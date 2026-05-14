@@ -58,13 +58,19 @@ reportsRouter.get("/reports/entities/:entityType", authorize({ feature: "finance
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
+    const isPrivEL = scope.isOwner || OWNER_GM_ROLES.includes(scope.role);
+    const elBranchIds = !isPrivEL && scope.allowedBranches.length > 0 ? scope.allowedBranches : null;
     let rows: any[] = [];
     if (entityType === "client") {
+      // clients are company-level master data with no branchId column — always company-scoped
       rows = await rawQuery<Record<string, unknown>>(`SELECT id, name, phone, email FROM clients WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
     } else if (entityType === "supplier") {
+      // suppliers are company-level master data with no branchId column — always company-scoped
       rows = await rawQuery<Record<string, unknown>>(`SELECT id, name, phone, email FROM suppliers WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
     } else if (entityType === "employee") {
-      rows = await rawQuery<Record<string, unknown>>(`SELECT e.id, e.name, e.phone, e.email FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 WHERE e."deletedAt" IS NULL ORDER BY e.name LIMIT 500`, [scope.companyId]);
+      const elParams: unknown[] = [scope.companyId];
+      const elBranchCond = elBranchIds ? (() => { elParams.push(elBranchIds); return ` AND ea."branchId" = ANY($${elParams.length}::int[])`; })() : "";
+      rows = await rawQuery<Record<string, unknown>>(`SELECT e.id, e.name, e.phone, e.email FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 WHERE e."deletedAt" IS NULL${elBranchCond} ORDER BY e.name LIMIT 500`, elParams);
     }
     res.json(maskFields(req, { data: rows }));
   } catch (err) {
@@ -293,6 +299,7 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
         const amt = Math.max(Number(l.debit), Number(l.credit));
         const maxAmt = max ? Math.max(Number(max.debit), Number(max.credit)) : 0;
         return amt > maxAmt ? l : max;
+      // as-any-reason: justified-pragmatic - internal pragmatic loss of type info; tracked for future tightening
       }, null as any);
       const section = classify(dominant);
       const inflow = Number(je.cashDebit) || 0;
@@ -360,6 +367,10 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
     const { startDate, endDate } = req.query as Record<string, string | undefined>;
     const id = parseId(req.params.entityId, "entityId");
 
+    const isPrivSubLedger = scope.isOwner || OWNER_GM_ROLES.includes(scope.role);
+    const subLedgerBranchIds = !isPrivSubLedger && scope.allowedBranches.length > 0
+      ? scope.allowedBranches : null;
+
     function buildDateFilter(fixedCount: number, sd: string | undefined, ed: string | undefined) {
       const extraParams: any[] = [];
       let filter = "";
@@ -407,7 +418,9 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
 
     } else if (entityType === "client") {
       const { filter: dateFilter, extraParams: dateDates } = buildDateFilter(2, startDate, endDate);
-      const invoiceRows = await rawQuery<Record<string, unknown>>(`SELECT i.id, i.ref, i.total AS debit, i."paidAmount" AS credit, i."createdAt" AS date, CONCAT('فاتورة ', i.ref) AS description, 'invoice' AS "movementType", i.status FROM invoices i WHERE i."companyId" = $1 AND i."clientId" = $2 AND i."deletedAt" IS NULL ${dateFilter.replace(/"createdAt"/g, 'i."createdAt"')} ORDER BY i."createdAt" ASC LIMIT 500`, [scope.companyId, id, ...dateDates]);
+      const invParams: unknown[] = [scope.companyId, id, ...dateDates];
+      const invBranchCond = subLedgerBranchIds ? (() => { invParams.push(subLedgerBranchIds); return ` AND i."branchId" = ANY($${invParams.length}::int[])`; })() : "";
+      const invoiceRows = await rawQuery<Record<string, unknown>>(`SELECT i.id, i.ref, i.total AS debit, i."paidAmount" AS credit, i."createdAt" AS date, CONCAT('فاتورة ', i.ref) AS description, 'invoice' AS "movementType", i.status FROM invoices i WHERE i."companyId" = $1 AND i."clientId" = $2 AND i."deletedAt" IS NULL ${dateFilter.replace(/"createdAt"/g, 'i."createdAt"')}${invBranchCond} ORDER BY i."createdAt" ASC LIMIT 500`, invParams);
       let runningBalance = 0;
       movements = invoiceRows.map((m: any) => { runningBalance += Number(m.debit) - Number(m.credit); return { ...m, runningBalance }; });
       const totalInvoiced = invoiceRows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.debit), 0);
@@ -416,7 +429,9 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
 
     } else if (entityType === "supplier") {
       const { filter: dateFilter, extraParams: dateDates } = buildDateFilter(2, startDate, endDate);
-      const poRows = await rawQuery<Record<string, unknown>>(`SELECT po.id, po.ref, po."totalAmount" AS debit, 0 AS credit, po."createdAt" AS date, CONCAT('أمر شراء ', po.ref) AS description, 'purchase_order' AS "movementType", po.status FROM purchase_orders po WHERE po."companyId" = $1 AND po."supplierId" = $2 AND po."deletedAt" IS NULL ${dateFilter.replace(/"createdAt"/g, 'po."createdAt"')} ORDER BY po."createdAt" ASC LIMIT 500`, [scope.companyId, id, ...dateDates]);
+      const poParams: unknown[] = [scope.companyId, id, ...dateDates];
+      const poBranchCondSub = subLedgerBranchIds ? (() => { poParams.push(subLedgerBranchIds); return ` AND po."branchId" = ANY($${poParams.length}::int[])`; })() : "";
+      const poRows = await rawQuery<Record<string, unknown>>(`SELECT po.id, po.ref, po."totalAmount" AS debit, 0 AS credit, po."createdAt" AS date, CONCAT('أمر شراء ', po.ref) AS description, 'purchase_order' AS "movementType", po.status FROM purchase_orders po WHERE po."companyId" = $1 AND po."supplierId" = $2 AND po."deletedAt" IS NULL ${dateFilter.replace(/"createdAt"/g, 'po."createdAt"')}${poBranchCondSub} ORDER BY po."createdAt" ASC LIMIT 500`, poParams);
       let runningBalance = 0;
       movements = poRows.map((m: any) => { runningBalance += Number(m.debit) - Number(m.credit); return { ...m, runningBalance }; });
       const totalOrdered = poRows.reduce((s: number, r: Record<string, unknown>) => s + Number(r.debit), 0);
@@ -431,16 +446,18 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
       const colFilter = colFilterMap[entityType];
       if (!colFilter) throw new ValidationError("نوع الكيان غير مدعوم");
       const { filter: dateFilter, extraParams: dateDates } = buildDateFilter(2, startDate, endDate);
+      const jeSubParams: unknown[] = [scope.companyId, id, ...dateDates];
+      const jeSubBranchCond = subLedgerBranchIds ? (() => { jeSubParams.push(subLedgerBranchIds); return ` AND je."branchId" = ANY($${jeSubParams.length}::int[])`; })() : "";
       const journalRows = await rawQuery<Record<string, unknown>>(
         `SELECT je.id, je.ref, je.description, je."createdAt" AS date, je.type AS "movementType",
                 COALESCE(SUM(jl.debit), 0) AS debit, COALESCE(SUM(jl.credit), 0) AS credit
          FROM journal_entries je
          JOIN journal_lines jl ON jl."journalId" = je.id
          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND ${colFilter} = $2
-         ${dateFilter.replace(/"createdAt"/g, 'je."createdAt"')}
+         ${dateFilter.replace(/"createdAt"/g, 'je."createdAt"')}${jeSubBranchCond}
          GROUP BY je.id, je.ref, je.description, je."createdAt", je.type
          ORDER BY je."createdAt" ASC`,
-        [scope.companyId, id, ...dateDates]
+        jeSubParams
       );
       let runningBalance = 0;
       movements = journalRows.map((m: any) => { runningBalance += Number(m.debit) - Number(m.credit); return { ...m, runningBalance }; });
@@ -487,18 +504,25 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
     );
     if (!client) { throw new NotFoundError("العميل غير موجود"); return; }
 
-    // Opening balance = invoices before startDate - payments before startDate
-    const [openingRow] = await rawQuery<Record<string, unknown>>(
-      `SELECT COALESCE(
-         (SELECT SUM(total) FROM invoices
-           WHERE "clientId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND "createdAt" < $3), 0
-       ) - COALESCE(
-         (SELECT SUM(amount) FROM invoice_payments
-           WHERE "clientId"=$1 AND "companyId"=$2 AND "paidAt" < $3), 0
-       ) AS opening`,
+    const isPrivCS = scope.isOwner || OWNER_GM_ROLES.includes(scope.role);
+    const csBranchIds = !isPrivCS && scope.allowedBranches.length > 0 ? scope.allowedBranches : null;
+
+    // Opening balance = invoices before startDate - payments before startDate (branch-scoped)
+    const obInvParams: unknown[] = [clientId, scope.companyId, from];
+    const obInvBranchCond = csBranchIds ? (() => { obInvParams.push(csBranchIds); return ` AND "branchId" = ANY($${obInvParams.length}::int[])`; })() : "";
+    const [obInvRow] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(total), 0) AS total FROM invoices WHERE "clientId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND "createdAt" < $3${obInvBranchCond}`,
+      obInvParams
+    );
+    // invoice_payments has no branchId column — scoped by companyId only
+    const [obPayRow] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(amount), 0) AS total FROM invoice_payments WHERE "clientId"=$1 AND "companyId"=$2 AND "paidAt" < $3`,
       [clientId, scope.companyId, from]
     );
-    const openingBalance = Number(openingRow?.opening ?? 0);
+    const openingBalance = Number(obInvRow?.total ?? 0) - Number(obPayRow?.total ?? 0);
+
+    const csBranchCond = csBranchIds ? ` AND "branchId" = ANY($5::int[])` : "";
+    const csBaseParams = (extra?: unknown[]): unknown[] => [clientId, scope.companyId, from, asOf, ...(extra || [])];
 
     // In-period invoices
     const invoices = await rawQuery<Record<string, unknown>>(
@@ -507,11 +531,11 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
               CONCAT('فاتورة ', ref) AS description
          FROM invoices
         WHERE "clientId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL
-          AND "createdAt" >= $3 AND "createdAt" <= $4
+          AND "createdAt" >= $3 AND "createdAt" <= $4${csBranchCond}
         ORDER BY "createdAt"`,
-      [clientId, scope.companyId, from, asOf]
+      csBaseParams(csBranchIds || undefined)
     );
-    // In-period payments
+    // In-period payments (invoice_payments may not have branchId — scope via companyId only)
     const payments = await rawQuery<Record<string, unknown>>(
       `SELECT ip.id, COALESCE(ip."transactionRef", CONCAT('PAY-', ip.id)) AS ref,
               ip."paidAt" AS date, 0 AS debit, ip.amount AS credit,
@@ -534,14 +558,16 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
     });
 
     // Aging of OPEN invoices as of asOf (based on dueDate or invoice date +30)
+    const agingParams: unknown[] = [clientId, scope.companyId, asOf];
+    const agingBranchCond = csBranchIds ? (() => { agingParams.push(csBranchIds); return ` AND "branchId" = ANY($${agingParams.length}::int[])`; })() : "";
     const openInvoices = await rawQuery<Record<string, unknown>>(
       `SELECT id, ref, "createdAt", "dueDate", total, "paidAmount",
               (total - COALESCE("paidAmount",0)) AS outstanding
          FROM invoices
         WHERE "clientId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL
           AND "createdAt" <= $3
-          AND (total - COALESCE("paidAmount",0)) > 0.01`,
-      [clientId, scope.companyId, asOf]
+          AND (total - COALESCE("paidAmount",0)) > 0.01${agingBranchCond}`,
+      agingParams
     );
     const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0 };
     const asOfMs = new Date(asOf).getTime();
@@ -606,20 +632,20 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
     );
     if (!supplier) { throw new NotFoundError("المورد غير موجود"); return; }
 
-    // Opening balance = POs matched/received before startDate - payments posted
-    // before startDate. Uses purchase_orders as the AP proxy since we lack a
-    // dedicated vendor_bills table today.
-    const [openingRow] = await rawQuery<Record<string, unknown>>(
-      `SELECT COALESCE(
-         (SELECT SUM("totalAmount") FROM purchase_orders
-           WHERE "supplierId"=$1 AND "companyId"=$2
-             AND "deletedAt" IS NULL
-             AND status IN ('received','partially_received','invoice_matched','payment_scheduled','paid','completed')
-             AND "createdAt" < $3), 0
-       ) AS opening`,
-      [supplierId, scope.companyId, from]
+    const isPrivVS = scope.isOwner || OWNER_GM_ROLES.includes(scope.role);
+    const vsBranchIds = !isPrivVS && scope.allowedBranches.length > 0 ? scope.allowedBranches : null;
+
+    // Opening balance = POs matched/received before startDate (branch-scoped)
+    const obPOParams: unknown[] = [supplierId, scope.companyId, from];
+    const obPOBranchCond = vsBranchIds ? (() => { obPOParams.push(vsBranchIds); return ` AND "branchId" = ANY($${obPOParams.length}::int[])`; })() : "";
+    const [obPORow] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM("totalAmount"), 0) AS total FROM purchase_orders WHERE "supplierId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND status IN ('received','partially_received','invoice_matched','payment_scheduled','paid','completed') AND "createdAt" < $3${obPOBranchCond}`,
+      obPOParams
     );
-    const openingBalance = Number(openingRow?.opening ?? 0);
+    const openingBalance = Number(obPORow?.total ?? 0);
+
+    const vsBranchCond = vsBranchIds ? ` AND "branchId" = ANY($5::int[])` : "";
+    const vsBaseParams = (extra?: unknown[]): unknown[] => [supplierId, scope.companyId, from, asOf, ...(extra || [])];
 
     const pos = await rawQuery<Record<string, unknown>>(
       `SELECT id, ref, "createdAt" AS date, 0 AS debit, "totalAmount" AS credit,
@@ -628,9 +654,9 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
          FROM purchase_orders
         WHERE "supplierId"=$1 AND "companyId"=$2
           AND "deletedAt" IS NULL
-          AND "createdAt" >= $3 AND "createdAt" <= $4
+          AND "createdAt" >= $3 AND "createdAt" <= $4${vsBranchCond}
         ORDER BY "createdAt"`,
-      [supplierId, scope.companyId, from, asOf]
+      vsBaseParams(vsBranchIds || undefined)
     );
 
     let running = openingBalance;
@@ -640,14 +666,16 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
     });
 
     // Aging of open POs
+    const agingPOParams: unknown[] = [supplierId, scope.companyId, asOf];
+    const agingPOBranchCond = vsBranchIds ? (() => { agingPOParams.push(vsBranchIds); return ` AND "branchId" = ANY($${agingPOParams.length}::int[])`; })() : "";
     const openPos = await rawQuery<Record<string, unknown>>(
       `SELECT id, ref, "createdAt", "expectedDelivery", "totalAmount"
          FROM purchase_orders
         WHERE "supplierId"=$1 AND "companyId"=$2
           AND "deletedAt" IS NULL
           AND status NOT IN ('paid','completed','cancelled','rejected')
-          AND "createdAt" <= $3`,
-      [supplierId, scope.companyId, asOf]
+          AND "createdAt" <= $3${agingPOBranchCond}`,
+      agingPOParams
     );
     const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0 };
     const asOfMs = new Date(asOf).getTime();
@@ -705,6 +733,9 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
     let rows: any[] = [];
     let entityName = "";
 
+    const isPrivES = scope.isOwner || OWNER_GM_ROLES.includes(scope.role);
+    const esBranchIds = !isPrivES && scope.allowedBranches.length > 0 ? scope.allowedBranches : null;
+
     if (entityType === "employee" && entityId) {
       const [emp] = await rawQuery<Record<string, unknown>>(
         `SELECT e.name, ea.id AS aid FROM employees e
@@ -736,6 +767,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
       let dateFilter = "";
       if (startDate) { qParams.push(startDate); dateFilter += ` AND i."createdAt" >= $${qParams.length}`; }
       if (endDate) { qParams.push(endDate); dateFilter += ` AND i."createdAt" <= $${qParams.length}`; }
+      if (esBranchIds) { qParams.push(esBranchIds); dateFilter += ` AND i."branchId" = ANY($${qParams.length}::int[])`; }
       rows = await rawQuery<Record<string, unknown>>(
         `SELECT i.ref, COALESCE(i.description, i.ref) AS description,
                 i.total AS debit, i."paidAmount" AS credit,
@@ -752,6 +784,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
       let dateFilter = "";
       if (startDate) { qParams.push(startDate); dateFilter += ` AND po."createdAt" >= $${qParams.length}`; }
       if (endDate) { qParams.push(endDate); dateFilter += ` AND po."createdAt" <= $${qParams.length}`; }
+      if (esBranchIds) { qParams.push(esBranchIds); dateFilter += ` AND po."branchId" = ANY($${qParams.length}::int[])`; }
       rows = await rawQuery<Record<string, unknown>>(
         `SELECT po.ref, CONCAT('أمر شراء: ', po.ref) AS description,
                 po."totalAmount" AS debit, 0 AS credit,
