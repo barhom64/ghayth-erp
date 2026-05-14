@@ -7,7 +7,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { getDeliveryStats } from "../lib/notificationEngine.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
@@ -120,7 +120,7 @@ router.get("/preferences", authorize({ feature: "notifications", action: "list" 
       [companyId]
     );
 
-    res.json({ data: rows, categories });
+    res.json(maskFields(req, { data: rows, categories }));
   } catch (err) {
     handleRouteError(err, res, "Notification engine error:");
   }
@@ -193,7 +193,7 @@ router.get("/routing-rules", authorize({ feature: "admin", action: "update" }), 
        ORDER BY r."companyId" DESC NULLS LAST, r."eventCategory"`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "Notification engine error:");
   }
@@ -329,7 +329,7 @@ router.get("/templates", authorize({ feature: "admin", action: "update" }), asyn
        ORDER BY "companyId" DESC NULLS LAST, "templateKey", channel`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "Notification engine error:");
   }
@@ -463,7 +463,7 @@ router.get("/fallback-chains", authorize({ feature: "admin", action: "update" })
        ORDER BY "companyId" DESC NULLS LAST, name`,
       [scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "Notification engine error:");
   }
@@ -589,7 +589,7 @@ router.get("/webhooks", authorize({ feature: "admin", action: "update" }), async
       [scope.companyId]
     );
     const masked = rows.map((r) => ({ ...r, secret: r.secret ? "__configured__" : null, headers: r.headers ? "__configured__" : null }));
-    res.json({ data: masked });
+    res.json(maskFields(req, { data: masked }));
   } catch (err) {
     handleRouteError(err, res, "Notification engine error:");
   }
@@ -745,7 +745,7 @@ router.get("/delivery-stats", authorize({ feature: "admin", action: "update" }),
     const scope = req.scope!;
     const days = parseInt(req.query.days as string) || 30;
     const stats = await getDeliveryStats(scope.companyId, days);
-    res.json({ data: stats });
+    res.json(maskFields(req, { data: stats }));
   } catch (err) {
     handleRouteError(err, res, "Notification engine error:");
   }
@@ -789,7 +789,7 @@ router.get("/delivery-log", authorize({ feature: "admin", action: "update" }), a
       params
     );
 
-    res.json({ data: rows, total: countResult[0]?.count ?? 0, page, limit });
+    res.json(maskFields(req, { data: rows, total: countResult[0]?.count ?? 0, page, limit }));
   } catch (err) {
     handleRouteError(err, res, "Notification engine error:");
   }

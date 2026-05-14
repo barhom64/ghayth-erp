@@ -24,6 +24,7 @@ import {
   createAuditLog,
   todayISO,
   generateTimeRef,
+  generateBranchRef,
 } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
@@ -1375,7 +1376,10 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
     const subtotal = servicesTotal + penaltiesTotal;
     const commission = subtotal * (Number(agent?.profitMargin || 0) / 100);
     const total = subtotal - commission;
-    const ref = generateTimeRef("UMRAH-INV");
+    // Per-branch invoice numbering (PR #529): branches can override the
+    // umrah-invoice prefix via system_settings; we keep "UMRAH-INV" as
+    // the fallback so existing tenants don't see a behaviour change.
+    const ref = await generateBranchRef(scope, "invoice_prefix", "UMRAH-INV");
     let invoiceRow: any;
     await withTransaction(async (client) => {
       const insRes = await client.query(

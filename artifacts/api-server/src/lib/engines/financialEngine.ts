@@ -71,6 +71,16 @@ class FinancialEngineImpl implements DomainEngine {
         `[FinancialEngine] sourceKey is required for GL posting — ${request.sourceType}#${request.sourceId}`
       );
     }
+    if (/(?:^|[^0-9])1\d{12}(?:$|[^0-9])/.test(request.sourceKey)) {
+      // Defensive guard: a 13-digit number starting with `1` inside the key
+      // is a Date.now() millisecond timestamp (range 2001-2286). Volatile
+      // suffixes break idempotency — derive sourceKey from a stable
+      // identifier (source row id, business key, or a request-scoped UUID
+      // / idempotency token).
+      throw new Error(
+        `[FinancialEngine] sourceKey "${request.sourceKey}" looks volatile (contains a Date.now-style timestamp) — derive it from a stable identifier (ref/sourceId/UUID)`
+      );
+    }
 
     const existing = await rawQuery<{ id: number }>(
       `SELECT id FROM journal_entries WHERE "companyId"=$1 AND "sourceKey"=$2 AND "deletedAt" IS NULL LIMIT 1`,
@@ -84,9 +94,10 @@ class FinancialEngineImpl implements DomainEngine {
       };
     }
 
+    const periodDate = request.postingDate ?? todayISO();
     const periodCheck = await checkFinancialPeriodOpen(
       request.companyId,
-      todayISO()
+      periodDate
     );
     if (!periodCheck.open) {
       throw new Error(
@@ -112,7 +123,114 @@ class FinancialEngineImpl implements DomainEngine {
       ? await createGuardedJournalEntry(entryParams, { table: request.guardTable, id: request.guardId })
       : await createJournalEntry(entryParams);
 
+    await this.applyHeaderOverrides(journalId, request);
+
     return { journalId, sourceKey: request.sourceKey, alreadyExists: false };
+  }
+
+  private async applyHeaderOverrides(
+    journalId: number,
+    request: GLPostingRequest
+  ): Promise<void> {
+    const updates: string[] = [];
+    const params: unknown[] = [];
+    let paramIdx = 1;
+
+    if (request.status && request.status !== "draft") {
+      updates.push(`status = $${paramIdx++}`);
+      params.push(request.status);
+    }
+    if (request.postingDate) {
+      updates.push(`"createdAt" = $${paramIdx++}`);
+      params.push(request.postingDate);
+    }
+    const meta = request.headerMeta;
+    if (meta) {
+      const columns: Array<[keyof NonNullable<typeof meta>, string]> = [
+        ["costCenter", `"costCenter"`],
+        ["departmentId", `"departmentId"`],
+        ["relatedEntityType", `"relatedEntityType"`],
+        ["relatedEntityId", `"relatedEntityId"`],
+        ["paymentMethod", `"paymentMethod"`],
+        ["reference", `reference`],
+        ["isPaid", `"isPaid"`],
+        ["attachmentUrl", `"attachmentUrl"`],
+        ["attachmentType", `"attachmentType"`],
+        ["expenseType", `"expenseType"`],
+        ["operationType", `"operationType"`],
+        ["projectId", `"projectId"`],
+        ["taxCategory", `"taxCategory"`],
+        ["govSyncEnabled", `"govSyncEnabled"`],
+        ["govIntegrationId", `"govIntegrationId"`],
+        ["govEntityType", `"govEntityType"`],
+        ["govEntityId", `"govEntityId"`],
+        ["approvalStatus", `"approvalStatus"`],
+        ["isManual", `"isManual"`],
+      ];
+      for (const [key, column] of columns) {
+        if (Object.prototype.hasOwnProperty.call(meta, key)) {
+          updates.push(`${column} = $${paramIdx++}`);
+          params.push(meta[key] ?? null);
+        }
+      }
+    }
+
+    if (updates.length === 0) return;
+    const idIdx = paramIdx++;
+    const companyIdx = paramIdx;
+    params.push(journalId, request.companyId);
+    await rawExecute(
+      `UPDATE journal_entries SET ${updates.join(", ")} WHERE id = $${idIdx} AND "companyId" = $${companyIdx} AND "deletedAt" IS NULL`,
+      params
+    );
+  }
+
+  /**
+   * Append a rounding-difference line (account 9999) to an EXISTING journal
+   * entry. Centralised here so routes never INSERT directly into journal_lines.
+   * The 0.05 SAR cap mirrors the long-standing business rule.
+   */
+  async appendRoundingAdjustment(params: {
+    companyId: number;
+    journalEntryId: number;
+    amount: number;
+    description?: string;
+  }): Promise<{ applied: number }> {
+    const diff = Math.round(params.amount * 100) / 100;
+    if (Math.abs(diff) === 0) {
+      throw new Error("فرق التقريب يجب أن يكون مختلفاً عن الصفر");
+    }
+    if (Math.abs(diff) > 0.05) {
+      throw new Error("فرق التقريب يتجاوز الحد المسموح (0.05 ﷼)");
+    }
+
+    const [roundingAcc] = await rawQuery<{ code: string }>(
+      `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' AND "deletedAt" IS NULL LIMIT 1`,
+      [params.companyId]
+    );
+    if (!roundingAcc) {
+      throw new Error("يجب إنشاء حساب فروقات التقريب أولاً");
+    }
+
+    const [je] = await rawQuery<{ id: number }>(
+      `SELECT id FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [params.journalEntryId, params.companyId]
+    );
+    if (!je) {
+      throw new Error("القيد اليومي غير موجود أو لا يتبع هذه الشركة");
+    }
+
+    await rawExecute(
+      `INSERT INTO journal_lines ("journalId","accountCode",debit,credit,description)
+       VALUES ($1,'9999',$2,$3,$4)`,
+      [
+        params.journalEntryId,
+        diff > 0 ? diff : 0,
+        diff < 0 ? Math.abs(diff) : 0,
+        params.description ?? "فرق تقريب تلقائي",
+      ]
+    );
+    return { applied: diff };
   }
 
   async resolveAccountCode(

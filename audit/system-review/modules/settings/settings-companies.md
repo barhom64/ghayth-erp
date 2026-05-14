@@ -26,13 +26,47 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/settings.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+إعدادات الشركات (Companies) — Multi-company setup (tenancy + legal entities).
+
+| الحقل | المتطلب |
+|------|--------|
+| Legal name | إجباري |
+| Commercial Register (CR) | إجباري — unique |
+| VAT Number | per ZATCA | إجباري للـ tax registration |
+| Logo | branding | optional |
+| Address | إجباري |
+| Industry | enum | optional |
+| Currency | base | إجباري |
+| Fiscal year start | for accounting | إجباري |
+| Time zone | for shifts/reports | إجباري |
+| Language(s) | i18n | enum |
+| ZATCA EGS credentials | encrypted | for e-invoicing | راجع `admin-integrations.md` |
+| Saudi Saudization quota | for compliance | راجع `governance-compliance.md` |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| List companies | GET `/settings/companies` | `companies` | ✅ |
+| Create company | POST | with full registration | ✅ critical |
+| Update info | PATCH | with audit | ✅ critical |
+| Add branches | راجع `settings-branches.md` | nested | ✅ |
+| Set as active | flag | for tenancy switching | ✅ |
+| Deactivate (no delete) | guard | if any GL entries exist | ✅ critical |
+| Upload logo | راجع `documents.md` | for invoices/letters | ✅ |
+| Configure VAT settings | راجع `finance-tax.md` | ✅ critical |
+| Connect to ZATCA | external | راجع `admin-integrations.md` | ✅ critical |
+| تكامل مع كل المعاملات | tenant scope | every record per company | ✅ critical |
+| تكامل مع `finance-chart-of-accounts.md` (per company) | ✅ critical |
+| تكامل مع `governance-compliance.md` (Saudi requirements) | ✅ critical |
+| Audit log إجباري | كل تعديل | `audit_logs` | ✅ critical |
+| RBAC | superadmin فقط | level=100 | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل CR + VAT uniqueness enforced at DB?
+- [ ] هل ZATCA EGS credentials encrypted (sensitive secrets)?
+- [ ] هل tenancy enforced on every read/write (لا cross-company leak)?
+- [ ] هل company deactivation preserves historical data?
+- [ ] هل Saudization quota tracked + reported?
 
 ## 4. النمذجة
 - الجدول: `companies` (export: `companies`, 13 عمود)

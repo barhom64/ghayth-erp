@@ -5,7 +5,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { buildScopedWhere } from "../lib/scopedQuery.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import dns from "node:dns/promises";
@@ -179,10 +179,10 @@ router.get("/", authorize({ feature: "admin", action: "update" }), async (req, r
         `SELECT ${GOV_SAFE_COLUMNS}, config FROM gov_integrations WHERE ${where} ORDER BY type ASC`,
         params
       );
-      res.json({ data: fresh.map((r) => ({ ...r, config: maskConfig(r.config) })) });
+      res.json(maskFields(req, { data: fresh.map((r) => ({ ...r, config: maskConfig(r.config) })) }));
       return;
     }
-    res.json({ data: rows.map((r) => ({ ...r, config: maskConfig(r.config) })) });
+    res.json(maskFields(req, { data: rows.map((r) => ({ ...r, config: maskConfig(r.config) })) }));
   } catch (err) { handleRouteError(err, res, "Gov integrations list error:"); }
 });
 
@@ -377,7 +377,7 @@ router.get("/expiring/iqama", authorize({ feature: "admin", action: "update" }),
        ORDER BY LEAST(e."iqamaExpiry", e."visaExpiry", e."workPermitExpiry") ASC`,
       [scope.companyId, days]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Expiring iqama error:"); }
 });
 
@@ -400,7 +400,7 @@ router.get("/expiring/registration", authorize({ feature: "admin", action: "upda
        ORDER BY LEAST(fv."registrationExpiry", fv."nextInspectionDate") ASC`,
       [scope.companyId, days]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Expiring registration error:"); }
 });
 
@@ -423,7 +423,7 @@ router.get("/links", authorize({ feature: "admin", action: "update" }), async (r
        ORDER BY gl."createdAt" DESC LIMIT 100`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Gov links list error:"); }
 });
 

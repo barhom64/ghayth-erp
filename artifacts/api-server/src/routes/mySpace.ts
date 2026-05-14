@@ -4,7 +4,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { todayISO, currentPeriod, currentYear, toDateISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 
 const router = Router();
 
@@ -448,7 +448,7 @@ router.get("/", authorize({ feature: "my_space", action: "view" }), async (req, 
       logger.error(e, "my-space roleEntities error:");
     }
 
-    res.json({
+    res.json(maskFields(req, {
       attendance,
       leaveBalances,
       openRequests,
@@ -468,7 +468,7 @@ router.get("/", authorize({ feature: "my_space", action: "view" }), async (req, 
       expiringSoon,
       roleEntities,
       role: scope.role,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "My-space error:");
   }
@@ -520,7 +520,7 @@ router.get("/attendance", authorize({ feature: "my_space", action: "view" }), as
       [scope.activeAssignmentId, monthStr]
     );
 
-    res.json({ data: rows, total: rows.length, monthly: monthlyStats ?? null });
+    res.json(maskFields(req, { data: rows, total: rows.length, monthly: monthlyStats ?? null }));
   } catch (err) {
     handleRouteError(err, res, "my-attendance error:");
   }
@@ -557,7 +557,7 @@ router.get("/payslip", authorize({ feature: "my_space.payslip", action: "view" }
        ORDER BY pr.period DESC LIMIT 1`,
       params
     );
-    res.json({ data: ps || null });
+    res.json(maskFields(req, { data: ps || null }));
   } catch (err) {
     handleRouteError(err, res, "my-payslip error:");
   }
@@ -574,7 +574,7 @@ router.get("/performance", authorize({ feature: "my_space", action: "view" }), a
        ORDER BY pr."createdAt" DESC LIMIT 20`,
       [scope.employeeId, scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "my-performance error:");
   }
@@ -590,7 +590,7 @@ router.get("/documents", authorize({ feature: "my_space", action: "view" }), asy
        ORDER BY "createdAt" DESC LIMIT 50`,
       [scope.employeeId, scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "my-documents error:");
   }
@@ -635,7 +635,7 @@ router.get("/requests", authorize({ feature: "my_space", action: "view" }), asyn
       [scope.employeeId, scope.companyId]
     ).catch((e) => { logger.error(e, "my space query failed"); return []; });
 
-    res.json({ data: rows, leaveRequests: leaveRows, total: rows.length });
+    res.json(maskFields(req, { data: rows, leaveRequests: leaveRows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "my-requests error:");
   }

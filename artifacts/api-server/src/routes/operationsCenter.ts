@@ -5,7 +5,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { handleRouteError, ValidationError, ForbiddenError, ConflictError , zodParse } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 
 // ── Zod validation schemas ──────────────────────────────────────────
@@ -336,7 +336,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
       );
     } catch (_e) { logger.error(_e, "OpsCenter: livefeed failed:"); }
 
-    res.json({ sections, slaItems, liveFeed });
+    res.json(maskFields(req, { sections, slaItems, liveFeed }));
   } catch (err) {
     handleRouteError(err, res, "تحميل مركز العمليات");
   }
@@ -464,12 +464,12 @@ router.get("/daily-close/checklist", authorize({ feature: "projects", action: "l
       closedToday = !!existing;
     } catch (_e) { logger.error(_e, "silent catch"); }
 
-    res.json({
+    res.json(maskFields(req, {
       date: today,
       items,
       allPassed: items.every(i => i.passed),
       closedToday,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "تحميل قائمة الإقفال اليومي");
   }

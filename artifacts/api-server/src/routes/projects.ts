@@ -939,7 +939,7 @@ router.post("/:id/tasks", authorize({ feature: "projects.tasks", action: "create
         );
         const allDepsDone = blockedRes.rows.every((d: any) => d.status === 'done');
         if (!allDepsDone) {
-          await client.query(`UPDATE project_tasks SET status='blocked' WHERE id=$1 AND status='todo' AND "deletedAt" IS NULL`, [insertId]);
+          await client.query(`UPDATE project_tasks SET status='blocked' WHERE id=$1 AND status='todo' AND "deletedAt" IS NULL AND "projectId" IN (SELECT id FROM projects WHERE "companyId"=$2)`, [insertId, scope.companyId]);
         }
       }
     });

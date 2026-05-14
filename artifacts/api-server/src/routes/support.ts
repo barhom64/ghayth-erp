@@ -10,7 +10,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -195,7 +195,7 @@ router.get("/tickets", authorize({ feature: "support.tickets", action: "list" })
       `SELECT t.*, cl.name AS "clientName", e.name AS "assigneeName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=t."assigneeId" AND e."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length, page: 1, pageSize: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Support tickets error:"); }
 });
 
@@ -418,7 +418,7 @@ router.get("/tickets/:id", authorize({ feature: "support.tickets", action: "view
       ? Math.max(0, (slaDeadline.getTime() - now.getTime()) / (1000 * 60 * 60))
       : 0;
 
-    res.json({ ...ticket, replies, isSlaBreached, slaRemainingHours: Number(slaRemainingHours).toFixed(1) });
+    res.json(maskFields(req, { ...ticket, replies, isSlaBreached, slaRemainingHours: Number(slaRemainingHours).toFixed(1) }));
   } catch (err) { handleRouteError(err, res, "Get ticket error:"); }
 });
 
@@ -744,7 +744,7 @@ router.get("/replies", authorize({ feature: "support.tickets", action: "list" })
     const resolved = rows.filter((r) => r.status === 'resolved' || r.status === 'closed').length;
     const pending = total - resolved;
     const activeAgents = new Set(rows.map((r) => r.agent).filter(Boolean)).size;
-    res.json({ data: rows, total, resolved, pending, activeAgents });
+    res.json(maskFields(req, { data: rows, total, resolved, pending, activeAgents }));
   } catch (err) { handleRouteError(err, res, "Support replies error:"); }
 });
 
@@ -758,14 +758,14 @@ router.get("/stats", authorize({ feature: "support.tickets", action: "list" }), 
       rawQuery<AvgHoursRow>(`SELECT AVG(EXTRACT(EPOCH FROM ("firstResponseAt"::timestamp - "createdAt"::timestamp))/3600) AS "avgHours" FROM support_tickets WHERE "companyId"=$1 AND "firstResponseAt" IS NOT NULL AND "deletedAt" IS NULL`, [cid]),
       rawQuery<AvgTotalRow>(`SELECT AVG(score) AS avg, COUNT(*) AS total FROM ticket_csat_ratings WHERE "companyId"=$1`, [cid]).catch((e) => { logger.error(e, "support query failed"); return [{ avg: null, total: 0 }] as AvgTotalRow[]; }),
     ]);
-    res.json({
+    res.json(maskFields(req, {
       totalTickets: Number(tickets.total), openTickets: Number(tickets.open),
       resolvedTickets: Number(tickets.resolved), slaBreach: Number(tickets.slaBreach),
       avgResolutionHours: Number(avgRes?.avgHours || 0).toFixed(1),
       avgFirstResponseHours: Number(firstResponse?.avgHours || 0).toFixed(1),
       csatAvg: csat?.avg ? Number(csat.avg).toFixed(2) : null,
       csatTotal: Number(csat?.total || 0),
-    });
+    }));
   } catch (err) { handleRouteError(err, res, "Support stats error:"); }
 });
 
@@ -818,7 +818,7 @@ router.get("/csat", authorize({ feature: "support.tickets", action: "list" }), a
        GROUP BY cr."assigneeId", e.name ORDER BY avg DESC LIMIT 200`,
       [scope.companyId]
     );
-    res.json({ data: rows, avg: avg?.avg ? Number(avg.avg).toFixed(2) : null, total: Number(avg?.total || 0), agentStats });
+    res.json(maskFields(req, { data: rows, avg: avg?.avg ? Number(avg.avg).toFixed(2) : null, total: Number(avg?.total || 0), agentStats }));
   } catch (err) { handleRouteError(err, res, "CSAT list error:"); }
 });
 
@@ -831,7 +831,7 @@ router.get("/kb", authorize({ feature: "support.tickets", action: "list" }), asy
     if (category) { params.push(category); conditions.push(`category=$${params.length}`); }
     if (q) { params.push(`%${q}%`); conditions.push(`(title ILIKE $${params.length} OR content ILIKE $${params.length})`); }
     const rows = await rawQuery<Pick<KbArticleRow, "id" | "title" | "category" | "tags" | "views" | "helpful" | "notHelpful" | "createdAt" | "updatedAt">>(`SELECT id, title, category, tags, views, helpful, "notHelpful", "createdAt", "updatedAt" FROM kb_articles WHERE ${conditions.join(' AND ')} ORDER BY views DESC LIMIT 500`, params);
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "KB list error:"); }
 });
 
@@ -842,7 +842,7 @@ router.get("/kb/:id", authorize({ feature: "support.tickets", action: "view" }),
     const [row] = await rawQuery<KbArticleRow>(`SELECT * FROM kb_articles WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المقالة غير موجودة");
     await rawExecute(`UPDATE kb_articles SET views=COALESCE(views,0)+1 WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`, [id, scope.companyId]).catch((e) => logger.error(e, "support background task failed"));
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "KB article error:"); }
 });
 

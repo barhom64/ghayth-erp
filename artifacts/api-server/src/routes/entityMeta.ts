@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError, parseId, zodParse } from "../lib/errorHandler.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
@@ -36,7 +36,7 @@ router.get("/comments/:entityType/:entityId", authorize({ feature: "projects", a
        ORDER BY "createdAt" DESC LIMIT 500`,
       [entityType, entityId, scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "List comments error");
   }
@@ -110,7 +110,7 @@ router.get("/tags/:entityType/:entityId", authorize({ feature: "projects", actio
        ORDER BY "createdAt" ASC`,
       [entityType, entityId, scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "List tags error");
   }
@@ -189,7 +189,7 @@ router.get("/tags-filter/:entityType", authorize({ feature: "projects", action: 
        WHERE "entityType" = $1 AND tag = $2 AND "companyId" = $3 LIMIT 1000`,
       [entityType, tag, scope.companyId]
     );
-    res.json({ data: rows.map((r: Record<string, unknown>) => r.entityId) });
+    res.json(maskFields(req, { data: rows.map((r: Record<string, unknown>) => r.entityId) }));
   } catch (err) {
     handleRouteError(err, res, "Filter by tag error");
   }
@@ -207,7 +207,7 @@ router.get("/tags-list/:entityType", authorize({ feature: "projects", action: "v
        ORDER BY count DESC LIMIT 500`,
       [entityType, scope.companyId]
     );
-    res.json({ data: rows });
+    res.json(maskFields(req, { data: rows }));
   } catch (err) {
     handleRouteError(err, res, "List all tags error");
   }
