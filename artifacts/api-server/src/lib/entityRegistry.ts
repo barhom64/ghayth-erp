@@ -50,9 +50,19 @@ export interface EntityFinancialImpact {
   sourceKey?: string;
 }
 
+export type PrintFormat = "a4" | "thermal_80" | "thermal_58" | "label" | "excel";
+
 export interface EntityPrint {
   hasTemplate: boolean;
   templateKey?: string;
+  /** Output formats the Print Engine v2 can produce for this entity. */
+  formats?: PrintFormat[];
+  /** Preferred format when the caller doesn't specify one. */
+  defaultFormat?: PrintFormat;
+  /** When true, a second+ copy requires `print:reprint_approve`. */
+  requiresApprovalForReprint?: boolean;
+  /** RBAC permission string; defaults to `print:<entity.id>` if omitted. */
+  permission?: string;
 }
 
 export interface EntityOperationalProfile {
@@ -100,7 +110,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:update", "hr:delete"],
     notifications: ["employee_created", "employee_activated", "employee_terminated"],
     reports: ["employee_list", "employee_turnover", "headcount"],
-    print: { hasTemplate: true, templateKey: "employee_profile" },
+    print: { hasTemplate: true, templateKey: "employee_profile", formats: ["a4"], defaultFormat: "a4", permission: "print:employee_profile:create" },
   },
   {
     id: "employee_contract",
@@ -131,7 +141,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:update", "hr:approve"],
     notifications: ["contract_approved", "contract_rejected", "contract_expiry_reminder"],
     reports: ["active_contracts", "expiring_contracts"],
-    print: { hasTemplate: true, templateKey: "employee_contract" },
+    print: { hasTemplate: true, templateKey: "employee_contract", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:employee_contract:create" },
   },
   {
     id: "leave_request",
@@ -237,7 +247,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:approve", "hr:self"],
     notifications: ["letter_approved"],
     reports: [],
-    print: { hasTemplate: true, templateKey: "official_letter" },
+    print: { hasTemplate: true, templateKey: "official_letter", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:official_letter:create" },
   },
   {
     id: "loan",
@@ -386,7 +396,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:discipline:create", "hr:discipline:read", "hr:discipline:update", "hr:discipline:approve"],
     notifications: ["discipline_memo_issued", "discipline_appeal_submitted", "discipline_gm_decision"],
     reports: ["discipline_summary", "violations_by_type"],
-    print: { hasTemplate: true, templateKey: "discipline_memo" },
+    print: { hasTemplate: true, templateKey: "discipline_memo", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:discipline_memo:create" },
   },
   {
     id: "payroll_run",
@@ -416,7 +426,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:approve"],
     notifications: ["payroll_ready", "payslip_available"],
     reports: ["payroll_summary", "payroll_comparison"],
-    print: { hasTemplate: true, templateKey: "payslip" },
+    print: { hasTemplate: true, templateKey: "payslip", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:payroll:create" },
   },
   {
     id: "shift",
@@ -515,7 +525,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:update", "finance:approve"],
     notifications: ["invoice_approved", "invoice_overdue", "payment_received"],
     reports: ["invoice_aging", "revenue_summary", "tax_declarations"],
-    print: { hasTemplate: true, templateKey: "invoice" },
+    print: { hasTemplate: true, templateKey: "invoice", formats: ["a4", "thermal_80", "excel"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:invoice:create" },
   },
   {
     id: "journal_entry",
@@ -602,7 +612,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:update", "finance:approve"],
     notifications: ["po_approved", "po_received"],
     reports: ["po_summary", "vendor_performance"],
-    print: { hasTemplate: true, templateKey: "purchase_order" },
+    print: { hasTemplate: true, templateKey: "purchase_order", formats: ["a4", "excel"], defaultFormat: "a4", permission: "print:purchase_order:create" },
   },
   {
     id: "expense_claim",
@@ -744,7 +754,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:approve"],
     notifications: [],
     reports: [],
-    print: { hasTemplate: true, templateKey: "payment_voucher" },
+    print: { hasTemplate: true, templateKey: "payment_voucher", formats: ["a4", "thermal_80"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:payment_voucher:create" },
   },
   {
     id: "vendor",
@@ -964,7 +974,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["property:create", "property:read", "property:update"],
     notifications: ["rent_due", "contract_expiry_reminder"],
     reports: ["active_contracts", "rent_collection"],
-    print: { hasTemplate: true, templateKey: "rental_contract" },
+    print: { hasTemplate: true, templateKey: "rental_contract", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:rental_contract:create" },
   },
   {
     id: "maintenance_request",
@@ -1044,7 +1054,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["legal:create", "legal:read", "legal:update"],
     notifications: ["contract_expiry_reminder"],
     reports: ["contract_register"],
-    print: { hasTemplate: true, templateKey: "legal_contract" },
+    print: { hasTemplate: true, templateKey: "legal_contract", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:legal_contract:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1341,6 +1351,44 @@ export function getEntitiesWithLifecycle(): EntityOperationalProfile[] {
 
 export function getEntitiesWithFinancialImpact(): EntityOperationalProfile[] {
   return ENTITY_REGISTRY.filter((e) => e.financialImpact?.hasGLImpact);
+}
+
+// ─── Print Engine v2 helpers ────────────────────────────────────────────────
+
+/**
+ * Print profile for any entityType — synthesizes a default for entities that
+ * the registry has not been updated for yet, so the engine never throws.
+ * Order: registry entry's `print` block → fallback default.
+ */
+export function getEntityPrintProfile(entityType: string): Required<Pick<EntityPrint, "formats" | "defaultFormat">> & {
+  permission: string;
+  requiresApprovalForReprint: boolean;
+  templateKey?: string;
+  registered: boolean;
+} {
+  const entity = getEntity(entityType);
+  if (entity?.print?.hasTemplate) {
+    const formats = entity.print.formats && entity.print.formats.length > 0
+      ? entity.print.formats
+      : ["a4"];
+    return {
+      formats: formats as PrintFormat[],
+      defaultFormat: entity.print.defaultFormat ?? formats[0] as PrintFormat,
+      permission: entity.print.permission ?? `print:${entity.id}:create`,
+      requiresApprovalForReprint: Boolean(entity.print.requiresApprovalForReprint),
+      templateKey: entity.print.templateKey,
+      registered: true,
+    };
+  }
+  // Permissive fallback for documents not yet wired into the registry.
+  return {
+    formats: ["a4"] as PrintFormat[],
+    defaultFormat: "a4",
+    permission: `print:${entityType}:create`,
+    requiresApprovalForReprint: false,
+    templateKey: undefined,
+    registered: false,
+  };
 }
 
 // ─── Coverage Analysis ──────────────────────────────────────────────────────

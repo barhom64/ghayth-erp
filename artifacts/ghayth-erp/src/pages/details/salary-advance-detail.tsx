@@ -257,6 +257,9 @@ export default function SalaryAdvanceDetail() {
             ref={item?.ref || `SA-${id}`}
             date={formatDateAr(item?.createdAt)}
             sections={printSections}
+            entityType="loan_request"
+            entityId={item?.id ?? id}
+            formats={["a4"]}
           />
           <GuardedButton
             perm="finance:update"

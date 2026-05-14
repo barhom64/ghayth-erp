@@ -23,15 +23,26 @@ function evictPermissionCacheIfNeeded(): void {
   }
 }
 
-async function loadRolePermissions(role: string, companyId: number): Promise<Set<string>> {
-  const cacheKey = `${role}:${companyId}`;
+async function loadRolePermissions(role: string, companyId: number, branchId: number | null = null): Promise<Set<string>> {
+  // Migration 173 added branchId to role_permissions. Cache key includes
+  // branchId so a user picking branch A vs branch B sees the correct
+  // tier of permissions. branchId=null targets the company-wide rows
+  // only; passing the actual branchId unions in branch-specific extras.
+  const cacheKey = `${role}:${companyId}:${branchId ?? "null"}`;
   const cached = permissionCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.perms;
 
+  // Three-tier union — global default (companyId NULL), company-wide
+  // (branchId NULL), and branch-specific (branchId = scope.branchId).
+  // Branch-specific rows ADD to the company-wide set rather than
+  // replacing it, matching the audit's "least surprise" rule for
+  // explicit grants.
   const rows = await rawQuery<{ permission: string }>(
     `SELECT rp.permission FROM role_permissions rp
-     WHERE rp.role = $1 AND (rp."companyId" IS NULL OR rp."companyId" = $2)`,
-    [role, companyId]
+     WHERE rp.role = $1
+       AND (rp."companyId" IS NULL OR rp."companyId" = $2)
+       AND (rp."branchId"  IS NULL OR rp."branchId"  = $3)`,
+    [role, companyId, branchId]
   );
 
   const perms = new Set(rows.map((r) => r.permission));
@@ -86,7 +97,7 @@ async function logSecurityEvent(opts: {
   }
 }
 
-async function loadAllUserRolePermissions(userId: number, primaryRole: string, companyId: number): Promise<Set<string>> {
+async function loadAllUserRolePermissions(userId: number, primaryRole: string, companyId: number, branchId: number | null = null): Promise<Set<string>> {
   const userRoleRows = await rawQuery<{ roleKey: string }>(
     `SELECT "roleKey" FROM user_roles WHERE "userId" = $1 AND "companyId" = $2`,
     [userId, companyId]
@@ -98,7 +109,7 @@ async function loadAllUserRolePermissions(userId: number, primaryRole: string, c
   const allPerms = new Set<string>();
   await Promise.all(
     Array.from(roleKeys).map(async (role) => {
-      const perms = await loadRolePermissions(role, companyId);
+      const perms = await loadRolePermissions(role, companyId, branchId);
       for (const p of perms) allPerms.add(p);
     })
   );
@@ -119,7 +130,7 @@ export function requirePermission(...requiredPerms: string[]) {
     }
 
     try {
-      const rolePerms = await loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId);
+      const rolePerms = await loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId, scope.branchId ?? null);
       const userOverrides = await loadUserPermissions(scope.userId, scope.companyId);
 
       const effectivePerms = new Set(rolePerms);
@@ -192,7 +203,7 @@ export function requireAnyPermission(...candidatePerms: string[]) {
     }
 
     try {
-      const rolePerms = await loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId);
+      const rolePerms = await loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId, scope.branchId ?? null);
       const userOverrides = await loadUserPermissions(scope.userId, scope.companyId);
 
       const effectivePerms = new Set(rolePerms);
@@ -246,11 +257,11 @@ export function requireAnyPermission(...candidatePerms: string[]) {
  * subject"). Use this instead of hardcoded role-name checks.
  */
 export async function userHasPermission(
-  scope: { userId: number; companyId: number; role: string; isOwner?: boolean },
+  scope: { userId: number; companyId: number; role: string; isOwner?: boolean; branchId?: number | null },
   permission: string
 ): Promise<boolean> {
   if (scope.isOwner || scope.role === "owner") return true;
-  const rolePerms = await loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId);
+  const rolePerms = await loadAllUserRolePermissions(scope.userId, scope.role, scope.companyId, scope.branchId ?? null);
   const userOverrides = await loadUserPermissions(scope.userId, scope.companyId);
   const effective = new Set(rolePerms);
   for (const p of userOverrides.granted) effective.add(p);
@@ -262,9 +273,19 @@ export async function userHasPermission(
   return false;
 }
 
-export function invalidatePermissionCache(role?: string, companyId?: number): void {
+export function invalidatePermissionCache(role?: string, companyId?: number, branchId?: number | null): void {
   if (role && companyId) {
-    permissionCache.delete(`${role}:${companyId}`);
+    // Migration 173 widened the cache key with branchId. Selective
+    // invalidation needs the full triplet; callers that omit branchId
+    // wipe both the company-default cache entry and any branch-specific
+    // entries to keep them in sync.
+    if (branchId !== undefined) {
+      permissionCache.delete(`${role}:${companyId}:${branchId ?? "null"}`);
+    } else {
+      for (const key of Array.from(permissionCache.keys())) {
+        if (key.startsWith(`${role}:${companyId}:`)) permissionCache.delete(key);
+      }
+    }
   } else {
     permissionCache.clear();
   }

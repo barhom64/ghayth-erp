@@ -370,6 +370,9 @@ export default function PropertyPaymentDetail() {
                 ref={payment.ref || `PAY-${id}`}
                 date={formatDateAr(payment.paidDate || payment.dueDate || payment.createdAt)}
                 sections={printSections}
+                entityType="receipt_voucher"
+                entityId={payment.id ?? id}
+                formats={["a4", "thermal_80"]}
               />
             )}
             <GuardedButton
