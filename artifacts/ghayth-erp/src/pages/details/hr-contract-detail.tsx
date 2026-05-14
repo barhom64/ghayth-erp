@@ -266,6 +266,9 @@ export default function HrContractDetail() {
               ref={`CNT-${id}`}
               date={formatDateAr(contract.createdAt)}
               sections={printSections}
+              entityType="employee_contract"
+              entityId={contract.id ?? id}
+              formats={["a4"]}
             />
           )}
           <GuardedButton

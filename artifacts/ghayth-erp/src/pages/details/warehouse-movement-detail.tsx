@@ -270,6 +270,9 @@ export default function WarehouseMovementDetail() {
               ref={movement.ref || `MVT-${id}`}
               date={formatDateAr(movement.date || movement.createdAt)}
               sections={printSections}
+              entityType={movement.type === "adjustment" ? "stock_adjustment" : "stock_transfer"}
+              entityId={movement.id ?? id}
+              formats={["a4", "label"]}
             />
           )}
           <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!movement}>

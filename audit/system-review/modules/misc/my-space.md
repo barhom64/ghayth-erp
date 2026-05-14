@@ -23,13 +23,41 @@ _لا توجد طلبات كتابة من هذه الصفحة._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/misc.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+بوابة الموظف الذاتية (My Space / ESS - Employee Self Service).
+
+| القسم | الوصف | المرجع |
+|------|------|--------|
+| My profile | الملف الشخصي | راجع `hr-employee-profile-byid.md` |
+| My attendance | الحضور | راجع `my-attendance.md` |
+| My leaves | الإجازات | راجع `my-leave-request.md` |
+| My loans | السلف | راجع `my-loans.md` |
+| My payslip | كشف الراتب | راجع `my-payslip.md` |
+| My documents | المستندات | راجع `my-documents.md` |
+| My overtime | الإضافي | راجع `my-overtime.md` |
+| My performance | التقييم | راجع `my-performance.md` |
+| My requests | طلباتي | راجع `requests.md` |
+| My tasks | مهامي | راجع `tasks.md` |
+| My calendar | جدولي | راجع `calendar.md` |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| ESS landing | GET `/my-space` | aggregations per user | ✅ |
+| Summary widgets (leave balance, pending requests, etc.) | aggregate | ✅ |
+| Quick actions (request leave, view payslip, etc.) | navigation | ✅ |
+| Notifications inbox | راجع `notifications.md` | ✅ |
+| Self-update profile (limited fields) | PATCH | راجع `hr-employee-profile-byid.md` | ⚠ |
+| **PDPL** — own data access only | scope enforcement | ✅ critical |
+| تكامل مع all my-* sub-modules | navigation | ✅ |
+| Audit log on access | for security audit | `access_logs` | ✅ |
+| RBAC | self only — no cross-employee access | ✅ critical |
+| Mobile-friendly | responsive | ✅ |
+
+تحقق يدوي:
+- [ ] هل scope صارم على الـ user (لا cross-employee access)?
+- [ ] هل limited fields update enforce بدقة (لا تعديل salary أو position)?
+- [ ] هل mobile UX smooth للـ self-service?
+- [ ] هل sensitive data masked appropriately في الـ display?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `my-space` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

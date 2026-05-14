@@ -4,6 +4,7 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
+import { PrintButton } from "@/components/shared/print-button";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -123,6 +124,12 @@ export default function PurchaseOrderDetailPage() {
         </Button>
       </Link>
       <ExportButton endpoint={`/export/pdf/purchase-order/${id}`} filename={`po-${id}.pdf`} type="pdf" label="ملف طباعي" />
+      <PrintButton
+        entityType="purchase_order"
+        entityId={po.id ?? id}
+        formats={["a4", "excel"]}
+        label="طباعة"
+      />
       <PrintActions
         onPreview={() => setShowPreview(true)}
         onPrint={() => directPrint(printContainerRef.current, `أمر شراء ${po.ref || po.id}`)}
