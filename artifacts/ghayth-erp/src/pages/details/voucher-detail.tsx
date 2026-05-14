@@ -344,6 +344,9 @@ export default function VoucherDetail() {
                 ref={voucher.ref || `VCH-${id}`}
                 date={formatDateAr(voucher.createdAt)}
                 sections={printSections}
+                entityType={voucher.voucherType === "receipt" ? "receipt_voucher" : "payment_voucher"}
+                entityId={voucher.id ?? id}
+                formats={["a4", "thermal_80"]}
               />
             )}
             <GuardedButton

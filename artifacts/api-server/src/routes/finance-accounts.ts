@@ -13,6 +13,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { checkFinancialPeriodOpen, emitEvent, createAuditLog, todayISO, toDateISO } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { requestIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib/requestIdempotency.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
 import { logger } from "../lib/logger.js";
@@ -364,17 +365,36 @@ accountsRouter.post("/journal", authorize({ feature: "finance.accounts", action:
       );
     }
     const { financialEngine } = await import("../lib/engines/index.js");
-    const { journalId } = await financialEngine.postJournalEntry({
+    const idempotencyToken = requestIdempotencyToken(req);
+    const journalRef = ref ?? `JE-${idempotencyToken}`;
+
+    if (isDryRun(req)) {
+      const totalDebit = lines.reduce((s, l) => s + Number(l.debit ?? 0), 0);
+      const totalCredit = lines.reduce((s, l) => s + Number(l.credit ?? 0), 0);
+      res.json({
+        dryRun: true,
+        ref: journalRef,
+        description: description ?? "",
+        postingDate: journalDate,
+        lines,
+        totals: { totalDebit, totalCredit },
+      });
+      return;
+    }
+
+    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
-      ref: ref ?? `JE-${Date.now()}`,
+      ref: journalRef,
       description: description ?? "",
       sourceType: "manual_journal",
       sourceId: 0,
-      sourceKey: `finance:manual_je:${Date.now()}`,
+      sourceKey: `finance:manual_je:${journalRef}:${idempotencyToken}`,
       lines,
+      postingDate: journalDate,
     });
+    markIdempotencyReplay(req, res, alreadyExists);
 
     emitEvent({
       companyId: scope.companyId,
@@ -402,11 +422,20 @@ accountsRouter.post("/journal", authorize({ feature: "finance.accounts", action:
        GROUP BY je.id`,
       [journalId, scope.companyId]
     );
-    res.status(201).json(createdJournal || { id: journalId });
+    res.status(201).json({ ...(createdJournal || { id: journalId }), idempotentReplay: alreadyExists });
   } catch (err) {
     handleRouteError(err, res, "Create journal error:");
   }
 });
+
+// NOTE: This `POST /journal` (feature=finance.accounts) and the one in
+// finance-journal.ts (feature=finance.journal) are intentionally parallel
+// endpoints — they share an HTTP path but have different RBAC features so a
+// user with one permission cannot post via the other. Both now route
+// through financialEngine.postJournalEntry, so there is no duplicated
+// booking logic — only the RBAC wrapping differs. Do NOT consolidate them
+// without first auditing every frontend caller, because changing the
+// authorize() feature will silently revoke access for some operator roles.
 
 accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {

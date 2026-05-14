@@ -23,13 +23,36 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+تفاصيل سجل حضور واحد — Single attendance record detail.
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| View record | GET `/hr/attendance/:id` | `attendance_records` | ✅ |
+| Edit (manager correction) | PATCH | with reason + approval | ✅ critical |
+| Delete (HR only, rare) | DELETE | with strong audit + reason | ⚠ critical |
+| Manual override (إضافة hours/OT) | with approval | راجع `governance/approvals.md` | ✅ critical |
+| Photo / proof view | راجع `documents.md` | for mobile check-in | ⚠ |
+| GPS location view | for verification | راجع `hr-geofencing.md` | ⚠ |
+| Linked shift | راجع `hr-shifts-byid.md` | ✅ |
+| Late/early flags | calculated | باستخدام tolerance | ✅ |
+| Overtime breakdown | hours × rate | راجع `hr-payroll.md` | ✅ critical |
+| Linked violation (لو tardiness) | راجع `hr-violations.md` | ⚠ |
+| تكامل مع `hr-payroll.md` (input data) | ✅ critical |
+| تكامل مع `hr-attendance.md` (parent list) | ✅ |
+| تكامل مع `hr-shifts-byid.md` (shift validation) | ✅ |
+| تكامل مع `bi-kpis.md` (attendance KPIs) | ✅ |
+| تكامل مع `notifications.md` (corrections) | ✅ |
+| Audit log إجباري | كل تعديل/حذف | `audit_logs` | ✅ critical |
+| **PDPL** — GPS data restricted | retention limited | ✅ critical |
+| RBAC | hr-manager + employee (self-view) + immediate manager | ✅ critical |
+
+تحقق يدوي:
+- [ ] هل manual override requires reason + manager approval + audit?
+- [ ] هل delete restricted to HR with reason + dual approval?
+- [ ] هل GPS data retention reasonable (e.g., 90 days)?
+- [ ] هل linked violation auto-created for late > X minutes?
+- [ ] هل photo / GPS proof reviewable by auditor?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `:id` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._
