@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { buildScopedWhere } from "../lib/scopedQuery.js";
 import { handleRouteError, NotFoundError,
   parseId,
@@ -233,7 +233,7 @@ router.get("/:id/timeline", authorize({ feature: "admin", action: "list" }), asy
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const result = await getTimeline(id, scope.companyId);
-    res.json(result);
+    res.json(maskFields(req, result));
   } catch (err) { handleRouteError(err, res, "Workflow timeline error:"); }
 });
 
@@ -242,7 +242,7 @@ router.get("/timeline/:refTable/:refId", authorize({ feature: "admin", action: "
     const scope = req.scope!;
     const refId = parseId(req.params.refId, "refId");
     const result = await getTimelineByRef(String(req.params.refTable), refId, scope.companyId);
-    res.json(result);
+    res.json(maskFields(req, result));
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
@@ -283,7 +283,7 @@ router.get("/", authorize({ feature: "admin", action: "list" }), async (req, res
        LIMIT 200`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
@@ -310,7 +310,7 @@ router.get("/pending", authorize({ feature: "admin", action: "list" }), async (r
        LIMIT 200`,
       [scope.companyId, scope.activeAssignmentId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
@@ -326,7 +326,7 @@ router.get("/definitions", authorize({ feature: "admin", action: "list" }), asyn
        ORDER BY wd."requestTypeLabel" LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: defs, total: defs.length });
+    res.json(maskFields(req, { data: defs, total: defs.length }));
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
@@ -345,7 +345,7 @@ router.get("/definitions/:id", authorize({ feature: "admin", action: "view" }), 
       `SELECT * FROM workflow_steps WHERE "definitionId" = $1 ORDER BY "stepOrder" LIMIT 500`,
       [def.id]
     );
-    res.json({ ...def, steps });
+    res.json(maskFields(req, { ...def, steps }));
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
@@ -447,7 +447,7 @@ router.get("/sla-definitions", authorize({ feature: "admin", action: "list" }), 
       `SELECT * FROM sla_definitions WHERE "companyId" = $1 ORDER BY "requestType" LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }
@@ -484,12 +484,12 @@ router.get("/stats", authorize({ feature: "admin", action: "list" }), async (req
     const [pending] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status IN ('pending','in_review')`, [scope.companyId]);
     const [slaWarning] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" IN ('warning','exceeded') AND status IN ('pending','in_review')`, [scope.companyId]);
     const [escalated] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as count FROM workflow_instances WHERE "companyId" = $1 AND "deletedAt" IS NULL AND "slaStatus" = 'escalated' AND status IN ('pending','in_review')`, [scope.companyId]);
-    res.json({
+    res.json(maskFields(req, {
       total: Number(total.count),
       pending: Number(pending.count),
       slaWarning: Number(slaWarning.count),
       escalated: Number(escalated.count),
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "workflows");
   }

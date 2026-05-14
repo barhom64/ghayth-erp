@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { handleRouteError, ValidationError , zodParse } from "../lib/errorHandler.js";
 import { logger } from "../lib/logger.js";
@@ -175,7 +175,7 @@ router.get("/logs", authorize({ feature: "documents", action: "create" }), async
       `SELECT dsl.*, e.name AS "userName" FROM digital_signature_logs dsl LEFT JOIN users u ON u.id=dsl."userId" LEFT JOIN employees e ON e.id=u."employeeId" WHERE ${conditions.join(" AND ")} ORDER BY dsl."createdAt" DESC LIMIT 100`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err: any) {
     handleRouteError(err, res, "Signature logs error");
   }

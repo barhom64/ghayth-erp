@@ -2050,15 +2050,15 @@ router.post("/late-rent/escalate", authorize({ feature: "properties.payments", a
         // H11 fix: use proper 2-decimal financial rounding.
         const penaltyResult = await withTransaction(async (client) => {
           const lockRes = await client.query(
-            `SELECT id, amount FROM rent_payments WHERE id = $1 AND "deletedAt" IS NULL FOR UPDATE`,
-            [payment.id]
+            `SELECT id, amount FROM rent_payments WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
+            [payment.id, scope.companyId]
           );
           const locked = lockRes.rows[0];
           if (!locked) throw new NotFoundError("القسط غير موجود");
           const lateFee = roundTo2(Number(locked.amount) * 0.02);
           await client.query(
-            `UPDATE rent_payments SET amount=amount+$1, notes=CONCAT(COALESCE(notes,''), ' | غرامة تأخير 2%: ',$2::text) WHERE id=$3 AND "deletedAt" IS NULL`,
-            [lateFee, lateFee.toFixed(2), locked.id]
+            `UPDATE rent_payments SET amount=amount+$1, notes=CONCAT(COALESCE(notes,''), ' | غرامة تأخير 2%: ',$2::text) WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
+            [lateFee, lateFee.toFixed(2), locked.id, scope.companyId]
           );
           return { lateFee, newAmount: Number(locked.amount) + lateFee };
         });

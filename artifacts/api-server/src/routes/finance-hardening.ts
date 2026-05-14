@@ -11,7 +11,7 @@ import { z } from "zod";
 import { Router } from "express";
 import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   createAuditLog,
   emitEvent,
@@ -143,7 +143,7 @@ financeHardeningRouter.get("/fiscal-periods-v2", authorize({ feature: "finance.h
        ORDER BY fp."startDate" DESC`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List fiscal periods error:");
   }
@@ -419,7 +419,7 @@ financeHardeningRouter.get("/journal-manual", authorize({ feature: "finance.hard
        ORDER BY je."createdAt" DESC LIMIT 100`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List manual journals error:");
   }
@@ -441,7 +441,7 @@ financeHardeningRouter.get("/journal-manual/:id", authorize({ feature: "finance.
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("القيد اليدوي غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) {
     handleRouteError(err, res, "Journal manual detail error:");
   }
@@ -690,7 +690,7 @@ financeHardeningRouter.get("/bank-guarantees", authorize({ feature: "finance.har
       expired: rows.filter((r) => r.alertStatus === 'expired').length,
     };
 
-    res.json({ data: rows, summary });
+    res.json(maskFields(req, { data: rows, summary }));
   } catch (err) {
     handleRouteError(err, res, "List bank guarantees error:");
   }
@@ -962,7 +962,7 @@ financeHardeningRouter.get("/intercompany", authorize({ feature: "finance.harden
        ORDER BY ic."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List intercompany transactions error:");
   }
@@ -1133,11 +1133,11 @@ financeHardeningRouter.get("/intercompany/consolidation", authorize({ feature: "
       ),
     ]);
 
-    res.json({
+    res.json(maskFields(req, {
       consolidatedBalance: balanceSheet,
       intercompanyElimination: Number(intercompanyTotal[0]?.total ?? 0),
       byCompany,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Consolidation report error:");
   }
@@ -1163,7 +1163,7 @@ financeHardeningRouter.get("/projects", authorize({ feature: "finance.hardening"
        LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List projects error:");
   }
@@ -1218,7 +1218,7 @@ financeHardeningRouter.get("/projects/:id", authorize({ feature: "finance.harden
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المشروع غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) {
     handleRouteError(err, res, "Project detail error:");
   }
@@ -1247,11 +1247,11 @@ financeHardeningRouter.get("/projects/:id/costs", authorize({ feature: "finance.
     const budgetRemaining = Number(project.budget ?? 0) - totalCost;
     const usagePct = Number(project.budget) > 0 ? Math.round((totalCost / Number(project.budget)) * 100) : 0;
 
-    res.json({
+    res.json(maskFields(req, {
       project,
       costs,
       summary: { totalCost, budget: Number(project.budget ?? 0), budgetRemaining, usagePct },
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Project costs error:");
   }
@@ -1326,7 +1326,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
     const totalInflow90 = inflow90.reduce((s: number, r) => s + Number(r.expected), 0);
     const totalOutflow30 = outflow30.reduce((s: number, r) => s + Number(r.expected), 0);
 
-    res.json({
+    res.json(maskFields(req, {
       currentBalance,
       forecast: {
         days30: { inflow: totalInflow30, outflow: totalOutflow30, net: totalInflow30 - totalOutflow30, projected: currentBalance + totalInflow30 - totalOutflow30 },
@@ -1335,7 +1335,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
       },
       inflows: { next30: inflow30, next60: inflow60, next90: inflow90 },
       outflows: { next30: outflow30 },
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Cash flow forecast error:");
   }
@@ -1383,7 +1383,7 @@ financeHardeningRouter.get("/cost-center-report", authorize({ feature: "finance.
       [scope.companyId, costCenter]
     ) : [];
 
-    res.json({ data: rows, details: costCenterDetails, total: rows.length });
+    res.json(maskFields(req, { data: rows, details: costCenterDetails, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "Cost center report error:");
   }
@@ -1400,7 +1400,7 @@ financeHardeningRouter.get("/posting-failures", authorize({ feature: "finance.ha
        ORDER BY "createdAt" DESC LIMIT 100`,
       [scope.companyId, resolved]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "Posting failures error:");
   }

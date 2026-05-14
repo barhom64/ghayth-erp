@@ -4,7 +4,7 @@ import { handleRouteError, ValidationError, NotFoundError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
@@ -93,7 +93,7 @@ router.get("/", authorize({ feature: "admin", action: "update" }), async (req, r
        ORDER BY priority DESC, "createdAt" DESC`,
       [scope.companyId]
     );
-    res.json({ data: rules, total: rules.length });
+    res.json(maskFields(req, { data: rules, total: rules.length }));
   } catch (err) {
     handleRouteError(err, res, "قواعد الأعمال");
   }
@@ -133,7 +133,7 @@ router.get("/logs", authorize({ feature: "admin", action: "update" }), async (re
       countParams
     );
 
-    res.json({ data: logs, total: Number(countRow?.total ?? 0), page: pageNum, pageSize: perPage });
+    res.json(maskFields(req, { data: logs, total: Number(countRow?.total ?? 0), page: pageNum, pageSize: perPage }));
   } catch (err) {
     handleRouteError(err, res, "سجل القواعد");
   }
