@@ -1,0 +1,189 @@
+name: audit-runtime
+
+# Boots api-server + ghayth-erp, runs the honest 5-axis runtime audit
+# (scripts/src/runtime-audit.cjs) against every registered route, then
+# fails the build if any route reports a hard FAIL on the gating axes
+# A1 (render), A2 (data fetch), or A4 (navigation). A3 (primary CTA)
+# and A5 (runtime smoke) are reported as warn-only until the smarter
+# form-field probe (Task #186) lands.
+#
+# Runs on every push/PR to main alongside .github/workflows/guard.yml.
+# Kept in a separate workflow because:
+#   1. It needs a live DB + two services running (guard.yml is pure
+#      static analysis and finishes in ~5 min).
+#   2. The full 373-route walk takes 30-40 min; the guard.yml job has
+#      a 15-min timeout we don't want to grow.
+#
+# Outputs (uploaded as artifacts on every run, success or failure):
+#   - audit/runtime-audit-results.json — raw per-route 5-axis JSON
+#   - audit/screenshots/                — PNG of every FAIL row
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  audit-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ghayth
+          POSTGRES_PASSWORD: ghayth
+          POSTGRES_DB: ghayth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://ghayth:ghayth@localhost:5432/ghayth
+      ADMIN_EMAIL: admin@ghayth.com
+      ADMIN_PASSWORD: Admin@123456
+      BASE_URL: http://localhost
+      JWT_SECRET: ci-only-not-a-secret
+      NODE_ENV: development
+      HUSKY: '0'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install Chromium for Puppeteer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
+          which chromium || which chromium-browser
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build api-spec
+        run: pnpm --filter @ghayth-erp/api-spec run generate || true
+
+      - name: Build ghayth-erp frontend
+        run: pnpm --filter ghayth-erp run build
+
+      - name: Start api-server
+        run: |
+          pnpm --filter @workspace/api-server start > /tmp/api-server.log 2>&1 &
+          echo $! > /tmp/api-server.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/api/healthz >/dev/null 2>&1; then
+              echo "api-server up"; break
+            fi
+            sleep 2
+          done
+          curl -fsS http://localhost:8080/api/healthz || (echo "api-server failed to start"; tail -200 /tmp/api-server.log; exit 1)
+
+      - name: Start ghayth-erp (preview)
+        run: |
+          pnpm --filter ghayth-erp run preview --host 0.0.0.0 --port 5173 > /tmp/ghayth-erp.log 2>&1 &
+          echo $! > /tmp/ghayth-erp.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:5173/ >/dev/null 2>&1; then
+              echo "ghayth-erp up"; break
+            fi
+            sleep 2
+          done
+          curl -fsS http://localhost:5173/ >/dev/null || (echo "ghayth-erp failed to start"; tail -200 /tmp/ghayth-erp.log; exit 1)
+
+      - name: Start reverse proxy (api on /api, frontend on /)
+        run: |
+          # Mimic the Replit shared proxy: route /api/* to api-server (8080)
+          # and everything else to the Vite preview (5173) on localhost:80.
+          npm install -g http-proxy@1.18.1
+          node -e "
+            const http = require('http');
+            const httpProxy = require('http-proxy');
+            const api = httpProxy.createProxyServer({ target: 'http://localhost:8080' });
+            const fe  = httpProxy.createProxyServer({ target: 'http://localhost:5173' });
+            http.createServer((req, res) => {
+              if (req.url.startsWith('/api')) return api.web(req, res, {}, e => { res.statusCode = 502; res.end(String(e)); });
+              return fe.web(req, res, {}, e => { res.statusCode = 502; res.end(String(e)); });
+            }).listen(80, () => console.log('proxy on :80'));
+          " > /tmp/proxy.log 2>&1 &
+          echo $! > /tmp/proxy.pid
+          sleep 2
+          sudo true || true  # noop; port 80 may need sudo on some runners
+          curl -fsS http://localhost/api/healthz || (echo "proxy failed"; tail -200 /tmp/proxy.log; exit 1)
+
+      - name: Run runtime audit
+        id: audit
+        env:
+          OUT_DIR: /tmp/runtime-audit
+          SHOT_DIR: audit/screenshots
+        run: pnpm run audit:runtime
+        continue-on-error: true
+
+      - name: Sanity-check audit output exists
+        run: |
+          test -s /tmp/runtime-audit/all.json || {
+            echo "::error::runtime audit did not produce /tmp/runtime-audit/all.json";
+            ls -la /tmp/runtime-audit/ || true;
+            exit 1;
+          }
+          # Reject stale output (must be newer than the workflow start).
+          find /tmp/runtime-audit/all.json -mmin -120 | grep -q . || {
+            echo "::error::/tmp/runtime-audit/all.json is older than 120 min — looks stale";
+            exit 1;
+          }
+
+      - name: Upload runtime audit JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-audit-results
+          path: /tmp/runtime-audit/all.json
+          if-no-files-found: warn
+
+      - name: Upload runtime audit screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-audit-screenshots
+          path: audit/screenshots/
+          if-no-files-found: warn
+
+      - name: Gate on A1/A2/A4 FAIL
+        env:
+          AUDIT_JSON: /tmp/runtime-audit/all.json
+        run: pnpm run audit:runtime:guard
+
+      - name: Tail server logs on failure
+        if: failure()
+        run: |
+          echo "=== api-server.log (tail) ==="; tail -200 /tmp/api-server.log || true
+          echo "=== ghayth-erp.log (tail) ==="; tail -200 /tmp/ghayth-erp.log || true
+          echo "=== proxy.log (tail) ===";       tail -200 /tmp/proxy.log     || true
+
+      - name: Stop services
+        if: always()
+        run: |
+          for f in /tmp/api-server.pid /tmp/ghayth-erp.pid /tmp/proxy.pid; do
+            [ -f "$f" ] && kill "$(cat "$f")" 2>/dev/null || true
+          done
