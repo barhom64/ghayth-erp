@@ -5,7 +5,7 @@ import { handleRouteError, NotFoundError, ForbiddenError,
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
@@ -139,7 +139,7 @@ router.get("/accounting-mappings", authorize({ feature: "finance.accounting_engi
        LIMIT 500`,
       [scope.companyId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List accounting mappings error:");
   }
@@ -198,7 +198,7 @@ router.get("/accounting-mappings/:operationType", authorize({ feature: "finance.
       [scope.companyId, req.params.operationType]
     );
     if (!row) throw new NotFoundError("التوجيه غير موجود");
-    res.json(row);
+    res.json(maskFields(req, row));
   } catch (err) {
     handleRouteError(err, res, "Get accounting mapping error:");
   }
@@ -274,7 +274,7 @@ router.get("/accounting-mappings/:operationType/validate", authorize({ feature: 
   try {
     const scope = req.scope!;
     const result = await validateAccountingMapping(scope.companyId, String(req.params.operationType));
-    res.json(result);
+    res.json(maskFields(req, result));
   } catch (err) {
     handleRouteError(err, res, "Validate accounting mapping error:");
   }
@@ -327,7 +327,7 @@ router.get("/journal-templates", authorize({ feature: "finance.accounting_engine
       }
     }
 
-    res.json({ data: templates, total: templates.length });
+    res.json(maskFields(req, { data: templates, total: templates.length }));
   } catch (err) {
     handleRouteError(err, res, "List journal templates error:");
   }
@@ -479,7 +479,7 @@ router.get("/subsidiary-accounts", authorize({ feature: "finance.accounting_engi
        LIMIT 500`,
       params
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "List subsidiary accounts error:");
   }
@@ -499,7 +499,7 @@ router.get("/subsidiary-accounts/entity/:entityType/:entityId", authorize({ feat
        ORDER BY sa."accountType" LIMIT 500`,
       [scope.companyId, entityType, entityId]
     );
-    res.json({ data: rows, total: rows.length });
+    res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "Get entity subsidiary accounts error:");
   }

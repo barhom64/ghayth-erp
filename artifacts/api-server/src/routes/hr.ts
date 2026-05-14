@@ -1890,8 +1890,8 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
         onApply: async (_row, client) => {
           if (currentStage) {
             await client.query(
-              `UPDATE leave_approval_stages SET status = 'returned', decision = $1, "decidedBy" = $2, "decidedAt" = NOW() WHERE id = $3 AND status = 'pending'`,
-              [reason, scope.activeAssignmentId, currentStage.id]
+              `UPDATE leave_approval_stages SET status = 'returned', decision = $1, "decidedBy" = $2, "decidedAt" = NOW() WHERE id = $3 AND status = 'pending' AND "leaveId" IN (SELECT id FROM leaves WHERE "companyId"=$4)`,
+              [reason, scope.activeAssignmentId, currentStage.id, scope.companyId]
             );
           }
           await client.query(

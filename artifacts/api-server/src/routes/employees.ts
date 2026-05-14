@@ -1262,8 +1262,8 @@ router.delete("/:id", authorize({ feature: "hr.employees", action: "delete", res
         [employee.assignmentId, scope.companyId]
       );
       await tx.query(
-        `UPDATE employees SET status = 'terminated' WHERE id = $1 AND status = 'active' AND "deletedAt" IS NULL`,
-        [id]
+        `UPDATE employees SET status = 'terminated' WHERE id = $1 AND "companyId" = $2 AND status = 'active' AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
       );
 
       // 1. Deactivate contracts tied to this employee / assignment so

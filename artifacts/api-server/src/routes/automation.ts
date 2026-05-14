@@ -20,9 +20,9 @@ router.post("/cron-jobs/:id/toggle", authorize({ feature: "admin", action: "upda
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const { affectedRows } = await rawExecute(`UPDATE cron_jobs SET "isActive" = NOT "isActive" WHERE id=$1`, [id]);
+    const { affectedRows } = await rawExecute(`UPDATE cron_jobs SET "isActive" = NOT "isActive" WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("المهمة غير موجودة");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM cron_jobs WHERE id=$1`, [id]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM cron_jobs WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "cron_jobs", entityId: id, after: { isActive: row?.isActive } }).catch((e) => logger.error(e, "automation background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "automation.cron_job.toggled", entity: "cron_jobs", entityId: id, details: JSON.stringify({ isActive: row?.isActive }) }).catch((e) => logger.error(e, "automation background task failed"));
     res.json(row);

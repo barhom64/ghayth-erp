@@ -12,6 +12,7 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestIdempotency.js";
 import {
   emitEvent,
   createAuditLog,
@@ -546,7 +547,8 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
     }
 
     const sourceAcct = sourceAccountCode || "1100";
-    const ref = `CUSTODY-${Date.now()}`;
+    const idempotencyToken = requestIdempotencyToken(req);
+    const ref = `CUSTODY-${idempotencyToken}`;
     const custodyAssignmentId = resolvedAssignmentId || scope.activeAssignmentId;
 
     // Resolve the real employee PK once. Journal lines tag employees by
@@ -573,7 +575,7 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
       }
     }
 
-    const { journalId } = await financialEngine.postJournalEntry({
+    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: custodyAssignmentId,
@@ -587,6 +589,7 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
         { accountCode: sourceAcct, debit: 0, credit: Number(amount) },
       ],
     });
+    markIdempotencyReplay(req, res, alreadyExists);
 
     if (purpose || expectedReturnDate) {
       await rawExecute(
@@ -662,7 +665,8 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
       });
     }
 
-    const { journalId, settleRef, remaining } = await withTransaction(async (client) => {
+    const idempotencyToken = requestIdempotencyToken(req);
+    const { journalId, settleRef, remaining, alreadyExists } = await withTransaction(async (client) => {
       // Lock the custody header row to prevent concurrent settlements
       const lockResult = await client.query(
         `SELECT je.id, je.status AS "approvalStatus"
@@ -726,9 +730,9 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
       }
 
       const sourceAcct = sourceAccountCode || "1100";
-      const settleRef = `CUSTODY-SETTLE-${Date.now()}`;
+      const settleRef = `CUSTODY-SETTLE-${idempotencyToken}`;
       const { financialEngine } = await import("../lib/engines/index.js");
-      const { journalId } = await financialEngine.postJournalEntry({
+      const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
         createdBy: scope.activeAssignmentId,
@@ -736,15 +740,16 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
         description: custodyRef,
         sourceType: "custody_settlement",
         sourceId: 0,
-        sourceKey: `finance:custody_settle:${settleRef}`,
+        sourceKey: `finance:custody_settle:${custodyRef}:${idempotencyToken}`,
         lines: [
           { accountCode: sourceAcct, debit: Number(amount), credit: 0 },
           { accountCode: custodyAccountCode, debit: 0, credit: Number(amount) },
         ],
       });
 
-      return { journalId, settleRef, remaining };
+      return { journalId, settleRef, remaining, alreadyExists };
     });
+    markIdempotencyReplay(req, res, alreadyExists);
 
     emitEvent({
       companyId: scope.companyId,
@@ -820,7 +825,8 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
       });
     }
 
-    const { journalId, settleRef, remaining } = await withTransaction(async (client) => {
+    const idempotencyToken = requestIdempotencyToken(req);
+    const { journalId, settleRef, remaining, alreadyExists } = await withTransaction(async (client) => {
       // Lock the custody header row to prevent concurrent settlements
       const lockResult = await client.query(
         `SELECT je.id, je.ref FROM journal_entries je
@@ -870,8 +876,8 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
 
       const sourceAcct = sourceAccountCode || "1100";
       const { financialEngine } = await import("../lib/engines/index.js");
-      const settleRef = `CUSTODY-SETTLE-${Date.now()}`;
-      const { journalId } = await financialEngine.postJournalEntry({
+      const settleRef = `CUSTODY-SETTLE-${idempotencyToken}`;
+      const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId,
         createdBy: scope.activeAssignmentId,
@@ -879,15 +885,16 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
         description: custody.ref,
         sourceType: "custody_settlement",
         sourceId: 0,
-        sourceKey: `finance:custody_settle:${settleRef}`,
+        sourceKey: `finance:custody_settle:${custody.ref}:${idempotencyToken}`,
         lines: [
           { accountCode: sourceAcct, debit: Number(amount), credit: 0 },
           { accountCode: custodyAccountCode, debit: 0, credit: Number(amount) },
         ],
       });
 
-      return { journalId, settleRef, remaining };
+      return { journalId, settleRef, remaining, alreadyExists };
     });
+    markIdempotencyReplay(req, res, alreadyExists);
 
     emitEvent({
       companyId: scope.companyId,

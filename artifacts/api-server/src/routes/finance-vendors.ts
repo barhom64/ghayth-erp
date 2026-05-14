@@ -316,6 +316,96 @@ vendorsRouter.get("/receivables", authorize({ feature: "finance.vendors", action
   }
 });
 
+// Payables view — AP equivalent of /receivables. Umrah ERP doesn't carry
+// a dedicated `purchase_invoices` table; the AP narrative for the NUSK
+// pipeline lives on `umrah_nusk_invoices` (one row per voucher, with the
+// service breakdown already split into ground/electronic/visa/hotel/
+// transport buckets). This endpoint surfaces every non-cancelled NUSK
+// invoice as an AP entry alongside agent/treasury context so the finance
+// module can show what the company owes upstream without a separate
+// import step. Gap #1 from docs/umrah-import-gaps-fix-plan.md.
+vendorsRouter.get("/payables", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { agentId: agentFilter, status: statusFilter } = req.query as { agentId?: string; status?: string };
+    const params: unknown[] = [scope.companyId];
+    let extraWhere = "";
+    if (agentFilter && agentFilter.trim()) {
+      params.push(Number(agentFilter));
+      extraWhere += ` AND ni."agentId" = $${params.length}`;
+    }
+    if (statusFilter && statusFilter.trim()) {
+      params.push(statusFilter.trim());
+      extraWhere += ` AND ni."nuskStatus" = $${params.length}`;
+    }
+
+    interface PayableRow {
+      id: number;
+      source: string;
+      nuskInvoiceNumber: string;
+      issueDate: string | null;
+      expiryDate: string | null;
+      mutamerCount: number;
+      totalAmount: number | string;
+      refundAmount: number | string;
+      netCost: number | string;
+      outstandingAmount: number | string;
+      nuskStatus: string;
+      agentId: number | null;
+      agentName: string | null;
+      subAgentId: number | null;
+      subAgentName: string | null;
+      treasuryId: number | null;
+      treasuryCode: string | null;
+      treasuryName: string | null;
+    }
+
+    const rows = await rawQuery<PayableRow>(
+      `SELECT
+         ni.id,
+         'umrah_nusk' AS source,
+         ni."nuskInvoiceNumber",
+         ni."issueDate", ni."expiryDate",
+         ni."mutamerCount",
+         ni."totalAmount", ni."refundAmount", ni."netCost",
+         (COALESCE(ni."totalAmount",0) - COALESCE(ni."refundAmount",0)) AS "outstandingAmount",
+         ni."nuskStatus",
+         ni."agentId",
+         a.name AS "agentName",
+         ni."subAgentId",
+         sa.name AS "subAgentName",
+         ni."treasuryId",
+         t.code AS "treasuryCode",
+         t.name AS "treasuryName"
+       FROM umrah_nusk_invoices ni
+       LEFT JOIN umrah_agents      a  ON a.id = ni."agentId"    AND a."deletedAt"  IS NULL
+       LEFT JOIN umrah_sub_agents  sa ON sa.id = ni."subAgentId" AND sa."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts t  ON t.id = ni."treasuryId"  AND t."deletedAt"  IS NULL
+       WHERE ni."companyId" = $1
+         AND ni."deletedAt" IS NULL
+         AND ni."nuskStatus" != 'cancelled'
+         ${extraWhere}
+       ORDER BY ni."issueDate" DESC NULLS LAST, ni.id DESC
+       LIMIT 200`,
+      params
+    );
+
+    const summary = rows.reduce(
+      (acc, r) => {
+        acc.totalAmount += Number(r.totalAmount ?? 0);
+        acc.refundAmount += Number(r.refundAmount ?? 0);
+        acc.outstandingAmount += Number(r.outstandingAmount ?? 0);
+        return acc;
+      },
+      { totalAmount: 0, refundAmount: 0, outstandingAmount: 0 },
+    );
+
+    res.json(maskFields(req, { data: rows, total: rows.length, summary }));
+  } catch (err) {
+    handleRouteError(err, res, "خطأ غير متوقع");
+  }
+});
+
 vendorsRouter.get("/receivables/:id", authorize({ feature: "finance.vendors", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;

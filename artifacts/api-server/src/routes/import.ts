@@ -19,7 +19,7 @@
 
 import { Router, type IRouter } from "express";
 import { z } from "zod";
-import { authorize } from "../lib/rbac/authorize.js";
+import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, zodParse } from "../lib/errorHandler.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
@@ -191,7 +191,7 @@ router.get(
       const entity = entityRaw ? entityKeyOrThrow(entityRaw) : undefined;
       const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
       const data = await listBatches(scopeFromReq(req), entity, limit);
-      res.json({ data, total: data.length });
+      res.json(maskFields(req, { data, total: data.length }));
     } catch (err) {
       handleRouteError(err, res, "Import batches error");
     }
@@ -215,7 +215,7 @@ router.get(
         res.status(404).json({ error: "batch not found" });
         return;
       }
-      res.json(batch);
+      res.json(maskFields(req, batch));
     } catch (err) {
       handleRouteError(err, res, "Import batch detail error");
     }
