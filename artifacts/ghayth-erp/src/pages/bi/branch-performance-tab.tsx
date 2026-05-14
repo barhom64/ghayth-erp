@@ -26,7 +26,7 @@ export function BranchPerformanceTab() {
       render: (r) => (
         <div className="flex items-center gap-1">
           <div className="w-16 bg-gray-200 rounded-full h-1.5">
-            <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${r.attendanceRate}%` }} />
+            <div className="bg-status-info-surface0 h-1.5 rounded-full" style={{ width: `${r.attendanceRate}%` }} />
           </div>
           <span className="text-xs">{r.attendanceRate}%</span>
         </div>

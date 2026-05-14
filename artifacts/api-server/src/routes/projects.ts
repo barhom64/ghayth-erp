@@ -10,7 +10,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { criticalPathLength } from "../lib/algorithms.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
@@ -766,6 +766,7 @@ router.post("/:id/phases", authorize({ feature: "projects.tasks", action: "creat
       `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
       [projectId, b.name.trim(), b.orderIndex || 0, b.startDate || null, b.endDate || null]
     );
+    assertInsert(insertId, "project_phases");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [insertId, projectId]);
 
     createAuditLog({
@@ -1414,6 +1415,7 @@ router.post("/:id/milestones", authorize({ feature: "projects.tasks", action: "c
        VALUES ($1,$2,$3,$3,$4,$5,'pending',$6)`,
       [projectId, scope.companyId, b.title, b.description || null, b.targetDate, b.completedDate || null]
     );
+    assertInsert(insertId, "project_milestones");
 
     // Register milestone obligation for its targetDate
     try {
@@ -1588,6 +1590,7 @@ router.post("/:id/risks", authorize({ feature: "projects.tasks", action: "create
        probability, impact, riskScore, riskLevel,
        b.mitigationPlan || null, b.responsibleId || null]
     );
+    assertInsert(insertId, "project_risks");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_risks WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({
@@ -1747,6 +1750,7 @@ router.post("/:id/resources", authorize({ feature: "projects.list", action: "cre
        b.role || 'member', b.allocatedHours || 0, b.budgetAllocated || 0,
        b.startDate || null, b.endDate || null]
     );
+    assertInsert(insertId, "project_resources");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_resources WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     createAuditLog({

@@ -81,7 +81,7 @@ export function ClientContextCard({
 
   if (isLoading) {
     return (
-      <Card className={cn("border-gray-200 bg-gray-50/50 animate-pulse", className)}>
+      <Card className={cn("border-border bg-surface-subtle/50 animate-pulse", className)}>
         <CardContent className="p-4">
           <div className="h-4 w-32 bg-gray-200 rounded mb-3" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -164,9 +164,9 @@ export function ClientContextCard({
         {creditLimit > 0 && (
           <div className={cn(
             "flex items-center gap-1.5 text-xs p-1.5 rounded border",
-            creditExceeded && "bg-red-50 text-red-700 border-red-200",
-            creditWarning && !creditExceeded && "bg-amber-50 text-amber-700 border-amber-200",
-            !creditWarning && "bg-gray-50 text-gray-600 border-gray-200",
+            creditExceeded && "bg-status-error-surface text-status-error-foreground border-status-error-surface",
+            creditWarning && !creditExceeded && "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface",
+            !creditWarning && "bg-surface-subtle text-muted-foreground border-border",
           )}>
             <Info className="h-3 w-3 shrink-0" />
             <span>
@@ -207,13 +207,13 @@ function FinTile({
   tone: "neutral" | "green" | "red" | "amber";
 }) {
   const toneClass =
-    tone === "red" ? "text-red-700 border-red-200" :
-    tone === "green" ? "text-green-700 border-green-200" :
-    tone === "amber" ? "text-amber-700 border-amber-200" :
-    "text-gray-800 border-gray-200";
+    tone === "red" ? "text-status-error-foreground border-status-error-surface" :
+    tone === "green" ? "text-status-success-foreground border-status-success-surface" :
+    tone === "amber" ? "text-status-warning-foreground border-status-warning-surface" :
+    "text-gray-800 border-border";
   return (
     <div className={cn("bg-white rounded p-2 border", toneClass.split(" ")[1])}>
-      <div className="flex items-center gap-1 text-xs text-gray-500 mb-0.5">
+      <div className="flex items-center gap-1 text-xs text-muted-foreground mb-0.5">
         <Icon className="h-3 w-3" />
         <span>{label}</span>
       </div>
@@ -241,7 +241,7 @@ function InvoiceSection({
         <span>فواتير مفتوحة حديثة</span>
       </div>
       {recentOpen.map((inv) => (
-        <div key={inv.id} className="flex items-center justify-between bg-white rounded p-1.5 text-xs border border-gray-200">
+        <div key={inv.id} className="flex items-center justify-between bg-white rounded p-1.5 text-xs border border-border">
           <span className="font-mono text-gray-700">{inv.ref}</span>
           <div className="flex items-center gap-2">
             <span className="font-semibold">{formatCurrency(Number(inv.total))}</span>
@@ -254,7 +254,7 @@ function InvoiceSection({
         </div>
       ))}
       {overdueCount > 0 && (
-        <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-1.5">
+        <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
           <AlertTriangle className="h-3 w-3" />
           <span>
             يوجد {overdueCount} فاتورة متأخرة — قد يكون التحصيل أولى من فاتورة جديدة
@@ -280,16 +280,16 @@ function OpportunitySection({
         <span>الفرص التجارية</span>
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <div className="bg-white rounded p-2 border border-gray-200">
-          <p className="text-xs text-gray-500">مفتوحة</p>
+        <div className="bg-white rounded p-2 border border-border">
+          <p className="text-xs text-muted-foreground">مفتوحة</p>
           <p className="text-sm font-semibold">{openOpportunities.length}</p>
         </div>
-        <div className="bg-white rounded p-2 border border-green-200">
-          <p className="text-xs text-gray-500">قيمة المفتوحة</p>
-          <p className="text-sm font-semibold text-green-700">{formatCurrency(totalOpenValue)}</p>
+        <div className="bg-white rounded p-2 border border-status-success-surface">
+          <p className="text-xs text-muted-foreground">قيمة المفتوحة</p>
+          <p className="text-sm font-semibold text-status-success-foreground">{formatCurrency(totalOpenValue)}</p>
         </div>
-        <div className="bg-white rounded p-2 border border-gray-200">
-          <p className="text-xs text-gray-500">الإجمالي</p>
+        <div className="bg-white rounded p-2 border border-border">
+          <p className="text-xs text-muted-foreground">الإجمالي</p>
           <p className="text-sm font-semibold">{allCount}</p>
         </div>
       </div>
@@ -311,16 +311,16 @@ function TicketSection({
         <span>التذاكر</span>
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <div className="bg-white rounded p-2 border border-amber-200">
-          <p className="text-xs text-gray-500">مفتوحة</p>
-          <p className="text-sm font-semibold text-amber-700">{openTickets.length}</p>
+        <div className="bg-white rounded p-2 border border-status-warning-surface">
+          <p className="text-xs text-muted-foreground">مفتوحة</p>
+          <p className="text-sm font-semibold text-status-warning-foreground">{openTickets.length}</p>
         </div>
-        <div className="bg-white rounded p-2 border border-gray-200">
-          <p className="text-xs text-gray-500">الإجمالي</p>
+        <div className="bg-white rounded p-2 border border-border">
+          <p className="text-xs text-muted-foreground">الإجمالي</p>
           <p className="text-sm font-semibold">{allCount}</p>
         </div>
-        <div className="bg-white rounded p-2 border border-gray-200">
-          <p className="text-xs text-gray-500">حرجة</p>
+        <div className="bg-white rounded p-2 border border-border">
+          <p className="text-xs text-muted-foreground">حرجة</p>
           <p className="text-sm font-semibold">
             {openTickets.filter((t) => t.priority === "urgent" || t.priority === "critical").length}
           </p>
@@ -344,12 +344,12 @@ function ProjectSection({
         <span>المشاريع</span>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <div className="bg-white rounded p-2 border border-green-200">
-          <p className="text-xs text-gray-500">نشطة</p>
-          <p className="text-sm font-semibold text-green-700">{active.length}</p>
+        <div className="bg-white rounded p-2 border border-status-success-surface">
+          <p className="text-xs text-muted-foreground">نشطة</p>
+          <p className="text-sm font-semibold text-status-success-foreground">{active.length}</p>
         </div>
-        <div className="bg-white rounded p-2 border border-gray-200">
-          <p className="text-xs text-gray-500">الإجمالي</p>
+        <div className="bg-white rounded p-2 border border-border">
+          <p className="text-xs text-muted-foreground">الإجمالي</p>
           <p className="text-sm font-semibold">{projects.length}</p>
         </div>
       </div>

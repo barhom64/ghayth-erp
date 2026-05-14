@@ -27,13 +27,47 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/hr.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+إنشاء دورة تدريبية جديدة — Training program creation.
+
+| الحقل | المتطلب |
+|------|--------|
+| Title | إجباري |
+| Category | enum (technical/soft/safety/compliance/onboarding) |
+| Provider | internal/external | راجع `warehouse-suppliers.md` لو external |
+| Trainer | FK | for internal | راجع `employees.md` |
+| Duration | hours/days | إجباري |
+| Capacity | max enrollment | إجباري |
+| Cost per participant | budget input | راجع `finance-budget.md` |
+| Schedule | dates + times |
+| Location | venue/online |
+| HRDF-eligible? | flag for reimbursement | راجع `admin-integrations.md` |
+| Mandatory? | flag for compliance |
+| Pre-requisites | linked trainings |
+| Assessment? | flag for post-evaluation |
+| Certification issued? | flag |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Create program | POST `/hr/training` | `training_programs` | ✅ |
+| Budget approval (لو > threshold) | راجع `governance/approvals.md` | ✅ |
+| Schedule rooms/resources | راجع `calendar.md` | ⚠ |
+| Send invites to target audience | راجع `notifications.md` | ✅ |
+| HRDF pre-approval (لو applicable) | external | راجع `admin-integrations.md` | ⚠ |
+| Linked materials/agenda | راجع `documents.md` | ✅ |
+| Mandatory enrollment (per role) | bulk | راجع `automation.md` | ⚠ |
+| تكامل مع `hr-training-byid.md` (detail) | ✅ |
+| تكامل مع `finance-budget.md` (cost approval) | ✅ critical |
+| تكامل مع `governance-compliance.md` (mandatory training tracking) | ✅ |
+| Audit log إجباري | `audit_logs` | ✅ |
+| RBAC | hr-manager + L&D specialist | ✅ |
+
+تحقق يدوي:
+- [ ] هل HRDF integration submits eligibility before training starts?
+- [ ] هل mandatory training auto-enrolls target audience based on role?
+- [ ] هل cost approval enforced for budget tracking?
+- [ ] هل capacity limit enforced (no over-enrollment)?
+- [ ] هل assessment results recorded for certification?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

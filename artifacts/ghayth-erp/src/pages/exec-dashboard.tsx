@@ -31,7 +31,7 @@ function AgingBar({ label, amount, total }: { label: string; amount: number; tot
       <span className="w-20 text-muted-foreground shrink-0">{label}</span>
       <div className="flex-1 bg-surface-subtle rounded-full h-2.5">
         <div
-          className="bg-blue-500 rounded-full h-2.5 transition-all"
+          className="bg-status-info-surface0 rounded-full h-2.5 transition-all"
           style={{ width: `${Math.min(pct, 100)}%` }}
         />
       </div>

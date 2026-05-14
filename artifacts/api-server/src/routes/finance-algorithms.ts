@@ -10,7 +10,7 @@ import {
 } from "../lib/errorHandler.js";
 import { z } from "zod";
 import { Router } from "express";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2, roundTo4, generateTimeRef, emitEvent } from "../lib/businessHelpers.js";
@@ -656,6 +656,7 @@ financeAlgorithmsRouter.post("/fixed-assets", authorize({ feature: "finance.algo
        b.assetAccountCode, b.depreciationAccountCode,
        b.accDepreciationAccountCode]
     );
+    assertInsert(insertId, "fixed_assets");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fixed_assets WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) {
@@ -1128,6 +1129,7 @@ financeAlgorithmsRouter.post("/rounding-account/setup", authorize({ feature: "fi
        VALUES ($1,'9999','فروقات التقريب','Rounding Differences','expense',2,null,true)`,
       [scope.companyId]
     );
+    assertInsert(insertId, "chart_of_accounts");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM chart_of_accounts WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     await emitEvent({
       action: "finance.rounding_account.configured",

@@ -304,6 +304,9 @@ export default function LegalContractDetail() {
               ref={contract.contractNumber || `LC-${id}`}
               date={formatDateAr(contract.createdAt)}
               sections={printSections}
+              entityType="legal_contract"
+              entityId={contract.id ?? id}
+              formats={["a4"]}
             />
           )}
           <GuardedButton

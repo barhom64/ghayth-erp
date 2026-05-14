@@ -1,6 +1,6 @@
 import { handleRouteError, NotFoundError, parseId, zodParse } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { z } from "zod";
@@ -184,6 +184,7 @@ router.post("/preferences", authorize({ feature: "notifications", action: "updat
        RETURNING id`,
       [scope.userId, scope.companyId, channel || 'in_app', category || 'general', enabled !== false]
     );
+    assertInsert(insertId, "notification_preferences");
     const [row] = await rawQuery<NotificationPreferenceRow>(`SELECT * FROM notification_preferences WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
 
     createAuditLog({

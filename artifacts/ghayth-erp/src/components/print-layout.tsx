@@ -42,14 +42,14 @@ function LetterheadHeader({ branch }: { branch?: BranchLetterhead }) {
           <div>
             <h1 className="text-xl font-bold text-gray-900">{branch.name || ""}</h1>
             {branch.nameEn && (
-              <p className="text-sm text-gray-600 font-medium" dir="ltr">{branch.nameEn}</p>
+              <p className="text-sm text-muted-foreground font-medium" dir="ltr">{branch.nameEn}</p>
             )}
             {branch.city && (
-              <p className="text-sm text-gray-500 mt-1">{branch.city}</p>
+              <p className="text-sm text-muted-foreground mt-1">{branch.city}</p>
             )}
           </div>
         </div>
-        <div className="text-left text-xs text-gray-600 space-y-0.5">
+        <div className="text-left text-xs text-muted-foreground space-y-0.5">
           {branch.phone && <p>هاتف: <span dir="ltr">{branch.phone}</span></p>}
           {branch.email && <p>بريد إلكتروني: <span dir="ltr">{branch.email}</span></p>}
           {branch.website && <p>الموقع الإلكتروني: <span dir="ltr">{branch.website}</span></p>}
@@ -58,7 +58,7 @@ function LetterheadHeader({ branch }: { branch?: BranchLetterhead }) {
         </div>
       </div>
       {branch.address && (
-        <p className="text-xs text-gray-500 mt-2">{branch.address}</p>
+        <p className="text-xs text-muted-foreground mt-2">{branch.address}</p>
       )}
     </div>
   );
@@ -66,7 +66,7 @@ function LetterheadHeader({ branch }: { branch?: BranchLetterhead }) {
 
 function LetterheadFooter({ branch, documentRef }: { branch?: BranchLetterhead; documentRef?: string }) {
   return (
-    <div className="print-footer border-t border-gray-300 pt-3 mt-8 text-xs text-gray-500">
+    <div className="print-footer border-t border-border pt-3 mt-8 text-xs text-muted-foreground">
       <div className="flex justify-between items-center">
         <span>{branch?.footerText || ""}</span>
         <span>{documentRef && `Ref: ${documentRef}`}</span>
@@ -80,7 +80,7 @@ function DocumentMeta({ title, ref, date }: { title?: string; ref?: string; date
   return (
     <div className="mb-6 text-center">
       {title && <h2 className="text-lg font-bold text-gray-900 mb-1">{title}</h2>}
-      <div className="flex justify-center gap-6 text-sm text-gray-600">
+      <div className="flex justify-center gap-6 text-sm text-muted-foreground">
         {ref && <span>الرقم المرجعي: <strong>{ref}</strong></span>}
         {date && <span>التاريخ: <strong>{date}</strong></span>}
       </div>
@@ -168,8 +168,8 @@ export function PrintPreviewModal({
           .text-left { text-align: left; }
           .text-center { text-align: center; }
           .font-bold { font-weight: bold; }
-          .text-green-600 { color: #16a34a; }
-          .text-red-600 { color: #dc2626; }
+          .text-status-success-foreground { color: #16a34a; }
+          .text-status-error-foreground { color: #dc2626; }
           .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
           .info-grid .info-item { display: flex; gap: 4px; font-size: 10pt; }
           .info-grid .info-label { color: #555; }
@@ -262,8 +262,8 @@ export function directPrint(contentEl: HTMLElement | null, documentTitle?: strin
         .text-left { text-align: left; }
         .text-center { text-align: center; }
         .font-bold { font-weight: bold; }
-        .text-green-600 { color: #16a34a; }
-        .text-red-600 { color: #dc2626; }
+        .text-status-success-foreground { color: #16a34a; }
+        .text-status-error-foreground { color: #dc2626; }
         .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
         .info-grid .info-item { display: flex; gap: 4px; font-size: 10pt; }
         .info-grid .info-label { color: #555; }

@@ -122,7 +122,7 @@ export default function TrainingDetailPage() {
             className={cn(
               "text-xs",
               score >= 80 ? "border-status-success-surface text-status-success-foreground bg-status-success-surface" :
-              score >= 60 ? "border-amber-300 text-status-warning-foreground bg-status-warning-surface" :
+              score >= 60 ? "border-status-warning-surface text-status-warning-foreground bg-status-warning-surface" :
               "border-status-error-surface text-status-error-foreground bg-status-error-surface",
             )}
           >

@@ -7,6 +7,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
+import { PrintButton } from "@/components/shared/print-button";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
 import {
   Banknote,
@@ -209,6 +210,12 @@ export default function InvoiceDetailPage() {
             type="pdf"
             label="ملف طباعي"
           />
+          <PrintButton
+            entityType="invoice"
+            entityId={invoice.id ?? id}
+            formats={["a4", "thermal_80", "excel"]}
+            label="طباعة"
+          />
           <PrintActions
             onPreview={() => setShowPreview(true)}
             onPrint={() =>
@@ -246,7 +253,7 @@ export default function InvoiceDetailPage() {
           </div>
           <div className="mt-3">
             <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-              <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, (Number(invoice.paidAmount || 0) / Number(invoice.total)) * 100)}%` }} />
+              <div className="h-full bg-status-success-surface0 rounded-full" style={{ width: `${Math.min(100, (Number(invoice.paidAmount || 0) / Number(invoice.total)) * 100)}%` }} />
             </div>
             <p className="text-xs text-muted-foreground mt-1 text-start">{Math.round((Number(invoice.paidAmount || 0) / Number(invoice.total)) * 100)}% مدفوع</p>
           </div>

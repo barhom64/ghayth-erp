@@ -31,6 +31,7 @@ import {
   currentMonthPadded,
 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { markIdempotencyReplay } from "../lib/requestIdempotency.js";
 import { z } from "zod";
@@ -296,7 +297,7 @@ invoicesRouter.get("/invoices", authorize({ feature: "finance.invoices", action:
       countParams
     );
 
-    res.json(maskFields(req, { data: invoices, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) }));
+    res.json({ data: invoices, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) });
   } catch (err) {
     handleRouteError(err, res, "List invoices error:");
   }
@@ -327,6 +328,10 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       );
       if (!branchRow) {
         throw new ValidationError("الفرع غير موجود أو لا ينتمي لهذه الشركة", { field: "branchId" });
+      }
+      if (!scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
+          scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(Number(branchId))) {
+        throw new ForbiddenError("لا تملك صلاحية إنشاء فواتير في هذا الفرع", { field: "branchId" });
       }
     }
     // FK pre-check on clientId so the frontend can light up the input.
@@ -1065,7 +1070,7 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action:
     const [inputVat] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM(jl.debit), 0) AS total FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je.status = 'posted' WHERE je."companyId" = $1 AND jl."accountCode" = '1400' AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod]);
     const outputTotal = Number(outputVat?.total ?? 0);
     const inputTotal = Number(inputVat?.total ?? 0);
-    res.json(maskFields(req, { period: targetPeriod, outputVat: outputTotal, inputVat: inputTotal, netVat: outputTotal - inputTotal, vatRate: 15, status: outputTotal - inputTotal > 0 ? "payable" : "refundable" }));
+    res.json({ period: targetPeriod, outputVat: outputTotal, inputVat: inputTotal, netVat: outputTotal - inputTotal, vatRate: 15, status: outputTotal - inputTotal > 0 ? "payable" : "refundable" });
   } catch (err) {
     handleRouteError(err, res, "Tax summary error:");
   }
@@ -1368,7 +1373,7 @@ invoicesRouter.get("/invoices/:id/memos", authorize({ feature: "finance.invoices
         [id, scope.companyId]
       );
     } catch (e) { logger.warn(e, "debit_memos table may not exist yet"); }
-    res.json(maskFields(req, { creditMemos, debitMemos }));
+    res.json({ creditMemos, debitMemos });
   } catch (err) {
     handleRouteError(err, res, "List memos error:");
   }
@@ -1429,7 +1434,7 @@ invoicesRouter.get("/bad-debt/preview", authorize({ feature: "finance.collection
     };
     const totalProvision = roundTo2(provision.current + provision.d30 + provision.d60 + provision.d90 + provision.d90plus);
 
-    res.json(maskFields(req, { asOf, rates, buckets, provision, totalProvision, invoiceCount: invoices.length }));
+    res.json({ asOf, rates, buckets, provision, totalProvision, invoiceCount: invoices.length });
   } catch (err) {
     handleRouteError(err, res, "Bad debt preview error:");
   }
@@ -1775,7 +1780,7 @@ invoicesRouter.get("/customer-advances", authorize({ feature: "finance.invoices"
         params
       );
     } catch (e) { logger.warn(e, "customer_advances table not yet created"); }
-    res.json(maskFields(req, { data: rows }));
+    res.json({ data: rows });
   } catch (err) {
     handleRouteError(err, res, "List customer advances error:");
   }
@@ -1917,7 +1922,7 @@ invoicesRouter.get("/dunning/preview", authorize({ feature: "finance.collection"
       });
     }
 
-    res.json(maskFields(req, {
+    res.json({
       asOf: today,
       total: eligible.length,
       byStage: {
@@ -1929,7 +1934,7 @@ invoicesRouter.get("/dunning/preview", authorize({ feature: "finance.collection"
       },
       totalOutstanding: roundTo2(eligible.reduce((s, e) => s + e.outstanding, 0)),
       invoices: eligible,
-    }));
+    });
   } catch (err) {
     handleRouteError(err, res, "Dunning preview error:");
   }
@@ -2028,7 +2033,7 @@ invoicesRouter.get("/dunning/history", authorize({ feature: "finance.collection"
        ORDER BY dl."sentAt" DESC LIMIT 500`,
       params
     );
-    res.json(maskFields(req, { data: rows }));
+    res.json({ data: rows });
   } catch (err) {
     handleRouteError(err, res, "Dunning history error:");
   }
@@ -2055,7 +2060,7 @@ invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", ac
         const m = Number((r.period as string).split("-")[1]);
         return { period: r.period as string, outputVat: Number(r.outputVat), inputVat: 0, netVat: Number(r.outputVat), invoiceCount: Number(r.invoiceCount), status: m < currentMonth ? "submitted" : "pending" };
       });
-    res.json(maskFields(req, { data: declarations }));
+    res.json({ data: declarations });
   } catch (err) {
     handleRouteError(err, res, "Finance route error:");
   }

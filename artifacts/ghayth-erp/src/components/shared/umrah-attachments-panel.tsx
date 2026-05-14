@@ -128,7 +128,7 @@ export function UmrahAttachmentsPanel({ entityType, entityId }: Props) {
             href={a.fileUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+            className="inline-flex items-center gap-1 text-status-info-foreground hover:underline"
           >
             <ExternalLink className="h-3.5 w-3.5" /> فتح
           </a>
@@ -149,7 +149,7 @@ export function UmrahAttachmentsPanel({ entityType, entityId }: Props) {
         <Button
           variant="ghost"
           size="sm"
-          className="text-red-600 gap-1"
+          className="text-status-error-foreground gap-1"
           onClick={() => setDeleteTarget({ id: a.id, name: a.title })}
           rateLimitAware
         >
@@ -188,7 +188,7 @@ export function UmrahAttachmentsPanel({ entityType, entityId }: Props) {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="att-title">العنوان <span className="text-red-600">*</span></Label>
+                <Label htmlFor="att-title">العنوان <span className="text-status-error-foreground">*</span></Label>
                 <Input id="att-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={255} />
               </div>
             </div>

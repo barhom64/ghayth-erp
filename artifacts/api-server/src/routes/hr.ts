@@ -9,7 +9,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
@@ -2911,6 +2911,7 @@ router.post("/violations", authorize({ feature: "hr.violations", action: "create
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [scope.companyId, Number(assignmentId), type, description, effectiveSeverity, effectiveDeduction, period]
     );
+    assertInsert(insertId, "employee_violations");
 
     // Discipline ladder — create the inquiry memo (idempotent). This wires
     // the violation to the 5-step penalty scale and the pending-employee
@@ -3160,6 +3161,7 @@ router.post("/performance", authorize({ feature: "hr.performance", action: "crea
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [scope.companyId, resolvedEmployeeId, period, Number(overallScore ?? 0), finalScores, finalComments, effectiveStatus]
     );
+    assertInsert(insertId, "performance_reviews");
 
     await createAuditLog({
       companyId: scope.companyId,
@@ -3245,6 +3247,7 @@ router.post("/salary-components", authorize({ feature: "hr.payroll.runs", action
        VALUES ($1,$2,$3,$4,$5,$6,true)`,
       [scope.companyId, String(name).trim(), type ?? "earning", calculationType ?? "fixed", Number(value ?? 0), taxable ?? true]
     );
+    assertInsert(insertId, "salary_components");
     await createAuditLog({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -3826,6 +3829,7 @@ router.post("/shift-assignments", authorize({ feature: "hr.attendance", action: 
       `INSERT INTO employee_shift_assignments ("assignmentId","shiftId","startDate","endDate") VALUES ($1,$2,$3,$4)`,
       [Number(assignmentId), Number(shiftId), startDate, endDate ?? null]
     );
+    assertInsert(insertId, "employee_shift_assignments");
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "employee_shift_assignments", entityId: insertId,
@@ -5511,6 +5515,7 @@ router.post("/evaluation-cycles/:id/upward-review", authorize({ feature: "hr.per
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [cycleId, scope.companyId, managerId, overallScore, scores ? JSON.stringify(scores) : null, comments ?? null, submissionToken]
     );
+    assertInsert(insertId, "anonymous_upward_reviews");
 
     // Recompute summary (upward score only shows when >=3 reviews)
     await recomputeSummary(cycleId, scope.companyId, cycle.employeeId as number);
@@ -5824,6 +5829,7 @@ router.post("/public-holidays", authorize({ feature: "hr.organization", action: 
       [scope.companyId, b.name, b.startDate, b.endDate || b.startDate, year,
        b.type || 'national', b.description || null, b.isRecurring || false]
     );
+    assertInsert(insertId, "public_holidays");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM public_holidays WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -6010,6 +6016,7 @@ router.post("/transfers", authorize({ feature: "hr.exit", action: "create" }), a
        assignment.salary, b.toSalary || assignment.salary,
        scope.employeeId, b.reason || null, b.effectiveDate || null, b.notes || null]
     );
+    assertInsert(insertId, "employee_transfers");
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
@@ -6307,6 +6314,7 @@ router.post("/idp", authorize({ feature: "hr.exit", action: "create" }), async (
       [scope.companyId, b.employeeId, scope.employeeId, b.title || 'خطة التطوير الفردي',
        goals, skills, trainingIds, b.targetDate || null, b.notes || null, b.reviewDate || null]
     );
+    assertInsert(insertId, "employee_development_plans");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_development_plans WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -6928,6 +6936,7 @@ router.post("/company-documents", authorize({ feature: "hr.organization", action
       [scope.companyId, b.documentType || b.title, b.documentNumber || b.type || null,
        b.expiryDate || null, b.notes || null]
     );
+    assertInsert(insertId, "company_documents");
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "company_document.created", entity: "hr_company_documents", entityId: insertId, details: JSON.stringify({ documentType: b.documentType }) }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
@@ -7000,6 +7009,7 @@ router.post("/employee-documents", authorize({ feature: "hr.employees", action: 
        b.documentNumber || b.number || null, b.issueDate || null,
        b.expiryDate || null, b.notes || null]
     );
+    assertInsert(insertId, "employee_documents");
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "employee_document.created", entity: "hr_employee_documents", entityId: insertId, details: JSON.stringify({ employeeId: Number(b.employeeId), documentType: b.documentType }) }).catch((e) => logger.error(e, "hr background task failed"));
 
     createAuditLog({
@@ -7087,6 +7097,7 @@ router.post("/excuse-requests", authorize({ feature: "hr.attendance", action: "c
        excuseDate, excuseType || "early_leave", startTime || null, endTime || null,
        estimatedMinutes || 0, reason || null]
     );
+    assertInsert(insertId, "hr_excuse_requests");
 
     createAuditLog({
       companyId: scope.companyId, branchId: assignment.branchId as number | undefined, userId: scope.userId,

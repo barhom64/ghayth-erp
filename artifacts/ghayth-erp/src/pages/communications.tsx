@@ -61,13 +61,13 @@ function QueueStatusBar({ sent = 0, failed = 0, pending = 0, total = 0 }: { sent
   return (
     <div className="space-y-1.5">
       <div className="flex h-2 rounded-full overflow-hidden bg-surface-subtle">
-        {sent > 0 && <div className="bg-green-500" style={{ width: `${(sent / safeTotal) * 100}%` }} title={`مرسل: ${sent}`} />}
-        {failed > 0 && <div className="bg-red-500" style={{ width: `${(failed / safeTotal) * 100}%` }} title={`فاشل: ${failed}`} />}
+        {sent > 0 && <div className="bg-status-success-surface0" style={{ width: `${(sent / safeTotal) * 100}%` }} title={`مرسل: ${sent}`} />}
+        {failed > 0 && <div className="bg-status-error-surface0" style={{ width: `${(failed / safeTotal) * 100}%` }} title={`فاشل: ${failed}`} />}
         {pending > 0 && <div className="bg-amber-400" style={{ width: `${(pending / safeTotal) * 100}%` }} title={`في الانتظار: ${pending}`} />}
       </div>
       <div className="flex gap-3 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />مرسل: {sent}</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />فاشل: {failed}</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-status-success-surface0 inline-block" />مرسل: {sent}</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-status-error-surface0 inline-block" />فاشل: {failed}</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />انتظار: {pending}</span>
       </div>
     </div>
@@ -147,7 +147,7 @@ function PushNotificationsCard() {
                 <BellRing className="h-3.5 w-3.5 me-1" />
                 إرسال تجريبي
               </GuardedButton>
-              <GuardedButton perm="communications:create" size="sm" variant="ghost" onClick={handleUnsubscribe} disabled={isLoading} className="text-red-600 hover:text-red-700">
+              <GuardedButton perm="communications:create" size="sm" variant="ghost" onClick={handleUnsubscribe} disabled={isLoading} className="text-status-error-foreground hover:text-status-error-foreground">
                 <BellOff className="h-3.5 w-3.5 me-1" />
                 إلغاء الاشتراك
               </GuardedButton>

@@ -8,12 +8,51 @@ import {
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
+import type { RequestScope } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { currentPeriod, currentYear, toDateISO, todayISO, roundTo2 } from "../lib/businessHelpers.js";
+import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 
 export const reportsRouter = Router();
 reportsRouter.use(authMiddleware);
+
+/**
+ * Builds a branch restriction SQL condition for queries joining `journal_entries`
+ * (or another table aliased via `alias`).
+ * - If the caller supplies a `branchId` query param, validates it is within the
+ *   caller's `allowedBranches` for non-privileged users and returns an equality condition.
+ * - If no `branchId` is given and the caller is branch-scoped (not owner/GM),
+ *   restricts the query to `scope.allowedBranches` automatically.
+ * - Owner/GM pass through without any branch restriction.
+ * Mutates `params` by appending the branch value when a condition is needed.
+ */
+function getBranchCondition(
+  scope: RequestScope,
+  requestedBranchId: string | undefined,
+  params: unknown[],
+  alias = "je"
+): string {
+  const col = `${alias}."branchId"`;
+  const isPrivileged = scope.isOwner || OWNER_GM_ROLES.includes(scope.role);
+
+  if (requestedBranchId != null) {
+    const bid = Number(requestedBranchId);
+    if (isNaN(bid)) throw new ValidationError("معرف الفرع غير صالح");
+    if (!isPrivileged && scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(bid)) {
+      throw new ForbiddenError("لا تملك صلاحية الاطلاع على بيانات هذا الفرع");
+    }
+    params.push(bid);
+    return ` AND ${col} = $${params.length}`;
+  }
+
+  if (!isPrivileged && scope.allowedBranches.length > 0) {
+    params.push(scope.allowedBranches);
+    return ` AND ${col} = ANY($${params.length}::int[])`;
+  }
+
+  return "";
+}
 
 reportsRouter.get("/reports/entities/:entityType", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
@@ -41,6 +80,7 @@ reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance.report
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    const branchFilter = getBranchCondition(scope, undefined, params);
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT coa.id, coa.code, coa.name, coa.type, coa."parentId", coa.level, coa."allowPosting",
               COALESCE(SUM(fl.debit), 0) AS "totalDebit",
@@ -54,7 +94,7 @@ reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance.report
        LEFT JOIN (
          SELECT jl."accountCode", jl.debit, jl.credit
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
+         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}${branchFilter}
        ) fl ON fl."accountCode" = coa.code
        WHERE coa."companyId" = $1 AND coa."deletedAt" IS NULL
        GROUP BY coa.id, coa.code, coa.name, coa.type, coa."parentId", coa.level, coa."allowPosting"
@@ -85,8 +125,9 @@ reportsRouter.get("/reports/income-statement", authorize({ feature: "finance.rep
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
-    const revenues = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
-    const expenses = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.debit) - SUM(fl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
+    const branchFilter = getBranchCondition(scope, undefined, params);
+    const revenues = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}${branchFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
+    const expenses = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.debit) - SUM(fl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}${branchFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
     const totalRevenue = revenues.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
     const totalExpenses = expenses.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
     res.json(maskFields(req, { revenues, expenses, summary: { totalRevenue, totalExpenses, netIncome: totalRevenue - totalExpenses } }));
@@ -102,6 +143,7 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.report
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
     if (asOfDate) { params.push(asOfDate); dateFilter = ` AND je."createdAt" <= $${params.length}`; }
+    const branchFilter = getBranchCondition(scope, undefined, params);
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT coa.code, coa.name, coa.type,
               CASE WHEN coa.type IN ('asset','expense') THEN COALESCE(SUM(fl.debit) - SUM(fl.credit), 0)
@@ -110,7 +152,7 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.report
        LEFT JOIN (
          SELECT jl."accountCode", jl.debit, jl.credit
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
+         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}${branchFilter}
        ) fl ON fl."accountCode" = coa.code
        WHERE coa."companyId" = $1 AND coa.type IN ('asset','liability','equity') AND coa."deletedAt" IS NULL
        GROUP BY coa.code, coa.name, coa.type ORDER BY coa.type, coa.code`,
@@ -160,15 +202,23 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
       ? cashAccountsRows.map((r: Record<string, unknown>) => r.code)
       : ["1100", "1110"];
 
+    const isCashPrivileged = scope.isOwner || OWNER_GM_ROLES.includes(scope.role);
+    const cashBranchIds = !isCashPrivileged && scope.allowedBranches.length > 0
+      ? scope.allowedBranches : null;
+
     // Opening cash balance = sum of all cash JL before startDate
+    const openingParams: unknown[] = [scope.companyId, from, cashCodes];
+    if (cashBranchIds) openingParams.push(cashBranchIds);
+    const openingBranchCond = cashBranchIds
+      ? ` AND je."branchId" = ANY($${openingParams.length}::int[])` : "";
     const [openingRow] = await rawQuery<Record<string, unknown>>(
       `SELECT COALESCE(SUM(jl.debit - jl.credit), 0) AS balance
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId"
         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted'
           AND je."createdAt" < $2
-          AND jl."accountCode" = ANY($3)`,
-      [scope.companyId, from, cashCodes]
+          AND jl."accountCode" = ANY($3)${openingBranchCond}`,
+      openingParams
     );
     const openingCash = Number(openingRow?.balance ?? 0);
 
@@ -176,6 +226,10 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
     // counter-account (any line in the same JE not pointing to cash) to infer
     // the classification. Simple heuristic: take the largest non-cash line as
     // the dominant counter-account.
+    const jesParams: unknown[] = [scope.companyId, from, to, cashCodes];
+    if (cashBranchIds) jesParams.push(cashBranchIds);
+    const jesBranchCond = cashBranchIds
+      ? ` AND je."branchId" = ANY($${jesParams.length}::int[])` : "";
     const jes = await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description, je."createdAt",
               jl_cash.debit AS "cashDebit", jl_cash.credit AS "cashCredit"
@@ -184,9 +238,9 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted'
           AND je."createdAt" >= $2 AND je."createdAt" <= $3
           AND jl_cash."accountCode" = ANY($4)
-          AND (jl_cash.debit > 0 OR jl_cash.credit > 0)
+          AND (jl_cash.debit > 0 OR jl_cash.credit > 0)${jesBranchCond}
         ORDER BY je."createdAt"`,
-      [scope.companyId, from, to, cashCodes]
+      jesParams
     );
 
     const jeIds = jes.map((j: any) => j.id);
@@ -727,7 +781,7 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
-    if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
+    dateFilter += getBranchCondition(scope, branchId, params);
 
     const custodies = await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description,
@@ -786,7 +840,7 @@ reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.re
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
-    if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
+    dateFilter += getBranchCondition(scope, branchId, params);
     if (projectId) { params.push(projectId); dateFilter += ` AND je."projectId" = $${params.length}`; }
 
     let selectCol = "coa.code AS key, coa.name AS label";
@@ -832,7 +886,7 @@ reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance.rep
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
-    if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
+    dateFilter += getBranchCondition(scope, branchId, params);
 
     const byAccount = await rawQuery<Record<string, unknown>>(
       `SELECT coa.code, coa.name,
@@ -875,8 +929,18 @@ reportsRouter.get("/reports/budget-variance", authorize({ feature: "finance.repo
 
     const targetPeriod = period || currentPeriod();
     const params: unknown[] = [scope.companyId, targetPeriod];
-    const branchFilter = branchId ? ` AND b."branchId" = $${params.length + 1}` : "";
-    if (branchId) params.push(branchId);
+    const isPrivilegedBV = scope.isOwner || OWNER_GM_ROLES.includes(scope.role);
+    if (branchId != null) {
+      const bid = Number(branchId);
+      if (!isPrivilegedBV && scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(bid)) {
+        throw new ForbiddenError("لا تملك صلاحية الاطلاع على بيانات هذا الفرع");
+      }
+    }
+    let branchFilter = "";
+    if (branchId) { params.push(Number(branchId)); branchFilter = ` AND b."branchId" = $${params.length}`; }
+    else if (!isPrivilegedBV && scope.allowedBranches.length > 0) {
+      params.push(scope.allowedBranches); branchFilter = ` AND b."branchId" = ANY($${params.length}::int[])`;
+    }
 
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT b."accountCode", b.amount AS budget,
@@ -911,7 +975,7 @@ reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance.
     const params: unknown[] = [scope.companyId, accountCode];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
-    if (branchId) { params.push(branchId); dateFilter += ` AND je."branchId" = $${params.length}`; }
+    dateFilter += getBranchCondition(scope, branchId, params);
 
     const [accountInfo] = await rawQuery<Record<string, unknown>>(
       `SELECT code, name, type FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,

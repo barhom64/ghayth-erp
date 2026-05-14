@@ -220,7 +220,7 @@ function FieldWrapper({
       {description && !error && (
         <p className="text-xs text-muted-foreground">{description}</p>
       )}
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-status-error-foreground">{error}</p>}
     </div>
   );
 }

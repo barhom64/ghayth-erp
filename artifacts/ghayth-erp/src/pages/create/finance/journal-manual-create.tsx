@@ -147,7 +147,7 @@ export default function JournalManualCreatePage() {
                         <NumberField label="دائن" className="w-24" min={0} value={line.credit || ""} onChange={v => updateLine(i, "credit", v)} placeholder="0" />
                       </td>
                       <td className="px-2 py-1">
-                        <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-red-600 text-lg leading-none">&times;</button>
+                        <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-status-error-foreground text-lg leading-none">&times;</button>
                       </td>
                     </tr>
                   ))}

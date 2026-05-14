@@ -964,7 +964,7 @@ function BudgetVariance() {
         <div className="flex items-center gap-2">
           <div className="flex-1 bg-surface-subtle rounded-full h-2">
             <div
-              className={`h-2 rounded-full ${Number(r.usagePct) > 100 ? "bg-red-500" : Number(r.usagePct) > 80 ? "bg-orange-400" : "bg-green-400"}`}
+              className={`h-2 rounded-full ${Number(r.usagePct) > 100 ? "bg-status-error-surface0" : Number(r.usagePct) > 80 ? "bg-orange-400" : "bg-green-400"}`}
               style={{ width: `${Math.min(100, Number(r.usagePct || 0))}%` }}
             />
           </div>

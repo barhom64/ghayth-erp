@@ -93,7 +93,7 @@ export function InlineEditForm({
   isPending: boolean;
 }) {
   return (
-    <div className="p-3 bg-blue-50/50 border border-blue-200 rounded-lg">
+    <div className="p-3 bg-status-info-surface/50 border border-status-info-surface rounded-lg">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {fields.map((f) => (
           <div key={f.key}>
@@ -170,8 +170,8 @@ export function InlineDeleteConfirm({
   }
 
   return (
-    <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
-      <span className="text-sm text-red-700">
+    <div className="p-3 bg-status-error-surface border border-status-error-surface rounded-lg flex items-center justify-between">
+      <span className="text-sm text-status-error-foreground">
         هل أنت متأكد من حذف {itemName ? `"${itemName}"` : "هذا العنصر"}؟
       </span>
       <div className="flex items-center gap-2">

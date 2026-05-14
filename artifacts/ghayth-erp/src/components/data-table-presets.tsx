@@ -83,7 +83,7 @@ export function currencyColumn<T>(
         <span
           className={cn(
             "tabular-nums font-medium",
-            value < 0 && "text-red-600",
+            value < 0 && "text-status-error-foreground",
             value === 0 && "text-muted-foreground",
           )}
         >
@@ -221,7 +221,7 @@ export function booleanColumn<T>(
         <span
           className={cn(
             "inline-flex px-2 py-0.5 rounded-full text-xs font-medium",
-            v ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600",
+            v ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-muted-foreground",
           )}
         >
           {label}

@@ -54,12 +54,12 @@ const STATE = {
   warning: {
     label: "ترحيل مع تنبيهات",
     icon: FileWarning,
-    classes: "bg-amber-50 text-amber-700 border-amber-200",
+    classes: "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface",
   },
   pending: {
     label: "قيد المعالجة",
     icon: Clock,
-    classes: "bg-blue-50 text-blue-700 border-blue-200",
+    classes: "bg-status-info-surface text-status-info-foreground border-status-info-surface",
   },
   rejected: {
     label: "مرفوضة",

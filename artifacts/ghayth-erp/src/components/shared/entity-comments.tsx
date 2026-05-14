@@ -83,22 +83,22 @@ export function EntityComments({ entityType, entityId, className }: EntityCommen
           {comments.map((c: any) => (
             <div key={c.id} className="flex gap-2 group">
               <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
-                <User className="h-3.5 w-3.5 text-blue-600" />
+                <User className="h-3.5 w-3.5 text-status-info-foreground" />
               </div>
-              <div className="flex-1 bg-gray-50 rounded-lg p-2.5 min-w-0">
+              <div className="flex-1 bg-surface-subtle rounded-lg p-2.5 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium text-gray-700">{c.userName || "مستخدم"}</span>
                   <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-gray-400">{formatTimeAgo(c.createdAt)}</span>
+                    <span className="text-[10px] text-muted-foreground">{formatTimeAgo(c.createdAt)}</span>
                     <button
                       onClick={() => removeComment(c.id)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500 p-0.5"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500 p-0.5"
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>
                   </div>
                 </div>
-                <p className="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{c.body}</p>
+                <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">{c.body}</p>
               </div>
             </div>
           ))}

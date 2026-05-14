@@ -6,14 +6,14 @@ import { cn } from "@/lib/utils";
 import { CheckCircle, XCircle, RotateCcw, Clock, ArrowUpCircle, ArrowLeftRight, AlertCircle } from "lucide-react";
 
 const ACTION_CONFIG: Record<string, { label: string; icon: any; color: string; bgColor: string }> = {
-  approved: { label: "موافقة", icon: CheckCircle, color: "text-green-600", bgColor: "bg-green-100" },
-  rejected: { label: "رفض", icon: XCircle, color: "text-red-600", bgColor: "bg-red-100" },
+  approved: { label: "موافقة", icon: CheckCircle, color: "text-status-success-foreground", bgColor: "bg-green-100" },
+  rejected: { label: "رفض", icon: XCircle, color: "text-status-error-foreground", bgColor: "bg-red-100" },
   returned: { label: "إرجاع", icon: RotateCcw, color: "text-orange-600", bgColor: "bg-orange-100" },
-  pending: { label: "قيد المراجعة", icon: Clock, color: "text-blue-600", bgColor: "bg-blue-100" },
-  in_review: { label: "قيد المراجعة", icon: Clock, color: "text-blue-600", bgColor: "bg-blue-100" },
+  pending: { label: "قيد المراجعة", icon: Clock, color: "text-status-info-foreground", bgColor: "bg-blue-100" },
+  in_review: { label: "قيد المراجعة", icon: Clock, color: "text-status-info-foreground", bgColor: "bg-blue-100" },
   escalated: { label: "تصعيد", icon: ArrowUpCircle, color: "text-purple-600", bgColor: "bg-purple-100" },
   referred: { label: "إحالة", icon: ArrowLeftRight, color: "text-indigo-600", bgColor: "bg-indigo-100" },
-  created: { label: "إنشاء", icon: AlertCircle, color: "text-gray-600", bgColor: "bg-gray-100" },
+  created: { label: "إنشاء", icon: AlertCircle, color: "text-muted-foreground", bgColor: "bg-gray-100" },
 };
 
 interface ApprovalTimelineProps {
@@ -53,22 +53,22 @@ export function ApprovalTimeline({ entityType, entityId, title = "مسار ال�
                   )}>
                     <Icon className={cn("h-4 w-4", config.color)} />
                   </div>
-                  <div className={cn("flex-1 pb-3", !isLast && "border-b border-gray-100")}>
+                  <div className={cn("flex-1 pb-3", !isLast && "border-b border-border")}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <Badge className={cn("text-[10px]", config.bgColor, config.color)}>
                           {config.label}
                         </Badge>
-                        <span className="text-xs text-gray-600">
+                        <span className="text-xs text-muted-foreground">
                           {action.actionByName || action.actionByEmail || "النظام"}
                         </span>
                       </div>
-                      <span className="text-[10px] text-gray-400">
+                      <span className="text-[10px] text-muted-foreground">
                         {formatDateAr(action.createdAt)}
                       </span>
                     </div>
                     {action.notes && (
-                      <p className="mt-1 text-xs text-gray-500 bg-gray-50 rounded p-2">
+                      <p className="mt-1 text-xs text-muted-foreground bg-surface-subtle rounded p-2">
                         {action.notes}
                       </p>
                     )}

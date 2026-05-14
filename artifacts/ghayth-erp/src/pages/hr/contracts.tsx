@@ -228,7 +228,7 @@ function ActionsMenu({
       <DropdownMenuContent align="end">
         {canSubmit && <DropdownMenuItem onClick={onSubmit}>تقديم للاعتماد</DropdownMenuItem>}
         {canApprove && <DropdownMenuItem onClick={onApprove}>اعتماد</DropdownMenuItem>}
-        {canReject && <DropdownMenuItem onClick={onReject} className="text-red-600">رفض</DropdownMenuItem>}
+        {canReject && <DropdownMenuItem onClick={onReject} className="text-status-error-foreground">رفض</DropdownMenuItem>}
         {canSign && <DropdownMenuItem onClick={onSignCompany}>توقيع الشركة</DropdownMenuItem>}
         {canActivate && <DropdownMenuItem onClick={onActivate}>تفعيل</DropdownMenuItem>}
         {canTerminate && <DropdownMenuItem onClick={onTerminate} className="text-status-error-foreground">إنهاء العقد</DropdownMenuItem>}

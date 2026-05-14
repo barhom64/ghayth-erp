@@ -61,10 +61,10 @@ interface VehicleDetail {
 }
 
 const STATUS_LABELS: Record<string, { label: string; className: string }> = {
-  active: { label: "نشطة", className: "bg-green-50 text-green-700 border-green-200" },
+  active: { label: "نشطة", className: "bg-status-success-surface text-status-success-foreground border-status-success-surface" },
   maintenance: { label: "تحت الصيانة", className: "bg-orange-50 text-orange-700 border-orange-200" },
-  retired: { label: "متوقفة", className: "bg-gray-50 text-gray-700 border-gray-200" },
-  sold: { label: "مباعة", className: "bg-red-50 text-red-700 border-red-200" },
+  retired: { label: "متوقفة", className: "bg-surface-subtle text-gray-700 border-border" },
+  sold: { label: "مباعة", className: "bg-status-error-surface text-status-error-foreground border-status-error-surface" },
 };
 
 /**
@@ -87,7 +87,7 @@ export function VehicleContextCard({
 
   if (isLoading) {
     return (
-      <Card className={cn("border-gray-200 bg-gray-50/50 animate-pulse", className)}>
+      <Card className={cn("border-border bg-surface-subtle/50 animate-pulse", className)}>
         <CardContent className="p-4">
           <div className="h-4 w-32 bg-gray-200 rounded mb-3" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -152,7 +152,7 @@ export function VehicleContextCard({
 
         {/* Not available warning */}
         {notAvailable && (
-          <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
             <AlertTriangle className="h-3 w-3" />
             <span>
               {data.status === "maintenance" && "المركبة تحت الصيانة — لا تقبل رحلات"}
@@ -164,13 +164,13 @@ export function VehicleContextCard({
 
         {/* Insurance warning */}
         {insuranceExpired && (
-          <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
             <Shield className="h-3 w-3" />
             <span>التأمين منتهي — لا يجوز تعيين رحلات قبل تجديده</span>
           </div>
         )}
         {insuranceExpiringSoon && activeInsurance && (
-          <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-status-warning-foreground bg-status-warning-surface border border-status-warning-surface rounded p-1.5">
             <Shield className="h-3 w-3" />
             <span>
               التأمين ينتهي خلال شهر ({new Date(activeInsurance.endDate!).toLocaleDateString("ar-SA")}) — جدّد قبل الانتهاء
@@ -180,7 +180,7 @@ export function VehicleContextCard({
 
         {/* Maintenance warning */}
         {serviceOverdue && (
-          <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded p-1.5">
             <Wrench className="h-3 w-3" />
             <span>موعد الصيانة الدوري متأخر — راجع قبل الرحلة التالية</span>
           </div>
@@ -194,11 +194,11 @@ export function VehicleContextCard({
               <span>آخر الرحلات</span>
             </div>
             {(data.trips || []).length === 0 ? (
-              <p className="text-xs text-gray-500">لا توجد رحلات سابقة</p>
+              <p className="text-xs text-muted-foreground">لا توجد رحلات سابقة</p>
             ) : (
               <div className="space-y-1">
                 {(data.trips || []).slice(0, 3).map((trip) => (
-                  <div key={trip.id} className="flex items-center justify-between bg-white rounded p-1.5 text-xs border border-gray-200">
+                  <div key={trip.id} className="flex items-center justify-between bg-white rounded p-1.5 text-xs border border-border">
                     <span className="text-gray-700">
                       {trip.fromLocation || "—"} ← {trip.toLocation || "—"}
                     </span>
@@ -219,17 +219,17 @@ export function VehicleContextCard({
               <span>الصيانة</span>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <div className="bg-white rounded p-2 border border-amber-200">
-                <p className="text-xs text-gray-500">مفتوحة</p>
-                <p className="text-sm font-semibold text-amber-700">{openMaintenance.length}</p>
+              <div className="bg-white rounded p-2 border border-status-warning-surface">
+                <p className="text-xs text-muted-foreground">مفتوحة</p>
+                <p className="text-sm font-semibold text-status-warning-foreground">{openMaintenance.length}</p>
               </div>
-              <div className="bg-white rounded p-2 border border-gray-200">
-                <p className="text-xs text-gray-500">الإجمالي</p>
+              <div className="bg-white rounded p-2 border border-border">
+                <p className="text-xs text-muted-foreground">الإجمالي</p>
                 <p className="text-sm font-semibold">{(data.maintenance || []).length}</p>
               </div>
               {nextService && (
-                <div className="bg-white rounded p-2 border border-gray-200">
-                  <p className="text-xs text-gray-500">الصيانة التالية</p>
+                <div className="bg-white rounded p-2 border border-border">
+                  <p className="text-xs text-muted-foreground">الصيانة التالية</p>
                   <p className="text-sm font-semibold">{nextService.toLocaleDateString("ar-SA")}</p>
                 </div>
               )}
@@ -244,11 +244,11 @@ export function VehicleContextCard({
               <span>آخر تزويدات الوقود</span>
             </div>
             {(data.fuelLogs || []).length === 0 ? (
-              <p className="text-xs text-gray-500">لا توجد تزويدات سابقة</p>
+              <p className="text-xs text-muted-foreground">لا توجد تزويدات سابقة</p>
             ) : (
               <div className="space-y-1">
                 {(data.fuelLogs || []).slice(0, 3).map((log) => (
-                  <div key={log.id} className="flex items-center justify-between bg-white rounded p-1.5 text-xs border border-gray-200">
+                  <div key={log.id} className="flex items-center justify-between bg-white rounded p-1.5 text-xs border border-border">
                     <span className="text-gray-700">
                       {new Date(log.fuelDate).toLocaleDateString("ar-SA")}
                     </span>
@@ -270,18 +270,18 @@ export function VehicleContextCard({
               <span>التأمين</span>
             </div>
             {activeInsurance ? (
-              <div className="bg-white rounded p-2 border border-gray-200 text-xs space-y-1">
+              <div className="bg-white rounded p-2 border border-border text-xs space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">الشركة</span>
+                  <span className="text-muted-foreground">الشركة</span>
                   <span className="font-semibold">{activeInsurance.provider || "—"}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">ينتهي</span>
+                  <span className="text-muted-foreground">ينتهي</span>
                   <span className="font-semibold">{activeInsurance.endDate ? new Date(activeInsurance.endDate).toLocaleDateString("ar-SA") : "—"}</span>
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-red-600">لا يوجد تأمين نشط — يجب إضافة تأمين قبل أي رحلة</p>
+              <p className="text-xs text-status-error-foreground">لا يوجد تأمين نشط — يجب إضافة تأمين قبل أي رحلة</p>
             )}
           </div>
         )}
@@ -292,8 +292,8 @@ export function VehicleContextCard({
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-white rounded p-2 border border-gray-200">
-      <p className="text-xs text-gray-500 mb-0.5">{label}</p>
+    <div className="bg-white rounded p-2 border border-border">
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
       <p className="text-sm font-semibold text-gray-800 truncate">{value}</p>
     </div>
   );

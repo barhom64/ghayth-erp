@@ -25,6 +25,7 @@ import {
   generateSalesInvoice,
   registerPayment,
   generateStatement,
+  listUninvoicedGroups,
 } from "../lib/umrahInvoicingEngine.js";
 import {
   calculateCommissionForPlan,
@@ -175,6 +176,8 @@ const generateInvoiceSchema = z.object({
   subAgentId: z.coerce.number({ required_error: "الوكيل الفرعي مطلوب" }),
   groupIds: z.array(z.coerce.number()).min(1, "المجموعات مطلوبة"),
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
+  /** groupId → manual price per mutamer (overrides pricing rules). */
+  manualPrices: z.record(z.coerce.number(), z.coerce.number().positive()).optional(),
 });
 
 const updateInvoiceSchema = z.object({
@@ -1304,15 +1307,35 @@ router.post("/invoices/generate", authorize({ feature: "umrah", action: "create"
   try {
     const scope = req.scope!;
     const parsed = zodParse(generateInvoiceSchema.safeParse(req.body));
-    const { subAgentId, groupIds, seasonId } = parsed;
+    const { subAgentId, groupIds, seasonId, manualPrices } = parsed;
     const result = await generateSalesInvoice(
       { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-      { subAgentId, groupIds, seasonId }
+      { subAgentId, groupIds, seasonId, manualPrices }
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sales_invoices", entityId: result.invoiceId, after: { subAgentId, groupIds, seasonId } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sales_invoices", entityId: result.invoiceId, after: { subAgentId, groupIds, seasonId, manualPrices: manualPrices ? Object.keys(manualPrices).length : 0 } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.invoice.generated", entity: "umrah_sales_invoices", entityId: result.invoiceId, after: { ref: result.ref, total: result.total, subAgentId } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.status(201).json(result);
   } catch (err) { handleRouteError(err, res, "Generate umrah invoice"); }
+});
+
+// Sales-invoice wizard: lists uninvoiced groups for a sub-agent + smart
+// per-group price suggestions (last invoice → pricing rule →
+// sub-agent default → none). The UI pre-fills the suggested price and
+// the operator types only for exceptional cases. Pairs with the
+// `manualPrices` payload on POST /invoices/generate above.
+router.get("/sales-wizard/uninvoiced-groups", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const subAgentId = parseId(String(req.query.subAgentId ?? ""), "subAgentId");
+    const seasonRaw = req.query.seasonId;
+    const seasonId = seasonRaw != null && String(seasonRaw) !== "" ? Number(seasonRaw) : null;
+    const result = await listUninvoicedGroups(
+      { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+      subAgentId,
+      seasonId,
+    );
+    res.json(maskFields(req, result));
+  } catch (err) { handleRouteError(err, res, "List uninvoiced groups for sales wizard"); }
 });
 
 router.patch("/invoices/:id", authorize({ feature: "umrah", action: "update" }), async (req, res) => {

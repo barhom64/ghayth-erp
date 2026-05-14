@@ -60,25 +60,25 @@ export function DeleteConfirmImpact({
   const hasImpact = impacts.length > 0;
 
   return (
-    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+    <div className="bg-status-error-surface border border-status-error-surface rounded-lg p-4">
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-          <AlertTriangle className="h-5 w-5 text-red-600" />
+          <AlertTriangle className="h-5 w-5 text-status-error-foreground" />
         </div>
         <div className="flex-1">
           <h4 className="text-sm font-semibold text-red-900">
             تأكيد حذف "{entityName}"
           </h4>
           {loading ? (
-            <div className="flex items-center gap-2 mt-2 text-sm text-red-700">
+            <div className="flex items-center gap-2 mt-2 text-sm text-status-error-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               جاري فحص البيانات المرتبطة...
             </div>
           ) : hasImpact ? (
             <div className="mt-2 space-y-1">
-              <p className="text-xs text-red-700 font-medium">سيتأثر بالحذف:</p>
+              <p className="text-xs text-status-error-foreground font-medium">سيتأثر بالحذف:</p>
               {impacts.map((impact, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs text-red-600">
+                <div key={i} className="flex items-center gap-2 text-xs text-status-error-foreground">
                   <span className="flex-shrink-0">{impact.icon}</span>
                   <span className="font-medium">{impact.label}:</span>
                   <span>{impact.detail}</span>
@@ -86,7 +86,7 @@ export function DeleteConfirmImpact({
               ))}
             </div>
           ) : (
-            <p className="text-xs text-red-700 mt-1">
+            <p className="text-xs text-status-error-foreground mt-1">
               هل أنت متأكد من حذف هذا العنصر؟ لا يمكن التراجع عن هذا الإجراء.
             </p>
           )}

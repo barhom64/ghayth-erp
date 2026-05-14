@@ -27,6 +27,10 @@ interface PreviewSummary {
   errorCount?: number;
   errors?: { row: number; message: string }[];
   unlinkedSubAgents?: { nuskCode: string; name: string; rowCount: number }[];
+  /** Primary agents the confirm step will auto-create (no existing match). */
+  newAgentsToCreate?: { nuskAgentNumber: string | null; agentName: string; rowCount: number }[];
+  /** Rows that name no agent at all (agentId saved as NULL). */
+  rowsWithoutAgent?: number;
   violationsDetected?: number;
   rows?: any[];
 }
@@ -48,11 +52,28 @@ export default function UmrahImportWizard() {
   const [linkingSubAgent, setLinkingSubAgent] = useState<{ nuskCode: string; name: string } | null>(null);
   const [linkClientId, setLinkClientId] = useState("");
   const [linking, setLinking] = useState(false);
+  // Voucher-only fields (gaps #2 + #3): pick the cash box that funds
+  // NUSK payments + optionally override the umrah-nusk-cost DR account.
+  const [treasuryId, setTreasuryId] = useState("");
+  const [purchaseAccountCode, setPurchaseAccountCode] = useState("");
 
   const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
   const clientsQ = useApiQuery<{ data: any[] }>(["clients"], "/clients");
+  // Asset accounts that can act as the cash box (treasuries are modelled
+  // as chart-of-accounts rows; we filter to postingOnly so abstract
+  // header accounts don't pollute the dropdown).
+  const treasuriesQ = useApiQuery<{ data: { id: number; code: string; name: string }[] }>(
+    ["finance-accounts-assets-posting"],
+    "/finance/accounts?type=asset&postingOnly=true",
+  );
+  const expenseAccountsQ = useApiQuery<{ data: { id: number; code: string; name: string }[] }>(
+    ["finance-accounts-expense-posting"],
+    "/finance/accounts?type=expense&postingOnly=true",
+  );
   const seasons = seasonsQ.data?.data ?? [];
   const clients = clientsQ.data?.data ?? [];
+  const treasuryAccounts = treasuriesQ.data?.data ?? [];
+  const expenseAccounts = expenseAccountsQ.data?.data ?? [];
 
   const clearFile = () => {
     setDropFiles([]);
@@ -129,13 +150,19 @@ export default function UmrahImportWizard() {
     setConfirming(true);
     try {
       const endpoint = fileType === "mutamers" ? "/umrah/import/mutamers" : "/umrah/import/vouchers";
+      const body: Record<string, unknown> = {
+        seasonId: Number(seasonId),
+        fileName,
+        rows: parsedRows,
+      };
+      // Cash-box + account override (gaps #2 + #3) only apply to vouchers.
+      if (fileType === "vouchers") {
+        if (treasuryId) body.treasuryId = Number(treasuryId);
+        if (purchaseAccountCode) body.purchaseAccountCode = purchaseAccountCode;
+      }
       const res: any = await apiFetch(endpoint, {
         method: "POST",
-        body: JSON.stringify({
-          seasonId: Number(seasonId),
-          fileName,
-          rows: parsedRows,
-        }),
+        body: JSON.stringify(body),
       });
       const data = res?.data ?? res;
       setConfirmResult({ batchId: data?.batchId ?? data?.id });
@@ -238,6 +265,37 @@ export default function UmrahImportWizard() {
               </div>
             </div>
 
+            {fileType === "vouchers" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 rounded-lg border border-muted/40 bg-muted/10">
+                <div>
+                  <Label className="text-xs">الخزنة (الصندوق النقدي)</Label>
+                  <p className="text-[11px] text-muted-foreground mb-1">حساب الأصول الذي ستُسحب منه دفعات نسك. اختياري — اتركه فارغًا لتأجيل الربط.</p>
+                  <Select value={treasuryId} onValueChange={setTreasuryId}>
+                    <SelectTrigger><SelectValue placeholder="اختر الخزنة" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">— بلا ربط الآن —</SelectItem>
+                      {treasuryAccounts.map((a) => (
+                        <SelectItem key={a.id} value={String(a.id)}>{a.code} — {a.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">حساب المشتريات (تجاوز الافتراضي)</Label>
+                  <p className="text-[11px] text-muted-foreground mb-1">رمز حساب المصاريف الذي سيُحمَّل بتكلفة هذه الدُفعة. اختياري — يستخدم الافتراضي (٥٢٠١) إن تُرك فارغًا.</p>
+                  <Select value={purchaseAccountCode} onValueChange={setPurchaseAccountCode}>
+                    <SelectTrigger><SelectValue placeholder="افتراضي النظام (٥٢٠١)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">— استخدم الافتراضي —</SelectItem>
+                      {expenseAccounts.map((a) => (
+                        <SelectItem key={a.id} value={a.code}>{a.code} — {a.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
             <FileDropZone
               files={dropFiles}
               onFilesChange={handleDropFiles}
@@ -310,7 +368,7 @@ export default function UmrahImportWizard() {
           </div>
 
           {preview.violationsDetected != null && preview.violationsDetected > 0 && (
-            <Card className="border-amber-300 bg-status-warning-surface">
+            <Card className="border-status-warning-surface bg-status-warning-surface">
               <CardContent className="p-3 flex items-center gap-3">
                 <AlertTriangle className="h-5 w-5 text-status-warning-foreground" />
                 <p className="text-sm text-status-warning-foreground">
@@ -363,6 +421,55 @@ export default function UmrahImportWizard() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* New agents to auto-create */}
+          {preview.newAgentsToCreate && preview.newAgentsToCreate.length > 0 && (
+            <Card className="border-status-warning-surface">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-4 w-4 text-status-warning-foreground" />
+                  <h3 className="font-semibold text-status-warning-foreground">وكلاء سيتم إنشاؤهم تلقائياً ({formatNumber(preview.newAgentsToCreate.length)})</h3>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  الوكلاء التاليون مذكورون في الملف ولا يوجد لهم سجل في النظام. سيُنشأون تلقائياً عند التأكيد. راجع الأسماء قبل المتابعة لتجنّب إنشاء سجلات مكررة بفروق إملائية.
+                </p>
+                <div className="rounded border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40">
+                      <tr>
+                        <th className="p-2 text-start font-medium">رقم الوكيل</th>
+                        <th className="p-2 text-start font-medium">الاسم</th>
+                        <th className="p-2 text-start font-medium">عدد الصفوف</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.newAgentsToCreate.map((a, idx) => (
+                        <tr key={`${a.nuskAgentNumber ?? "name"}-${idx}`} className="border-t">
+                          <td className="p-2 font-mono text-xs" dir="ltr">{a.nuskAgentNumber ?? "—"}</td>
+                          <td className="p-2">{a.agentName}</td>
+                          <td className="p-2">{formatNumber(a.rowCount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Rows with no agent — silent data loss prevention */}
+          {preview.rowsWithoutAgent && preview.rowsWithoutAgent > 0 && (
+            <Card className="border-status-warning-surface">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-status-warning-foreground" />
+                  <p className="text-sm text-status-warning-foreground">
+                    <strong>{formatNumber(preview.rowsWithoutAgent)}</strong> صفًا لا يحوي رقم وكيل ولا اسم وكيل — ستُحفظ بدون ربط بأي وكيل (لن تظهر في كشوف الوكلاء).
+                  </p>
                 </div>
               </CardContent>
             </Card>

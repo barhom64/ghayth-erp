@@ -14,10 +14,10 @@ interface Props {
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-gray-100 text-gray-700",
-  breached: "bg-red-100 text-red-700",
+  breached: "bg-red-100 text-status-error-foreground",
   escalated_l1: "bg-orange-100 text-orange-700",
-  escalated_l2: "bg-red-200 text-red-800",
-  met: "bg-green-100 text-green-700",
+  escalated_l2: "bg-red-200 text-status-error-foreground",
+  met: "bg-green-100 text-status-success-foreground",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -68,14 +68,14 @@ export function EntityObligations({ entityType, entityId, hideWhenEmpty }: Props
   );
 
   return (
-    <Card className={overdue.length > 0 ? "border-red-200" : ""}>
+    <Card className={overdue.length > 0 ? "border-status-error-surface" : ""}>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
           <Clock className="h-4 w-4 text-muted-foreground" />
           الالتزامات الزمنية
           <Badge variant="outline" className="text-xs">{list.length}</Badge>
           {overdue.length > 0 && (
-            <Badge className="bg-red-100 text-red-700 text-[10px] gap-1">
+            <Badge className="bg-red-100 text-status-error-foreground text-[10px] gap-1">
               <AlertTriangle className="h-3 w-3" /> {overdue.length} متأخر
             </Badge>
           )}
@@ -86,11 +86,11 @@ export function EntityObligations({ entityType, entityId, hideWhenEmpty }: Props
           const isOverdue = o.dueAt && new Date(o.dueAt) < new Date() &&
             o.status !== "met" && o.status !== "cancelled";
           return (
-            <div key={o.id} className={`flex items-center justify-between text-xs p-2 rounded ${isOverdue ? "bg-red-50" : "bg-muted/30"}`}>
+            <div key={o.id} className={`flex items-center justify-between text-xs p-2 rounded ${isOverdue ? "bg-status-error-surface" : "bg-muted/30"}`}>
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{o.title}</p>
                 {o.dueAt && (
-                  <p className={`text-[10px] ${isOverdue ? "text-red-600" : "text-muted-foreground"}`}>
+                  <p className={`text-[10px] ${isOverdue ? "text-status-error-foreground" : "text-muted-foreground"}`}>
                     استحقاق: {formatDateAr(o.dueAt)}
                   </p>
                 )}

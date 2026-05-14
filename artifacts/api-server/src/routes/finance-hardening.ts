@@ -9,7 +9,7 @@ import {
 } from "../lib/errorHandler.js";
 import { z } from "zod";
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import {
@@ -159,6 +159,7 @@ financeHardeningRouter.post("/fiscal-periods-v2", authorize({ feature: "finance.
        VALUES ($1,$2,$3,$4,'open',$5)`,
       [scope.companyId, name, startDate, endDate, notes ?? null]
     );
+    assertInsert(insertId, "financial_periods");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM financial_periods WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     emitEvent({
@@ -705,6 +706,7 @@ financeHardeningRouter.post("/bank-guarantees", authorize({ feature: "finance.ha
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [scope.companyId, branchId ?? scope.branchId, ref, bank, beneficiary, Number(amount), issueDate, expiryDate, guaranteeType ?? "performance", notes ?? null, attachmentUrl ?? null, scope.activeAssignmentId]
     );
+    assertInsert(insertId, "bank_guarantees");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM bank_guarantees WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     emitEvent({
@@ -1178,6 +1180,7 @@ financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [scope.companyId, branchId ?? scope.branchId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
     );
+    assertInsert(insertId, "projects");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     emitEvent({

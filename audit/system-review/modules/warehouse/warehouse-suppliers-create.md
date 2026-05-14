@@ -27,13 +27,45 @@ _لا قراءات._
 
 
 ## 3. الحركات ذات الصلة (Cross-Module Transactions)
-- [ ] **TBD** — راجع `docs/blueprints/warehouse.md` (إن وُجد) وعدّد:
-  - القيود المحاسبية المتوقعة (gl_entries / posting-failures)
-  - تأثير الأرصدة (balances, balances_history)
-  - الإشعارات (notifications)
-  - سير الموافقات (approval_chains)
-  - تكامل خارجي (ZATCA / Mudad / WPS / Government)
-- يتم تعبئتها يدوياً في مرحلة المراجعة المعزّزة.
+
+إنشاء مورد جديد — Onboard new supplier.
+
+| الحقل | المتطلب |
+|------|--------|
+| Name (legal) | إجباري |
+| Commercial Reg (CR) | للـ business | إجباري |
+| VAT Number | per ZATCA | for B2B invoicing |
+| Type | individual/company/govt | enum |
+| Country | enum (KSA priority) |
+| Contact (phone, email, address) | إجباري |
+| Bank info | encrypted | for payment |
+| Credit terms | NET 30/60/COD | enum |
+| Default GL account | per supplier | راجع `finance-accounts.md` |
+| Tax behavior | per ZATCA | راجع `finance-tax.md` |
+| WHT applicable? | flag | per service type |
+| Categories supplied | linked | راجع `warehouse-categories.md` |
+
+| الحركة | API | DB | الحالة |
+|--------|-----|-----|--------|
+| Create supplier | POST `/warehouse/suppliers` | `suppliers` | ✅ |
+| Validate unique CR/VAT | server-side | ✅ critical |
+| ZATCA VAT lookup (verify number) | external API | راجع `admin-integrations.md` | ⚠ |
+| Encrypt bank info | at-rest | ✅ critical |
+| Approval workflow (لو significant) | راجع `governance/approvals.md` | ⚠ |
+| Generate AP sub-ledger account | راجع `finance-accounts.md` | auto | ✅ |
+| تكامل مع `crm/clients.md` (لو also a client) | linkage | ⚠ |
+| تكامل مع `finance-accounts.md` (AP sub-ledger) | ✅ critical |
+| تكامل مع `finance-tax.md` (WHT applicability) | ✅ |
+| Notification | event=`supplier_created` | راجع `notifications.md` | ✅ |
+| Audit log إجباري | `audit_logs` | ✅ critical |
+| **PDPL** — لو individual supplier | retention rules | ⚠ |
+| RBAC | procurement + finance | ✅ |
+
+تحقق يدوي:
+- [ ] هل VAT lookup mandatory للـ B2B Saudi suppliers?
+- [ ] هل bank info encryption at-rest (column-level)?
+- [ ] هل WHT auto-flag accurate per service category?
+- [ ] هل duplicate detection by CR/VAT/name fuzzy match?
 
 ## 4. النمذجة
 _لم يتم العثور على جدول Drizzle بالاسم المستنبط `create` — قد يكون معرّفًا في migrations فقط (راجع `artifacts/api-server/src/migrations`)._

@@ -84,7 +84,7 @@ export default function ApplicationListPage() {
             className={cn(
               "text-xs",
               r >= 4 ? "border-status-success-surface text-status-success-foreground bg-status-success-surface" :
-              r >= 3 ? "border-amber-300 text-status-warning-foreground bg-status-warning-surface" :
+              r >= 3 ? "border-status-warning-surface text-status-warning-foreground bg-status-warning-surface" :
               "border-status-error-surface text-status-error-foreground bg-status-error-surface",
             )}
           >

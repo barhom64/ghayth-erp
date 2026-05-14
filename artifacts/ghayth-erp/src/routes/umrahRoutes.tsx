@@ -24,6 +24,7 @@ const UmrahPenaltyDetail = lazy(() => import("@/pages/details/umrah-penalty-deta
 const UmrahSubAgents = lazy(() => import("@/pages/umrah/sub-agents"));
 const UmrahSubAgentDetail = lazy(() => import("@/pages/details/umrah-sub-agent-detail"));
 const UmrahPricing = lazy(() => import("@/pages/umrah/pricing"));
+const UmrahSalesWizard = lazy(() => import("@/pages/umrah/sales-wizard"));
 const UmrahCommissionPlans = lazy(() => import("@/pages/umrah/commission-plans"));
 const UmrahCommissionPlanEditor = lazy(() => import("@/pages/umrah/commission-plan-editor"));
 const UmrahViolations = lazy(() => import("@/pages/umrah/violations"));
@@ -67,6 +68,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/sub-agents", component: UmrahSubAgents, module: "operations" },
   { path: "/umrah/sub-agents/:id", component: UmrahSubAgentDetail, module: "operations" },
   { path: "/umrah/pricing", component: UmrahPricing, module: "operations" },
+  { path: "/umrah/sales-wizard", component: UmrahSalesWizard, module: "operations" },
   { path: "/umrah/commission-plans", component: UmrahCommissionPlans, module: "operations" },
   { path: "/umrah/commission-plans/new", component: UmrahCommissionPlanEditor, module: "operations" },
   { path: "/umrah/commission-plans/:id/edit", component: UmrahCommissionPlanEditor, module: "operations" },

@@ -389,6 +389,11 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     if (!accountCode) { throw new ValidationError("لا يمكن صرف بدون حساب محاسبي واضح", { field: "accountCode", fix: "حدد الحساب المحاسبي للمصروف (مثل 5100 رواتب، 5200 وقود)" }); }
     if (!amount || Number(amount) <= 0) { throw new ValidationError("لا يمكن تسجيل مصروف بقيمة صفر أو سالبة", { field: "amount", fix: "أدخل مبلغ المصروف بقيمة موجبة" }); }
     if (!branchId && !scope.branchId) { throw new ValidationError("الفرع مطلوب لتسجيل المصروف", { field: "branchId", fix: "حدد الفرع الذي ينتمي إليه هذا المصروف" }); }
+    if (branchId != null &&
+        !scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
+        scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(Number(branchId))) {
+      throw new ForbiddenError("لا تملك صلاحية تسجيل مصروفات في هذا الفرع", { field: "branchId" });
+    }
     if (!costCenter) { throw new ValidationError("مركز التكلفة مطلوب لتسجيل المصروف", { field: "costCenter", fix: "حدد مركز التكلفة (مثل: مشروع-001، فرع-الرياض)" }); }
 
     let costCenterValidationEnabled = false;

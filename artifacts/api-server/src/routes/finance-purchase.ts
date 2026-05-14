@@ -9,7 +9,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -28,6 +28,7 @@ import {
 } from "../lib/businessHelpers.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { registerObligation } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { markIdempotencyReplay } from "../lib/requestIdempotency.js";
@@ -299,6 +300,7 @@ purchaseRouter.post("/purchase-requests", authorize({ feature: "finance.purchase
        VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8,$9)`,
       [scope.companyId, scope.branchId, scope.activeAssignmentId, ref, totalAmount, supplierId ?? null, notes ?? null, expectedDate ?? null, costCenter ?? null]
     );
+    assertInsert(insertId, "purchase_requests");
 
     if (Array.isArray(items) && items.length > 0) {
       const valuesSql: string[] = [];
@@ -544,6 +546,12 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies?.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
     const effectiveBranchId = branchId ?? scope.branchId;
 
+    if (branchId != null &&
+        !scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
+        scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(Number(branchId))) {
+      throw new ForbiddenError("لا تملك صلاحية إنشاء أوامر شراء في هذا الفرع", { field: "branchId" });
+    }
+
     if (supplierId) {
       const [sup] = await rawQuery<{ id: number }>(`SELECT id FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [supplierId, effectiveCompanyId]);
       if (!sup) throw new ValidationError("المورد غير موجود", { field: "supplierId", fix: "اختر مورداً من قائمة الموردين." });
@@ -557,6 +565,7 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
        VALUES ($1,$2,$3,'pending',$4,$5,$6,$7,$8)`,
       [effectiveCompanyId, effectiveBranchId, ref, Number(totalAmount), supplierId, notes ?? null, expectedDelivery ?? null, scope.userId]
     );
+    assertInsert(insertId, "purchase_orders");
 
     if (Array.isArray(items) && items.length > 0) {
       const valuesSql: string[] = [];
