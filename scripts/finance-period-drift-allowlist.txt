@@ -1,0 +1,75 @@
+# scripts/finance-period-drift-allowlist.txt
+#
+# Used by scripts/src/check-finance-period-drift.mjs (guard step 4f).
+#
+# Each entry is `<repo-relative-file>:<line>` pointing at a use of
+# `new Date().getMonth()` / `new Date().getFullYear()` or a variable-bound
+# `X.getMonth()` / `X.getFullYear()` (where `X` was declared on an earlier
+# line as `const X = new Date()`) that is exempt from the guard.
+#
+# Two valid reasons to add an entry here:
+#
+#   (A) [legitimate] The site really does want the UTC server clock —
+#       footers, low-stakes display headings, calendar widget initial
+#       view, object-storage path partitions, timer math like
+#       `setMonth(now.getMonth() + 3)`. Skewing 3 hours doesn't matter.
+#
+#   (B) [tech-debt] A pre-existing period-drift bug captured at the
+#       moment this guard landed (Task #438). These are real Task #433
+#       / #435 / #437-class bugs that need converting to
+#       `currentDateInTz("Asia/Riyadh")` / `currentMonthPadded()` /
+#       `currentPeriod()` / `currentYear()` — but that conversion is
+#       out of scope for the guard itself. Each one is a follow-up.
+#
+# Stale entries (file/line no longer matches a banned pattern) fail
+# the guard so this list stays honest as code drifts. For one-off
+# legit sites prefer an inline `// utc-ok: <reason>` comment over an
+# entry here.
+
+# ============================================================
+# (A) Legitimate — UTC server clock is fine.
+# ============================================================
+
+# Display-only: dashboard heading "الإيرادات السنوية ({year})" — the
+# numbers underneath come from a server-derived period; this is just
+# the heading text.
+artifacts/ghayth-erp/src/pages/properties-dashboard.tsx:187
+
+# Display-only: footer copyright year on the public login page. UTC
+# vs Riyadh boundary is at most 3 hours of "wrong year" once a year.
+artifacts/ghayth-erp/src/pages/login.tsx:275
+artifacts/ghayth-erp/src/pages/login.tsx:479
+
+# Display-only: "أيام مستخدمة {year}" badge label on the employee
+# context card. The leave-balance number itself comes from the API.
+artifacts/ghayth-erp/src/components/shared/employee-context-card.tsx:287
+
+# Calendar widget initial view: which month the picker should open
+# on. The user can flip months freely; no business reporting depends
+# on this default.
+artifacts/ghayth-erp/src/pages/calendar.tsx:80
+
+# Object-storage path partition. Bucket key prefix, not a business
+# date. (The declaration line already carries `// utc-ok:` but the
+# `now.getFullYear()` / `now.getMonth()` uses are on separate lines.)
+artifacts/api-server/src/lib/print/printStorage.ts:36
+artifacts/api-server/src/lib/print/printStorage.ts:37
+
+# Timer math: `setMonth(<X>.getMonth() + 3)` for a maintenance
+# reminder. Computes "3 months from now"; UTC vs Riyadh skew is at
+# most 3 hours against a 90-day horizon — immaterial.
+artifacts/api-server/src/lib/proactiveEngine.ts:529
+artifacts/api-server/src/routes/fleet.ts:1400
+
+# ============================================================
+# (B) Tech debt — pre-existing Task #433/#435/#437-class bugs
+#     captured at the moment Task #438 landed. Each one is a
+#     follow-up to convert to a Riyadh-aware helper. DO NOT add
+#     more entries here; the guard exists precisely to stop new
+#     occurrences. Open a ticket and fix the underlying line.
+# ============================================================
+#
+# Empty — all 14 entries cleared by Task #439. Each site was
+# converted to the Riyadh-aware `currentYearRiyadh()` /
+# `currentPeriodRiyadh()` / `todayLocal()` helpers in
+# `artifacts/ghayth-erp/src/lib/formatters.ts`.
