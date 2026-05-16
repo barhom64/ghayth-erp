@@ -77,7 +77,18 @@ export default function AdminMonitoring() {
   const errorColumns: DataTableColumn<any>[] = [
     { key: "action", header: "الإجراء", searchable: true, render: (r: any) => <span className="font-medium text-xs text-status-error-foreground">{r.action}</span> },
     { key: "entity", header: "الوحدة", render: (r: any) => <span className="text-xs">{r.entity || "-"}</span> },
-    { key: "details", header: "التفاصيل", render: (r: any) => <span className="text-xs max-w-[300px] truncate block">{typeof r.details === "object" ? JSON.stringify(r.details) : r.details || "-"}</span> },
+    { key: "details", header: "التفاصيل", render: (r: any) => {
+      // M3 fix: previously dumped JSON.stringify(r.details) unwrapped,
+      // overflowing the cell with nested objects like {"stack":"...","cause":{...}}.
+      // Now show a one-line summary (top-level error/message/code/fix)
+      // with title-tooltip carrying the pretty-printed full payload.
+      if (r.details == null) return <span className="text-xs text-muted-foreground">-</span>;
+      if (typeof r.details !== "object") return <span className="text-xs max-w-[300px] truncate block">{String(r.details)}</span>;
+      const d = r.details as Record<string, unknown>;
+      const summary = String(d.error ?? d.message ?? d.code ?? d.fix ?? Object.keys(d)[0] ?? "(تفاصيل)");
+      const full = JSON.stringify(d, null, 2);
+      return <span className="text-xs max-w-[300px] truncate block" title={full}>{summary}</span>;
+    } },
     { key: "createdAt", header: "التاريخ", render: (r: any) => <span className="text-xs">{formatDateAr(r.createdAt)}</span> },
   ];
 
