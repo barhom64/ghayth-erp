@@ -1,0 +1,15 @@
+{
+  "name": "@workspace/ghayth-erp-deck",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check-shots-age": "node scripts/check-shots-age.mjs",
+    "capture-shots": "node scripts/capture-shots.mjs",
+    "test": "node scripts/check-shots-age.test.mjs && node scripts/capture-shots.test.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.59.1",
+    "puppeteer": "npm:puppeteer-core@^23.11.1"
+  }
+}
