@@ -290,7 +290,7 @@ router.get("/products", authorize({ feature: "warehouse.inventory", action: "lis
     const offsetParam = paramIdx++;
 
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.name LIMIT $${limitParam} OFFSET $${offsetParam}`,
+      `SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" AND c."deletedAt" IS NULL WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.name LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
     );
     res.json(maskFields(req, { data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage }));
@@ -363,7 +363,7 @@ router.get("/products/:id", authorize({ feature: "warehouse.inventory", action: 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [id, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" AND c."deletedAt" IS NULL WHERE p.id=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المنتج غير موجود");
     res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get product error:"); }
@@ -557,7 +557,7 @@ router.get("/movements", authorize({ feature: "warehouse.transfers", action: "li
     if (search) { params.push(`%${search}%`); where += ` AND (p.name ILIKE $${paramIdx} OR m.reference ILIKE $${paramIdx})`; paramIdx++; }
     if (status) { where += ` AND m.type = $${paramIdx}`; params.push(status); paramIdx++; }
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT m.*, p.name AS "productName", p.sku FROM warehouse_movements m LEFT JOIN warehouse_products p ON p.id=m."productId" WHERE ${where} ORDER BY m.id DESC LIMIT 500`,
+      `SELECT m.*, p.name AS "productName", p.sku FROM warehouse_movements m LEFT JOIN warehouse_products p ON p.id=m."productId" AND p."deletedAt" IS NULL WHERE ${where} ORDER BY m.id DESC LIMIT 500`,
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
@@ -572,7 +572,7 @@ router.get("/movements/:id", authorize({ feature: "warehouse.transfers", action:
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT m.*, p.name AS "productName", p.sku
        FROM warehouse_movements m
-       LEFT JOIN warehouse_products p ON p.id=m."productId"
+       LEFT JOIN warehouse_products p ON p.id=m."productId" AND p."deletedAt" IS NULL
        WHERE m.id=$1 AND m."companyId"=$2`,
       [id, scope.companyId]
     );
@@ -887,11 +887,13 @@ router.post("/transfers", authorize({ feature: "warehouse.transfers", action: "c
       );
       inId = inRes.rows[0].id;
 
-      // Decrement source product stock (transfer_out)
-      await client.query(
-        `UPDATE warehouse_products SET "currentStock" = "currentStock" - $1, "updatedAt" = NOW() WHERE id = $2 AND "deletedAt" IS NULL`,
-        [qtyNum, b.productId]
-      );
+      // C1 fix: warehouse_products.currentStock is the company-wide global
+      // counter (no per-warehouse split column on this table). An internal
+      // A→B transfer must NOT change it — it's recorded only as the paired
+      // transfer_out + transfer_in movement rows above. The previous code
+      // decremented currentStock by qty without re-incrementing for the
+      // matching transfer_in, causing silent stock loss equal to the
+      // transferred quantity on every transfer.
     });
 
     emitEvent({
