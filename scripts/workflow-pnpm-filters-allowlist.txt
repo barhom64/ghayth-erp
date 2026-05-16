@@ -1,0 +1,10 @@
+# scripts/workflow-pnpm-filters-allowlist.txt
+#
+# Known-broken `pnpm --filter <pkg> ...` invocations in
+# `.github/workflows/*.yml` that the check:workflow-pnpm-filters
+# guard should silence while a follow-up fix is in flight.
+#
+# Format: one entry per line, `<workflow-basename>:<package-name>`.
+# `#` starts a comment. Stale entries (no longer matching any
+# invocation) fail the guard so this file stays honest.
+
