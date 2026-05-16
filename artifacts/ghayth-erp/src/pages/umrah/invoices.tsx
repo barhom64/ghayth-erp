@@ -35,7 +35,17 @@ export default function UmrahInvoices() {
       await apiFetch("/umrah/agent-invoices/generate", { method: "POST", body: JSON.stringify({ agentId: Number(genAgent), seasonId: Number(genSeason) }) });
       toast({ title: "تم إنشاء الفاتورة" });
       refetch();
-    } catch (err: any) { toast({ variant: "destructive", title: err?.error || "خطأ" }); }
+    } catch (err: any) {
+      // M1 fix: previously surfaced err?.error (often the raw validation
+      // field key like "seasonId") or the bare placeholder "خطأ". Read the
+      // typed ApiError's message + fix so the user gets a real description
+      // and the field-binding hint the server already provides.
+      toast({
+        variant: "destructive",
+        title: err?.message || "تعذر إنشاء الفاتورة",
+        description: err?.fix,
+      });
+    }
   };
 
   const filteredItems = items.filter((inv: any) => {
@@ -51,9 +61,9 @@ export default function UmrahInvoices() {
   const paidAmount = items.filter((inv: any) => inv.status === "paid").reduce((sum: number, inv: any) => sum + Number(inv.total || 0), 0);
 
   const kpiCards = [
-    { label: "إجمالي الفواتير", value: items.length, icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },
+    { label: "إجمالي الفواتير", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
     { label: "الإجمالي (ريال)", value: formatCurrency(totalAmount), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
-    { label: "المدفوع (ريال)", value: formatCurrency(paidAmount), icon: Receipt, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "المدفوع (ريال)", value: formatCurrency(paidAmount), icon: Receipt, color: "text-green-600 bg-green-50" },
   ];
 
   return (
@@ -71,7 +81,7 @@ export default function UmrahInvoices() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-muted-foreground">{c.label}</p>
+                <p className="text-xs text-gray-500">{c.label}</p>
               </div>
             </CardContent>
           </Card>
@@ -126,7 +136,7 @@ export default function UmrahInvoices() {
           { key: "seasonTitle", header: "الموسم" },
           { key: "pilgrimCount", header: "عدد المعتمرين" },
           { key: "servicesTotal", header: "الخدمات (ريال)", render: (inv) => formatCurrency(Number(inv.servicesTotal)) },
-          { key: "penaltiesTotal", header: "الغرامات (ريال)", render: (inv) => <span className="text-status-error-foreground">{formatCurrency(Number(inv.penaltiesTotal))}</span> },
+          { key: "penaltiesTotal", header: "الغرامات (ريال)", render: (inv) => <span className="text-red-600">{formatCurrency(Number(inv.penaltiesTotal))}</span> },
           { key: "total", header: "الإجمالي (ريال)", render: (inv) => <span className="font-bold">{formatCurrency(Number(inv.total))}</span> },
           { key: "status", header: "الحالة", render: (inv) => <PageStatusBadge status={inv.status} /> },
         ] as DataTableColumn<any>[]}
