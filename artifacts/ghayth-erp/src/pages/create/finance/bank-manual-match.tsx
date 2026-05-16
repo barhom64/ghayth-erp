@@ -63,8 +63,19 @@ export default function BankManualMatchPage() {
       toast({ title: "تمت المطابقة بنجاح" });
       setTimeout(() => setLocation("/finance/bank-reconciliation"), 1500);
     } catch (err: any) {
-      setMatchMsg("حدث خطأ أثناء المطابقة");
-      toast({ variant: "destructive", title: "حدث خطأ أثناء المطابقة", description: err?.message });
+      // M2 fix: bank manual match can fail with 4 distinct states
+      // (duplicate statement line, already-matched journal,
+      //  out-of-range amount, closed period). Surface the typed
+      // ApiError's `fix` (actionable hint) and `meta` (offending
+      // value) so the finance operator knows which one and why,
+      // instead of a single generic "حدث خطأ أثناء المطابقة".
+      const title = err?.message || "حدث خطأ أثناء المطابقة";
+      const hint = err?.fix
+        || (err?.meta && Object.entries(err.meta as Record<string, unknown>)
+              .map(([k, v]) => `${k}: ${String(v)}`).join(" • "))
+        || undefined;
+      setMatchMsg(hint ? `${title} — ${hint}` : title);
+      toast({ variant: "destructive", title, description: hint });
     }
   }
 
