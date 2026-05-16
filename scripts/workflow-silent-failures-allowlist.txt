@@ -1,0 +1,89 @@
+# scripts/workflow-silent-failures-allowlist.txt
+#
+# Allowlist for `scripts/src/check-workflow-silent-failures.mjs`. One
+# entry per line. `#` starts a comment. Stale entries fail the guard.
+#
+# Two key shapes:
+#   <basename>:or-true:<exact trimmed line content>
+#   <basename>:continue-on-error:<step id or name>
+#
+# Add a comment above each entry explaining why the failure is safe to
+# ignore. Adding to this file is a code-review red flag — prefer to
+# fix the underlying step.
+
+# audit-runtime.yml: best-effort log tailing on the post-failure path.
+# These run inside `if: failure()` blocks, so a non-zero exit from
+# `tail` (e.g. log file never created because the service crashed
+# before writing one) must not mask the real failure that already
+# exists.
+audit-runtime.yml:or-true:echo "=== api-server.log (tail) ==="; tail -200 /tmp/api-server.log || true
+audit-runtime.yml:or-true:echo "=== ghayth-erp.log (tail) ==="; tail -200 /tmp/ghayth-erp.log || true
+audit-runtime.yml:or-true:echo "=== proxy.log (tail) ===";       tail -200 /tmp/proxy.log     || true
+
+# audit-runtime.yml: idempotent service teardown in `if: always()`.
+# `kill` is allowed to fail if the PID no longer exists.
+audit-runtime.yml:or-true:[ -f "$f" ] && kill "$(cat "$f")" 2>/dev/null || true
+
+# audit-runtime.yml: `sudo true` probe is a no-op meant only to warm
+# the sudo cache on runners that need it for port 80; failure means
+# sudo is unavailable, which is not actionable here.
+audit-runtime.yml:or-true:sudo true || true  # noop; port 80 may need sudo on some runners
+
+# audit-runtime.yml: best-effort directory listing inside an
+# already-failing diagnostic block (the surrounding `||` chain has
+# `exit 1` after it, so the real failure is preserved).
+audit-runtime.yml:or-true:ls -la /tmp/runtime-audit/ || true;
+
+# audit-runtime.yml: the `audit` step uses continue-on-error so a
+# non-zero exit from the long runtime walk does not abort before the
+# upload-artifact + sanity-check steps run. The failure IS re-checked
+# by the next "Sanity-check audit output exists" step (which exits 1
+# if all.json is missing or stale) and again by the
+# "Gate on A1/A2/A4 FAIL" step that runs `audit:runtime:guard` on the
+# JSON.
+audit-runtime.yml:continue-on-error:audit
+
+# backup.yml: webhook ping is fire-and-forget by design — if the
+# notification endpoint is down we still want the backup itself to
+# count as successful.
+backup.yml:or-true:"$WEBHOOK" || true
+
+# guard.yml: 2-pass schema load. pass 1 deliberately tolerates the
+# pg_dump-orders-FKs-before-tables ordering bug and pass 2 replays
+# only the ALTER TABLE blocks. Both passes have ON_ERROR_STOP=0 and
+# their failure is verified afterwards by the FK-count assertion
+# (lines 135-144), which exits 1 with both pass logs attached if the
+# schema isn't fully loaded.
+guard.yml:or-true:psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -f db/schema.sql > /tmp/pass1.log 2>&1 || true
+guard.yml:or-true:psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -f /tmp/constraints.sql > /tmp/pass2.log 2>&1 || true
+
+# refresh-deck-shots.yml (Task #419 — scheduled GM-deck refresh).
+# Same legitimate-best-effort pattern as audit-runtime.yml above.
+
+# Best-effort chromium binary probe; the next step explicitly checks
+# CHROME_BIN and fails loudly if neither candidate was found.
+refresh-deck-shots.yml:or-true:CHROME_BIN="$(command -v chromium-browser || command -v chromium || true)"
+
+# 2-pass schema load: pass 1 may fail on FK ordering, pass 2 retries
+# with constraints split out. Failure of pass 1 is expected; what
+# matters is the final psql check after pass 2, which DOES surface.
+refresh-deck-shots.yml:or-true:psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -f db/schema.sql > /tmp/pass1.log 2>&1 || true
+refresh-deck-shots.yml:or-true:psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -f /tmp/constraints.sql > /tmp/pass2.log 2>&1 || true
+
+# Best-effort log tailing inside `if: failure()` post-failure block —
+# if a service crashed before writing a log, `tail` mustn't mask the
+# real failure that already triggered the block.
+refresh-deck-shots.yml:or-true:echo "---- api-server.log ----"; tail -n 200 /tmp/api-server.log || true
+refresh-deck-shots.yml:or-true:echo "---- frontend.log ----"; tail -n 200 /tmp/frontend.log || true
+refresh-deck-shots.yml:or-true:echo "---- proxy.log ----"; tail -n 200 /tmp/proxy.log || true
+
+# `git status --porcelain` may output zero lines when nothing changed;
+# `awk` would still exit 0, but the `|| true` defends against an empty
+# pipeline interrupt. The next step `if: env.CHANGED != ''` gates real action.
+refresh-deck-shots.yml:or-true:CHANGED=$(git status --porcelain -- artifacts/ghayth-erp-deck/public/screenshots/ | awk '{print $2}' || true)
+
+# Idempotent service teardown: PID file may not exist if the service
+# never started; `kill` may target a PID that already exited. Same
+# pattern as audit-runtime.yml above.
+refresh-deck-shots.yml:or-true:pid=$(cat "$f" 2>/dev/null || true)
+refresh-deck-shots.yml:or-true:[ -n "${pid:-}" ] && kill "$pid" 2>/dev/null || true
