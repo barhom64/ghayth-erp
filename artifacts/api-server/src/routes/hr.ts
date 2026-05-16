@@ -1719,7 +1719,12 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
 });
 
 // Staged leave approval: manager (stage 1) → HR (stage 2)
-router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", action: "update" }), requireOwnership({ table: "hr_leave_requests", checks: ["company", "branch"] }), async (req, res) => {
+router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", action: "update" }), requireOwnership({ table: "hr_leave_requests", checks: ["company"] }), async (req, res) => {
+  // C2 fix: hr_leave_requests has no "branchId" column, so adding "branch"
+  // to the ownership check made requireOwnership() throw a 500 with
+  // SQL "column \"branchId\" does not exist" before the handler ran.
+  // Tenant scoping is still enforced via "company" + the explicit
+  // companyId predicate in the handler's SELECT below.
   // Step 6 of the HR operational audit — leave approval workflow.
   // 4 authorization / state branches rewritten to ForbiddenError +
   // ConflictError, each one carrying meta so the frontend can show
