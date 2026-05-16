@@ -26,11 +26,8 @@ import {
   todayISO,
   currentPeriod,
   currentYear,
-  currentMonthPadded,
   generateRef,
   toDateISO,
-  currentDateInTz,
-  combineDateAndShiftTime,
   roundTo2,
   softDeleteJournalEntry,
 } from "../lib/businessHelpers.js";
@@ -429,10 +426,7 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
   try {
     const scope = req.scope!;
     const now = new Date();
-    // Task #400 — derive "today" in the tenant's wall-clock timezone
-    // (Asia/Riyadh) so a check-in at 01:30 AM local doesn't get filed
-    // under the previous UTC day.
-    const today = currentDateInTz("Asia/Riyadh", now);
+    const today = toDateISO(now);
     const period = today.slice(0, 7);
     const { lat, lon, notes, workType } = zodParse(checkInSchema.safeParse(req.body));
 
@@ -528,11 +522,7 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
       shift = { id: newShiftId, startTime: "08:00", endTime: "17:00", days: "0,1,2,3,4" };
     }
 
-    // Task #400 — `now.getDay()` reads server-local weekday; for a Riyadh
-    // tenant on a TZ=UTC server the day-of-week flips at 03:00 Asia/Riyadh
-    // instead of midnight. `today` is already the Riyadh calendar date,
-    // so derive its weekday in UTC (unambiguous for a YYYY-MM-DD string).
-    const dayOfWeek = new Date(today + "T00:00:00Z").getUTCDay();
+    const dayOfWeek = now.getDay();
     const shiftDays = String(shift.days ?? "0,1,2,3,4").split(",").map(Number);
     const isWorkDay = shiftDays.includes(dayOfWeek);
 
@@ -592,10 +582,11 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
       ? shift.flexStartLatest
       : shift?.startTime;
     if (effectiveStartTime) {
-      // Task #400 — build the shift-start instant in Asia/Riyadh wall-clock
-      // (was: `new Date(today + "T00:00:00").setHours(h, m)` which read the
-      // server's TZ and made lateMinutes wrong by the server↔Riyadh offset).
-      const expected = combineDateAndShiftTime(today, String(effectiveStartTime).slice(0, 5), "Asia/Riyadh");
+      const parts = String(effectiveStartTime).split(":");
+      const h = Number(parts[0]);
+      const m = Number(parts[1]);
+      const expected = new Date(today + "T00:00:00");
+      expected.setHours(h, m, 0, 0);
       const diff = now.getTime() - expected.getTime();
       if (diff > 0) { lateMinutes = Math.floor(diff / 60000); isLate = lateMinutes > 0; }
     }
@@ -803,8 +794,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
   try {
     const scope = req.scope!;
     const now = new Date();
-    // Task #400 — same Asia/Riyadh derivation as /check-in (see comment there).
-    const today = currentDateInTz("Asia/Riyadh", now);
+    const today = toDateISO(now);
     const period = today.slice(0, 7);
     const { notes, lat, lon } = zodParse(checkOutSchema.safeParse(req.body ?? {}));
 
@@ -894,10 +884,11 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     let overtimeMinutes = 0;
     let earlyDepartureMinutes = 0;
     if (shift?.endTime) {
-      // Task #400 — build the shift-end instant in Asia/Riyadh wall-clock
-      // (was: server-local setHours, which made overtime/early-departure
-      // off by the server↔Riyadh offset on a TZ=UTC server).
-      const shiftEnd = combineDateAndShiftTime(today, String(shift.endTime).slice(0, 5), "Asia/Riyadh");
+      const parts = String(shift.endTime).split(":");
+      const endH = Number(parts[0]);
+      const endM = Number(parts[1] ?? 0);
+      const shiftEnd = new Date(today + "T00:00:00");
+      shiftEnd.setHours(endH, endM, 0, 0);
       const diffMs = now.getTime() - shiftEnd.getTime();
       if (diffMs > 0) {
         overtimeMinutes = Math.floor(diffMs / 60000);
@@ -1102,7 +1093,7 @@ router.get("/attendance/today-summary", authorize({ feature: "hr.attendance", ac
               a.status, a."checkIn", a."checkOut", COALESCE(a."lateMinutes", 0) AS "lateMinutes"
        FROM employee_assignments ea
        JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN attendance a ON a."assignmentId" = ea.id AND a.date = $2 AND a."deletedAt" IS NULL
+       LEFT JOIN attendance a ON a."assignmentId" = ea.id AND a.date = $2
        WHERE ea."companyId" = $1 AND ea.status = 'active'
        ORDER BY e.name
        LIMIT 1000`,
@@ -1277,7 +1268,7 @@ router.get("/leaves/:id", authorize({ feature: "hr.leaves", action: "view", reso
        JOIN employees e ON e.id = lr."employeeId"
        JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
        LEFT JOIN employee_assignments aa ON aa.id = lr."approvedBy"
-       LEFT JOIN employees approver ON approver.id = aa."employeeId" AND approver."deletedAt" IS NULL
+       LEFT JOIN employees approver ON approver.id = aa."employeeId"
        WHERE lr.id = $1 AND lr."companyId" = $2 AND lr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1486,7 +1477,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
       );
       if (ass?.hireDate) {
         const hireDate = new Date(ass.hireDate as string | Date);
-        const monthsOfService = (currentYear() - hireDate.getFullYear()) * 12 + ((Number(currentMonthPadded()) - 1) - hireDate.getMonth());
+        const monthsOfService = (currentYear() - hireDate.getFullYear()) * 12 + (new Date().getMonth() - hireDate.getMonth());
         if (monthsOfService < Number(leaveType.minServiceMonths)) {
           throw new ConflictError(
             `يشترط مدة خدمة لا تقل عن ${leaveType.minServiceMonths} شهر. مدة خدمتك: ${monthsOfService} شهر`,
@@ -2169,7 +2160,7 @@ router.get("/leave-requests/:id/stages", authorize({ feature: "hr.leaves", actio
       `SELECT las.*, e.name AS "decidedByName"
        FROM leave_approval_stages las
        LEFT JOIN employee_assignments ea ON ea.id = las."decidedBy" AND ea."companyId" = $2
-       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE las."leaveRequestId" = $1
        ORDER BY las.stage ASC`,
       [id, scope.companyId]
@@ -2305,7 +2296,7 @@ router.get("/payroll", authorize({ feature: "hr.payroll.runs", action: "view" })
               COUNT(pl.id) AS "employeeCount"
        FROM payroll_runs pr
        LEFT JOIN employee_assignments ea ON ea.id = pr."runBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id = ea."employeeId"
        LEFT JOIN payroll_lines pl ON pl."runId" = pr.id AND pl."deletedAt" IS NULL
        WHERE pr."companyId" = $1 AND pr."deletedAt" IS NULL
        GROUP BY pr.id, e.name ORDER BY pr."createdAt" DESC LIMIT 500`,
@@ -2331,7 +2322,7 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
               (SELECT COUNT(*) FROM payroll_lines pl WHERE pl."runId" = pr.id AND pl."deletedAt" IS NULL)::int AS "employeeCount"
        FROM payroll_runs pr
        LEFT JOIN employee_assignments ea ON ea.id = pr."runBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE pr.id = $1 AND pr."companyId" = $2 AND pr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -2341,7 +2332,7 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
       `SELECT pl.*, e.name AS "employeeName"
        FROM payroll_lines pl
        LEFT JOIN employee_assignments ea ON ea.id = pl."assignmentId" AND ea."companyId" = $2
-       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL ORDER BY pl.id LIMIT 1000`,
       [id, scope.companyId]
     );
@@ -3105,7 +3096,7 @@ router.get("/performance/:id", authorize({ feature: "hr.performance", action: "v
               rv.name AS "reviewerName"
        FROM performance_reviews pr
        JOIN employees e ON e.id = pr."employeeId"
-       LEFT JOIN employees rv ON rv.id = pr."reviewerId" AND rv."deletedAt" IS NULL
+       LEFT JOIN employees rv ON rv.id = pr."reviewerId"
        WHERE pr.id = $1 AND pr."companyId" = $2 AND pr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -3386,7 +3377,7 @@ router.get("/approval-requests", authorize({ feature: "hr.organization", action:
       `SELECT ar.*, e.name AS "assignedToName"
        FROM approval_requests ar
        LEFT JOIN employee_assignments ea ON ea.id = ar."assignedTo"
-       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE ar."companyId" = $1 AND ar.status = $2
        ORDER BY ar."createdAt" DESC LIMIT 500`,
       [scope.companyId, statusFilter]
@@ -3854,7 +3845,7 @@ router.post("/shift-assignments", authorize({ feature: "hr.attendance", action: 
       `SELECT esa.*, s.name AS "shiftName"
          FROM employee_shift_assignments esa
          JOIN employee_assignments ea ON ea.id = esa."assignmentId" AND ea."companyId" = $2
-         LEFT JOIN shifts s ON s.id = esa."shiftId" AND s."deletedAt" IS NULL
+         LEFT JOIN shifts s ON s.id = esa."shiftId"
         WHERE esa.id = $1`,
       [insertId, scope.companyId]
     );
@@ -3869,7 +3860,7 @@ router.get("/official-letters", authorize({ feature: "hr.organization", action: 
       `SELECT ol.*, e.name AS "employeeName",
               b.name AS "branchName"
        FROM official_letters ol
-       LEFT JOIN employees e ON e.id = ol."employeeId" AND e."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id = ol."employeeId"
        LEFT JOIN branches b ON b.id = ol."branchId"
        WHERE ol."companyId" = $1 AND ol."deletedAt" IS NULL
        ORDER BY ol."createdAt" DESC LIMIT 100`,
@@ -4494,7 +4485,7 @@ router.get("/official-letters/:id", authorize({ feature: "hr.organization", acti
               b."nameEn" AS "branchNameEn", b.city AS "branchCity",
               c.name AS "companyName"
        FROM official_letters ol
-       LEFT JOIN employees e ON e.id = ol."employeeId" AND e."deletedAt" IS NULL
+       LEFT JOIN employees e ON e.id = ol."employeeId"
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = ol."companyId" AND ea.status = 'active'
        LEFT JOIN branches b ON b.id = COALESCE(ol."branchId", ea."branchId")
        LEFT JOIN companies c ON c.id = ol."companyId"
@@ -5742,8 +5733,8 @@ router.get("/delegations", authorize({ feature: "hr.organization", action: "list
       `SELECT d.id, d."delegatorId", d."delegateId", d.scope, d.reason, d.status, d."startDate", d."endDate", d."createdAt",
               e1.name AS "delegatorName", e2.name AS "delegateName"
        FROM delegations d
-       LEFT JOIN employees e1 ON e1.id = d."delegatorId" AND e1."deletedAt" IS NULL
-       LEFT JOIN employees e2 ON e2.id = d."delegateId" AND e2."deletedAt" IS NULL
+       LEFT JOIN employees e1 ON e1.id = d."delegatorId"
+       LEFT JOIN employees e2 ON e2.id = d."delegateId"
        WHERE d."companyId" = $1
        ORDER BY d."createdAt" DESC
        LIMIT 50`,
@@ -6406,7 +6397,7 @@ router.get("/gratuity/:employeeId", authorize({ feature: "hr.exit", action: "vie
               e.name AS "employeeName"
        FROM employee_assignments ea
        JOIN employees e ON e.id=ea."employeeId"
-       LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId" AND ec."companyId"=$1 AND ec.status='active' AND ec."deletedAt" IS NULL
+       LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId" AND ec."companyId"=$1 AND ec.status='active'
        WHERE ea."employeeId"=$2 AND ea."companyId"=$1 AND ea.status='active' LIMIT 1`,
       [scope.companyId, employeeId]
     );
@@ -6501,7 +6492,7 @@ router.post("/accruals/monthly", authorize({ feature: "hr.payroll", action: "upd
       `SELECT ea."employeeId", ea.salary, ea."hireDate",
               COALESCE(ec."startDate", ea."hireDate") AS "contractStart"
        FROM employee_assignments ea
-       LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId" AND ec."deletedAt" IS NULL
+       LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId"
                                       AND ec."companyId"=$1 AND ec.status='active'
        WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary > 0`,
       [scope.companyId]
@@ -6619,7 +6610,7 @@ router.get("/accruals/preview", authorize({ feature: "hr.payroll", action: "list
               COALESCE(ec."startDate", ea."hireDate") AS "contractStart"
        FROM employee_assignments ea
        JOIN employees e ON e.id=ea."employeeId"
-       LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId" AND ec."deletedAt" IS NULL
+       LEFT JOIN employee_contracts ec ON ec."employeeId"=ea."employeeId"
                                       AND ec."companyId"=$1 AND ec.status='active'
        WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary > 0
        ORDER BY e.name`,

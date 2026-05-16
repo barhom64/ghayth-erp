@@ -48,7 +48,7 @@ run_step() {
   fi
 }
 
-run_step "typecheck"          pnpm run typecheck
+run_step "typecheck"          pnpm -s run typecheck
 run_step "lint:patterns"      pnpm -s run lint:patterns
 run_step "lint:as-any"        pnpm -s run lint:as-any
 run_step "audit:routes"       node scripts/src/audit-routes.mjs
