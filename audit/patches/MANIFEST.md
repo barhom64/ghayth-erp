@@ -1,6 +1,6 @@
 # SOT-C — Patch Queue Manifest
 
-Generated: `2026-05-17T15:44:09.735Z`
+Generated: `2026-05-17T16:55:13.857Z`
 Source:    `/tmp/diag/sot2/LOCAL_ONLY_VALUABLE.txt`
 Total:     1016 files (L=218 local-only, D=798 differs)
 Skipped:   151 R-marked entries (remote is canonical — local would be overwritten on next pull)
@@ -17,9 +17,9 @@ This is the **inventory + classification** half of SOT-C. The next phase consume
 |---|---:|---|
 | P0 | 137 | **Must preserve.** Loss = silent regression or data corruption. Generate patch immediately. |
 | P1 | 308 | **Should preserve.** Loss = user-visible bug. Generate patch; restore via PR. |
-| P2 | 114 | **Nice to preserve.** Tooling/tests. Generate patch; restore at convenience. |
-| P3 | 43 | **Do NOT preserve.** Regeneratable from source (Orval codegen) or doc-only churn. |
-| P? | 414 | **Triage required.** Unknown classification — human review before patching. |
+| P2 | 126 | **Nice to preserve.** Tooling/tests. Generate patch; restore at convenience. |
+| P3 | 434 | **Do NOT preserve.** Regeneratable from source (Orval codegen) or doc-only churn. |
+| P? | 11 | **Triage required.** Unknown classification — human review before patching. |
 
 ## Bucket breakdown
 
@@ -33,10 +33,12 @@ This is the **inventory + classification** half of SOT-C. The next phase consume
 | `api-client-hand` | P1 | 3 | Hand-written React Query client (NOT Orval-generated). |
 | `frontend-main` | P1 | 305 | Main ERP frontend (artifacts/ghayth-erp). |
 | `script-tooling` | P2 | 55 | Maintainer scripts (PR push, CI, audit, self-heal). |
+| `system-auditor-tool` | P2 | 12 | — |
 | `tests` | P2 | 59 | Unit/integration/e2e test files. |
 | `api-zod-gen` | P3 | 23 | Orval-generated Zod schemas. Regeneratable via `pnpm --filter @ghayth-erp/api-spec run generate`. |
+| `audit-system-review` | P3 | 391 | — |
 | `docs` | P3 | 20 | Markdown documentation. |
-| `other` | P? | 414 | Did not match any classification rule — needs human triage. |
+| `other` | P? | 11 | Did not match any classification rule — needs human triage. |
 
 ## Files by bucket
 
@@ -612,6 +614,25 @@ Maintainer scripts (PR push, CI, audit, self-heal).
 
 </details>
 
+### `system-auditor-tool` (P2 · 12 files)
+
+—
+
+```text
+[L] tools/system-auditor/.gitignore
+[L] tools/system-auditor/src/checkers/apiContracts.ts
+[L] tools/system-auditor/src/checkers/boundaries.ts
+[L] tools/system-auditor/src/checkers/db.ts
+[L] tools/system-auditor/src/checkers/events.ts
+[L] tools/system-auditor/src/checkers/frontend.ts
+[L] tools/system-auditor/src/checkers/rbacAudit.ts
+[L] tools/system-auditor/src/index.ts
+[L] tools/system-auditor/src/reporter.ts
+[L] tools/system-auditor/src/types.ts
+[L] tools/system-auditor/src/utils.ts
+[L] tools/system-auditor/tsconfig.json
+```
+
 ### `tests` (P2 · 59 files)
 
 Unit/integration/e2e test files.
@@ -712,51 +733,13 @@ Orval-generated Zod schemas. Regeneratable via `pnpm --filter @ghayth-erp/api-sp
 [L] lib/api-zod/src/generated/types/umrahSubAgentStatementPdfParams.ts
 ```
 
-### `docs` (P3 · 20 files)
+### `audit-system-review` (P3 · 391 files)
 
-Markdown documentation.
+—
 
-```text
-[L] docs/AI_GUARDIAN_SETUP.md
-[L] docs/DR_RUNBOOK.md
-[D] docs/freeze/freeze-post-freeze-cleanup.md
-[L] docs/GITHUB_OPS.md
-[L] docs/grafana/alertmanager.yaml
-[L] docs/grafana/alerts.test.yaml
-[L] docs/grafana/alerts.yaml
-[L] docs/grafana/api-health.json
-[L] docs/grafana/cron-health.json
-[L] docs/grafana/db-health.json
-[L] docs/grafana/gh-client-quota.json
-[L] docs/grafana/integrations-health.json
-[L] docs/grafana/README.md
-[L] docs/GUARD_SUITE.md
-[L] docs/OPERATIONAL_REVIEW_01.md
-[D] docs/request-approval-matrix.md
-[L] docs/UI_TEMPLATES.md
-[L] docs/UNIFICATION_PLAN.md
-[L] docs/WORKFLOWS_RUNBOOK.md
-[L] threat_model.md
-```
-
-### `other` (P? · 414 files)
-
-Did not match any classification rule — needs human triage.
-
-<details><summary>414 files (click to expand)</summary>
+<details><summary>391 files (click to expand)</summary>
 
 ```text
-[L] artifacts/api-server/scripts/ocr-accuracy-benchmark.mjs
-[L] audit/as-any-classification.csv
-[L] audit/HTTP_SMOKE_AUDIT_2026-05-15.md
-[L] audit/ocr-accuracy-report.json
-[L] audit/ocr-fixtures/.gitignore
-[L] audit/ocr-fixtures/generate.mjs
-[L] audit/ocr-fixtures/manifest.json
-[L] audit/ocr-fixtures/README.md
-[L] audit/OPS_002_ROOT_CAUSE.md
-[D] audit/RUNTIME_AUDIT_README.md
-[L] audit/STABILIZATION_CLOSE_2026-05-15.md
 [D] audit/system-review/findings/broken-integrations.md
 [L] audit/system-review/findings/FINDING-003-source-of-truth-drift.md
 [D] audit/system-review/findings/FINDINGS.csv
@@ -1148,21 +1131,54 @@ Did not match any classification rule — needs human triage.
 [L] audit/system-review/tooling/inject-module-findings.mjs
 [D] audit/system-review/tooling/page-inventory.mjs
 [D] audit/system-review/tooling/schema-link.mjs
-[L] tools/system-auditor/.gitignore
-[L] tools/system-auditor/src/checkers/apiContracts.ts
-[L] tools/system-auditor/src/checkers/boundaries.ts
-[L] tools/system-auditor/src/checkers/db.ts
-[L] tools/system-auditor/src/checkers/events.ts
-[L] tools/system-auditor/src/checkers/frontend.ts
-[L] tools/system-auditor/src/checkers/rbacAudit.ts
-[L] tools/system-auditor/src/index.ts
-[L] tools/system-auditor/src/reporter.ts
-[L] tools/system-auditor/src/types.ts
-[L] tools/system-auditor/src/utils.ts
-[L] tools/system-auditor/tsconfig.json
 ```
 
 </details>
+
+### `docs` (P3 · 20 files)
+
+Markdown documentation.
+
+```text
+[L] docs/AI_GUARDIAN_SETUP.md
+[L] docs/DR_RUNBOOK.md
+[D] docs/freeze/freeze-post-freeze-cleanup.md
+[L] docs/GITHUB_OPS.md
+[L] docs/grafana/alertmanager.yaml
+[L] docs/grafana/alerts.test.yaml
+[L] docs/grafana/alerts.yaml
+[L] docs/grafana/api-health.json
+[L] docs/grafana/cron-health.json
+[L] docs/grafana/db-health.json
+[L] docs/grafana/gh-client-quota.json
+[L] docs/grafana/integrations-health.json
+[L] docs/grafana/README.md
+[L] docs/GUARD_SUITE.md
+[L] docs/OPERATIONAL_REVIEW_01.md
+[D] docs/request-approval-matrix.md
+[L] docs/UI_TEMPLATES.md
+[L] docs/UNIFICATION_PLAN.md
+[L] docs/WORKFLOWS_RUNBOOK.md
+[L] threat_model.md
+```
+
+### `other` (P? · 11 files)
+
+Did not match any classification rule — needs human triage.
+
+```text
+[L] artifacts/api-server/scripts/ocr-accuracy-benchmark.mjs
+[L] audit/as-any-classification.csv
+[L] audit/HTTP_SMOKE_AUDIT_2026-05-15.md
+[L] audit/ocr-accuracy-report.json
+[L] audit/ocr-fixtures/.gitignore
+[L] audit/ocr-fixtures/generate.mjs
+[L] audit/ocr-fixtures/manifest.json
+[L] audit/ocr-fixtures/README.md
+[L] audit/OPS_002_ROOT_CAUSE.md
+[D] audit/RUNTIME_AUDIT_README.md
+[L] audit/STABILIZATION_CLOSE_2026-05-15.md
+```
 
 ## Next phase
 
