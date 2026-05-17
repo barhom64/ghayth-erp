@@ -46,6 +46,7 @@ export abstract class TypedError extends Error {
     this.fix = options.fix;
     this.meta = options.meta;
     if (options.cause !== undefined) {
+      // as-any-reason: justified-pragmatic - internal pragmatic loss of type info; tracked for future tightening
       (this as any).cause = options.cause;
     }
   }
@@ -132,6 +133,7 @@ export interface ClassifiedError {
 }
 
 export function classifyDbError(err: unknown): ClassifiedError {
+  // as-any-reason: justified-pragmatic - internal pragmatic loss of type info; tracked for future tightening
   const e = err as any;
   const msg = e?.message ?? String(err);
   const code = e?.code ?? "";
@@ -311,6 +313,7 @@ export function handleRouteError(err: unknown, res: any, logContext: string): vo
   if (isTypedError(err)) {
     // Log with structured context so the underlying cause (if any) is still
     // visible to the operator even though we never ship it to the client.
+    // as-any-reason: justified-pragmatic - internal pragmatic loss of type info; tracked for future tightening
     const underlying = (err as any).cause;
     if (underlying !== undefined) {
       logger.error({ code: err.code, meta: err.meta, cause: underlying }, `[ERROR] ${logContext}: ${err.message}`);

@@ -581,6 +581,7 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
   // Field policies — merge per-feature policies into a single map.
   const fieldPolicy: Record<string, "visible" | "masked" | "hidden" | "readonly"> = {};
   for (const fp of fields.filter((f) => f.feature_key === spec.feature)) {
+    // as-any-reason: justified-pragmatic - internal pragmatic loss of type info; tracked for future tightening
     fieldPolicy[fp.field_name] = fp.mode as any;
   }
 

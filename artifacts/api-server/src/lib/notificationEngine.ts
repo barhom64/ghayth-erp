@@ -319,6 +319,7 @@ async function dispatchWebhooks(companyId: number, eventCategory: string, payloa
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
+      logger.warn(err, `[NotifEngine] Webhook ${wh.name} (${wh.url}) delivery failed: ${errMsg}`);
       await updateDeliveryLog(deliveryId, companyId, "failed", { errorMessage: errMsg });
       await rawExecute(
         `UPDATE notification_webhooks SET "lastFailureAt"=NOW(), "lastError"=$2, "failCount"="failCount"+1 WHERE id=$1 AND "companyId" = $3`,

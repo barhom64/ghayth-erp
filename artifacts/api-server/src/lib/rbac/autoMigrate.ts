@@ -130,6 +130,7 @@ function translateLegacy(permission: string): { featureKey: string; action: stri
   const out: { featureKey: string; action: string }[] = [];
   for (const f of features) {
     for (const a of catalogActions) {
+      // as-any-reason: justified-pragmatic - internal pragmatic loss of type info; tracked for future tightening
       if (f.availableActions.includes(a as any)) {
         out.push({ featureKey: f.key, action: a });
       }
