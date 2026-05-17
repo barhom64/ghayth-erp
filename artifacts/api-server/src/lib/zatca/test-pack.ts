@@ -90,7 +90,7 @@ export interface TestPackTemplate {
  * lines, discount, debit/credit-note references).
  */
 export function buildTestPackTemplates(): TestPackTemplate[] {
-  const baseDate = new Date().toISOString().slice(0, 10);
+  const baseDate = new Date().toISOString().slice(0, 10); // utc-ok: synthetic test-pack label only, not a tenant date
   return [
     {
       kind: "standard.regular",
