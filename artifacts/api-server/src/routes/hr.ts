@@ -26,6 +26,8 @@ import {
   todayISO,
   currentPeriod,
   currentYear,
+  currentMonthPadded,
+  combineDateAndShiftTime,
   generateRef,
   toDateISO,
   roundTo2,
@@ -585,8 +587,7 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
       const parts = String(effectiveStartTime).split(":");
       const h = Number(parts[0]);
       const m = Number(parts[1]);
-      const expected = new Date(today + "T00:00:00");
-      expected.setHours(h, m, 0, 0);
+      const expected = combineDateAndShiftTime(today, `${h}:${m}`, "Asia/Riyadh");
       const diff = now.getTime() - expected.getTime();
       if (diff > 0) { lateMinutes = Math.floor(diff / 60000); isLate = lateMinutes > 0; }
     }
@@ -887,8 +888,7 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
       const parts = String(shift.endTime).split(":");
       const endH = Number(parts[0]);
       const endM = Number(parts[1] ?? 0);
-      const shiftEnd = new Date(today + "T00:00:00");
-      shiftEnd.setHours(endH, endM, 0, 0);
+      const shiftEnd = combineDateAndShiftTime(today, `${endH}:${endM}`, "Asia/Riyadh");
       const diffMs = now.getTime() - shiftEnd.getTime();
       if (diffMs > 0) {
         overtimeMinutes = Math.floor(diffMs / 60000);
@@ -1477,7 +1477,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
       );
       if (ass?.hireDate) {
         const hireDate = new Date(ass.hireDate as string | Date);
-        const monthsOfService = (currentYear() - hireDate.getFullYear()) * 12 + (new Date().getMonth() - hireDate.getMonth());
+        const monthsOfService = (currentYear() - hireDate.getFullYear()) * 12 + ((Number(currentMonthPadded()) - 1) - hireDate.getMonth());
         if (monthsOfService < Number(leaveType.minServiceMonths)) {
           throw new ConflictError(
             `يشترط مدة خدمة لا تقل عن ${leaveType.minServiceMonths} شهر. مدة خدمتك: ${monthsOfService} شهر`,
