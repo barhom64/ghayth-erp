@@ -29,6 +29,7 @@ import {
 import {
   FormShell, FormTextField, FormDateField, FormGrid,
 } from "@/components/form-shell";
+import { todayLocal } from "@/lib/formatters";
 
 // New count session — schema enforces countDate required (was no
 // validation at all on the create form). `Input` per-item edits inside
@@ -382,7 +383,7 @@ export default function InventoryCountPage() {
             <FormShell
               schema={createCountSchema}
               defaultValues={{
-                countDate: new Date().toISOString().split("T")[0],
+                countDate: todayLocal(),
                 warehouseLocation: "",
                 notes: "",
               }}

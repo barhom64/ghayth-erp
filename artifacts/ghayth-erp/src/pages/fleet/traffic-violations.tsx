@@ -17,6 +17,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import {
   FormShell, FormTextField, FormNumberField, FormSelectField, FormDateField, FormGrid,
 } from "@/components/form-shell";
+import { todayLocal } from "@/lib/formatters";
 
 // driverId stays a string so the "—" no-driver option works cleanly.
 // vehicleId required (was missing — handleSave had `if (!form.vehicleId)`
@@ -202,7 +203,7 @@ export default function TrafficViolationsPage() {
                 vehicleId: "",
                 driverId: "none",
                 violationType: "speeding" as const,
-                violationDate: new Date().toISOString().split("T")[0],
+                violationDate: todayLocal(),
                 fineAmount: 0,
                 location: "",
                 violationNumber: "",
