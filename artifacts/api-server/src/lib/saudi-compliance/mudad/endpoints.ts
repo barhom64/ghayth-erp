@@ -42,6 +42,9 @@ export const MUDAD_EXIT_REENTRY_PATH = "/v1/movement/exit-reentry";
 /** Path suffix for contract termination submission. */
 export const MUDAD_TERMINATION_PATH = "/v1/contract/termination";
 
+/** Path suffix for new contract registration (used on hire). */
+export const MUDAD_CONTRACT_REGISTER_PATH = "/v1/contract/register";
+
 /** Path suffix for status enquiry by Mudad ref id. */
 export const MUDAD_STATUS_PATH = "/v1/status";
 
