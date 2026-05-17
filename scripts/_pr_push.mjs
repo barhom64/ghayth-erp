@@ -36,9 +36,16 @@
 //   2. Run: node scripts/_pr_push.mjs
 //   3. Watch: tail -f /tmp/_pr_push.log (or stdout)
 
-import { ReplitConnectors } from "@replit/connectors-sdk";
 import fs from "fs";
 import path from "path";
+// Claim the foreground priority lane on the shared rate-limit budget BEFORE
+// importing the client (Task #369). Background workflows (Auto-Pull, Merge
+// All, Rerun Failed CI, Self-Heal, Billing Monitor) yield while this
+// process holds a fresh heartbeat in /tmp/_gh_priority.json so manual
+// fixes don't get starved out by polling traffic on the 10 RPS proxy cap.
+process.env.GH_CLIENT_PRIORITY = process.env.GH_CLIENT_PRIORITY || "1";
+import { gh as ghClient } from "./src/lib/github-client.mjs";
+import { validatePush } from "./_pr_push_baseline.mjs";
 
 const OWNER = "barhom64";
 const REPO = "ghayth-erp";
@@ -47,27 +54,11 @@ const STATE = process.env.PR_PUSH_STATE || "/tmp/_pr_push_state.json";
 const POLL_MS = 30_000;
 const MAX_POLL_MIN = 25;
 
-const c = new ReplitConnectors();
-
+// Thin adapter that preserves this script's legacy `gh(ep, method, body)` shape
+// while delegating to the shared rate-limit-aware client (Task #362).
 async function gh(ep, method = "GET", body = null) {
-  const opts = { method, headers: { "Content-Type": "application/json" } };
-  if (body) opts.body = JSON.stringify(body);
-  for (let r = 0; r < 5; r++) {
-    try {
-      const res = await c.proxy("github", ep, opts);
-      const text = await res.text();
-      let data; try { data = JSON.parse(text); } catch { data = { _raw: text }; }
-      if (res.status >= 200 && res.status < 300) return { status: res.status, data };
-      if (res.status === 404 && method === "GET") return { status: 404, data };
-      if (res.status === 422) return { status: 422, data };
-      console.log(`  retry ${r+1}/5 ${method} ${ep.slice(0,80)}: ${res.status} ${(data?.message || "").slice(0,100)}`);
-      await new Promise(s => setTimeout(s, 2000 * (r + 1)));
-    } catch (e) {
-      console.log(`  retry ${r+1}/5 err: ${e.message}`);
-      await new Promise(s => setTimeout(s, 2000 * (r + 1)));
-    }
-  }
-  return { status: 0, data: { message: "exhausted retries" } };
+  const r = await ghClient(ep, { method, body: body ?? undefined });
+  return { status: r.status, data: r.data };
 }
 
 function loadState() {
@@ -93,6 +84,31 @@ s.phase = s.phase || "init";
 saveState(s);
 
 console.log(`[pr-push] branch=${s.branch} files=${s.files.length} title="${s.title}" phase=${s.phase}`);
+
+// ── SOT-3 baseline guard ───────────────────────────────────────────────
+// Refuses the push BEFORE any remote mutation if any file in state.files
+// matches the FINDING-003 corrupt-path class, KEEP_LOCAL_NEVER_PUSH, or
+// fails the remote-baseline check. See scripts/_pr_push_baseline.mjs.
+// Skippable only with PR_PUSH_SKIP_BASELINE=1 (logged, not silent).
+if (process.env.PR_PUSH_SKIP_BASELINE === "1") {
+  console.warn(`[pr-push] ⚠ PR_PUSH_SKIP_BASELINE=1 → baseline guard bypassed (logged, not recommended)`);
+} else {
+  console.log(`[pr-push] baseline guard: checking ${s.files.length} file(s) against remote main…`);
+  const baseline = await validatePush({ owner: OWNER, repo: REPO, files: s.files, gh });
+  if (!baseline.ok) {
+    console.error(`\n[pr-push] ✗ baseline guard REFUSED push (${baseline.violations.length} violation(s)):\n`);
+    for (const v of baseline.violations) {
+      console.error(`  ✗ ${v.file}`);
+      console.error(`    category: ${v.category}`);
+      console.error(`    reason:   ${v.reason}`);
+      console.error(`    fix:      ${v.howToFix}\n`);
+    }
+    console.error(`[pr-push] no branch created, no files uploaded, no PR opened. State at ${STATE} unchanged.`);
+    console.error(`[pr-push] to bypass (NOT recommended): export PR_PUSH_SKIP_BASELINE=1`);
+    process.exit(5);
+  }
+  console.log(`[pr-push] ✓ baseline guard PASS`);
+}
 
 // Short-circuit: a previous run already completed.
 if (s.phase === "done") {
@@ -139,6 +155,36 @@ s.uploaded = s.uploaded || [];
 const remaining = s.files.filter(f => !s.uploaded.includes(f));
 console.log(`[pr-push] uploading ${remaining.length}/${s.files.length} files…`);
 
+// Detect the "Replit GitHub App is missing the Workflows permission" class:
+// reads of `.github/workflows/*` come back as 403 (not 404) before we even
+// attempt the PUT. Without this branch the user sees a generic
+// `403 undefined` and has to guess whether it's rate-limit, auth, or scope.
+function isWorkflowPath(rel) {
+  return rel.startsWith(".github/workflows/");
+}
+function explainWorkflowScopeFailure(rel, status, message) {
+  console.error("");
+  console.error(`[pr-push] ✗ ${rel}: ${status} ${message || "(no message)"}`);
+  console.error(`[pr-push] This path is under .github/workflows/ and the Replit GitHub App`);
+  console.error(`[pr-push] does not currently have the "Workflows" permission on this repo.`);
+  console.error(`[pr-push] Without it, GitHub returns 403 on BOTH read and write of workflow`);
+  console.error(`[pr-push] files (this script just confirmed read also fails — same scope).`);
+  console.error(`[pr-push]`);
+  console.error(`[pr-push] To fix (one-time, ~30 seconds, has to be done by a repo admin in the`);
+  console.error(`[pr-push] GitHub UI — no API can grant this):`);
+  console.error(`[pr-push]   1. Open https://github.com/apps/replit/installations/new`);
+  console.error(`[pr-push]      (or: github.com → Settings → Applications → Replit → Configure)`);
+  console.error(`[pr-push]   2. Pick the barhom64/ghayth-erp repo.`);
+  console.error(`[pr-push]   3. Under "Repository permissions" set "Workflows" to "Read and write".`);
+  console.error(`[pr-push]   4. Save / Install. (No Replit-side reconnect needed — the SDK picks`);
+  console.error(`[pr-push]      up the new scope on the next request.)`);
+  console.error(`[pr-push]   5. Re-run this script — state at ${STATE} is resumable, so the`);
+  console.error(`[pr-push]      already-uploaded files are skipped.`);
+  console.error(`[pr-push]`);
+  console.error(`[pr-push] If the toggle is already on and you still see this, drop the workflow`);
+  console.error(`[pr-push] file from state.files and edit it directly on github.com as a one-off.`);
+}
+
 for (const rel of remaining) {
   const full = path.join(BASE, rel);
   if (!fs.existsSync(full)) {
@@ -151,6 +197,13 @@ for (const rel of remaining) {
   const ge = await gh(
     `/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(rel).replace(/%2F/g, "/")}?ref=${s.branch}`,
   );
+  // A 403 on a .github/workflows/* read is the unmistakable signature of the
+  // missing-Workflows-scope class — bail out with the actionable message
+  // BEFORE we try the PUT (which would just produce a second, identical 403).
+  if (ge.status === 403 && isWorkflowPath(rel)) {
+    explainWorkflowScopeFailure(rel, ge.status, ge.data?.message);
+    process.exit(4);
+  }
   const sha = ge.status === 200 ? ge.data.sha : undefined;
   const body = {
     message: `${s.title}: ${rel}`,
@@ -167,6 +220,11 @@ for (const rel of remaining) {
     console.log(`  ✓ ${rel}`);
     s.uploaded.push(rel);
     saveState(s);
+  } else if (r.status === 403 && isWorkflowPath(rel)) {
+    // Read might have succeeded (cached / different code path) but write
+    // still hits the same scope wall — handle it the same way.
+    explainWorkflowScopeFailure(rel, r.status, r.data?.message);
+    process.exit(4);
   } else {
     console.error(`  ✗ ${rel}: ${r.status} ${r.data?.message}`);
     process.exit(1);
