@@ -21,6 +21,7 @@ import {
   checkFinancialPeriodOpen,
   computeVat,
   currentPeriod,
+  currentDateInTz,
   generateRef,
   toDateISO,
   roundTo2,
@@ -1043,7 +1044,7 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     const totalCredit = roundTo2(lines.reduce((s: number, l) => s + l.credit, 0));
     if (Math.abs(totalDebit - totalCredit) > 0.01) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
 
-    const postingDate = date ? toDateISO(date) : toDateISO(new Date());
+    const postingDate = date ? toDateISO(date) : currentDateInTz("Asia/Riyadh");
     const engineLines = lines.map((l) => ({
       accountCode: l.accountCode,
       debit: l.debit,
