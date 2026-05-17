@@ -15,6 +15,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
+import { todayLocal } from "@/lib/formatters";
   FormShell, FormTextField, FormNumberField, FormSelectField, FormDateField, FormGrid,
 } from "@/components/form-shell";
 
@@ -202,7 +203,7 @@ export default function TrafficViolationsPage() {
                 vehicleId: "",
                 driverId: "none",
                 violationType: "speeding" as const,
-                violationDate: new Date().toISOString().split("T")[0],
+                violationDate: todayLocal(),
                 fineAmount: 0,
                 location: "",
                 violationNumber: "",

@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+import { todayLocal } from "@/lib/formatters";
   FormShell, FormTextField, FormDateField, FormGrid,
 } from "@/components/form-shell";
 
@@ -382,7 +383,7 @@ export default function InventoryCountPage() {
             <FormShell
               schema={createCountSchema}
               defaultValues={{
-                countDate: new Date().toISOString().split("T")[0],
+                countDate: todayLocal(),
                 warehouseLocation: "",
                 notes: "",
               }}

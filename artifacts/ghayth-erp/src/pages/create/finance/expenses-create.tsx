@@ -193,7 +193,7 @@ export default function ExpensesCreate() {
     amount: "",
     description: "",
     date: todayLocal(),
-    period: new Date().toISOString().slice(0, 7),
+    period: todayLocal().slice(0, 7),
     operationType: "expense",
     expenseType: "operational",
     paymentMethod: "cash",
