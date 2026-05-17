@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-17T15:44:09.735Z",
+  "generatedAt": "2026-05-17T16:55:13.857Z",
   "inputFile": "/tmp/diag/sot2/LOCAL_ONLY_VALUABLE.txt",
   "totalFiles": 1016,
   "byMarker": {
@@ -11,9 +11,9 @@
   "byPriority": {
     "P0": 137,
     "P1": 308,
-    "P2": 114,
-    "P3": 43,
-    "P?": 414
+    "P2": 126,
+    "P3": 434,
+    "P?": 11
   },
   "byBucket": {
     "api-lib": {
@@ -595,6 +595,27 @@
         "[L] scripts/src/test-deep-link-routing.mjs"
       ]
     },
+    "system-auditor-tool": {
+      "priority": "P2",
+      "count": 12,
+      "markers": {
+        "L": 12
+      },
+      "files": [
+        "[L] tools/system-auditor/.gitignore",
+        "[L] tools/system-auditor/src/checkers/apiContracts.ts",
+        "[L] tools/system-auditor/src/checkers/boundaries.ts",
+        "[L] tools/system-auditor/src/checkers/db.ts",
+        "[L] tools/system-auditor/src/checkers/events.ts",
+        "[L] tools/system-auditor/src/checkers/frontend.ts",
+        "[L] tools/system-auditor/src/checkers/rbacAudit.ts",
+        "[L] tools/system-auditor/src/index.ts",
+        "[L] tools/system-auditor/src/reporter.ts",
+        "[L] tools/system-auditor/src/types.ts",
+        "[L] tools/system-auditor/src/utils.ts",
+        "[L] tools/system-auditor/tsconfig.json"
+      ]
+    },
     "tests": {
       "priority": "P2",
       "count": 59,
@@ -696,55 +717,14 @@
         "[L] lib/api-zod/src/generated/types/umrahSubAgentStatementPdfParams.ts"
       ]
     },
-    "docs": {
+    "audit-system-review": {
       "priority": "P3",
-      "count": 20,
+      "count": 391,
       "markers": {
-        "L": 18,
-        "D": 2
+        "D": 388,
+        "L": 3
       },
       "files": [
-        "[L] docs/AI_GUARDIAN_SETUP.md",
-        "[L] docs/DR_RUNBOOK.md",
-        "[D] docs/freeze/freeze-post-freeze-cleanup.md",
-        "[L] docs/GITHUB_OPS.md",
-        "[L] docs/grafana/alertmanager.yaml",
-        "[L] docs/grafana/alerts.test.yaml",
-        "[L] docs/grafana/alerts.yaml",
-        "[L] docs/grafana/api-health.json",
-        "[L] docs/grafana/cron-health.json",
-        "[L] docs/grafana/db-health.json",
-        "[L] docs/grafana/gh-client-quota.json",
-        "[L] docs/grafana/integrations-health.json",
-        "[L] docs/grafana/README.md",
-        "[L] docs/GUARD_SUITE.md",
-        "[L] docs/OPERATIONAL_REVIEW_01.md",
-        "[D] docs/request-approval-matrix.md",
-        "[L] docs/UI_TEMPLATES.md",
-        "[L] docs/UNIFICATION_PLAN.md",
-        "[L] docs/WORKFLOWS_RUNBOOK.md",
-        "[L] threat_model.md"
-      ]
-    },
-    "other": {
-      "priority": "P?",
-      "count": 414,
-      "markers": {
-        "L": 25,
-        "D": 389
-      },
-      "files": [
-        "[L] artifacts/api-server/scripts/ocr-accuracy-benchmark.mjs",
-        "[L] audit/as-any-classification.csv",
-        "[L] audit/HTTP_SMOKE_AUDIT_2026-05-15.md",
-        "[L] audit/ocr-accuracy-report.json",
-        "[L] audit/ocr-fixtures/.gitignore",
-        "[L] audit/ocr-fixtures/generate.mjs",
-        "[L] audit/ocr-fixtures/manifest.json",
-        "[L] audit/ocr-fixtures/README.md",
-        "[L] audit/OPS_002_ROOT_CAUSE.md",
-        "[D] audit/RUNTIME_AUDIT_README.md",
-        "[L] audit/STABILIZATION_CLOSE_2026-05-15.md",
         "[D] audit/system-review/findings/broken-integrations.md",
         "[L] audit/system-review/findings/FINDING-003-source-of-truth-drift.md",
         "[D] audit/system-review/findings/FINDINGS.csv",
@@ -1135,19 +1115,58 @@
         "[L] audit/system-review/tooling/inject-findings.mjs",
         "[L] audit/system-review/tooling/inject-module-findings.mjs",
         "[D] audit/system-review/tooling/page-inventory.mjs",
-        "[D] audit/system-review/tooling/schema-link.mjs",
-        "[L] tools/system-auditor/.gitignore",
-        "[L] tools/system-auditor/src/checkers/apiContracts.ts",
-        "[L] tools/system-auditor/src/checkers/boundaries.ts",
-        "[L] tools/system-auditor/src/checkers/db.ts",
-        "[L] tools/system-auditor/src/checkers/events.ts",
-        "[L] tools/system-auditor/src/checkers/frontend.ts",
-        "[L] tools/system-auditor/src/checkers/rbacAudit.ts",
-        "[L] tools/system-auditor/src/index.ts",
-        "[L] tools/system-auditor/src/reporter.ts",
-        "[L] tools/system-auditor/src/types.ts",
-        "[L] tools/system-auditor/src/utils.ts",
-        "[L] tools/system-auditor/tsconfig.json"
+        "[D] audit/system-review/tooling/schema-link.mjs"
+      ]
+    },
+    "docs": {
+      "priority": "P3",
+      "count": 20,
+      "markers": {
+        "L": 18,
+        "D": 2
+      },
+      "files": [
+        "[L] docs/AI_GUARDIAN_SETUP.md",
+        "[L] docs/DR_RUNBOOK.md",
+        "[D] docs/freeze/freeze-post-freeze-cleanup.md",
+        "[L] docs/GITHUB_OPS.md",
+        "[L] docs/grafana/alertmanager.yaml",
+        "[L] docs/grafana/alerts.test.yaml",
+        "[L] docs/grafana/alerts.yaml",
+        "[L] docs/grafana/api-health.json",
+        "[L] docs/grafana/cron-health.json",
+        "[L] docs/grafana/db-health.json",
+        "[L] docs/grafana/gh-client-quota.json",
+        "[L] docs/grafana/integrations-health.json",
+        "[L] docs/grafana/README.md",
+        "[L] docs/GUARD_SUITE.md",
+        "[L] docs/OPERATIONAL_REVIEW_01.md",
+        "[D] docs/request-approval-matrix.md",
+        "[L] docs/UI_TEMPLATES.md",
+        "[L] docs/UNIFICATION_PLAN.md",
+        "[L] docs/WORKFLOWS_RUNBOOK.md",
+        "[L] threat_model.md"
+      ]
+    },
+    "other": {
+      "priority": "P?",
+      "count": 11,
+      "markers": {
+        "L": 10,
+        "D": 1
+      },
+      "files": [
+        "[L] artifacts/api-server/scripts/ocr-accuracy-benchmark.mjs",
+        "[L] audit/as-any-classification.csv",
+        "[L] audit/HTTP_SMOKE_AUDIT_2026-05-15.md",
+        "[L] audit/ocr-accuracy-report.json",
+        "[L] audit/ocr-fixtures/.gitignore",
+        "[L] audit/ocr-fixtures/generate.mjs",
+        "[L] audit/ocr-fixtures/manifest.json",
+        "[L] audit/ocr-fixtures/README.md",
+        "[L] audit/OPS_002_ROOT_CAUSE.md",
+        "[D] audit/RUNTIME_AUDIT_README.md",
+        "[L] audit/STABILIZATION_CLOSE_2026-05-15.md"
       ]
     }
   }
