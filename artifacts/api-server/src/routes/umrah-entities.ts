@@ -20,7 +20,7 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { emitEvent, createAuditLog, initiateApprovalChain } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog, initiateApprovalChain, todayISO } from "../lib/businessHelpers.js";
 import {
   generateSalesInvoice,
   registerPayment,
@@ -1580,7 +1580,7 @@ async function fetchDailyRunsheet(companyId: number, date: string) {
 router.get("/reports/daily-runsheet", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const date = String((req.query.date as string) || new Date().toISOString().slice(0, 10));
+    const date = String((req.query.date as string) || todayISO());
     const data = await fetchDailyRunsheet(scope.companyId, date);
     res.json(maskFields(req, { date, ...data }));
   } catch (err) { handleRouteError(err, res, "Daily run-sheet"); }
@@ -1589,7 +1589,7 @@ router.get("/reports/daily-runsheet", authorize({ feature: "umrah", action: "vie
 router.get("/reports/daily-runsheet/pdf", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const date = String((req.query.date as string) || new Date().toISOString().slice(0, 10));
+    const date = String((req.query.date as string) || todayISO());
     const data = await fetchDailyRunsheet(scope.companyId, date);
     const pdf = await exportUmrahDailyRunsheetPdf(scope.companyId, date, data as any);
     res.setHeader("Content-Type", "application/pdf");
