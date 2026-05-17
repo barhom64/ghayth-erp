@@ -18,6 +18,7 @@ import {
   nextStatusAfterQc,
   shouldExpire,
 } from "./lots-fsm.js";
+import { todayISO } from "../businessHelpers.js";
 
 interface LotRow {
   id: number;
@@ -190,7 +191,7 @@ export interface ExpireScanOutcome {
  * Returns a structured summary suitable for cron_logs.
  */
 export async function expireDueLots(asOfDate?: string): Promise<ExpireScanOutcome> {
-  const today = asOfDate ?? new Date().toISOString().slice(0, 10);
+  const today = asOfDate ?? todayISO();
   const out: ExpireScanOutcome = { scanned: 0, expired: 0, errors: [] };
 
   const due = await rawQuery<{ id: number; status: LotStatus; companyId: number; expiryDate: string }>(
