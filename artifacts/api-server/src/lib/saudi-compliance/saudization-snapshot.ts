@@ -14,6 +14,7 @@ import { rawQuery, rawExecute } from "../rawdb.js";
 import { logger } from "../logger.js";
 import { classifyNitaqat } from "./nitaqat.js";
 import type { NitaqatCategory } from "./types.js";
+import { todayISO } from "../businessHelpers.js";
 
 export interface SnapshotPerCompany {
   companyId: number;
@@ -83,7 +84,7 @@ export function isSaudiNationality(value: string | null | undefined): boolean {
  * consumers.
  */
 export async function runSaudizationSnapshot(asOfDate?: string): Promise<SnapshotRunOutcome> {
-  const today = asOfDate ?? new Date().toISOString().slice(0, 10);
+  const today = asOfDate ?? todayISO();
   const period = today.slice(0, 7); // YYYY-MM
 
   const out: SnapshotRunOutcome = { scanned: 0, written: 0, errors: [], snapshots: [] };
