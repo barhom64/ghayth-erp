@@ -14,7 +14,8 @@ export type MudadType =
   | "leave_unpaid"
   | "exit_reentry"
   | "termination"
-  | "contract_renewal";
+  | "contract_renewal"
+  | "contract_register";
 export type MudadStatus = "submitted" | "acknowledged" | "rejected" | "retry";
 
 /**
@@ -54,7 +55,7 @@ export interface WpsBuildResult {
 
 /** Spec-shaped supported bank format. Today only the generic format
  *  ships; per-bank adapters (NCB, Al Rajhi, Riyad) land in week 4. */
-export type WpsFormat = "generic_pipe" | "ncb" | "alrajhi" | "riyad" | "alinma";
+export type WpsFormat = "generic_pipe" | "ncb" | "alrajhi" | "riyad" | "alinma" | "albilad";
 
 export interface SaudizationInput {
   totalEmployees: number;
