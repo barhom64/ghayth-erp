@@ -389,7 +389,7 @@ export function exportToCSV(data: Record<string, any>[], columns: { key: string;
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`; // utc-ok: download filename timestamp, UTC date is fine
   document.body.appendChild(a);
   a.click();
   a.remove();
