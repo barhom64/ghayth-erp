@@ -6,25 +6,113 @@ import { validateEventPayload, getEventDefinition } from "./eventCatalog.js";
 import { logger } from "./logger.js";
 import { FINANCE_ROLES, OWNER_GM_ROLES } from "./rbacCatalog.js";
 
+// Task #428 — these "what's the current date/period/year?" helpers are now
+// timezone-aware (Asia/Riyadh by default). Pre-Task #428 they all delegated
+// to `new Date().toISOString().*`, which silently returned the *UTC* calendar
+// boundary — exactly the same class of bug Task #400 fixed in attendance.
+// On a `TZ=UTC` server, `todayISO()` shifted to tomorrow at 21:00 Riyadh
+// (i.e. an HR action filed at 23:30 Riyadh local landed under tomorrow's
+// `period`/`year` row). Routing every "now" helper through `currentDateInTz`
+// fixes ~50 call sites at once instead of patching each individually.
 export function todayISO(): string {
-  return new Date().toISOString().split("T")[0];
+  return currentDateInTz();
 }
 
 export function currentYear(): number {
-  return new Date().getFullYear();
+  return Number(currentDateInTz().slice(0, 4));
 }
 
 export function currentPeriod(): string {
-  return new Date().toISOString().slice(0, 7);
+  return currentDateInTz().slice(0, 7);
 }
 
 export function currentMonthPadded(): string {
-  return String(new Date().getMonth() + 1).padStart(2, "0");
+  return currentDateInTz().slice(5, 7);
 }
 
 export function toDateISO(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   return d.toISOString().split("T")[0];
+}
+
+/**
+ * Returns the calendar date (YYYY-MM-DD) currently observed in `tz`.
+ *
+ * Task #400 — using `toDateISO(new Date())` returns the UTC date, which
+ * silently shifts attendance / cron rows by one day for any user whose
+ * local clock crosses midnight before/after UTC midnight. For Asia/Riyadh
+ * (UTC+3, no DST), an employee that checks in at 01:30 AM local time was
+ * being filed under the *previous* day's attendance row.
+ *
+ * Defaults to Asia/Riyadh because that's the system-wide tenant timezone
+ * (see `companyBootstrap` and `cronScheduler`). Pass an explicit `tz` to
+ * override per call.
+ */
+export function currentDateInTz(tz: string = "Asia/Riyadh", date: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/**
+ * Combine a calendar date (YYYY-MM-DD) with a wall-clock time ("HH:MM")
+ * **as observed in `tz`** and return the corresponding UTC `Date`.
+ *
+ * Task #400 — the previous pattern `new Date(today + "T00:00:00")` then
+ * `setHours(h, m)` interpreted the shift start in the *server's* local
+ * timezone. On a `TZ=UTC` server the 08:00 shift was treated as 08:00 UTC
+ * (= 11:00 Riyadh), so a Riyadh employee who walked in at 08:30 local
+ * (05:30 UTC) was reported as having arrived ~5h30m *early* (lateMinutes
+ * = 0) instead of on-time, and an employee who walked in at 11:30 local
+ * (08:30 UTC) was reported as 30m late instead of 3h30m late.
+ *
+ * Implementation derives the tz offset at the candidate instant via
+ * `Intl.DateTimeFormat` so it stays correct under DST-observing timezones
+ * (Riyadh has no DST today, but other tenants might).
+ */
+export function combineDateAndShiftTime(
+  dateISO: string,
+  time: string,
+  tz: string = "Asia/Riyadh",
+): Date {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const [hPart, mPart] = time.split(":");
+  const h = Number(hPart);
+  const mi = Number(mPart ?? "0");
+  // First guess: pretend the wall-clock time is UTC.
+  const guess = new Date(Date.UTC(y, m - 1, d, h, mi, 0));
+  // Read what `guess` actually looks like in `tz` and compute the offset
+  // between the tz-local components and UTC.
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = dtf.formatToParts(guess).reduce<Record<string, string>>((acc, p) => {
+    if (p.type !== "literal") acc[p.type] = p.value;
+    return acc;
+  }, {});
+  const tzHour = parts.hour === "24" ? 0 : Number(parts.hour);
+  const tzAsUTC = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    tzHour,
+    Number(parts.minute),
+    Number(parts.second),
+  );
+  const offsetMs = tzAsUTC - guess.getTime();
+  return new Date(guess.getTime() - offsetMs);
 }
 
 export function generateRef(prefix: string, seq: number | string, pad = 4): string {
@@ -35,71 +123,38 @@ export function generateTimeRef(prefix: string): string {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}`;
 }
 
-/**
- * Resolves the numbering prefix for a (company, branch, kind) triplet by
- * reading `system_settings` with a branch-first / company-fallback lookup.
- * ZATCA Phase 2 expects each VAT-registered branch to issue its own
- * invoice series (e.g. INV-MK-001 vs INV-HB-001) — this helper lets
- * callers swap their hardcoded `generateTimeRef("INV")` for one that
- * picks up whatever the operator configured per branch.
- *
- * Lookup order:
- *   1. (companyId, branchId, key)   ← per-branch override
- *   2. (companyId, NULL, key)        ← company default
- *   3. fallback parameter            ← code default (e.g. "INV")
- *
- * The `system_settings_companyId_branchId_key_key` unique constraint
- * already supports the (companyId, branchId, key) triple, so no schema
- * migration is needed. Callers opt-in by switching from
- * `generateTimeRef("INV")` to `resolveBranchPrefix(...)` then
- * `generateTimeRef(prefix)` or directly via `generateBranchRef`.
- */
-export async function resolveBranchPrefix(
-  companyId: number,
-  branchId: number | null,
-  key:
-    | "invoice_prefix"
-    | "purchase_prefix"
-    | "voucher_prefix"
-    | "receipt_voucher_prefix"
-    | "payment_voucher_prefix"
-    | "journal_entry_prefix"
-    | "expense_claim_prefix"
-    | "credit_note_prefix"
-    | "debit_note_prefix",
-  fallback: string,
-): Promise<string> {
-  if (branchId !== null && branchId !== undefined) {
-    const [branchRow] = await rawQuery<{ value: string | null }>(
-      `SELECT value FROM system_settings
-        WHERE "companyId" = $1 AND "branchId" = $2 AND key = $3
-        LIMIT 1`,
-      [companyId, branchId, key],
-    );
-    if (branchRow?.value) return branchRow.value;
-  }
-  const [companyRow] = await rawQuery<{ value: string | null }>(
-    `SELECT value FROM system_settings
-      WHERE "companyId" = $1 AND "branchId" IS NULL AND key = $2
-      LIMIT 1`,
-    [companyId, key],
-  );
-  if (companyRow?.value) return companyRow.value;
-  return fallback;
-}
-
-/**
- * Branch-aware variant of `generateTimeRef`. Combines `resolveBranchPrefix`
- * with the time-based suffix so callers can swap a one-line drop-in:
- *
- *   const ref = await generateBranchRef(scope, "invoice_prefix", "INV");
- */
+// Per-branch reference generator (PR #529): looks up an optional
+// per-branch prefix override in `system_settings` (key = `<settingKey>`,
+// scope = branch → company → system) and falls back to `defaultPrefix`
+// when no override is configured. Always emits a time-based suffix to
+// avoid colliding with existing sequence-based refs in the same table.
 export async function generateBranchRef(
   scope: { companyId: number; branchId: number | null },
-  key: Parameters<typeof resolveBranchPrefix>[2],
-  fallback: string,
+  settingKey: string,
+  defaultPrefix: string,
 ): Promise<string> {
-  const prefix = await resolveBranchPrefix(scope.companyId, scope.branchId, key, fallback);
+  let prefix = defaultPrefix;
+  try {
+    const { rawQuery } = await import("./rawdb.js");
+    // system_settings is keyed by ("companyId","branchId",key). A NULL
+    // branchId row is the company-wide default; a NULL companyId row
+    // (rare) is the system-wide default. Branch row wins, then company,
+    // then system.
+    const rows = await rawQuery<{ value: string | null }>(
+      `SELECT value FROM system_settings
+        WHERE key = $1
+          AND ( ("companyId" = $2 AND "branchId" = $3)
+             OR ("companyId" = $2 AND "branchId" IS NULL)
+             OR ("companyId" IS NULL AND "branchId" IS NULL) )
+        ORDER BY ("branchId" IS NULL) ASC, ("companyId" IS NULL) ASC
+        LIMIT 1`,
+      [settingKey, scope.companyId, scope.branchId ?? null],
+    );
+    const override = rows[0]?.value?.trim();
+    if (override) prefix = override;
+  } catch {
+    // system_settings table may not exist yet in dev; fall through to default
+  }
   return generateTimeRef(prefix);
 }
 
@@ -164,9 +219,10 @@ export async function createNotification(params: {
  *
  * If a new event name is added without a matching `eventBus.on(...)`
  * listener, event_logs will silently lose the row. The CI lint rule
- * `lintEventCoverage.mjs` (P6.1 — P6 enforcement phase) will fail any PR
- * that emits an event name that's not in the listener catalog; until that
- * lint lands, run:
+ * `scripts/src/lintEventCoverage.mjs` (wired into `pnpm run guard` as
+ * step `lint:event-coverage`, see Task #224) fails any PR that emits an
+ * event name that's not declared in `eventCatalog.ts`. To debug a
+ * pre-existing missing-listener case manually, run:
  *
  *   grep -rhoE 'action:\s*"([a-z][a-z_]*\.)+[a-z_]+"' \
  *     artifacts/api-server/src/routes artifacts/api-server/src/lib \
@@ -252,6 +308,55 @@ export async function emitEvent(params: {
   }
 }
 
+/**
+ * Compact wrapper around `createAuditLog` for route handlers.
+ *
+ * Pulls `companyId`/`branchId`/`userId` from `req.scope!` and accepts
+ * the entity-specific fields inline. Returns a fire-and-forget promise
+ * that swallows failures into `logger.error` so callers never have to
+ * remember `.catch(...)` boilerplate.
+ *
+ * Use this for the **second-pass** payload work — the auto-injection
+ * script (`scripts/_fix_audit_hooks.mjs`) only writes the bare 5
+ * fields; richer handlers should record `before`/`after`/`reason` so
+ * an internal auditor can reconstruct what changed.
+ */
+export function auditMutation(
+  req: { scope?: { companyId: number; branchId?: number | null; userId: number } | null },
+  opts: {
+    entity: string;
+    action: string;
+    entityId: number;
+    before?: unknown;
+    after?: unknown;
+    reason?: string;
+  },
+): Promise<void> {
+  const scope = req.scope;
+  if (!scope) {
+    logger.error(
+      { entity: opts.entity, action: opts.action, entityId: opts.entityId },
+      "auditMutation called without req.scope — audit entry DROPPED. " +
+        "This means the route is not behind authMiddleware/scope-enrichment. " +
+        "Treat as a high-priority bug: callers MUST run after scope is set.",
+    );
+    return Promise.resolve();
+  }
+  return createAuditLog({
+    companyId: scope.companyId,
+    branchId: scope.branchId ?? undefined,
+    userId: scope.userId,
+    action: opts.action,
+    entity: opts.entity,
+    entityId: opts.entityId,
+    before: opts.before,
+    after: opts.after,
+    reason: opts.reason,
+  }).catch((err) =>
+    logger.error(err, `auditMutation failed for ${opts.entity}.${opts.action}`),
+  );
+}
+
 export async function createAuditLog(params: {
   companyId: number;
   branchId?: number;
@@ -321,7 +426,7 @@ export async function createJournalEntry(params: {
 }) {
   // Financial period guard: prevent posting to closed periods
   if (!params.skipPeriodCheck) {
-    const postingDate = new Date().toISOString().split("T")[0];
+    const postingDate = todayISO();
     const periodCheck = await checkFinancialPeriodOpen(params.companyId, postingDate);
     if (!periodCheck.open) {
       throw new ValidationError(
