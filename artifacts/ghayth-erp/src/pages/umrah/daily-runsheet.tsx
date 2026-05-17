@@ -9,6 +9,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { PlaneTakeoff, PlaneLanding, AlertTriangle, Download, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { todayLocal } from "@/lib/formatters";
 
 // Daily ops run-sheet — backs GET /api/umrah/reports/daily-runsheet (PR #305).
 // Three lists side by side: arrivals (entryDate=today), departures
@@ -36,7 +37,7 @@ interface Payload {
   overstays: Pilgrim[];
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayLocal();
 
 export default function UmrahDailyRunsheet() {
   const [date, setDate] = useState(today());

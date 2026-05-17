@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Plus, Trash2 } from "lucide-react";
-import { formatCurrency, roundMoney } from "@/lib/formatters";
+import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 interface TemplateLine {
@@ -39,7 +39,7 @@ export default function RecurringJournalsCreatePage() {
     name: "",
     description: "",
     frequency: "monthly",
-    startDate: new Date().toISOString().slice(0, 10),
+    startDate: todayLocal(),
     templateRef: "",
     active: true,
     lines: [emptyLine(), emptyLine()] as TemplateLine[],

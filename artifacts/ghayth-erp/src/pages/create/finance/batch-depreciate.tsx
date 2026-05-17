@@ -8,11 +8,12 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { CreatePageLayout } from "@/components/create-page-layout";
 import { FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { todayLocal } from "@/lib/formatters";
 
 export default function BatchDepreciatePage() {
   const { toast } = useToast();
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_batch_depreciate", {
-    depPeriod: new Date().toISOString().slice(0, 7),
+    depPeriod: todayLocal().slice(0, 7),
   });
   const { fieldErrors, validate } = useFieldErrors();
   const [batchResult, setBatchResult] = useState<any>(null);
