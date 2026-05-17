@@ -1,0 +1,2 @@
+ALTER TABLE client_portal_accounts
+  ADD COLUMN IF NOT EXISTS "tokenVersion" INTEGER NOT NULL DEFAULT 0;
