@@ -18,6 +18,7 @@ import { rawQuery } from "../rawdb.js";
 import { logger } from "../logger.js";
 import { selectExpiringIqamas } from "./iqama-alerts.js";
 import type { IqamaExpiryWatch } from "./types.js";
+import { todayISO } from "../businessHelpers.js";
 
 export interface IqamaCronOutcome {
   scanned: number;
@@ -35,7 +36,7 @@ export function formatAlertMessage(watch: IqamaExpiryWatch): string {
 }
 
 export async function runIqamaDailyAlerts(asOfDate?: string): Promise<IqamaCronOutcome> {
-  const today = asOfDate ?? new Date().toISOString().slice(0, 10);
+  const today = asOfDate ?? todayISO();
   const out: IqamaCronOutcome = { scanned: 0, alertsEmitted: 0, perCompany: {} };
 
   const employees = await rawQuery<{
