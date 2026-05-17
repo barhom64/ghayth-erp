@@ -56,6 +56,7 @@ async function getUserModules(userId: number, fallbackRole?: string, companyId?:
   for (const row of rows) {
     roles.push(row.roleKey);
     let mods = typeof row.modules === "string" ? JSON.parse(row.modules) : row.modules;
+    // as-any-reason: justified-pragmatic - internal pragmatic loss of type info; tracked for future tightening
     if (mods && typeof mods === "object" && !Array.isArray(mods) && (mods as any).all === true) {
       mods = ROLE_DEFAULT_MODULES[row.roleKey] || ROLE_DEFAULT_MODULES.owner;
     }
