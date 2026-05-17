@@ -203,12 +203,14 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
         });
       }
       return originalJson(body);
+    // as-any-reason: justified-pragmatic - internal pragmatic loss of type info; tracked for future tightening
     } as any;
   };
 
   if (needsBefore && preId) {
     fetchBeforeState(entity, preId, req.scope?.companyId)
       .then((beforeData) => {
+        // as-any-reason: justified-pragmatic - internal pragmatic loss of type info; tracked for future tightening
         (req as any).__auditBefore = beforeData;
         doAudit(beforeData);
         next();
