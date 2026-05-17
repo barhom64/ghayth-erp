@@ -52,6 +52,21 @@ run_step "audit:schema"       node scripts/src/audit-schema-drift.mjs
 # Pure-logic fixtures for the ghost-row predicates — no DB needed, so
 # this runs in every environment to guard the guard itself.
 run_step "check:ghost-rows:tests" node scripts/src/check-ghost-rows.test.mjs
+
+# CI-INTEGRITY-1 — activate dormant static checks that have lived on
+# remote as files but were never invoked by guard.sh. Each runs its own
+# self-test fixture first ("guard the guard") before the real check.
+# All four are pure-static (no DB required) so they belong here in the
+# no-DB block alongside ghost-rows:tests.
+run_step "check:utc-time-drift:tests"        node scripts/src/check-utc-time-drift.test.mjs
+run_step "check:utc-time-drift"              node scripts/src/check-utc-time-drift.mjs
+run_step "check:finance-period-drift:tests"  node scripts/src/check-finance-period-drift.guard.test.mjs
+run_step "check:finance-period-drift:legacy" node scripts/src/check-finance-period-drift.test.mjs
+run_step "check:finance-period-drift"        node scripts/src/check-finance-period-drift.mjs
+run_step "check:workflow-pnpm-filters:tests"  node scripts/src/check-workflow-pnpm-filters.test.mjs
+run_step "check:workflow-pnpm-filters"        node scripts/src/check-workflow-pnpm-filters.mjs
+run_step "check:workflow-silent-failures:tests" node scripts/src/check-workflow-silent-failures.test.mjs
+run_step "check:workflow-silent-failures"     node scripts/src/check-workflow-silent-failures.mjs
 if [ -n "${DATABASE_URL:-}" ]; then
   run_step "check:schema-drift" node scripts/src/check-schema-drift.mjs
   run_step "check:ghost-rows"   node scripts/src/check-ghost-rows.mjs
