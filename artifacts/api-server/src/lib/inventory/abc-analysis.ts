@@ -26,6 +26,7 @@
  */
 import { rawQuery, rawExecute } from "../rawdb.js";
 import { logger } from "../logger.js";
+import { todayISO } from "../businessHelpers.js";
 
 export interface AbcInput {
   productId: number;
@@ -138,7 +139,7 @@ export interface AbcRunOutcome {
 }
 
 export async function runAbcAnalysis(asOfDate?: string): Promise<AbcRunOutcome> {
-  const today = asOfDate ?? new Date().toISOString().slice(0, 10);
+  const today = asOfDate ?? todayISO();
   const period = today.slice(0, 7); // YYYY-MM
   const out: AbcRunOutcome = { scanned: 0, written: 0, errors: [] };
 

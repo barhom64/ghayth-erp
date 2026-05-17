@@ -168,16 +168,19 @@ export function registerCrossDomainHandler(
 }
 
 export function safeEmitEvent(payload: unknown & { companyId?: number }): void {
+  // as-any-reason: justified-external - external/dynamic shape (event payload, SDK proxy, JSON.parse)
   const action = (payload as any)?.action;
   if (!action) return;
   if (!isKnownEvent(action)) {
     logger.warn({ action }, "Event not in catalog — skipped");
+    // as-any-reason: justified-external - external/dynamic shape (event payload, SDK proxy, JSON.parse)
     pushToDLQ("event", payload, `Uncatalogued event: ${action}`, (payload as any)?.companyId, action);
     return;
   }
   try {
     eventBus.emit(action as EventName, payload as EventPayload);
   } catch (err) {
+    // as-any-reason: justified-external - external/dynamic shape (event payload, SDK proxy, JSON.parse)
     pushToDLQ("event", payload, err, (payload as any)?.companyId, action);
   }
 }

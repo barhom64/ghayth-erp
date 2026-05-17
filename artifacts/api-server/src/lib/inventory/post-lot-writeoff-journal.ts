@@ -29,6 +29,7 @@ import {
   type BuildEntryInput,
   type EntryContext,
 } from "../gl/index.js";
+import { todayISO } from "../businessHelpers.js";
 
 /** Statuses that legitimately trigger a write-off entry. `rejected`
  *  lots transition straight to `disposed` via the QC FSM, so the
@@ -204,7 +205,7 @@ export async function postLotWriteoffJournal(
     }
 
     const payload = buildEntry(buildInput);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayISO();
 
     const ctx: EntryContext = {
       companyId: opts.companyId,

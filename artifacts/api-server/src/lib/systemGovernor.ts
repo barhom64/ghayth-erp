@@ -120,6 +120,7 @@ const systemStopGuard: GuardFn = async (companyId, context) => {
        AND (scope = $2 OR scope = 'all')
      LIMIT 1`,
     [companyId, scope]
+  // as-any-reason: justified-pragmatic - internal pragmatic loss of type info; tracked for future tightening
   ).catch(() => [{ scope: "all", reason: "فشل التحقق من إيقاف النظام" }] as any[]);
 
   if (rows.length > 0) {
@@ -186,6 +187,7 @@ import type { Request, Response, NextFunction } from "express";
 export function requireGuards(scope: GuardScope = "financial") {
   return async (req: Request, _res: Response, next: NextFunction) => {
     if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return next();
+    // as-any-reason: justified-pragmatic - internal pragmatic loss of type info; tracked for future tightening
     const s = (req as any).scope;
     const companyId = s?.companyId;
     if (!companyId) return next();
