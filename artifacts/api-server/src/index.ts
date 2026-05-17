@@ -11,6 +11,8 @@ import { syncFeatureCatalog } from "./lib/rbac/catalogSync.js";
 import { syncLegacyToV2 } from "./lib/rbac/autoMigrate.js";
 import { pool } from "./lib/rawdb.js";
 import http from "http";
+import fs from "node:fs";
+import path from "node:path";
 
 const rawPort = process.env["PORT"];
 
@@ -48,6 +50,26 @@ async function start() {
       process.exit(1);
     }
     logger.warn("Continuing despite migration failure (development mode only)");
+  }
+
+  // E2E bench admin — materialise the deterministic owner@local.test user
+  // via the canonical SQL fixture (db/seed-admin-user.sql) when
+  // SEED_DEMO_DATA=true. The fixture is idempotent and bootstraps a minimal
+  // company+branch when none exist, so it must run BEFORE bootstrapAdminUser
+  // (which requires company id=1 to already exist) on fresh CI databases.
+  // Logic is NOT duplicated in JS — the SQL file is the single source of truth.
+  if (process.env.SEED_DEMO_DATA === "true") {
+    const seedPath = path.resolve(process.cwd(), "db/seed-admin-user.sql");
+    try {
+      const sql = fs.readFileSync(seedPath, "utf-8");
+      await pool.query(sql);
+      logger.info({ file: "db/seed-admin-user.sql" }, "E2E bench admin seeded");
+    } catch (seedErr) {
+      logger.warn(
+        { err: seedErr, tried: seedPath },
+        "E2E bench admin seed skipped or failed — e2e tests requiring owner@local.test may fail",
+      );
+    }
   }
 
   try {
