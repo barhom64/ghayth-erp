@@ -70,6 +70,18 @@ export {
   postCycleCountVarianceJournal,
 } from "./post-cycle-count-journal.js";
 
+// Pre-expiry warning cron (Task #277)
+export type { ExpiryWarningOutcome } from "./expiry-warning.js";
+export {
+  pickAlertThreshold,
+  runExpiryWarnings,
+  lotExpiryWarningCron,
+} from "./expiry-warning.js";
+
+// ABC-driven cycle-count plan generator (Task #277)
+export type { GeneratePlanInput, GeneratePlanOutcome } from "./cycle-count-plan.js";
+export { generateCycleCountPlan } from "./cycle-count-plan.js";
+
 // Lot lifecycle write-off → journal entry wiring
 export type {
   LotWriteoffStatus,
