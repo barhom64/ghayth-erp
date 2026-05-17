@@ -258,6 +258,7 @@ export async function evaluateRulesForEvent(eventName: string, payload: EventPay
     for (const rule of rules) {
       try {
         if (rule.conditionField && rule.conditionValue !== null) {
+          // as-any-reason: justified-external - external/dynamic shape (event payload, SDK proxy, JSON.parse)
           const fieldValue = (payload as any)[rule.conditionField];
           if (fieldValue === undefined) continue;
           if (!evaluateCondition(fieldValue, rule.conditionOperator, rule.conditionValue)) continue;
