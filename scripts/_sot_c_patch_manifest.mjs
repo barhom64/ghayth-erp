@@ -20,21 +20,24 @@
 //   separate follow-up that consumes MANIFEST.json deterministically.
 //
 // CLASSIFICATION RULES (first match wins)
-//   migration       artifacts/api-server/src/migrations/*.sql            P0
-//   api-route       artifacts/api-server/src/routes/**                    P0
-//   api-lib         artifacts/api-server/src/lib/**                       P0
-//   api-middleware  artifacts/api-server/src/middlewares/**               P0
-//   api-spec        lib/api-spec/**                                       P0
-//   db-schema       lib/db/**                                             P0
-//   frontend-main   artifacts/ghayth-erp/src/**                           P1
-//   portal-client   artifacts/client-portal/**                            P1
-//   portal-careers  artifacts/careers-portal/**                           P1
-//   api-client-hand lib/api-client-react/src/** (NOT generated/)          P1
-//   script-tooling  scripts/** (excluding scripts/src/generated)          P2
-//   tests           **/tests/**, **/*.test.ts                             P2
-//   api-zod-gen     lib/api-zod/src/generated/**                          P3 (regeneratable)
-//   docs            docs/**, *.md at root                                 P3
-//   other           anything else                                         P? (review)
+//   migration            artifacts/api-server/src/migrations/*.sql            P0
+//   api-route            artifacts/api-server/src/routes/**                    P0
+//   api-middleware       artifacts/api-server/src/middlewares/**               P0
+//   api-lib              artifacts/api-server/src/lib/**                       P0
+//   api-spec             lib/api-spec/**                                       P0
+//   db-schema            lib/db/**                                             P0
+//   api-zod-gen          lib/api-zod/src/generated/**                          P3 (regeneratable)
+//   api-client-hand      lib/api-client-react/src/** (NOT generated/)          P1
+//   frontend-main        artifacts/ghayth-erp/src/**                           P1
+//   portal-client        artifacts/client-portal/**                            P1
+//   portal-careers       artifacts/careers-portal/**                           P1
+//   tests                **/tests/**, **/*.test.ts                             P2
+//   system-auditor-tool  tools/system-auditor/**                               P2
+//   scripts-generated    scripts/src/generated/**                              P3 (generated; not immediate preservation unless explicitly referenced)
+//   script-tooling       scripts/** (excluding scripts/src/generated/)         P2
+//   audit-system-review  audit/system-review/**                                P3 (review/diagnostic output, not runtime code)
+//   docs                 docs/**, *.md at root                                 P3
+//   other                anything else                                         P? (review)
 //
 // PRIORITY DEFINITIONS
 //   P0  must-preserve. Loss = silent regression or data corruption.
@@ -72,9 +75,18 @@ const RULES = [
   { id: "frontend-main",   p: "P1", test: (f) => /^artifacts\/ghayth-erp\/src\//.test(f) },
   { id: "portal-client",   p: "P1", test: (f) => /^artifacts\/client-portal\//.test(f) },
   { id: "portal-careers",  p: "P1", test: (f) => /^artifacts\/careers-portal\//.test(f) },
-  { id: "tests",           p: "P2", test: (f) => /(^|\/)tests?\//.test(f) || /\.test\.[cm]?[jt]sx?$/.test(f) },
-  { id: "script-tooling",  p: "P2", test: (f) => /^scripts\//.test(f) },
-  { id: "docs",            p: "P3", test: (f) => /^docs\//.test(f) || /^[^\/]+\.md$/.test(f) },
+  { id: "tests",               p: "P2", test: (f) => /(^|\/)tests?\//.test(f) || /\.test\.[cm]?[jt]sx?$/.test(f) },
+  { id: "system-auditor-tool", p: "P2", test: (f) => /^tools\/system-auditor\//.test(f) },
+  // scripts-generated MUST come before script-tooling so generated files
+  // are NOT lumped into the tooling preservation bucket. Generated scripts
+  // are not immediate preservation candidates unless explicitly referenced.
+  { id: "scripts-generated",   p: "P3", test: (f) => /^scripts\/src\/generated\//.test(f) },
+  { id: "script-tooling",      p: "P2", test: (f) => /^scripts\// .test(f) && !/^scripts\/src\/generated\//.test(f) },
+  // audit/system-review/** is review/diagnostic output (FINDINGS, module
+  // reports, diff snapshots, etc.) — NOT runtime code. Demote to P3 so the
+  // ~390 entries don't drown the P? triage queue.
+  { id: "audit-system-review", p: "P3", test: (f) => /^audit\/system-review\//.test(f) },
+  { id: "docs",                p: "P3", test: (f) => /^docs\//.test(f) || /^[^\/]+\.md$/.test(f) },
 ];
 
 export function classify(file) {
@@ -312,6 +324,35 @@ function selfTest() {
   assert(r.files[1].path === "artifacts/api-server/src/lib/bar.ts", "byte annotation stripped from D path");
   assert(r.files[1].marker === "D", "D marker preserved");
   fs.unlinkSync(tmpfile);
+
+  console.log("[self-test] new P? drain rules (audit-system-review / system-auditor-tool / scripts-generated)");
+  // audit/system-review/** → P3 (was previously falling into 'other' P?)
+  assert(classify("audit/system-review/findings/FINDING-003-source-of-truth-drift.md").bucket === "audit-system-review", "audit/system-review/** → audit-system-review");
+  assert(classify("audit/system-review/findings/FINDING-003-source-of-truth-drift.md").priority === "P3", "audit-system-review priority P3");
+  assert(classify("audit/system-review/modules/hr/SUMMARY.md").bucket === "audit-system-review", "nested audit/system-review/modules/** → audit-system-review");
+  // tools/system-auditor/** → P2 (potentially useful CLI; not runtime-critical)
+  assert(classify("tools/system-auditor/src/index.ts").bucket === "system-auditor-tool", "tools/system-auditor/** → system-auditor-tool");
+  assert(classify("tools/system-auditor/src/index.ts").priority === "P2", "system-auditor-tool priority P2");
+  assert(classify("tools/system-auditor/checkers/db.ts").bucket === "system-auditor-tool", "nested tools/system-auditor/** → system-auditor-tool");
+  // scripts/src/generated/** → P3 (NOT immediate preservation; was previously
+  // mis-classified as script-tooling P2 — comment said excluded, code didn't).
+  assert(classify("scripts/src/generated/something.mjs").bucket === "scripts-generated", "scripts/src/generated/** → scripts-generated (NOT script-tooling)");
+  assert(classify("scripts/src/generated/something.mjs").priority === "P3", "scripts-generated priority P3");
+  // Sibling sanity: hand-written scripts/src/* (non-generated) stays script-tooling P2.
+  assert(classify("scripts/src/runtime-audit.cjs").bucket === "script-tooling", "scripts/src/runtime-audit.cjs → script-tooling P2 (not generated)");
+  assert(classify("scripts/_pr_push_baseline.mjs").bucket === "script-tooling", "scripts/_pr_push_baseline.mjs → script-tooling P2");
+  // R-prefix entries are skipped at parser layer, not classifier — already covered
+  // by the readInput() test above, but re-assert end-to-end here:
+  const tmpR = "/tmp/_sot_c_test_r_skip.txt";
+  fs.writeFileSync(tmpR, [
+    "R\taudit/system-review/findings/FINDING-001.md",
+    "R\tlib/db/schema.ts(L:100b R:200b)",
+    "L\tscripts/keep.mjs",
+  ].join("\n"));
+  const rs = readInput(tmpR);
+  assert(rs.files.length === 1 && rs.files[0].path === "scripts/keep.mjs", "all R entries skipped end-to-end");
+  assert(rs.skippedRemoteCanonical === 2, "skippedRemoteCanonical=2 (both R lines)");
+  fs.unlinkSync(tmpR);
 
   if (failures > 0) {
     console.error(`\n[self-test] ${failures} assertion(s) failed`);
