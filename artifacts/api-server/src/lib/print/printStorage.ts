@@ -31,6 +31,7 @@ export async function storePrintArtifact(opts: {
   const dir = process.env.PRIVATE_OBJECT_DIR;
   if (!dir) return null;
   try {
+    // utc-ok: object-storage path partition only, not a business date
     const now = new Date();
     const yyyy = String(now.getFullYear());
     const mm = String(now.getMonth() + 1).padStart(2, "0");
