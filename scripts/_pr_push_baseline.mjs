@@ -45,6 +45,12 @@ import path from "node:path";
 // ── Static rules ───────────────────────────────────────────────────────
 
 // Prefixes that must NEVER appear in a pushed file path.
+// SOT-3.1: added .env*, node_modules/, .git/, dist/, coverage/, .turbo/,
+//          .vite/, playwright-report/, test-results/ as a second-line safety
+//          net beneath .gitignore — catches the case where state.files is
+//          built from an explicit list that bypasses git's ignore logic.
+// Matching is case-insensitive (see checkStaticRules); catches NODE_MODULES/
+// on case-preserving filesystems and NOHUP.OUT-style accidents.
 const FORBIDDEN_PREFIXES = [
   "attached_assets/",
   "audit/screenshots/",
@@ -57,12 +63,26 @@ const FORBIDDEN_PREFIXES = [
   "tmp/",
   ".tmp/",
   "scripts/.agent-state/",
+  // SOT-3.1 additions:
+  "node_modules/",
+  ".git/",
+  "dist/",
+  "coverage/",
+  ".turbo/",
+  ".vite/",
+  "playwright-report/",
+  "test-results/",
 ];
 
-// Exact filename basenames that must never be pushed.
+// Filename prefixes that must never be pushed regardless of directory.
+// Matches `.env`, `.env.local`, `.env.production`, etc. anywhere in the tree.
+// (SOT-3.1 — dotenv files commonly contain secrets.)
+const FORBIDDEN_BASENAME_PREFIXES = [".env"];
+
+// Exact filename basenames that must never be pushed (case-insensitive).
 const FORBIDDEN_BASENAMES = new Set([
   "nohup.out",
-  ".DS_Store",
+  ".ds_store",
 ]);
 
 // Removes consecutive segment-run duplicates from a path. Example:
@@ -102,9 +122,14 @@ function checkStaticRules(file) {
     };
   }
 
-  // 2. Forbidden basenames.
+  // SOT-3.1: case-insensitive matching for junk paths — catches
+  // NODE_MODULES/, NOHUP.OUT, .DS_STORE, .Env.production, etc.
+  const fileLc = file.toLowerCase();
   const base = path.posix.basename(file);
-  if (FORBIDDEN_BASENAMES.has(base)) {
+  const baseLc = base.toLowerCase();
+
+  // 2. Forbidden basenames (case-insensitive).
+  if (FORBIDDEN_BASENAMES.has(baseLc)) {
     return {
       file,
       category: "RUNTIME_JUNK",
@@ -113,9 +138,22 @@ function checkStaticRules(file) {
     };
   }
 
-  // 3. Forbidden prefixes.
+  // 2b. Forbidden basename prefixes (.env, .env.local, .env.production, …).
+  for (const pre of FORBIDDEN_BASENAME_PREFIXES) {
+    if (baseLc === pre || baseLc.startsWith(pre + ".")) {
+      return {
+        file,
+        category: "SECRET_LEAK_RISK",
+        reason: `basename "${base}" matches secret-bearing pattern "${pre}*"`,
+        howToFix: `dotenv files contain secrets — never push. Use Replit secrets / GitHub Actions secrets instead.`,
+      };
+    }
+  }
+
+  // 3. Forbidden prefixes (case-insensitive).
   for (const pre of FORBIDDEN_PREFIXES) {
-    if (file === pre.replace(/\/$/, "") || file.startsWith(pre)) {
+    const preLc = pre.toLowerCase();
+    if (fileLc === preLc.replace(/\/$/, "") || fileLc.startsWith(preLc)) {
       return {
         file,
         category: "KEEP_LOCAL_NEVER_PUSH",
@@ -304,6 +342,61 @@ async function selfTest() {
 
   const v8 = checkStaticRules("mockup-sandbox/foo.tsx");
   assert(v8 && v8.category === "KEEP_LOCAL_NEVER_PUSH", "rejects mockup-sandbox/");
+
+  // ── SOT-3.1 additions: hardened forbidden lists ──────────────────────
+  const v9 = checkStaticRules("node_modules/foo/index.js");
+  assert(v9 && v9.category === "KEEP_LOCAL_NEVER_PUSH", "rejects node_modules/");
+
+  const v10 = checkStaticRules(".git/HEAD");
+  assert(v10 && v10.category === "KEEP_LOCAL_NEVER_PUSH", "rejects .git/");
+
+  const v11 = checkStaticRules("dist/bundle.js");
+  assert(v11 && v11.category === "KEEP_LOCAL_NEVER_PUSH", "rejects dist/");
+
+  const v12 = checkStaticRules("coverage/lcov.info");
+  assert(v12 && v12.category === "KEEP_LOCAL_NEVER_PUSH", "rejects coverage/");
+
+  const v13 = checkStaticRules(".turbo/cache/foo");
+  assert(v13 && v13.category === "KEEP_LOCAL_NEVER_PUSH", "rejects .turbo/");
+
+  const v14 = checkStaticRules(".vite/deps/foo");
+  assert(v14 && v14.category === "KEEP_LOCAL_NEVER_PUSH", "rejects .vite/");
+
+  const v15 = checkStaticRules("playwright-report/index.html");
+  assert(v15 && v15.category === "KEEP_LOCAL_NEVER_PUSH", "rejects playwright-report/");
+
+  const v16 = checkStaticRules("test-results/junit.xml");
+  assert(v16 && v16.category === "KEEP_LOCAL_NEVER_PUSH", "rejects test-results/");
+
+  // .env family (anywhere in tree)
+  const v17 = checkStaticRules(".env");
+  assert(v17 && v17.category === "SECRET_LEAK_RISK", "rejects .env at root");
+
+  const v18 = checkStaticRules(".env.local");
+  assert(v18 && v18.category === "SECRET_LEAK_RISK", "rejects .env.local");
+
+  const v19 = checkStaticRules("artifacts/api-server/.env.production");
+  assert(v19 && v19.category === "SECRET_LEAK_RISK", "rejects nested .env.production");
+
+  // Negative: .env-aware filenames that are NOT dotenv files should pass.
+  assert(checkStaticRules("docs/.env-example.md") === null, "allows .env-example.md (not a dotenv file)");
+  assert(checkStaticRules("scripts/envcheck.ts") === null, "allows envcheck.ts (no leading dot)");
+
+  // Case-insensitive matching
+  const v20 = checkStaticRules("NODE_MODULES/pkg/index.js");
+  assert(v20 && v20.category === "KEEP_LOCAL_NEVER_PUSH", "case-insensitive: rejects NODE_MODULES/");
+
+  const v21 = checkStaticRules("NOHUP.OUT");
+  assert(v21 && v21.category === "RUNTIME_JUNK", "case-insensitive: rejects NOHUP.OUT");
+
+  const v22 = checkStaticRules("subdir/.DS_STORE");
+  assert(v22 && v22.category === "RUNTIME_JUNK", "case-insensitive: rejects .DS_STORE uppercase");
+
+  const v23 = checkStaticRules("artifacts/web/.Env.Production");
+  assert(v23 && v23.category === "SECRET_LEAK_RISK", "case-insensitive: rejects .Env.Production");
+
+  const v24 = checkStaticRules("Dist/bundle.js");
+  assert(v24 && v24.category === "KEEP_LOCAL_NEVER_PUSH", "case-insensitive: rejects Dist/");
 
   console.log("[self-test] validatePush() with mocked gh");
   const mockGhAllOk = async (urlPath) => ({ status: urlPath.includes("does-not-exist") ? 404 : 200, data: {} });
