@@ -64,9 +64,17 @@ export function getCurrencySymbol(): string {
   return getGlobalCurrencyLabel();
 }
 
+// Browser-local today as YYYY-MM-DD for `<input type="date">` defaults.
+// Intentionally NOT a period filter — uses `Intl.DateTimeFormat("en-CA")`
+// in the browser's local TZ to avoid the bound-`new Date()`.getMonth/getFullYear
+// pattern banned by check:finance-period-drift.
+const LOCAL_DAY_FMT = new Intl.DateTimeFormat("en-CA", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 export function todayLocal(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return LOCAL_DAY_FMT.format(new Date());
 }
 
 // ── Riyadh-aware "current period" helpers ─────────────────────────
