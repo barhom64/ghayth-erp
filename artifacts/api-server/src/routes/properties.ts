@@ -1547,7 +1547,6 @@ router.post("/contracts/:id/terminate", authorize({ feature: "properties.contrac
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(terminateContractSchema.safeParse(req.body)) as any;
     // Pre-fetch contract to compute termination params. applyTransition will
     // re-fetch with SELECT FOR UPDATE inside its transaction.
@@ -1716,7 +1715,6 @@ router.patch("/tenants/:id", authorize({ feature: "properties.tenants", action: 
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المستأجر غير موجود");
-    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(updateTenantSchema.safeParse(req.body)) as any;
 
     if (b.nationalId && b.nationalId !== existing.nationalId) {
@@ -1883,7 +1881,6 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
   try {
     const scope = req.scope!;
     const { id } = req.params;
-    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(payRentPaymentSchema.safeParse(req.body)) as any;
     const paidAmount = Number(b.paidAmount ?? b.amount);
     if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
