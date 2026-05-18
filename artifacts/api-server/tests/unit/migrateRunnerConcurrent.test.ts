@@ -14,6 +14,7 @@ import { describe, it, expect } from "vitest";
 import {
   splitSqlStatements,
   stripSqlComments,
+  stripSqlLiteralsAndComments,
   containsTxnIncompatibleStatement,
 } from "../../src/lib/migrate.js";
 
@@ -35,6 +36,24 @@ describe("migrate.ts — txn-incompatible detection (#635)", () => {
   it("flags REINDEX ... CONCURRENTLY", () => {
     expect(
       containsTxnIncompatibleStatement(`REINDEX TABLE CONCURRENTLY foo;`),
+    ).toBe(true);
+  });
+
+  it("flags REFRESH MATERIALIZED VIEW CONCURRENTLY", () => {
+    expect(
+      containsTxnIncompatibleStatement(
+        `REFRESH MATERIALIZED VIEW CONCURRENTLY my_mv;`,
+      ),
+    ).toBe(true);
+    // Non-concurrent REFRESH is safe inside a transaction.
+    expect(
+      containsTxnIncompatibleStatement(`REFRESH MATERIALIZED VIEW my_mv;`),
+    ).toBe(false);
+  });
+
+  it("flags REINDEX SYSTEM CONCURRENTLY", () => {
+    expect(
+      containsTxnIncompatibleStatement(`REINDEX SYSTEM CONCURRENTLY foo;`),
     ).toBe(true);
   });
 
@@ -76,6 +95,70 @@ describe("migrate.ts — txn-incompatible detection (#635)", () => {
         `/* CREATE INDEX CONCURRENTLY in a block comment */\nSELECT 1;`,
       ),
     ).toBe(false);
+  });
+
+  it("ignores keywords inside single-quoted string literals (no false positive)", () => {
+    expect(
+      containsTxnIncompatibleStatement(
+        `INSERT INTO notes (body) VALUES ('please VACUUM the warehouse tonight');`,
+      ),
+    ).toBe(false);
+    expect(
+      containsTxnIncompatibleStatement(
+        `INSERT INTO notes (body) VALUES ('reminder: CREATE INDEX CONCURRENTLY on idx_foo');`,
+      ),
+    ).toBe(false);
+  });
+
+  it("ignores keywords inside double-quoted identifiers (no false positive)", () => {
+    expect(
+      containsTxnIncompatibleStatement(
+        `CREATE TABLE "VACUUM logs" (id serial primary key);`,
+      ),
+    ).toBe(false);
+  });
+
+  it("ignores keywords inside $tag$ dollar-quoted strings (no false positive)", () => {
+    expect(
+      containsTxnIncompatibleStatement(
+        `DO $$ BEGIN RAISE NOTICE 'CREATE INDEX CONCURRENTLY would fail here'; END $$;`,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("migrate.ts — stripSqlLiteralsAndComments", () => {
+  it("blanks single-quoted bodies but keeps surrounding tokens", () => {
+    const out = stripSqlLiteralsAndComments(
+      `INSERT INTO t VALUES ('VACUUM here');`,
+    );
+    expect(out).not.toMatch(/VACUUM/);
+    expect(out).toMatch(/INSERT INTO t VALUES/);
+    expect(out.endsWith(";")).toBe(true);
+  });
+  it("blanks dollar-quoted bodies", () => {
+    const out = stripSqlLiteralsAndComments(
+      `DO $$ BEGIN RAISE NOTICE 'VACUUM'; END $$;`,
+    );
+    expect(out).not.toMatch(/VACUUM/);
+    expect(out).not.toMatch(/RAISE/);
+  });
+  it("blanks both comment kinds", () => {
+    const out = stripSqlLiteralsAndComments(
+      `-- VACUUM line\n/* CREATE INDEX CONCURRENTLY block */\nSELECT 1;`,
+    );
+    expect(out).not.toMatch(/VACUUM/);
+    expect(out).not.toMatch(/CONCURRENTLY/);
+    expect(out).toMatch(/SELECT 1;/);
+  });
+  it("preserves '' escape correctly (does not desync state)", () => {
+    const out = stripSqlLiteralsAndComments(
+      `INSERT INTO t VALUES ('it''s VACUUM time'); VACUUM foo;`,
+    );
+    // First VACUUM is inside the literal → blanked.
+    // Second VACUUM is outside → preserved.
+    const matches = out.match(/VACUUM/g) || [];
+    expect(matches).toHaveLength(1);
   });
 });
 
