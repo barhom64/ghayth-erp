@@ -87,3 +87,31 @@ refresh-deck-shots.yml:or-true:CHANGED=$(git status --porcelain -- artifacts/gha
 # pattern as audit-runtime.yml above.
 refresh-deck-shots.yml:or-true:pid=$(cat "$f" 2>/dev/null || true)
 refresh-deck-shots.yml:or-true:[ -n "${pid:-}" ] && kill "$pid" 2>/dev/null || true
+
+# guard.yml clean-boot self-bootstrap step (Task #449): `grep -c` exits
+# 1 when the pattern is absent. We *want* the count (including 0) so
+# the next line can compare it to the expected exact value of 1 and
+# fail with a precise message. `|| true` converts the absent-pattern
+# exit into the literal "0" the gate needs. The very next line is the
+# explicit `[ "$count" != "1" ]` failure gate.
+guard.yml:or-true:count=$(grep -c "baseline loaded from schema_pre + schema_post" /tmp/cleanboot.log || true)
+
+# guard.yml clean-boot teardown trap (Task #449): idempotent kill of
+# the backgrounded api-server PID inside an EXIT trap. The PID may
+# already have exited (crash path, graceful shutdown after success),
+# in which case `kill` returns non-zero — that's fine, the trap's job
+# is "best-effort make sure nothing is left running". Same pattern as
+# audit-runtime.yml / refresh-deck-shots.yml teardown entries above.
+guard.yml:or-true:kill "$SERVER_PID" 2>/dev/null || true
+guard.yml:or-true:kill -9 "$SERVER_PID" 2>/dev/null || true
+
+# guard.yml clean-boot login assertion (Task #454): best-effort dumps of
+# the response body / cookie jar / who-am-i payload inside `if [ "$status"
+# != "200" ]` failure branches that ALWAYS exit 1 on the next line. The
+# `|| true` exists because the file may not have been created (e.g. curl
+# itself failed before writing the body), and the underlying assertion
+# failure has already been declared via `::error::`. Same shape as the
+# audit-runtime.yml log-tailing entries above.
+guard.yml:or-true:cat /tmp/cleanboot-login.json >&2 || true
+guard.yml:or-true:cat /tmp/cleanboot-cookies.txt >&2 || true
+guard.yml:or-true:cat /tmp/cleanboot-me.json >&2 || true
