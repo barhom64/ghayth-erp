@@ -445,6 +445,7 @@ router.delete("/templates/:id", authorize({ feature: "admin", action: "update" }
       action: "notification.template.deleted",
       entity: "notification_templates",
       entityId: id,
+      // as-any-reason: justified-pragmatic - dynamic key access on prior-row snapshot for audit detail JSON only; behavior unchanged
       details: JSON.stringify({ templateKey: (before as any)?.templateKey }),
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
@@ -569,6 +570,7 @@ router.delete("/fallback-chains/:id", authorize({ feature: "admin", action: "upd
       action: "notification.fallback_chain.deleted",
       entity: "notification_fallback_chains",
       entityId: id,
+      // as-any-reason: justified-pragmatic - dynamic key access on prior-row snapshot for audit detail JSON only; behavior unchanged
       details: JSON.stringify({ name: (before as any)?.name }),
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
@@ -732,6 +734,7 @@ router.delete("/webhooks/:id", authorize({ feature: "admin", action: "update" })
       action: "notification.webhook.deleted",
       entity: "notification_webhooks",
       entityId: id,
+      // as-any-reason: justified-pragmatic - dynamic key access on prior-row snapshot for audit detail JSON only; behavior unchanged
       details: JSON.stringify({ name: (before as any)?.name }),
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
 
