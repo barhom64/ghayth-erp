@@ -2887,10 +2887,12 @@ router.post("/violations", authorize({ feature: "hr.violations", action: "create
   try {
     const scope = req.scope!;
     const parsed = zodParse(violationSchema.safeParse(req.body));
+    // as-any-reason: justified-pragmatic - zodParse returns widened type; destructure shape is validated upstream by violationSchema
+    const parsedAny = parsed as any;
     const {
       assignmentId, type, description, severity, deduction,
       period: reqPeriod, incidentDate: reqIncidentDate, regulationId,
-    } = parsed as any;
+    } = parsedAny;
 
     // FK pre-check: assignment must exist inside the caller's company scope.
     // Without this, a bad assignmentId would fail as a deep 23503 whose
@@ -2931,6 +2933,7 @@ router.post("/violations", authorize({ feature: "hr.violations", action: "create
       "late", "early_leave", "absence", "behavior",
       "organization", "gps_out_of_range", "custom",
     ]);
+    // as-any-reason: justified-pragmatic - guarded by knownIncidentTypes.has(); cast widens string to the engine's union; "custom" fallback covers misses
     const incidentType = knownIncidentTypes.has(String(type)) ? (type as any) : "custom";
     ensureInquiryMemoForViolation({
       companyId: scope.companyId,
@@ -4071,6 +4074,7 @@ router.post("/leave-requests/:id/cancel", authorize({ feature: "hr.leaves", acti
       toState: "cancelled",
       reason: b.reason,
       setExtras: {
+        // as-any-reason: justified-pragmatic - read-only access on request row to concat prior rejectedReason into the cancel note; no decision/balance change
         rejectedReason: b.reason ? `${(request as any).rejectedReason || ""} | إلغاء: ${b.reason}`.trim() : null,
       },
       onApply: async (_row, client) => {
@@ -5985,6 +5989,7 @@ router.post("/transfers", authorize({ feature: "hr.exit", action: "create" }), a
   // side-effect notification).
   try {
     const scope = req.scope!;
+    // as-any-reason: justified-pragmatic - zodParse returns widened type; downstream field access validated upstream by transferSchema
     const b = zodParse(transferSchema.safeParse(req.body)) as any;
     const [assignment] = await rawQuery<Record<string, unknown>>(
       `SELECT ea.id, ea."branchId", ea."departmentId", ea.salary, ea."jobTitle"
