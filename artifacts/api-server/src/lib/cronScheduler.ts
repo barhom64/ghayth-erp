@@ -28,7 +28,7 @@ import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
 import { scanObligations } from "./obligationsEngine.js";
 import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
 import { getRedisRateLimitStatus, type RedisRateLimitStatus } from "./rateLimitStore.js";
-import { zatcaRetryDrain } from "./zatca/worker.js";
+import { zatcaRetryDrain, weeklyZatcaPauseDigest } from "./zatca/worker.js";
 import { dailyFxRateFetchCron } from "./fx/jobs.js";
 import { fxStalenessCheckCron } from "./fx/staleness-alert.js";
 import { lotExpiryScanCron } from "./inventory/lots.js";
@@ -224,6 +224,7 @@ async function documentExpiryAlerts(): Promise<string> {
          AND fv."insuranceExpiry" IS NOT NULL
          AND fv."insuranceExpiry" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'`,
       [company.id]
+      // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
     ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any[]; });
 
     // Company documents (commercial registration, municipality license, etc.)
@@ -236,6 +237,7 @@ async function documentExpiryAlerts(): Promise<string> {
          AND cd."expiryDate" IS NOT NULL
          AND cd."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '90 days'`,
       [company.id]
+      // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
     ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any[]; });
 
     const allDocsCombined = [
@@ -498,6 +500,7 @@ async function leaveEscalationCheck(): Promise<string> {
         }
 
         // Stage approved but other stages still pending — don't finalize the leave request
+        // as-any-reason: justified-pragmatic - empty-literal type widening on sentinel return shape; values are []/{} only, no behavior change
         return { allAssignments: [] as any[], managersByAsn: {} as Record<string, any>, isFullyApproved: false };
       });
 
@@ -918,7 +921,7 @@ async function hourlyApprovalEscalation(): Promise<string> {
           // Audit + event so the auto-approval is visible in reports.
           createAuditLog({
             companyId: req.companyId as number, branchId: req.branchId as number, userId: 0,
-            action: "auto_approved", entity: req.refType as string, entityId: req.refId as number,
+            action: `${req.refType}.auto_approved`, entity: req.refType as string, entityId: req.refId as number,
             reason: "Auto-approved on timeout by hourly escalation cron",
           }).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
           emitEvent({
@@ -2714,6 +2717,7 @@ async function monthlyBadDebtReminder(): Promise<string> {
          WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
          LIMIT 1`,
         [c.id]
+        // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
       ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any; });
       const cfoId = cfoRow?.id;
       if (!cfoId) continue;
@@ -2757,6 +2761,7 @@ async function monthlyFxRevaluationReminder(): Promise<string> {
          WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
          LIMIT 1`,
         [c.id]
+        // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
       ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any; });
       const cfoId = cfoRow?.id;
       if (!cfoId) continue;
@@ -2823,6 +2828,7 @@ async function dailyBudgetVarianceAlert(): Promise<string> {
          WHERE ea."companyId"=$1 AND ea.status='active' AND ur."roleKey"='finance_manager'
          LIMIT 1`,
         [c.id]
+        // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
       ).catch((e) => { logger.error(e, "[cronScheduler] query failed"); return [] as any; });
       const cfoId = cfoRow?.id;
       if (!cfoId) continue;
@@ -3449,6 +3455,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "monthly_payroll_prep", description: "تذكير الرواتب يوم 25", schedule: "0 8 25 * *", handler: monthlyPayrollPrep },
   { name: "monthly_closing_prep", description: "تذكير الإقفال يوم 28", schedule: "0 8 28 * *", handler: monthlyClosingPrep },
   { name: "weekly_hr_report", description: "تقرير HR الأسبوعي", schedule: "0 8 * * 0", handler: weeklyHrReport },
+  { name: "weekly_zatca_pause_digest", description: "ملخّص أسبوعي لمالية الفواتير التي حافظت بوّابة ZATCA على إيقافها", schedule: "0 8 * * 1", handler: weeklyZatcaPauseDigest },
   { name: "weekly_fleet_report", description: "تقرير الأسطول الأسبوعي", schedule: "0 8 * * 0", handler: weeklyFleetReport },
   { name: "weekly_crm_report", description: "تقرير CRM الأسبوعي", schedule: "0 8 * * 0", handler: weeklyCrmReport },
   { name: "weekly_cash_flow", description: "فحص التدفق النقدي الأسبوعي", schedule: "0 9 * * 1", handler: weeklyCashFlowCheck },
