@@ -6931,10 +6931,12 @@ router.get("/company-documents", authorize({ feature: "hr.organization", action:
     const [countRow] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total FROM company_documents WHERE "companyId"=$1 AND status != 'deleted'`,
       [scope.companyId]
+      // as-any-reason: justified-pragmatic - catch fallback preserves existing zero-count behavior while satisfying route return typing
     ).catch((e) => { logger.error(e, "hr query failed"); return [{ total: 0 }] as any[]; });
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM company_documents WHERE "companyId"=$1 AND status != 'deleted' ORDER BY "expiryDate" ASC NULLS LAST LIMIT $2 OFFSET $3`,
       [scope.companyId, perPage, offset]
+      // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     res.json(maskFields(req, { data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage }));
   } catch (err) { handleRouteError(err, res, "Company documents error:"); }
@@ -6943,6 +6945,7 @@ router.get("/company-documents", authorize({ feature: "hr.organization", action:
 router.post("/company-documents", authorize({ feature: "hr.organization", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent field access does not require explicit per-field generics; behavior unchanged
     const b = zodParse(companyDocumentSchema.safeParse(req.body)) as any;
 
     const { insertId } = await rawExecute(
@@ -6992,6 +6995,7 @@ router.get("/employee-documents", authorize({ feature: "hr.employees", action: "
     const [countRow] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total FROM employee_documents ed ${where}`,
       countParams
+      // as-any-reason: justified-pragmatic - catch fallback preserves existing zero-count behavior while satisfying route return typing
     ).catch((e) => { logger.error(e, "hr query failed"); return [{ total: 0 }] as any[]; });
 
     params.push(perPage);
@@ -7007,6 +7011,7 @@ router.get("/employee-documents", authorize({ feature: "hr.employees", action: "
        ORDER BY ed."expiryDate" ASC NULLS LAST
        LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
+      // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     res.json(maskFields(req, { data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage }));
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
@@ -7015,6 +7020,7 @@ router.get("/employee-documents", authorize({ feature: "hr.employees", action: "
 router.post("/employee-documents", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent field access does not require explicit per-field generics; behavior unchanged
     const b = zodParse(employeeDocumentSchema.safeParse(req.body)) as any;
 
     const { insertId } = await rawExecute(
