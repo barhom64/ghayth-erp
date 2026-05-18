@@ -279,6 +279,7 @@ router.get("/", authorize({ feature: "my_space", action: "view" }), async (req, 
           [scope.companyId]
         );
         return defaultShift || null;
+        // as-any-reason: justified-pragmatic - null fallback for safe() helper whose generic widens to the success-branch type
       })(), null as any),
       safe(rawQuery<Record<string, unknown>>(
         `SELECT "presentDays", "absentDays", "lateDays", "totalLateMinutes", "totalDeduction"
