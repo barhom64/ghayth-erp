@@ -1233,7 +1233,7 @@ router.get("/commission-calculations", authorize({ feature: "umrah", action: "li
     const rows = await rawQuery(
       `SELECT cc.*, cp."planName"
        FROM employee_commission_calculations cc
-       LEFT JOIN employee_commission_plans cp ON cc."planId" = cp.id
+       LEFT JOIN employee_commission_plans cp ON cc."planId" = cp.id AND cp."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY cc.year DESC, cc.month DESC LIMIT 500`,
       params
