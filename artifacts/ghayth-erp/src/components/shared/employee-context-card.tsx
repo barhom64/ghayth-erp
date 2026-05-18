@@ -1,7 +1,7 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import {
   User, Building, Briefcase, UserCheck, DollarSign, Calendar,
   Banknote, AlertTriangle, CalendarDays, TrendingUp, Info,
@@ -111,7 +111,7 @@ export function EmployeeContextCard({
   const totalRemainingLoans = activeLoans.reduce((sum, l) => sum + Number(l.remainingAmount || 0), 0);
   const totalMonthlyInstallment = activeLoans.reduce((sum, l) => sum + Number(l.installmentAmount || 0), 0);
   const pendingLeaves = (data.leaves || []).filter((l) => l.status === "pending");
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  const thisMonth = todayLocal().slice(0, 7);
   const recentViolations = (data.violations || []).filter((v) => v.period === thisMonth).slice(0, 3);
 
   return (
@@ -350,7 +350,7 @@ function OvertimeSection({
 }: {
   overtime: NonNullable<EmployeeDetail["overtime"]>;
 }) {
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  const thisMonth = todayLocal().slice(0, 7);
   const thisMonthOT = overtime.filter((o) => o.overtimeDate?.slice(0, 7) === thisMonth);
   const totalHoursThisMonth = thisMonthOT.reduce((sum, o) => sum + Number(o.hours || 0), 0);
   const totalAmountThisMonth = thisMonthOT.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);

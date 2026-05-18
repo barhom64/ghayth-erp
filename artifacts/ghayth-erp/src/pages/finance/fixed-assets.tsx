@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Building2, Plus, X, TrendingDown, Calculator, CheckCircle, DollarSign, PackageCheck } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, formatNumber, todayLocal } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
@@ -43,7 +43,7 @@ export default function FixedAssetsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<any>(null);
   const [showDepreciate, setShowDepreciate] = useState(false);
-  const [depPeriod, setDepPeriod] = useState(new Date().toISOString().slice(0, 7));
+  const [depPeriod, setDepPeriod] = useState(todayLocal().slice(0, 7));
   const [depResult, setDepResult] = useState<any>(null);
   const [batchResult, setBatchResult] = useState<any>(null);
 
