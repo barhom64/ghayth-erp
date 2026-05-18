@@ -290,6 +290,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       borderNumber, visaNumber, visaType, visaExpiry,
       sponsorNumber, workPermitNumber, workPermitExpiry, iqamaStatus,
       bankName, bankAccount, iban, emergencyContact, emergencyPhone,
+      // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent destructure does not require explicit per-field generics; behavior unchanged
     } = body as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
@@ -454,11 +455,13 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
          borderNumber || null, visaNumber || null, visaType || null, visaExpiry || null,
          sponsorNumber || null, workPermitNumber || null, workPermitExpiry || null, iqamaStatus || 'active',
          bankName || null, bankAccount || null, iban || null, emergencyContact || null, emergencyPhone || null,
+         // as-any-reason: justified-pragmatic - defensive read of optional attachments field on parsed body; behavior unchanged
          (body as any).attachments ? JSON.stringify((body as any).attachments) : null]
       );
       const empId = empRes.rows[0].id;
 
       // ── Step 3: Create first assignment ──
+      // as-any-reason: justified-pragmatic - defensive read of optional jobTitleId field on parsed body; behavior unchanged
       let resolvedJobTitleId = (body as any).jobTitleId ?? null;
       if (!resolvedJobTitleId && jobTitle && jobTitle !== "موظف") {
         const jtRes = await client.query(
@@ -954,7 +957,9 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
       borderNumber, visaNumber, visaType, visaExpiry, sponsorNumber,
       workPermitNumber, workPermitExpiry, iqamaStatus,
       nationalId, iqamaNumber, iqamaExpiry, passportNumber, passportExpiry,
+      // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent destructure does not require explicit per-field generics; behavior unchanged
     } = validatedBody as any;
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent destructure does not require explicit per-field generics; behavior unchanged
     const { jobTitleId: bodyJobTitleId, managerId: bodyManagerId } = validatedBody as any;
 
     // Load the full employee + assignment row BEFORE we mutate anything. We
@@ -1190,7 +1195,9 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
       "jobTitle", "role", "salary", "branchId", "departmentId", "managerId",
     ] as const;
     for (const key of trackedKeys) {
+      // as-any-reason: justified-pragmatic - dynamic key access is limited to an explicit field whitelist for audit diff generation; behavior unchanged
       const oldVal = (before as any)[key];
+      // as-any-reason: justified-pragmatic - dynamic key access is limited to an explicit field whitelist for audit diff generation; behavior unchanged
       const newVal = (after as any)[key];
       if (String(oldVal ?? "") !== String(newVal ?? "")) {
         changedFields[key] = { from: oldVal ?? null, to: newVal ?? null };
