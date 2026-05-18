@@ -967,6 +967,7 @@ router.patch("/nusk-invoices/:id", authorize({ feature: "umrah", action: "update
     const params: unknown[] = [];
     const sets: string[] = [];
     for (const key of fields) {
+      // as-any-reason: justified-pragmatic - dynamic key access on Zod-parsed body whose generic does not expose indexer; key is bound to const whitelist `fields` (12 hardcoded columns)
       if ((b as any)[key] !== undefined) { params.push((b as any)[key]); sets.push(`"${key}"=$${params.length}`); }
     }
     if (sets.length === 0) { res.json(existing); return; }
@@ -1119,6 +1120,7 @@ router.post("/commission-plans", authorize({ feature: "umrah", action: "create" 
       approval = await initiateApprovalChain({
         companyId: scope.companyId,
         branchId: scope.branchId || 0,
+        // as-any-reason: justified-pragmatic - chainType literal not yet in the shared ApprovalChainType union; runtime value is whitelisted by initiateApprovalChain
         chainType: "umrah_commission_plan" as any,
         refType: "employee_commission_plan",
         refId: result.id,
@@ -1448,6 +1450,7 @@ router.get("/statements/:subAgentId/pdf", authorize({ feature: "umrah", action: 
       "detailed",
       from, to
     );
+    // as-any-reason: justified-external - PDF exporter accepts a loose payload shape; `data` is the validated report result and is passed through unchanged
     const pdf = await exportUmrahStatementPdf(scope.companyId, subAgentId, data as any, { from, to });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="umrah-statement-${subAgentId}.pdf"`);
@@ -1591,6 +1594,7 @@ router.get("/reports/daily-runsheet/pdf", authorize({ feature: "umrah", action: 
     const scope = req.scope!;
     const date = String((req.query.date as string) || todayISO());
     const data = await fetchDailyRunsheet(scope.companyId, date);
+    // as-any-reason: justified-external - PDF exporter accepts a loose payload shape; `data` is the validated runsheet result and is passed through unchanged
     const pdf = await exportUmrahDailyRunsheetPdf(scope.companyId, date, data as any);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="umrah-runsheet-${date}.pdf"`);
