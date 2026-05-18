@@ -9,6 +9,155 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const isDev = process.env.NODE_ENV === "development";
 
 /**
+ * Other PostgreSQL statements that cannot run inside a transaction block.
+ * Same `25001 PreventInTransactionBlock` family as
+ * `CREATE INDEX CONCURRENTLY`. Detected so the runner switches to its
+ * unwrapped/per-statement path automatically — same fix as #635.
+ */
+const TXN_INCOMPATIBLE_PATTERNS: RegExp[] = [
+  /\bCREATE\s+INDEX\s+CONCURRENTLY\b/i,
+  /\bDROP\s+INDEX\s+CONCURRENTLY\b/i,
+  /\bREINDEX\s+(TABLE|INDEX|SCHEMA|DATABASE)\s+CONCURRENTLY\b/i,
+  /\bVACUUM\b/i,
+  /\bCLUSTER\b(?!\s+ON\b)/i, // bare CLUSTER, not "CLUSTER ON" inside ALTER TABLE
+  /\bCREATE\s+DATABASE\b/i,
+  /\bDROP\s+DATABASE\b/i,
+  /\bALTER\s+SYSTEM\b/i,
+  /\bCREATE\s+TABLESPACE\b/i,
+  /\bDROP\s+TABLESPACE\b/i,
+  /\bALTER\s+TYPE\s+\S+\s+ADD\s+VALUE\b/i, // enum value add — txn-block-ban on PG < 12 + still requires special handling
+];
+
+export function containsTxnIncompatibleStatement(sql: string): boolean {
+  const stripped = stripSqlComments(sql);
+  return TXN_INCOMPATIBLE_PATTERNS.some((re) => re.test(stripped));
+}
+
+/**
+ * Strip SQL line- and block-comments. Conservative: does NOT try to
+ * preserve comments inside string literals. Only used to make the
+ * statement-splitter and the txn-incompatible detector resilient to
+ * the `-- ...` and `/* ... *​/` cases.
+ */
+export function stripSqlComments(sql: string): string {
+  // Block comments (non-greedy, supports newlines)
+  let out = sql.replace(/\/\*[\s\S]*?\*\//g, "");
+  // Line comments
+  out = out.replace(/--[^\n\r]*/g, "");
+  return out;
+}
+
+/**
+ * Split a SQL string into top-level statements on `;`. Skips `;` inside
+ * single-quoted strings, double-quoted identifiers, and `$tag$`
+ * dollar-quoted strings. Used by the concurrent-migration code path so
+ * each statement gets its own `client.query()` round-trip (PostgreSQL
+ * otherwise wraps a multi-statement simple query in an *implicit*
+ * transaction block, breaking CREATE INDEX CONCURRENTLY even when the
+ * runner never calls BEGIN itself — root cause of issue #635).
+ */
+export function splitSqlStatements(sql: string): string[] {
+  const out: string[] = [];
+  let buf = "";
+  let i = 0;
+  const n = sql.length;
+
+  while (i < n) {
+    const ch = sql[i];
+    const next = sql[i + 1];
+
+    // Line comment
+    if (ch === "-" && next === "-") {
+      while (i < n && sql[i] !== "\n") {
+        buf += sql[i];
+        i++;
+      }
+      continue;
+    }
+    // Block comment
+    if (ch === "/" && next === "*") {
+      buf += "/*";
+      i += 2;
+      while (i < n && !(sql[i] === "*" && sql[i + 1] === "/")) {
+        buf += sql[i];
+        i++;
+      }
+      if (i < n) {
+        buf += "*/";
+        i += 2;
+      }
+      continue;
+    }
+    // Single-quoted string (handle '' escape)
+    if (ch === "'") {
+      buf += "'";
+      i++;
+      while (i < n) {
+        if (sql[i] === "'" && sql[i + 1] === "'") {
+          buf += "''";
+          i += 2;
+          continue;
+        }
+        buf += sql[i];
+        if (sql[i] === "'") {
+          i++;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
+    // Double-quoted identifier ("companyId")
+    if (ch === '"') {
+      buf += '"';
+      i++;
+      while (i < n) {
+        buf += sql[i];
+        if (sql[i] === '"') {
+          i++;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
+    // Dollar-quoted string: $tag$ ... $tag$
+    if (ch === "$") {
+      const tagMatch = /^\$([A-Za-z_]\w*)?\$/.exec(sql.slice(i));
+      if (tagMatch) {
+        const tag = tagMatch[0]; // includes both dollars + optional name
+        buf += tag;
+        i += tag.length;
+        const closeIdx = sql.indexOf(tag, i);
+        if (closeIdx === -1) {
+          // unterminated — flush rest and bail
+          buf += sql.slice(i);
+          i = n;
+        } else {
+          buf += sql.slice(i, closeIdx) + tag;
+          i = closeIdx + tag.length;
+        }
+        continue;
+      }
+    }
+    // Statement terminator
+    if (ch === ";") {
+      const stmt = buf.trim();
+      if (stmt.length > 0) out.push(stmt);
+      buf = "";
+      i++;
+      continue;
+    }
+    buf += ch;
+    i++;
+  }
+
+  const tail = buf.trim();
+  if (tail.length > 0) out.push(tail);
+  return out;
+}
+
+/**
  * Phase 2 — Schema baseline detection.
  *
  * The canonical schema lives in `db/schema.sql` at the repo root (a
@@ -67,10 +216,87 @@ async function detectAndApplyBaselineIfNeeded(client: any): Promise<void> {
     return;
   }
 
-  logger.info("Empty DB detected — loading db/schema.sql baseline");
-  const sql = readFileSync(baselinePath, "utf-8");
-  await client.query(sql);
-  logger.info("Baseline schema loaded");
+  // Partial-DB safety gate: schema_migrations is empty AND companies is
+  // absent, but `public` may still hold leftover tables from a previous
+  // half-run. The pg_dump --clean halves below contain
+  // `DROP TABLE ... CASCADE`, so blindly applying them would silently
+  // destroy that data. Refuse and force manual investigation.
+  const otherTablesResult = await client.query(
+    `SELECT table_name FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name <> 'schema_migrations'
+       ORDER BY table_name`
+  );
+  const otherTables = (otherTablesResult.rows as Array<{ table_name: string }>).map(
+    (r) => r.table_name
+  );
+  if (otherTables.length > 0) {
+    const sample = otherTables.slice(0, 3).join(", ");
+    throw new Error(
+      `refusing to load baseline: schema_migrations is empty AND companies is absent, ` +
+        `but ${otherTables.length} other public tables exist (e.g. ${sample}); ` +
+        `this looks like a semi-bootstrapped DB; investigate manually`
+    );
+  }
+
+  // Resolve the two halves relative to the same repo root used for
+  // db/schema.sql above. The wrapper db/schema.sql is intentionally
+  // NOT opened here — its body is two `\ir` psql meta-commands that
+  // the `pg` driver cannot parse.
+  const baselineDir = dirname(baselinePath);
+  const prePath = resolve(baselineDir, "schema_pre.sql");
+  const postPath = resolve(baselineDir, "schema_post.sql");
+  for (const p of [prePath, postPath]) {
+    if (!existsSync(p)) {
+      throw new Error(`baseline half missing: ${p}`);
+    }
+  }
+
+  const metaStripRe = /^\\(?:restrict|unrestrict)\s+\S+\s*$/;
+  const unknownMetaRe = /^\s*\\/;
+  const loadHalf = async (filePath: string): Promise<void> => {
+    const raw = readFileSync(filePath, "utf-8");
+    const lines = raw.split("\n");
+    const kept: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i] ?? "";
+      if (metaStripRe.test(line)) continue;
+      if (unknownMetaRe.test(line)) {
+        throw new Error(
+          `refusing baseline: unknown psql meta-command at ${filePath}:${i + 1}: ${line.trim()}`
+        );
+      }
+      kept.push(line);
+    }
+    const stripped = kept.join("\n");
+    await client.query(stripped);
+  };
+
+  await loadHalf(prePath);
+  await loadHalf(postPath);
+
+  // Pre-mark every committed migration as applied so the runner's
+  // delta loop walks zero new files on top of the freshly-loaded
+  // baseline. Mirrors db/bootstrap.sh step 8. MUST run only after
+  // both halves apply successfully — if schema_post.sql throws, the
+  // exception propagates and this block is skipped, so the next boot
+  // sees an empty schema_migrations and the partial-DB gate above
+  // refuses to retry on the partly-loaded schema.
+  const migrationsDir = resolve(__dirname, "./migrations");
+  const migrationFiles = readdirSync(migrationsDir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
+  for (const file of migrationFiles) {
+    await client.query(
+      `INSERT INTO schema_migrations (filename) VALUES ($1)
+         ON CONFLICT (filename) DO NOTHING`,
+      [file]
+    );
+  }
+
+  logger.info(
+    { migrations: migrationFiles.length },
+    `baseline loaded from schema_pre + schema_post; ${migrationFiles.length} migrations pre-marked`
+  );
 }
 
 export async function runMigrations(): Promise<void> {
@@ -120,12 +346,27 @@ export async function runMigrations(): Promise<void> {
       // file as txn-less in that case — the index statements are themselves
       // idempotent via IF NOT EXISTS, and the migration is recorded in
       // schema_migrations in a separate INSERT below.
-      const isConcurrentMigration = /\bCREATE\s+INDEX\s+CONCURRENTLY\b/i.test(sql);
+      //
+      // CRITICAL: even though we are NOT calling BEGIN/COMMIT ourselves,
+      // PostgreSQL treats any multi-statement "simple query" (a single
+      // string with N statements separated by `;`) as an *implicit
+      // transaction block*. CREATE INDEX CONCURRENTLY then fails with
+      // 25001 PreventInTransactionBlock. So we must additionally split
+      // the file on top-level `;` and execute each statement in its own
+      // separate query round-trip. The same applies to any other
+      // statement that's banned inside a transaction (VACUUM, REINDEX
+      // CONCURRENTLY, CREATE/DROP DATABASE, ALTER SYSTEM, ...).
+      const isConcurrentMigration =
+        /\bCREATE\s+INDEX\s+CONCURRENTLY\b/i.test(sql) ||
+        containsTxnIncompatibleStatement(sql);
 
       logger.info({ file, isConcurrentMigration }, "Applying migration");
       try {
         if (isConcurrentMigration) {
-          await client.query(sql);
+          const statements = splitSqlStatements(sql);
+          for (const stmt of statements) {
+            await client.query(stmt);
+          }
           await client.query(
             `INSERT INTO schema_migrations (filename) VALUES ($1)`,
             [file]
