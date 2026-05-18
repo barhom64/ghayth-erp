@@ -15,7 +15,7 @@ import { ExportButton } from "@/components/shared/export-buttons";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { cn } from "@/lib/utils";
-import { formatCurrency, formatTimeAr, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatTimeAr, formatDateAr, todayLocal } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
@@ -107,7 +107,7 @@ function PenaltyChain({ record }: { record: any }) {
 
 export default function AttendancePage() {
   const { scopeQueryString } = useAppContext();
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState(todayLocal().slice(0, 7));
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [filters, setFilters] = useFilters();
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
