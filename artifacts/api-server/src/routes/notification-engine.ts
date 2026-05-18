@@ -309,6 +309,7 @@ router.delete("/routing-rules/:id", authorize({ feature: "admin", action: "updat
       action: "notification.routing_rule.deleted",
       entity: "notification_routing_rules",
       entityId: id,
+      // as-any-reason: justified-pragmatic - `before` is a row snapshot of unknown shape; eventCategory field is read defensively for audit details
       details: JSON.stringify({ eventCategory: (before as any)?.eventCategory }),
     }).catch((e) => logger.error(e, "notification-engine background task failed"));
 

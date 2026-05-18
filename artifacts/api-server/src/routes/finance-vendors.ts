@@ -507,7 +507,7 @@ vendorsRouter.get("/financial-requests/:id", authorize({ feature: "finance.vendo
       `SELECT wr.*, e.name AS "submittedByName"
        FROM workflow_requests wr
        LEFT JOIN employee_assignments ea ON ea.id = wr."requestedBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
        WHERE wr.id = $1 AND wr."companyId" = $2 AND wr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -533,7 +533,7 @@ vendorsRouter.get("/financial-requests", authorize({ feature: "finance.vendors",
               e.name AS "submittedByName"
        FROM workflow_requests wr
        LEFT JOIN employee_assignments ea ON ea.id = wr."requestedBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
        WHERE wr."companyId" = $1 AND wr."deletedAt" IS NULL AND wr."entityType" IN ('expense','salary_advance','custody','purchase_order')
        ORDER BY wr."createdAt" DESC LIMIT 100`,
       [scope.companyId]
@@ -550,6 +550,7 @@ vendorsRouter.get("/financial-requests", authorize({ feature: "finance.vendors",
 
 vendorsRouter.get("/vendors/:id", authorize({ feature: "finance.vendors", action: "view" }), async (req, res) => {
   try {
+    // as-any-reason: justified-external - Express Request augmentation; scope is injected by authMiddleware but not in Request types here
     const scope = (req as any).scope!;
     const id = parseId(req.params.id, "id");
     if (!id || isNaN(id)) { throw new ValidationError("معرف غير صالح"); return; }

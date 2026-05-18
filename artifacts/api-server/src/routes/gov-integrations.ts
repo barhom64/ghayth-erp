@@ -212,6 +212,7 @@ router.put("/:id", authorize({ feature: "admin", action: "update" }), async (req
         mergedConfig = { ...(existing.config as Record<string, unknown>) };
         for (const [key, val] of Object.entries(config)) {
           if (typeof val === "string" && /^\w{2}\*{4}\w{2}$/.test(val)) continue;
+          // as-any-reason: justified-pragmatic - dynamic key assignment on a merged Record<string, unknown> whose key set is only known at runtime
           (mergedConfig as any)[key] = val;
         }
       }
