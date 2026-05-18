@@ -3760,6 +3760,7 @@ router.get("/deposits", authorize({ feature: "properties.payments", action: "lis
 router.post("/deposits", authorize({ feature: "properties.payments", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(createDepositSchema.safeParse(req.body)) as any;
     if (!b.contractId) {
       throw new ValidationError("العقد مطلوب", { field: "contractId", fix: "اختر العقد المرتبط بالوديعة" });
@@ -3829,6 +3830,7 @@ router.patch("/deposits/:id/refund", authorize({ feature: "properties.payments",
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(refundDepositSchema.safeParse(req.body)) as any;
     const [deposit] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM property_security_deposits WHERE id=$1 AND "companyId"=$2`,
