@@ -7020,6 +7020,7 @@ router.get("/employee-documents", authorize({ feature: "hr.employees", action: "
 router.post("/employee-documents", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent field access does not require explicit per-field generics; behavior unchanged
     const b = zodParse(employeeDocumentSchema.safeParse(req.body)) as any;
 
     const { insertId } = await rawExecute(
