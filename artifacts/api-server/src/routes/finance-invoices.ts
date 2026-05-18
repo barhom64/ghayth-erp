@@ -164,6 +164,7 @@ invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance.in
   try {
     const scope = req.scope!;
     const b = zodParse(impactPreviewSchema.safeParse(req.body ?? {}));
+    // as-any-reason: justified-pragmatic - destructuring on zodParse inferred type whose property names are not directly indexable at the call site
     const { clientId, lines = [], taxRate = 15, dueInDays = 30 } = b as any;
 
     let clientName = "";
@@ -312,6 +313,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       clientId, description, subtotal, total: rawTotal, lines: lineItems,
       vatRate = 15, dueDate, date: invoiceBodyDate, paymentTermsDays, branchId, companyId: bodyCompanyId, notes,
       isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason,
+      // as-any-reason: justified-pragmatic - destructuring on zodParse inferred type whose property names are not directly indexable at the call site
     } = parsed as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
@@ -439,6 +441,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
         [effectiveCompanyId, branchId ?? scope.branchId, clientId ?? null, ref, description ?? null,
           baseAmount, Number(vatRate), vatAmount, total, finalDueDate, scope.activeAssignmentId, notes ?? null,
           isTaxLinked ? true : false, invoiceTypeCode ?? "388", taxCategoryCode ?? "S", exemptionReason ?? null,
+          // as-any-reason: justified-pragmatic - defensive read of optional costCenter field not yet in createInvoiceSchema; behavior unchanged
           (req.body as any).costCenter ?? null]
       );
       insertId = invResult.rows[0].id;
@@ -2053,7 +2056,7 @@ invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", ac
        GROUP BY to_char("createdAt", 'YYYY-MM')`,
       [scope.companyId, thisYear]
     );
-    const currentMonth = new Date().getMonth() + 1;
+    const currentMonth = Number(currentMonthPadded());
     const declarations = vatRows
       .filter((r) => Number(r.invoiceCount ?? 0) > 0)
       .map((r) => {
