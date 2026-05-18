@@ -150,8 +150,10 @@ router.patch("/roles/:id", authorize({ feature: "admin.roles", action: "update" 
     let idx = 1;
     for (const f of fields) {
       const camel = f.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+      // as-any-reason: justified-pragmatic - dynamic field read on zod-parsed body; key `camel` comes from a fixed allowlist (fields)
       if ((b as any)[camel] !== undefined) {
         sets.push(`${f} = $${idx++}`);
+        // as-any-reason: justified-pragmatic - dynamic field read on zod-parsed body; key `camel` comes from a fixed allowlist (fields)
         params.push((b as any)[camel]);
       }
     }
@@ -229,10 +231,12 @@ router.put("/roles/:id/grants", authorize({ feature: "admin.roles", action: "upd
       const feat = FEATURE_INDEX.get(g.featureKey);
       if (!feat) throw new ValidationError(`الميزة "${g.featureKey}" غير معروفة`);
       for (const a of g.actions) {
+        // as-any-reason: justified-pragmatic - widen string to enum element for .includes() catalog-validation check; no permission decision
         if (a !== "*" && !feat.availableActions.includes(a as any)) {
           throw new ValidationError(`الإجراء "${a}" غير متاح للميزة "${g.featureKey}"`);
         }
       }
+      // as-any-reason: justified-pragmatic - widen string to enum element for .includes() catalog-validation check; no permission decision
       if (!feat.availableScopes.includes(g.scope as any)) {
         throw new ValidationError(`النطاق "${g.scope}" غير متاح للميزة "${g.featureKey}"`);
       }
@@ -667,7 +671,9 @@ router.get("/sod", authorize({ feature: "admin.roles", action: "view" }), async 
            JOIN rbac_role_grants gb ON gb.role_id = rr.id AND gb.feature_key = $3 AND $4 = ANY(gb.actions)
           WHERE ur."companyId" = $5`,
         [r.feature_a, r.action_a, r.feature_b, r.action_b, scope.companyId]
-      ).catch(() => [] as any[]);
+      )
+        // as-any-reason: justified-pragmatic - catch fallback returns empty array; downstream only iterates
+        .catch(() => [] as any[]);
       if (offenders.length > 0) {
         violations.push({ rule: r, offenders });
       }
