@@ -298,6 +298,7 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
           payload: SAMPLE_PAYLOADS[entityType] ?? {},
         }),
         raw: true,
+        // as-any-reason: justified-pragmatic - apiClient options bag accepts non-standard `raw` flag not in its TS surface; cast widens to silence excess-property check
       } as any);
       const text = await (blob as unknown as Response).text?.();
       setPreviewHtml(typeof text === "string" ? text : String(blob));
@@ -443,6 +444,7 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
             <CardTitle className="text-base">طريقة البناء</CardTitle>
           </CardHeader>
           <CardContent>
+            {/* as-any-reason: justified-jsx-generic - Tabs onValueChange yields string; mode state is a literal-union; runtime values are guaranteed to be one of the three TabsTrigger values below */}
             <Tabs value={mode} onValueChange={(v) => setMode(v as any)}>
               <TabsList className="grid grid-cols-3 mb-3">
                 <TabsTrigger value="preset" className="gap-1"><FileText className="h-3 w-3" /> قالب جاهز</TabsTrigger>
