@@ -6,14 +6,18 @@
 
 ## Health endpoints (poll these)
 
-| Endpoint | What it tells you | Polling cadence |
-| --- | --- | --- |
-| `GET /api/health` | Process is alive, DB pool is connected, build SHA matches deploy | 30 s |
-| `GET /api/health/schema-drift` | Live DB columns match `db/schema.sql` (catches manual ALTERs that bypassed migrations) | Hourly |
-| `GET /api/health/cron` | Last-run timestamp + last-error of every scheduled job | 5 min |
-| `GET /api/health/rbac` | Permission cache size, last refresh timestamp, distributed-cache health | 1 min |
+| Endpoint | What it tells you | Polling cadence | Source |
+| --- | --- | --- | --- |
+| `GET /api/health` | Process is alive + DB pool answers `SELECT 1`. Returns `{status,db,timestamp}`; `503` if pool is disconnected. | 30 s | `artifacts/api-server/src/app.ts` |
+| `GET /api/healthz` | Pure-liveness (no DB touch). Validates a fixed `HealthCheckResponse` schema; also exposes `redisRateLimit` status so monitors notice when caps silently degrade to per-replica memory. | 10 s | `artifacts/api-server/src/routes/health.ts` |
+| `GET /api/health/schema` | Tables present vs `CRITICAL_TABLES` + per-module `MODULE_TABLES`, plus last applied migration. Returns `503` when status=`critical` (missing critical table); `200` for `ok`/`degraded`. | Hourly | `artifacts/api-server/src/routes/health.ts` |
 
-Wire each to your uptime monitor; **non-2xx for ≥3 consecutive polls is a page-out condition**.
+Wire each to your uptime monitor; **non-2xx for ≥3 consecutive polls is a page-out condition**. Use `/api/healthz` for fast page-out detection (loopback only DB pool); use `/api/health/schema` for drift detection (matches the runtime audit the guard suite runs in CI — `pnpm run check:schema-drift`).
+
+> **Removed in this revision:** `/api/health/schema-drift`, `/api/health/cron`, `/api/health/rbac` — those endpoints were documented but never implemented (verified against `routes/health.ts` and `app.ts`). Hitting them returns the central `/api/*` 404 (`{"error":"المسار غير موجود",…}`). Replacements:
+> - schema-drift → `/api/health/schema` (live) + `pnpm run check:schema-drift` (build-time guard).
+> - cron last-run → Prometheus `cron_runs_total` / `cron_duration_seconds` via `GET /metrics` (basic-auth via `METRICS_USER` / `METRICS_PASS`).
+> - rbac cache → not exposed today; rely on `cron_runs_total{job="rbac_cache_refresh"}` + structured logs (`code: "RBAC_*"`).
 
 ## Logs to alert on
 
