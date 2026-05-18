@@ -2151,6 +2151,7 @@ router.get("/maintenance/:id", authorize({ feature: "properties.maintenance", ac
 router.post("/maintenance-requests", authorize({ feature: "properties.maintenance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(createMaintenanceRequestSchema.safeParse(req.body)) as any;
 
     if (!b.unitId) {
@@ -2392,6 +2393,7 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(completeMaintenanceSchema.safeParse(req.body)) as any;
     const [mr] = await rawQuery<Record<string, unknown>>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!mr) throw new NotFoundError("الطلب غير موجود");
@@ -2586,6 +2588,7 @@ router.get("/tenants", authorize({ feature: "properties.tenants", action: "list"
 router.post("/tenants", authorize({ feature: "properties.tenants", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(createTenantSchema.safeParse(req.body)) as any;
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المستأجر مطلوب", { field: "name", fix: "أدخل الاسم الكامل للمستأجر" });
