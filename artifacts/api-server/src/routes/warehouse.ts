@@ -383,6 +383,7 @@ router.patch("/products/:id", authorize({ feature: "warehouse.inventory", action
     const statusChanging = b.status !== undefined && b.status !== existing.status;
 
     // Validate status value (applyTransition validates the transition itself)
+    // as-any-reason: justified-pragmatic - widening Zod-parsed b.status for readonly tuple .includes() whose generic narrows to the literal union
     if (statusChanging && !PRODUCT_STATUSES.includes(b.status as any)) {
       throw new ValidationError(
         `حالة منتج غير صالحة: ${b.status}`,
@@ -707,6 +708,7 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
           journalEntryId = await postInventoryMovementGl({
             companyId: scope.companyId,
             branchId: scope.branchId,
+            // as-any-reason: justified-external - scope.activeAssignmentId is injected by authMiddleware at runtime but not exposed on the Scope type here
             createdBy: (scope as any).activeAssignmentId ?? scope.userId,
             movementId: insertId,
             productId: Number(b.productId),
@@ -737,6 +739,7 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
           journalEntryId = await postInventoryMovementGl({
             companyId: scope.companyId,
             branchId: scope.branchId,
+            // as-any-reason: justified-external - scope.activeAssignmentId is injected by authMiddleware at runtime but not exposed on the Scope type here
             createdBy: (scope as any).activeAssignmentId ?? scope.userId,
             movementId: insertId,
             productId: Number(b.productId),
@@ -758,6 +761,7 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
     }
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM warehouse_movements WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    // as-any-reason: justified-pragmatic - augmenting SELECT result row with computed journalEntryId field before returning to client; row shape is Record<string, unknown>
     if (row) (row as any).journalEntryId = journalEntryId;
 
     // Bus emission — closes the dead listener in eventListeners.ts:261 so the
@@ -1507,6 +1511,7 @@ router.post("/inventory-counts/:id/approve", authorize({ feature: "warehouse.inv
         await postInventoryMovementGl({
           companyId: scope.companyId,
           branchId: scope.branchId,
+          // as-any-reason: justified-external - scope.activeAssignmentId is injected by authMiddleware at runtime but not exposed on the Scope type here
           createdBy: (scope as any).activeAssignmentId ?? scope.userId,
           movementId: pending.movementId,
           productId: pending.productId,
