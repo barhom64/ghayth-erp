@@ -273,6 +273,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
            AND "slaDeadline" IS NOT NULL AND "slaDeadline" < NOW()
          ORDER BY "slaDeadline" LIMIT 10`,
         [cid]
+        // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
       ).catch((_e) => { logger.error(_e, "silent catch"); return [] as any[]; }),
       rawQuery<Record<string, unknown>>(
         `SELECT id, title, 'ticket' AS type, "slaDeadline",
@@ -282,6 +283,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
          WHERE ${where} AND "deletedAt" IS NULL AND status='open' AND "slaDeadline" IS NOT NULL AND "slaDeadline" < NOW()
          ORDER BY "slaDeadline" LIMIT 10`,
         params
+        // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
       ).catch((_e) => { logger.error(_e, "silent catch"); return [] as any[]; }),
       rawQuery<Record<string, unknown>>(
         `SELECT id, 'طلب إجازة' AS title, 'leave_approval' AS type,
@@ -292,6 +294,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
            AND "createdAt" < NOW() - INTERVAL '1 hour' * $2
          ORDER BY "createdAt" LIMIT 10`,
         [companies, slaHours]
+        // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
       ).catch((_e) => { logger.error(_e, "OpsCenter: approval SLA failed:"); return [] as any[]; }),
       rawQuery<Record<string, unknown>>(
         `SELECT id, 'مطالبة مصروف #' || id AS title, 'expense_approval' AS type,
@@ -302,6 +305,7 @@ router.get("/", authorize({ feature: "projects", action: "list" }), async (req, 
            AND "createdAt" < NOW() - INTERVAL '1 hour' * $2
          ORDER BY "createdAt" LIMIT 10`,
         [companies, slaHours]
+        // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
       ).catch((_e) => { logger.error(_e, "OpsCenter: approval SLA failed:"); return [] as any[]; }),
     ]);
     let slaItems: any[] = [
