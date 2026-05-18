@@ -280,7 +280,10 @@ export default function TrafficViolationsPage() {
         noToolbar
         emptyMessage="لا توجد مخالفات مسجلة"
         emptyIcon={<AlertTriangle className="w-10 h-10 text-gray-300" />}
-        rowClassName={(v) => v.status === "paid" ? "opacity-60" : undefined as any}
+        rowClassName={(v) =>
+          // as-any-reason: justified-jsx-generic - DataTable rowClassName prop allows undefined return; the cast widens the ternary's union to match the prop signature; display only, behavior unchanged
+          v.status === "paid" ? "opacity-60" : undefined as any
+        }
         onRowClick={(row) => navigate(`/fleet/traffic-violations/${row.id}`)}
       />
     </PageShell>
