@@ -68,3 +68,34 @@ export function todayLocal(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+// ── Riyadh-aware "current period" helpers ─────────────────────────
+// Always return the current period in Asia/Riyadh regardless of the
+// browser/server timezone. Use these in place of `new Date().getMonth()`
+// / `new Date().getFullYear()` for any value that drives a business
+// "current period" (defaults on create forms, "this month" filters,
+// default report periods…). Otherwise at ~21:00 Riyadh on the last day
+// of the month a UTC clock already thinks it's next month and the value
+// points at the wrong period (Task #433/#435/#437/#439 family).
+const RIYADH_PERIOD_FMT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Riyadh",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function riyadhTodayISO(): string {
+  return RIYADH_PERIOD_FMT.format(new Date());
+}
+
+export function currentYearRiyadh(): number {
+  return Number(riyadhTodayISO().slice(0, 4));
+}
+
+export function currentMonthPaddedRiyadh(): string {
+  return riyadhTodayISO().slice(5, 7);
+}
+
+export function currentPeriodRiyadh(): string {
+  return riyadhTodayISO().slice(0, 7);
+}
