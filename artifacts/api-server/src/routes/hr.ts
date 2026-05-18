@@ -1324,6 +1324,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
 
     const scope = req.scope!;
     const parsed = zodParse(leaveRequestSchema.safeParse(req.body));
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent destructure does not require explicit per-field generics; behavior unchanged
     let { leaveTypeId, leaveType: leaveTypeName, startDate, endDate, reason, documentUrl } = parsed as any;
 
     if (!leaveTypeId && leaveTypeName) {
@@ -2547,6 +2548,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
          WHERE li."companyId" = $1 AND li.period = $2 AND li.status = 'pending'
          GROUP BY li."assignmentId"`,
         [scope.companyId, targetPeriod]
+        // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
       ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; }),
       rawQuery<Record<string, unknown>>(
         `SELECT a."assignmentId", COALESCE(SUM(a."overtimeMinutes"), 0) AS "totalOvertimeMinutes"
@@ -2561,6 +2563,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
          WHERE "companyId" = $1 AND TO_CHAR("overtimeDate", 'YYYY-MM') = $2 AND status = 'approved' AND "deletedAt" IS NULL
          GROUP BY "assignmentId"`,
         [scope.companyId, targetPeriod]
+        // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
       ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; }),
     ]);
     const lateMap = new Map<number, number>();
@@ -2873,6 +2876,7 @@ router.get("/violations/:id", authorize({ feature: "hr.violations", action: "vie
        WHERE m."violationId" = $1 AND m."companyId" = $2 AND m."deletedAt" IS NULL
        ORDER BY m."createdAt" DESC`,
       [item.id, scope.companyId]
+      // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     res.json(maskFields(req, { ...item, memos }));
@@ -3108,6 +3112,7 @@ router.get("/performance/:id", authorize({ feature: "hr.performance", action: "v
 router.post("/performance", authorize({ feature: "hr.performance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent destructure does not require explicit per-field generics; behavior unchanged
     const { employeeId, assignmentId, period, overallScore, scores, categories, comments, notes, status } = zodParse(performanceSchema.safeParse(req.body)) as any;
 
     // Resolve the employee PK — performance_reviews."employeeId" is a FK
