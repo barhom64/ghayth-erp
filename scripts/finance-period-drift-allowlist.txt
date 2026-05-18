@@ -40,10 +40,6 @@ artifacts/ghayth-erp/src/pages/properties-dashboard.tsx:187
 artifacts/ghayth-erp/src/pages/login.tsx:275
 artifacts/ghayth-erp/src/pages/login.tsx:479
 
-# Display-only: "أيام مستخدمة {year}" badge label on the employee
-# context card. The leave-balance number itself comes from the API.
-artifacts/ghayth-erp/src/components/shared/employee-context-card.tsx:287
-
 # Calendar widget initial view: which month the picker should open
 # on. The user can flip months freely; no business reporting depends
 # on this default.
