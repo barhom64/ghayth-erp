@@ -2751,6 +2751,7 @@ router.get("/buildings/:id", authorize({ feature: "properties.buildings", action
 router.post("/buildings", authorize({ feature: "properties.buildings", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(createBuildingSchema.safeParse(req.body)) as any;
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المبنى مطلوب", { field: "name", fix: "أدخل اسم المبنى" });
@@ -2834,6 +2835,7 @@ router.patch("/buildings/:id", authorize({ feature: "properties.buildings", acti
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("المبنى غير موجود");
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(updateBuildingSchema.safeParse(req.body)) as any;
     if (b.ownerId && b.ownerId !== existing.ownerId) {
       const [owner] = await rawQuery<Record<string, unknown>>(
@@ -2967,6 +2969,7 @@ router.get("/maintenance", authorize({ feature: "properties.maintenance", action
 router.post("/maintenance", authorize({ feature: "properties.maintenance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(createMaintenanceSimpleSchema.safeParse(req.body)) as any;
     if (!b.unitId) {
       throw new ValidationError("الوحدة مطلوبة", { field: "unitId", fix: "اختر الوحدة المطلوب صيانتها" });
@@ -3091,6 +3094,7 @@ router.patch("/maintenance-requests/:id", authorize({ feature: "properties.maint
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<Record<string, unknown>>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("الطلب غير موجود");
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(updateMaintenanceRequestSchema.safeParse(req.body)) as any;
 
     // State machine — PATCH allowed to move through the allowlist only
@@ -3317,6 +3321,7 @@ router.get("/owners/:id", authorize({ feature: "properties.owners", action: "vie
 router.post("/owners", authorize({ feature: "properties.owners", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(createOwnerSchema.safeParse(req.body)) as any;
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المالك مطلوب", { field: "name", fix: "أدخل اسم المالك الكامل" });
@@ -3378,6 +3383,7 @@ router.patch("/owners/:id", authorize({ feature: "properties.owners", action: "u
     const id = parseId(req.params.id, "id");
     const [existing] = await rawQuery<Record<string, unknown>>(`SELECT id FROM property_owners WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المالك غير موجود");
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(updateOwnerSchema.safeParse(req.body)) as any;
     const fields: string[] = [];
     const params: unknown[] = [];
