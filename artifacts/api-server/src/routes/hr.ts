@@ -5112,6 +5112,7 @@ router.post("/evaluation-cycles", authorize({ feature: "hr.performance", action:
       throw new ForbiddenError("مسموح فقط لـ HR بإنشاء دورات التقييم");
     }
 
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent destructure does not require explicit per-field generics; behavior unchanged
     const { employeeId, period, notes, participants = [] } = zodParse(evaluationCycleSchema.safeParse(req.body)) as any;
 
     // Validate subject employee belongs to this company (multi-tenant integrity)
@@ -5744,6 +5745,7 @@ router.get("/delegations", authorize({ feature: "hr.organization", action: "list
        ORDER BY d."createdAt" DESC
        LIMIT 50`,
       [scope.companyId]
+      // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { logger.error(err, "delegations query failed"); res.json({ data: [], total: 0 }); }
@@ -6313,6 +6315,7 @@ router.get("/idp", authorize({ feature: "hr.exit", action: "list" }), async (req
 router.post("/idp", authorize({ feature: "hr.exit", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent field access does not require explicit per-field generics; behavior unchanged
     const b = zodParse(idpSchema.safeParse(req.body)) as any;
     const goals = Array.isArray(b.goals) ? JSON.stringify(b.goals) : (b.goals || '[]');
     const skills = Array.isArray(b.skills) ? JSON.stringify(b.skills) : (b.skills || '[]');
@@ -6879,6 +6882,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
          AND ed."expiryDate" IS NOT NULL
          AND ed."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
+      // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     // Company documents (commercial registration, chamber of commerce, etc.)
@@ -6892,6 +6896,7 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
          AND cd."expiryDate" IS NOT NULL
          AND cd."expiryDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + ($2 || ' days')::interval`,
       [scope.companyId, days]
+      // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
 
     const all = [
