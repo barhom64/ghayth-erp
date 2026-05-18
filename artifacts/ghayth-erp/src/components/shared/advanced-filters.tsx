@@ -73,6 +73,7 @@ export function applyFilters<T>(items: T[], values: FilterValues, fields: {
   extraFields?: Record<string, keyof T | string>;
 }): T[] {
   let result = items;
+  // as-any-reason: justified-pragmatic - dynamic field read by string key on generic T; keyof T|string union forbids structural index access
   const get = (item: T, f: keyof T | string) => (item as any)[f];
 
   if (values.search && fields.searchFields?.length) {
@@ -110,6 +111,7 @@ export function applyFilters<T>(items: T[], values: FilterValues, fields: {
 
 export function AdvancedFilters(props: AdvancedFiltersProps) {
   if (props.config && props.values && props.onChange) {
+    // as-any-reason: justified-jsx-generic - union prop type narrowed by runtime guard above; TS cannot infer the ConfigBasedFilters branch from the discriminator
     return <ConfigBasedFilters {...props as any} />;
   }
   return <SimpleFilters {...props} />;
