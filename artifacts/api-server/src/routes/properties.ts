@@ -1019,6 +1019,7 @@ router.get("/contracts/:id", authorize({ feature: "properties.contracts", action
 router.post("/contracts", authorize({ feature: "properties.contracts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(createContractSchema.safeParse(req.body)) as any;
 
     if (!b.unitId) {
@@ -1251,6 +1252,7 @@ router.patch("/contracts/:id", authorize({ feature: "properties.contracts", acti
       );
     }
 
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(updateContractSchema.safeParse(req.body)) as any;
 
     // State machine: terminated/renewed/expired must go through dedicated
@@ -1424,6 +1426,7 @@ router.post("/contracts/:id/renew", authorize({ feature: "properties.contracts",
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(renewContractSchema.safeParse(req.body)) as any;
     // Pre-fetch the contract to compute renewal params. applyTransition will
     // re-fetch with SELECT FOR UPDATE inside the transaction.
