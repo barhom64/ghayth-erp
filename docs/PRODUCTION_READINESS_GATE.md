@@ -143,11 +143,26 @@ audit/api-smoke-results.json
 
 ---
 
-## 7. فحص API
+## 7. عقد الصحة والجاهزية Health Endpoint Contract
+
+يجب توحيد استخدام health endpoints في التشغيل والمراقبة:
+
+| المسار | الغرض | ملاحظات |
+|---|---|---|
+| `/api/health` | فحص اتصال عام بقاعدة البيانات | مناسب كفحص liveness بسيط عندما يلزم إثبات DB connectivity. |
+| `/api/healthz` | فحص liveness خفيف وسريع | مناسب للـload balancer وعمليات uptime السريعة؛ لا يغني عن فحص schema. |
+| `/api/health/schema` | فحص readiness للـschema/module tables | يكشف حالة الجداول الحرجة ومسارات النظام ويصنف الحالة `ok/degraded/critical`. |
+
+لا يُستخدم مسار غير موجود مثل `/api/health/schema-drift` إلا إذا أضيف صراحة كـalias في PR مستقل. المرجع التشغيلي الحالي هو `/api/health/schema`.
+
+---
+
+## 8. فحص API
 
 الحد الأدنى:
 
-- `/api/health` يرجع 200.
+- `/api/health` أو `/api/healthz` يرجع 200 بحسب نوع الفحص.
+- `/api/health/schema` يرجع `ok` أو يوضح الجداول/المسارات الناقصة.
 - login يعمل.
 - `audit/api-smoke.mjs` لا ينتج أي 5xx.
 - 401/403 مقبولة إذا كانت بسبب صلاحيات.
@@ -156,7 +171,7 @@ audit/api-smoke-results.json
 
 ---
 
-## 8. فحص المسارات Path Readiness Matrix
+## 9. فحص المسارات Path Readiness Matrix
 
 | المسار | DB | API | UI | RBAC | Audit | Events | Reports | الحالة |
 |---|---|---|---|---|---|---|---|---|
@@ -174,7 +189,7 @@ audit/api-smoke-results.json
 
 ---
 
-## 9. Service Boundary Lock
+## 10. Service Boundary Lock
 
 أي تكامل بين المسارات يجب أن يلتزم بالآتي:
 
@@ -193,7 +208,7 @@ audit/api-smoke-results.json
 
 ---
 
-## 10. معايير الفشل
+## 11. معايير الفشل
 
 يفشل readiness إذا ظهر أي مما يلي:
 
@@ -208,7 +223,7 @@ audit/api-smoke-results.json
 
 ---
 
-## 11. مبدأ التنفيذ
+## 12. مبدأ التنفيذ
 
 أي PR متعلق بهذه البوابة يجب أن يكون:
 
