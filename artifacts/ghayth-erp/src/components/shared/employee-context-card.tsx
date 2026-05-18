@@ -1,7 +1,7 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, todayLocal, currentYearRiyadh } from "@/lib/formatters";
 import {
   User, Building, Briefcase, UserCheck, DollarSign, Calendar,
   Banknote, AlertTriangle, CalendarDays, TrendingUp, Info,
@@ -271,7 +271,7 @@ function LeavesSection({
 }) {
   const thisYearLeaves = allLeaves.filter((l) => {
     const y = new Date(l.startDate).getFullYear();
-    return y === new Date().getFullYear() && l.status === "approved";
+    return y === currentYearRiyadh() && l.status === "approved";
   });
   const usedDays = thisYearLeaves.reduce((sum, l) => sum + Number(l.days || 0), 0);
 
@@ -283,7 +283,7 @@ function LeavesSection({
       </div>
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-white rounded p-2 border border-border">
-          <p className="text-xs text-muted-foreground">أيام مستخدمة {new Date().getFullYear()}</p>
+          <p className="text-xs text-muted-foreground">أيام مستخدمة {currentYearRiyadh()}</p>
           <p className="text-sm font-semibold text-gray-800">{usedDays} يوم</p>
         </div>
         <div className="bg-white rounded p-2 border border-status-warning-surface">
