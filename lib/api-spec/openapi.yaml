@@ -16,6 +16,17 @@ tags:
   - name: finance
   - name: notifications
   - name: tasks
+  - name: projects
+    description: |
+      Projects domain — owns the `projects` table.
+      Project creation MUST go through `POST /api/projects` (this tag).
+      Finance UI screens (e.g. `project-costing`) must NOT call any
+      `POST /api/finance/projects*` endpoint to create a project — that
+      route was removed because it bypassed the projects domain
+      (RBAC `projects.list:create`, manager assignment, delivery
+      obligation registration, `project.created` event, audit log).
+      Finance may freely call the read-side `GET /api/finance/projects*`
+      and the costing endpoints `POST /api/finance/projects/:id/costs`.
   - name: umrah
     description: |
       Umrah workflow — pilgrimage operations.
@@ -28,7 +39,11 @@ paths:
     get:
       operationId: healthCheck
       tags: [health]
-      summary: Health check
+      summary: Liveness probe (lightweight)
+      description: |
+        Lightweight liveness check. Proves the process is up. Does NOT
+        verify DB connectivity or schema completeness — use
+        `GET /api/health/schema` for readiness verification.
       responses:
         "200":
           description: Healthy
@@ -36,6 +51,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /health/schema:
+    get:
+      operationId: healthSchema
+      tags: [health]
+      summary: Schema/readiness verification
+      description: |
+        Readiness probe. Verifies that the expected tables/columns exist
+        and that pending migrations have been applied. This is the
+        endpoint that post-deploy verification scripts should poll —
+        `/api/health` and `/api/healthz` only prove connectivity /
+        liveness, not schema completeness.
+      responses:
+        "200":
+          description: Schema reachable (see `ok` field for readiness verdict)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthSchemaStatus"
 
   # ─── Auth ──────────────────────────────────────────────────
   /auth/login:
@@ -513,6 +547,60 @@ paths:
               schema:
                 $ref: "#/components/schemas/FinanceStats"
 
+  # ─── Projects ──────────────────────────────────────────────
+  /projects:
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a project (canonical entrypoint)
+      description: |
+        The **only** supported way to create a project. Used by the
+        projects module *and* by finance UI screens that need to spin up
+        a new project (e.g. "إنشاء مشروع جديد" shortcut on
+        `project-costing`). Enforces:
+          - RBAC `projects.list:create` (or role `projects_manager`).
+          - Manager assignment (auto-pinned to caller for `projects_manager`).
+          - Delivery obligation registration on `endDate`.
+          - `project.created` event + audit log.
+        The historical `POST /api/finance/projects` was removed because
+        it bypassed all of the above.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, startDate, endDate]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                clientId: { type: integer, nullable: true }
+                managerId: { type: integer, nullable: true }
+                startDate: { type: string, format: date }
+                endDate: { type: string, format: date }
+                budget: { type: number, minimum: 0 }
+                status:
+                  type: string
+                  enum: [planning, active, on_hold, completed, cancelled]
+                  default: planning
+                phases:
+                  type: array
+                  items:
+                    type: object
+                    required: [name]
+                    properties:
+                      name: { type: string }
+                      startDate: { type: string, format: date }
+                      endDate: { type: string, format: date }
+      responses:
+        "201":
+          description: Project created
+        "400":
+          description: Validation error (missing name/dates, endDate <= startDate, invalid budget, unknown clientId/managerId)
+        "403":
+          description: Caller lacks `projects.list:create`
+
   # ─── Notifications ─────────────────────────────────────────
   /notifications:
     get:
@@ -917,6 +1005,25 @@ components:
         status:
           type: string
       required: [status]
+
+    HealthSchemaStatus:
+      type: object
+      description: |
+        Response from `GET /api/health/schema`. Readiness verdict for the
+        DB schema — `ok: true` means expected tables/columns are present
+        and migrations are in a consistent state. Additional diagnostic
+        fields are returned by the implementation but intentionally not
+        pinned here to avoid forcing schema churn on every internal
+        change to the readiness check.
+      properties:
+        ok:
+          type: boolean
+        status:
+          type: string
+        checkedAt:
+          type: string
+          format: date-time
+      required: [ok]
 
     LoginBody:
       type: object
