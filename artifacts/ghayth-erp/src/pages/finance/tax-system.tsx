@@ -9,12 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Receipt, TrendingUp, TrendingDown, DollarSign, Calendar, Zap, CheckCircle, XCircle, Clock, AlertTriangle, FileText } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { PageShell } from "@/components/page-shell";
 
 export default function TaxSystemPage() {
-  const currentPeriod = new Date().toISOString().slice(0, 7);
+  const currentPeriod = todayLocal().slice(0, 7);
   const [period, setPeriod] = useState(currentPeriod);
   const [activeTab, setActiveTab] = useState<"vat" | "zatca">("vat");
   const [submissionPage, setSubmissionPage] = useState(1);

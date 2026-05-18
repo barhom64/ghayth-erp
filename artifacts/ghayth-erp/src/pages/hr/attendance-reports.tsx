@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, todayLocal } from "@/lib/formatters";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function AttendanceReportsPage() {
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState(todayLocal().slice(0, 7));
   const [filters, setFilters] = useFilters();
   const { data: statsData, isLoading: statsLoading, isError: statsError } = useApiQuery<any>(["attendance-stats", month], `/hr/attendance-stats?month=${month}`);
   const { data: monthlyData, isLoading: monthlyLoading, isError: monthlyError } = useApiQuery<any>(["monthly-attendance", month], `/hr/monthly-attendance?month=${month}`);
