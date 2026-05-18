@@ -68,6 +68,7 @@ function getClientIP(req: Request): string {
 router.post("/request-otp", authorize({ feature: "documents", action: "create" }), async (req, res: Response) => {
   try {
     const body = zodParse(requestOtpSchema.safeParse(req.body));
+    // as-any-reason: justified-external - Express Request augmentation; scope is injected by authMiddleware but not in Request types here
     const scope = (req as any).scope!;
     const { entityType, entityId, action } = body;
     if (!entityType || !entityId || !action) {
@@ -108,6 +109,7 @@ router.post("/request-otp", authorize({ feature: "documents", action: "create" }
 router.post("/verify", authorize({ feature: "documents", action: "create" }), async (req, res: Response) => {
   try {
     const body = zodParse(verifySignatureSchema.safeParse(req.body));
+    // as-any-reason: justified-external - Express Request augmentation; scope is injected by authMiddleware but not in Request types here
     const scope = (req as any).scope!;
     const { otp, entityType, entityId, action } = body;
     if (!otp || !entityType || !entityId || !action) {
@@ -165,6 +167,7 @@ router.post("/verify", authorize({ feature: "documents", action: "create" }), as
 
 router.get("/logs", authorize({ feature: "documents", action: "create" }), async (req, res: Response) => {
   try {
+    // as-any-reason: justified-external - Express Request augmentation; scope is injected by authMiddleware but not in Request types here
     const scope = (req as any).scope!;
     const { entityType, entityId } = req.query as Record<string, string | undefined>;
     const conditions = [`dsl."companyId"=$1`];
