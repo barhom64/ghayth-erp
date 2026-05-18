@@ -3503,6 +3503,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", authorize({ feature: "
     const scope = req.scope!;
     const contractId = parseId(req.params.id, "id");
     const installmentId = parseId(req.params.installmentId, "installmentId");
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(payInstallmentSchema.safeParse(req.body)) as any;
     const paidAmount = Number(b.paidAmount ?? b.amount);
     const [existing] = await rawQuery<Record<string, unknown>>(
@@ -3587,6 +3588,7 @@ router.get("/inspections", authorize({ feature: "properties.maintenance", action
 router.post("/inspections", authorize({ feature: "properties.maintenance", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(createInspectionSchema.safeParse(req.body)) as any;
     if (!b.unitId) {
       throw new ValidationError("الوحدة مطلوبة", { field: "unitId", fix: "اختر الوحدة المراد فحصها" });
@@ -3643,6 +3645,7 @@ router.patch("/inspections/:id", authorize({ feature: "properties.maintenance", 
     );
     if (!existing) throw new NotFoundError("الفحص غير موجود");
 
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(updateInspectionSchema.safeParse(req.body)) as any;
 
     // Collect extra field changes
