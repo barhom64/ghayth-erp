@@ -140,6 +140,7 @@ audit/api-smoke-results.json
 - عدم وجود جدول أو عمود مستخدم في routes/services وغير موجود في live DB.
 
 لا يكفي `/api/health` وحده؛ لأنه يثبت الاتصال فقط ولا يثبت اكتمال الجداول.
+لإثبات اكتمال الـschema استخدم **`GET /api/health/schema`** — يرجع حالة الجداول/الأعمدة/الـmigrations ويُعتبر هو الـreadiness gate الحقيقي للـDB (وليس `/api/health` ولا `/api/healthz`).
 
 ---
 
@@ -147,7 +148,9 @@ audit/api-smoke-results.json
 
 الحد الأدنى:
 
-- `/api/health` يرجع 200.
+- `/api/healthz` يرجع 200 — **liveness خفيف** (يثبت أن الـprocess حي فقط، لا يلمس DB).
+- `/api/health` يرجع 200 — يثبت اتصال DB الأساسي.
+- `/api/health/schema` يرجع 200 + `ok: true` — **readiness الحقيقي**: يتحقق من اكتمال الجداول/الأعمدة وحالة الـmigrations. هذا هو الـendpoint الذي يُربَط عليه post-deploy verification (وليس `/api/health` ولا `/api/healthz`).
 - login يعمل.
 - `audit/api-smoke.mjs` لا ينتج أي 5xx.
 - 401/403 مقبولة إذا كانت بسبب صلاحيات.
