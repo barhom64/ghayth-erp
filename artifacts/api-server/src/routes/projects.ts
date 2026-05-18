@@ -1871,6 +1871,7 @@ router.post("/:id/costs", authorize({ feature: "projects.list", action: "create"
         } else {
           const { projectsEngine } = await import("../lib/engines/index.js");
           const glResult = await projectsEngine.postProjectCostGL(
+            // as-any-reason: justified-external - scope.activeAssignmentId is injected by authMiddleware at runtime but not exposed on the Scope type here
             { companyId: scope.companyId, branchId: scope.branchId, createdBy: (scope as any).activeAssignmentId ?? scope.userId },
             { id: insertId, projectId, projectName: project.name as string, amount, description: b.description, sourceType: b.sourceType || b.category }
           );
@@ -1940,6 +1941,7 @@ router.post("/:id/close", authorize({ feature: "projects.list", action: "update"
         } else {
           const { projectsEngine } = await import("../lib/engines/index.js");
           const glResult = await projectsEngine.postProjectClosureGL(
+            // as-any-reason: justified-external - scope.activeAssignmentId is injected by authMiddleware at runtime but not exposed on the Scope type here
             { companyId: scope.companyId, branchId: scope.branchId, createdBy: (scope as any).activeAssignmentId ?? scope.userId },
             { projectId, projectName: project.name as string, totalWip }
           );
