@@ -668,6 +668,7 @@ router.patch("/units/:id", authorize({ feature: "properties.units", action: "upd
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("الوحدة غير موجودة");
+    // as-any-reason: justified-pragmatic - zodParse inferred type is widened so the subsequent destructure/index accesses don't need explicit per-field generics; behavior unchanged
     const b = zodParse(updateUnitSchema.safeParse(req.body)) as any;
 
     // State machine + business impact guard
@@ -1005,8 +1006,8 @@ router.get("/contracts/:id", authorize({ feature: "properties.contracts", action
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT c.*, u."unitNumber", u."buildingName", t.name AS "tenantFullName", t.phone AS "tenantPhoneFromRecord", t.email AS "tenantEmailFromRecord"
        FROM rental_contracts c
-       LEFT JOIN property_units u ON u.id = c."unitId"
-       LEFT JOIN tenants t ON t.id = c."tenantId"
+       LEFT JOIN property_units u ON u.id = c."unitId" AND u."deletedAt" IS NULL
+       LEFT JOIN tenants t ON t.id = c."tenantId" AND t."deletedAt" IS NULL
        WHERE c.id = $1 AND c."companyId" = $2 AND c."deletedAt" IS NULL`,
       [contractId, scope.companyId]
     );
@@ -1662,7 +1663,7 @@ router.get("/tenants/list", authorize({ feature: "properties.tenants", action: "
           t."createdAt"
          FROM tenants t
          LEFT JOIN rental_contracts c ON (c."tenantId"=t.id OR c."tenantName"=t.name) AND c."companyId"=$1 AND c."deletedAt" IS NULL
-         LEFT JOIN property_units u ON u.id=c."unitId"
+         LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL
          LEFT JOIN rent_payments rp ON rp."contractId"=c.id
          WHERE ${tConditions.join(" AND ")}
          GROUP BY t.id, t.name, t.phone, t.email, t."nationalId", t.nationality, t."createdAt"
@@ -1685,7 +1686,7 @@ router.get("/tenants/list", authorize({ feature: "properties.tenants", action: "
           COALESCE(SUM(CASE WHEN rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE THEN rp.amount - rp."paidAmount" ELSE 0 END),0) AS "overdueAmount",
           TRUE AS "contractOnly"
          FROM rental_contracts c
-         LEFT JOIN property_units u ON u.id=c."unitId"
+         LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL
          LEFT JOIN rent_payments rp ON rp."contractId"=c.id
          WHERE ${conditions.join(" AND ")}
            AND c."tenantName" NOT IN (SELECT name FROM tenants WHERE "companyId"=$1)
@@ -1891,7 +1892,7 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
         `SELECT rp.*, c.status AS "contractStatus", c."tenantName", c."companyId" AS "contractCompanyId", u."unitNumber", u."buildingName", u.id AS "unitId"
            FROM rent_payments rp
            JOIN rental_contracts c ON c.id = rp."contractId"
-           LEFT JOIN property_units u ON u.id = c."unitId"
+           LEFT JOIN property_units u ON u.id = c."unitId" AND u."deletedAt" IS NULL
           WHERE rp.id = $1 AND c."companyId" = $2
           FOR UPDATE OF rp`,
         [Number(id), scope.companyId]
@@ -1976,7 +1977,7 @@ router.post("/late-rent/escalate", authorize({ feature: "properties.payments", a
     const today = new Date();
 
     const overduePayments = await rawQuery<Record<string, unknown>>(
-      `SELECT rp.*, c."tenantName", c."tenantPhone", c.id AS "contractId", c."monthlyRent", u."unitNumber", u."buildingName" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE`,
+      `SELECT rp.*, c."tenantName", c."tenantPhone", c.id AS "contractId", c."monthlyRent", u."unitNumber", u."buildingName" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE`,
       [cid]
     );
 
@@ -2115,7 +2116,7 @@ router.get("/maintenance-requests", authorize({ feature: "properties.maintenance
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`mr.status = $${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT mr.*, u."unitNumber", u."buildingName", t.name AS "technicianName" FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId" LEFT JOIN technicians t ON t.id=mr."assignedTo" WHERE ${conditions.join(" AND ")} ORDER BY mr.id DESC LIMIT 500`,
+      `SELECT mr.*, u."unitNumber", u."buildingName", t.name AS "technicianName" FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId" AND u."deletedAt" IS NULL LEFT JOIN technicians t ON t.id=mr."assignedTo" WHERE ${conditions.join(" AND ")} ORDER BY mr.id DESC LIMIT 500`,
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
@@ -2131,7 +2132,7 @@ router.get("/maintenance/:id", authorize({ feature: "properties.maintenance", ac
               t.name AS "technicianName", t.name AS "assignedTo",
               CONCAT('PMT-', mr.id) AS ref
        FROM maintenance_requests mr
-       LEFT JOIN property_units u ON u.id = mr."unitId"
+       LEFT JOIN property_units u ON u.id = mr."unitId" AND u."deletedAt" IS NULL
        LEFT JOIN technicians t ON t.id = mr."assignedTo"
        WHERE mr.id = $1 AND mr."companyId" = $2 AND mr."deletedAt" IS NULL`,
       [id, scope.companyId]
@@ -2180,7 +2181,7 @@ router.post("/maintenance-requests", authorize({ feature: "properties.maintenanc
       `SELECT t.*, COUNT(mr2.id) AS "activeJobs",
               COALESCE(t.rating, 3) AS "techRating"
        FROM technicians t
-       LEFT JOIN maintenance_requests mr2 ON mr2."assignedTo"=t.id AND mr2.status NOT IN ('completed','closed')
+       LEFT JOIN maintenance_requests mr2 ON mr2."assignedTo"=t.id AND mr2.status NOT IN ('completed','closed') AND mr2."deletedAt" IS NULL
        WHERE t."companyId"=$1 AND t.status='available'
        GROUP BY t.id
        ORDER BY COUNT(mr2.id) ASC`,
@@ -2648,7 +2649,7 @@ router.get("/tenants/:id", authorize({ feature: "properties.tenants", action: "v
 
     const contracts = tenantName
       ? await rawQuery<Record<string, unknown>>(
-          `SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND (c."tenantId"=$2 OR c."tenantName"=$3) ORDER BY c.id DESC LIMIT 500`,
+          `SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND (c."tenantId"=$2 OR c."tenantName"=$3) ORDER BY c.id DESC LIMIT 500`,
           [scope.companyId, numericId ?? null, tenantName]
         )
       : [];
@@ -2660,7 +2661,7 @@ router.get("/tenants/:id", authorize({ feature: "properties.tenants", action: "v
     const contractIds = contracts.map((c) => c.id);
     const payments = contractIds.length > 0
       ? await rawQuery<Record<string, unknown>>(
-          `SELECT rp.*, c."tenantName", u."unitNumber" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" LEFT JOIN property_units u ON u.id=c."unitId" WHERE rp."contractId" = ANY($1::int[]) ORDER BY rp."dueDate" DESC LIMIT 500`,
+          `SELECT rp.*, c."tenantName", u."unitNumber" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE rp."contractId" = ANY($1::int[]) ORDER BY rp."dueDate" DESC LIMIT 500`,
           [contractIds]
         )
       : [];
@@ -2705,7 +2706,7 @@ router.get("/buildings", authorize({ feature: "properties.buildings", action: "l
         COUNT(u.id) FILTER (WHERE u.status='available') AS "availableUnits",
         COALESCE(SUM(rp."paidAmount"),0) AS "totalRevenue"
        FROM property_buildings b
-       LEFT JOIN property_units u ON (u."buildingId"=b.id OR u."buildingName"=b.name) AND u."companyId"=b."companyId"
+       LEFT JOIN property_units u ON (u."buildingId"=b.id OR u."buildingName"=b.name) AND u."companyId"=b."companyId" AND u."deletedAt" IS NULL
        LEFT JOIN rental_contracts rc ON rc."unitId"=u.id AND rc."companyId"=b."companyId" AND rc."deletedAt" IS NULL
        LEFT JOIN rent_payments rp ON rp."contractId"=rc.id AND rp.status='paid'
        WHERE ${conditions.join(" AND ")} AND b."deletedAt" IS NULL
@@ -2728,7 +2729,7 @@ router.get("/buildings/:id", authorize({ feature: "properties.buildings", action
         COUNT(u.id) FILTER (WHERE u.status='rented') AS "rentedUnits",
         COUNT(u.id) FILTER (WHERE u.status='available') AS "availableUnits"
        FROM property_buildings b
-       LEFT JOIN property_units u ON (u."buildingId"=b.id OR u."buildingName"=b.name) AND u."companyId"=b."companyId"
+       LEFT JOIN property_units u ON (u."buildingId"=b.id OR u."buildingName"=b.name) AND u."companyId"=b."companyId" AND u."deletedAt" IS NULL
        WHERE b.id=$1 AND b."companyId"=$2 AND b."deletedAt" IS NULL
        GROUP BY b.id`,
       [id, scope.companyId]
@@ -2947,7 +2948,7 @@ router.get("/maintenance", authorize({ feature: "properties.maintenance", action
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`mr.status = $${params.length}`); }
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT mr.*, u."unitNumber", u."buildingName" FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId" WHERE ${conditions.join(" AND ")} ORDER BY mr.id DESC LIMIT 500`,
+      `SELECT mr.*, u."unitNumber", u."buildingName" FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId" AND u."deletedAt" IS NULL WHERE ${conditions.join(" AND ")} ORDER BY mr.id DESC LIMIT 500`,
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
@@ -3031,7 +3032,7 @@ router.get("/stats", authorize({ feature: "properties.units", action: "list" }),
           COALESCE(SUM(rp."paidAmount"),0) AS "totalRevenue",
           COALESCE(SUM(rp.amount),0) AS "totalExpected"
         FROM property_buildings b
-        LEFT JOIN property_units u ON u."buildingId"=b.id AND u."companyId"=$1
+        LEFT JOIN property_units u ON u."buildingId"=b.id AND u."companyId"=$1 AND u."deletedAt" IS NULL
         LEFT JOIN rental_contracts rc ON rc."unitId"=u.id AND rc."companyId"=$1 AND rc."deletedAt" IS NULL
         LEFT JOIN rent_payments rp ON rp."contractId"=rc.id
         WHERE b."companyId"=$1
@@ -3232,21 +3233,21 @@ router.get("/operations-dashboard", authorize({ feature: "properties.units", act
       ),
       rawQuery<Record<string, unknown>>(
         `SELECT c.id, c."tenantName", c."endDate", u."unitNumber", u."buildingName"
-         FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId"
+         FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL
          WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND c.status='active' AND c."endDate" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
          ORDER BY c."endDate"`, [cid]
       ),
       rawQuery<Record<string, unknown>>(
         `SELECT rp.id, rp.amount, rp."paidAmount", rp."dueDate", c."tenantName", u."unitNumber"
          FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId"
-         LEFT JOIN property_units u ON u.id=c."unitId"
+         LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL
          WHERE c."companyId"=$1 AND c."deletedAt" IS NULL AND rp.status IN ('pending','partial') AND rp."dueDate" < CURRENT_DATE
          ORDER BY rp."dueDate" LIMIT 20`, [cid]
       ),
       rawQuery<Record<string, unknown>>(
         `SELECT mr.id, mr.category, mr.description, mr.priority, mr.status, mr."createdAt", mr."slaDeadline",
           u."unitNumber", u."buildingName", mr."tenantName"
-         FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId"
+         FROM maintenance_requests mr LEFT JOIN property_units u ON u.id=mr."unitId" AND u."deletedAt" IS NULL
          WHERE mr."companyId"=$1 AND mr.status NOT IN ('completed','closed','rejected')
          ORDER BY mr.priority DESC, mr."createdAt" LIMIT 20`, [cid]
       ),
@@ -3298,7 +3299,7 @@ router.get("/owners/:id", authorize({ feature: "properties.owners", action: "vie
     const [buildings, units, contracts] = await Promise.all([
       rawQuery<Record<string, unknown>>(`SELECT * FROM property_buildings WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 500`, [id, scope.companyId]),
       rawQuery<Record<string, unknown>>(`SELECT * FROM property_units WHERE "ownerId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 500`, [id, scope.companyId]),
-      rawQuery<Record<string, unknown>>(`SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" WHERE c."ownerId"=$1 AND c."companyId"=$2 AND c."deletedAt" IS NULL ORDER BY c.id DESC LIMIT 500`, [id, scope.companyId]),
+      rawQuery<Record<string, unknown>>(`SELECT c.*, u."unitNumber", u."buildingName" FROM rental_contracts c LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE c."ownerId"=$1 AND c."companyId"=$2 AND c."deletedAt" IS NULL ORDER BY c.id DESC LIMIT 500`, [id, scope.companyId]),
     ]);
     res.json(maskFields(req, { ...owner, buildings, units, contracts }));
   } catch (err) { handleRouteError(err, res, "Owner detail error:"); }
@@ -3490,7 +3491,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", authorize({ feature: "
     const b = zodParse(payInstallmentSchema.safeParse(req.body)) as any;
     const paidAmount = Number(b.paidAmount ?? b.amount);
     const [existing] = await rawQuery<Record<string, unknown>>(
-      `SELECT cps.*, rc."tenantName", u."unitNumber", u."buildingName" FROM contract_payment_schedule cps JOIN rental_contracts rc ON rc.id=cps."contractId" LEFT JOIN property_units u ON u.id=rc."unitId" WHERE cps.id=$1 AND cps."contractId"=$2 AND cps."companyId"=$3`,
+      `SELECT cps.*, rc."tenantName", u."unitNumber", u."buildingName" FROM contract_payment_schedule cps JOIN rental_contracts rc ON rc.id=cps."contractId" LEFT JOIN property_units u ON u.id=rc."unitId" AND u."deletedAt" IS NULL WHERE cps.id=$1 AND cps."contractId"=$2 AND cps."companyId"=$3`,
       [installmentId, contractId, scope.companyId]
     );
     if (!existing) throw new NotFoundError("القسط غير موجود");
@@ -3728,7 +3729,7 @@ router.get("/deposits", authorize({ feature: "properties.payments", action: "lis
       `SELECT sd.*, rc."tenantName", u."unitNumber", u."buildingName"
        FROM property_security_deposits sd
        JOIN rental_contracts rc ON rc.id=sd."contractId"
-       LEFT JOIN property_units u ON u.id=rc."unitId"
+       LEFT JOIN property_units u ON u.id=rc."unitId" AND u."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")}
        ORDER BY sd."receivedDate" DESC
        LIMIT 500`,
