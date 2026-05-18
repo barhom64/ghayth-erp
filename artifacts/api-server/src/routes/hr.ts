@@ -2888,10 +2888,11 @@ router.post("/violations", authorize({ feature: "hr.violations", action: "create
     const scope = req.scope!;
     const parsed = zodParse(violationSchema.safeParse(req.body));
     // as-any-reason: justified-pragmatic - zodParse returns widened type; destructure shape is validated upstream by violationSchema
+    const parsedAny = parsed as any;
     const {
       assignmentId, type, description, severity, deduction,
       period: reqPeriod, incidentDate: reqIncidentDate, regulationId,
-    } = parsed as any;
+    } = parsedAny;
 
     // FK pre-check: assignment must exist inside the caller's company scope.
     // Without this, a bad assignmentId would fail as a deep 23503 whose
