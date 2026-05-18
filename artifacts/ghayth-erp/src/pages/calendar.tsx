@@ -9,7 +9,7 @@ import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Calendar as CalendarIcon, Calendar, Flag, Clock, FileText, ListTodo, GraduationCap, IdCard, Car, Shield, Users, List, Grid3x3, ChevronRight, ChevronLeft } from "lucide-react";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, todayLocal } from "@/lib/formatters";
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
   milestone: { label: "معلم", color: "bg-orange-100 text-orange-700", icon: Flag },
@@ -36,7 +36,7 @@ function groupByDate(events: any[]): Record<string, any[]> {
 }
 
 function isToday(dateStr: string) {
-  return dateStr === new Date().toISOString().split("T")[0];
+  return dateStr === todayLocal();
 }
 
 function isTomorrow(dateStr: string) {
@@ -241,7 +241,7 @@ interface MonthGridProps {
 
 function MonthGrid({ year, month, events, onPrev, onNext, onToday }: MonthGridProps) {
   const cells = buildMonthGrid(year, month);
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayLocal();
 
   const eventsByDate: Record<string, any[]> = {};
   for (const e of events) {

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, Flag, Clock, FileText, ListTodo, GraduationCap, IdCard, Car, Shield, ChevronLeft } from "lucide-react";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, todayLocal } from "@/lib/formatters";
 
 const CATEGORY_ICON: Record<string, any> = {
   milestone: Flag,
@@ -31,7 +31,7 @@ const CATEGORY_COLOR: Record<string, string> = {
 };
 
 function dayLabel(dateStr: string) {
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayLocal();
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowStr = tomorrow.toISOString().split("T")[0];
