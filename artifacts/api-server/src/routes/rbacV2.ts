@@ -940,12 +940,14 @@ router.post("/jit/request", async (req, res) => {
     if (!feature) {
       throw new ValidationError(`الميزة "${body.featureKey}" غير معروفة`);
     }
+    // as-any-reason: justified-pragmatic - widen string to enum element for .includes() catalog-validation check; no permission decision
     if (!feature.availableActions.includes(body.action as any)) {
       throw new ValidationError(
         `الإجراء "${body.action}" غير متاح للميزة "${feature.labelAr}"`,
         { field: "action", fix: `الإجراءات المتاحة: ${feature.availableActions.join("، ")}` }
       );
     }
+    // as-any-reason: justified-pragmatic - widen string to enum element for .includes() catalog-validation check; no permission decision
     if (!feature.availableScopes.includes(body.scope as any)) {
       throw new ValidationError(
         `النطاق "${body.scope}" غير متاح للميزة "${feature.labelAr}"`,
@@ -1075,7 +1077,9 @@ router.post("/jit/:id/approve", authorize({ feature: "admin.roles", action: "upd
             ORDER BY ea."isPrimary" DESC, ea.id ASC LIMIT 1`,
           [id, scope.companyId]
         ),
-      ]).catch(() => [{ rows: [] }, []] as any);
+      ])
+        // as-any-reason: justified-pragmatic - catch fallback returns empty tuple; both consumers handle missing data
+        .catch(() => [{ rows: [] }, []] as any);
       const assignmentId = asgRes[0]?.id;
       if (!assignmentId || !j) return;
       await createNotification({
