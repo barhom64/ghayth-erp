@@ -747,7 +747,7 @@ router.post("/groups/:id/split", authorize({ feature: "umrah", action: "update" 
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
-      action: "split", entity: "umrah_groups", entityId: sourceId,
+      action: "umrah.group.split", entity: "umrah_groups", entityId: sourceId,
       after: { newGroupId: result.newGroup.id, movedCount: result.movedCount },
     }).catch((e) => logger.error(e, "umrah groups split bg"));
     emitEvent({
@@ -830,7 +830,7 @@ router.post("/groups/merge", authorize({ feature: "umrah", action: "update" }), 
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
-      action: "merge", entity: "umrah_groups", entityId: body.targetGroupId,
+      action: "umrah.group.merged", entity: "umrah_groups", entityId: body.targetGroupId,
       after: result,
     }).catch((e) => logger.error(e, "umrah groups merge bg"));
     emitEvent({
