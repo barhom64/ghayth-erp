@@ -17,7 +17,8 @@ const isDev = process.env.NODE_ENV === "development";
 const TXN_INCOMPATIBLE_PATTERNS: RegExp[] = [
   /\bCREATE\s+INDEX\s+CONCURRENTLY\b/i,
   /\bDROP\s+INDEX\s+CONCURRENTLY\b/i,
-  /\bREINDEX\s+(TABLE|INDEX|SCHEMA|DATABASE)\s+CONCURRENTLY\b/i,
+  /\bREINDEX\s+(TABLE|INDEX|SCHEMA|DATABASE|SYSTEM)\s+CONCURRENTLY\b/i,
+  /\bREFRESH\s+MATERIALIZED\s+VIEW\s+CONCURRENTLY\b/i,
   /\bVACUUM\b/i,
   /\bCLUSTER\b(?!\s+ON\b)/i, // bare CLUSTER, not "CLUSTER ON" inside ALTER TABLE
   /\bCREATE\s+DATABASE\b/i,
@@ -29,8 +30,123 @@ const TXN_INCOMPATIBLE_PATTERNS: RegExp[] = [
 ];
 
 export function containsTxnIncompatibleStatement(sql: string): boolean {
-  const stripped = stripSqlComments(sql);
-  return TXN_INCOMPATIBLE_PATTERNS.some((re) => re.test(stripped));
+  // Use the same parser-aware splitter that the runner uses, so that
+  // pattern matches against literal/identifier/dollar-quoted/comment
+  // bodies don't false-positive (e.g. the string `'VACUUM the warehouse'`
+  // or a comment that mentions CREATE INDEX CONCURRENTLY would otherwise
+  // wrongly mark an ordinary atomic migration as txn-incompatible and
+  // strip its surrounding BEGIN/COMMIT).
+  const statements = splitSqlStatements(sql);
+  for (const stmt of statements) {
+    const stripped = stripSqlLiteralsAndComments(stmt);
+    if (TXN_INCOMPATIBLE_PATTERNS.some((re) => re.test(stripped))) return true;
+  }
+  return false;
+}
+
+/**
+ * Returns a copy of `sql` where the *bodies* of comments, single-quoted
+ * strings, double-quoted identifiers, and `$tag$` dollar-quoted strings
+ * have been replaced with single spaces. The terminator characters and
+ * surrounding tokens are preserved so keyword/whitespace boundaries used
+ * by `TXN_INCOMPATIBLE_PATTERNS` still match correctly. This is the
+ * literal-aware variant of `stripSqlComments` and is used solely by
+ * `containsTxnIncompatibleStatement` to avoid false positives.
+ */
+export function stripSqlLiteralsAndComments(sql: string): string {
+  let out = "";
+  let i = 0;
+  const n = sql.length;
+  while (i < n) {
+    const ch = sql[i];
+    const next = sql[i + 1];
+    // line comment
+    if (ch === "-" && next === "-") {
+      out += "  ";
+      i += 2;
+      while (i < n && sql[i] !== "\n") {
+        out += " ";
+        i++;
+      }
+      continue;
+    }
+    // block comment
+    if (ch === "/" && next === "*") {
+      out += "  ";
+      i += 2;
+      while (i < n && !(sql[i] === "*" && sql[i + 1] === "/")) {
+        out += sql[i] === "\n" ? "\n" : " ";
+        i++;
+      }
+      if (i < n) {
+        out += "  ";
+        i += 2;
+      }
+      continue;
+    }
+    // single-quoted string ('...' with '' escape)
+    if (ch === "'") {
+      out += "'";
+      i++;
+      while (i < n) {
+        if (sql[i] === "'" && sql[i + 1] === "'") {
+          out += "  ";
+          i += 2;
+          continue;
+        }
+        if (sql[i] === "'") {
+          out += "'";
+          i++;
+          break;
+        }
+        out += sql[i] === "\n" ? "\n" : " ";
+        i++;
+      }
+      continue;
+    }
+    // double-quoted identifier
+    if (ch === '"') {
+      out += '"';
+      i++;
+      while (i < n) {
+        if (sql[i] === '"') {
+          out += '"';
+          i++;
+          break;
+        }
+        out += sql[i] === "\n" ? "\n" : " ";
+        i++;
+      }
+      continue;
+    }
+    // dollar-quoted string $tag$...$tag$
+    if (ch === "$") {
+      const tagMatch = /^\$([A-Za-z_]\w*)?\$/.exec(sql.slice(i));
+      if (tagMatch) {
+        const tag = tagMatch[0];
+        out += " ".repeat(tag.length);
+        i += tag.length;
+        const closeIdx = sql.indexOf(tag, i);
+        if (closeIdx === -1) {
+          while (i < n) {
+            out += sql[i] === "\n" ? "\n" : " ";
+            i++;
+          }
+        } else {
+          while (i < closeIdx) {
+            out += sql[i] === "\n" ? "\n" : " ";
+            i++;
+          }
+          out += " ".repeat(tag.length);
+          i += tag.length;
+        }
+        continue;
+      }
+    }
+    out += ch;
+    i++;
+  }
+  return out;
 }
 
 /**
