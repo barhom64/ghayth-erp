@@ -243,8 +243,10 @@ Run these from a workstation against the live API to confirm the deployment is h
 # 1. Liveness — should return 200 with build info
 curl -sf https://api.example.com/api/health
 
-# 2. Schema-drift probe — confirms migrations applied
-curl -sf https://api.example.com/api/health/schema-drift | jq .
+# 2. Schema probe — confirms critical tables present + migrations applied
+#    Returns 503 if any CRITICAL_TABLES row is missing; 200 + status="degraded"
+#    if a module table is missing (won't page out, but flags partial deploy).
+curl -sf https://api.example.com/api/health/schema | jq .
 
 # 3. Login as the first admin — should return a JWT
 curl -sf -X POST https://api.example.com/api/auth/login \
