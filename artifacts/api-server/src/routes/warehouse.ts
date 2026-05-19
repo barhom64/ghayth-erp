@@ -267,7 +267,7 @@ async function postInventoryMovementGl(params: {
 router.get("/products", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { search, status, page = "1", limit: lim = "50" } = req.query as Record<string, string | undefined>;
+    const { search, status, page = "1", limit: lim = "50", dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
@@ -277,6 +277,8 @@ router.get("/products", authorize({ feature: "warehouse.inventory", action: "lis
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND p.status = $${paramIdx}`; params.push(status); paramIdx++; }
+    if (dateFrom) { where += ` AND p."createdAt" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
+    if (dateTo) { where += ` AND p."createdAt" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }
 
     const countParams = [...params];
     const [countRow] = await rawQuery<Record<string, unknown>>(
@@ -549,7 +551,7 @@ router.delete("/products/:id", authorize({ feature: "warehouse.inventory", actio
 router.get("/movements", authorize({ feature: "warehouse.transfers", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { productId, search, status } = req.query as Record<string, string | undefined>;
+    const { productId, search, status, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
     let where = baseWhere;
@@ -557,6 +559,8 @@ router.get("/movements", authorize({ feature: "warehouse.transfers", action: "li
     if (productId) { where += ` AND m."productId" = $${paramIdx}`; params.push(Number(productId)); paramIdx++; }
     if (search) { params.push(`%${search}%`); where += ` AND (p.name ILIKE $${paramIdx} OR m.reference ILIKE $${paramIdx})`; paramIdx++; }
     if (status) { where += ` AND m.type = $${paramIdx}`; params.push(status); paramIdx++; }
+    if (dateFrom) { where += ` AND m."createdAt" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
+    if (dateTo) { where += ` AND m."createdAt" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT m.*, p.name AS "productName", p.sku FROM warehouse_movements m LEFT JOIN warehouse_products p ON p.id=m."productId" AND p."deletedAt" IS NULL WHERE ${where} ORDER BY m.id DESC LIMIT 500`,
       params
@@ -937,16 +941,22 @@ router.post("/transfers", authorize({ feature: "warehouse.transfers", action: "c
 router.get("/categories", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { page = "1", limit: lim = "50", search, status } = req.query as Record<string, string | undefined>;
+    const { page = "1", limit: lim = "50", search, status, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
-    const params: unknown[] = [scope.companyId];
-    let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
-    let paramIdx = 2;
+    // warehouse_categories has no branchId column → disable branch scoping.
+    const filters = parseScopeFilters(req);
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(
+      scope, filters, { disableBranchScope: true, softDeleteColumn: '"deletedAt"' }
+    );
+    let where = baseWhere;
+    let paramIdx = nextParamIndex;
     if (search) { params.push(`%${search}%`); where += ` AND name ILIKE $${paramIdx}`; paramIdx++; }
     if (status) { params.push(status); where += ` AND status = $${paramIdx}`; paramIdx++; }
+    if (dateFrom) { where += ` AND "createdAt" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
+    if (dateTo) { where += ` AND "createdAt" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }
 
     const [countRow] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total FROM warehouse_categories WHERE ${where}`,
@@ -1013,16 +1023,22 @@ router.post("/categories", authorize({ feature: "warehouse.inventory", action: "
 router.get("/suppliers", authorize({ feature: "warehouse.inventory", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { page = "1", limit: lim = "50", search, status } = req.query as Record<string, string | undefined>;
+    const { page = "1", limit: lim = "50", search, status, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
 
-    const params: unknown[] = [scope.companyId];
-    let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
-    let paramIdx = 2;
+    // suppliers has no branchId column → disable branch scoping.
+    const filters = parseScopeFilters(req);
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(
+      scope, filters, { disableBranchScope: true, softDeleteColumn: '"deletedAt"' }
+    );
+    let where = baseWhere;
+    let paramIdx = nextParamIndex;
     if (search) { params.push(`%${search}%`); where += ` AND (name ILIKE $${paramIdx} OR "contactPerson" ILIKE $${paramIdx} OR phone ILIKE $${paramIdx})`; paramIdx++; }
     if (status) { params.push(status); where += ` AND status = $${paramIdx}`; paramIdx++; }
+    if (dateFrom) { where += ` AND "createdAt" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
+    if (dateTo) { where += ` AND "createdAt" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }
 
     const [countRow] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS total FROM suppliers WHERE ${where}`,
