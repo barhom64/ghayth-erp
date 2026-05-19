@@ -264,7 +264,7 @@
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
             "audit": true,
-            "event": false,
+            "event": true,
             "applyTransition": false,
             "directStatusUpdate": true,
             "glPosting": false
@@ -273,7 +273,7 @@
             "rbac": "PASS",
             "scope": "PASS",
             "audit": "PASS",
-            "event": "FAIL",
+            "event": "PASS",
             "lifecycle": "FAIL",
             "glBridge": "PARTIAL"
           }
@@ -281,14 +281,14 @@
         {
           "method": "POST",
           "path": "/:id/renew",
-          "line": 465,
+          "line": 479,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
             "audit": true,
-            "event": false,
+            "event": true,
             "applyTransition": false,
             "directStatusUpdate": false,
             "glPosting": false
@@ -297,7 +297,7 @@
             "rbac": "PASS",
             "scope": "PASS",
             "audit": "PASS",
-            "event": "FAIL",
+            "event": "PASS",
             "lifecycle": "SKIP",
             "glBridge": "PARTIAL"
           }
