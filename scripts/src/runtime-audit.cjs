@@ -36,10 +36,100 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "Admin@123456";
 const BATCH = parseInt(process.env.BATCH || "0", 10);
 const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || "50", 10);
 const OUT_DIR = process.env.OUT_DIR || "/tmp/runtime-audit";
-const SHOT_DIR = process.env.SHOT_DIR || "audit/screenshots";
+
+// === Runtime Certification Harness v2 — Phase 1: Run-ID layout ===
+// Every invocation gets a unique run-id and an isolated evidence-pack
+// directory at OUT_DIR/<run-id>/, while still writing the legacy files
+// (all.json, batch_NNN.json, progress.json, all_nav-diag.json) into
+// OUT_DIR for backward compatibility with the existing aggregators and
+// uploaders. The new layout is:
+//   OUT_DIR/<run-id>/
+//     environment.json    written immediately at startup
+//     summary.json        written at end (counts + run metadata)
+//     histogram.json      written at end (raw + categorized)
+//     failures.json       written at end (a4=FAIL rows only)
+//     screenshots/        per-route screenshots for failures
+//   OUT_DIR/latest        symlink (or text pointer) → <run-id>
+function makeRunId() {
+  if (process.env.RUN_ID) return process.env.RUN_ID;
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const ts =
+    d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) + "-" +
+    pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + pad(d.getUTCSeconds());
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `run-${ts}-${process.pid}-${rand}`;
+}
+const RUN_ID = makeRunId();
+const RUN_DIR = path.join(OUT_DIR, RUN_ID);
+const SHOT_DIR = process.env.SHOT_DIR || path.join(RUN_DIR, "screenshots");
+const RUN_STARTED_AT = new Date().toISOString();
+const RUN_STARTED_MS = Date.now();
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
+fs.mkdirSync(RUN_DIR, { recursive: true });
 fs.mkdirSync(SHOT_DIR, { recursive: true });
+
+// "latest" pointer — atomic-ish via rename. Symlink first; on platforms
+// where symlinks fail (e.g. Windows without privileges), fall back to a
+// text file. Either way the operator can do `cat OUT_DIR/latest` to find
+// the most recent run.
+function updateLatestPointer() {
+  const latest = path.join(OUT_DIR, "latest");
+  try {
+    if (fs.existsSync(latest) || fs.lstatSync(latest).isSymbolicLink?.()) fs.unlinkSync(latest);
+  } catch { /* not present */ }
+  try {
+    fs.symlinkSync(RUN_ID, latest, "dir");
+  } catch {
+    try { fs.writeFileSync(latest, RUN_ID + "\n"); } catch { /* best-effort */ }
+  }
+}
+
+// environment.json — written immediately so a crashed run still leaves
+// a forensic record of what env it was launched in (node version,
+// chromium binary, env flags, route count, …).
+function writeEnvironmentJson(extra) {
+  const { execSync } = require("child_process");
+  let chromiumPath = "";
+  try { chromiumPath = detectChromium(); } catch { /* ignored */ }
+  let chromiumVersion = "";
+  if (chromiumPath) {
+    try {
+      chromiumVersion = String(execSync(`${chromiumPath} --version`, { encoding: "utf8", timeout: 5000 })).trim();
+    } catch { /* ignored */ }
+  }
+  let gitSha = "";
+  try {
+    gitSha = String(execSync("git rev-parse HEAD", { encoding: "utf8", cwd: path.join(__dirname, "..", ".."), timeout: 3000 })).trim();
+  } catch { /* git ops blocked in this env — leave empty */ }
+  const env = {
+    runId: RUN_ID,
+    startedAt: RUN_STARTED_AT,
+    pid: process.pid,
+    node: process.version,
+    platform: `${process.platform}-${process.arch}`,
+    chromium: { path: chromiumPath, version: chromiumVersion },
+    gitSha,
+    base: BASE,
+    adminEmail: ADMIN_EMAIL,
+    flags: {
+      ALL: process.env.ALL === "1",
+      DIAG: process.env.DIAG === "1",
+      CREATE_ONLY: process.env.CREATE_ONLY === "1",
+      BATCH,
+      BATCH_SIZE,
+      ROUTES_INCLUDE: process.env.ROUTES_INCLUDE || "",
+    },
+    auditSessionId: `${RUN_ID}-s${Math.random().toString(36).slice(2, 6)}`,
+    outDir: OUT_DIR,
+    runDir: RUN_DIR,
+    shotDir: SHOT_DIR,
+    ...extra,
+  };
+  fs.writeFileSync(path.join(RUN_DIR, "environment.json"), JSON.stringify(env, null, 2));
+  return env;
+}
 
 const SAVE_RE =
   /(حفظ|إنشاء|إضافة|تأكيد|تسجيل|نشر|اعتماد|اعتمد|إرسال|تقديم|تحديث|إصدار|توليد|إنهاء|submit|save|create|publish|register)/i;
@@ -476,6 +566,18 @@ async function probe(page, routePath, resolvedUrl, cls) {
     console.log(`[audit] batch ${BATCH}: routes ${start}..${end - 1} (${routes.length} of ${allRoutes.length})`);
   }
 
+  // === Phase 1: write environment.json + claim "latest" pointer ===
+  // before any heavyweight work so a crashed run still leaves a
+  // forensic trace of what was launched and where.
+  const envRecord = writeEnvironmentJson({
+    routeCountTotal: allRoutes.length,
+    routeCountInRun: routes.length,
+    batchStart: start,
+    batchEnd: end,
+  });
+  updateLatestPointer();
+  console.log(`[audit] run-id=${RUN_ID} run-dir=${RUN_DIR} (session=${envRecord.auditSessionId})`);
+
   console.log(`[audit] login as ${ADMIN_EMAIL}…`);
   const cookieHeader = await login();
   console.log(`[audit] login ok, cookieHeader len=${cookieHeader.length}`);
@@ -639,4 +741,79 @@ async function probe(page, routePath, resolvedUrl, cls) {
     console.log(`[#638] DIAG sidecar → ${diagOut}`);
   }
   console.log(`[audit] wrote ${out} (${results.length} rows)`);
-})().catch((e) => { console.error("[audit] fatal:", e); process.exit(2); });
+
+  // === Phase 1: Runtime Evidence Pack — always written, not gated on DIAG ===
+  // The legacy DIAG sidecar above is preserved for backward compat; the
+  // pack below is the v2 layout that downstream tools (CI, dashboards,
+  // operators) will read going forward. Per-run, machine-readable, and
+  // referenced from environment.json by run-id.
+  const runEndedAt = new Date().toISOString();
+  const runDurationMs = Date.now() - RUN_STARTED_MS;
+  const counts = { pass: 0, fail: 0, skip: 0 };
+  for (const r of results) {
+    const overall = [r.a1, r.a2, r.a3, r.a4, r.a5].includes("FAIL") ? "fail"
+      : (r.a1 === "PASS" ? "pass" : "skip");
+    counts[overall]++;
+  }
+  const axisCounts = { a1: {P:0,F:0,S:0}, a2: {P:0,F:0,S:0}, a3: {P:0,F:0,S:0}, a4: {P:0,F:0,S:0}, a5: {P:0,F:0,S:0} };
+  for (const r of results) {
+    for (const ax of ["a1","a2","a3","a4","a5"]) {
+      const v = r[ax];
+      if (v === "PASS") axisCounts[ax].P++;
+      else if (v === "FAIL") axisCounts[ax].F++;
+      else axisCounts[ax].S++;
+    }
+  }
+  fs.writeFileSync(path.join(RUN_DIR, "summary.json"), JSON.stringify({
+    runId: RUN_ID,
+    auditSessionId: envRecord.auditSessionId,
+    startedAt: RUN_STARTED_AT,
+    endedAt: runEndedAt,
+    durationMs: runDurationMs,
+    routeCountInRun: results.length,
+    routeCountTotal: allRoutes.length,
+    counts,
+    axisCounts,
+    a4Failures: a4Failures.length,
+    categoryHistogram,
+    legacyAllJsonPath: out,
+  }, null, 2));
+  fs.writeFileSync(path.join(RUN_DIR, "histogram.json"), JSON.stringify({
+    runId: RUN_ID,
+    totalProbed: results.length,
+    a4Failures: a4Failures.length,
+    categoryHistogram,
+    causeHistogram,
+  }, null, 2));
+  fs.writeFileSync(path.join(RUN_DIR, "failures.json"), JSON.stringify({
+    runId: RUN_ID,
+    count: a4Failures.length,
+    failures: a4Failures.map((r) => ({
+      route: r.route,
+      landedUrl: r.landedUrl || "",
+      navCause: r.navCause || "",
+      category: categorize((r.navCause || "").replace(/^navCause=/, "")),
+      navTrace: r.navTrace || [],
+      api4xx: r.dom4xx || [],
+      note: r.note,
+      shot: r.shot || "",
+    })),
+  }, null, 2));
+  console.log(`[audit] evidence pack → ${RUN_DIR}/{summary,histogram,failures,environment}.json`);
+})().catch((e) => {
+  console.error("[audit] fatal:", e);
+  // Phase 1: even on a crash, drop a tombstone so the operator can find
+  // the run-id + what was loaded by the time it died.
+  try {
+    fs.writeFileSync(path.join(RUN_DIR, "summary.json"), JSON.stringify({
+      runId: RUN_ID,
+      auditSessionId: `${RUN_ID}-crashed`,
+      startedAt: RUN_STARTED_AT,
+      endedAt: new Date().toISOString(),
+      durationMs: Date.now() - RUN_STARTED_MS,
+      crashed: true,
+      error: String(e && e.message || e).slice(0, 500),
+    }, null, 2));
+  } catch { /* best-effort */ }
+  process.exit(2);
+});
