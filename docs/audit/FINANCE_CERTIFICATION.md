@@ -30,7 +30,7 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 | File | Endpoints | RBAC | Scope | Audit | Events | Lifecycle | GL bridge |
 |---|---:|---|---|---|---|---|---|
 | `finance-accounts.ts` | 10 (4w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | — SKIP | ✅ PASS |
-| `finance-algorithms.ts` | 27 (11w) | ✅ PASS | 🟡 PARTIAL | ❌ FAIL | 🟡 PARTIAL | ❌ FAIL | ✅ PASS |
+| `finance-algorithms.ts` | 27 (11w) | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL | ❌ FAIL | ✅ PASS |
 | `finance-budget.ts` | 13 (7w) | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL | — SKIP | ✅ PASS |
 | `finance-collection.ts` | 3 (1w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
 | `finance-cost-centers.ts` | 5 (3w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP |
@@ -52,7 +52,7 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 |---|---:|---:|---:|---:|
 | RBAC | 16 | 0 | 0 | 0 |
 | Scope | 2 | 14 | 0 | 0 |
-| Audit | 6 | 8 | 1 | 1 |
+| Audit | 6 | 9 | 0 | 1 |
 | Events | 6 | 9 | 0 | 1 |
 | Lifecycle | 2 | 1 | 5 | 8 |
 | GL bridge | 7 | 4 | 0 | 5 |
@@ -69,8 +69,7 @@ From `audit/system-review/tooling/_workflow-audit.json`:
   - `finance-cost-centers.ts` — 1
   - `finance-custodies.ts` — 1
 
-- **fromState graph mismatches** on Finance files: **1** hits (after PR #667 closes 1).
-  - `finance-invoices.ts:587` — invoices sent → approved
+- **fromState graph mismatches** on Finance files: **0** hits (after PR #667 closes 1).
 
 ## Endpoint-level non-PASS detail
 
@@ -85,30 +84,29 @@ From `audit/system-review/tooling/_workflow-audit.json`:
 
 | Line | Endpoint | RBAC | Scope | Audit | Events | Lifecycle | GL bridge |
 |---:|---|---|---|---|---|---|---|
-| 122 | `GET /ar-aging` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 212 | `GET /ap-aging` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 347 | `POST /bank-reconciliation/import` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | — SKIP |
-| 399 | `POST /bank-reconciliation/auto-match` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | ❌ FAIL | ✅ PASS |
-| 516 | `POST /bank-reconciliation/manual-match` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | ❌ FAIL | ✅ PASS |
-| 558 | `GET /journal-lines/search` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 592 | `GET /bank-reconciliation` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 620 | `GET /fixed-assets` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 633 | `POST /fixed-assets` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
-| 686 | `PATCH /fixed-assets/:id` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
-| 765 | `GET /fixed-assets/:id/schedule` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 840 | `POST /fixed-assets/:id/depreciate` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | ✅ PASS |
-| 920 | `POST /fixed-assets/depreciate-all` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | ✅ PASS |
-| 1004 | `GET /inventory-costing` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1100 | `GET /rounding-account` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1113 | `POST /rounding-account/setup` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | — SKIP |
-| 1150 | `POST /rounding-differences/apply` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
-| 1236 | `GET /fx/rates` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1257 | `POST /fx/rates` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
-| 1278 | `GET /fx/revaluation/preview` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1404 | `POST /fx/revaluation/post` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | ✅ PASS |
-| 1567 | `GET /fx/revaluation` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1585 | `GET /treasury` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1691 | `GET /entity-financial-profile` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 123 | `GET /ar-aging` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 213 | `GET /ap-aging` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 413 | `POST /bank-reconciliation/auto-match` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS |
+| 543 | `POST /bank-reconciliation/manual-match` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS |
+| 598 | `GET /journal-lines/search` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 632 | `GET /bank-reconciliation` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 660 | `GET /fixed-assets` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 673 | `POST /fixed-assets` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
+| 726 | `PATCH /fixed-assets/:id` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
+| 805 | `GET /fixed-assets/:id/schedule` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 880 | `POST /fixed-assets/:id/depreciate` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | ✅ PASS |
+| 960 | `POST /fixed-assets/depreciate-all` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | ✅ PASS |
+| 1044 | `GET /inventory-costing` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1140 | `GET /rounding-account` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1153 | `POST /rounding-account/setup` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | — SKIP |
+| 1190 | `POST /rounding-differences/apply` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
+| 1276 | `GET /fx/rates` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1297 | `POST /fx/rates` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
+| 1318 | `GET /fx/revaluation/preview` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1444 | `POST /fx/revaluation/post` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | ✅ PASS |
+| 1607 | `GET /fx/revaluation` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1625 | `GET /treasury` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1731 | `GET /entity-financial-profile` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 
 ### `finance-budget.ts`
 
@@ -187,24 +185,24 @@ From `audit/system-review/tooling/_workflow-audit.json`:
 | 163 | `POST /invoices/impact-preview` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
 | 307 | `POST /invoices` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
 | 500 | `POST /invoices/:id/send` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
-| 694 | `POST /invoices/:id/payment` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | ❌ FAIL | ✅ PASS |
-| 824 | `PATCH /invoices/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1063 | `PATCH /invoices/:id/approve` | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 1064 | `PATCH /invoices/:id/reject` | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 1065 | `PATCH /invoices/:id/return` | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 1067 | `GET /tax/summary` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1097 | `POST /invoices/:id/credit-memo` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | ❌ FAIL | ✅ PASS |
-| 1236 | `POST /invoices/:id/debit-memo` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | ✅ PASS |
-| 1359 | `GET /invoices/:id/memos` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1394 | `GET /bad-debt/preview` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1446 | `POST /bad-debt/post` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | ✅ PASS |
-| 1569 | `POST /customer-advances` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | ✅ PASS |
-| 1670 | `POST /customer-advances/:id/apply` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | ✅ PASS |
-| 1764 | `GET /customer-advances` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1869 | `GET /dunning/preview` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1947 | `POST /dunning/send` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 2019 | `GET /dunning/history` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 2045 | `GET /tax/declarations` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 704 | `POST /invoices/:id/payment` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | ❌ FAIL | ✅ PASS |
+| 834 | `PATCH /invoices/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1073 | `PATCH /invoices/:id/approve` | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
+| 1074 | `PATCH /invoices/:id/reject` | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
+| 1075 | `PATCH /invoices/:id/return` | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
+| 1077 | `GET /tax/summary` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1107 | `POST /invoices/:id/credit-memo` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | ❌ FAIL | ✅ PASS |
+| 1246 | `POST /invoices/:id/debit-memo` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | ✅ PASS |
+| 1369 | `GET /invoices/:id/memos` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1404 | `GET /bad-debt/preview` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1456 | `POST /bad-debt/post` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | ✅ PASS |
+| 1579 | `POST /customer-advances` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | ✅ PASS |
+| 1680 | `POST /customer-advances/:id/apply` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | ✅ PASS |
+| 1774 | `GET /customer-advances` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1879 | `GET /dunning/preview` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1957 | `POST /dunning/send` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
+| 2029 | `GET /dunning/history` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 2055 | `GET /tax/declarations` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 
 ### `finance-journal.ts`
 
