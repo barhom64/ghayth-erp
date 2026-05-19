@@ -204,7 +204,15 @@ async function main() {
   log(`fail-on policy   : ${FAIL_ON.join(",")}  →  realFailures=${realFailures}`);
   if (metrics && Number.isFinite(metrics.avgLoadMs)) {
     log(`timings (ms)     : avg=${metrics.avgLoadMs} p50=${metrics.p50Ms} p95=${metrics.p95Ms} p99=${metrics.p99Ms} max=${metrics.maxMs}`);
-    log(`operational      : retries=${metrics.totalRetries} chromiumCrashes=${metrics.chromiumCrashes} relogins=${metrics.relogins} apiRestarts=${metrics.apiServerRestartsDetected}`);
+    log(`operational      : retries=${metrics.totalRetries} chromiumCrashes=${metrics.chromiumCrashes} relogins=${metrics.relogins} apiRestarts=${metrics.apiServerRestartsDetected} pageRecycles=${metrics.pageRecycles ?? 0}`);
+  }
+  const instr = summary.instrumentation;
+  if (instr && Number.isFinite(instr.sampleCount)) {
+    log(`instrumentation  : samples=${instr.sampleCount} rssPeak=${(instr.memoryPeakRss/1024/1024).toFixed(0)}MB rssΔ=${(instr.memoryDeltaRss/1024/1024).toFixed(0)}MB fdPeak=${instr.fdPeak ?? "n/a"} fdΔ=${instr.fdDelta ?? "n/a"} pagesPeak=${instr.browserPagesPeak} pagesFinal=${instr.browserPagesFinal}`);
+    log(`health           : ${instr.healthOkSamples}ok/${instr.healthFailSamples}fail avg=${instr.healthLatencyAvgMs}ms p95=${instr.healthLatencyP95Ms}ms`);
+    if (instr.firstFailureIdx >= 0) {
+      log(`first failure    : idx=${instr.firstFailureIdx}  route=${instr.firstFailureRoute}`);
+    }
   }
   log(`evidence pack    : ${runDir}`);
   if (!NO_TARBALL) log(`tarball          : ${path.join(OUT_DIR, `${runId}.tar.gz`)} (→ latest.tar.gz)`);
