@@ -18,6 +18,23 @@ import { AdvancedFilters, useFilters, exportToCSV } from "@/components/shared/ad
 import { useAppContext } from "@/contexts/app-context";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 
+// Compose a URL with the warehouse list-endpoint filter knobs
+// (search/status/dateFrom/dateTo). Scope (companyIds/branchIds) is
+// auto-injected by useApiQuery → injectScope, so we don't splice it.
+function withListFilters(
+  base: string,
+  f: { search?: string; status?: string; dateFrom?: string; dateTo?: string },
+): string {
+  const parts: string[] = [];
+  if (f.search) parts.push(`search=${encodeURIComponent(f.search)}`);
+  if (f.status) parts.push(`status=${encodeURIComponent(f.status)}`);
+  if (f.dateFrom) parts.push(`dateFrom=${encodeURIComponent(f.dateFrom)}`);
+  if (f.dateTo) parts.push(`dateTo=${encodeURIComponent(f.dateTo)}`);
+  if (parts.length === 0) return base;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}${parts.join("&")}`;
+}
+
 export default function Warehouse() {
   const [tab, setTab] = useState("products");
   return (
@@ -61,17 +78,19 @@ export default function Warehouse() {
 
 function ProductsTab() {
   const [, navigate] = useLocation();
-  const { roleLevel, scopeQueryString } = useAppContext();
-  const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
-  const { data: stats } = useApiQuery<any>(["warehouse-stats", scopeQueryString], `/warehouse/stats${scopeQueryString ? `?${scopeQueryString}` : ""}`);
+  const { roleLevel } = useAppContext();
+  // Scope (companyIds/branchIds) + scope-aware queryKey are injected
+  // automatically by useApiQuery → injectScope. We keep filterParams
+  // narrow to the list-endpoint-specific knobs.
+  const { data: stats } = useApiQuery<any>(["warehouse-stats"], `/warehouse/stats`);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useFilters();
-  useEffect(() => { setPage(1); }, [filters.search, filters.status]);
+  useEffect(() => { setPage(1); }, [filters.search, filters.status, filters.dateFrom, filters.dateTo]);
   const pageSize = 20;
   const canManage = roleLevel >= 50;
-  const filterParams = `&search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
   const { data: productsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["warehouse-products", String(page), filters.search, filters.status, scopeQueryString], `/warehouse/products?page=${page}&limit=${pageSize}${scopeSuffix}${filterParams}`
+    ["warehouse-products", String(page), filters.search, filters.status, filters.dateFrom, filters.dateTo],
+    withListFilters(`/warehouse/products?page=${page}&limit=${pageSize}`, filters),
   );
   const products = asList(productsResp);
   const total = productsResp?.total || products.length;
@@ -188,11 +207,11 @@ function ProductsTab() {
 function MovementsTab() {
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useFilters();
-  useEffect(() => { setPage(1); }, [filters.search, filters.status]);
+  useEffect(() => { setPage(1); }, [filters.search, filters.status, filters.dateFrom, filters.dateTo]);
   const pageSize = 20;
-  const filterParams = `&search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
   const { data: movementsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["warehouse-movements", String(page), filters.search, filters.status], `/warehouse/movements?page=${page}&limit=${pageSize}${filterParams}`
+    ["warehouse-movements", String(page), filters.search, filters.status, filters.dateFrom, filters.dateTo],
+    withListFilters(`/warehouse/movements?page=${page}&limit=${pageSize}`, filters),
   );
   const movements = asList(movementsResp);
   const total = movementsResp?.total || movements.length;
@@ -266,8 +285,10 @@ function MovementsTab() {
 function CategoriesTab() {
   const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
-  const filterParams = `?search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
-  const { data: categoriesResp, isLoading, isError, error, refetch } = useApiQuery<any>(["warehouse-categories", filters.search, filters.status], `/warehouse/categories${filterParams}`);
+  const { data: categoriesResp, isLoading, isError, error, refetch } = useApiQuery<any>(
+    ["warehouse-categories", filters.search, filters.status, filters.dateFrom, filters.dateTo],
+    withListFilters(`/warehouse/categories`, filters),
+  );
   const categories = asList(categoriesResp);
 
   const filtered = categories;
@@ -323,8 +344,10 @@ function CategoriesTab() {
 function SuppliersTab() {
   const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
-  const filterParams = `?search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
-  const { data: suppliersResp, isLoading, isError, error, refetch } = useApiQuery<any>(["warehouse-suppliers", filters.search, filters.status], `/warehouse/suppliers${filterParams}`);
+  const { data: suppliersResp, isLoading, isError, error, refetch } = useApiQuery<any>(
+    ["warehouse-suppliers", filters.search, filters.status, filters.dateFrom, filters.dateTo],
+    withListFilters(`/warehouse/suppliers`, filters),
+  );
   const suppliers = asList(suppliersResp);
 
   const filtered = suppliers;
