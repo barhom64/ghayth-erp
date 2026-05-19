@@ -29,6 +29,8 @@ const path = require("path");
 const puppeteer = require(
   path.join(__dirname, "..", "..", "artifacts", "ghayth-erp-deck", "node_modules", "puppeteer"),
 );
+// Phase 2: pidfile lock + api-server health-wait. Dependency-free.
+const { acquireAuditLock, releaseAuditLock, waitForApiHealth } = require("./lib/audit-lock.cjs");
 
 const BASE = process.env.BASE_URL || "http://localhost";
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@ghayth.com";
@@ -577,6 +579,55 @@ async function probe(page, routePath, resolvedUrl, cls) {
   });
   updateLatestPointer();
   console.log(`[audit] run-id=${RUN_ID} run-dir=${RUN_DIR} (session=${envRecord.auditSessionId})`);
+
+  // === Phase 2: acquire pidfile lock so two audits can't race chromium ===
+  // The 233/251 a4=FAIL harness-timeout cascade in the 2026-05-19 ALL
+  // run was caused by 3 concurrent chromium audits starving each other.
+  // The lock makes that impossible at the harness level; set FORCE_LOCK=1
+  // to override (used by the runtime-verify orchestrator after a clean
+  // kill of any prior chromium pid).
+  let lockHandle = null;
+  try {
+    lockHandle = acquireAuditLock({ runId: RUN_ID, force: process.env.FORCE_LOCK === "1" });
+    console.log(`[audit] acquired lock at ${lockHandle.lockPath}` + (lockHandle.previous ? ` (reclaimed stale pid=${lockHandle.previous.pid})` : ""));
+  } catch (e) {
+    if (e.code === "EAUDITLOCK") {
+      console.error(e.message);
+      console.error(`[audit] refusing to start — set FORCE_LOCK=1 to override.`);
+      process.exit(3);
+    }
+    throw e;
+  }
+  // Always release on the way out, even on crash, so the next run isn't
+  // blocked by a stale lockfile we owned.
+  const releaseLock = () => {
+    if (!lockHandle) return;
+    try { releaseAuditLock({ lockPath: lockHandle.lockPath }); } catch { /* best-effort */ }
+    lockHandle = null;
+  };
+  process.on("exit", releaseLock);
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    process.on(sig, () => { releaseLock(); process.exit(130); });
+  }
+
+  // === Phase 2: wait for api-server /api/healthz before login ===
+  // Refuses to start against a not-yet-warm api-server (the second #638
+  // root cause: an api-server restart mid-audit caused every in-flight
+  // route to fail). Bounded so a genuinely-down api-server doesn't hang
+  // the harness forever — exit 4 makes the cause unambiguous.
+  const healthTimeoutMs = parseInt(process.env.HEALTH_TIMEOUT_MS || "60000", 10);
+  try {
+    const h = await waitForApiHealth({ baseUrl: BASE, timeoutMs: healthTimeoutMs });
+    console.log(`[audit] api-server healthy (attempts=${h.attempts}, ${h.durationMs}ms)`);
+  } catch (e) {
+    if (e.code === "EHEALTHTIMEOUT") {
+      console.error(e.message);
+      console.error(`[audit] refusing to start — api-server not responding on ${BASE}/api/healthz`);
+      releaseLock();
+      process.exit(4);
+    }
+    throw e;
+  }
 
   console.log(`[audit] login as ${ADMIN_EMAIL}…`);
   const cookieHeader = await login();
