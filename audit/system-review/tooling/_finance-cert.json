@@ -262,7 +262,7 @@
       "dimAgg": {
         "rbac": "PASS",
         "scope": "PARTIAL",
-        "audit": "FAIL",
+        "audit": "PARTIAL",
         "event": "PARTIAL",
         "lifecycle": "FAIL",
         "glBridge": "PASS"
@@ -271,7 +271,7 @@
         {
           "method": "GET",
           "path": "/ar-aging",
-          "line": 122,
+          "line": 123,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -295,7 +295,7 @@
         {
           "method": "GET",
           "path": "/ap-aging",
-          "line": 212,
+          "line": 213,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -319,37 +319,37 @@
         {
           "method": "POST",
           "path": "/bank-reconciliation/import",
-          "line": 347,
+          "line": 348,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
-            "audit": false,
+            "audit": true,
             "event": true,
             "applyTransition": false,
             "directStatusUpdate": false,
-            "glPosting": false
+            "glPosting": true
           },
           "dims": {
             "rbac": "PASS",
             "scope": "PASS",
-            "audit": "FAIL",
+            "audit": "PASS",
             "event": "PASS",
             "lifecycle": "SKIP",
-            "glBridge": "SKIP"
+            "glBridge": "PASS"
           }
         },
         {
           "method": "POST",
           "path": "/bank-reconciliation/auto-match",
-          "line": 399,
+          "line": 413,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
-            "audit": false,
+            "audit": true,
             "event": true,
             "applyTransition": false,
             "directStatusUpdate": true,
@@ -358,7 +358,7 @@
           "dims": {
             "rbac": "PASS",
             "scope": "PASS",
-            "audit": "FAIL",
+            "audit": "PASS",
             "event": "PASS",
             "lifecycle": "FAIL",
             "glBridge": "PASS"
@@ -367,7 +367,7 @@
         {
           "method": "GET",
           "path": "/bank-reconciliation/:batchId",
-          "line": 474,
+          "line": 501,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -391,13 +391,13 @@
         {
           "method": "POST",
           "path": "/bank-reconciliation/manual-match",
-          "line": 516,
+          "line": 543,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
-            "audit": false,
+            "audit": true,
             "event": true,
             "applyTransition": false,
             "directStatusUpdate": true,
@@ -406,7 +406,7 @@
           "dims": {
             "rbac": "PASS",
             "scope": "PASS",
-            "audit": "FAIL",
+            "audit": "PASS",
             "event": "PASS",
             "lifecycle": "FAIL",
             "glBridge": "PASS"
@@ -415,7 +415,7 @@
         {
           "method": "GET",
           "path": "/journal-lines/search",
-          "line": 558,
+          "line": 598,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -439,7 +439,7 @@
         {
           "method": "GET",
           "path": "/bank-reconciliation",
-          "line": 592,
+          "line": 632,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -463,7 +463,7 @@
         {
           "method": "GET",
           "path": "/fixed-assets",
-          "line": 620,
+          "line": 660,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -487,7 +487,7 @@
         {
           "method": "POST",
           "path": "/fixed-assets",
-          "line": 633,
+          "line": 673,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -511,7 +511,7 @@
         {
           "method": "GET",
           "path": "/fixed-assets/:id",
-          "line": 667,
+          "line": 707,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -535,7 +535,7 @@
         {
           "method": "PATCH",
           "path": "/fixed-assets/:id",
-          "line": 686,
+          "line": 726,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -559,7 +559,7 @@
         {
           "method": "GET",
           "path": "/fixed-assets/:id/schedule",
-          "line": 765,
+          "line": 805,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -583,7 +583,7 @@
         {
           "method": "POST",
           "path": "/fixed-assets/:id/depreciate",
-          "line": 840,
+          "line": 880,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -607,7 +607,7 @@
         {
           "method": "POST",
           "path": "/fixed-assets/depreciate-all",
-          "line": 920,
+          "line": 960,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -631,7 +631,7 @@
         {
           "method": "GET",
           "path": "/inventory-costing",
-          "line": 1004,
+          "line": 1044,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -655,7 +655,7 @@
         {
           "method": "GET",
           "path": "/inventory-costing/:productId",
-          "line": 1032,
+          "line": 1072,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -679,7 +679,7 @@
         {
           "method": "GET",
           "path": "/rounding-account",
-          "line": 1100,
+          "line": 1140,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -703,7 +703,7 @@
         {
           "method": "POST",
           "path": "/rounding-account/setup",
-          "line": 1113,
+          "line": 1153,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -727,7 +727,7 @@
         {
           "method": "POST",
           "path": "/rounding-differences/apply",
-          "line": 1150,
+          "line": 1190,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -751,7 +751,7 @@
         {
           "method": "GET",
           "path": "/fx/rates",
-          "line": 1236,
+          "line": 1276,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -775,7 +775,7 @@
         {
           "method": "POST",
           "path": "/fx/rates",
-          "line": 1257,
+          "line": 1297,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -799,7 +799,7 @@
         {
           "method": "GET",
           "path": "/fx/revaluation/preview",
-          "line": 1278,
+          "line": 1318,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -823,7 +823,7 @@
         {
           "method": "POST",
           "path": "/fx/revaluation/post",
-          "line": 1404,
+          "line": 1444,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -847,7 +847,7 @@
         {
           "method": "GET",
           "path": "/fx/revaluation",
-          "line": 1567,
+          "line": 1607,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -871,7 +871,7 @@
         {
           "method": "GET",
           "path": "/treasury",
-          "line": 1585,
+          "line": 1625,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -895,7 +895,7 @@
         {
           "method": "GET",
           "path": "/entity-financial-profile",
-          "line": 1691,
+          "line": 1731,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2752,7 +2752,7 @@
         {
           "method": "POST",
           "path": "/invoices/:id/post",
-          "line": 655,
+          "line": 665,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2776,7 +2776,7 @@
         {
           "method": "POST",
           "path": "/invoices/:id/payment",
-          "line": 694,
+          "line": 704,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2800,7 +2800,7 @@
         {
           "method": "GET",
           "path": "/invoices/:id",
-          "line": 798,
+          "line": 808,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2824,7 +2824,7 @@
         {
           "method": "PATCH",
           "path": "/invoices/:id",
-          "line": 824,
+          "line": 834,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2848,7 +2848,7 @@
         {
           "method": "DELETE",
           "path": "/invoices/:id",
-          "line": 914,
+          "line": 924,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2872,7 +2872,7 @@
         {
           "method": "PATCH",
           "path": "/invoices/:id/approve",
-          "line": 1063,
+          "line": 1073,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2896,7 +2896,7 @@
         {
           "method": "PATCH",
           "path": "/invoices/:id/reject",
-          "line": 1064,
+          "line": 1074,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2920,7 +2920,7 @@
         {
           "method": "PATCH",
           "path": "/invoices/:id/return",
-          "line": 1065,
+          "line": 1075,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2944,7 +2944,7 @@
         {
           "method": "GET",
           "path": "/tax/summary",
-          "line": 1067,
+          "line": 1077,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2968,7 +2968,7 @@
         {
           "method": "POST",
           "path": "/invoices/:id/credit-memo",
-          "line": 1097,
+          "line": 1107,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2992,7 +2992,7 @@
         {
           "method": "POST",
           "path": "/invoices/:id/debit-memo",
-          "line": 1236,
+          "line": 1246,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3016,7 +3016,7 @@
         {
           "method": "GET",
           "path": "/invoices/:id/memos",
-          "line": 1359,
+          "line": 1369,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3040,7 +3040,7 @@
         {
           "method": "GET",
           "path": "/bad-debt/preview",
-          "line": 1394,
+          "line": 1404,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3064,7 +3064,7 @@
         {
           "method": "POST",
           "path": "/bad-debt/post",
-          "line": 1446,
+          "line": 1456,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3088,7 +3088,7 @@
         {
           "method": "POST",
           "path": "/customer-advances",
-          "line": 1569,
+          "line": 1579,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3112,7 +3112,7 @@
         {
           "method": "POST",
           "path": "/customer-advances/:id/apply",
-          "line": 1670,
+          "line": 1680,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3136,7 +3136,7 @@
         {
           "method": "GET",
           "path": "/customer-advances",
-          "line": 1764,
+          "line": 1774,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3160,7 +3160,7 @@
         {
           "method": "GET",
           "path": "/dunning/preview",
-          "line": 1869,
+          "line": 1879,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3184,7 +3184,7 @@
         {
           "method": "POST",
           "path": "/dunning/send",
-          "line": 1947,
+          "line": 1957,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3208,7 +3208,7 @@
         {
           "method": "GET",
           "path": "/dunning/history",
-          "line": 2019,
+          "line": 2029,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3232,7 +3232,7 @@
         {
           "method": "GET",
           "path": "/tax/declarations",
-          "line": 2045,
+          "line": 2055,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5765,49 +5765,49 @@
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 742,
+        "line": 752,
         "table": "invoices",
         "snippet": "`UPDATE invoices SET \"paidAmount\" = $1, status = $2, \"paidAt\" = $3 WHERE id = $4 AND \"companyId\" = $5 AND \"deletedAt\" IS NULL`,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 747,
+        "line": 757,
         "table": "invoices",
         "snippet": "`UPDATE invoices SET \"paidAmount\" = $1, status = $2 WHERE id = $3 AND \"companyId\" = $4 AND \"deletedAt\" IS NULL`,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 953,
+        "line": 963,
         "table": "journal_entries",
         "snippet": "`UPDATE journal_entries SET \"deletedAt\" = NOW(), status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 958,
+        "line": 968,
         "table": "invoices",
         "snippet": "`UPDATE invoices SET \"deletedAt\" = NOW(), status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 1024,
+        "line": 1034,
         "table": "journal_entries",
         "snippet": "`UPDATE journal_entries SET status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND status IN ('posted', 'approved') AND \"deletedAt\" IS "
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 1187,
+        "line": 1197,
         "table": "invoices",
         "snippet": "`UPDATE invoices SET \"paidAmount\" = COALESCE(\"paidAmount\",0) + $1,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 1723,
+        "line": 1733,
         "table": "customer_advances",
         "snippet": "`UPDATE customer_advances SET \"appliedAmount\" = COALESCE(\"appliedAmount\",0) + $1,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 1729,
+        "line": 1739,
         "table": "invoices",
         "snippet": "`UPDATE invoices SET \"paidAmount\" = COALESCE(\"paidAmount\",0) + $1,"
       },
@@ -5860,20 +5860,6 @@
         "snippet": "`UPDATE journal_entries SET \"zatcaUuid\" = $1::uuid, \"zatcaHash\" = $2, \"zatcaStatus\" = $3, \"zatcaQrCode\" = $4"
       }
     ],
-    "fromStateMismatch": [
-      {
-        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 587,
-        "entity": "invoices",
-        "action": "invoice.approved",
-        "attempted": "sent → approved",
-        "engineAllowsFrom": [
-          "partial",
-          "paid",
-          "overdue",
-          "cancelled"
-        ]
-      }
-    ]
+    "fromStateMismatch": []
   }
 }
