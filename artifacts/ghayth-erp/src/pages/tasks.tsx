@@ -22,6 +22,24 @@ import { BulkActionsBar, useBulkSelection } from "@/components/shared/bulk-actio
 import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
 import { GuardedButton } from "@/components/shared/permission-gate";
 
+// Compose a list-endpoint URL out of the AdvancedFilters state. Scope
+// (companyIds/branchIds) is auto-injected by useApiQuery → injectScope,
+// so we don't splice it here. Mirrors the warehouse.tsx helper introduced
+// alongside the same fix; tracked for extraction in issue #652.
+function withListFilters(
+  base: string,
+  f: { search?: string; status?: string; dateFrom?: string; dateTo?: string },
+): string {
+  const parts: string[] = [];
+  if (f.search) parts.push(`search=${encodeURIComponent(f.search)}`);
+  if (f.status) parts.push(`status=${encodeURIComponent(f.status)}`);
+  if (f.dateFrom) parts.push(`dateFrom=${encodeURIComponent(f.dateFrom)}`);
+  if (f.dateTo) parts.push(`dateTo=${encodeURIComponent(f.dateTo)}`);
+  if (parts.length === 0) return base;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}${parts.join("&")}`;
+}
+
 const statusOptions = [
   { value: "pending", label: "معلق", color: "bg-status-warning-surface text-status-warning-foreground" },
   { value: "in_progress", label: "جاري", color: "bg-status-info-surface text-status-info-foreground" },
@@ -62,7 +80,7 @@ export default function Tasks() {
   const [editForm, setEditForm] = useState<any>({});
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const { selectedRole, scopeQueryString } = useAppContext();
+  const { selectedRole } = useAppContext();
   const isOwner = selectedRole?.roleKey === "owner" || selectedRole?.roleKey === "general_manager";
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const { tagsList, selectedTag, setSelectedTag, filteredIds: tagFilteredIds } = useTagFilter("task");
@@ -76,8 +94,12 @@ export default function Tasks() {
     { label: "الحالة", key: "status", type: "status" },
   ];
 
-  const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const { data: tasksResp, isLoading, isError } = useApiQuery<any>(["tasks", scopeQueryString], `/tasks${scopeSuffix}`);
+  // Scope (companyIds/branchIds) + scope-aware queryKey are injected
+  // automatically by useApiQuery → injectScope.
+  const { data: tasksResp, isLoading, isError } = useApiQuery<any>(
+    ["tasks", filters.search, filters.status, filters.dateFrom, filters.dateTo],
+    withListFilters(`/tasks`, filters),
+  );
 
   const updateMut = useApiMutation<any, { id: number } & Record<string, any>>(
     (body) => `/tasks/${body.id}`,
@@ -112,10 +134,13 @@ export default function Tasks() {
   if (isError) return <ErrorState />;
 
   const tasks = asList(tasksResp);
+  // Client-side filter mirrors backend so the count chip ("X نتيجة") in
+  // AdvancedFilters reflects what's visible; backend already narrowed
+  // the result set, so this is defence-in-depth + display consistency.
   const preFiltered = applyFilters(tasks, filters, {
     searchFields: ["title", "assigneeName", "description"],
     statusField: "status",
-    dateField: "",
+    dateField: "scheduledDate",
   });
   const filtered = tagFilteredIds ? preFiltered.filter((t: any) => tagFilteredIds.has(t.id)) : preFiltered;
 

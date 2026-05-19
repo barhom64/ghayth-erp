@@ -1099,11 +1099,15 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
               <Menu className="h-5 w-5" />
             </Button>
             {location !== "/dashboard" && location !== "/" && (
-              <Link href="/dashboard">
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-status-info-foreground" title="الرجوع للرئيسية">
+              // Slot composition (issue #639) — rendering Button asChild
+              // makes the host element the <a> from <Link>, avoiding the
+              // invalid `<a><button>` nesting that the old wrapper form
+              // produced.
+              <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-status-info-foreground" title="الرجوع للرئيسية">
+                <Link href="/dashboard">
                   <Home className="h-4 w-4" />
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             )}
             <h1 className="text-base font-semibold text-gray-800 flex items-center gap-2">
               <PageIcon className="h-[18px] w-[18px] text-status-info-foreground" />
@@ -1112,12 +1116,15 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             {currentQuickActions.length > 0 && (
               <div className="hidden md:flex items-center gap-1.5 ms-3">
                 {currentQuickActions.map((action) => (
-                  <Link key={action.link} href={action.link}>
-                    <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 bg-white">
+                  // Slot composition (issue #639) — Button asChild renders
+                  // the <a> from <Link> as the host element so we don't
+                  // nest a <button> inside an <a>.
+                  <Button asChild key={action.link} variant="outline" size="sm" className="h-7 text-xs gap-1.5 bg-white">
+                    <Link href={action.link}>
                       <action.icon className="h-3.5 w-3.5" />
                       {action.label}
-                    </Button>
-                  </Link>
+                    </Link>
+                  </Button>
                 ))}
               </div>
             )}

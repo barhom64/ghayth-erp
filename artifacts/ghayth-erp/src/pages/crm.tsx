@@ -22,6 +22,24 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";
 import { GuardedButton } from "@/components/shared/permission-gate";
 
+// Compose a list-endpoint URL out of the AdvancedFilters state. Scope
+// (companyIds/branchIds) is auto-injected by useApiQuery → injectScope,
+// so we don't splice it here. Mirrors the warehouse.tsx helper introduced
+// alongside the same fix; tracked for extraction in issue #652.
+function withListFilters(
+  base: string,
+  f: { search?: string; status?: string; dateFrom?: string; dateTo?: string },
+): string {
+  const parts: string[] = [];
+  if (f.search) parts.push(`search=${encodeURIComponent(f.search)}`);
+  if (f.status) parts.push(`status=${encodeURIComponent(f.status)}`);
+  if (f.dateFrom) parts.push(`dateFrom=${encodeURIComponent(f.dateFrom)}`);
+  if (f.dateTo) parts.push(`dateTo=${encodeURIComponent(f.dateTo)}`);
+  if (parts.length === 0) return base;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}${parts.join("&")}`;
+}
+
 const STAGE_LABELS: Record<string, string> = {
   lead: "عميل محتمل",
   qualified: "مؤهل",
@@ -63,26 +81,30 @@ const OPP_STAGE_OPTIONS = [
 
 function OpportunitiesTab() {
   const [, navigate] = useLocation();
-  const { roleLevel, scopeQueryString } = useAppContext();
+  const { roleLevel } = useAppContext();
   const canManage = roleLevel >= 50;
-  const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
-  const { data: stats } = useApiQuery(["crm-stats", scopeQueryString], `/crm/stats?${scopeQueryString}`);
+  // Scope (companyIds/branchIds) + scope-aware queryKey are injected
+  // automatically by useApiQuery → injectScope.
+  const { data: stats } = useApiQuery(["crm-stats"], `/crm/stats`);
   const [page, setPage] = useState(1);
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [filters, setFilters] = useFilters();
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const pageSize = 20;
   const { data: oppsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["crm-opportunities", String(page), scopeQueryString],
-    `/crm/opportunities?page=${page}&limit=${pageSize}${scopeSuffix}`
+    ["crm-opportunities", String(page), filters.search, filters.status, filters.dateFrom, filters.dateTo],
+    withListFilters(`/crm/opportunities?page=${page}&limit=${pageSize}`, filters),
   );
   const opportunities = asList(oppsResp);
   const total = oppsResp?.total || opportunities.length;
 
+  // Client-side filter mirrors backend so the count chip ("X نتيجة") in
+  // AdvancedFilters reflects what's visible; backend already narrowed
+  // the result set, so this is defence-in-depth + display consistency.
   const filtered = applyFilters(opportunities, filters, {
     searchFields: ["title", "contactName", "clientName"],
     statusField: "status",
-    dateField: "",
+    dateField: "createdAt",
   });
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({

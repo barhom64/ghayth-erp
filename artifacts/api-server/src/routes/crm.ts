@@ -162,13 +162,15 @@ const STAGE_AUTO_ACTIONS: Record<string, { followUpDays: number; description: st
 router.get("/opportunities", authorize({ feature: "crm.opportunities", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { stage, status } = req.query as Record<string, string | undefined>;
+    const { stage, status, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'o."companyId"', disableBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (stage) { where += ` AND o.stage = $${paramIdx}`; params.push(stage); paramIdx++; }
     if (status) { where += ` AND o.status = $${paramIdx}`; params.push(status); paramIdx++; }
+    if (dateFrom) { where += ` AND o."createdAt" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
+    if (dateTo) { where += ` AND o."createdAt" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }
     const rows = await rawQuery<CrmOpportunityListRow>(
       `SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE ${where} AND o."deletedAt" IS NULL ORDER BY o.id DESC LIMIT 500`,
       params
