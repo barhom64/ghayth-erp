@@ -142,6 +142,37 @@ describe("lifecycleEngine — interfaces", () => {
   });
 });
 
+// Issue #646 — `POST /inventory-counts/:id/approve` (and every other route
+// that calls `applyTransition` with an entity not declared in
+// `STATE_MACHINES`) used to be rejected unconditionally because
+// `isValidTransition` returns false for unregistered entities. The engine
+// must instead trust the route's explicit `fromStates` whitelist in that
+// case; routes whose entity IS registered still get the state-machine
+// gate as defence-in-depth.
+describe("lifecycleEngine — applyTransition trusts route fromStates for unregistered entities (issue #646)", () => {
+  it("applyTransition guards isValidTransition with a getStateMachine() existence check", () => {
+    // The fix wraps the transition rejection in `if (sm && !isValidTransition(...))`
+    // so unregistered entities don't trip the engine.
+    expect(LIFECYCLE).toMatch(
+      /const sm = getStateMachine\(entity, statusCol\);[\s\S]{0,200}if \(sm && !isValidTransition\(/
+    );
+  });
+
+  it("inventory_counts has NO entry in STATE_MACHINES (its lifecycle is route-owned)", () => {
+    // If someone later adds inventory_counts to STATE_MACHINES, this test
+    // becomes obsolete and should be removed alongside the registration.
+    expect(LIFECYCLE).not.toMatch(/entity:\s*"inventory_counts"/);
+  });
+
+  it("warehouse_products has NO entry in STATE_MACHINES (its lifecycle is route-owned)", () => {
+    expect(LIFECYCLE).not.toMatch(/entity:\s*"warehouse_products"/);
+  });
+
+  it("rejection error message remains identical for entities that DO have a state machine", () => {
+    expect(LIFECYCLE).toContain("الانتقال غير مسموح:");
+  });
+});
+
 describe("lifecycleEngine — STATE_MACHINES registry", () => {
   it("exports STATE_MACHINES array", () => {
     expect(LIFECYCLE).toContain("export const STATE_MACHINES");

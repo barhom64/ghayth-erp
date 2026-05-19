@@ -1458,6 +1458,14 @@ router.post("/inventory-counts/:id/approve", authorize({ feature: "warehouse.inv
         approvedAt: { raw: "NOW()" },
         approvedBy: scope.employeeId || null,
       },
+      // inventory_counts has no "updatedAt" column (verified against
+      // information_schema). The default `"updatedAt" = NOW()` clause
+      // the lifecycle engine appends would throw 42703 and 500 the
+      // approve endpoint — same blast radius as #646 (route declares a
+      // transition the engine then rejects/explodes on). Same workaround
+      // already used in properties.ts:3886, finance-invoices.ts:541, and
+      // 3 spots in umrah.ts.
+      skipUpdatedAt: true,
       after: { itemsAdjusted, totalItems: items.length },
       onApply: async (_row, client) => {
         // Apply stock adjustments for items with variance inside the
