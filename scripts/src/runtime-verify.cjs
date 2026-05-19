@@ -204,7 +204,7 @@ async function main() {
   log(`fail-on policy   : ${FAIL_ON.join(",")}  →  realFailures=${realFailures}`);
   if (metrics && Number.isFinite(metrics.avgLoadMs)) {
     log(`timings (ms)     : avg=${metrics.avgLoadMs} p50=${metrics.p50Ms} p95=${metrics.p95Ms} p99=${metrics.p99Ms} max=${metrics.maxMs}`);
-    log(`operational      : retries=${metrics.totalRetries} chromiumCrashes=${metrics.chromiumCrashes} relogins=${metrics.relogins} apiRestarts=${metrics.apiServerRestartsDetected}`);
+    log(`operational      : retries=${metrics.totalRetries} chromiumCrashes=${metrics.chromiumCrashes} relogins=${metrics.relogins} apiRestarts=${metrics.apiServerRestartsDetected} pageRecycles=${metrics.pageRecycles ?? 0}`);
   }
   const instr = summary.instrumentation;
   if (instr && Number.isFinite(instr.sampleCount)) {
