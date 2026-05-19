@@ -30,7 +30,7 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 | File | Endpoints | RBAC | Scope | Audit | Events | Lifecycle | GL bridge |
 |---|---:|---|---|---|---|---|---|
 | `finance-accounts.ts` | 10 (4w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | — SKIP | ✅ PASS |
-| `finance-algorithms.ts` | 27 (11w) | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL | ❌ FAIL | ✅ PASS |
+| `finance-algorithms.ts` | 27 (11w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | 🟡 PARTIAL | ❌ FAIL | ✅ PASS |
 | `finance-budget.ts` | 13 (7w) | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL | — SKIP | ✅ PASS |
 | `finance-collection.ts` | 3 (1w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
 | `finance-cost-centers.ts` | 5 (3w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP |
@@ -52,7 +52,7 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 |---|---:|---:|---:|---:|
 | RBAC | 16 | 0 | 0 | 0 |
 | Scope | 2 | 14 | 0 | 0 |
-| Audit | 6 | 9 | 0 | 1 |
+| Audit | 7 | 8 | 0 | 1 |
 | Events | 6 | 9 | 0 | 1 |
 | Lifecycle | 2 | 1 | 5 | 8 |
 | GL bridge | 7 | 4 | 0 | 5 |
@@ -97,15 +97,14 @@ From `audit/system-review/tooling/_workflow-audit.json`:
 | 927 | `POST /fixed-assets/:id/depreciate` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | ✅ PASS |
 | 1133 | `GET /inventory-costing` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 | 1229 | `GET /rounding-account` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1242 | `POST /rounding-account/setup` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | — SKIP |
-| 1279 | `POST /rounding-differences/apply` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
-| 1365 | `GET /fx/rates` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1386 | `POST /fx/rates` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
-| 1407 | `GET /fx/revaluation/preview` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1533 | `POST /fx/revaluation/post` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | ✅ PASS |
-| 1696 | `GET /fx/revaluation` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1714 | `GET /treasury` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1820 | `GET /entity-financial-profile` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1291 | `POST /rounding-differences/apply` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | ✅ PASS |
+| 1391 | `GET /fx/rates` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1412 | `POST /fx/rates` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | ✅ PASS |
+| 1452 | `GET /fx/revaluation/preview` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1578 | `POST /fx/revaluation/post` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | ✅ PASS |
+| 1768 | `GET /fx/revaluation` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1786 | `GET /treasury` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1892 | `GET /entity-financial-profile` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 
 ### `finance-budget.ts`
 
