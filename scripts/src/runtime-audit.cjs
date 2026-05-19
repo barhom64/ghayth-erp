@@ -425,17 +425,29 @@ async function probe(page, routePath, resolvedUrl, cls) {
   // so the regular audit reports tell the operator WHICH cause they
   // hit (auth401 hard-redirect vs AccessDenied vs harness race). The
   // sidecar JSON below carries the full per-event trace.
+  // #638 — refined navCause buckets (2026-05-19):
+  //   * harness-*           → audit infra (chromium starvation, page crash) — not a runtime defect
+  //   * api401→/login       → real session expiry: apiFetch saw 401 and pushed /login
+  //   * forbidden-bounce    → SPA route-guard sent user to /login with session STILL VALID
+  //                            and ZERO captured 4xx. This is the #638 class — guard should
+  //                            have sent to /forbidden instead.
+  //   * login-bounce-no-401 → bounced to /login, no 401 captured, session ALSO gone. Refresh
+  //                            path swallowed something — needs investigation.
+  //   * AccessDenied        → URL never changed; page rendered an AccessDenied banner.
+  //   * api4xx-no-redirect  → some 4xx fired but URL never reached /login or expected path.
+  //   * unclassified        → genuinely unknown; trace dumped for follow-up.
   let navCause = "";
   if (a4 === "FAIL") {
     const firstApi4xx = network.status4xx[0] || "";
     const has401 = /\b401\b/.test(network.status4xx.join(" "));
     const sawLoginInTrace = navTrace.some((e) => /\/login(\?|$)/.test(e.url));
-    if (has401 && sawLoginInTrace) navCause = "navCause=api401→/login (apiFetch hard redirect)";
-    else if (dom.accessDenied) navCause = "navCause=AccessDenied (URL didn't change; expected match was prefix-based)";
-    else if (sawLoginInTrace) navCause = "navCause=app-redirect-to-login (no captured 401 — refresh path?)";
-    else if (!dom.lsHasSession) navCause = "navCause=localStorage cleared (session lost mid-nav)";
-    else if (firstApi4xx) navCause = `navCause=api4xx ${firstApi4xx}`;
-    else navCause = `navCause=unclassified (trace=${navTrace.map((e) => e.label).join(",")})`;
+    if (has401 && sawLoginInTrace) navCause = "api401→/login (apiFetch hard redirect, real session expiry)";
+    else if (dom.accessDenied) navCause = "AccessDenied (URL didn't change; SPA rendered access-denied banner)";
+    else if (sawLoginInTrace && dom.lsHasSession) navCause = "forbidden-bounce (SPA guard sent /login with valid session + no api4xx — should be /forbidden)";
+    else if (sawLoginInTrace && !dom.lsHasSession) navCause = "login-bounce-no-401 (session lost silently — refresh path swallowed something)";
+    else if (!dom.lsHasSession) navCause = "session-lost-mid-nav (localStorage cleared, no /login redirect captured)";
+    else if (firstApi4xx) navCause = `api4xx-no-redirect (${firstApi4xx}, never landed on /login or expected path)`;
+    else navCause = `unclassified (trace=${navTrace.map((e) => e.label).join(",") || "empty"})`;
   }
 
   const note = [
@@ -529,9 +541,22 @@ async function probe(page, routePath, resolvedUrl, cls) {
       const p = await probe(page, routePath, res.url, cls);
       row = { route: routePath, ...p, cls };
     } catch (e) {
+      // #638 — probe throws now carry a real navCause instead of falling
+      // into the histogram "unknown" bucket. The 233/251 a4 failures in
+      // the 2026-05-19 ALL run were ALL Navigation timeouts caused by
+      // chromium starvation (3 concurrent audits + api-server restart),
+      // not by app-level redirects — they belong in a "harness-*" bucket
+      // so operators stop chasing them as runtime defects.
+      const msg = String(e.message || "");
+      let navCause;
+      if (/Navigation timeout/i.test(msg)) navCause = "harness-timeout (page.goto exceeded 25s — chromium/proxy starvation, not a route defect)";
+      else if (/detached Frame/i.test(msg)) navCause = "harness-detached-frame (chromium crashed mid-navigation)";
+      else if (/Target closed/i.test(msg) || /Session closed/i.test(msg)) navCause = "harness-session-closed (browser/page died)";
+      else navCause = `harness-throw (${msg.slice(0, 100)})`;
       row = {
         route: routePath, a1: "FAIL", a2: "SKIP", a3: "SKIP", a4: "FAIL", a5: "SKIP",
-        note: `probe-throw: ${String(e.message).slice(0, 120)}`, shot: null, cls,
+        note: `probe-throw: ${msg.slice(0, 120)}; ${navCause}`, shot: null, cls,
+        landedUrl: "", navTrace: [], navCause, dom4xx: [],
       };
     }
     results.push(row);
@@ -553,16 +578,46 @@ async function probe(page, routePath, resolvedUrl, cls) {
   // trace and the inferred navCause. Lets the operator classify the
   // landed=/dashboard pattern without re-reading the verbose main
   // results file. Always also writes a short summary table to stdout.
+  //
+  // The histogram now groups raw navCauses into 4 categories so the
+  // operator can see at-a-glance how many failures are real runtime
+  // defects vs harness noise (the 2026-05-19 ALL run had 233/251 = 93%
+  // harness-timeout, only 18/251 = 7% real). Categories:
+  //   * harness   → audit infra (chromium timeout/crash/detach) — NOT a defect
+  //   * authz     → SPA route-guard bounce with valid session (#638 class)
+  //   * auth      → real session expiry (api401, lost session)
+  //   * unknown   → genuinely unclassified — needs trace inspection
+  function categorize(cause) {
+    if (!cause || /^unclassified/.test(cause)) return "unknown";
+    if (/^harness-/.test(cause)) return "harness";
+    if (/^(api401|session-lost-mid-nav|login-bounce-no-401)/.test(cause)) return "auth";
+    if (/^(forbidden-bounce|AccessDenied|api4xx-no-redirect)/.test(cause)) return "authz";
+    return "unknown";
+  }
   const a4Failures = results.filter((r) => r.a4 === "FAIL");
   const causeHistogram = {};
+  const categoryHistogram = { harness: 0, authz: 0, auth: 0, unknown: 0 };
   for (const r of a4Failures) {
-    const c = (r.navCause || "navCause=unknown").replace(/^navCause=/, "");
-    causeHistogram[c] = (causeHistogram[c] || 0) + 1;
+    const raw = (r.navCause || "unclassified").replace(/^navCause=/, "");
+    causeHistogram[raw] = (causeHistogram[raw] || 0) + 1;
+    categoryHistogram[categorize(raw)]++;
   }
   if (a4Failures.length > 0) {
-    console.log("\n[#638 nav-cause histogram]");
+    const total = a4Failures.length;
+    const pct = (n) => `${((n / total) * 100).toFixed(1).padStart(5)}%`;
+    console.log(`\n[#638 nav-cause histogram] ${total} a4=FAIL of ${results.length} probed`);
+    console.log(`  ── BY CATEGORY ──`);
+    for (const [cat, n] of Object.entries(categoryHistogram).sort((a, b) => b[1] - a[1])) {
+      if (n === 0) continue;
+      const hint = cat === "harness" ? " (audit infra noise — NOT runtime defects)"
+                 : cat === "authz"   ? " (SPA route-guard / RBAC — real defects)"
+                 : cat === "auth"    ? " (session/auth — investigate)"
+                 :                     " (needs trace inspection)";
+      console.log(`  ${String(n).padStart(4)} ${pct(n)} × ${cat}${hint}`);
+    }
+    console.log(`  ── BY RAW CAUSE ──`);
     for (const [cause, count] of Object.entries(causeHistogram).sort((a, b) => b[1] - a[1])) {
-      console.log(`  ${String(count).padStart(4)} × ${cause}`);
+      console.log(`  ${String(count).padStart(4)} ${pct(count)} × ${cause}`);
     }
   }
   if (process.env.DIAG === "1") {
@@ -570,13 +625,14 @@ async function probe(page, routePath, resolvedUrl, cls) {
     fs.writeFileSync(diagOut, JSON.stringify({
       batch: BATCH,
       generatedAt: new Date().toISOString(),
-      summary: { totalProbed: results.length, a4Failures: a4Failures.length, causeHistogram },
+      summary: { totalProbed: results.length, a4Failures: a4Failures.length, causeHistogram, categoryHistogram },
       failures: a4Failures.map((r) => ({
         route: r.route,
-        landedUrl: r.landedUrl,
-        navCause: r.navCause,
-        navTrace: r.navTrace,
-        api4xx: r.dom4xx,
+        landedUrl: r.landedUrl || "",
+        navCause: r.navCause || "",
+        category: categorize((r.navCause || "").replace(/^navCause=/, "")),
+        navTrace: r.navTrace || [],
+        api4xx: r.dom4xx || [],
         note: r.note,
       })),
     }, null, 2));
