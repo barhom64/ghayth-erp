@@ -160,6 +160,18 @@ contractsRouter.post("/", authorize({ feature: "hr.contracts", action: "create" 
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_created", entity: "employee_contract", entityId: row.id as number, after: { ref, employeeName: emp.name } });
+    // #683 Cluster A — emit event so the notification engine, BI,
+    // and rule engine can react to a fresh contract being created.
+    emitEvent({
+      action: "hr.contract.created",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "employee_contracts",
+      entityId: row.id as number,
+      details: `created contract ${ref} for ${emp.name}`,
+      after: { ref, employeeId: data.employeeId, employeeName: emp.name, contractType: data.contractType },
+    }).catch((e) => logger.error(e, "hr-contracts background task failed"));
 
     res.status(201).json(row);
   } catch (err) {
@@ -206,6 +218,23 @@ contractsRouter.patch("/:id", authorize({ feature: "hr.contracts", action: "upda
        RETURNING *`,
       params
     );
+    // #683 Cluster A — emit event for draft-contract edits so the
+    // BI / rule engine can react. `changed` records WHICH keys were
+    // patched (not their values, to avoid leaking salary fields
+    // through the event bus).
+    const changed = sets
+      .map((s) => s.match(/"([^"]+)"/)?.[1])
+      .filter((k): k is string => !!k && k !== "updatedAt");
+    emitEvent({
+      action: "hr.contract.updated",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "employee_contracts",
+      entityId: id,
+      details: `updated draft contract ${updated.ref}: ${changed.join(",")}`,
+      after: { ref: updated.ref, changed },
+    }).catch((e) => logger.error(e, "hr-contracts background task failed"));
     res.json(updated);
   } catch (err) {
     handleRouteError(err, res, "خطأ في تع��يل العقد");
@@ -233,6 +262,19 @@ contractsRouter.post("/:id/submit", authorize({ feature: "hr.contracts", action:
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_submitted", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
+    // #683 Cluster A — emit event so the approval-engine and
+    // approver-side notifications can fire when a contract enters
+    // pending_approval.
+    emitEvent({
+      action: "hr.contract.submitted",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "employee_contracts",
+      entityId: id,
+      details: `submitted contract ${contract.ref} for approval`,
+      after: { ref: contract.ref, approvalStatus: "pending_approval" },
+    }).catch((e) => logger.error(e, "hr-contracts background task failed"));
 
     res.json(updated);
   } catch (err) {

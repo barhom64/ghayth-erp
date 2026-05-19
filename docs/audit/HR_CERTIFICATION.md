@@ -69,16 +69,16 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 | Line | Endpoint | RBAC | Scope | Audit | Events | Lifecycle | GL bridge |
 |---:|---|---|---|---|---|---|---|
 | 53 | `GET /` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 117 | `POST /` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 171 | `PATCH /:id` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 216 | `POST /:id/submit` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 244 | `POST /:id/approve` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
-| 288 | `POST /:id/reject` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
-| 332 | `POST /:id/sign-company` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 371 | `POST /:id/sign-employee` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 404 | `POST /:id/activate` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 433 | `POST /:id/terminate` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
-| 479 | `POST /:id/renew` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 117 | `POST /` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 183 | `PATCH /:id` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 245 | `POST /:id/submit` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
+| 286 | `POST /:id/approve` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
+| 330 | `POST /:id/reject` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
+| 374 | `POST /:id/sign-company` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
+| 413 | `POST /:id/sign-employee` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
+| 446 | `POST /:id/activate` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
+| 475 | `POST /:id/terminate` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
+| 521 | `POST /:id/renew` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
 
 ### `hr-discipline.ts`
 
