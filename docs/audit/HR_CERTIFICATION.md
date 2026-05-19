@@ -29,7 +29,7 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 
 | File | Endpoints | RBAC | Scope | Audit | Events | Lifecycle | GL bridge |
 |---|---:|---|---|---|---|---|---|
-| `hr-contracts.ts` | 12 (10w) | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
+| `hr-contracts.ts` | 12 (10w) | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
 | `hr-discipline.ts` | 24 (15w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP |
 | `hr-exit.ts` | 6 (4w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | 🟡 PARTIAL | — SKIP |
 | `hr-loans.ts` | 6 (3w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
@@ -40,7 +40,7 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 
 | Dimension | PASS | PARTIAL | FAIL | SKIP |
 |---|---:|---:|---:|---:|
-| RBAC | 5 | 1 | 0 | 0 |
+| RBAC | 6 | 0 | 0 | 0 |
 | Scope | 0 | 6 | 0 | 0 |
 | Audit | 4 | 2 | 0 | 0 |
 | Events | 4 | 1 | 1 | 0 |
@@ -75,10 +75,10 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 | 244 | `POST /:id/approve` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
 | 275 | `POST /:id/reject` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
 | 307 | `POST /:id/sign-company` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 338 | `POST /:id/sign-employee` | ❌ FAIL | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 371 | `POST /:id/activate` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 400 | `POST /:id/terminate` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 432 | `POST /:id/renew` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | 🟡 PARTIAL |
+| 346 | `POST /:id/sign-employee` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
+| 379 | `POST /:id/activate` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
+| 408 | `POST /:id/terminate` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
+| 440 | `POST /:id/renew` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | 🟡 PARTIAL |
 
 ### `hr-discipline.ts`
 
