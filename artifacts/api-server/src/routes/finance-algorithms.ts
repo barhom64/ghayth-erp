@@ -698,6 +698,31 @@ financeAlgorithmsRouter.post("/fixed-assets", authorize({ feature: "finance.algo
     );
     assertInsert(insertId, "fixed_assets");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fixed_assets WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
+    // #670 — fixed_assets create audit. Captures the immutable input
+    // contract (cost, salvage, useful life, depreciation method,
+    // account mapping) so forensic review can reconstruct the asset's
+    // initial conditions even after subsequent updates.
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fixed_assets.create",
+      entity: "fixed_assets",
+      entityId: insertId,
+      after: {
+        code: b.code ?? null,
+        name: b.name,
+        category: b.category ?? null,
+        purchaseDate: b.purchaseDate,
+        purchaseCost,
+        salvageValue,
+        usefulLifeYears: usefulYears,
+        depreciationMethod: b.depreciationMethod,
+        assetAccountCode: b.assetAccountCode,
+        depreciationAccountCode: b.depreciationAccountCode,
+        accDepreciationAccountCode: b.accDepreciationAccountCode,
+      },
+    }).catch((e) => logger.error(e, "finance-algorithms fixed_assets create audit failed"));
     res.status(201).json(row);
   } catch (err) {
     handleRouteError(err, res, "Create fixed asset error:");
@@ -745,6 +770,28 @@ financeAlgorithmsRouter.patch("/fixed-assets/:id", authorize({ feature: "finance
       params
     );
     if (!row) { throw new NotFoundError("الأصل غير موجود"); return; }
+    // #670 — fixed_assets update audit. Logs only the validated patch
+    // payload (zod-parsed `b`) so the trail records exactly what was
+    // changed. Status flips (status field) are captured here too,
+    // pending a separate Lifecycle migration to applyTransition
+    // (tracked under #664 — direct UPDATE bypass).
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fixed_assets.update",
+      entity: "fixed_assets",
+      entityId: id,
+      after: {
+        name: b.name,
+        description: b.description,
+        category: b.category,
+        salvageValue: b.salvageValue,
+        usefulLifeYears: b.usefulLifeYears,
+        depreciationMethod: b.depreciationMethod,
+        status: b.status,
+      },
+    }).catch((e) => logger.error(e, "finance-algorithms fixed_assets update audit failed"));
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "Update fixed asset error:");
@@ -940,6 +987,29 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", authorize({ feature
       );
     });
 
+    // #670 — single-asset depreciation audit. Financially material
+    // (touches P&L via the depreciation_account, balance sheet via
+    // accumulated depreciation). Links to the journal entry that was
+    // posted by financialEngine.postJournalEntry above so a reviewer
+    // can trace asset → audit → depreciation_entries → journal_entries
+    // → journal_lines from the trail alone.
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fixed_assets.depreciate",
+      entity: "fixed_assets",
+      entityId: id,
+      after: {
+        period: targetPeriod,
+        depreciationAmount: depAmount,
+        bookValueBefore: Number(asset.currentBookValue ?? asset.purchaseCost),
+        bookValueAfter: newBookValue,
+        accumulatedDepreciationAfter: newAccumulated,
+        depreciationEntryId: entryId,
+        journalId,
+      },
+    }).catch((e) => logger.error(e, "finance-algorithms fixed_assets depreciate audit failed"));
     res.status(201).json({
       entryId,
       period: targetPeriod,
@@ -1024,6 +1094,25 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature
       details: `period=${targetPeriod} processed=${processed} skipped=${skipped} total=${roundTo2(totalDepreciation)}`,
       after: { period: targetPeriod, assetsCount: processed, totalDepreciation: roundTo2(totalDepreciation) },
     });
+    // #670 — batch-level audit entry. Per-asset attribution lives in
+    // depreciation_entries.assetId + journal_entries.sourceKey; the
+    // audit row records who triggered the batch run and the period
+    // aggregate. Mirrors the bank-reconciliation batch shape (#672).
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fixed_assets.depreciate_all",
+      entity: "fixed_assets",
+      entityId: 0,
+      after: {
+        period: targetPeriod,
+        eligibleAssets: assets.length,
+        processed,
+        skipped,
+        totalDepreciation: roundTo2(totalDepreciation),
+      },
+    }).catch((e) => logger.error(e, "finance-algorithms fixed_assets depreciate-all audit failed"));
     res.json({
       period: targetPeriod,
       processed,
