@@ -113,7 +113,7 @@ interface IdRow {
 router.get("/", authorize({ feature: "tasks", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { status = "", date = "" } = req.query as Record<string, string | undefined>;
+    const { status = "", date = "", dateFrom = "", dateTo = "" } = req.query as Record<string, string | undefined>;
 
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, {
@@ -133,6 +133,17 @@ router.get("/", authorize({ feature: "tasks", action: "list" }), async (req, res
     if (date) {
       where += ` AND t."scheduledDate" = $${paramIdx}`;
       params.push(date);
+      paramIdx++;
+    }
+
+    if (dateFrom) {
+      where += ` AND t."scheduledDate" >= $${paramIdx}::date`;
+      params.push(dateFrom);
+      paramIdx++;
+    }
+    if (dateTo) {
+      where += ` AND t."scheduledDate" <= $${paramIdx}::date`;
+      params.push(dateTo);
       paramIdx++;
     }
 
