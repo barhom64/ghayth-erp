@@ -589,7 +589,17 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       id,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
       action: "invoice.approved",
-      fromStates: ["draft", "sent", "returned"],
+      // Issue #663 #1: dropped "sent" — once an invoice has been sent
+      // to the customer it is a financial commitment, not a draft
+      // pending approval. The engine's invoices state machine reflects
+      // this: `sent: ["partial","paid","overdue","cancelled"]` has no
+      // `approved` target, so the previous `["draft","sent","returned"]`
+      // whitelist threw `LifecycleError` at runtime for any sent-state
+      // invoice. The UI (finance/invoice-detail.tsx:316) only exposes
+      // the approve action when `status === "draft"`, so the
+      // unreachable `sent` entry was latent drift, not an exercised
+      // path — but the route is now in agreement with engine + UI.
+      fromStates: ["draft", "returned"],
       toState: "approved",
       setExtras: { approvedBy: scope.userId, approvedAt: { raw: "NOW()" } },
       extraWhere: `"deletedAt" IS NULL`,
