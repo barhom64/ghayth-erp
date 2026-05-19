@@ -701,6 +701,27 @@ async function probe(page, routePath, resolvedUrl, cls) {
     }
   }
 
+  // Frontend latency — separate from /api/healthz so we can distinguish
+  // "api-server fine, vite/static dying" from "everything fine". Fetches
+  // BASE/ (the index.html that vite serves in dev or the static build
+  // serves in preview). Treats any 200..399 as ok, since some setups
+  // redirect / to /login.
+  async function checkFrontendLatency() {
+    const t0 = Date.now();
+    try {
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), HEALTH_TIMEOUT_MS);
+      const r = await fetch(`${BASE}/`, { signal: ac.signal, redirect: "manual" });
+      clearTimeout(timer);
+      const latencyMs = Date.now() - t0;
+      const ok = r.status >= 200 && r.status < 400;
+      return { ok, latencyMs, status: r.status };
+    } catch (e) {
+      const latencyMs = Date.now() - t0;
+      return { ok: false, latencyMs, error: String(e && e.message || e).slice(0, 100) };
+    }
+  }
+
   async function sampleRuntimeMetrics(label, routeIdx) {
     const mem = process.memoryUsage();
     const sample = {
@@ -729,6 +750,7 @@ async function probe(page, routePath, resolvedUrl, cls) {
       }
     } catch { /* browser dead — leave zeros */ }
     sample.health = await checkApiHealth();
+    sample.frontend = await checkFrontendLatency();
     instrumentationSamples.push(sample);
     return sample;
   }
@@ -1075,6 +1097,15 @@ async function probe(page, routePath, resolvedUrl, cls) {
     const healthFail = samples.length - healthOk;
     const latencies = samples.map((s) => (s.health && s.health.latencyMs) || 0).sort((a, b) => a - b);
     const lp = (p) => latencies.length ? latencies[Math.min(latencies.length - 1, Math.floor((p / 100) * latencies.length))] : 0;
+    // Frontend latency aggregates (separate from /healthz so we can
+    // tell "vite/static slow" from "api slow"). Samples without a
+    // `.frontend` field — from runs before this PR — are filtered out
+    // gracefully so re-running the aggregator on old packs still works.
+    const frontendSamples = samples.filter((s) => s.frontend);
+    const frontendOk = frontendSamples.filter((s) => s.frontend.ok).length;
+    const frontendFail = frontendSamples.length - frontendOk;
+    const frontendLat = frontendSamples.map((s) => s.frontend.latencyMs || 0).sort((a, b) => a - b);
+    const flp = (p) => frontendLat.length ? frontendLat[Math.min(frontendLat.length - 1, Math.floor((p / 100) * frontendLat.length))] : 0;
     return {
       sampleCount: samples.length,
       firstFailureIdx,
@@ -1090,6 +1121,11 @@ async function probe(page, routePath, resolvedUrl, cls) {
       healthFailSamples: healthFail,
       healthLatencyAvgMs: latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0,
       healthLatencyP95Ms: lp(95),
+      frontendSampleCount: frontendSamples.length,
+      frontendOkSamples: frontendOk,
+      frontendFailSamples: frontendFail,
+      frontendLatencyAvgMs: frontendLat.length ? Math.round(frontendLat.reduce((a, b) => a + b, 0) / frontendLat.length) : 0,
+      frontendLatencyP95Ms: flp(95),
     };
   }
   const instrumentationAgg = aggregateInstrumentation(instrumentationSamples);
@@ -1135,6 +1171,9 @@ async function probe(page, routePath, resolvedUrl, cls) {
   // operators can eyeball harness-side regression vs app-side regression.
   const ia = instrumentationAgg;
   console.log(`  instrumentation samples=${ia.sampleCount} · rss peak=${(ia.memoryPeakRss/1024/1024).toFixed(0)}MB Δ=${(ia.memoryDeltaRss/1024/1024).toFixed(0)}MB · fd peak=${ia.fdPeak ?? "n/a"} Δ=${ia.fdDelta ?? "n/a"} · pages peak=${ia.browserPagesPeak} final=${ia.browserPagesFinal} · health=${ia.healthOkSamples}ok/${ia.healthFailSamples}fail avg=${ia.healthLatencyAvgMs}ms p95=${ia.healthLatencyP95Ms}ms`);
+  if (ia.frontendSampleCount) {
+    console.log(`  frontend (BASE/) ${ia.frontendOkSamples}ok/${ia.frontendFailSamples}fail · avg=${ia.frontendLatencyAvgMs}ms p95=${ia.frontendLatencyP95Ms}ms`);
+  }
   if (ia.firstFailureIdx >= 0) {
     console.log(`  first failure at idx ${ia.firstFailureIdx}: ${ia.firstFailureRoute}`);
   }
@@ -1154,18 +1193,27 @@ async function probe(page, routePath, resolvedUrl, cls) {
   fs.writeFileSync(path.join(RUN_DIR, "failures.json"), JSON.stringify({
     runId: RUN_ID,
     count: a4Failures.length,
-    failures: a4Failures.map((r) => ({
-      route: r.route,
-      landedUrl: r.landedUrl || "",
-      navCause: r.navCause || "",
-      category: navTaxonomy.categoryOf(r.navCause || ""),
-      code: navTaxonomy.classify(r.navCause || "").code,
-      severity: navTaxonomy.classify(r.navCause || "").severity,
-      navTrace: r.navTrace || [],
-      api4xx: r.dom4xx || [],
-      note: r.note,
-      shot: r.shot || "",
-    })),
+    failures: a4Failures.map((r) => {
+      const trace = r.navTrace || [];
+      return {
+        route: r.route,
+        landedUrl: r.landedUrl || "",
+        navCause: r.navCause || "",
+        category: navTaxonomy.categoryOf(r.navCause || ""),
+        code: navTaxonomy.classify(r.navCause || "").code,
+        severity: navTaxonomy.classify(r.navCause || "").severity,
+        // Phase 1 instrumentation surface: the last nav-event label
+        // for this failure. Operators frequently only need this one
+        // label to classify the failure shape (e.g. "postSleep1s",
+        // "framenavigated:/login", "goto:domcontentloaded") rather
+        // than reading the full trace. Full trace stays in `navTrace`.
+        navTraceLastLabel: trace.length ? trace[trace.length - 1].label : null,
+        navTrace: trace,
+        api4xx: r.dom4xx || [],
+        note: r.note,
+        shot: r.shot || "",
+      };
+    }),
   }, null, 2));
   console.log(`[audit] evidence pack → ${RUN_DIR}/{summary,histogram,failures,environment}.json`);
 })().catch((e) => {
