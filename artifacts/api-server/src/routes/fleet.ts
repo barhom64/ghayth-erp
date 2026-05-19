@@ -874,8 +874,9 @@ router.get("/trips", authorize({ feature: "fleet.trips", action: "list" }), asyn
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
     if (search) { params.push(`%${search}%`); where += ` AND (v."plateNumber" ILIKE $${paramIdx} OR d.name ILIKE $${paramIdx})`; paramIdx++; }
-    if (dateFrom) { where += ` AND t."startTime" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
-    if (dateTo) { where += ` AND t."startTime" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }
+    // #651 follow-up — normalize to createdAt per PR #653 template (was t."startTime")
+    if (dateFrom) { where += ` AND t."createdAt" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
+    if (dateTo) { where += ` AND t."createdAt" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT t.*, t."fromLocation" AS origin, t."toLocation" AS destination, t."startTime" AS "tripDate",
               v."plateNumber", v."plateNumber" AS "vehiclePlate", d.name AS "driverName"
@@ -1335,8 +1336,9 @@ router.get("/maintenance", authorize({ feature: "fleet.maintenance", action: "li
     if (vehicleId) { where += ` AND m."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
     if (search) { params.push(`%${search}%`); where += ` AND (v."plateNumber" ILIKE $${paramIdx} OR m.description ILIKE $${paramIdx})`; paramIdx++; }
     if (status) { where += ` AND m.status = $${paramIdx}`; params.push(status); paramIdx++; }
-    if (dateFrom) { where += ` AND m."serviceDate" >= $${paramIdx}::date`; params.push(dateFrom); paramIdx++; }
-    if (dateTo) { where += ` AND m."serviceDate" <= $${paramIdx}::date`; params.push(dateTo); paramIdx++; }
+    // #651 follow-up — normalize to createdAt per PR #653 template (was m."serviceDate")
+    if (dateFrom) { where += ` AND m."createdAt" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
+    if (dateTo) { where += ` AND m."createdAt" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT m.*, m.type AS "maintenanceType", m.cost AS amount,
               m."serviceDate" AS "scheduledDate", m."serviceDate" AS date,
@@ -1758,8 +1760,9 @@ router.get("/fuel-logs", authorize({ feature: "fleet.trips", action: "list" }), 
     if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
     if (search) { params.push(`%${search}%`); where += ` AND (v."plateNumber" ILIKE $${paramIdx} OR f."stationName" ILIKE $${paramIdx})`; paramIdx++; }
     if (status) { where += ` AND f.status = $${paramIdx}`; params.push(status); paramIdx++; }
-    if (dateFrom) { where += ` AND f."fuelDate" >= $${paramIdx}::date`; params.push(dateFrom); paramIdx++; }
-    if (dateTo) { where += ` AND f."fuelDate" <= $${paramIdx}::date`; params.push(dateTo); paramIdx++; }
+    // #651 follow-up — normalize to createdAt per PR #653 template (was f."fuelDate")
+    if (dateFrom) { where += ` AND f."createdAt" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
+    if (dateTo) { where += ` AND f."createdAt" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT f.*, f.liters AS quantity, f."totalCost" AS cost, f."mileageAtFuel" AS mileage, f."stationName" AS station, f."fuelDate" AS date, v."plateNumber", v."plateNumber" AS "vehiclePlate" FROM fleet_fuel_logs f LEFT JOIN fleet_vehicles v ON v.id=f."vehicleId" AND v."deletedAt" IS NULL WHERE ${where} AND f."deletedAt" IS NULL ORDER BY f.id DESC LIMIT 1000`,
       params
