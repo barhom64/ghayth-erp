@@ -91,22 +91,21 @@ From `audit/system-review/tooling/_workflow-audit.json`:
 | 598 | `GET /journal-lines/search` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 | 632 | `GET /bank-reconciliation` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 | 660 | `GET /fixed-assets` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 673 | `POST /fixed-assets` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
-| 726 | `PATCH /fixed-assets/:id` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
-| 805 | `GET /fixed-assets/:id/schedule` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 880 | `POST /fixed-assets/:id/depreciate` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | ✅ PASS |
-| 960 | `POST /fixed-assets/depreciate-all` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | ✅ PASS |
-| 1044 | `GET /inventory-costing` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1140 | `GET /rounding-account` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1153 | `POST /rounding-account/setup` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | — SKIP |
-| 1190 | `POST /rounding-differences/apply` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
-| 1276 | `GET /fx/rates` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1297 | `POST /fx/rates` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
-| 1318 | `GET /fx/revaluation/preview` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1444 | `POST /fx/revaluation/post` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | ✅ PASS |
-| 1607 | `GET /fx/revaluation` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1625 | `GET /treasury` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1731 | `GET /entity-financial-profile` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 673 | `POST /fixed-assets` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | ✅ PASS |
+| 751 | `PATCH /fixed-assets/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | ✅ PASS |
+| 852 | `GET /fixed-assets/:id/schedule` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 927 | `POST /fixed-assets/:id/depreciate` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | ✅ PASS |
+| 1133 | `GET /inventory-costing` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1229 | `GET /rounding-account` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1242 | `POST /rounding-account/setup` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | — SKIP |
+| 1279 | `POST /rounding-differences/apply` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
+| 1365 | `GET /fx/rates` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1386 | `POST /fx/rates` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
+| 1407 | `GET /fx/revaluation/preview` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1533 | `POST /fx/revaluation/post` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | ✅ PASS |
+| 1696 | `GET /fx/revaluation` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1714 | `GET /treasury` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1820 | `GET /entity-financial-profile` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 
 ### `finance-budget.ts`
 
