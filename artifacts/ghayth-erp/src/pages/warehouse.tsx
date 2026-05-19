@@ -17,23 +17,7 @@ import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } fro
 import { AdvancedFilters, useFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
-
-// Compose a URL with the warehouse list-endpoint filter knobs
-// (search/status/dateFrom/dateTo). Scope (companyIds/branchIds) is
-// auto-injected by useApiQuery → injectScope, so we don't splice it.
-function withListFilters(
-  base: string,
-  f: { search?: string; status?: string; dateFrom?: string; dateTo?: string },
-): string {
-  const parts: string[] = [];
-  if (f.search) parts.push(`search=${encodeURIComponent(f.search)}`);
-  if (f.status) parts.push(`status=${encodeURIComponent(f.status)}`);
-  if (f.dateFrom) parts.push(`dateFrom=${encodeURIComponent(f.dateFrom)}`);
-  if (f.dateTo) parts.push(`dateTo=${encodeURIComponent(f.dateTo)}`);
-  if (parts.length === 0) return base;
-  const sep = base.includes("?") ? "&" : "?";
-  return `${base}${sep}${parts.join("&")}`;
-}
+import { withListFilters } from "@/lib/list-query";
 
 export default function Warehouse() {
   const [tab, setTab] = useState("products");
