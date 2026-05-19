@@ -493,25 +493,25 @@
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
-            "audit": false,
+            "audit": true,
             "event": false,
             "applyTransition": false,
             "directStatusUpdate": false,
-            "glPosting": false
+            "glPosting": true
           },
           "dims": {
             "rbac": "PASS",
             "scope": "PASS",
-            "audit": "FAIL",
+            "audit": "PASS",
             "event": "FAIL",
             "lifecycle": "SKIP",
-            "glBridge": "SKIP"
+            "glBridge": "PASS"
           }
         },
         {
           "method": "GET",
           "path": "/fixed-assets/:id",
-          "line": 707,
+          "line": 732,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -535,31 +535,31 @@
         {
           "method": "PATCH",
           "path": "/fixed-assets/:id",
-          "line": 726,
+          "line": 751,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
-            "audit": false,
+            "audit": true,
             "event": false,
             "applyTransition": false,
             "directStatusUpdate": false,
-            "glPosting": false
+            "glPosting": true
           },
           "dims": {
             "rbac": "PASS",
             "scope": "PASS",
-            "audit": "FAIL",
+            "audit": "PASS",
             "event": "FAIL",
             "lifecycle": "SKIP",
-            "glBridge": "SKIP"
+            "glBridge": "PASS"
           }
         },
         {
           "method": "GET",
           "path": "/fixed-assets/:id/schedule",
-          "line": 805,
+          "line": 852,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -583,13 +583,13 @@
         {
           "method": "POST",
           "path": "/fixed-assets/:id/depreciate",
-          "line": 880,
+          "line": 927,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
-            "audit": false,
+            "audit": true,
             "event": false,
             "applyTransition": false,
             "directStatusUpdate": false,
@@ -598,7 +598,7 @@
           "dims": {
             "rbac": "PASS",
             "scope": "PASS",
-            "audit": "FAIL",
+            "audit": "PASS",
             "event": "FAIL",
             "lifecycle": "SKIP",
             "glBridge": "PASS"
@@ -607,13 +607,13 @@
         {
           "method": "POST",
           "path": "/fixed-assets/depreciate-all",
-          "line": 960,
+          "line": 1030,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
-            "audit": false,
+            "audit": true,
             "event": true,
             "applyTransition": false,
             "directStatusUpdate": false,
@@ -622,7 +622,7 @@
           "dims": {
             "rbac": "PASS",
             "scope": "PASS",
-            "audit": "FAIL",
+            "audit": "PASS",
             "event": "PASS",
             "lifecycle": "SKIP",
             "glBridge": "PASS"
@@ -631,7 +631,7 @@
         {
           "method": "GET",
           "path": "/inventory-costing",
-          "line": 1044,
+          "line": 1133,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -655,7 +655,7 @@
         {
           "method": "GET",
           "path": "/inventory-costing/:productId",
-          "line": 1072,
+          "line": 1161,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -679,7 +679,7 @@
         {
           "method": "GET",
           "path": "/rounding-account",
-          "line": 1140,
+          "line": 1229,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -703,7 +703,7 @@
         {
           "method": "POST",
           "path": "/rounding-account/setup",
-          "line": 1153,
+          "line": 1242,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -727,7 +727,7 @@
         {
           "method": "POST",
           "path": "/rounding-differences/apply",
-          "line": 1190,
+          "line": 1279,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -751,7 +751,7 @@
         {
           "method": "GET",
           "path": "/fx/rates",
-          "line": 1276,
+          "line": 1365,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -775,7 +775,7 @@
         {
           "method": "POST",
           "path": "/fx/rates",
-          "line": 1297,
+          "line": 1386,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -799,7 +799,7 @@
         {
           "method": "GET",
           "path": "/fx/revaluation/preview",
-          "line": 1318,
+          "line": 1407,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -823,7 +823,7 @@
         {
           "method": "POST",
           "path": "/fx/revaluation/post",
-          "line": 1444,
+          "line": 1533,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -847,7 +847,7 @@
         {
           "method": "GET",
           "path": "/fx/revaluation",
-          "line": 1607,
+          "line": 1696,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -871,7 +871,7 @@
         {
           "method": "GET",
           "path": "/treasury",
-          "line": 1625,
+          "line": 1714,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -895,7 +895,7 @@
         {
           "method": "GET",
           "path": "/entity-financial-profile",
-          "line": 1731,
+          "line": 1820,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
