@@ -454,6 +454,20 @@ contractsRouter.post("/:id/terminate", authorize({ feature: "hr.contracts", acti
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_terminated", entity: "employee_contract", entityId: id, after: { ref: contract.ref, reason } });
+    // #683 Cluster D — emit event. Termination is a downstream
+    // trigger: payroll cycle should stop, attendance enrolment ends,
+    // exit-process workflows can spin up, HR dashboards reflect
+    // the headcount change.
+    emitEvent({
+      action: "hr.contract.terminated",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "employee_contracts",
+      entityId: id,
+      details: `terminated contract ${contract.ref}: ${reason || "no reason"}`,
+      after: { ref: contract.ref, status: "terminated", approvalStatus: "terminated", reason: reason || null },
+    }).catch((e) => logger.error(e, "hr-contracts background task failed"));
 
     res.json(updated);
   } catch (err) {
@@ -508,6 +522,28 @@ contractsRouter.post("/:id/renew", authorize({ feature: "hr.contracts", action: 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_renewed", entity: "employee_contract", entityId: newContract.id, after: {
       ref, previousRef: contract.ref,
     } });
+    // #683 Cluster D — emit event. Renewal creates a NEW contract
+    // row (draft) and stamps `renewalDate` on the previous one;
+    // entityId points at the new contract, `after.previousContractId`
+    // links to the renewed-from row so subscribers can trace the
+    // chain.
+    emitEvent({
+      action: "hr.contract.renewed",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "employee_contracts",
+      entityId: newContract.id as number,
+      details: `renewed contract ${contract.ref} → ${ref}`,
+      after: {
+        ref,
+        previousRef: contract.ref,
+        previousContractId: id,
+        startDate: newStart,
+        endDate: newEndDate || null,
+        salary: newSalary ?? contract.salary,
+      },
+    }).catch((e) => logger.error(e, "hr-contracts background task failed"));
 
     res.status(201).json(newContract);
   } catch (err) {
