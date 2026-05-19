@@ -1,0 +1,5879 @@
+{
+  "results": [
+    {
+      "file": "artifacts/api-server/src/routes/finance-accounts.ts",
+      "endpointCount": 10,
+      "writeEndpoints": 4,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PARTIAL",
+        "audit": "PASS",
+        "event": "PASS",
+        "lifecycle": "SKIP",
+        "glBridge": "PASS"
+      },
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/chart-of-accounts",
+          "line": 130,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/accounts",
+          "line": 148,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/accounts",
+          "line": 178,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/accounts/:id",
+          "line": 226,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/accounts/:id",
+          "line": 270,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/journal",
+          "line": 328,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/journal",
+          "line": 348,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/ledger/:accountCode",
+          "line": 440,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "line": 485,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/summary",
+          "line": 500,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-algorithms.ts",
+      "endpointCount": 27,
+      "writeEndpoints": 11,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PARTIAL",
+        "audit": "FAIL",
+        "event": "PARTIAL",
+        "lifecycle": "FAIL",
+        "glBridge": "PASS"
+      },
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/ar-aging",
+          "line": 122,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/ap-aging",
+          "line": 212,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/bank-reconciliation/import",
+          "line": 347,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/bank-reconciliation/auto-match",
+          "line": 399,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "PASS",
+            "lifecycle": "FAIL",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/bank-reconciliation/:batchId",
+          "line": 474,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/bank-reconciliation/manual-match",
+          "line": 516,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "PASS",
+            "lifecycle": "FAIL",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/journal-lines/search",
+          "line": 558,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/bank-reconciliation",
+          "line": 592,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/fixed-assets",
+          "line": 620,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/fixed-assets",
+          "line": 633,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/fixed-assets/:id",
+          "line": 667,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/fixed-assets/:id",
+          "line": 686,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/fixed-assets/:id/schedule",
+          "line": 765,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/fixed-assets/:id/depreciate",
+          "line": 840,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/fixed-assets/depreciate-all",
+          "line": 920,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/inventory-costing",
+          "line": 1004,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/inventory-costing/:productId",
+          "line": 1032,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/rounding-account",
+          "line": 1100,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/rounding-account/setup",
+          "line": 1113,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/rounding-differences/apply",
+          "line": 1150,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/fx/rates",
+          "line": 1236,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/fx/rates",
+          "line": 1257,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/fx/revaluation/preview",
+          "line": 1278,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/fx/revaluation/post",
+          "line": 1404,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/fx/revaluation",
+          "line": 1567,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/treasury",
+          "line": 1585,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/entity-financial-profile",
+          "line": 1691,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-budget.ts",
+      "endpointCount": 13,
+      "writeEndpoints": 7,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PARTIAL",
+        "audit": "PARTIAL",
+        "event": "PARTIAL",
+        "lifecycle": "SKIP",
+        "glBridge": "PASS"
+      },
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/budget",
+          "line": 114,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/budget-vs-actual",
+          "line": 133,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/budget",
+          "line": 176,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/budget/validate",
+          "line": 215,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/budget/:id",
+          "line": 256,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/budget/:id",
+          "line": 300,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/budget/approval-requests",
+          "line": 403,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/budget/approval-requests",
+          "line": 472,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/budget/approval-requests/:id/decide",
+          "line": 492,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/budget/variance",
+          "line": 564,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/budget/:id",
+          "line": 649,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/fiscal-periods",
+          "line": 665,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/fiscal-periods/:period/close",
+          "line": 703,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-collection.ts",
+      "endpointCount": 3,
+      "writeEndpoints": 1,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PARTIAL",
+        "audit": "PASS",
+        "event": "PASS",
+        "lifecycle": "PASS",
+        "glBridge": "PARTIAL"
+      },
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/collection",
+          "line": 78,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/collection/:invoiceId/action",
+          "line": 125,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/collection/:invoiceId/history",
+          "line": 219,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-cost-centers.ts",
+      "endpointCount": 5,
+      "writeEndpoints": 3,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PARTIAL",
+        "audit": "PASS",
+        "event": "PASS",
+        "lifecycle": "FAIL",
+        "glBridge": "SKIP"
+      },
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/cost-centers",
+          "line": 57,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/cost-centers/:id",
+          "line": 79,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/cost-centers",
+          "line": 92,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/cost-centers/:id",
+          "line": 121,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/cost-centers/:id",
+          "line": 159,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "FAIL",
+            "glBridge": "SKIP"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-custodies.ts",
+      "endpointCount": 8,
+      "writeEndpoints": 4,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PARTIAL",
+        "audit": "PARTIAL",
+        "event": "PARTIAL",
+        "lifecycle": "FAIL",
+        "glBridge": "PASS"
+      },
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/custodies",
+          "line": 176,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/custodies/report",
+          "line": 272,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/custodies/summary",
+          "line": 370,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/custodies/:id",
+          "line": 416,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/custodies",
+          "line": 517,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "FAIL",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/custodies/settle",
+          "line": 647,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/custodies/:id/settle",
+          "line": 787,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/custodies/:id/approve",
+          "line": 932,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-gl-helpers.ts",
+      "endpointCount": 10,
+      "writeEndpoints": 5,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PARTIAL",
+        "audit": "PASS",
+        "event": "PASS",
+        "lifecycle": "SKIP",
+        "glBridge": "SKIP"
+      },
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/gl-helpers/mudad-salary/pending",
+          "line": 96,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/gl-helpers/fx-revaluation/pending",
+          "line": 133,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/gl-helpers/cycle-count/pending",
+          "line": 170,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/gl-helpers/realized-fx/history",
+          "line": 213,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/gl-helpers/lot-writeoff/pending",
+          "line": 250,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/gl-helpers/fx-revaluation/:revaluationLogId",
+          "line": 292,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/gl-helpers/realized-fx/:invoiceId",
+          "line": 326,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/gl-helpers/cycle-count/:cycleCountId",
+          "line": 362,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/gl-helpers/lot-writeoff/:lotId",
+          "line": 396,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/gl-helpers/mudad-salary/:settlementId",
+          "line": 430,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-hardening.ts",
+      "endpointCount": 28,
+      "writeEndpoints": 16,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PARTIAL",
+        "audit": "PARTIAL",
+        "event": "PARTIAL",
+        "lifecycle": "SKIP",
+        "glBridge": "PASS"
+      },
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/fiscal-periods-v2",
+          "line": 132,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/fiscal-periods-v2",
+          "line": 152,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/fiscal-periods-v2/:id/close",
+          "line": 189,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/fiscal-periods-v2/:id/reopen",
+          "line": 259,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/journal-manual",
+          "line": 309,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/journal-manual",
+          "line": 396,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/journal-manual/:id",
+          "line": 428,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/journal-manual/:id/submit",
+          "line": 463,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/journal-manual/:id/review",
+          "line": 500,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/journal-manual/:id/approve",
+          "line": 564,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/journal-manual/:id/post",
+          "line": 616,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/bank-guarantees",
+          "line": 666,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/bank-guarantees",
+          "line": 699,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/bank-guarantees/:id",
+          "line": 736,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/bank-guarantees/:id",
+          "line": 785,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/bank-guarantees/:id/cancel",
+          "line": 855,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/bank-guarantees/:id/release",
+          "line": 902,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/intercompany",
+          "line": 951,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/intercompany",
+          "line": 971,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/intercompany/consolidation",
+          "line": 1099,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/projects",
+          "line": 1150,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/projects",
+          "line": 1172,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/projects/:id",
+          "line": 1210,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/projects/:id/costs",
+          "line": 1227,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/cash-flow-forecast",
+          "line": 1264,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/cost-center-report",
+          "line": 1348,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/posting-failures",
+          "line": 1393,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/posting-failures/:id/resolve",
+          "line": 1409,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+      "endpointCount": 26,
+      "writeEndpoints": 17,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PARTIAL",
+        "audit": "PARTIAL",
+        "event": "PARTIAL",
+        "lifecycle": "PARTIAL",
+        "glBridge": "PARTIAL"
+      },
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/invoices/impact-preview",
+          "line": 163,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/invoices",
+          "line": 253,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoices",
+          "line": 307,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoices/:id/send",
+          "line": 500,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoices/:id/approve",
+          "line": 570,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoices/:id/post",
+          "line": 655,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoices/:id/payment",
+          "line": 694,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "PASS",
+            "lifecycle": "FAIL",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/invoices/:id",
+          "line": 798,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/invoices/:id",
+          "line": 824,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/invoices/:id",
+          "line": 914,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/invoices/:id/approve",
+          "line": 1063,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "FAIL",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/invoices/:id/reject",
+          "line": 1064,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "FAIL",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/invoices/:id/return",
+          "line": 1065,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "FAIL",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/tax/summary",
+          "line": 1067,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoices/:id/credit-memo",
+          "line": 1097,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "PASS",
+            "lifecycle": "FAIL",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/invoices/:id/debit-memo",
+          "line": 1236,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/invoices/:id/memos",
+          "line": 1359,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/bad-debt/preview",
+          "line": 1394,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/bad-debt/post",
+          "line": 1446,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/customer-advances",
+          "line": 1569,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/customer-advances/:id/apply",
+          "line": 1670,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "FAIL",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/customer-advances",
+          "line": 1764,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/dunning/preview",
+          "line": 1869,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/dunning/send",
+          "line": 1947,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/dunning/history",
+          "line": 2019,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/tax/declarations",
+          "line": 2045,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-journal.ts",
+      "endpointCount": 23,
+      "writeEndpoints": 15,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PARTIAL",
+        "audit": "PARTIAL",
+        "event": "PARTIAL",
+        "lifecycle": "FAIL",
+        "glBridge": "PARTIAL"
+      },
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/expenses",
+          "line": 233,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/expenses/impact-preview",
+          "line": 267,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/expenses",
+          "line": 373,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "PASS",
+            "lifecycle": "FAIL",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/expenses/:id",
+          "line": 546,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/expenses/:id",
+          "line": 566,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "FAIL",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/expenses/:id/approve",
+          "line": 579,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/vouchers",
+          "line": 653,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/vouchers/:id",
+          "line": 680,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/vouchers",
+          "line": 702,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/vouchers/:id",
+          "line": 838,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/vouchers/:id",
+          "line": 851,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "FAIL",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/salary-advances",
+          "line": 864,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/salary-advances/:id",
+          "line": 874,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/salary-advances",
+          "line": 894,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "FAIL",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/salary-advances/:id/approve",
+          "line": 954,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/journal",
+          "line": 1014,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/journal",
+          "line": 1036,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/journal/:id",
+          "line": 1105,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/journal/:id/reverse",
+          "line": 1145,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "FAIL",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/fiscal-periods/:period/year-end-close",
+          "line": 1331,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "PASS",
+            "lifecycle": "FAIL",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/opening-balances",
+          "line": 1478,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/opening-balances",
+          "line": 1592,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "FAIL",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/opening-balances/import-csv",
+          "line": 1608,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "FAIL",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "endpointCount": 23,
+      "writeEndpoints": 15,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PARTIAL",
+        "audit": "PARTIAL",
+        "event": "PARTIAL",
+        "lifecycle": "PASS",
+        "glBridge": "PARTIAL"
+      },
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/purchase-requests/impact-preview",
+          "line": 123,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/purchase-requests",
+          "line": 211,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/purchase-requests",
+          "line": 254,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/purchase-requests/:id/submit",
+          "line": 373,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/purchase-requests/:id/approve",
+          "line": 398,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/purchase-requests/:id/convert",
+          "line": 456,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": false,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/purchase-orders",
+          "line": 531,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/purchase-orders",
+          "line": 570,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/purchase-orders/:id/approve",
+          "line": 677,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "FAIL",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/purchase-orders/:id/reject",
+          "line": 678,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "FAIL",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/purchase-orders/:id/return",
+          "line": 679,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "FAIL",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/purchase-orders/:id/receive",
+          "line": 688,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/purchase-orders/:id/receipts",
+          "line": 900,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/purchase-orders/:id/match",
+          "line": 929,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/payment-run/pending",
+          "line": 984,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/payment-run/execute",
+          "line": 1027,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/payment-run",
+          "line": 1191,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/purchase-requests/:id/convert-to-po",
+          "line": 1213,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": true,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/purchase-orders/pending-grn",
+          "line": 1319,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/purchase-orders/:id",
+          "line": 1336,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/purchase-orders/:id/vendor-confirm",
+          "line": 1368,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/purchase-orders/:id/match-invoice",
+          "line": 1408,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/purchase-orders/:id/schedule-payment",
+          "line": 1510,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": true,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "PASS",
+            "glBridge": "PASS"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-recurring.ts",
+      "endpointCount": 6,
+      "writeEndpoints": 4,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PASS",
+        "audit": "PASS",
+        "event": "PASS",
+        "lifecycle": "SKIP",
+        "glBridge": "SKIP"
+      },
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/recurring-journals",
+          "line": 104,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/recurring-journals/:id",
+          "line": 135,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/recurring-journals",
+          "line": 184,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/recurring-journals/:id",
+          "line": 247,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/recurring-journals/:id/run-now",
+          "line": 334,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/recurring-journals/:id",
+          "line": 386,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-reports.ts",
+      "endpointCount": 14,
+      "writeEndpoints": 0,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PARTIAL",
+        "audit": "SKIP",
+        "event": "SKIP",
+        "lifecycle": "SKIP",
+        "glBridge": "SKIP"
+      },
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/reports/entities/:entityType",
+          "line": 57,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/trial-balance",
+          "line": 81,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/income-statement",
+          "line": 126,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/balance-sheet",
+          "line": 145,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/cash-flow",
+          "line": 191,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/subsidiary-ledger/:entityType/:entityId",
+          "line": 363,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/customer-statement/:clientId",
+          "line": 493,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/vendor-statement/:supplierId",
+          "line": 621,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/entity-statement",
+          "line": 728,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/custody-advances",
+          "line": 808,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/expenses-analysis",
+          "line": 867,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/revenue-analysis",
+          "line": 913,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/budget-variance",
+          "line": 958,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/cash-bank-statement",
+          "line": 1002,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-vendor-contracts.ts",
+      "endpointCount": 5,
+      "writeEndpoints": 3,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PASS",
+        "audit": "PASS",
+        "event": "PASS",
+        "lifecycle": "SKIP",
+        "glBridge": "SKIP"
+      },
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/contracts",
+          "line": 60,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/contracts/:id",
+          "line": 103,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/contracts",
+          "line": 125,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/contracts/:id",
+          "line": 195,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/contracts/:id",
+          "line": 265,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-vendors.ts",
+      "endpointCount": 19,
+      "writeEndpoints": 8,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PARTIAL",
+        "audit": "PARTIAL",
+        "event": "PARTIAL",
+        "lifecycle": "SKIP",
+        "glBridge": "PASS"
+      },
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/vendors",
+          "line": 86,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/vendors",
+          "line": 101,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/vendors/:id",
+          "line": 137,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/vendors/:id",
+          "line": 188,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/stats",
+          "line": 253,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/receivables",
+          "line": 289,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/payables",
+          "line": 327,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/receivables/:id",
+          "line": 409,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/payments",
+          "line": 426,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/commitments",
+          "line": 454,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/commitments/:id",
+          "line": 484,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/financial-requests/:id",
+          "line": 501,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/financial-requests",
+          "line": 519,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/vendors/:id",
+          "line": 551,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": false,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "FAIL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/commitments/:id/approve",
+          "line": 586,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/receivables/:id/approve",
+          "line": 613,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/vouchers/:id/approve",
+          "line": 640,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/financial-requests/:id/approve",
+          "line": 667,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/budgets/:id/approve",
+          "line": 693,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-zatca.ts",
+      "endpointCount": 9,
+      "writeEndpoints": 6,
+      "dimAgg": {
+        "rbac": "PASS",
+        "scope": "PARTIAL",
+        "audit": "PARTIAL",
+        "event": "PARTIAL",
+        "lifecycle": "FAIL",
+        "glBridge": "PASS"
+      },
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/zatca/settings",
+          "line": 347,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PUT",
+          "path": "/zatca/settings",
+          "line": 370,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/zatca/test-connection",
+          "line": 467,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "FAIL",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/zatca/invoice/:id/xml",
+          "line": 503,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/zatca/invoice/:id/submit",
+          "line": 591,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "FAIL",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/zatca/expense/:id/submit",
+          "line": 722,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "FAIL",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/zatca/submissions",
+          "line": 802,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/zatca/invoice/:id",
+          "line": 869,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/zatca/expense/:id",
+          "line": 900,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        }
+      ]
+    }
+  ],
+  "wfFindings": {
+    "directStatusUpdate": [
+      {
+        "file": "artifacts/api-server/src/routes/finance-algorithms.ts",
+        "line": 450,
+        "table": "bank_statements",
+        "snippet": "`UPDATE bank_statements SET \"matchStatus\" = 'matched', \"matchedJournalLineId\" = $1 WHERE id = $2 AND \"companyId\" = $3`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-algorithms.ts",
+        "line": 539,
+        "table": "bank_statements",
+        "snippet": "`UPDATE bank_statements SET \"matchStatus\"='matched', \"matchedJournalLineId\"=$1 WHERE id=$2 AND \"companyId\"=$3`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-cost-centers.ts",
+        "line": 164,
+        "table": "cost_centers",
+        "snippet": "`UPDATE cost_centers SET status = 'deleted', \"updatedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND status != 'deleted'`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-custodies.ts",
+        "line": 609,
+        "table": "journal_entries",
+        "snippet": "`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND \"companyId\" = $2 AND status = 'draft' AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 742,
+        "table": "invoices",
+        "snippet": "`UPDATE invoices SET \"paidAmount\" = $1, status = $2, \"paidAt\" = $3 WHERE id = $4 AND \"companyId\" = $5 AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 747,
+        "table": "invoices",
+        "snippet": "`UPDATE invoices SET \"paidAmount\" = $1, status = $2 WHERE id = $3 AND \"companyId\" = $4 AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 953,
+        "table": "journal_entries",
+        "snippet": "`UPDATE journal_entries SET \"deletedAt\" = NOW(), status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 958,
+        "table": "invoices",
+        "snippet": "`UPDATE invoices SET \"deletedAt\" = NOW(), status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 1024,
+        "table": "journal_entries",
+        "snippet": "`UPDATE journal_entries SET status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND status IN ('posted', 'approved') AND \"deletedAt\" IS "
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 1187,
+        "table": "invoices",
+        "snippet": "`UPDATE invoices SET \"paidAmount\" = COALESCE(\"paidAmount\",0) + $1,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 1723,
+        "table": "customer_advances",
+        "snippet": "`UPDATE customer_advances SET \"appliedAmount\" = COALESCE(\"appliedAmount\",0) + $1,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 1729,
+        "table": "invoices",
+        "snippet": "`UPDATE invoices SET \"paidAmount\" = COALESCE(\"paidAmount\",0) + $1,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-journal.ts",
+        "line": 528,
+        "table": "journal_entries",
+        "snippet": "if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND \"companyId"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-journal.ts",
+        "line": 570,
+        "table": "journal_entries",
+        "snippet": "const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET \"deletedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-journal.ts",
+        "line": 855,
+        "table": "journal_entries",
+        "snippet": "const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET \"deletedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-journal.ts",
+        "line": 939,
+        "table": "journal_entries",
+        "snippet": "if (approvalResult.requiresApproval) { const { affectedRows } = await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHE"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-journal.ts",
+        "line": 1405,
+        "table": "financial_periods",
+        "snippet": "`UPDATE financial_periods SET status='closed', \"closedAt\"=NOW(), \"closedBy\"=$1, \"updatedAt\"=NOW() WHERE id=$2 AND \"companyId\"=$3 AND status "
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-zatca.ts",
+        "line": 490,
+        "table": "zatca_settings",
+        "snippet": "`UPDATE zatca_settings SET \"lastConnectionTest\" = NOW(), \"connectionTestStatus\" = $1, \"connectionTestMessage\" = $2 WHERE \"companyId\" = $3`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-zatca.ts",
+        "line": 687,
+        "table": "invoices",
+        "snippet": "`UPDATE invoices SET \"zatcaUuid\" = $1::uuid, \"zatcaHash\" = $2, \"zatcaStatus\" = $3, \"zatcaQrCode\" = $4"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-zatca.ts",
+        "line": 775,
+        "table": "journal_entries",
+        "snippet": "`UPDATE journal_entries SET \"zatcaUuid\" = $1::uuid, \"zatcaHash\" = $2, \"zatcaStatus\" = $3, \"zatcaQrCode\" = $4"
+      }
+    ],
+    "fromStateMismatch": [
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 587,
+        "entity": "invoices",
+        "action": "invoice.approved",
+        "attempted": "sent → approved",
+        "engineAllowsFrom": [
+          "partial",
+          "paid",
+          "overdue",
+          "cancelled"
+        ]
+      }
+    ]
+  }
+}
