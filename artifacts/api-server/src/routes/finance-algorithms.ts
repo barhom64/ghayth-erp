@@ -13,8 +13,9 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
-import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2, roundTo4, generateTimeRef, emitEvent } from "../lib/businessHelpers.js";
+import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2, roundTo4, generateTimeRef, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
+import { logger } from "../lib/logger.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
@@ -390,6 +391,19 @@ financeAlgorithmsRouter.post("/bank-reconciliation/import", authorize({ feature:
       details: `imported ${imported} rows, batch ${batchId}`,
       after: { batchId, accountCode, imported },
     });
+    // #670 — batch-level audit entry (not per-row, per the issue's
+    // bulk-operation guideline). Forensic review needs to attribute
+    // the import to a user; the per-row inserts already carry
+    // `importBatchId`, so the linking key is `batchId`.
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "bank_reconciliation.import",
+      entity: "bank_reconciliation",
+      entityId: 0,
+      after: { batchId, accountCode, statementDate, imported },
+    }).catch((e) => logger.error(e, "finance-algorithms bank import audit failed"));
     res.status(201).json({ batchId, imported, message: `تم استيراد ${imported} سطر من الكشف البنكي` });
   } catch (err) {
     handleRouteError(err, res, "Bank reconciliation import error:");
@@ -465,6 +479,19 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", authorize({ feat
       details: `auto-matched ${matched}/${bankRows.length}, batch ${batchId}`,
       after: { batchId, matched, method: "auto" },
     });
+    // #670 — batch-level audit entry. Per-row attribution lives on
+    // `bank_statements.matchedJournalLineId`; the audit log records
+    // who ran the auto-match, with which tolerance, and how many
+    // rows the algorithm matched out of how many candidates.
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "bank_reconciliation.auto_match",
+      entity: "bank_reconciliation",
+      entityId: 0,
+      after: { batchId, accountCode, toleranceDays, candidates: bankRows.length, matched, unmatched, method: "auto" },
+    }).catch((e) => logger.error(e, "finance-algorithms bank auto-match audit failed"));
     res.json({ matched, unmatched, total: bankRows.length, message: `تمت المطابقة التلقائية: ${matched} متطابق، ${unmatched} غير متطابق` });
   } catch (err) {
     handleRouteError(err, res, "Auto-match error:");
@@ -549,6 +576,19 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", authorize({ fe
       details: `manually matched bank_statement=${bankStatementId} ↔ journal_line=${journalLineId}`,
       after: { bankStatementId, journalLineId, method: "manual" },
     });
+    // #670 — single-row audit entry. entityId points at the
+    // bank_statements row that just transitioned to "matched"; the
+    // matched journal-line is in `after` so the trail can reconstruct
+    // the pairing even if the row is later re-matched.
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "bank_reconciliation.manual_match",
+      entity: "bank_statements",
+      entityId: bankStatementId,
+      after: { bankStatementId, journalLineId, accountCode: bs.accountCode, method: "manual" },
+    }).catch((e) => logger.error(e, "finance-algorithms bank manual-match audit failed"));
     res.json({ success: true, message: "تمت المطابقة اليدوية" });
   } catch (err) {
     handleRouteError(err, res, "Manual match error:");
