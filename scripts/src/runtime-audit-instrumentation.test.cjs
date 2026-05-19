@@ -33,6 +33,8 @@ function aggregate(samples, firstFailureIdx, firstFailureRoute) {
       browserPagesPeak: 0, browserPagesFinal: 0,
       healthOkSamples: 0, healthFailSamples: 0,
       healthLatencyAvgMs: 0, healthLatencyP95Ms: 0,
+      frontendSampleCount: 0, frontendOkSamples: 0, frontendFailSamples: 0,
+      frontendLatencyAvgMs: 0, frontendLatencyP95Ms: 0,
     };
   }
   const boot = samples[0];
@@ -45,6 +47,11 @@ function aggregate(samples, firstFailureIdx, firstFailureRoute) {
   const healthFail = samples.length - healthOk;
   const latencies = samples.map((s) => (s.health && s.health.latencyMs) || 0).sort((a, b) => a - b);
   const lp = (p) => latencies.length ? latencies[Math.min(latencies.length - 1, Math.floor((p / 100) * latencies.length))] : 0;
+  const frontendSamples = samples.filter((s) => s.frontend);
+  const frontendOk = frontendSamples.filter((s) => s.frontend.ok).length;
+  const frontendFail = frontendSamples.length - frontendOk;
+  const frontendLat = frontendSamples.map((s) => s.frontend.latencyMs || 0).sort((a, b) => a - b);
+  const flp = (p) => frontendLat.length ? frontendLat[Math.min(frontendLat.length - 1, Math.floor((p / 100) * frontendLat.length))] : 0;
   return {
     sampleCount: samples.length,
     firstFailureIdx, firstFailureRoute,
@@ -59,6 +66,11 @@ function aggregate(samples, firstFailureIdx, firstFailureRoute) {
     healthFailSamples: healthFail,
     healthLatencyAvgMs: latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0,
     healthLatencyP95Ms: lp(95),
+    frontendSampleCount: frontendSamples.length,
+    frontendOkSamples: frontendOk,
+    frontendFailSamples: frontendFail,
+    frontendLatencyAvgMs: frontendLat.length ? Math.round(frontendLat.reduce((a, b) => a + b, 0) / frontendLat.length) : 0,
+    frontendLatencyP95Ms: flp(95),
   };
 }
 
@@ -145,6 +157,40 @@ console.log("aggregate(samples, firstFailureIdx, firstFailureRoute)");
   const out = aggregate(samples, -1, null);
   assert(out.fdPeak === null, "no-fd: fdPeak=null");
   assert(out.fdDelta === null, "no-fd: fdDelta=null");
+}
+
+// 7. Frontend latency rollup is independent of /healthz rollup
+{
+  const samples = [
+    mkSample({ rss: 100, heap: 50, fd: 10, pages: 1, health: { ok: true, latencyMs: 5 } }),
+    mkSample({ rss: 100, heap: 50, fd: 10, pages: 1, health: { ok: true, latencyMs: 8 } }),
+  ];
+  // Mutate to add frontend data on one of the two samples.
+  samples[0].frontend = { ok: true, latencyMs: 120, status: 200 };
+  samples[1].frontend = { ok: false, latencyMs: 5000, error: "timeout" };
+  const out = aggregate(samples, -1, null);
+  assert(out.frontendSampleCount === 2, "frontend: counts samples that carry .frontend");
+  assert(out.frontendOkSamples === 1, "frontend: ok count");
+  assert(out.frontendFailSamples === 1, "frontend: fail count");
+  assert(out.frontendLatencyAvgMs === Math.round((120 + 5000) / 2), "frontend: avg includes timeout");
+  assert(out.frontendLatencyP95Ms === 5000, "frontend: p95 reflects timeout outlier");
+  // /healthz aggregates are unchanged by frontend data.
+  assert(out.healthOkSamples === 2, "health unchanged: still 2 ok");
+}
+
+// 8. Old samples without `.frontend` field are filtered out gracefully
+//    (re-running the aggregator on a pre-PR pack still works).
+{
+  const samples = [
+    mkSample({ rss: 100, heap: 50, fd: 10, pages: 1, health: { ok: true, latencyMs: 5 } }),
+    mkSample({ rss: 100, heap: 50, fd: 10, pages: 1, health: { ok: true, latencyMs: 5 } }),
+  ];
+  // No .frontend field on any sample.
+  const out = aggregate(samples, -1, null);
+  assert(out.frontendSampleCount === 0, "no-frontend: count=0");
+  assert(out.frontendOkSamples === 0, "no-frontend: ok=0");
+  assert(out.frontendLatencyAvgMs === 0, "no-frontend: avg=0");
+  assert(out.frontendLatencyP95Ms === 0, "no-frontend: p95=0");
 }
 
 if (failed > 0) {
