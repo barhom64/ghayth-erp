@@ -54,6 +54,25 @@ function extractApiCalls(src) {
   return calls;
 }
 
+/**
+ * Pure classifier (exported for the sibling .test.mjs): decide whether
+ * the Button at the current source line is wrapped by a Link, and if
+ * so whether the wrap is the safe slot form or the risky nested form.
+ *
+ *   before — the 3 lines that PRECEDE the Button line, joined.
+ *   blob   — the Button line + 3 following lines, joined.
+ *
+ * Returns { wrappedByLink, linkButtonNestingRisk, buttonIsAsChild }.
+ */
+export function classifyLinkButton(before, blob) {
+  const linkOpensBeforeButton = /<Link\b[^>]*href=/.test(before);
+  const linkOpensInline = /<Link\b[^>]*href=/.test(blob);
+  const buttonIsAsChild = /\basChild\b/.test(blob);
+  const wrappedByLink = linkOpensBeforeButton || linkOpensInline || buttonIsAsChild;
+  const linkButtonNestingRisk = linkOpensBeforeButton && !buttonIsAsChild;
+  return { wrappedByLink, linkButtonNestingRisk, buttonIsAsChild };
+}
+
 function extractButtons(src) {
   const lines = src.split(/\r?\n/);
   const buttons = [];
@@ -61,13 +80,24 @@ function extractButtons(src) {
     if (!/<Button\b/.test(lines[i])) continue;
     const blob = lines.slice(i, i + 4).join(" ");
     // Detect `<Link href="...">...<Button>...</Button>...</Link>` so the
-    // button isn't flagged as orphan. Look both backwards (Link opens
-    // before Button) and at href= near a Button asChild pattern.
+    // button isn't flagged as orphan. Two distinct shapes share this
+    // signature and they have OPPOSITE hydration-safety properties:
+    //
+    //   safe   — `<Button asChild><Link href=…>…</Link></Button>`
+    //             Button passes its props to the <a> Link emits, so the
+    //             rendered HTML is a single <a> with no nested <button>.
+    //   risky  — `<Link href=…><Button>…</Button></Link>`
+    //             Renders as <a><button/></a>, which is invalid
+    //             interactive nesting and contributes to React hydration
+    //             warnings. Issue #640 asks the scanner to surface this
+    //             distinction instead of silently normalising both as
+    //             "wrappedByLink: true".
     const before = lines.slice(Math.max(0, i - 3), i).join(" ");
-    const wrappedByLink =
-      /<Link\b[^>]*href=/.test(before) ||
-      /<Link\b[^>]*href=/.test(blob) ||
-      /\basChild\b/.test(blob);
+    // The "Link opens BEFORE Button without asChild" shape is the
+    // unambiguous risky form. Inline-blob Links are too ambiguous to
+    // flag from a regex (could be a sibling, not a wrapper) so the
+    // predicate only raises the risk for the "Link opens earlier" case.
+    const { wrappedByLink, linkButtonNestingRisk } = classifyLinkButton(before, blob);
     const txtMatch = blob.match(/<Button[^>]*>\s*(?:<[^>]+>\s*)?([^<>{}\n]{2,40}?)\s*</);
     const onClick = blob.match(/onClick=\{([^}]+)\}/);
     const titleAttr = blob.match(/title=["']([^"']+)["']/);
@@ -80,6 +110,8 @@ function extractButtons(src) {
       onClick: onClick ? onClick[1].trim().slice(0, 80) : null,
       disabledHinted: disabled,
       wrappedByLink,
+      linkButtonNestingRisk,
+      recommendedPattern: linkButtonNestingRisk ? "Button asChild > Link" : null,
       isSubmit,
     });
   }
@@ -94,10 +126,21 @@ function extractCrossDomainImports(src) {
   return out;
 }
 
+// Entry-point guard: only run the scanner when this module is invoked
+// directly (e.g. `node button-handler-scan.mjs`). Importing it from the
+// sibling .test.mjs must NOT trigger a full-disk scan + write.
+const isMain = import.meta.url === `file://${process.argv[1]}`;
+if (!isMain) {
+  // Importer wants the exported predicates only.
+} else runMain();
+
+function runMain() {
 const result = {};
 let withApi = 0,
   withButtons = 0,
-  missing = 0;
+  missing = 0,
+  nestingRiskPages = 0,
+  nestingRiskTotal = 0;
 
 for (const row of inventory) {
   if (!row.sourceFile) continue;
@@ -112,11 +155,17 @@ for (const row of inventory) {
   const imports = extractCrossDomainImports(src);
   if (apiCalls.length) withApi++;
   if (buttons.length) withButtons++;
+  const nestingRiskCount = buttons.filter((b) => b.linkButtonNestingRisk).length;
+  if (nestingRiskCount > 0) {
+    nestingRiskPages++;
+    nestingRiskTotal += nestingRiskCount;
+  }
   result[row.path] = {
     sourceFile: row.sourceFile,
     module: row.module,
     apiCalls,
     buttonCount: buttons.length,
+    linkButtonNestingRiskCount: nestingRiskCount,
     buttons: buttons.slice(0, 200), // safety cap
     lineCount: src.split(/\r?\n/).length,
     crossDomainImports: imports,
@@ -127,4 +176,6 @@ writeFileSync(OUT, JSON.stringify(result, null, 2));
 console.log(`button-handler-scan: ${Object.keys(result).length} pages scanned`);
 console.log(`  with API calls : ${withApi}`);
 console.log(`  with buttons   : ${withButtons}`);
+console.log(`  Link>Button nesting risk : ${nestingRiskTotal} hits across ${nestingRiskPages} pages`);
 console.log(`  missing source : ${missing}`);
+} // end runMain()
