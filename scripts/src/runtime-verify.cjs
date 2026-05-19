@@ -209,11 +209,30 @@ async function main() {
   const instr = summary.instrumentation;
   if (instr && Number.isFinite(instr.sampleCount)) {
     log(`instrumentation  : samples=${instr.sampleCount} rssPeak=${(instr.memoryPeakRss/1024/1024).toFixed(0)}MB rssΔ=${(instr.memoryDeltaRss/1024/1024).toFixed(0)}MB fdPeak=${instr.fdPeak ?? "n/a"} fdΔ=${instr.fdDelta ?? "n/a"} pagesPeak=${instr.browserPagesPeak} pagesFinal=${instr.browserPagesFinal}`);
-    log(`health           : ${instr.healthOkSamples}ok/${instr.healthFailSamples}fail avg=${instr.healthLatencyAvgMs}ms p95=${instr.healthLatencyP95Ms}ms`);
+    log(`health (/healthz): ${instr.healthOkSamples}ok/${instr.healthFailSamples}fail avg=${instr.healthLatencyAvgMs}ms p95=${instr.healthLatencyP95Ms}ms`);
+    if (Number.isFinite(instr.frontendSampleCount) && instr.frontendSampleCount > 0) {
+      log(`frontend (BASE/) : ${instr.frontendOkSamples}ok/${instr.frontendFailSamples}fail avg=${instr.frontendLatencyAvgMs}ms p95=${instr.frontendLatencyP95Ms}ms`);
+    }
     if (instr.firstFailureIdx >= 0) {
       log(`first failure    : idx=${instr.firstFailureIdx}  route=${instr.firstFailureRoute}`);
     }
   }
+  // navTrace last-label histogram from failures.json — gives the
+  // operator a one-line shape distribution without reading the full
+  // trace per failure.
+  try {
+    const failsPath = path.join(runDir, "failures.json");
+    if (fs.existsSync(failsPath)) {
+      const failsDoc = JSON.parse(fs.readFileSync(failsPath, "utf8"));
+      const labelHist = {};
+      for (const f of failsDoc.failures || []) {
+        const k = f.navTraceLastLabel || "(none)";
+        labelHist[k] = (labelHist[k] || 0) + 1;
+      }
+      const labelSummary = Object.entries(labelHist).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, n]) => `${k}=${n}`).join("  ");
+      if (labelSummary) log(`navTrace last    : ${labelSummary}`);
+    }
+  } catch { /* failures.json absent or malformed — already handled by counts */ }
   log(`evidence pack    : ${runDir}`);
   if (!NO_TARBALL) log(`tarball          : ${path.join(OUT_DIR, `${runId}.tar.gz`)} (→ latest.tar.gz)`);
   log(`taxonomy codes   : ${navTaxonomy.TAXONOMY.length} (see ${path.relative(process.cwd(), require.resolve("./lib/nav-cause-taxonomy.cjs"))})`);
