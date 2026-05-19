@@ -1,0 +1,1445 @@
+{
+  "totalHits": 111,
+  "buckets": {
+    "intentional": 76,
+    "legacy": 17,
+    "dangerous": 18
+  },
+  "byFile": {
+    "admin.ts": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "communications.ts": {
+      "intentional": 2,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 2
+    },
+    "correspondence.ts": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "documents.ts": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "employees.ts": {
+      "intentional": 10,
+      "legacy": 0,
+      "dangerous": 1,
+      "total": 11
+    },
+    "finance-algorithms.ts": {
+      "intentional": 2,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 2
+    },
+    "finance-cost-centers.ts": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "finance-custodies.ts": {
+      "intentional": 0,
+      "legacy": 0,
+      "dangerous": 1,
+      "total": 1
+    },
+    "finance-invoices.ts": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 7,
+      "total": 8
+    },
+    "finance-journal.ts": {
+      "intentional": 0,
+      "legacy": 0,
+      "dangerous": 5,
+      "total": 5
+    },
+    "finance-zatca.ts": {
+      "intentional": 3,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 3
+    },
+    "fleet.ts": {
+      "intentional": 1,
+      "legacy": 11,
+      "dangerous": 0,
+      "total": 12
+    },
+    "gov-integrations.ts": {
+      "intentional": 0,
+      "legacy": 2,
+      "dangerous": 0,
+      "total": 2
+    },
+    "governance.ts": {
+      "intentional": 0,
+      "legacy": 0,
+      "dangerous": 1,
+      "total": 1
+    },
+    "hr-contracts.ts": {
+      "intentional": 5,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 5
+    },
+    "hr-discipline.ts": {
+      "intentional": 5,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 5
+    },
+    "hr-exit.ts": {
+      "intentional": 2,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 2
+    },
+    "hr-loans.ts": {
+      "intentional": 3,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 3
+    },
+    "hr-overtime.ts": {
+      "intentional": 3,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 3
+    },
+    "hr.ts": {
+      "intentional": 23,
+      "legacy": 1,
+      "dangerous": 1,
+      "total": 25
+    },
+    "obligations.ts": {
+      "intentional": 2,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 2
+    },
+    "print.ts": {
+      "intentional": 2,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 2
+    },
+    "projects.ts": {
+      "intentional": 1,
+      "legacy": 1,
+      "dangerous": 0,
+      "total": 2
+    },
+    "properties.ts": {
+      "intentional": 1,
+      "legacy": 1,
+      "dangerous": 1,
+      "total": 3
+    },
+    "rbacV2.ts": {
+      "intentional": 3,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 3
+    },
+    "recruitment.ts": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "settings.ts": {
+      "intentional": 0,
+      "legacy": 1,
+      "dangerous": 0,
+      "total": 1
+    },
+    "umrah-entities.ts": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "umrah.ts": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 1,
+      "total": 2
+    }
+  },
+  "byTable": {
+    "audit_violations": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "pbx_calls": {
+      "intentional": 2,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 2
+    },
+    "correspondence": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "documents": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "onboarding_tasks": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "employee_assignments": {
+      "intentional": 5,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 5
+    },
+    "employees": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "employee_contracts": {
+      "intentional": 6,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 6
+    },
+    "hr_leave_requests": {
+      "intentional": 0,
+      "legacy": 0,
+      "dangerous": 2,
+      "total": 2
+    },
+    "leave_approval_stages": {
+      "intentional": 6,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 6
+    },
+    "tasks": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "approval_requests": {
+      "intentional": 2,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 2
+    },
+    "hr_employee_loans": {
+      "intentional": 5,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 5
+    },
+    "bank_statements": {
+      "intentional": 2,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 2
+    },
+    "cost_centers": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "journal_entries": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 7,
+      "total": 8
+    },
+    "invoices": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 5,
+      "total": 6
+    },
+    "customer_advances": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "financial_periods": {
+      "intentional": 0,
+      "legacy": 0,
+      "dangerous": 1,
+      "total": 1
+    },
+    "zatca_settings": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "fleet_vehicles": {
+      "intentional": 1,
+      "legacy": 7,
+      "dangerous": 0,
+      "total": 8
+    },
+    "fleet_drivers": {
+      "intentional": 0,
+      "legacy": 4,
+      "dangerous": 0,
+      "total": 4
+    },
+    "gov_integrations": {
+      "intentional": 0,
+      "legacy": 2,
+      "dangerous": 0,
+      "total": 2
+    },
+    "governance_policies": {
+      "intentional": 0,
+      "legacy": 0,
+      "dangerous": 1,
+      "total": 1
+    },
+    "employee_violations": {
+      "intentional": 5,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 5
+    },
+    "hr_exit_clearance": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "hr_overtime_requests": {
+      "intentional": 5,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 5
+    },
+    "attendance_deductions": {
+      "intentional": 2,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 2
+    },
+    "hr_loan_installments": {
+      "intentional": 2,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 2
+    },
+    "payroll_runs": {
+      "intentional": 2,
+      "legacy": 1,
+      "dangerous": 0,
+      "total": 3
+    },
+    "email_queue": {
+      "intentional": 2,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 2
+    },
+    "whatsapp_queue": {
+      "intentional": 2,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 2
+    },
+    "official_letters": {
+      "intentional": 4,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 4
+    },
+    "obligations": {
+      "intentional": 2,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 2
+    },
+    "print_reprint_requests": {
+      "intentional": 2,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 2
+    },
+    "project_tasks": {
+      "intentional": 1,
+      "legacy": 1,
+      "dangerous": 0,
+      "total": 2
+    },
+    "contract_payment_schedule": {
+      "intentional": 1,
+      "legacy": 1,
+      "dangerous": 0,
+      "total": 2
+    },
+    "property_units": {
+      "intentional": 0,
+      "legacy": 0,
+      "dangerous": 1,
+      "total": 1
+    },
+    "rbac_jit_requests": {
+      "intentional": 3,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 3
+    },
+    "job_applications": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "branches": {
+      "intentional": 0,
+      "legacy": 1,
+      "dangerous": 0,
+      "total": 1
+    },
+    "umrah_import_logs": {
+      "intentional": 1,
+      "legacy": 0,
+      "dangerous": 0,
+      "total": 1
+    },
+    "umrah_penalties": {
+      "intentional": 0,
+      "legacy": 0,
+      "dangerous": 1,
+      "total": 1
+    }
+  },
+  "classified": [
+    {
+      "file": "admin.ts",
+      "line": 1010,
+      "table": "audit_violations",
+      "snippet": "`UPDATE audit_violations SET status='resolved', \"resolvedBy\"=$1, \"resolvedAt\"=NOW() WHERE id=$2 AND \"companyId\"=$3 AND status != 'resolved'`",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "audit_violations is a system-signal table (not a workflow entity); status is a flag, not a state"
+    },
+    {
+      "file": "communications.ts",
+      "line": 362,
+      "table": "pbx_calls",
+      "snippet": "`UPDATE pbx_calls SET status=$1, duration=$2, \"recordingUrl\"=$3 WHERE id=$4 AND \"companyId\"=$5 AND status != 'completed'`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "pbx_calls is a system-signal table (not a workflow entity); status is a flag, not a state"
+    },
+    {
+      "file": "communications.ts",
+      "line": 412,
+      "table": "pbx_calls",
+      "snippet": "`UPDATE pbx_calls SET status=$1, \"answeredBy\"=$2 WHERE id=$3`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "pbx_calls is a system-signal table (not a workflow entity); status is a flag, not a state"
+    },
+    {
+      "file": "correspondence.ts",
+      "line": 269,
+      "table": "correspondence",
+      "snippet": "`UPDATE correspondence SET status = 'sent', ${sentField} = NOW(), \"updatedAt\" = NOW()",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "correspondence is a system-signal table (not a workflow entity); status is a flag, not a state"
+    },
+    {
+      "file": "documents.ts",
+      "line": 488,
+      "table": "documents",
+      "snippet": "`UPDATE documents SET status=$1, \"updatedAt\"=NOW() WHERE id=$2 AND \"companyId\"=$3 AND status != $1 AND \"deletedAt\" IS NULL`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "documents is a system-signal table (not a workflow entity); status is a flag, not a state"
+    },
+    {
+      "file": "employees.ts",
+      "line": 757,
+      "table": "onboarding_tasks",
+      "snippet": "`UPDATE onboarding_tasks SET status = $1,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "employees.ts",
+      "line": 1101,
+      "table": "employee_assignments",
+      "snippet": "`UPDATE employee_assignments SET status = 'active' WHERE id = $1 AND \"companyId\" = $2 AND status = $3`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "employees.ts",
+      "line": 1106,
+      "table": "employee_assignments",
+      "snippet": "`UPDATE employee_assignments SET status = 'suspended' WHERE id = $1 AND \"companyId\" = $2 AND status = $3`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "employees.ts",
+      "line": 1268,
+      "table": "employee_assignments",
+      "snippet": "`UPDATE employee_assignments SET status = 'terminated' WHERE id = $1 AND \"companyId\" = $2 AND status = 'active'`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "employees.ts",
+      "line": 1272,
+      "table": "employees",
+      "snippet": "`UPDATE employees SET status = 'terminated' WHERE id = $1 AND \"companyId\" = $2 AND status = 'active' AND \"deletedAt\" IS NULL`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "employees.ts",
+      "line": 1279,
+      "table": "employee_contracts",
+      "snippet": "`UPDATE employee_contracts",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "employees.ts",
+      "line": 1288,
+      "table": "hr_leave_requests",
+      "snippet": "`UPDATE hr_leave_requests",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "hr_leave_requests IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "employees.ts",
+      "line": 1294,
+      "table": "leave_approval_stages",
+      "snippet": "`UPDATE leave_approval_stages",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "employees.ts",
+      "line": 1307,
+      "table": "tasks",
+      "snippet": "`UPDATE tasks",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "employees.ts",
+      "line": 1317,
+      "table": "approval_requests",
+      "snippet": "`UPDATE approval_requests",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "employees.ts",
+      "line": 1325,
+      "table": "hr_employee_loans",
+      "snippet": "`UPDATE hr_employee_loans",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "finance-algorithms.ts",
+      "line": 450,
+      "table": "bank_statements",
+      "snippet": "`UPDATE bank_statements SET \"matchStatus\" = 'matched', \"matchedJournalLineId\" = $1 WHERE id = $2 AND \"companyId\" = $3`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bank_statements is a system-signal table (not a workflow entity); status is a flag, not a state"
+    },
+    {
+      "file": "finance-algorithms.ts",
+      "line": 539,
+      "table": "bank_statements",
+      "snippet": "`UPDATE bank_statements SET \"matchStatus\"='matched', \"matchedJournalLineId\"=$1 WHERE id=$2 AND \"companyId\"=$3`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bank_statements is a system-signal table (not a workflow entity); status is a flag, not a state"
+    },
+    {
+      "file": "finance-cost-centers.ts",
+      "line": 164,
+      "table": "cost_centers",
+      "snippet": "`UPDATE cost_centers SET status = 'deleted', \"updatedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND status != 'deleted'`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "finance-custodies.ts",
+      "line": 609,
+      "table": "journal_entries",
+      "snippet": "`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND \"companyId\" = $2 AND status = 'draft' AND \"deletedAt\" IS NULL`,",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "journal_entries IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "finance-invoices.ts",
+      "line": 752,
+      "table": "invoices",
+      "snippet": "`UPDATE invoices SET \"paidAmount\" = $1, status = $2, \"paidAt\" = $3 WHERE id = $4 AND \"companyId\" = $5 AND \"deletedAt\" IS NULL`,",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "invoices IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "finance-invoices.ts",
+      "line": 757,
+      "table": "invoices",
+      "snippet": "`UPDATE invoices SET \"paidAmount\" = $1, status = $2 WHERE id = $3 AND \"companyId\" = $4 AND \"deletedAt\" IS NULL`,",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "invoices IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "finance-invoices.ts",
+      "line": 963,
+      "table": "journal_entries",
+      "snippet": "`UPDATE journal_entries SET \"deletedAt\" = NOW(), status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "journal_entries IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "finance-invoices.ts",
+      "line": 968,
+      "table": "invoices",
+      "snippet": "`UPDATE invoices SET \"deletedAt\" = NOW(), status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "invoices IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "finance-invoices.ts",
+      "line": 1034,
+      "table": "journal_entries",
+      "snippet": "`UPDATE journal_entries SET status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND status IN ('posted', 'approved') AND \"deletedAt\" IS ",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "journal_entries IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "finance-invoices.ts",
+      "line": 1197,
+      "table": "invoices",
+      "snippet": "`UPDATE invoices SET \"paidAmount\" = COALESCE(\"paidAmount\",0) + $1,",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "invoices IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "finance-invoices.ts",
+      "line": 1733,
+      "table": "customer_advances",
+      "snippet": "`UPDATE customer_advances SET \"appliedAmount\" = COALESCE(\"appliedAmount\",0) + $1,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "finance-invoices.ts",
+      "line": 1739,
+      "table": "invoices",
+      "snippet": "`UPDATE invoices SET \"paidAmount\" = COALESCE(\"paidAmount\",0) + $1,",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "invoices IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "finance-journal.ts",
+      "line": 528,
+      "table": "journal_entries",
+      "snippet": "if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND \"companyId",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "journal_entries IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "finance-journal.ts",
+      "line": 570,
+      "table": "journal_entries",
+      "snippet": "const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET \"deletedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "journal_entries IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "finance-journal.ts",
+      "line": 855,
+      "table": "journal_entries",
+      "snippet": "const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET \"deletedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "journal_entries IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "finance-journal.ts",
+      "line": 939,
+      "table": "journal_entries",
+      "snippet": "if (approvalResult.requiresApproval) { const { affectedRows } = await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHE",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "journal_entries IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "finance-journal.ts",
+      "line": 1405,
+      "table": "financial_periods",
+      "snippet": "`UPDATE financial_periods SET status='closed', \"closedAt\"=NOW(), \"closedBy\"=$1, \"updatedAt\"=NOW() WHERE id=$2 AND \"companyId\"=$3 AND status ",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "financial_periods IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "finance-zatca.ts",
+      "line": 490,
+      "table": "zatca_settings",
+      "snippet": "`UPDATE zatca_settings SET \"lastConnectionTest\" = NOW(), \"connectionTestStatus\" = $1, \"connectionTestMessage\" = $2 WHERE \"companyId\" = $3`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk operation in finance-zatca.ts (cron/batch context); per-row applyTransition would be slower with no semantic benefit"
+    },
+    {
+      "file": "finance-zatca.ts",
+      "line": 687,
+      "table": "invoices",
+      "snippet": "`UPDATE invoices SET \"zatcaUuid\" = $1::uuid, \"zatcaHash\" = $2, \"zatcaStatus\" = $3, \"zatcaQrCode\" = $4",
+      "isLifecycleEntity": true,
+      "bucket": "intentional",
+      "rationale": "bulk operation in finance-zatca.ts (cron/batch context); per-row applyTransition would be slower with no semantic benefit"
+    },
+    {
+      "file": "finance-zatca.ts",
+      "line": 775,
+      "table": "journal_entries",
+      "snippet": "`UPDATE journal_entries SET \"zatcaUuid\" = $1::uuid, \"zatcaHash\" = $2, \"zatcaStatus\" = $3, \"zatcaQrCode\" = $4",
+      "isLifecycleEntity": true,
+      "bucket": "intentional",
+      "rationale": "bulk operation in finance-zatca.ts (cron/batch context); per-row applyTransition would be slower with no semantic benefit"
+    },
+    {
+      "file": "fleet.ts",
+      "line": 1077,
+      "table": "fleet_vehicles",
+      "snippet": "const vResult = await client.query(`UPDATE fleet_vehicles SET status='in_use', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status='",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "fleet.ts",
+      "line": 1081,
+      "table": "fleet_drivers",
+      "snippet": "const dResult = await client.query(`UPDATE fleet_drivers SET status='on_trip' WHERE id=$1 AND \"companyId\"=$2 AND status='available' AND \"del",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "fleet.ts",
+      "line": 1173,
+      "table": "fleet_vehicles",
+      "snippet": "const vRes = await client.query(`UPDATE fleet_vehicles SET status='available', \"currentMileage\"=\"currentMileage\"+$1, \"updatedAt\"=NOW() WHERE",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "fleet.ts",
+      "line": 1177,
+      "table": "fleet_drivers",
+      "snippet": "const dRes = await client.query(`UPDATE fleet_drivers SET status='available', \"totalTrips\"=COALESCE(\"totalTrips\",0)+1 WHERE id=$1 AND \"compa",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "fleet.ts",
+      "line": 1256,
+      "table": "fleet_vehicles",
+      "snippet": "`UPDATE fleet_vehicles SET status='available', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status='in_use' AND \"deletedAt\" IS NULL`",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "fleet.ts",
+      "line": 1262,
+      "table": "fleet_drivers",
+      "snippet": "`UPDATE fleet_drivers SET status='available' WHERE id=$1 AND \"companyId\"=$2 AND status='on_trip' AND \"deletedAt\" IS NULL`,",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "fleet.ts",
+      "line": 1413,
+      "table": "fleet_vehicles",
+      "snippet": "await client.query(`UPDATE fleet_vehicles SET status='maintenance', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status='available' ",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "fleet.ts",
+      "line": 1514,
+      "table": "fleet_vehicles",
+      "snippet": "await client.query(`UPDATE fleet_vehicles SET status='available', \"lastMaintenanceDate\"=NOW(), \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "fleet.ts",
+      "line": 1601,
+      "table": "fleet_vehicles",
+      "snippet": "await client.query(`UPDATE fleet_vehicles SET status='available', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status='maintenance' ",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "fleet.ts",
+      "line": 2115,
+      "table": "fleet_vehicles",
+      "snippet": "`UPDATE fleet_vehicles SET status='available', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status IN ('in_use','on_trip') AND \"dele",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "fleet.ts",
+      "line": 2121,
+      "table": "fleet_drivers",
+      "snippet": "`UPDATE fleet_drivers SET status='available', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status='on_trip' AND \"deletedAt\" IS NULL`",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "fleet.ts",
+      "line": 2267,
+      "table": "fleet_vehicles",
+      "snippet": "`UPDATE fleet_vehicles SET status='available', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status='maintenance' AND \"deletedAt\" IS ",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "gov-integrations.ts",
+      "line": 282,
+      "table": "gov_integrations",
+      "snippet": "`UPDATE gov_integrations SET \"lastCheckedAt\"=NOW(), \"lastCheckStatus\"=$2, \"lastCheckMessage\"=$3, \"updatedAt\"=NOW() WHERE id=$1 AND \"companyI",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "gov-integrations.ts",
+      "line": 337,
+      "table": "gov_integrations",
+      "snippet": "`UPDATE gov_integrations SET \"lastCheckedAt\"=NOW(), \"lastCheckStatus\"=$2, \"lastCheckMessage\"=$3, \"updatedAt\"=NOW() WHERE id=$1 AND \"companyI",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "governance.ts",
+      "line": 331,
+      "table": "governance_policies",
+      "snippet": "`UPDATE governance_policies SET status='archived', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status IN ('draft','active') AND \"de",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "governance_policies IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "hr-contracts.ts",
+      "line": 230,
+      "table": "employee_contracts",
+      "snippet": "`UPDATE employee_contracts SET \"approvalStatus\" = 'pending_approval', \"updatedAt\" = NOW()",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-contracts.ts",
+      "line": 258,
+      "table": "employee_contracts",
+      "snippet": "`UPDATE employee_contracts",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-contracts.ts",
+      "line": 291,
+      "table": "employee_contracts",
+      "snippet": "`UPDATE employee_contracts",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-contracts.ts",
+      "line": 385,
+      "table": "employee_contracts",
+      "snippet": "`UPDATE employee_contracts",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-contracts.ts",
+      "line": 416,
+      "table": "employee_contracts",
+      "snippet": "`UPDATE employee_contracts",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-discipline.ts",
+      "line": 919,
+      "table": "employee_violations",
+      "snippet": "`UPDATE employee_violations SET status = 'rejected' WHERE id = $1 AND \"companyId\" = $2 AND status = 'pending' AND \"deletedAt\" IS NULL`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-discipline.ts",
+      "line": 944,
+      "table": "employee_violations",
+      "snippet": "`UPDATE employee_violations",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-discipline.ts",
+      "line": 1013,
+      "table": "employee_violations",
+      "snippet": "`UPDATE employee_violations SET status = 'cancelled'",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-discipline.ts",
+      "line": 1109,
+      "table": "employee_violations",
+      "snippet": "`UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND \"companyId\" = $2 AND status = 'approved' AND \"deletedAt\" IS NUL",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-discipline.ts",
+      "line": 1164,
+      "table": "employee_violations",
+      "snippet": "`UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND \"companyId\" = $2 AND status IN ('approved', 'rejected', 'appeal_accepted",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-exit.ts",
+      "line": 534,
+      "table": "hr_exit_clearance",
+      "snippet": "`UPDATE hr_exit_clearance",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-exit.ts",
+      "line": 592,
+      "table": "employee_assignments",
+      "snippet": "`UPDATE employee_assignments SET status = 'terminated', \"endDate\" = CURRENT_DATE",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-loans.ts",
+      "line": 440,
+      "table": "hr_employee_loans",
+      "snippet": "`UPDATE hr_employee_loans SET status = 'rejected', \"rejectionReason\" = $1, \"updatedAt\" = NOW() WHERE id = $2 AND \"companyId\" = $3 AND status",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-loans.ts",
+      "line": 486,
+      "table": "hr_employee_loans",
+      "snippet": "`UPDATE hr_employee_loans",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-loans.ts",
+      "line": 591,
+      "table": "hr_employee_loans",
+      "snippet": "`UPDATE hr_employee_loans SET status = 'rejected', \"rejectionReason\" = $1, \"updatedAt\" = NOW() WHERE id = $2 AND \"companyId\" = $3 AND status",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-overtime.ts",
+      "line": 401,
+      "table": "hr_overtime_requests",
+      "snippet": "`UPDATE hr_overtime_requests SET status = 'rejected', \"rejectionReason\" = $1, \"updatedAt\" = NOW() WHERE id = $2 AND \"companyId\" = $3 AND sta",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-overtime.ts",
+      "line": 447,
+      "table": "hr_overtime_requests",
+      "snippet": "`UPDATE hr_overtime_requests",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr-overtime.ts",
+      "line": 515,
+      "table": "hr_overtime_requests",
+      "snippet": "`UPDATE hr_overtime_requests SET status = 'rejected', \"rejectionReason\" = $1, \"updatedAt\" = NOW() WHERE id = $2 AND \"companyId\" = $3 AND sta",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 1847,
+      "table": "leave_approval_stages",
+      "snippet": "`UPDATE leave_approval_stages",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 1899,
+      "table": "leave_approval_stages",
+      "snippet": "`UPDATE leave_approval_stages SET status = 'returned', decision = $1, \"decidedBy\" = $2, \"decidedAt\" = NOW() WHERE id = $3 AND status = 'pend",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 1961,
+      "table": "leave_approval_stages",
+      "snippet": "`UPDATE leave_approval_stages",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 2029,
+      "table": "leave_approval_stages",
+      "snippet": "`UPDATE leave_approval_stages",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 2048,
+      "table": "approval_requests",
+      "snippet": "`UPDATE approval_requests SET status = 'approved', \"decidedBy\" = $1, \"decidedAt\" = NOW()",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 2253,
+      "table": "leave_approval_stages",
+      "snippet": "`UPDATE leave_approval_stages SET status = 'escalated'",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 2698,
+      "table": "attendance_deductions",
+      "snippet": "`UPDATE attendance_deductions SET status = 'deducted_in_payroll'",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 2717,
+      "table": "hr_loan_installments",
+      "snippet": "`UPDATE hr_loan_installments SET status = 'paid', \"paidAt\" = NOW()",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 2722,
+      "table": "hr_employee_loans",
+      "snippet": "`UPDATE hr_employee_loans l SET",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 2737,
+      "table": "hr_overtime_requests",
+      "snippet": "`UPDATE hr_overtime_requests SET status = 'paid', \"updatedAt\" = NOW()",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 2827,
+      "table": "payroll_runs",
+      "snippet": "`UPDATE payroll_runs SET status='completed', \"approvedBy\"=$1, \"approvedAt\"=NOW() WHERE id=$2 AND \"companyId\"=$3 AND \"deletedAt\" IS NULL`,",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "hr.ts",
+      "line": 3499,
+      "table": "email_queue",
+      "snippet": "`UPDATE email_queue SET status='cancelled', \"errorMessage\"='تم رفض الخطاب الرسمي', \"updatedAt\"=NOW()",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 3504,
+      "table": "whatsapp_queue",
+      "snippet": "`UPDATE whatsapp_queue SET status='cancelled', \"errorMessage\"='تم رفض الخطاب الرسمي', \"updatedAt\"=NOW()",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 3920,
+      "table": "official_letters",
+      "snippet": "`UPDATE official_letters SET status = 'pending_approval' WHERE id = $1 AND \"companyId\" = $2 AND status = 'draft' AND \"deletedAt\" IS NULL`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 4151,
+      "table": "hr_leave_requests",
+      "snippet": "`UPDATE hr_leave_requests SET \"deletedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND status = 'pending' AND \"deletedAt\" IS NULL RETURNIN",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "hr_leave_requests IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "hr.ts",
+      "line": 4216,
+      "table": "payroll_runs",
+      "snippet": "`UPDATE payroll_runs SET status = $1 WHERE id = $2 AND \"companyId\" = $3 AND \"deletedAt\" IS NULL AND status = $4 RETURNING *`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 4300,
+      "table": "payroll_runs",
+      "snippet": "`UPDATE payroll_runs SET status = $1 WHERE id = $2 AND \"companyId\" = $3 AND \"deletedAt\" IS NULL AND status = $4 RETURNING *`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 4334,
+      "table": "attendance_deductions",
+      "snippet": "`UPDATE attendance_deductions SET status = 'pending_payroll' WHERE period = $1 AND \"companyId\" = $2 AND status = 'deducted_in_payroll'`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 4345,
+      "table": "hr_loan_installments",
+      "snippet": "`UPDATE hr_loan_installments SET status = 'pending' WHERE \"payrollLineId\" IN (SELECT id FROM payroll_lines WHERE \"runId\" = $1) AND \"companyI",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 4358,
+      "table": "hr_overtime_requests",
+      "snippet": "`UPDATE hr_overtime_requests SET status = 'approved' WHERE \"payrollLineId\" IN (SELECT id FROM payroll_lines WHERE \"runId\" = $1) AND \"company",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 4591,
+      "table": "official_letters",
+      "snippet": "`UPDATE official_letters",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 4598,
+      "table": "official_letters",
+      "snippet": "`UPDATE official_letters SET status = $1 WHERE id = $2 AND \"companyId\" = $3 AND status = 'pending_approval' AND \"deletedAt\" IS NULL`,",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 4607,
+      "table": "email_queue",
+      "snippet": "`UPDATE email_queue SET status='cancelled', \"errorMessage\"='تم رفض الخطاب الرسمي', \"updatedAt\"=NOW()",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 4612,
+      "table": "whatsapp_queue",
+      "snippet": "`UPDATE whatsapp_queue SET status='cancelled', \"errorMessage\"='تم رفض الخطاب الرسمي', \"updatedAt\"=NOW()",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "hr.ts",
+      "line": 6244,
+      "table": "employee_assignments",
+      "snippet": "`UPDATE employee_assignments SET \"branchId\"=$1,\"departmentId\"=$2,\"jobTitle\"=$3,salary=$4 WHERE \"employeeId\"=$5 AND \"companyId\"=$6 AND status",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "obligations.ts",
+      "line": 136,
+      "table": "obligations",
+      "snippet": "`UPDATE obligations SET status='met', \"metAt\"=NOW(), \"updatedAt\"=NOW()",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk operation in obligations.ts (cron/batch context); per-row applyTransition would be slower with no semantic benefit"
+    },
+    {
+      "file": "obligations.ts",
+      "line": 172,
+      "table": "obligations",
+      "snippet": "`UPDATE obligations SET status='cancelled', \"updatedAt\"=NOW()",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk operation in obligations.ts (cron/batch context); per-row applyTransition would be slower with no semantic benefit"
+    },
+    {
+      "file": "print.ts",
+      "line": 573,
+      "table": "print_reprint_requests",
+      "snippet": "`UPDATE print_reprint_requests",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "print.ts",
+      "line": 597,
+      "table": "print_reprint_requests",
+      "snippet": "`UPDATE print_reprint_requests",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "projects.ts",
+      "line": 942,
+      "table": "project_tasks",
+      "snippet": "await client.query(`UPDATE project_tasks SET status='blocked' WHERE id=$1 AND status='todo' AND \"deletedAt\" IS NULL AND \"projectId\" IN (SELE",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "projects.ts",
+      "line": 1085,
+      "table": "project_tasks",
+      "snippet": "`UPDATE project_tasks SET status='todo'",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "properties.ts",
+      "line": 1583,
+      "table": "contract_payment_schedule",
+      "snippet": "`UPDATE contract_payment_schedule SET status='cancelled'",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "properties.ts",
+      "line": 1591,
+      "table": "property_units",
+      "snippet": "`UPDATE property_units SET status='available', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status IN ('occupied','rented') AND \"del",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "property_units IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    },
+    {
+      "file": "properties.ts",
+      "line": 3525,
+      "table": "contract_payment_schedule",
+      "snippet": "`UPDATE contract_payment_schedule SET \"paidAmount\"=$1, \"paidDate\"=$2, method=$3, status=$4, \"receiptNumber\"=$5, \"updatedAt\"=NOW() WHERE id=$",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "rbacV2.ts",
+      "line": 1049,
+      "table": "rbac_jit_requests",
+      "snippet": "`UPDATE rbac_jit_requests",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "rbacV2.ts",
+      "line": 1111,
+      "table": "rbac_jit_requests",
+      "snippet": "`UPDATE rbac_jit_requests",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "rbacV2.ts",
+      "line": 1162,
+      "table": "rbac_jit_requests",
+      "snippet": "`UPDATE rbac_jit_requests",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "recruitment.ts",
+      "line": 207,
+      "table": "job_applications",
+      "snippet": "`UPDATE job_applications",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "settings.ts",
+      "line": 510,
+      "table": "branches",
+      "snippet": "`UPDATE branches SET status='inactive' WHERE id=$1 AND \"companyId\"=$2`,",
+      "isLifecycleEntity": false,
+      "bucket": "legacy",
+      "rationale": "single-row status flip outside the engine; doesn't break invariants but skips audit/event"
+    },
+    {
+      "file": "umrah-entities.ts",
+      "line": 1524,
+      "table": "official_letters",
+      "snippet": "`UPDATE official_letters",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "umrah.ts",
+      "line": 980,
+      "table": "umrah_import_logs",
+      "snippet": "`UPDATE umrah_import_logs SET \"newRecords\"=$1,\"updatedRecords\"=$2,\"duplicateRecords\"=$3,\"errorRecords\"=$4,errors=$5,\"processedRows\"=$6,statu",
+      "isLifecycleEntity": false,
+      "bucket": "intentional",
+      "rationale": "bulk update without single-row predicate; treat as documented batch operation"
+    },
+    {
+      "file": "umrah.ts",
+      "line": 1393,
+      "table": "umrah_penalties",
+      "snippet": "`UPDATE umrah_penalties SET status='invoiced', \"invoiceId\"=$1 WHERE \"agentId\"=$2 AND \"seasonId\"=$3 AND \"companyId\"=$4 AND status='pending'`,",
+      "isLifecycleEntity": true,
+      "bucket": "dangerous",
+      "rationale": "umrah_penalties IS in STATE_MACHINES — direct UPDATE skips engine validation, audit log, AND event emission"
+    }
+  ]
+}
