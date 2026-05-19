@@ -394,6 +394,21 @@ contractsRouter.post("/:id/sign-company", authorize({ feature: "hr.contracts", a
     if (!updated) throw new ConflictError("العقد تم توقيعه مسبقاً — أعد التحميل");
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_signed_company", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
+    // #683 Cluster C — emit event. signedByCompany alone doesn't
+    // flip approvalStatus; the SQL only sets approvalStatus='signed'
+    // if signedByEmployee was already TRUE. The event reflects what
+    // actually changed: company-side signature recorded; final
+    // bilateral-signed state is in `after.approvalStatus`.
+    emitEvent({
+      action: "hr.contract.signed_by_company",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "employee_contracts",
+      entityId: id,
+      details: `company signed contract ${contract.ref}`,
+      after: { ref: contract.ref, signedByCompany: true, approvalStatus: updated.approvalStatus, companySignedBy: scope.userId },
+    }).catch((e) => logger.error(e, "hr-contracts background task failed"));
 
     res.json(updated);
   } catch (err) {
@@ -435,6 +450,20 @@ contractsRouter.post("/:id/sign-employee", authorize({ feature: "hr.contracts", 
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_signed_employee", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
+    // #683 Cluster C — emit event. Mirror of signed_by_company,
+    // employee-side. The final 'signed' approvalStatus is only set
+    // here if signedByCompany was already TRUE — `after` reflects
+    // the actual post-update state from the RETURNING clause.
+    emitEvent({
+      action: "hr.contract.signed_by_employee",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "employee_contracts",
+      entityId: id,
+      details: `employee signed contract ${contract.ref}`,
+      after: { ref: contract.ref, signedByEmployee: true, approvalStatus: updated.approvalStatus, employeeId: scope.employeeId },
+    }).catch((e) => logger.error(e, "hr-contracts background task failed"));
 
     res.json(updated);
   } catch (err) {
@@ -464,6 +493,19 @@ contractsRouter.post("/:id/activate", authorize({ feature: "hr.contracts", actio
     );
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_activated", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
+    // #683 Cluster C — emit event. Activation is the trigger event
+    // for downstream subscribers (payroll, attendance enrolment, HR
+    // dashboards) — the contract is now in force.
+    emitEvent({
+      action: "hr.contract.activated",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "employee_contracts",
+      entityId: id,
+      details: `activated contract ${contract.ref}`,
+      after: { ref: contract.ref, status: "active", approvalStatus: "active" },
+    }).catch((e) => logger.error(e, "hr-contracts background task failed"));
 
     res.json(updated);
   } catch (err) {
