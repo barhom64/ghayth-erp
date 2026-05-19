@@ -264,6 +264,19 @@ contractsRouter.post("/:id/approve", authorize({ feature: "hr.contracts", action
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_approved", entity: "employee_contract", entityId: id, after: { ref: contract.ref } });
     await createNotification({ companyId: scope.companyId, assignmentId: contract.assignmentId as number, type: "contract_approved", title: "تم اعتماد العقد", body: `تم اعتماد العقد رقم ${contract.ref}`, refType: "contract", refId: id }).catch((e) => logger.error(e, "hr-contracts background task failed"));
+    // #683 Cluster B — emit event so BI dashboards, the rule
+    // engine, and any cross-module subscriber (e.g. payroll spinning
+    // up after contract approval) can react.
+    emitEvent({
+      action: "hr.contract.approved",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "employee_contracts",
+      entityId: id,
+      details: `approved contract ${contract.ref}`,
+      after: { ref: contract.ref, approvalStatus: "approved", approvedBy: scope.userId },
+    }).catch((e) => logger.error(e, "hr-contracts background task failed"));
 
     res.json(updated);
   } catch (err) {
@@ -296,6 +309,18 @@ contractsRouter.post("/:id/reject", authorize({ feature: "hr.contracts", action:
     if (!updated) throw new ConflictError("تم تحديث العقد مسبقاً — أعد التحميل");
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_rejected", entity: "employee_contract", entityId: id, after: { ref: contract.ref, reason } });
+    // #683 Cluster B — emit event so the submitter-side notification
+    // and rework workflows can react to a rejection.
+    emitEvent({
+      action: "hr.contract.rejected",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "employee_contracts",
+      entityId: id,
+      details: `rejected contract ${contract.ref}: ${reason || "no reason"}`,
+      after: { ref: contract.ref, approvalStatus: "rejected", reason: reason || null },
+    }).catch((e) => logger.error(e, "hr-contracts background task failed"));
 
     res.json(updated);
   } catch (err) {

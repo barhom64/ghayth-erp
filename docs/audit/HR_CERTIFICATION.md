@@ -29,7 +29,7 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 
 | File | Endpoints | RBAC | Scope | Audit | Events | Lifecycle | GL bridge |
 |---|---:|---|---|---|---|---|---|
-| `hr-contracts.ts` | 12 (10w) | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
+| `hr-contracts.ts` | 12 (10w) | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL | ❌ FAIL | 🟡 PARTIAL |
 | `hr-discipline.ts` | 24 (15w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP |
 | `hr-exit.ts` | 6 (4w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | 🟡 PARTIAL | — SKIP |
 | `hr-loans.ts` | 6 (3w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
@@ -43,7 +43,7 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 | RBAC | 6 | 0 | 0 | 0 |
 | Scope | 0 | 6 | 0 | 0 |
 | Audit | 4 | 2 | 0 | 0 |
-| Events | 4 | 1 | 1 | 0 |
+| Events | 4 | 2 | 0 | 0 |
 | Lifecycle | 1 | 2 | 3 | 0 |
 | GL bridge | 0 | 3 | 0 | 3 |
 
@@ -72,13 +72,13 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 | 117 | `POST /` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | 🟡 PARTIAL |
 | 171 | `PATCH /:id` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
 | 216 | `POST /:id/submit` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 244 | `POST /:id/approve` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 275 | `POST /:id/reject` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 307 | `POST /:id/sign-company` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 346 | `POST /:id/sign-employee` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 379 | `POST /:id/activate` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 408 | `POST /:id/terminate` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 440 | `POST /:id/renew` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | 🟡 PARTIAL |
+| 244 | `POST /:id/approve` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
+| 288 | `POST /:id/reject` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
+| 332 | `POST /:id/sign-company` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
+| 371 | `POST /:id/sign-employee` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
+| 404 | `POST /:id/activate` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
+| 433 | `POST /:id/terminate` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
+| 465 | `POST /:id/renew` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | 🟡 PARTIAL |
 
 ### `hr-discipline.ts`
 
