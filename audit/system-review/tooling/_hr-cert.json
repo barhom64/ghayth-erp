@@ -9,7 +9,7 @@
         "rbac": "PASS",
         "scope": "PARTIAL",
         "audit": "PARTIAL",
-        "event": "PARTIAL",
+        "event": "PASS",
         "lifecycle": "FAIL",
         "glBridge": "PARTIAL"
       },
@@ -192,7 +192,7 @@
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
             "audit": true,
-            "event": false,
+            "event": true,
             "applyTransition": false,
             "directStatusUpdate": true,
             "glPosting": false
@@ -201,7 +201,7 @@
             "rbac": "PASS",
             "scope": "PASS",
             "audit": "PASS",
-            "event": "FAIL",
+            "event": "PASS",
             "lifecycle": "FAIL",
             "glBridge": "PARTIAL"
           }
@@ -209,14 +209,14 @@
         {
           "method": "POST",
           "path": "/:id/sign-employee",
-          "line": 413,
+          "line": 428,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
             "audit": true,
-            "event": false,
+            "event": true,
             "applyTransition": false,
             "directStatusUpdate": true,
             "glPosting": false
@@ -225,7 +225,7 @@
             "rbac": "PASS",
             "scope": "PASS",
             "audit": "PASS",
-            "event": "FAIL",
+            "event": "PASS",
             "lifecycle": "FAIL",
             "glBridge": "PARTIAL"
           }
@@ -233,30 +233,6 @@
         {
           "method": "POST",
           "path": "/:id/activate",
-          "line": 446,
-          "checks": {
-            "rbac": true,
-            "scopeParseFilters": false,
-            "scopeBuildWhere": false,
-            "scopeManualCompany": true,
-            "audit": true,
-            "event": false,
-            "applyTransition": false,
-            "directStatusUpdate": true,
-            "glPosting": false
-          },
-          "dims": {
-            "rbac": "PASS",
-            "scope": "PASS",
-            "audit": "PASS",
-            "event": "FAIL",
-            "lifecycle": "FAIL",
-            "glBridge": "PARTIAL"
-          }
-        },
-        {
-          "method": "POST",
-          "path": "/:id/terminate",
           "line": 475,
           "checks": {
             "rbac": true,
@@ -280,8 +256,32 @@
         },
         {
           "method": "POST",
+          "path": "/:id/terminate",
+          "line": 517,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": true,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "FAIL",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "POST",
           "path": "/:id/renew",
-          "line": 521,
+          "line": 563,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
