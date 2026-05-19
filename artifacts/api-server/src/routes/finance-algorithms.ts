@@ -1270,6 +1270,18 @@ financeAlgorithmsRouter.post("/rounding-account/setup", authorize({ feature: "fi
       details: `created rounding account 9999`,
       after: { accountCode: "9999" },
     });
+    // #670 — rounding-account setup audit. One-shot configuration
+    // change that creates the GL account used for rounding diffs;
+    // recording who configured it is essential for compliance.
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "rounding_account.setup",
+      entity: "chart_of_accounts",
+      entityId: (row?.id as number) ?? 0,
+      after: { accountCode: "9999", accountName: "فروقات التقريب" },
+    }).catch((e) => logger.error(e, "finance-algorithms rounding-account setup audit failed"));
     res.status(201).json({ account: row, message: "تم إنشاء حساب فروقات التقريب (9999)" });
   } catch (err) {
     handleRouteError(err, res, "Setup rounding account error:");
@@ -1301,6 +1313,20 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", authorize({ feature:
         { accountCode: "9999", debit: applied > 0 ? applied : 0, credit: applied < 0 ? Math.abs(applied) : 0 },
       ]);
 
+      // #670 — rounding-difference apply audit. Adjusts an existing
+      // journal entry with a sub-cent rounding diff; the `entityId`
+      // points at the journal entry that was modified, and `after`
+      // records exactly what amount was applied so a reviewer can
+      // attribute the 9999-account hit to a specific user + JE.
+      createAuditLog({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "rounding_difference.apply",
+        entity: "journal_entries",
+        entityId: journalEntryId,
+        after: { journalEntryId, requested: diff, applied, description: description ?? null },
+      }).catch((e) => logger.error(e, "finance-algorithms rounding-diff apply audit failed"));
       res.json({ message: `تم تسجيل فرق التقريب (${applied.toFixed(2)} ﷼) في حساب 9999` });
     } catch (engineErr) {
       const msg = engineErr instanceof Error ? engineErr.message : String(engineErr);
@@ -1397,6 +1423,25 @@ financeAlgorithmsRouter.post("/fx/rates", authorize({ feature: "finance.algorith
        RETURNING *`,
       [scope.companyId, rateDate, fromCurrency.toUpperCase(), toCurrency.toUpperCase(), rate, type]
     );
+    // #670 — fx_rates upsert audit. FX rates feed every downstream
+    // revaluation calculation; recording who set which rate, when,
+    // and from which source is essential for forensic review of
+    // multi-currency P&L impact.
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fx_rate.upsert",
+      entity: "fx_rates",
+      entityId: (row?.id as number) ?? 0,
+      after: {
+        effectiveDate: rateDate,
+        fromCurrency: fromCurrency.toUpperCase(),
+        toCurrency: toCurrency.toUpperCase(),
+        rate,
+        source: type,
+      },
+    }).catch((e) => logger.error(e, "finance-algorithms fx-rate upsert audit failed"));
     res.status(201).json({ data: row });
   } catch (err) {
     handleRouteError(err, res, "FX rate upsert error:");
@@ -1678,6 +1723,33 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
     }
     const revalId = revalIds[0];
 
+    // #670 — FX revaluation post audit. Critical P&L-impacting
+    // operation: posts the period-end revaluation journal that
+    // restates foreign-currency monetary balances to closing rate.
+    // The audit row carries the journalEntryId (the GL entry just
+    // posted by financialEngine.postJournalEntry above) AND the
+    // full per-currency `revalIds` list so the trail can reconstruct
+    // the linkage: audit → fx_revaluations → journal_entries.
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fx_revaluation.post",
+      entity: "fx_revaluations",
+      entityId: revalId ?? 0,
+      after: {
+        period,
+        periodEnd,
+        arDiff,
+        apDiff,
+        totalGain: roundTo2(totalGain),
+        totalLoss: roundTo2(totalLoss),
+        journalEntryId,
+        revaluationIds: revalIds,
+        currencies,
+        lineCount: details.length,
+      },
+    }).catch((e) => logger.error(e, "finance-algorithms fx-revaluation post audit failed"));
     res.status(201).json({
       revaluationId: revalId,
       journalEntryId,
