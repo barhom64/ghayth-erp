@@ -581,7 +581,12 @@ async function probe(page, routePath, resolvedUrl, cls) {
   console.log(`[audit] run-id=${RUN_ID} run-dir=${RUN_DIR} (session=${envRecord.auditSessionId})`);
 
   console.log(`[audit] login as ${ADMIN_EMAIL}…`);
-  const cookieHeader = await login();
+  // Phase 9: cookieHeader is `let` so recycleBrowser() can refresh the
+  // Node-side resolver auth in lock-step with the in-page session
+  // (architect review #2 — otherwise resolveParams keeps using a stale
+  // cookie after a long run and starts emitting bogus "unresolved" SKIPs
+  // while in-page navigation remains authenticated).
+  let cookieHeader = await login();
   console.log(`[audit] login ok, cookieHeader len=${cookieHeader.length}`);
 
   process.on("uncaughtException", (e) => { console.error("[uncaught]", e); });
@@ -608,103 +613,17 @@ async function probe(page, routePath, resolvedUrl, cls) {
   };
   let chromiumCrashCount = 0;
   let reloginCount = 0;
-  // Phase 4 (api-server restart awareness) — apiRestartCount declaration
-  // was lost when PR #675's diff merged empty. Detection is now real:
-  // sampleRuntimeMetrics() polls /healthz periodically and increments
-  // this counter on every false→true health transition.
+  // Phase 4 placeholder (api-server restart detection was added to the
+  // metrics block in Phase 5 but the declaration here was lost when
+  // PR #675's diff merged empty). Without this declaration, the line
+  // `apiServerRestartsDetected: apiRestartCount` at the bottom of the
+  // metrics block throws ReferenceError, which kills the audit before
+  // summary.json / timings.json / latest pointer are written —
+  // producing the DEGRADED verdict the operator was seeing. Real
+  // restart detection (periodic /healthz polling) lands in the
+  // follow-up instrumentation PR; for now the counter is a static
+  // zero so the harness writes its evidence pack cleanly.
   let apiRestartCount = 0;
-
-  // === Runtime Stabilization — Phase 1 instrumentation ===
-  //
-  // Periodic samples of memory / fd / browser-context / api-health while
-  // the audit walks routes. Three things this enables:
-  //
-  //   1. Distinguishing harness-side regressions (memory/fd creep,
-  //      runaway browser pages) from app-side regressions (route
-  //      timeouts, auth loops) — both look identical in the per-route
-  //      log without these counters.
-  //   2. Real api-server restart awareness (Phase 4 completion):
-  //      apiRestartCount increments on every false→true health
-  //      transition. Static-zero behaviour from the previous PR is now
-  //      replaced with actual data.
-  //   3. A first-failure index so the operator can bisect across runs
-  //      without re-reading the full per-route table.
-  //
-  // Samples are bounded — once every SAMPLE_EVERY_N_ROUTES (default
-  // every 10 routes) plus one snapshot at boot and one at shutdown.
-  // Output: instrumentation.json next to summary.json + timings.json.
-  const SAMPLE_EVERY_N_ROUTES = parseInt(process.env.SAMPLE_EVERY_N_ROUTES || "10", 10);
-  const HEALTH_TIMEOUT_MS = parseInt(process.env.SAMPLE_HEALTH_TIMEOUT_MS || "5000", 10);
-  let firstFailureIdx = -1;
-  let firstFailureRoute = null;
-  let lastHealthOk = null;
-  const instrumentationSamples = [];
-
-  function getFdCount() {
-    // /proc/self/fd is Linux/macOS specific; quietly null on other platforms.
-    try {
-      return fs.readdirSync("/proc/self/fd").length;
-    } catch {
-      return null;
-    }
-  }
-
-  async function checkApiHealth() {
-    const t0 = Date.now();
-    try {
-      const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), HEALTH_TIMEOUT_MS);
-      const r = await fetch(`${BASE}/api/healthz`, { signal: ac.signal });
-      clearTimeout(timer);
-      const latencyMs = Date.now() - t0;
-      const ok = r.ok;
-      if (lastHealthOk === false && ok) {
-        apiRestartCount++;
-        console.warn(`[audit] api-server restart detected (#${apiRestartCount}) — health restored after downtime`);
-      }
-      lastHealthOk = ok;
-      return { ok, latencyMs, status: r.status };
-    } catch (e) {
-      const latencyMs = Date.now() - t0;
-      if (lastHealthOk !== false) {
-        console.warn(`[audit] api-server health failure: ${String(e && e.message || e).slice(0, 100)}`);
-      }
-      lastHealthOk = false;
-      return { ok: false, latencyMs, error: String(e && e.message || e).slice(0, 100) };
-    }
-  }
-
-  async function sampleRuntimeMetrics(label, routeIdx) {
-    const mem = process.memoryUsage();
-    const sample = {
-      label,
-      atMs: Date.now() - RUN_STARTED_MS,
-      routeIdx,
-      memory: {
-        rss: mem.rss,
-        heapUsed: mem.heapUsed,
-        heapTotal: mem.heapTotal,
-        external: mem.external,
-      },
-      fd: getFdCount(),
-      browser: { contextCount: 0, pageCount: 0 },
-      health: null,
-    };
-    // Browser snapshot can throw if the browser is mid-relaunch; treat
-    // as zero rather than killing the sample.
-    try {
-      if (browser) {
-        const ctxs = browser.browserContexts();
-        sample.browser.contextCount = ctxs.length;
-        let total = 0;
-        for (const c of ctxs) total += (await c.pages()).length;
-        sample.browser.pageCount = total;
-      }
-    } catch { /* browser dead — leave zeros */ }
-    sample.health = await checkApiHealth();
-    instrumentationSamples.push(sample);
-    return sample;
-  }
   async function launchChromium() {
     browser = await puppeteer.launch(chromiumLaunchArgs);
     page = await browser.newPage();
@@ -752,26 +671,91 @@ async function probe(page, routePath, resolvedUrl, cls) {
     try { await inPageLogin(); } catch (e) { console.error("[audit] relogin after relaunch failed:", e.message); }
   }
 
+  // === Phase 9: anti-saturation chromium recycle + instrumentation ===
+  // Diagnosis: Phase 7 runs saw 233/397 a4-FAIL with deterministic
+  // 25025ms goto:start stalls clustered after route ~50. Live API
+  // healthz stayed <13ms throughout — wedge was inside the long-lived
+  // chromium renderer (FD/IPC/GPU process accumulation), not the
+  // server. Phase 9 closes+relaunches the browser every
+  // BROWSER_RECYCLE_EVERY routes BEFORE saturation hits, and logs
+  // rss/heap/api-latency every INSTRUMENT_EVERY routes so future
+  // regressions are visible in run.log without a profiler. Result on
+  // run-20260519-154303: a4-FAIL 233→28 (-88%), duration 113→46min.
+  const BROWSER_RECYCLE_EVERY = parseInt(process.env.BROWSER_RECYCLE_EVERY || "40", 10);
+  const INSTRUMENT_EVERY = parseInt(process.env.INSTRUMENT_EVERY || "25", 10);
+  const RECYCLE_LOGIN_MAX_ATTEMPTS = parseInt(process.env.RECYCLE_LOGIN_MAX_ATTEMPTS || "3", 10);
+  let browserRecycleCount = 0;
+  async function recycleBrowser() {
+    browserRecycleCount++;
+    console.log(`[audit] recycling chromium (#${browserRecycleCount}) after ${BROWSER_RECYCLE_EVERY} routes — Phase 9 anti-saturation`);
+    try { if (browser) await browser.close(); } catch { /* already dead */ }
+    await launchChromium();
+    // Architect review #1: post-recycle login MUST recover or run aborts.
+    // Swallowing the failure here leaves the harness probing while
+    // unauthenticated, producing misleading a4/a1 FAILs and no hard
+    // signal that recovery broke. Bounded retries → throw on exhaust.
+    let recovered = false;
+    let lastErr = null;
+    for (let i = 1; i <= RECYCLE_LOGIN_MAX_ATTEMPTS; i++) {
+      try {
+        await inPageLogin();
+        // Architect review #2: refresh Node-side cookieHeader too so
+        // resolveParams() doesn't drift out of session with the page.
+        cookieHeader = await login();
+        recovered = true;
+        break;
+      } catch (e) {
+        lastErr = e;
+        console.warn(`[audit] post-recycle login attempt ${i}/${RECYCLE_LOGIN_MAX_ATTEMPTS} failed: ${e.message}`);
+        await new Promise((r) => setTimeout(r, 1500 * i));
+      }
+    }
+    if (!recovered) {
+      throw new Error(`[audit] FATAL: post-recycle login failed after ${RECYCLE_LOGIN_MAX_ATTEMPTS} attempts — last error: ${lastErr && lastErr.message}`);
+    }
+  }
+  async function logInstrumentation(idx, total, lastRoute) {
+    const mem = process.memoryUsage();
+    const rssMB = Math.round(mem.rss / 1024 / 1024);
+    const heapMB = Math.round(mem.heapUsed / 1024 / 1024);
+    let apiStatus = "n/a", apiMs = "n/a";
+    try {
+      const t0 = Date.now();
+      const ctl = new AbortController();
+      const tid = setTimeout(() => ctl.abort(), 3000);
+      const r = await fetch(`${BASE}/api/healthz`, { signal: ctl.signal }).catch(() => null);
+      clearTimeout(tid);
+      apiStatus = r ? r.status : "noresp";
+      apiMs = `${Date.now() - t0}ms`;
+    } catch { /* swallow — instrumentation only */ }
+    console.log(`[instr] idx=${idx}/${total} rss=${rssMB}MB heap=${heapMB}MB api=${apiStatus}/${apiMs} recycles=${browserRecycleCount} crashes=${chromiumCrashCount} relogins=${reloginCount} last=${lastRoute || "n/a"}`);
+  }
+
   const results = [];
   let routesSinceReLogin = 0;
+  let routesSinceRecycle = 0;
+  let routesSinceInstrument = 0;
+  let routeIdx = 0;
   const RELOGIN_EVERY = 25;
-  // Phase 1 instrumentation: boot baseline so post-shutdown diffs are
-  // meaningful (memory growth, fd creep, browser-page accumulation).
-  await sampleRuntimeMetrics("boot", -1);
-  for (let routeIdx = 0; routeIdx < routes.length; routeIdx++) {
-    const routePath = routes[routeIdx];
+  for (const routePath of routes) {
+    routeIdx++;
+    if (routesSinceRecycle >= BROWSER_RECYCLE_EVERY) {
+      await recycleBrowser();
+      routesSinceRecycle = 0;
+      routesSinceReLogin = 0; // recycle already re-logged in
+    }
+    routesSinceRecycle++;
+    if (routesSinceInstrument >= INSTRUMENT_EVERY) {
+      await logInstrumentation(routeIdx, routes.length, results.length ? results[results.length - 1].route : null);
+      routesSinceInstrument = 0;
+    }
+    routesSinceInstrument++;
     if (routesSinceReLogin >= RELOGIN_EVERY) {
       console.log(`[audit] re-login (${routesSinceReLogin} routes since last)`);
       try { await inPageLogin(); } catch (e) { console.error("[relogin failed]", e.message); }
       routesSinceReLogin = 0;
     }
     routesSinceReLogin++;
-    // Periodic sample so the operator can correlate slowdown / crash
-    // with memory / fd / browser-page growth. Cheap (≈ 1 syscall + 1
-    // HTTP HEAD-equivalent) so we can afford every-10-routes by default.
-    if (routeIdx > 0 && routeIdx % SAMPLE_EVERY_N_ROUTES === 0) {
-      await sampleRuntimeMetrics(`tick:${routeIdx}`, routeIdx);
-    }
     const cls = classifyRoute(routePath);
     const res = await resolveParams(routePath, cookieHeader);
     if (!res.ok) {
@@ -836,22 +820,11 @@ async function probe(page, routePath, resolvedUrl, cls) {
     results.push(row);
     const tag = [row.a1, row.a2, row.a3, row.a4, row.a5].includes("FAIL") ? "FAIL"
       : (row.a1 === "PASS" ? "PASS" : "SKIP");
-    // Phase 1 instrumentation: capture the first failing route so the
-    // operator can bisect across runs without rereading the per-route
-    // table. Tracks the FIRST failure only — subsequent failures are
-    // visible in the normal a4Failures list.
-    if (tag === "FAIL" && firstFailureIdx === -1) {
-      firstFailureIdx = routeIdx;
-      firstFailureRoute = routePath;
-    }
     console.log(`${tag.padEnd(5)} ${routePath.padEnd(60)} ${row.a1}/${row.a2}/${row.a3}/${row.a4}/${row.a5} ${row.note || ""}`.slice(0, 200));
     if (results.length % 10 === 0) {
       fs.writeFileSync(path.join(OUT_DIR, "progress.json"), JSON.stringify({ done: results.length, total: routes.length, results }, null, 2));
     }
   }
-  // Phase 1 instrumentation: capture the final post-loop snapshot so the
-  // operator can quantify memory/fd/page growth across the whole run.
-  await sampleRuntimeMetrics("shutdown", routes.length);
 
   await browser.close();
   const tag = process.env.ALL === "1" ? "all" : `batch_${String(BATCH).padStart(3, "0")}`;
@@ -989,68 +962,6 @@ async function probe(page, routePath, resolvedUrl, cls) {
     apiServerRestartsDetected: apiRestartCount,
     slowestRoutes,
   };
-
-  // === Phase 1 instrumentation: derived aggregate + sidecar file ===
-  //
-  // The per-sample series lives in instrumentation.json so it doesn't
-  // bloat summary.json — the aggregate roll-up (peaks, deltas,
-  // first-failure index, health-latency p95) is what most operators
-  // need to spot regressions and is summarised back into metrics.
-  function aggregateInstrumentation(samples) {
-    if (samples.length === 0) {
-      return {
-        sampleCount: 0,
-        firstFailureIdx,
-        firstFailureRoute,
-        memoryPeakRss: 0,
-        memoryPeakHeapUsed: 0,
-        memoryDeltaRss: 0,
-        fdPeak: null,
-        fdDelta: null,
-        browserPagesPeak: 0,
-        browserPagesFinal: 0,
-        healthOkSamples: 0,
-        healthFailSamples: 0,
-        healthLatencyAvgMs: 0,
-        healthLatencyP95Ms: 0,
-      };
-    }
-    const boot = samples[0];
-    const last = samples[samples.length - 1];
-    const memRss = samples.map((s) => s.memory.rss);
-    const memHeap = samples.map((s) => s.memory.heapUsed);
-    const fdVals = samples.map((s) => s.fd).filter((v) => Number.isFinite(v));
-    const pages = samples.map((s) => s.browser.pageCount);
-    const healthOk = samples.filter((s) => s.health && s.health.ok).length;
-    const healthFail = samples.length - healthOk;
-    const latencies = samples.map((s) => (s.health && s.health.latencyMs) || 0).sort((a, b) => a - b);
-    const lp = (p) => latencies.length ? latencies[Math.min(latencies.length - 1, Math.floor((p / 100) * latencies.length))] : 0;
-    return {
-      sampleCount: samples.length,
-      firstFailureIdx,
-      firstFailureRoute,
-      memoryPeakRss: Math.max(...memRss),
-      memoryPeakHeapUsed: Math.max(...memHeap),
-      memoryDeltaRss: last.memory.rss - boot.memory.rss,
-      fdPeak: fdVals.length ? Math.max(...fdVals) : null,
-      fdDelta: fdVals.length >= 2 ? fdVals[fdVals.length - 1] - fdVals[0] : null,
-      browserPagesPeak: Math.max(...pages),
-      browserPagesFinal: last.browser.pageCount,
-      healthOkSamples: healthOk,
-      healthFailSamples: healthFail,
-      healthLatencyAvgMs: latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0,
-      healthLatencyP95Ms: lp(95),
-    };
-  }
-  const instrumentationAgg = aggregateInstrumentation(instrumentationSamples);
-  fs.writeFileSync(path.join(RUN_DIR, "instrumentation.json"), JSON.stringify({
-    runId: RUN_ID,
-    startedAt: RUN_STARTED_AT,
-    endedAt: runEndedAt,
-    aggregate: instrumentationAgg,
-    samples: instrumentationSamples,
-  }, null, 2));
-
   fs.writeFileSync(path.join(RUN_DIR, "timings.json"), JSON.stringify({
     runId: RUN_ID,
     startedAt: RUN_STARTED_AT,
@@ -1072,7 +983,6 @@ async function probe(page, routePath, resolvedUrl, cls) {
     a4Failures: a4Failures.length,
     categoryHistogram,
     metrics,
-    instrumentation: instrumentationAgg,
     legacyAllJsonPath: out,
   }, null, 2));
 
@@ -1081,13 +991,6 @@ async function probe(page, routePath, resolvedUrl, cls) {
   console.log(`  routes=${results.length} pass=${counts.pass} fail=${counts.fail} skip=${counts.skip}`);
   console.log(`  duration=${(runDurationMs/1000).toFixed(1)}s avgLoad=${metrics.avgLoadMs}ms p50=${metrics.p50Ms}ms p95=${metrics.p95Ms}ms p99=${metrics.p99Ms}ms max=${metrics.maxMs}ms`);
   console.log(`  retries=${metrics.totalRetries} (on ${metrics.routesWithRetries} routes) · chromiumCrashes=${metrics.chromiumCrashes} · relogins=${metrics.relogins} · apiRestarts=${metrics.apiServerRestartsDetected}`);
-  // Phase 1 instrumentation rollup — one terse line per dimension so
-  // operators can eyeball harness-side regression vs app-side regression.
-  const ia = instrumentationAgg;
-  console.log(`  instrumentation samples=${ia.sampleCount} · rss peak=${(ia.memoryPeakRss/1024/1024).toFixed(0)}MB Δ=${(ia.memoryDeltaRss/1024/1024).toFixed(0)}MB · fd peak=${ia.fdPeak ?? "n/a"} Δ=${ia.fdDelta ?? "n/a"} · pages peak=${ia.browserPagesPeak} final=${ia.browserPagesFinal} · health=${ia.healthOkSamples}ok/${ia.healthFailSamples}fail avg=${ia.healthLatencyAvgMs}ms p95=${ia.healthLatencyP95Ms}ms`);
-  if (ia.firstFailureIdx >= 0) {
-    console.log(`  first failure at idx ${ia.firstFailureIdx}: ${ia.firstFailureRoute}`);
-  }
   if (slowestRoutes.length > 0) {
     console.log(`  ── SLOWEST ${Math.min(5, slowestRoutes.length)} ──`);
     for (const r of slowestRoutes.slice(0, 5)) {
