@@ -122,6 +122,11 @@ function writeEnvironmentJson(extra) {
       BATCH,
       BATCH_SIZE,
       ROUTES_INCLUDE: process.env.ROUTES_INCLUDE || "",
+      // Phase 1 experimental knobs — operator overrides for the
+      // triangulation matrix (Phase 2 of Runtime Stabilization).
+      REVERSE_ORDER: process.env.REVERSE_ORDER === "1",
+      BROWSER_RECYCLE_EVERY: parseInt(process.env.BROWSER_RECYCLE_EVERY || "0", 10),
+      SAMPLE_EVERY_N_ROUTES: parseInt(process.env.SAMPLE_EVERY_N_ROUTES || "10", 10),
     },
     auditSessionId: `${RUN_ID}-s${Math.random().toString(36).slice(2, 6)}`,
     outDir: OUT_DIR,
@@ -567,6 +572,28 @@ async function probe(page, routePath, resolvedUrl, cls) {
     routes = allRoutes.slice(start, end);
     console.log(`[audit] batch ${BATCH}: routes ${start}..${end - 1} (${routes.length} of ${allRoutes.length})`);
   }
+  // Runtime Stabilization Program — Phase 1 experimental knobs.
+  // Both default OFF: real runs don't change behaviour. The operator
+  // flips them to triangulate the cause of a regression:
+  //   REVERSE_ORDER=1            walk the route set in reverse → tests
+  //                              whether failures track route POSITION
+  //                              (chromium starvation, late-batch GC) vs
+  //                              route IDENTITY (app regression).
+  //   BROWSER_RECYCLE_EVERY=25   close + re-open the puppeteer Page every
+  //                              N routes → tests whether failures track
+  //                              accumulated DOM listeners, modal residue,
+  //                              or page-level memory creep. Drops the
+  //                              cache (each new page starts cold).
+  //                              Default 0 = disabled (current behaviour).
+  if (process.env.REVERSE_ORDER === "1") {
+    routes = routes.slice().reverse();
+    console.log(`[audit] REVERSE_ORDER=1 — walking ${routes.length} routes in reverse`);
+  }
+  const BROWSER_RECYCLE_EVERY = parseInt(process.env.BROWSER_RECYCLE_EVERY || "0", 10);
+  if (BROWSER_RECYCLE_EVERY > 0) {
+    console.log(`[audit] BROWSER_RECYCLE_EVERY=${BROWSER_RECYCLE_EVERY} — recycling Page every ${BROWSER_RECYCLE_EVERY} routes`);
+  }
+  let pageRecycleCount = 0;
 
   // === Phase 1: write environment.json + claim "latest" pointer ===
   // before any heavyweight work so a crashed run still leaves a
@@ -771,6 +798,28 @@ async function probe(page, routePath, resolvedUrl, cls) {
     // HTTP HEAD-equivalent) so we can afford every-10-routes by default.
     if (routeIdx > 0 && routeIdx % SAMPLE_EVERY_N_ROUTES === 0) {
       await sampleRuntimeMetrics(`tick:${routeIdx}`, routeIdx);
+    }
+    // Experimental knob: close + re-open the puppeteer Page every N
+    // routes to test the "DOM / listener / cache residue" hypothesis.
+    // Default OFF (BROWSER_RECYCLE_EVERY=0). The Page is recreated on
+    // the same browser instance — no relaunch overhead — but cookies
+    // are preserved by the browser context, so re-login isn't needed.
+    if (BROWSER_RECYCLE_EVERY > 0 && routeIdx > 0 && routeIdx % BROWSER_RECYCLE_EVERY === 0) {
+      try {
+        await page.close({ runBeforeUnload: false });
+      } catch (e) {
+        console.warn(`[audit] page.close at recycle failed (continuing): ${String(e && e.message || e).slice(0, 80)}`);
+      }
+      try {
+        page = await browser.newPage();
+        await page.setViewport({ width: 1280, height: 900 });
+        await page.setExtraHTTPHeaders({ "Accept-Language": "ar" });
+        pageRecycleCount++;
+        console.log(`[audit] page recycled (#${pageRecycleCount}) at routeIdx=${routeIdx}`);
+      } catch (e) {
+        console.error(`[audit] page recycle FAILED — relaunching chromium: ${String(e && e.message || e)}`);
+        await relaunchChromium("page-recycle-failed");
+      }
     }
     const cls = classifyRoute(routePath);
     const res = await resolveParams(routePath, cookieHeader);
@@ -987,6 +1036,7 @@ async function probe(page, routePath, resolvedUrl, cls) {
     chromiumCrashes: chromiumCrashCount,
     relogins: reloginCount,
     apiServerRestartsDetected: apiRestartCount,
+    pageRecycles: pageRecycleCount,
     slowestRoutes,
   };
 
@@ -1080,7 +1130,7 @@ async function probe(page, routePath, resolvedUrl, cls) {
   console.log(`\n[#runtime-v2 metrics] run=${RUN_ID}`);
   console.log(`  routes=${results.length} pass=${counts.pass} fail=${counts.fail} skip=${counts.skip}`);
   console.log(`  duration=${(runDurationMs/1000).toFixed(1)}s avgLoad=${metrics.avgLoadMs}ms p50=${metrics.p50Ms}ms p95=${metrics.p95Ms}ms p99=${metrics.p99Ms}ms max=${metrics.maxMs}ms`);
-  console.log(`  retries=${metrics.totalRetries} (on ${metrics.routesWithRetries} routes) · chromiumCrashes=${metrics.chromiumCrashes} · relogins=${metrics.relogins} · apiRestarts=${metrics.apiServerRestartsDetected}`);
+  console.log(`  retries=${metrics.totalRetries} (on ${metrics.routesWithRetries} routes) · chromiumCrashes=${metrics.chromiumCrashes} · relogins=${metrics.relogins} · apiRestarts=${metrics.apiServerRestartsDetected} · pageRecycles=${metrics.pageRecycles}`);
   // Phase 1 instrumentation rollup — one terse line per dimension so
   // operators can eyeball harness-side regression vs app-side regression.
   const ia = instrumentationAgg;
