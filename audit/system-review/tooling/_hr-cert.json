@@ -9,7 +9,7 @@
         "rbac": "PASS",
         "scope": "PARTIAL",
         "audit": "PARTIAL",
-        "event": "FAIL",
+        "event": "PARTIAL",
         "lifecycle": "FAIL",
         "glBridge": "PARTIAL"
       },
@@ -144,7 +144,7 @@
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
             "audit": true,
-            "event": false,
+            "event": true,
             "applyTransition": false,
             "directStatusUpdate": true,
             "glPosting": false
@@ -153,7 +153,7 @@
             "rbac": "PASS",
             "scope": "PASS",
             "audit": "PASS",
-            "event": "FAIL",
+            "event": "PASS",
             "lifecycle": "FAIL",
             "glBridge": "PARTIAL"
           }
@@ -161,14 +161,14 @@
         {
           "method": "POST",
           "path": "/:id/reject",
-          "line": 275,
+          "line": 288,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
             "audit": true,
-            "event": false,
+            "event": true,
             "applyTransition": false,
             "directStatusUpdate": true,
             "glPosting": false
@@ -177,7 +177,7 @@
             "rbac": "PASS",
             "scope": "PASS",
             "audit": "PASS",
-            "event": "FAIL",
+            "event": "PASS",
             "lifecycle": "FAIL",
             "glBridge": "PARTIAL"
           }
@@ -185,7 +185,7 @@
         {
           "method": "POST",
           "path": "/:id/sign-company",
-          "line": 307,
+          "line": 332,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -209,7 +209,7 @@
         {
           "method": "POST",
           "path": "/:id/sign-employee",
-          "line": 346,
+          "line": 371,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -233,7 +233,7 @@
         {
           "method": "POST",
           "path": "/:id/activate",
-          "line": 379,
+          "line": 404,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -257,7 +257,7 @@
         {
           "method": "POST",
           "path": "/:id/terminate",
-          "line": 408,
+          "line": 433,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -281,7 +281,7 @@
         {
           "method": "POST",
           "path": "/:id/renew",
-          "line": 440,
+          "line": 465,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
