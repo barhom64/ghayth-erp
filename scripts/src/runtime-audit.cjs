@@ -29,8 +29,6 @@ const path = require("path");
 const puppeteer = require(
   path.join(__dirname, "..", "..", "artifacts", "ghayth-erp-deck", "node_modules", "puppeteer"),
 );
-// Phase 2: pidfile lock + api-server health-wait. Dependency-free.
-const { acquireAuditLock, releaseAuditLock, waitForApiHealth } = require("./lib/audit-lock.cjs");
 
 const BASE = process.env.BASE_URL || "http://localhost";
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@ghayth.com";
@@ -580,55 +578,6 @@ async function probe(page, routePath, resolvedUrl, cls) {
   updateLatestPointer();
   console.log(`[audit] run-id=${RUN_ID} run-dir=${RUN_DIR} (session=${envRecord.auditSessionId})`);
 
-  // === Phase 2: acquire pidfile lock so two audits can't race chromium ===
-  // The 233/251 a4=FAIL harness-timeout cascade in the 2026-05-19 ALL
-  // run was caused by 3 concurrent chromium audits starving each other.
-  // The lock makes that impossible at the harness level; set FORCE_LOCK=1
-  // to override (used by the runtime-verify orchestrator after a clean
-  // kill of any prior chromium pid).
-  let lockHandle = null;
-  try {
-    lockHandle = acquireAuditLock({ runId: RUN_ID, force: process.env.FORCE_LOCK === "1" });
-    console.log(`[audit] acquired lock at ${lockHandle.lockPath}` + (lockHandle.previous ? ` (reclaimed stale pid=${lockHandle.previous.pid})` : ""));
-  } catch (e) {
-    if (e.code === "EAUDITLOCK") {
-      console.error(e.message);
-      console.error(`[audit] refusing to start — set FORCE_LOCK=1 to override.`);
-      process.exit(3);
-    }
-    throw e;
-  }
-  // Always release on the way out, even on crash, so the next run isn't
-  // blocked by a stale lockfile we owned.
-  const releaseLock = () => {
-    if (!lockHandle) return;
-    try { releaseAuditLock({ lockPath: lockHandle.lockPath }); } catch { /* best-effort */ }
-    lockHandle = null;
-  };
-  process.on("exit", releaseLock);
-  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-    process.on(sig, () => { releaseLock(); process.exit(130); });
-  }
-
-  // === Phase 2: wait for api-server /api/healthz before login ===
-  // Refuses to start against a not-yet-warm api-server (the second #638
-  // root cause: an api-server restart mid-audit caused every in-flight
-  // route to fail). Bounded so a genuinely-down api-server doesn't hang
-  // the harness forever — exit 4 makes the cause unambiguous.
-  const healthTimeoutMs = parseInt(process.env.HEALTH_TIMEOUT_MS || "60000", 10);
-  try {
-    const h = await waitForApiHealth({ baseUrl: BASE, timeoutMs: healthTimeoutMs });
-    console.log(`[audit] api-server healthy (attempts=${h.attempts}, ${h.durationMs}ms)`);
-  } catch (e) {
-    if (e.code === "EHEALTHTIMEOUT") {
-      console.error(e.message);
-      console.error(`[audit] refusing to start — api-server not responding on ${BASE}/api/healthz`);
-      releaseLock();
-      process.exit(4);
-    }
-    throw e;
-  }
-
   console.log(`[audit] login as ${ADMIN_EMAIL}…`);
   const cookieHeader = await login();
   console.log(`[audit] login ok, cookieHeader len=${cookieHeader.length}`);
@@ -637,7 +586,14 @@ async function probe(page, routePath, resolvedUrl, cls) {
   process.on("unhandledRejection", (e) => { console.error("[unhandled]", e); });
 
   console.log(`[audit] launching chromium at ${detectChromium()}…`);
-  const browser = await puppeteer.launch({
+  // === Phase 3: browser+page mutable so we can relaunch after a crash ===
+  // The harness-detached-frame / harness-session-closed buckets in
+  // #638's histogram represent chromium dying mid-run. Before Phase 3
+  // every route after the crash also failed. Now we relaunch and
+  // continue, with the per-route retry loop deciding whether to re-probe.
+  let browser = null;
+  let page = null;
+  const chromiumLaunchArgs = {
     headless: true,
     dumpio: !!process.env.DUMPIO,
     executablePath: detectChromium(),
@@ -647,10 +603,16 @@ async function probe(page, routePath, resolvedUrl, cls) {
       "--disable-extensions", "--disable-background-networking",
       "--disable-default-apps", "--disable-sync",
     ],
-  });
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1280, height: 900 });
-  await page.setExtraHTTPHeaders({ "Accept-Language": "ar" });
+  };
+  let chromiumCrashCount = 0;
+  let reloginCount = 0;
+  async function launchChromium() {
+    browser = await puppeteer.launch(chromiumLaunchArgs);
+    page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 900 });
+    await page.setExtraHTTPHeaders({ "Accept-Language": "ar" });
+  }
+  await launchChromium();
   // seed cookie via in-page fetch (HttpOnly cookies don't round-trip via setCookie)
   async function inPageLogin() {
     await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -664,8 +626,32 @@ async function probe(page, routePath, resolvedUrl, cls) {
     }, { email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
     await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded", timeout: 30000 });
     await new Promise((r) => setTimeout(r, 800));
+    reloginCount++;
   }
   await inPageLogin();
+
+  // === Phase 3: per-route retry strategy (harness-only) ===
+  // Classifies a probe-throw into the canonical navCause buckets and
+  // declares whether it is retry-eligible. We ONLY retry harness causes
+  // (chromium starvation / crash / detach). Real-defect causes (auth401,
+  // forbidden-bounce, AccessDenied, …) are recorded on first hit so we
+  // don't mask flaky-defects-look-fine-after-retry.
+  const RETRY_MAX_ATTEMPTS = parseInt(process.env.RETRY_MAX_ATTEMPTS || "3", 10);
+  const RETRY_BACKOFF_MS = parseInt(process.env.RETRY_BACKOFF_MS || "1500", 10);
+  function classifyProbeThrow(msg) {
+    if (/Navigation timeout/i.test(msg)) return { navCause: "harness-timeout (page.goto exceeded 25s — chromium/proxy starvation, not a route defect)", relaunch: false };
+    if (/detached Frame/i.test(msg)) return { navCause: "harness-detached-frame (chromium crashed mid-navigation)", relaunch: true };
+    if (/Target closed/i.test(msg) || /Session closed/i.test(msg)) return { navCause: "harness-session-closed (browser/page died)", relaunch: true };
+    if (/Protocol error/i.test(msg)) return { navCause: `harness-protocol-error (${msg.slice(0, 80)})`, relaunch: true };
+    return { navCause: `harness-throw (${msg.slice(0, 100)})`, relaunch: false };
+  }
+  async function relaunchChromium(reason) {
+    chromiumCrashCount++;
+    console.warn(`[audit] relaunching chromium (#${chromiumCrashCount}) due to: ${reason}`);
+    try { if (browser) await browser.close(); } catch { /* already dead */ }
+    await launchChromium();
+    try { await inPageLogin(); } catch (e) { console.error("[audit] relogin after relaunch failed:", e.message); }
+  }
 
   const results = [];
   let routesSinceReLogin = 0;
@@ -683,34 +669,56 @@ async function probe(page, routePath, resolvedUrl, cls) {
       const row = {
         route: routePath,
         a1: "SKIP", a2: "SKIP", a3: "SKIP", a4: "SKIP", a5: "SKIP",
-        note: `unresolved: ${res.reason}`, shot: null, cls,
+        note: `unresolved: ${res.reason}`, shot: null, cls, retries: 0,
       };
       results.push(row);
       console.log(`SKIP  ${routePath.padEnd(60)} ${res.reason}`);
       continue;
     }
-    let row;
-    try {
-      const p = await probe(page, routePath, res.url, cls);
-      row = { route: routePath, ...p, cls };
-    } catch (e) {
-      // #638 — probe throws now carry a real navCause instead of falling
-      // into the histogram "unknown" bucket. The 233/251 a4 failures in
-      // the 2026-05-19 ALL run were ALL Navigation timeouts caused by
-      // chromium starvation (3 concurrent audits + api-server restart),
-      // not by app-level redirects — they belong in a "harness-*" bucket
-      // so operators stop chasing them as runtime defects.
-      const msg = String(e.message || "");
-      let navCause;
-      if (/Navigation timeout/i.test(msg)) navCause = "harness-timeout (page.goto exceeded 25s — chromium/proxy starvation, not a route defect)";
-      else if (/detached Frame/i.test(msg)) navCause = "harness-detached-frame (chromium crashed mid-navigation)";
-      else if (/Target closed/i.test(msg) || /Session closed/i.test(msg)) navCause = "harness-session-closed (browser/page died)";
-      else navCause = `harness-throw (${msg.slice(0, 100)})`;
+    // === Phase 3: retry loop — harness causes only ===
+    let row = null;
+    let attempts = 0;
+    let lastThrowMsg = "";
+    let lastHarnessCause = "";
+    while (attempts < RETRY_MAX_ATTEMPTS) {
+      attempts++;
+      try {
+        const p = await probe(page, routePath, res.url, cls);
+        row = { route: routePath, ...p, cls, retries: attempts - 1 };
+        break;
+      } catch (e) {
+        lastThrowMsg = String(e.message || "");
+        const { navCause, relaunch } = classifyProbeThrow(lastThrowMsg);
+        lastHarnessCause = navCause;
+        if (relaunch) {
+          await relaunchChromium(navCause);
+        }
+        if (attempts < RETRY_MAX_ATTEMPTS) {
+          const backoff = RETRY_BACKOFF_MS * attempts;
+          console.warn(`[audit] retry ${attempts}/${RETRY_MAX_ATTEMPTS} for ${routePath} after ${backoff}ms (${navCause.slice(0, 60)})`);
+          await new Promise((r) => setTimeout(r, backoff));
+          continue;
+        }
+        // Final attempt failed — record as before but with attempts count.
+        row = {
+          route: routePath, a1: "FAIL", a2: "SKIP", a3: "SKIP", a4: "FAIL", a5: "SKIP",
+          note: `probe-throw (after ${attempts} attempts): ${lastThrowMsg.slice(0, 120)}; ${navCause}`,
+          shot: null, cls,
+          landedUrl: "", navTrace: [], navCause, dom4xx: [], retries: attempts - 1,
+        };
+      }
+    }
+    // safety net
+    if (!row) {
       row = {
         route: routePath, a1: "FAIL", a2: "SKIP", a3: "SKIP", a4: "FAIL", a5: "SKIP",
-        note: `probe-throw: ${msg.slice(0, 120)}; ${navCause}`, shot: null, cls,
-        landedUrl: "", navTrace: [], navCause, dom4xx: [],
+        note: `probe-loop-exhausted: ${lastThrowMsg.slice(0, 120)}`,
+        shot: null, cls, landedUrl: "", navTrace: [],
+        navCause: lastHarnessCause || "unclassified", dom4xx: [], retries: attempts - 1,
       };
+    }
+    if (attempts > 1) {
+      console.log(`[audit] route ${routePath} resolved after ${attempts} attempts (final ${row.a4 === "PASS" ? "PASS" : "FAIL"})`);
     }
     results.push(row);
     const tag = [row.a1, row.a2, row.a3, row.a4, row.a5].includes("FAIL") ? "FAIL"
