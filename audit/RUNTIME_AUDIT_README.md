@@ -102,3 +102,30 @@ xdg-open audit/screenshots/finance_invoices_create.png   # or scp to look at it
 
 - **Periodic re-login** every 25 routes (`RELOGIN_EVERY` constant). The 2026-05-07 v1 run had 85 routes bouncing to `/login` near the tail because the JWT in the HttpOnly cookie expired during the ~40-minute walk. With re-login in place the v2 run shows 0 A1 FAIL and 0 A5 FAIL — the only failure mode is A4 navigation, which is a real SPA bug.
 - Run with `ALL=1 pnpm run audit:runtime` to walk all 373 routes in one pass; results are written to `/tmp/runtime-audit/all.json` and copied to `audit/runtime-audit-results.json`. Screenshots land in `audit/screenshots/`, one PNG per A4 FAIL.
+
+## Phase 9 update (2026-05-19) — anti-saturation chromium relaunch + bounded relogin
+
+After Phase 1–4 (PRs #694–#697) landed, long runs still wedged on `page.goto`
+exceeding 25s in deterministic bursts — symptom of FD / IPC / DOM-worker
+creep inside a single chromium process. Phase 9 adds three opt-in knobs and
+one safety fix:
+
+| Env var | Default | What it does |
+|---|---|---|
+| `BROWSER_RELAUNCH_EVERY` | `0` (off) | Close + relaunch the **entire chromium process** every N routes (anti-saturation). Distinct from `BROWSER_RECYCLE_EVERY` (Phase 1) which only recycles the Page. Recommended: `40`. |
+| `INSTRUMENT_EVERY` | `0` (off) | Emit a one-line `[instr] idx=…/… rss=…MB heap=…MB api=ok relaunches=… crashes=… relogins=… last=…` every N routes so the operator can correlate slowdown in the live tail without waiting for `instrumentation.json`. Recommended: `25`. |
+| `RECYCLE_LOGIN_MAX_ATTEMPTS` | `3` | Cap for the bounded post-relaunch login retry loop in `relaunchChromium()`. Previously a single silent failure left the harness unauthenticated and produced a phantom wave of auth-301 FAILs that looked like app defects. Now exhaustion **throws** to abort the run deterministically. |
+
+Lock-step cookie refresh: `cookieHeader` (the Node-side cookie used by
+`resolveParams()`) is now mutable and re-issued via a server-side `login()`
+inside `relaunchChromium()` so it stays in sync with the new in-page session.
+
+Recommended invocation for long runs:
+
+```bash
+BROWSER_RELAUNCH_EVERY=40 INSTRUMENT_EVERY=25 RECYCLE_LOGIN_MAX_ATTEMPTS=3 \
+  ALL=1 node scripts/src/runtime-audit.cjs
+```
+
+Counters surfaced in `summary.json`: `browserRelaunches` joins the existing
+`pageRecycles` / `chromiumCrashes` / `relogins` / `apiServerRestartsDetected`.
