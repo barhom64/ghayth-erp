@@ -11,7 +11,7 @@ Generated: 2026-05-19
 
 | Source | Count |
 |---|---|
-| `STATE_MACHINES` entries in `lifecycleEngine.ts` | **28** |
+| `STATE_MACHINES` entries in `lifecycleEngine.ts` | **27** |
 | Entities with `lifecycle` block in `entityRegistry.ts` | **32** |
 | `applyTransition({ ... })` call sites across `routes/` | **80** |
 | Unique entities referenced from routes | **33** |
@@ -44,7 +44,9 @@ Generated: 2026-05-19
 
 ## 2. Used but unregistered (engine trusts route)
 
-**16** findings.
+**17** findings.
+
+- **hr_inquiry_memos** (column `status`) — `applyTransition` is called for this entity but `STATE_MACHINES` has no entry. After PR #654 this is supported (engine bypasses `isValidTransition` and trusts the route's `fromStates`), but each unregistered entity should be a conscious decision. Sample site: `artifacts/api-server/src/routes/hr-discipline.ts:757`.
 
 - **employee_violations** (column `status`) — `applyTransition` is called for this entity but `STATE_MACHINES` has no entry. After PR #654 this is supported (engine bypasses `isValidTransition` and trusts the route's `fromStates`), but each unregistered entity should be a conscious decision. Sample site: `artifacts/api-server/src/routes/hr.ts:3707`.
 
@@ -80,19 +82,9 @@ Generated: 2026-05-19
 
 ## 3. Route-engine fromState graph mismatch
 
-**6** findings.
+**0** findings.
 
-- `artifacts/api-server/src/routes/fleet.ts:1504` (`fleet.maintenance.completed`) — route declares `scheduled → completed` but engine graph for `fleet_maintenance` from `scheduled` only allows `["in_progress","cancelled"]`. **Will throw `LifecycleError` at runtime.**
-
-- `artifacts/api-server/src/routes/hr-discipline.ts:1000` (`hr.memo.cancelled`) — route declares `pending_employee → cancelled` but engine graph for `hr_inquiry_memos` from `pending_employee` only allows `["pending_manager"]`. **Will throw `LifecycleError` at runtime.**
-
-- `artifacts/api-server/src/routes/hr-discipline.ts:1000` (`hr.memo.cancelled`) — route declares `pending_manager → cancelled` but engine graph for `hr_inquiry_memos` from `pending_manager` only allows `["pending_gm"]`. **Will throw `LifecycleError` at runtime.**
-
-- `artifacts/api-server/src/routes/hr-discipline.ts:1000` (`hr.memo.cancelled`) — route declares `pending_gm → cancelled` but engine graph for `hr_inquiry_memos` from `pending_gm` only allows `["approved","rejected"]`. **Will throw `LifecycleError` at runtime.**
-
-- `artifacts/api-server/src/routes/legal.ts:469` (`legal.contract.renewed`) — route declares `active → active` but engine graph for `legal_contracts` from `active` only allows `["terminated","expired","renewed"]`. **Will throw `LifecycleError` at runtime.**
-
-- `artifacts/api-server/src/routes/legal.ts:469` (`legal.contract.renewed`) — route declares `expired → active` but engine graph for `legal_contracts` from `expired` only allows `["renewed"]`. **Will throw `LifecycleError` at runtime.**
+_None._
 
 ## 4. Registry ↔ engine state-set disagreement
 
@@ -112,7 +104,7 @@ Generated: 2026-05-19
 
 - **hr_excuse_requests** — has `lifecycle` in `entityRegistry.ts` (states: `["pending","approved","rejected"]`, initial: `pending`, terminals: `["rejected"]`) but NO matching entry in `STATE_MACHINES`. Governance reports will reference states the runtime engine has no opinion on.
 
-- **hr_inquiry_memos** — registry-only states: `["issued","acknowledged","appealed","escalated","gm_review","justified"]` ; engine-only states: `["pending_employee","pending_manager","pending_gm","approved","rejected","appeal_pending","appeal_accepted","cancelled"]`. One of the two declarations is stale.
+- **hr_inquiry_memos** — has `lifecycle` in `entityRegistry.ts` (states: `["draft","issued","acknowledged","appealed","escalated","gm_review","justified","closed"]`, initial: `draft`, terminals: `["closed"]`) but NO matching entry in `STATE_MACHINES`. Governance reports will reference states the runtime engine has no opinion on.
 
 - **payroll_runs** — has `lifecycle` in `entityRegistry.ts` (states: `["draft","calculated","approved","posted","paid"]`, initial: `draft`, terminals: `["paid"]`) but NO matching entry in `STATE_MACHINES`. Governance reports will reference states the runtime engine has no opinion on.
 
@@ -180,9 +172,9 @@ Generated: 2026-05-19
 
 - `artifacts/api-server/src/routes/employees.ts:1325` (table `hr_employee_loans`): ``UPDATE hr_employee_loans` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/finance-algorithms.ts:450` (table `bank_statements`): ``UPDATE bank_statements SET "matchStatus" = 'matched', "matchedJournalLineId" = $1 WHERE id = $2 AND "companyId" = $3`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/finance-algorithms.ts:464` (table `bank_statements`): ``UPDATE bank_statements SET "matchStatus" = 'matched', "matchedJournalLineId" = $1 WHERE id = $2 AND "companyId" = $3`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/finance-algorithms.ts:539` (table `bank_statements`): ``UPDATE bank_statements SET "matchStatus"='matched', "matchedJournalLineId"=$1 WHERE id=$2 AND "companyId"=$3`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/finance-algorithms.ts:566` (table `bank_statements`): ``UPDATE bank_statements SET "matchStatus"='matched', "matchedJournalLineId"=$1 WHERE id=$2 AND "companyId"=$3`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
 - `artifacts/api-server/src/routes/finance-cost-centers.ts:164` (table `cost_centers`): ``UPDATE cost_centers SET status = 'deleted', "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status != 'deleted'`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
@@ -250,15 +242,15 @@ Generated: 2026-05-19
 
 - `artifacts/api-server/src/routes/governance.ts:331` (table `governance_policies`): ``UPDATE governance_policies SET status='archived', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status IN ('draft','active') AND "de` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/hr-contracts.ts:230` (table `employee_contracts`): ``UPDATE employee_contracts SET "approvalStatus" = 'pending_approval', "updatedAt" = NOW()` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/hr-contracts.ts:259` (table `employee_contracts`): ``UPDATE employee_contracts SET "approvalStatus" = 'pending_approval', "updatedAt" = NOW()` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/hr-contracts.ts:258` (table `employee_contracts`): ``UPDATE employee_contracts` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/hr-contracts.ts:300` (table `employee_contracts`): ``UPDATE employee_contracts` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/hr-contracts.ts:291` (table `employee_contracts`): ``UPDATE employee_contracts` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/hr-contracts.ts:346` (table `employee_contracts`): ``UPDATE employee_contracts` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/hr-contracts.ts:385` (table `employee_contracts`): ``UPDATE employee_contracts` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/hr-contracts.ts:489` (table `employee_contracts`): ``UPDATE employee_contracts` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/hr-contracts.ts:416` (table `employee_contracts`): ``UPDATE employee_contracts` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/hr-contracts.ts:533` (table `employee_contracts`): ``UPDATE employee_contracts` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
 - `artifacts/api-server/src/routes/hr-discipline.ts:919` (table `employee_violations`): ``UPDATE employee_violations SET status = 'rejected' WHERE id = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 

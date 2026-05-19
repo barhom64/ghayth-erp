@@ -230,11 +230,13 @@
         "active": [
           "terminated",
           "expired",
-          "renewed"
+          "renewed",
+          "active"
         ],
         "terminated": [],
         "expired": [
-          "renewed"
+          "renewed",
+          "active"
         ],
         "renewed": [
           "active"
@@ -284,44 +286,6 @@
       }
     },
     {
-      "entity": "hr_inquiry_memos",
-      "statusColumn": "status",
-      "transitions": {
-        "pending_employee": [
-          "pending_manager"
-        ],
-        "pending_manager": [
-          "pending_gm"
-        ],
-        "pending_gm": [
-          "approved",
-          "rejected"
-        ],
-        "approved": [
-          "appeal_pending",
-          "closed"
-        ],
-        "rejected": [
-          "closed"
-        ],
-        "appeal_pending": [
-          "appeal_accepted",
-          "approved"
-        ],
-        "appeal_accepted": [
-          "closed"
-        ],
-        "cancelled": [
-          "closed"
-        ],
-        "draft": [
-          "pending_employee",
-          "cancelled"
-        ],
-        "closed": []
-      }
-    },
-    {
       "entity": "fleet_trips",
       "statusColumn": "status",
       "transitions": {
@@ -348,7 +312,8 @@
       "transitions": {
         "scheduled": [
           "in_progress",
-          "cancelled"
+          "cancelled",
+          "completed"
         ],
         "in_progress": [
           "completed",
@@ -1829,7 +1794,6 @@
       "statusColumn": "status",
       "fromStates": [
         "active",
-        "draft",
         "expired"
       ],
       "fromStatesDynamic": false,
@@ -1838,7 +1802,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/legal.ts",
-      "line": 514,
+      "line": 520,
       "entity": "legal_contracts",
       "action": "legal.contract.terminated",
       "statusColumn": "status",
@@ -1851,7 +1815,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/legal.ts",
-      "line": 880,
+      "line": 886,
       "entity": "legal_cases",
       "action": "legal.case.in_progress",
       "statusColumn": "status",
@@ -2516,6 +2480,11 @@
     ],
     "usedButUnregistered": [
       {
+        "entity": "hr_inquiry_memos",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/hr-discipline.ts:757"
+      },
+      {
         "entity": "employee_violations",
         "statusColumn": "status",
         "sampleSite": "artifacts/api-server/src/routes/hr.ts:3707"
@@ -2596,72 +2565,7 @@
         "sampleSite": "artifacts/api-server/src/routes/warehouse.ts:1450"
       }
     ],
-    "fromStateGraphMismatch": [
-      {
-        "file": "artifacts/api-server/src/routes/fleet.ts",
-        "line": 1504,
-        "entity": "fleet_maintenance",
-        "action": "fleet.maintenance.completed",
-        "attempted": "scheduled → completed",
-        "engineAllowsFrom": [
-          "in_progress",
-          "cancelled"
-        ]
-      },
-      {
-        "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-        "line": 1000,
-        "entity": "hr_inquiry_memos",
-        "action": "hr.memo.cancelled",
-        "attempted": "pending_employee → cancelled",
-        "engineAllowsFrom": [
-          "pending_manager"
-        ]
-      },
-      {
-        "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-        "line": 1000,
-        "entity": "hr_inquiry_memos",
-        "action": "hr.memo.cancelled",
-        "attempted": "pending_manager → cancelled",
-        "engineAllowsFrom": [
-          "pending_gm"
-        ]
-      },
-      {
-        "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-        "line": 1000,
-        "entity": "hr_inquiry_memos",
-        "action": "hr.memo.cancelled",
-        "attempted": "pending_gm → cancelled",
-        "engineAllowsFrom": [
-          "approved",
-          "rejected"
-        ]
-      },
-      {
-        "file": "artifacts/api-server/src/routes/legal.ts",
-        "line": 469,
-        "entity": "legal_contracts",
-        "action": "legal.contract.renewed",
-        "attempted": "active → active",
-        "engineAllowsFrom": [
-          "terminated",
-          "expired",
-          "renewed"
-        ]
-      },
-      {
-        "file": "artifacts/api-server/src/routes/legal.ts",
-        "line": 469,
-        "entity": "legal_contracts",
-        "action": "legal.contract.renewed",
-        "attempted": "expired → active",
-        "engineAllowsFrom": [
-          "renewed"
-        ]
-      }
-    ],
+    "fromStateGraphMismatch": [],
     "registryEngineMismatch": [
       {
         "table": "employee_contracts",
@@ -2761,24 +2665,20 @@
       },
       {
         "table": "hr_inquiry_memos",
-        "kind": "state-set-disagrees",
-        "registryOnlyStates": [
+        "kind": "registry-only",
+        "registryStates": [
+          "draft",
           "issued",
           "acknowledged",
           "appealed",
           "escalated",
           "gm_review",
-          "justified"
+          "justified",
+          "closed"
         ],
-        "engineOnlyStates": [
-          "pending_employee",
-          "pending_manager",
-          "pending_gm",
-          "approved",
-          "rejected",
-          "appeal_pending",
-          "appeal_accepted",
-          "cancelled"
+        "registryInitial": "draft",
+        "registryTerminals": [
+          "closed"
         ]
       },
       {
@@ -3091,13 +2991,13 @@
       },
       {
         "file": "artifacts/api-server/src/routes/finance-algorithms.ts",
-        "line": 450,
+        "line": 464,
         "table": "bank_statements",
         "snippet": "`UPDATE bank_statements SET \"matchStatus\" = 'matched', \"matchedJournalLineId\" = $1 WHERE id = $2 AND \"companyId\" = $3`,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-algorithms.ts",
-        "line": 539,
+        "line": 566,
         "table": "bank_statements",
         "snippet": "`UPDATE bank_statements SET \"matchStatus\"='matched', \"matchedJournalLineId\"=$1 WHERE id=$2 AND \"companyId\"=$3`,"
       },
@@ -3301,31 +3201,31 @@
       },
       {
         "file": "artifacts/api-server/src/routes/hr-contracts.ts",
-        "line": 230,
+        "line": 259,
         "table": "employee_contracts",
         "snippet": "`UPDATE employee_contracts SET \"approvalStatus\" = 'pending_approval', \"updatedAt\" = NOW()"
       },
       {
         "file": "artifacts/api-server/src/routes/hr-contracts.ts",
-        "line": 258,
+        "line": 300,
         "table": "employee_contracts",
         "snippet": "`UPDATE employee_contracts"
       },
       {
         "file": "artifacts/api-server/src/routes/hr-contracts.ts",
-        "line": 291,
+        "line": 346,
         "table": "employee_contracts",
         "snippet": "`UPDATE employee_contracts"
       },
       {
         "file": "artifacts/api-server/src/routes/hr-contracts.ts",
-        "line": 385,
+        "line": 489,
         "table": "employee_contracts",
         "snippet": "`UPDATE employee_contracts"
       },
       {
         "file": "artifacts/api-server/src/routes/hr-contracts.ts",
-        "line": 416,
+        "line": 533,
         "table": "employee_contracts",
         "snippet": "`UPDATE employee_contracts"
       },
