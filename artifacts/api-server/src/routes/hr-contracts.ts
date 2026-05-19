@@ -335,7 +335,15 @@ contractsRouter.post("/:id/sign-company", authorize({ feature: "hr.contracts", a
 });
 
 // ── Sign by employee (self-service) ──
-contractsRouter.post("/:id/sign-employee", async (req, res) => {
+// Issue #682 — added authorize() to bring this endpoint under the
+// RBAC catalog umbrella; previously the only gate was authMiddleware
+// + the SQL `ea."employeeId" = scope.employeeId` self-only predicate
+// further below. Matches the action key used by the sibling lifecycle
+// endpoints in this file (`activate` at L371, `terminate` at L400,
+// both use `action: "update"`). The SQL predicate stays as
+// defence-in-depth so even a manager with `hr.contracts:update@branch`
+// cannot sign on behalf of an employee.
+contractsRouter.post("/:id/sign-employee", authorize({ feature: "hr.contracts", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
