@@ -450,10 +450,18 @@ export const STATE_MACHINES: StateMachine[] = [
     entity: "legal_contracts",
     label: "عقد قانوني",
     transitions: {
+      // #663 RCA: the /contracts/:id/renew route extends endDate +
+      // bumps renewalCount and keeps the contract usable. For an
+      // active contract that's a status-preserving self-loop; for an
+      // expired contract it reactivates it. Both edges were missing —
+      // the engine only modelled renewal via a transient `renewed`
+      // state that nothing actually rests in. The route's `draft`
+      // fromState is dropped separately (a draft is *activated*, not
+      // *renewed*); `renewed` is kept for backward compatibility.
       draft: ["active", "cancelled"],
-      active: ["terminated", "expired", "renewed"],
+      active: ["terminated", "expired", "renewed", "active"],
       terminated: [],
-      expired: ["renewed"],
+      expired: ["renewed", "active"],
       renewed: ["active"],
       cancelled: [],
     },
@@ -485,9 +493,16 @@ export const STATE_MACHINES: StateMachine[] = [
     entity: "hr_inquiry_memos",
     label: "مذكرة تأديبية",
     transitions: {
-      pending_employee: ["pending_manager"],
-      pending_manager: ["pending_gm"],
-      pending_gm: ["approved", "rejected"],
+      // #663 RCA: the `cancelled` state already exists but was only
+      // reachable from `draft`. The /memos/:id/cancel route is a
+      // legitimate escape hatch — HR can withdraw a memo raised in
+      // error at ANY pending review stage (employee response, manager
+      // review, GM review) before it's finalised. The engine was
+      // missing those three → cancelled edges; once approved/rejected
+      // the memo is finalised and cancellation no longer applies.
+      pending_employee: ["pending_manager", "cancelled"],
+      pending_manager: ["pending_gm", "cancelled"],
+      pending_gm: ["approved", "rejected", "cancelled"],
       approved: ["appeal_pending", "closed"],
       rejected: ["closed"],
       appeal_pending: ["appeal_accepted", "approved"],
@@ -512,7 +527,13 @@ export const STATE_MACHINES: StateMachine[] = [
     entity: "fleet_maintenance",
     label: "صيانة مركبة",
     transitions: {
-      scheduled: ["in_progress", "cancelled"],
+      // #663 RCA: a short maintenance job (oil change, tyre rotation)
+      // is legitimately scheduled then completed without a separate
+      // in_progress step. The /complete route guards status itself
+      // (rejects already-completed / cancelled) so the direct edge is
+      // safe. Adding `completed` here aligns the engine with real
+      // fleet ops instead of forcing a two-hop workflow.
+      scheduled: ["in_progress", "cancelled", "completed"],
       in_progress: ["completed", "cancelled"],
       completed: [],
       cancelled: [],
