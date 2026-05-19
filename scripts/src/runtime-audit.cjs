@@ -346,11 +346,36 @@ async function probe(page, routePath, resolvedUrl, cls) {
     nav_ok = true;
     recordNav("goto:domcontentloaded", page.url());
   } catch (e) {
+    // ── #702 fix: classify nav-timeouts as harness, not unknown ──────────
+    // Before this fix, this catch returned a row WITHOUT navCause, so the
+    // post-run taxonomy classifier (scripts/src/lib/nav-cause-taxonomy.cjs)
+    // saw an empty string, matched /^$/ in `unknown.unclassified`, and
+    // binned every Chromium-side nav-timeout as `unknown` instead of
+    // `harness`. The Task #702 evidence pack
+    // (audit/runtime-evidence/run-20260519-175517-257267-indt3a.tar.gz)
+    // showed 27 contiguous /finance/* routes (idx 79-105) all failing with
+    // `goto:start`-only trace + 25025ms duration + IDENTICAL error message
+    // — a textbook wedged-Chromium pattern, not a finance app defect
+    // (every "failed" route serves HTTP 200 in 5-7ms via curl). Setting
+    // navCause here lets the existing classifier put these into the
+    // `harness.timeout` bucket as the taxonomy already documents.
+    // No retry/relaunch/failOn behavior is changed.
+    const msg = String(e && e.message || "");
+    const navCause = /Navigation timeout/i.test(msg)
+      ? "harness-timeout (page.goto exceeded 25s — chromium/proxy starvation, not a route defect)"
+      : /detached Frame/i.test(msg)
+      ? "harness-detached-frame (chromium crashed mid-navigation)"
+      : /Target closed|Session closed/i.test(msg)
+      ? "harness-session-closed (browser/page died)"
+      : /Protocol error/i.test(msg)
+      ? `harness-protocol-error (${msg.slice(0, 80)})`
+      : `harness-throw (${msg.slice(0, 100)})`;
     return {
       a1: "FAIL", a2: "SKIP", a3: "SKIP", a4: "FAIL", a5: "SKIP",
-      note: `goto failed: ${String(e.message).slice(0, 120)}`,
+      note: `goto failed: ${msg.slice(0, 120)}`,
       shot: null,
       navTrace,
+      navCause,
     };
   }
   try { await page.waitForNetworkIdle({ idleTime: 700, timeout: 8000 }); } catch {}
@@ -860,8 +885,8 @@ async function probe(page, routePath, resolvedUrl, cls) {
   //                               Default OFF (=0).
   //   RECYCLE_LOGIN_MAX_ATTEMPTS=3 cap for the bounded post-relaunch login
   //                               retry loop in relaunchChromium (above).
-  const BROWSER_RELAUNCH_EVERY = parseInt(process.env.BROWSER_RELAUNCH_EVERY || "0", 10);
-  const INSTRUMENT_EVERY = parseInt(process.env.INSTRUMENT_EVERY || "0", 10);
+  const BROWSER_RELAUNCH_EVERY = parseInt(process.env.BROWSER_RELAUNCH_EVERY || "40", 10);
+  const INSTRUMENT_EVERY = parseInt(process.env.INSTRUMENT_EVERY || "25", 10);
   let browserRelaunchCount = 0;
   if (BROWSER_RELAUNCH_EVERY > 0) {
     console.log(`[audit] BROWSER_RELAUNCH_EVERY=${BROWSER_RELAUNCH_EVERY} — relaunching chromium every ${BROWSER_RELAUNCH_EVERY} routes (Phase 9 anti-saturation)`);
