@@ -193,6 +193,110 @@ console.log("aggregate(samples, firstFailureIdx, firstFailureRoute)");
   assert(out.frontendLatencyP95Ms === 0, "no-frontend: p95=0");
 }
 
+// 9. Static guard against the exact bug that produced the DEGRADED
+//    verdict: a `key: identifier` line in the metrics block whose
+//    identifier has no declaration in the same file. ReferenceError
+//    at the metrics-assembly step kills the audit before summary.json
+//    is written. node --check doesn't catch this (parser is happy with
+//    a reference to a not-yet-declared symbol). This test does.
+{
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const src = fs.readFileSync(path.join(__dirname, "runtime-audit.cjs"), "utf8");
+
+  // Walk all `const metrics = { ... };` regions. We do this without a
+  // full parser by counting braces from the open of the literal.
+  function extractMetricsBlocks(source) {
+    const blocks = [];
+    const startRe = /\bconst\s+metrics\s*=\s*\{/g;
+    let m;
+    while ((m = startRe.exec(source)) !== null) {
+      const openBraceIdx = source.indexOf("{", m.index);
+      let depth = 0;
+      let inStr = false;
+      let strCh = "";
+      let closeIdx = -1;
+      for (let i = openBraceIdx; i < source.length; i++) {
+        const c = source[i];
+        if (inStr) {
+          if (c === strCh && source[i - 1] !== "\\") inStr = false;
+          continue;
+        }
+        if (c === '"' || c === "'" || c === "`") { inStr = true; strCh = c; continue; }
+        if (c === "{") depth++;
+        else if (c === "}") {
+          depth--;
+          if (depth === 0) { closeIdx = i; break; }
+        }
+      }
+      if (closeIdx !== -1) blocks.push(source.slice(openBraceIdx + 1, closeIdx));
+    }
+    return blocks;
+  }
+
+  function extractValueIdentifiers(block) {
+    // Match `key: <ident>` where <ident> is a bare identifier (not a
+    // call, not a literal, not a template, not a member access). Skip
+    // common falsy literals and obvious in-place expressions.
+    const out = new Set();
+    const lineRe = /^\s*(?:\w+|"[^"]+")\s*:\s*([A-Za-z_$][\w$]*)\s*[,}]/gm;
+    let m;
+    while ((m = lineRe.exec(block)) !== null) {
+      const id = m[1];
+      // Filter out obvious literals + native globals that don't need
+      // a local declaration.
+      if (["true", "false", "null", "undefined", "Infinity", "NaN"].includes(id)) continue;
+      if (["Math", "Number", "String", "Array", "Object", "JSON", "Date", "process"].includes(id)) continue;
+      out.add(id);
+    }
+    return out;
+  }
+
+  function hasDeclaration(source, id, beforeIdx) {
+    // True if a `(let|const|var) <id>` declaration exists in `source`
+    // BEFORE `beforeIdx`. This is the same scoping rule the metrics
+    // block honours at runtime.
+    const re = new RegExp(`\\b(?:let|const|var|function)\\s+${id}\\b`);
+    const haystack = source.slice(0, beforeIdx);
+    return re.test(haystack);
+  }
+
+  const blocks = extractMetricsBlocks(src);
+  assert(blocks.length >= 1, `static-guard: found ${blocks.length} metrics block(s) — at least one expected`);
+
+  let allDeclared = true;
+  for (const block of blocks) {
+    const blockStart = src.indexOf(block);
+    const ids = extractValueIdentifiers(block);
+    for (const id of ids) {
+      if (!hasDeclaration(src, id, blockStart)) {
+        console.log(`  ✗ static-guard: identifier "${id}" referenced in metrics block but has no declaration above`);
+        allDeclared = false;
+      }
+    }
+  }
+  assert(allDeclared, "static-guard: every metrics-block value identifier has a backing declaration (prevents apiRestartCount-class ReferenceError)");
+
+  // Negative self-test: ensure the guard would have caught the
+  // original DEGRADED bug. Simulate the pre-PR-#693 state by removing
+  // the `let apiRestartCount = 0;` declaration from a working copy,
+  // re-running just the static check, and expecting it to FAIL.
+  const stripped = src.replace(/\n\s*let apiRestartCount\s*=\s*0;.*?\n/, "\n");
+  const removed = stripped.length < src.length;
+  assert(removed, "self-test: simulated removal of `let apiRestartCount = 0;` works");
+  const strippedBlocks = extractMetricsBlocks(stripped);
+  let strippedCaught = false;
+  for (const block of strippedBlocks) {
+    const blockStart = stripped.indexOf(block);
+    for (const id of extractValueIdentifiers(block)) {
+      if (!hasDeclaration(stripped, id, blockStart)) {
+        if (id === "apiRestartCount") strippedCaught = true;
+      }
+    }
+  }
+  assert(strippedCaught, "self-test: guard catches apiRestartCount missing — would have prevented the original DEGRADED ReferenceError");
+}
+
 if (failed > 0) {
   console.log(`\nFAIL — ${failed} assertion(s) failed`);
   process.exit(1);
