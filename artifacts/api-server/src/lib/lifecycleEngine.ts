@@ -181,7 +181,16 @@ export async function applyTransition<TRow = any>(
 
     if (toState !== undefined) {
       const currentStatus = (existing[statusCol] as string) ?? "*";
-      if (!isValidTransition(entity, currentStatus, toState, statusCol)) {
+      // Defence-in-depth: when a state machine is registered in
+      // STATE_MACHINES, enforce it on top of the route's `fromStates`
+      // whitelist (validated above). Entities without a registered
+      // state machine — e.g. warehouse_products, inventory_counts —
+      // trust the route's explicit `fromStates` as the sole authority.
+      // Previously this branch rejected every transition for unregistered
+      // entities, breaking `POST /inventory-counts/:id/approve` from a
+      // brand-new `draft` count (issue #646).
+      const sm = getStateMachine(entity, statusCol);
+      if (sm && !isValidTransition(entity, currentStatus, toState, statusCol)) {
         throw new LifecycleError(
           `الانتقال غير مسموح: ${entity} ${currentStatus} → ${toState}`,
           409
