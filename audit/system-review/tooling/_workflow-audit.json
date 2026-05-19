@@ -1266,7 +1266,6 @@
       "statusColumn": "status",
       "fromStates": [
         "draft",
-        "sent",
         "returned"
       ],
       "fromStatesDynamic": false,
@@ -1275,7 +1274,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-      "line": 660,
+      "line": 670,
       "entity": "invoices",
       "action": "invoice.posted",
       "statusColumn": "status",
@@ -1288,7 +1287,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-      "line": 1003,
+      "line": 1013,
       "entity": "invoices",
       "action": null,
       "statusColumn": "status",
@@ -1844,8 +1843,7 @@
       "action": "legal.contract.terminated",
       "statusColumn": "status",
       "fromStates": [
-        "active",
-        "draft"
+        "active"
       ],
       "fromStatesDynamic": false,
       "toState": "terminated",
@@ -1853,7 +1851,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/legal.ts",
-      "line": 874,
+      "line": 880,
       "entity": "legal_cases",
       "action": "legal.case.in_progress",
       "statusColumn": "status",
@@ -2600,19 +2598,6 @@
     ],
     "fromStateGraphMismatch": [
       {
-        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 587,
-        "entity": "invoices",
-        "action": "invoice.approved",
-        "attempted": "sent → approved",
-        "engineAllowsFrom": [
-          "partial",
-          "paid",
-          "overdue",
-          "cancelled"
-        ]
-      },
-      {
         "file": "artifacts/api-server/src/routes/fleet.ts",
         "line": 1504,
         "entity": "fleet_maintenance",
@@ -2674,17 +2659,6 @@
         "attempted": "expired → active",
         "engineAllowsFrom": [
           "renewed"
-        ]
-      },
-      {
-        "file": "artifacts/api-server/src/routes/legal.ts",
-        "line": 514,
-        "entity": "legal_contracts",
-        "action": "legal.contract.terminated",
-        "attempted": "draft → terminated",
-        "engineAllowsFrom": [
-          "active",
-          "cancelled"
         ]
       }
     ],
@@ -3141,49 +3115,49 @@
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 742,
+        "line": 752,
         "table": "invoices",
         "snippet": "`UPDATE invoices SET \"paidAmount\" = $1, status = $2, \"paidAt\" = $3 WHERE id = $4 AND \"companyId\" = $5 AND \"deletedAt\" IS NULL`,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 747,
+        "line": 757,
         "table": "invoices",
         "snippet": "`UPDATE invoices SET \"paidAmount\" = $1, status = $2 WHERE id = $3 AND \"companyId\" = $4 AND \"deletedAt\" IS NULL`,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 953,
+        "line": 963,
         "table": "journal_entries",
         "snippet": "`UPDATE journal_entries SET \"deletedAt\" = NOW(), status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 958,
+        "line": 968,
         "table": "invoices",
         "snippet": "`UPDATE invoices SET \"deletedAt\" = NOW(), status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 1024,
+        "line": 1034,
         "table": "journal_entries",
         "snippet": "`UPDATE journal_entries SET status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND status IN ('posted', 'approved') AND \"deletedAt\" IS "
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 1187,
+        "line": 1197,
         "table": "invoices",
         "snippet": "`UPDATE invoices SET \"paidAmount\" = COALESCE(\"paidAmount\",0) + $1,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 1723,
+        "line": 1733,
         "table": "customer_advances",
         "snippet": "`UPDATE customer_advances SET \"appliedAmount\" = COALESCE(\"appliedAmount\",0) + $1,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-        "line": 1729,
+        "line": 1739,
         "table": "invoices",
         "snippet": "`UPDATE invoices SET \"paidAmount\" = COALESCE(\"paidAmount\",0) + $1,"
       },

@@ -80,9 +80,7 @@ Generated: 2026-05-19
 
 ## 3. Route-engine fromState graph mismatch
 
-**8** findings.
-
-- `artifacts/api-server/src/routes/finance-invoices.ts:587` (`invoice.approved`) — route declares `sent → approved` but engine graph for `invoices` from `sent` only allows `["partial","paid","overdue","cancelled"]`. **Will throw `LifecycleError` at runtime.**
+**6** findings.
 
 - `artifacts/api-server/src/routes/fleet.ts:1504` (`fleet.maintenance.completed`) — route declares `scheduled → completed` but engine graph for `fleet_maintenance` from `scheduled` only allows `["in_progress","cancelled"]`. **Will throw `LifecycleError` at runtime.**
 
@@ -95,8 +93,6 @@ Generated: 2026-05-19
 - `artifacts/api-server/src/routes/legal.ts:469` (`legal.contract.renewed`) — route declares `active → active` but engine graph for `legal_contracts` from `active` only allows `["terminated","expired","renewed"]`. **Will throw `LifecycleError` at runtime.**
 
 - `artifacts/api-server/src/routes/legal.ts:469` (`legal.contract.renewed`) — route declares `expired → active` but engine graph for `legal_contracts` from `expired` only allows `["renewed"]`. **Will throw `LifecycleError` at runtime.**
-
-- `artifacts/api-server/src/routes/legal.ts:514` (`legal.contract.terminated`) — route declares `draft → terminated` but engine graph for `legal_contracts` from `draft` only allows `["active","cancelled"]`. **Will throw `LifecycleError` at runtime.**
 
 ## 4. Registry ↔ engine state-set disagreement
 
@@ -192,21 +188,21 @@ Generated: 2026-05-19
 
 - `artifacts/api-server/src/routes/finance-custodies.ts:609` (table `journal_entries`): ``UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/finance-invoices.ts:742` (table `invoices`): ``UPDATE invoices SET "paidAmount" = $1, status = $2, "paidAt" = $3 WHERE id = $4 AND "companyId" = $5 AND "deletedAt" IS NULL`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/finance-invoices.ts:752` (table `invoices`): ``UPDATE invoices SET "paidAmount" = $1, status = $2, "paidAt" = $3 WHERE id = $4 AND "companyId" = $5 AND "deletedAt" IS NULL`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/finance-invoices.ts:747` (table `invoices`): ``UPDATE invoices SET "paidAmount" = $1, status = $2 WHERE id = $3 AND "companyId" = $4 AND "deletedAt" IS NULL`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/finance-invoices.ts:757` (table `invoices`): ``UPDATE invoices SET "paidAmount" = $1, status = $2 WHERE id = $3 AND "companyId" = $4 AND "deletedAt" IS NULL`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/finance-invoices.ts:953` (table `journal_entries`): ``UPDATE journal_entries SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/finance-invoices.ts:963` (table `journal_entries`): ``UPDATE journal_entries SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/finance-invoices.ts:958` (table `invoices`): ``UPDATE invoices SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/finance-invoices.ts:968` (table `invoices`): ``UPDATE invoices SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/finance-invoices.ts:1024` (table `journal_entries`): ``UPDATE journal_entries SET status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND status IN ('posted', 'approved') AND "deletedAt" IS ` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/finance-invoices.ts:1034` (table `journal_entries`): ``UPDATE journal_entries SET status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND status IN ('posted', 'approved') AND "deletedAt" IS ` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/finance-invoices.ts:1187` (table `invoices`): ``UPDATE invoices SET "paidAmount" = COALESCE("paidAmount",0) + $1,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/finance-invoices.ts:1197` (table `invoices`): ``UPDATE invoices SET "paidAmount" = COALESCE("paidAmount",0) + $1,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/finance-invoices.ts:1723` (table `customer_advances`): ``UPDATE customer_advances SET "appliedAmount" = COALESCE("appliedAmount",0) + $1,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/finance-invoices.ts:1733` (table `customer_advances`): ``UPDATE customer_advances SET "appliedAmount" = COALESCE("appliedAmount",0) + $1,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
-- `artifacts/api-server/src/routes/finance-invoices.ts:1729` (table `invoices`): ``UPDATE invoices SET "paidAmount" = COALESCE("paidAmount",0) + $1,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
+- `artifacts/api-server/src/routes/finance-invoices.ts:1739` (table `invoices`): ``UPDATE invoices SET "paidAmount" = COALESCE("paidAmount",0) + $1,` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
 - `artifacts/api-server/src/routes/finance-journal.ts:528` (table `journal_entries`): `if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId` — bypasses `applyTransition` ⇒ no engine state-validation, no audit log entry, no event emission, no lifecycle side-effects.
 
