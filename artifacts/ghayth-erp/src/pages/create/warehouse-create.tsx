@@ -30,6 +30,7 @@ export default function WarehouseCreate() {
   const handleSubmit = async () => {
     const firstError = validate({
       name: form.name ? null : "يرجى إدخال اسم المنتج",
+      sku: form.sku ? null : "يرجى إدخال رمز المنتج",
       costPrice: form.costPrice && Number(form.costPrice) < 0 ? "سعر التكلفة يجب أن يكون صفر أو أكثر" : null,
       sellPrice: form.sellPrice && Number(form.sellPrice) < 0 ? "سعر البيع يجب أن يكون صفر أو أكثر" : null,
       minStock: form.minStock && Number(form.minStock) < 0 ? "الحد الأدنى يجب أن يكون صفر أو أكثر" : null,
@@ -42,7 +43,7 @@ export default function WarehouseCreate() {
     try {
       await addProduct.mutateAsync({
         name: form.name,
-        sku: form.sku || undefined,
+        sku: form.sku,
         categoryId: form.categoryId ? Number(form.categoryId) : undefined,
         unit: form.unit,
         costPrice: Number(form.costPrice) || 0,
@@ -74,7 +75,7 @@ export default function WarehouseCreate() {
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <TextField label="اسم المنتج" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="اسم المنتج" error={fieldErrors.name} />
-          <TextField label="رمز المنتج" dir="ltr" value={form.sku} onChange={(v) => setForm((f) => ({ ...f, sku: v }))} placeholder="رمز المنتج" />
+          <TextField label="رمز المنتج" required dir="ltr" value={form.sku} onChange={(v) => setForm((f) => ({ ...f, sku: v }))} placeholder="رمز المنتج" error={fieldErrors.sku} />
           <FormFieldWrapper label="التصنيف">
             <Select value={form.categoryId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, categoryId: v === "_none" ? "" : v }))}>
               <SelectTrigger><SelectValue placeholder="بدون تصنيف" /></SelectTrigger>
