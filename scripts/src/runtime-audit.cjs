@@ -126,6 +126,9 @@ function writeEnvironmentJson(extra) {
       // triangulation matrix (Phase 2 of Runtime Stabilization).
       REVERSE_ORDER: process.env.REVERSE_ORDER === "1",
       BROWSER_RECYCLE_EVERY: parseInt(process.env.BROWSER_RECYCLE_EVERY || "0", 10),
+      BROWSER_RELAUNCH_EVERY: parseInt(process.env.BROWSER_RELAUNCH_EVERY || "0", 10),
+      INSTRUMENT_EVERY: parseInt(process.env.INSTRUMENT_EVERY || "0", 10),
+      RECYCLE_LOGIN_MAX_ATTEMPTS: parseInt(process.env.RECYCLE_LOGIN_MAX_ATTEMPTS || "3", 10),
       SAMPLE_EVERY_N_ROUTES: parseInt(process.env.SAMPLE_EVERY_N_ROUTES || "10", 10),
     },
     auditSessionId: `${RUN_ID}-s${Math.random().toString(36).slice(2, 6)}`,
@@ -608,7 +611,11 @@ async function probe(page, routePath, resolvedUrl, cls) {
   console.log(`[audit] run-id=${RUN_ID} run-dir=${RUN_DIR} (session=${envRecord.auditSessionId})`);
 
   console.log(`[audit] login as ${ADMIN_EMAIL}…`);
-  const cookieHeader = await login();
+  // Phase 9: cookieHeader is mutable so relaunchChromium() can refresh it via
+  // a server-side login() in lock-step with the in-page session. Without this,
+  // resolveParams() (which uses the Node-side cookieHeader) drifts out of
+  // session with the puppeteer Page after a relaunch.
+  let cookieHeader = await login();
   console.log(`[audit] login ok, cookieHeader len=${cookieHeader.length}`);
 
   process.on("uncaughtException", (e) => { console.error("[uncaught]", e); });
@@ -635,6 +642,8 @@ async function probe(page, routePath, resolvedUrl, cls) {
   };
   let chromiumCrashCount = 0;
   let reloginCount = 0;
+  // Phase 9 — bounded retry cap for post-relaunch in-page login.
+  const RECYCLE_LOGIN_MAX_ATTEMPTS = parseInt(process.env.RECYCLE_LOGIN_MAX_ATTEMPTS || "3", 10);
   // Phase 4 (api-server restart awareness) — apiRestartCount declaration
   // was lost when PR #675's diff merged empty. Detection is now real:
   // sampleRuntimeMetrics() polls /healthz periodically and increments
@@ -798,7 +807,74 @@ async function probe(page, routePath, resolvedUrl, cls) {
     console.warn(`[audit] relaunching chromium (#${chromiumCrashCount}) due to: ${reason}`);
     try { if (browser) await browser.close(); } catch { /* already dead */ }
     await launchChromium();
-    try { await inPageLogin(); } catch (e) { console.error("[audit] relogin after relaunch failed:", e.message); }
+    // === Phase 9 (architect fix #1): fail-fast post-relaunch login ===
+    // Previously a single in-page login attempt could silently fail and the
+    // run continued unauthenticated, producing a wave of misleading auth-301
+    // FAILs that look like app defects. Now we retry up to
+    // RECYCLE_LOGIN_MAX_ATTEMPTS times and THROW on exhaust so the operator
+    // sees a deterministic abort rather than a phantom defect signal.
+    let loginErr = null;
+    for (let attempt = 1; attempt <= RECYCLE_LOGIN_MAX_ATTEMPTS; attempt++) {
+      try {
+        await inPageLogin();
+        loginErr = null;
+        break;
+      } catch (e) {
+        loginErr = e;
+        console.error(`[audit] post-relaunch login attempt ${attempt}/${RECYCLE_LOGIN_MAX_ATTEMPTS} failed: ${e.message}`);
+        if (attempt < RECYCLE_LOGIN_MAX_ATTEMPTS) {
+          await new Promise((r) => setTimeout(r, 1000 * attempt));
+        }
+      }
+    }
+    if (loginErr) {
+      throw new Error(`[audit] post-relaunch login exhausted ${RECYCLE_LOGIN_MAX_ATTEMPTS} attempts (${loginErr.message}) — aborting run to avoid phantom auth FAILs`);
+    }
+    // === Phase 9 (architect fix #2): refresh Node-side cookieHeader ===
+    // Re-call the server-side login() helper to get a fresh Set-Cookie so
+    // resolveParams() (uses cookieHeader directly) stays in lock-step with
+    // the new in-page session.
+    try {
+      cookieHeader = await login();
+    } catch (e) {
+      console.warn(`[audit] cookieHeader refresh failed (continuing with stale): ${e.message}`);
+    }
+  }
+
+  // === Phase 9: anti-saturation browser relaunch + inline instrumentation ===
+  //
+  // The Phase 1 BROWSER_RECYCLE_EVERY knob (PR #695) recycles only the Page
+  // (cheap, default OFF) — it does NOT close + relaunch the entire chromium
+  // process. Phase 9 adds two new knobs that DO:
+  //
+  //   BROWSER_RELAUNCH_EVERY=40   close + re-launch the entire chromium
+  //                               every N routes (anti-saturation —
+  //                               proactive, before FD/IPC creep wedges
+  //                               page.goto with 25s timeouts). Default
+  //                               OFF (=0) to preserve current behaviour.
+  //   INSTRUMENT_EVERY=25         inline-log one [instr] line every N
+  //                               routes carrying idx/rss/heap/api/recycles/
+  //                               crashes/relogins/last — operator can
+  //                               correlate slowdown in the live tail
+  //                               without waiting for instrumentation.json.
+  //                               Default OFF (=0).
+  //   RECYCLE_LOGIN_MAX_ATTEMPTS=3 cap for the bounded post-relaunch login
+  //                               retry loop in relaunchChromium (above).
+  const BROWSER_RELAUNCH_EVERY = parseInt(process.env.BROWSER_RELAUNCH_EVERY || "0", 10);
+  const INSTRUMENT_EVERY = parseInt(process.env.INSTRUMENT_EVERY || "0", 10);
+  let browserRelaunchCount = 0;
+  if (BROWSER_RELAUNCH_EVERY > 0) {
+    console.log(`[audit] BROWSER_RELAUNCH_EVERY=${BROWSER_RELAUNCH_EVERY} — relaunching chromium every ${BROWSER_RELAUNCH_EVERY} routes (Phase 9 anti-saturation)`);
+  }
+  if (INSTRUMENT_EVERY > 0) {
+    console.log(`[audit] INSTRUMENT_EVERY=${INSTRUMENT_EVERY} — inline instrumentation every ${INSTRUMENT_EVERY} routes`);
+  }
+  function logInstrumentation(routeIdx, lastRoute) {
+    const mem = process.memoryUsage();
+    const rssMb = Math.round(mem.rss / 1024 / 1024);
+    const heapMb = Math.round(mem.heapUsed / 1024 / 1024);
+    const health = lastHealthOk === false ? "DOWN" : (lastHealthOk === true ? "ok" : "?");
+    console.log(`[instr] idx=${routeIdx}/${routes.length} rss=${rssMb}MB heap=${heapMb}MB api=${health} relaunches=${browserRelaunchCount} crashes=${chromiumCrashCount} relogins=${reloginCount} last=${lastRoute}`);
   }
 
   const results = [];
@@ -820,6 +896,20 @@ async function probe(page, routePath, resolvedUrl, cls) {
     // HTTP HEAD-equivalent) so we can afford every-10-routes by default.
     if (routeIdx > 0 && routeIdx % SAMPLE_EVERY_N_ROUTES === 0) {
       await sampleRuntimeMetrics(`tick:${routeIdx}`, routeIdx);
+    }
+    // === Phase 9: proactive whole-chromium relaunch (anti-saturation) ===
+    // Unlike the Page-recycle below, this closes + re-launches the entire
+    // browser process to release FDs / IPC channels / DOM workers that
+    // accumulate across long runs (the wedge that produced the deterministic
+    // 25025ms goto:start stalls in #638's histogram before Phase 9).
+    if (BROWSER_RELAUNCH_EVERY > 0 && routeIdx > 0 && routeIdx % BROWSER_RELAUNCH_EVERY === 0) {
+      browserRelaunchCount++;
+      console.log(`[audit] recycling chromium (#${browserRelaunchCount}) after ${BROWSER_RELAUNCH_EVERY} routes — Phase 9 anti-saturation`);
+      await relaunchChromium(`scheduled relaunch every ${BROWSER_RELAUNCH_EVERY} routes`);
+    }
+    // === Phase 9: inline instrumentation (every INSTRUMENT_EVERY routes) ===
+    if (INSTRUMENT_EVERY > 0 && routeIdx > 0 && routeIdx % INSTRUMENT_EVERY === 0) {
+      logInstrumentation(routeIdx, routePath);
     }
     // Experimental knob: close + re-open the puppeteer Page every N
     // routes to test the "DOM / listener / cache residue" hypothesis.
@@ -1059,6 +1149,7 @@ async function probe(page, routePath, resolvedUrl, cls) {
     relogins: reloginCount,
     apiServerRestartsDetected: apiRestartCount,
     pageRecycles: pageRecycleCount,
+    browserRelaunches: browserRelaunchCount,
     slowestRoutes,
   };
 
