@@ -1,0 +1,3691 @@
+{
+  "machines": [
+    {
+      "entity": "invoices",
+      "statusColumn": "status",
+      "transitions": {
+        "draft": [
+          "approved",
+          "rejected",
+          "returned",
+          "sent",
+          "cancelled"
+        ],
+        "approved": [
+          "sent",
+          "posted",
+          "cancelled",
+          "rejected"
+        ],
+        "returned": [
+          "draft",
+          "approved",
+          "cancelled"
+        ],
+        "rejected": [
+          "draft",
+          "cancelled"
+        ],
+        "sent": [
+          "partial",
+          "paid",
+          "overdue",
+          "cancelled"
+        ],
+        "posted": [
+          "paid",
+          "partial",
+          "overdue",
+          "cancelled",
+          "closed"
+        ],
+        "partial": [
+          "paid",
+          "overdue",
+          "cancelled"
+        ],
+        "overdue": [
+          "paid",
+          "partial",
+          "cancelled"
+        ],
+        "paid": [
+          "closed"
+        ],
+        "cancelled": [],
+        "closed": []
+      }
+    },
+    {
+      "entity": "purchase_orders",
+      "statusColumn": "status",
+      "transitions": {
+        "draft": [
+          "pending_approval",
+          "approved",
+          "cancelled"
+        ],
+        "pending": [
+          "pending_approval",
+          "confirmed"
+        ],
+        "pending_approval": [
+          "approved",
+          "rejected",
+          "returned"
+        ],
+        "approved": [
+          "partially_received",
+          "received",
+          "sent",
+          "cancelled"
+        ],
+        "sent": [
+          "confirmed",
+          "partially_received",
+          "received",
+          "cancelled"
+        ],
+        "confirmed": [
+          "partially_received",
+          "received",
+          "cancelled"
+        ],
+        "partially_received": [
+          "received",
+          "invoice_matched",
+          "invoice_mismatch"
+        ],
+        "received": [
+          "invoice_matched",
+          "invoice_mismatch",
+          "paid"
+        ],
+        "invoice_matched": [
+          "paid",
+          "payment_scheduled"
+        ],
+        "invoice_mismatch": [
+          "invoice_matched",
+          "cancelled"
+        ],
+        "payment_scheduled": [
+          "paid"
+        ],
+        "rejected": [
+          "draft"
+        ],
+        "returned": [
+          "draft",
+          "pending_approval",
+          "approved",
+          "cancelled"
+        ],
+        "paid": [],
+        "cancelled": []
+      }
+    },
+    {
+      "entity": "purchase_requests",
+      "statusColumn": "status",
+      "transitions": {
+        "draft": [
+          "pending",
+          "approved"
+        ],
+        "pending": [
+          "approved",
+          "rejected"
+        ],
+        "approved": [
+          "converted"
+        ],
+        "rejected": [
+          "draft"
+        ],
+        "converted": []
+      }
+    },
+    {
+      "entity": "journal_entries",
+      "statusColumn": "status",
+      "transitions": {
+        "draft": [
+          "pending_approval",
+          "posted",
+          "approved",
+          "rejected",
+          "returned"
+        ],
+        "pending_approval": [
+          "posted",
+          "approved",
+          "rejected",
+          "returned"
+        ],
+        "approved": [
+          "posted",
+          "rejected"
+        ],
+        "posted": [],
+        "rejected": [
+          "draft"
+        ],
+        "returned": [
+          "draft",
+          "pending_approval",
+          "approved"
+        ]
+      }
+    },
+    {
+      "entity": "journal_entries",
+      "statusColumn": "approvalStatus",
+      "transitions": {
+        "draft": [
+          "pending_review"
+        ],
+        "pending_review": [
+          "approved",
+          "rejected"
+        ],
+        "approved": [
+          "posted",
+          "rejected"
+        ],
+        "rejected": [
+          "draft"
+        ],
+        "posted": []
+      }
+    },
+    {
+      "entity": "legal_cases",
+      "statusColumn": "status",
+      "transitions": {
+        "open": [
+          "in_progress",
+          "closed",
+          "on_hold"
+        ],
+        "in_progress": [
+          "closed",
+          "on_hold"
+        ],
+        "on_hold": [
+          "in_progress",
+          "closed"
+        ],
+        "closed": []
+      }
+    },
+    {
+      "entity": "legal_contracts",
+      "statusColumn": "status",
+      "transitions": {
+        "draft": [
+          "active",
+          "cancelled"
+        ],
+        "active": [
+          "terminated",
+          "expired",
+          "renewed"
+        ],
+        "terminated": [],
+        "expired": [
+          "renewed"
+        ],
+        "renewed": [
+          "active"
+        ],
+        "cancelled": []
+      }
+    },
+    {
+      "entity": "hr_leave_requests",
+      "statusColumn": "status",
+      "transitions": {
+        "pending": [
+          "approved",
+          "rejected",
+          "returned",
+          "cancelled"
+        ],
+        "approved": [
+          "cancelled",
+          "completed"
+        ],
+        "returned": [
+          "pending"
+        ],
+        "rejected": [],
+        "cancelled": [],
+        "completed": []
+      }
+    },
+    {
+      "entity": "hr_exit_requests",
+      "statusColumn": "status",
+      "transitions": {
+        "pending": [
+          "approved",
+          "rejected"
+        ],
+        "approved": [
+          "clearance",
+          "completed"
+        ],
+        "clearance": [
+          "completed"
+        ],
+        "rejected": [],
+        "completed": []
+      }
+    },
+    {
+      "entity": "hr_inquiry_memos",
+      "statusColumn": "status",
+      "transitions": {
+        "pending_employee": [
+          "pending_manager"
+        ],
+        "pending_manager": [
+          "pending_gm"
+        ],
+        "pending_gm": [
+          "approved",
+          "rejected"
+        ],
+        "approved": [
+          "appeal_pending",
+          "closed"
+        ],
+        "rejected": [
+          "closed"
+        ],
+        "appeal_pending": [
+          "appeal_accepted",
+          "approved"
+        ],
+        "appeal_accepted": [
+          "closed"
+        ],
+        "cancelled": [
+          "closed"
+        ],
+        "draft": [
+          "pending_employee",
+          "cancelled"
+        ],
+        "closed": []
+      }
+    },
+    {
+      "entity": "fleet_trips",
+      "statusColumn": "status",
+      "transitions": {
+        "planned": [
+          "scheduled",
+          "in_progress",
+          "cancelled"
+        ],
+        "scheduled": [
+          "in_progress",
+          "cancelled"
+        ],
+        "in_progress": [
+          "completed",
+          "cancelled"
+        ],
+        "completed": [],
+        "cancelled": []
+      }
+    },
+    {
+      "entity": "fleet_maintenance",
+      "statusColumn": "status",
+      "transitions": {
+        "scheduled": [
+          "in_progress",
+          "cancelled"
+        ],
+        "in_progress": [
+          "completed",
+          "cancelled"
+        ],
+        "completed": [],
+        "cancelled": []
+      }
+    },
+    {
+      "entity": "property_contracts",
+      "statusColumn": "status",
+      "transitions": {
+        "draft": [
+          "active",
+          "cancelled"
+        ],
+        "active": [
+          "terminated",
+          "expired",
+          "renewed"
+        ],
+        "terminated": [],
+        "expired": [
+          "renewed"
+        ],
+        "renewed": [
+          "active"
+        ],
+        "cancelled": []
+      }
+    },
+    {
+      "entity": "property_units",
+      "statusColumn": "status",
+      "transitions": {
+        "available": [
+          "reserved",
+          "rented",
+          "maintenance"
+        ],
+        "reserved": [
+          "rented",
+          "available"
+        ],
+        "rented": [
+          "available",
+          "maintenance"
+        ],
+        "maintenance": [
+          "available"
+        ]
+      }
+    },
+    {
+      "entity": "support_tickets",
+      "statusColumn": "status",
+      "transitions": {
+        "open": [
+          "in_progress",
+          "closed"
+        ],
+        "in_progress": [
+          "resolved",
+          "escalated",
+          "closed"
+        ],
+        "escalated": [
+          "in_progress",
+          "resolved",
+          "closed"
+        ],
+        "resolved": [
+          "closed",
+          "open"
+        ],
+        "closed": [
+          "open"
+        ]
+      }
+    },
+    {
+      "entity": "crm_opportunities",
+      "statusColumn": "status",
+      "transitions": {
+        "prospecting": [
+          "qualification",
+          "lost"
+        ],
+        "qualification": [
+          "proposal",
+          "lost"
+        ],
+        "proposal": [
+          "negotiation",
+          "lost"
+        ],
+        "negotiation": [
+          "won",
+          "lost"
+        ],
+        "won": [],
+        "lost": []
+      }
+    },
+    {
+      "entity": "workflow_instances",
+      "statusColumn": "status",
+      "transitions": {
+        "draft": [
+          "pending",
+          "pending_approval"
+        ],
+        "pending": [
+          "approved",
+          "rejected",
+          "returned",
+          "escalated"
+        ],
+        "pending_approval": [
+          "approved",
+          "rejected",
+          "returned"
+        ],
+        "returned": [
+          "draft",
+          "pending",
+          "pending_approval"
+        ],
+        "escalated": [
+          "approved",
+          "rejected"
+        ],
+        "approved": [],
+        "rejected": []
+      }
+    },
+    {
+      "entity": "umrah_sales_invoices",
+      "statusColumn": "status",
+      "transitions": {
+        "draft": [
+          "approved",
+          "cancelled"
+        ],
+        "approved": [
+          "sent",
+          "cancelled"
+        ],
+        "sent": [
+          "partially_paid",
+          "paid",
+          "overdue",
+          "cancelled"
+        ],
+        "partially_paid": [
+          "paid",
+          "overdue",
+          "cancelled"
+        ],
+        "paid": [],
+        "overdue": [
+          "partially_paid",
+          "paid",
+          "cancelled"
+        ],
+        "cancelled": []
+      }
+    },
+    {
+      "entity": "umrah_pilgrims",
+      "statusColumn": "status",
+      "transitions": {
+        "pending": [
+          "arrived",
+          "cancelled"
+        ],
+        "arrived": [
+          "active",
+          "departed",
+          "overstayed",
+          "cancelled"
+        ],
+        "active": [
+          "departed",
+          "overstayed",
+          "violated"
+        ],
+        "overstayed": [
+          "departed",
+          "violated"
+        ],
+        "departed": [],
+        "violated": [],
+        "cancelled": []
+      }
+    },
+    {
+      "entity": "umrah_seasons",
+      "statusColumn": "status",
+      "transitions": {
+        "open": [
+          "closed"
+        ],
+        "closed": [
+          "archived"
+        ],
+        "archived": []
+      }
+    },
+    {
+      "entity": "umrah_agents",
+      "statusColumn": "status",
+      "transitions": {
+        "active": [
+          "inactive",
+          "suspended",
+          "blocked"
+        ],
+        "inactive": [
+          "active"
+        ],
+        "suspended": [
+          "active",
+          "blocked"
+        ],
+        "blocked": []
+      }
+    },
+    {
+      "entity": "umrah_transport",
+      "statusColumn": "status",
+      "transitions": {
+        "scheduled": [
+          "in_progress",
+          "cancelled"
+        ],
+        "in_progress": [
+          "completed",
+          "cancelled"
+        ],
+        "completed": [],
+        "cancelled": []
+      }
+    },
+    {
+      "entity": "governance_policies",
+      "statusColumn": "status",
+      "transitions": {
+        "draft": [
+          "active",
+          "archived"
+        ],
+        "active": [
+          "archived",
+          "draft"
+        ],
+        "archived": []
+      }
+    },
+    {
+      "entity": "budgets",
+      "statusColumn": "status",
+      "transitions": {
+        "draft": [
+          "pending_approval",
+          "approved"
+        ],
+        "pending_approval": [
+          "approved",
+          "rejected",
+          "returned"
+        ],
+        "approved": [
+          "closed"
+        ],
+        "rejected": [
+          "draft"
+        ],
+        "returned": [
+          "draft",
+          "pending_approval"
+        ],
+        "closed": []
+      }
+    },
+    {
+      "entity": "financial_periods",
+      "statusColumn": "status",
+      "transitions": {
+        "open": [
+          "closed"
+        ],
+        "closed": [
+          "open"
+        ]
+      }
+    },
+    {
+      "entity": "fleet_traffic_violations",
+      "statusColumn": "status",
+      "transitions": {
+        "pending": [
+          "unpaid",
+          "paid",
+          "disputed",
+          "cancelled"
+        ],
+        "unpaid": [
+          "paid",
+          "disputed",
+          "cancelled"
+        ],
+        "disputed": [
+          "unpaid",
+          "paid",
+          "cancelled"
+        ],
+        "paid": [],
+        "cancelled": []
+      }
+    },
+    {
+      "entity": "umrah_penalties",
+      "statusColumn": "status",
+      "transitions": {
+        "pending": [
+          "invoiced",
+          "waived"
+        ],
+        "invoiced": [
+          "paid",
+          "waived"
+        ],
+        "paid": [],
+        "waived": []
+      }
+    },
+    {
+      "entity": "umrah_agent_invoices",
+      "statusColumn": "status",
+      "transitions": {
+        "sent": [
+          "partially_paid",
+          "paid",
+          "overdue",
+          "cancelled"
+        ],
+        "partially_paid": [
+          "paid",
+          "overdue",
+          "cancelled"
+        ],
+        "overdue": [
+          "partially_paid",
+          "paid",
+          "cancelled"
+        ],
+        "paid": [],
+        "cancelled": []
+      }
+    }
+  ],
+  "registry": [
+    {
+      "table": "employee_contracts",
+      "statusColumn": "approvalStatus",
+      "states": [
+        "draft",
+        "pending_approval",
+        "approved",
+        "rejected",
+        "signed",
+        "active",
+        "terminated"
+      ],
+      "initialState": "draft",
+      "terminalStates": [
+        "terminated"
+      ]
+    },
+    {
+      "table": "hr_leave_requests",
+      "statusColumn": "status",
+      "states": [
+        "pending",
+        "approved",
+        "rejected",
+        "cancelled",
+        "completed"
+      ],
+      "initialState": "pending",
+      "terminalStates": [
+        "rejected",
+        "cancelled",
+        "completed"
+      ]
+    },
+    {
+      "table": "hr_overtime_requests",
+      "statusColumn": "status",
+      "states": [
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "initialState": "pending",
+      "terminalStates": [
+        "rejected"
+      ]
+    },
+    {
+      "table": "hr_official_letters",
+      "statusColumn": "status",
+      "states": [
+        "pending",
+        "approved",
+        "rejected",
+        "printed"
+      ],
+      "initialState": "pending",
+      "terminalStates": [
+        "printed"
+      ]
+    },
+    {
+      "table": "hr_loans",
+      "statusColumn": "status",
+      "states": [
+        "pending",
+        "approved",
+        "rejected",
+        "active",
+        "completed"
+      ],
+      "initialState": "pending",
+      "terminalStates": [
+        "rejected",
+        "completed"
+      ]
+    },
+    {
+      "table": "hr_exit_requests",
+      "statusColumn": "status",
+      "states": [
+        "pending",
+        "approved",
+        "rejected",
+        "clearance",
+        "completed"
+      ],
+      "initialState": "pending",
+      "terminalStates": [
+        "rejected",
+        "completed"
+      ]
+    },
+    {
+      "table": "employee_transfers",
+      "statusColumn": "status",
+      "states": [
+        "pending",
+        "approved",
+        "rejected",
+        "completed"
+      ],
+      "initialState": "pending",
+      "terminalStates": [
+        "rejected",
+        "completed"
+      ]
+    },
+    {
+      "table": "hr_excuse_requests",
+      "statusColumn": "status",
+      "states": [
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "initialState": "pending",
+      "terminalStates": [
+        "rejected"
+      ]
+    },
+    {
+      "table": "hr_inquiry_memos",
+      "statusColumn": "status",
+      "states": [
+        "draft",
+        "issued",
+        "acknowledged",
+        "appealed",
+        "escalated",
+        "gm_review",
+        "justified",
+        "closed"
+      ],
+      "initialState": "draft",
+      "terminalStates": [
+        "closed"
+      ]
+    },
+    {
+      "table": "payroll_runs",
+      "statusColumn": "status",
+      "states": [
+        "draft",
+        "calculated",
+        "approved",
+        "posted",
+        "paid"
+      ],
+      "initialState": "draft",
+      "terminalStates": [
+        "paid"
+      ]
+    },
+    {
+      "table": "invoices",
+      "statusColumn": "status",
+      "states": [
+        "draft",
+        "approved",
+        "rejected",
+        "returned",
+        "sent",
+        "partial",
+        "paid",
+        "overdue",
+        "cancelled",
+        "closed",
+        "posted"
+      ],
+      "initialState": "draft",
+      "terminalStates": [
+        "cancelled",
+        "closed"
+      ]
+    },
+    {
+      "table": "journal_entries",
+      "statusColumn": "status",
+      "states": [
+        "draft",
+        "pending_approval",
+        "posted",
+        "rejected",
+        "reversed"
+      ],
+      "initialState": "draft",
+      "terminalStates": [
+        "reversed"
+      ]
+    },
+    {
+      "table": "purchase_requests",
+      "statusColumn": "status",
+      "states": [
+        "draft",
+        "pending",
+        "approved",
+        "rejected",
+        "converted"
+      ],
+      "initialState": "draft",
+      "terminalStates": [
+        "rejected",
+        "converted"
+      ]
+    },
+    {
+      "table": "purchase_orders",
+      "statusColumn": "status",
+      "states": [
+        "draft",
+        "pending_approval",
+        "approved",
+        "rejected",
+        "partially_received",
+        "received",
+        "paid",
+        "cancelled"
+      ],
+      "initialState": "draft",
+      "terminalStates": [
+        "paid",
+        "cancelled"
+      ]
+    },
+    {
+      "table": "expense_claims",
+      "statusColumn": "status",
+      "states": [
+        "pending",
+        "approved",
+        "rejected",
+        "paid"
+      ],
+      "initialState": "pending",
+      "terminalStates": [
+        "rejected",
+        "paid"
+      ]
+    },
+    {
+      "table": "budgets",
+      "statusColumn": "status",
+      "states": [
+        "draft",
+        "pending_approval",
+        "approved",
+        "rejected",
+        "closed"
+      ],
+      "initialState": "draft",
+      "terminalStates": [
+        "closed"
+      ]
+    },
+    {
+      "table": "custodies",
+      "statusColumn": "status",
+      "states": [
+        "pending",
+        "approved",
+        "rejected",
+        "settled"
+      ],
+      "initialState": "pending",
+      "terminalStates": [
+        "rejected",
+        "settled"
+      ]
+    },
+    {
+      "table": "salary_advances",
+      "statusColumn": "status",
+      "states": [
+        "pending",
+        "approved",
+        "rejected",
+        "deducted"
+      ],
+      "initialState": "pending",
+      "terminalStates": [
+        "rejected",
+        "deducted"
+      ]
+    },
+    {
+      "table": "payment_vouchers",
+      "statusColumn": "status",
+      "states": [
+        "draft",
+        "approved",
+        "posted",
+        "cancelled"
+      ],
+      "initialState": "draft",
+      "terminalStates": [
+        "posted",
+        "cancelled"
+      ]
+    },
+    {
+      "table": "fleet_trips",
+      "statusColumn": "status",
+      "states": [
+        "scheduled",
+        "in_progress",
+        "completed",
+        "cancelled"
+      ],
+      "initialState": "scheduled",
+      "terminalStates": [
+        "completed",
+        "cancelled"
+      ]
+    },
+    {
+      "table": "fleet_maintenance",
+      "statusColumn": "status",
+      "states": [
+        "scheduled",
+        "in_progress",
+        "completed",
+        "cancelled"
+      ],
+      "initialState": "scheduled",
+      "terminalStates": [
+        "completed",
+        "cancelled"
+      ]
+    },
+    {
+      "table": "fleet_insurance_policies",
+      "statusColumn": "status",
+      "states": [
+        "active",
+        "expired",
+        "cancelled",
+        "renewed"
+      ],
+      "initialState": "active",
+      "terminalStates": [
+        "cancelled"
+      ]
+    },
+    {
+      "table": "rental_contracts",
+      "statusColumn": "status",
+      "states": [
+        "draft",
+        "active",
+        "terminated",
+        "expired",
+        "renewed",
+        "cancelled"
+      ],
+      "initialState": "draft",
+      "terminalStates": [
+        "terminated",
+        "cancelled"
+      ]
+    },
+    {
+      "table": "maintenance_requests",
+      "statusColumn": "status",
+      "states": [
+        "pending",
+        "approved",
+        "in_progress",
+        "completed",
+        "cancelled"
+      ],
+      "initialState": "pending",
+      "terminalStates": [
+        "completed",
+        "cancelled"
+      ]
+    },
+    {
+      "table": "legal_cases",
+      "statusColumn": "status",
+      "states": [
+        "open",
+        "in_progress",
+        "on_hold",
+        "closed"
+      ],
+      "initialState": "open",
+      "terminalStates": [
+        "closed"
+      ]
+    },
+    {
+      "table": "legal_contracts",
+      "statusColumn": "status",
+      "states": [
+        "draft",
+        "active",
+        "terminated",
+        "expired",
+        "renewed",
+        "cancelled"
+      ],
+      "initialState": "draft",
+      "terminalStates": [
+        "terminated",
+        "cancelled"
+      ]
+    },
+    {
+      "table": "crm_opportunities",
+      "statusColumn": "status",
+      "states": [
+        "prospecting",
+        "qualification",
+        "proposal",
+        "negotiation",
+        "won",
+        "lost"
+      ],
+      "initialState": "prospecting",
+      "terminalStates": [
+        "won",
+        "lost"
+      ]
+    },
+    {
+      "table": "support_tickets",
+      "statusColumn": "status",
+      "states": [
+        "open",
+        "in_progress",
+        "escalated",
+        "resolved",
+        "closed"
+      ],
+      "initialState": "open",
+      "terminalStates": [
+        "closed"
+      ]
+    },
+    {
+      "table": "inventory_counts",
+      "statusColumn": "status",
+      "states": [
+        "draft",
+        "in_progress",
+        "pending_approval",
+        "approved",
+        "cancelled"
+      ],
+      "initialState": "draft",
+      "terminalStates": [
+        "approved",
+        "cancelled"
+      ]
+    },
+    {
+      "table": "store_orders",
+      "statusColumn": "status",
+      "states": [
+        "pending",
+        "confirmed",
+        "processing",
+        "shipped",
+        "delivered",
+        "cancelled"
+      ],
+      "initialState": "pending",
+      "terminalStates": [
+        "delivered",
+        "cancelled"
+      ]
+    },
+    {
+      "table": "umrah_sales_invoices",
+      "statusColumn": "status",
+      "states": [
+        "draft",
+        "confirmed",
+        "partial",
+        "paid",
+        "cancelled"
+      ],
+      "initialState": "draft",
+      "terminalStates": [
+        "paid",
+        "cancelled"
+      ]
+    },
+    {
+      "table": "governance_policies",
+      "statusColumn": "status",
+      "states": [
+        "draft",
+        "active",
+        "archived"
+      ],
+      "initialState": "draft",
+      "terminalStates": [
+        "archived"
+      ]
+    }
+  ],
+  "sites": [
+    {
+      "file": "artifacts/api-server/src/routes/crm.ts",
+      "line": 866,
+      "entity": "crm_opportunities",
+      "action": "crm.opportunity.converted",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": false,
+      "toState": "won",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-collection.ts",
+      "line": 185,
+      "entity": "invoices",
+      "action": "invoice.overdue",
+      "statusColumn": "status",
+      "fromStates": [
+        "sent",
+        "posted",
+        "partial"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "overdue",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+      "line": 527,
+      "entity": "invoices",
+      "action": "invoice.sent",
+      "statusColumn": "status",
+      "fromStates": [
+        "draft",
+        "approved"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "sent",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+      "line": 587,
+      "entity": "invoices",
+      "action": "invoice.approved",
+      "statusColumn": "status",
+      "fromStates": [
+        "draft",
+        "sent",
+        "returned"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "approved",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+      "line": 660,
+      "entity": "invoices",
+      "action": "invoice.posted",
+      "statusColumn": "status",
+      "fromStates": [
+        "approved"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "posted",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+      "line": 1003,
+      "entity": "invoices",
+      "action": null,
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": false,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "line": 336,
+      "entity": "purchase_requests",
+      "action": "purchase_request.submitted",
+      "statusColumn": "status",
+      "fromStates": [
+        "draft"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "pending",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "line": 382,
+      "entity": "purchase_requests",
+      "action": "purchase_request.submitted",
+      "statusColumn": "status",
+      "fromStates": [
+        "draft"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "pending",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "line": 433,
+      "entity": "purchase_requests",
+      "action": null,
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": false,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "line": 476,
+      "entity": "purchase_requests",
+      "action": "purchase_request.converted",
+      "statusColumn": "status",
+      "fromStates": [
+        "approved"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "converted",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "line": 619,
+      "entity": "purchase_orders",
+      "action": "purchase_order.submitted_for_approval",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "pending_approval",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "line": 656,
+      "entity": "purchase_orders",
+      "action": null,
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": false,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "line": 836,
+      "entity": "purchase_orders",
+      "action": "purchase_order.received",
+      "statusColumn": "status",
+      "fromStates": [
+        "approved",
+        "partially_received"
+      ],
+      "fromStatesDynamic": false,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "line": 1123,
+      "entity": "purchase_orders",
+      "action": "purchase_order.paid",
+      "statusColumn": "status",
+      "fromStates": [
+        "invoice_matched"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "paid",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "line": 1134,
+      "entity": "purchase_orders",
+      "action": "purchase_order.paid",
+      "statusColumn": "status",
+      "fromStates": [
+        "invoice_matched"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "paid",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "line": 1236,
+      "entity": "purchase_requests",
+      "action": "purchase_request.converted",
+      "statusColumn": "status",
+      "fromStates": [
+        "approved"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "converted",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "line": 1271,
+      "entity": "purchase_orders",
+      "action": "purchase_order.submitted_for_approval",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "pending_approval",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "line": 1386,
+      "entity": "purchase_orders",
+      "action": "purchase_order.vendor_confirmed",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending",
+        "sent"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "confirmed",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "line": 1473,
+      "entity": "purchase_orders",
+      "action": null,
+      "statusColumn": "status",
+      "fromStates": [
+        "received",
+        "partially_received"
+      ],
+      "fromStatesDynamic": false,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/finance-purchase.ts",
+      "line": 1567,
+      "entity": "purchase_orders",
+      "action": "purchase_order.payment_scheduled",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": false,
+      "toState": "payment_scheduled",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/fleet.ts",
+      "line": 1163,
+      "entity": "fleet_trips",
+      "action": "fleet.trip.completed",
+      "statusColumn": "status",
+      "fromStates": [
+        "in_progress"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "completed",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/fleet.ts",
+      "line": 1239,
+      "entity": "fleet_trips",
+      "action": "fleet.trip.cancelled",
+      "statusColumn": "status",
+      "fromStates": [
+        "scheduled",
+        "planned",
+        "in_progress"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "cancelled",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/fleet.ts",
+      "line": 1504,
+      "entity": "fleet_maintenance",
+      "action": "fleet.maintenance.completed",
+      "statusColumn": "status",
+      "fromStates": [
+        "scheduled",
+        "in_progress"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "completed",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/fleet.ts",
+      "line": 1590,
+      "entity": "fleet_maintenance",
+      "action": "fleet.maintenance.cancelled",
+      "statusColumn": "status",
+      "fromStates": [
+        "scheduled",
+        "in_progress"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "cancelled",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/fleet.ts",
+      "line": 2926,
+      "entity": "fleet_traffic_violations",
+      "action": "fleet.traffic_violation.paid",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending",
+        "unpaid"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "paid",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+      "line": 757,
+      "entity": "hr_inquiry_memos",
+      "action": "hr.memo.justified",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending_employee"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "pending_manager",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+      "line": 811,
+      "entity": "hr_inquiry_memos",
+      "action": "hr.memo.manager_recommended",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending_manager"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "pending_gm",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+      "line": 896,
+      "entity": "hr_inquiry_memos",
+      "action": "hr.memo.gm_decided",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending_gm"
+      ],
+      "fromStatesDynamic": false,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+      "line": 1000,
+      "entity": "hr_inquiry_memos",
+      "action": "hr.memo.cancelled",
+      "statusColumn": "status",
+      "fromStates": [
+        "draft",
+        "pending_employee",
+        "pending_manager",
+        "pending_gm"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "cancelled",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+      "line": 1043,
+      "entity": "hr_inquiry_memos",
+      "action": "hr.memo.appealed",
+      "statusColumn": "status",
+      "fromStates": [
+        "approved"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "appeal_pending",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+      "line": 1093,
+      "entity": "hr_inquiry_memos",
+      "action": "hr.memo.appeal_decided",
+      "statusColumn": "status",
+      "fromStates": [
+        "appeal_pending"
+      ],
+      "fromStatesDynamic": false,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+      "line": 1150,
+      "entity": "hr_inquiry_memos",
+      "action": "hr.memo.closed",
+      "statusColumn": "status",
+      "fromStates": [
+        "approved",
+        "rejected",
+        "appeal_accepted",
+        "cancelled"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "closed",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr-exit.ts",
+      "line": 432,
+      "entity": "hr_exit_requests",
+      "action": "hr.exit.rejected",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "rejected",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr-exit.ts",
+      "line": 482,
+      "entity": "hr_exit_requests",
+      "action": "hr.exit.approved",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "approved",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr-exit.ts",
+      "line": 579,
+      "entity": "hr_exit_requests",
+      "action": "hr.exit.completed",
+      "statusColumn": "status",
+      "fromStates": [
+        "approved"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "completed",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr.ts",
+      "line": 1824,
+      "entity": "hr_leave_requests",
+      "action": "leave.rejected",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "rejected",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr.ts",
+      "line": 1880,
+      "entity": "hr_leave_requests",
+      "action": "leave.returned",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "returned",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr.ts",
+      "line": 2013,
+      "entity": "hr_leave_requests",
+      "action": "leave.approved",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "approved",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr.ts",
+      "line": 3707,
+      "entity": "employee_violations",
+      "action": null,
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": false,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr.ts",
+      "line": 4068,
+      "entity": "hr_leave_requests",
+      "action": "leave.cancelled",
+      "statusColumn": "status",
+      "fromStates": [
+        "approved",
+        "pending"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "cancelled",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr.ts",
+      "line": 5184,
+      "entity": "evaluation_cycles",
+      "action": "evaluation.created",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": false,
+      "toState": "in_progress",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr.ts",
+      "line": 6118,
+      "entity": "employee_transfers",
+      "action": "hr.transfer.hr_approved",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "pending_receiving_manager",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr.ts",
+      "line": 6139,
+      "entity": "employee_transfers",
+      "action": "hr.transfer.rejected",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "rejected",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr.ts",
+      "line": 6233,
+      "entity": "employee_transfers",
+      "action": "hr.transfer.completed",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending_receiving_manager"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "approved",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr.ts",
+      "line": 6264,
+      "entity": "employee_transfers",
+      "action": "hr.transfer.rejected_by_receiver",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending_receiving_manager"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "rejected_by_receiver",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/hr.ts",
+      "line": 7157,
+      "entity": "hr_excuse_requests",
+      "action": null,
+      "statusColumn": "status",
+      "fromStates": [
+        "pending"
+      ],
+      "fromStatesDynamic": false,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/legal.ts",
+      "line": 469,
+      "entity": "legal_contracts",
+      "action": "legal.contract.renewed",
+      "statusColumn": "status",
+      "fromStates": [
+        "active",
+        "draft",
+        "expired"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "active",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/legal.ts",
+      "line": 514,
+      "entity": "legal_contracts",
+      "action": "legal.contract.terminated",
+      "statusColumn": "status",
+      "fromStates": [
+        "active",
+        "draft"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "terminated",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/legal.ts",
+      "line": 874,
+      "entity": "legal_cases",
+      "action": "legal.case.in_progress",
+      "statusColumn": "status",
+      "fromStates": [
+        "open"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "in_progress",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/projects.ts",
+      "line": 816,
+      "entity": "project_phases",
+      "action": "project.phase.completed",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending",
+        "in_progress"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "completed",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/projects.ts",
+      "line": 1960,
+      "entity": "projects",
+      "action": "project.closed",
+      "statusColumn": "status",
+      "fromStates": [
+        "active",
+        "in_progress",
+        "planning",
+        "planned",
+        "on_hold",
+        "draft",
+        "blocked"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "completed",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/properties.ts",
+      "line": 1165,
+      "entity": "property_units",
+      "action": "property.unit.rented",
+      "statusColumn": "status",
+      "fromStates": [
+        "available",
+        "reserved"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "rented",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/properties.ts",
+      "line": 1448,
+      "entity": "rental_contracts",
+      "action": "property.contract.renewed",
+      "statusColumn": "status",
+      "fromStates": [
+        "active",
+        "expired"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "active",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/properties.ts",
+      "line": 1566,
+      "entity": "rental_contracts",
+      "action": "property.contract.terminated",
+      "statusColumn": "status",
+      "fromStates": [
+        "active",
+        "draft"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "terminated",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/properties.ts",
+      "line": 2355,
+      "entity": "maintenance_requests",
+      "action": "); }\n      },\n      notifications: mr.createdBy ? [{\n        assignmentId: Number(mr.createdBy),\n        type: `maintenance_${newStatus}`,\n        title: titleMap[newStatus] || `حالة طلب الصيانة: ${newStatus}`,\n        body: `${mr.title || `طلب #${id}`}${notes ? ` — ${notes}` : ''}`,\n        priority: newStatus === ",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": true,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/properties.ts",
+      "line": 2446,
+      "entity": "maintenance_requests",
+      "action": "property.maintenance.completed",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": true,
+      "toState": "completed",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/properties.ts",
+      "line": 3677,
+      "entity": "property_inspections",
+      "action": "property.inspection.status_changed",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": true,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/properties.ts",
+      "line": 3872,
+      "entity": "property_security_deposits",
+      "action": "property.deposit.refunded",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": true,
+      "toState": "refunded",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/recruitment.ts",
+      "line": 191,
+      "entity": "job_postings",
+      "action": "recruitment.job.closed",
+      "statusColumn": "status",
+      "fromStates": [
+        "open",
+        "draft",
+        "paused"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "closed",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/recruitment.ts",
+      "line": 239,
+      "entity": "job_postings",
+      "action": "recruitment.job.reopened",
+      "statusColumn": "status",
+      "fromStates": [
+        "closed",
+        "paused"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "open",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/requests.ts",
+      "line": 533,
+      "entity": "requests",
+      "action": "workflow_override",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": true,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/requests.ts",
+      "line": 608,
+      "entity": "requests",
+      "action": "request.approved",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": true,
+      "toState": "approved",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/requests.ts",
+      "line": 671,
+      "entity": "requests",
+      "action": "request.rejected",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": true,
+      "toState": "rejected",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/requests.ts",
+      "line": 732,
+      "entity": "requests",
+      "action": "request.returned",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": true,
+      "toState": "returned",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/requests.ts",
+      "line": 865,
+      "entity": "requests",
+      "action": "request.converted",
+      "statusColumn": "status",
+      "fromStates": [
+        "approved"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "closed",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/training.ts",
+      "line": 214,
+      "entity": "training_programs",
+      "action": "training.program.approved",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": false,
+      "toState": "approved",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/training.ts",
+      "line": 246,
+      "entity": "training_programs",
+      "action": "training.program.rejected",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": false,
+      "toState": "rejected",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/umrah.ts",
+      "line": 599,
+      "entity": "umrah_packages",
+      "action": "umrah.package.deleted",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": false,
+      "toState": "deleted",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/umrah.ts",
+      "line": 758,
+      "entity": "umrah_pilgrims",
+      "action": "umrah.pilgrim.status_changed",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": false,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/umrah.ts",
+      "line": 1072,
+      "entity": "umrah_pilgrims",
+      "action": "umrah.pilgrim.arrived",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "arrived",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/umrah.ts",
+      "line": 1084,
+      "entity": "umrah_pilgrims",
+      "action": "umrah.pilgrim.overstayed",
+      "statusColumn": "status",
+      "fromStates": [
+        "arrived",
+        "active"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "overstayed",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/umrah.ts",
+      "line": 1095,
+      "entity": "umrah_pilgrims",
+      "action": "umrah.pilgrim.departed",
+      "statusColumn": "status",
+      "fromStates": [
+        "arrived",
+        "active"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "departed",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/umrah.ts",
+      "line": 1135,
+      "entity": "umrah_pilgrims",
+      "action": "umrah.pilgrim.violated",
+      "statusColumn": "status",
+      "fromStates": [
+        "overstayed"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "violated",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/umrah.ts",
+      "line": 1205,
+      "entity": "umrah_penalties",
+      "action": "umrah.penalty.waived",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending",
+        "invoiced"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "waived",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/umrah.ts",
+      "line": 1262,
+      "entity": "umrah_penalties",
+      "action": "umrah.penalty.waived",
+      "statusColumn": "status",
+      "fromStates": [
+        "pending",
+        "invoiced"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "waived",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/umrah.ts",
+      "line": 1321,
+      "entity": "umrah_agent_invoices",
+      "action": null,
+      "statusColumn": "status",
+      "fromStates": [
+        "sent",
+        "partially_paid",
+        "overdue"
+      ],
+      "fromStatesDynamic": false,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/umrah.ts",
+      "line": 1603,
+      "entity": "umrah_transport",
+      "action": "umrah.transport.status_changed",
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": false,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/warehouse.ts",
+      "line": 454,
+      "entity": "warehouse_products",
+      "action": null,
+      "statusColumn": "status",
+      "fromStates": [],
+      "fromStatesDynamic": false,
+      "toState": null,
+      "toStateDynamic": true
+    },
+    {
+      "file": "artifacts/api-server/src/routes/warehouse.ts",
+      "line": 529,
+      "entity": "warehouse_products",
+      "action": "warehouse.product.deleted",
+      "statusColumn": "status",
+      "fromStates": [
+        "active",
+        "inactive"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "inactive",
+      "toStateDynamic": false
+    },
+    {
+      "file": "artifacts/api-server/src/routes/warehouse.ts",
+      "line": 1450,
+      "entity": "inventory_counts",
+      "action": "warehouse.inventory_count.approved",
+      "statusColumn": "status",
+      "fromStates": [
+        "draft",
+        "in_progress"
+      ],
+      "fromStatesDynamic": false,
+      "toState": "approved",
+      "toStateDynamic": false
+    }
+  ],
+  "findings": {
+    "registeredButUnused": [
+      {
+        "entity": "journal_entries",
+        "statusColumn": "status",
+        "transitions": {
+          "draft": [
+            "pending_approval",
+            "posted",
+            "approved",
+            "rejected",
+            "returned"
+          ],
+          "pending_approval": [
+            "posted",
+            "approved",
+            "rejected",
+            "returned"
+          ],
+          "approved": [
+            "posted",
+            "rejected"
+          ],
+          "posted": [],
+          "rejected": [
+            "draft"
+          ],
+          "returned": [
+            "draft",
+            "pending_approval",
+            "approved"
+          ]
+        }
+      },
+      {
+        "entity": "journal_entries",
+        "statusColumn": "approvalStatus",
+        "transitions": {
+          "draft": [
+            "pending_review"
+          ],
+          "pending_review": [
+            "approved",
+            "rejected"
+          ],
+          "approved": [
+            "posted",
+            "rejected"
+          ],
+          "rejected": [
+            "draft"
+          ],
+          "posted": []
+        }
+      },
+      {
+        "entity": "property_contracts",
+        "statusColumn": "status",
+        "transitions": {
+          "draft": [
+            "active",
+            "cancelled"
+          ],
+          "active": [
+            "terminated",
+            "expired",
+            "renewed"
+          ],
+          "terminated": [],
+          "expired": [
+            "renewed"
+          ],
+          "renewed": [
+            "active"
+          ],
+          "cancelled": []
+        }
+      },
+      {
+        "entity": "support_tickets",
+        "statusColumn": "status",
+        "transitions": {
+          "open": [
+            "in_progress",
+            "closed"
+          ],
+          "in_progress": [
+            "resolved",
+            "escalated",
+            "closed"
+          ],
+          "escalated": [
+            "in_progress",
+            "resolved",
+            "closed"
+          ],
+          "resolved": [
+            "closed",
+            "open"
+          ],
+          "closed": [
+            "open"
+          ]
+        }
+      },
+      {
+        "entity": "workflow_instances",
+        "statusColumn": "status",
+        "transitions": {
+          "draft": [
+            "pending",
+            "pending_approval"
+          ],
+          "pending": [
+            "approved",
+            "rejected",
+            "returned",
+            "escalated"
+          ],
+          "pending_approval": [
+            "approved",
+            "rejected",
+            "returned"
+          ],
+          "returned": [
+            "draft",
+            "pending",
+            "pending_approval"
+          ],
+          "escalated": [
+            "approved",
+            "rejected"
+          ],
+          "approved": [],
+          "rejected": []
+        }
+      },
+      {
+        "entity": "umrah_sales_invoices",
+        "statusColumn": "status",
+        "transitions": {
+          "draft": [
+            "approved",
+            "cancelled"
+          ],
+          "approved": [
+            "sent",
+            "cancelled"
+          ],
+          "sent": [
+            "partially_paid",
+            "paid",
+            "overdue",
+            "cancelled"
+          ],
+          "partially_paid": [
+            "paid",
+            "overdue",
+            "cancelled"
+          ],
+          "paid": [],
+          "overdue": [
+            "partially_paid",
+            "paid",
+            "cancelled"
+          ],
+          "cancelled": []
+        }
+      },
+      {
+        "entity": "umrah_seasons",
+        "statusColumn": "status",
+        "transitions": {
+          "open": [
+            "closed"
+          ],
+          "closed": [
+            "archived"
+          ],
+          "archived": []
+        }
+      },
+      {
+        "entity": "umrah_agents",
+        "statusColumn": "status",
+        "transitions": {
+          "active": [
+            "inactive",
+            "suspended",
+            "blocked"
+          ],
+          "inactive": [
+            "active"
+          ],
+          "suspended": [
+            "active",
+            "blocked"
+          ],
+          "blocked": []
+        }
+      },
+      {
+        "entity": "governance_policies",
+        "statusColumn": "status",
+        "transitions": {
+          "draft": [
+            "active",
+            "archived"
+          ],
+          "active": [
+            "archived",
+            "draft"
+          ],
+          "archived": []
+        }
+      },
+      {
+        "entity": "budgets",
+        "statusColumn": "status",
+        "transitions": {
+          "draft": [
+            "pending_approval",
+            "approved"
+          ],
+          "pending_approval": [
+            "approved",
+            "rejected",
+            "returned"
+          ],
+          "approved": [
+            "closed"
+          ],
+          "rejected": [
+            "draft"
+          ],
+          "returned": [
+            "draft",
+            "pending_approval"
+          ],
+          "closed": []
+        }
+      },
+      {
+        "entity": "financial_periods",
+        "statusColumn": "status",
+        "transitions": {
+          "open": [
+            "closed"
+          ],
+          "closed": [
+            "open"
+          ]
+        }
+      }
+    ],
+    "usedButUnregistered": [
+      {
+        "entity": "employee_violations",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/hr.ts:3707"
+      },
+      {
+        "entity": "evaluation_cycles",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/hr.ts:5184"
+      },
+      {
+        "entity": "employee_transfers",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/hr.ts:6118"
+      },
+      {
+        "entity": "hr_excuse_requests",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/hr.ts:7157"
+      },
+      {
+        "entity": "project_phases",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/projects.ts:816"
+      },
+      {
+        "entity": "projects",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/projects.ts:1960"
+      },
+      {
+        "entity": "rental_contracts",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/properties.ts:1448"
+      },
+      {
+        "entity": "maintenance_requests",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/properties.ts:2355"
+      },
+      {
+        "entity": "property_inspections",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/properties.ts:3677"
+      },
+      {
+        "entity": "property_security_deposits",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/properties.ts:3872"
+      },
+      {
+        "entity": "job_postings",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/recruitment.ts:191"
+      },
+      {
+        "entity": "requests",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/requests.ts:533"
+      },
+      {
+        "entity": "training_programs",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/training.ts:214"
+      },
+      {
+        "entity": "umrah_packages",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/umrah.ts:599"
+      },
+      {
+        "entity": "warehouse_products",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/warehouse.ts:454"
+      },
+      {
+        "entity": "inventory_counts",
+        "statusColumn": "status",
+        "sampleSite": "artifacts/api-server/src/routes/warehouse.ts:1450"
+      }
+    ],
+    "fromStateGraphMismatch": [
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 587,
+        "entity": "invoices",
+        "action": "invoice.approved",
+        "attempted": "sent → approved",
+        "engineAllowsFrom": [
+          "partial",
+          "paid",
+          "overdue",
+          "cancelled"
+        ]
+      },
+      {
+        "file": "artifacts/api-server/src/routes/fleet.ts",
+        "line": 1504,
+        "entity": "fleet_maintenance",
+        "action": "fleet.maintenance.completed",
+        "attempted": "scheduled → completed",
+        "engineAllowsFrom": [
+          "in_progress",
+          "cancelled"
+        ]
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+        "line": 1000,
+        "entity": "hr_inquiry_memos",
+        "action": "hr.memo.cancelled",
+        "attempted": "pending_employee → cancelled",
+        "engineAllowsFrom": [
+          "pending_manager"
+        ]
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+        "line": 1000,
+        "entity": "hr_inquiry_memos",
+        "action": "hr.memo.cancelled",
+        "attempted": "pending_manager → cancelled",
+        "engineAllowsFrom": [
+          "pending_gm"
+        ]
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+        "line": 1000,
+        "entity": "hr_inquiry_memos",
+        "action": "hr.memo.cancelled",
+        "attempted": "pending_gm → cancelled",
+        "engineAllowsFrom": [
+          "approved",
+          "rejected"
+        ]
+      },
+      {
+        "file": "artifacts/api-server/src/routes/legal.ts",
+        "line": 469,
+        "entity": "legal_contracts",
+        "action": "legal.contract.renewed",
+        "attempted": "active → active",
+        "engineAllowsFrom": [
+          "terminated",
+          "expired",
+          "renewed"
+        ]
+      },
+      {
+        "file": "artifacts/api-server/src/routes/legal.ts",
+        "line": 469,
+        "entity": "legal_contracts",
+        "action": "legal.contract.renewed",
+        "attempted": "expired → active",
+        "engineAllowsFrom": [
+          "renewed"
+        ]
+      },
+      {
+        "file": "artifacts/api-server/src/routes/legal.ts",
+        "line": 514,
+        "entity": "legal_contracts",
+        "action": "legal.contract.terminated",
+        "attempted": "draft → terminated",
+        "engineAllowsFrom": [
+          "active",
+          "cancelled"
+        ]
+      }
+    ],
+    "registryEngineMismatch": [
+      {
+        "table": "employee_contracts",
+        "kind": "registry-only",
+        "registryStates": [
+          "draft",
+          "pending_approval",
+          "approved",
+          "rejected",
+          "signed",
+          "active",
+          "terminated"
+        ],
+        "registryInitial": "draft",
+        "registryTerminals": [
+          "terminated"
+        ]
+      },
+      {
+        "table": "hr_leave_requests",
+        "kind": "state-set-disagrees",
+        "registryOnlyStates": [],
+        "engineOnlyStates": [
+          "returned"
+        ]
+      },
+      {
+        "table": "hr_overtime_requests",
+        "kind": "registry-only",
+        "registryStates": [
+          "pending",
+          "approved",
+          "rejected"
+        ],
+        "registryInitial": "pending",
+        "registryTerminals": [
+          "rejected"
+        ]
+      },
+      {
+        "table": "hr_official_letters",
+        "kind": "registry-only",
+        "registryStates": [
+          "pending",
+          "approved",
+          "rejected",
+          "printed"
+        ],
+        "registryInitial": "pending",
+        "registryTerminals": [
+          "printed"
+        ]
+      },
+      {
+        "table": "hr_loans",
+        "kind": "registry-only",
+        "registryStates": [
+          "pending",
+          "approved",
+          "rejected",
+          "active",
+          "completed"
+        ],
+        "registryInitial": "pending",
+        "registryTerminals": [
+          "rejected",
+          "completed"
+        ]
+      },
+      {
+        "table": "employee_transfers",
+        "kind": "registry-only",
+        "registryStates": [
+          "pending",
+          "approved",
+          "rejected",
+          "completed"
+        ],
+        "registryInitial": "pending",
+        "registryTerminals": [
+          "rejected",
+          "completed"
+        ]
+      },
+      {
+        "table": "hr_excuse_requests",
+        "kind": "registry-only",
+        "registryStates": [
+          "pending",
+          "approved",
+          "rejected"
+        ],
+        "registryInitial": "pending",
+        "registryTerminals": [
+          "rejected"
+        ]
+      },
+      {
+        "table": "hr_inquiry_memos",
+        "kind": "state-set-disagrees",
+        "registryOnlyStates": [
+          "issued",
+          "acknowledged",
+          "appealed",
+          "escalated",
+          "gm_review",
+          "justified"
+        ],
+        "engineOnlyStates": [
+          "pending_employee",
+          "pending_manager",
+          "pending_gm",
+          "approved",
+          "rejected",
+          "appeal_pending",
+          "appeal_accepted",
+          "cancelled"
+        ]
+      },
+      {
+        "table": "payroll_runs",
+        "kind": "registry-only",
+        "registryStates": [
+          "draft",
+          "calculated",
+          "approved",
+          "posted",
+          "paid"
+        ],
+        "registryInitial": "draft",
+        "registryTerminals": [
+          "paid"
+        ]
+      },
+      {
+        "table": "journal_entries",
+        "kind": "state-set-disagrees",
+        "registryOnlyStates": [
+          "reversed"
+        ],
+        "engineOnlyStates": [
+          "approved",
+          "returned"
+        ]
+      },
+      {
+        "table": "purchase_orders",
+        "kind": "state-set-disagrees",
+        "registryOnlyStates": [],
+        "engineOnlyStates": [
+          "pending",
+          "sent",
+          "confirmed",
+          "invoice_matched",
+          "invoice_mismatch",
+          "payment_scheduled",
+          "returned"
+        ]
+      },
+      {
+        "table": "expense_claims",
+        "kind": "registry-only",
+        "registryStates": [
+          "pending",
+          "approved",
+          "rejected",
+          "paid"
+        ],
+        "registryInitial": "pending",
+        "registryTerminals": [
+          "rejected",
+          "paid"
+        ]
+      },
+      {
+        "table": "budgets",
+        "kind": "state-set-disagrees",
+        "registryOnlyStates": [],
+        "engineOnlyStates": [
+          "returned"
+        ]
+      },
+      {
+        "table": "custodies",
+        "kind": "registry-only",
+        "registryStates": [
+          "pending",
+          "approved",
+          "rejected",
+          "settled"
+        ],
+        "registryInitial": "pending",
+        "registryTerminals": [
+          "rejected",
+          "settled"
+        ]
+      },
+      {
+        "table": "salary_advances",
+        "kind": "registry-only",
+        "registryStates": [
+          "pending",
+          "approved",
+          "rejected",
+          "deducted"
+        ],
+        "registryInitial": "pending",
+        "registryTerminals": [
+          "rejected",
+          "deducted"
+        ]
+      },
+      {
+        "table": "payment_vouchers",
+        "kind": "registry-only",
+        "registryStates": [
+          "draft",
+          "approved",
+          "posted",
+          "cancelled"
+        ],
+        "registryInitial": "draft",
+        "registryTerminals": [
+          "posted",
+          "cancelled"
+        ]
+      },
+      {
+        "table": "fleet_trips",
+        "kind": "state-set-disagrees",
+        "registryOnlyStates": [],
+        "engineOnlyStates": [
+          "planned"
+        ]
+      },
+      {
+        "table": "fleet_insurance_policies",
+        "kind": "registry-only",
+        "registryStates": [
+          "active",
+          "expired",
+          "cancelled",
+          "renewed"
+        ],
+        "registryInitial": "active",
+        "registryTerminals": [
+          "cancelled"
+        ]
+      },
+      {
+        "table": "rental_contracts",
+        "kind": "registry-only",
+        "registryStates": [
+          "draft",
+          "active",
+          "terminated",
+          "expired",
+          "renewed",
+          "cancelled"
+        ],
+        "registryInitial": "draft",
+        "registryTerminals": [
+          "terminated",
+          "cancelled"
+        ]
+      },
+      {
+        "table": "maintenance_requests",
+        "kind": "registry-only",
+        "registryStates": [
+          "pending",
+          "approved",
+          "in_progress",
+          "completed",
+          "cancelled"
+        ],
+        "registryInitial": "pending",
+        "registryTerminals": [
+          "completed",
+          "cancelled"
+        ]
+      },
+      {
+        "table": "inventory_counts",
+        "kind": "registry-only",
+        "registryStates": [
+          "draft",
+          "in_progress",
+          "pending_approval",
+          "approved",
+          "cancelled"
+        ],
+        "registryInitial": "draft",
+        "registryTerminals": [
+          "approved",
+          "cancelled"
+        ]
+      },
+      {
+        "table": "store_orders",
+        "kind": "registry-only",
+        "registryStates": [
+          "pending",
+          "confirmed",
+          "processing",
+          "shipped",
+          "delivered",
+          "cancelled"
+        ],
+        "registryInitial": "pending",
+        "registryTerminals": [
+          "delivered",
+          "cancelled"
+        ]
+      },
+      {
+        "table": "umrah_sales_invoices",
+        "kind": "state-set-disagrees",
+        "registryOnlyStates": [
+          "confirmed",
+          "partial"
+        ],
+        "engineOnlyStates": [
+          "approved",
+          "sent",
+          "partially_paid",
+          "overdue"
+        ]
+      }
+    ],
+    "directStatusUpdate": [
+      {
+        "file": "artifacts/api-server/src/routes/admin.ts",
+        "line": 1010,
+        "table": "audit_violations",
+        "snippet": "`UPDATE audit_violations SET status='resolved', \"resolvedBy\"=$1, \"resolvedAt\"=NOW() WHERE id=$2 AND \"companyId\"=$3 AND status != 'resolved'`"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/communications.ts",
+        "line": 362,
+        "table": "pbx_calls",
+        "snippet": "`UPDATE pbx_calls SET status=$1, duration=$2, \"recordingUrl\"=$3 WHERE id=$4 AND \"companyId\"=$5 AND status != 'completed'`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/communications.ts",
+        "line": 412,
+        "table": "pbx_calls",
+        "snippet": "`UPDATE pbx_calls SET status=$1, \"answeredBy\"=$2 WHERE id=$3`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/correspondence.ts",
+        "line": 269,
+        "table": "correspondence",
+        "snippet": "`UPDATE correspondence SET status = 'sent', ${sentField} = NOW(), \"updatedAt\" = NOW()"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/documents.ts",
+        "line": 488,
+        "table": "documents",
+        "snippet": "`UPDATE documents SET status=$1, \"updatedAt\"=NOW() WHERE id=$2 AND \"companyId\"=$3 AND status != $1 AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/employees.ts",
+        "line": 757,
+        "table": "onboarding_tasks",
+        "snippet": "`UPDATE onboarding_tasks SET status = $1,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/employees.ts",
+        "line": 1101,
+        "table": "employee_assignments",
+        "snippet": "`UPDATE employee_assignments SET status = 'active' WHERE id = $1 AND \"companyId\" = $2 AND status = $3`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/employees.ts",
+        "line": 1106,
+        "table": "employee_assignments",
+        "snippet": "`UPDATE employee_assignments SET status = 'suspended' WHERE id = $1 AND \"companyId\" = $2 AND status = $3`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/employees.ts",
+        "line": 1268,
+        "table": "employee_assignments",
+        "snippet": "`UPDATE employee_assignments SET status = 'terminated' WHERE id = $1 AND \"companyId\" = $2 AND status = 'active'`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/employees.ts",
+        "line": 1272,
+        "table": "employees",
+        "snippet": "`UPDATE employees SET status = 'terminated' WHERE id = $1 AND \"companyId\" = $2 AND status = 'active' AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/employees.ts",
+        "line": 1279,
+        "table": "employee_contracts",
+        "snippet": "`UPDATE employee_contracts"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/employees.ts",
+        "line": 1288,
+        "table": "hr_leave_requests",
+        "snippet": "`UPDATE hr_leave_requests"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/employees.ts",
+        "line": 1294,
+        "table": "leave_approval_stages",
+        "snippet": "`UPDATE leave_approval_stages"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/employees.ts",
+        "line": 1307,
+        "table": "tasks",
+        "snippet": "`UPDATE tasks"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/employees.ts",
+        "line": 1317,
+        "table": "approval_requests",
+        "snippet": "`UPDATE approval_requests"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/employees.ts",
+        "line": 1325,
+        "table": "hr_employee_loans",
+        "snippet": "`UPDATE hr_employee_loans"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-algorithms.ts",
+        "line": 450,
+        "table": "bank_statements",
+        "snippet": "`UPDATE bank_statements SET \"matchStatus\" = 'matched', \"matchedJournalLineId\" = $1 WHERE id = $2 AND \"companyId\" = $3`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-algorithms.ts",
+        "line": 539,
+        "table": "bank_statements",
+        "snippet": "`UPDATE bank_statements SET \"matchStatus\"='matched', \"matchedJournalLineId\"=$1 WHERE id=$2 AND \"companyId\"=$3`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-cost-centers.ts",
+        "line": 164,
+        "table": "cost_centers",
+        "snippet": "`UPDATE cost_centers SET status = 'deleted', \"updatedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND status != 'deleted'`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-custodies.ts",
+        "line": 609,
+        "table": "journal_entries",
+        "snippet": "`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND \"companyId\" = $2 AND status = 'draft' AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 742,
+        "table": "invoices",
+        "snippet": "`UPDATE invoices SET \"paidAmount\" = $1, status = $2, \"paidAt\" = $3 WHERE id = $4 AND \"companyId\" = $5 AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 747,
+        "table": "invoices",
+        "snippet": "`UPDATE invoices SET \"paidAmount\" = $1, status = $2 WHERE id = $3 AND \"companyId\" = $4 AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 953,
+        "table": "journal_entries",
+        "snippet": "`UPDATE journal_entries SET \"deletedAt\" = NOW(), status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 958,
+        "table": "invoices",
+        "snippet": "`UPDATE invoices SET \"deletedAt\" = NOW(), status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 1024,
+        "table": "journal_entries",
+        "snippet": "`UPDATE journal_entries SET status = 'cancelled' WHERE id = $1 AND \"companyId\" = $2 AND status IN ('posted', 'approved') AND \"deletedAt\" IS "
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 1187,
+        "table": "invoices",
+        "snippet": "`UPDATE invoices SET \"paidAmount\" = COALESCE(\"paidAmount\",0) + $1,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 1723,
+        "table": "customer_advances",
+        "snippet": "`UPDATE customer_advances SET \"appliedAmount\" = COALESCE(\"appliedAmount\",0) + $1,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-invoices.ts",
+        "line": 1729,
+        "table": "invoices",
+        "snippet": "`UPDATE invoices SET \"paidAmount\" = COALESCE(\"paidAmount\",0) + $1,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-journal.ts",
+        "line": 528,
+        "table": "journal_entries",
+        "snippet": "if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND \"companyId"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-journal.ts",
+        "line": 570,
+        "table": "journal_entries",
+        "snippet": "const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET \"deletedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-journal.ts",
+        "line": 855,
+        "table": "journal_entries",
+        "snippet": "const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET \"deletedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-journal.ts",
+        "line": 939,
+        "table": "journal_entries",
+        "snippet": "if (approvalResult.requiresApproval) { const { affectedRows } = await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHE"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-journal.ts",
+        "line": 1405,
+        "table": "financial_periods",
+        "snippet": "`UPDATE financial_periods SET status='closed', \"closedAt\"=NOW(), \"closedBy\"=$1, \"updatedAt\"=NOW() WHERE id=$2 AND \"companyId\"=$3 AND status "
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-zatca.ts",
+        "line": 490,
+        "table": "zatca_settings",
+        "snippet": "`UPDATE zatca_settings SET \"lastConnectionTest\" = NOW(), \"connectionTestStatus\" = $1, \"connectionTestMessage\" = $2 WHERE \"companyId\" = $3`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-zatca.ts",
+        "line": 687,
+        "table": "invoices",
+        "snippet": "`UPDATE invoices SET \"zatcaUuid\" = $1::uuid, \"zatcaHash\" = $2, \"zatcaStatus\" = $3, \"zatcaQrCode\" = $4"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/finance-zatca.ts",
+        "line": 775,
+        "table": "journal_entries",
+        "snippet": "`UPDATE journal_entries SET \"zatcaUuid\" = $1::uuid, \"zatcaHash\" = $2, \"zatcaStatus\" = $3, \"zatcaQrCode\" = $4"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/fleet.ts",
+        "line": 1077,
+        "table": "fleet_vehicles",
+        "snippet": "const vResult = await client.query(`UPDATE fleet_vehicles SET status='in_use', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status='"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/fleet.ts",
+        "line": 1081,
+        "table": "fleet_drivers",
+        "snippet": "const dResult = await client.query(`UPDATE fleet_drivers SET status='on_trip' WHERE id=$1 AND \"companyId\"=$2 AND status='available' AND \"del"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/fleet.ts",
+        "line": 1173,
+        "table": "fleet_vehicles",
+        "snippet": "const vRes = await client.query(`UPDATE fleet_vehicles SET status='available', \"currentMileage\"=\"currentMileage\"+$1, \"updatedAt\"=NOW() WHERE"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/fleet.ts",
+        "line": 1177,
+        "table": "fleet_drivers",
+        "snippet": "const dRes = await client.query(`UPDATE fleet_drivers SET status='available', \"totalTrips\"=COALESCE(\"totalTrips\",0)+1 WHERE id=$1 AND \"compa"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/fleet.ts",
+        "line": 1256,
+        "table": "fleet_vehicles",
+        "snippet": "`UPDATE fleet_vehicles SET status='available', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status='in_use' AND \"deletedAt\" IS NULL`"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/fleet.ts",
+        "line": 1262,
+        "table": "fleet_drivers",
+        "snippet": "`UPDATE fleet_drivers SET status='available' WHERE id=$1 AND \"companyId\"=$2 AND status='on_trip' AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/fleet.ts",
+        "line": 1413,
+        "table": "fleet_vehicles",
+        "snippet": "await client.query(`UPDATE fleet_vehicles SET status='maintenance', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status='available' "
+      },
+      {
+        "file": "artifacts/api-server/src/routes/fleet.ts",
+        "line": 1514,
+        "table": "fleet_vehicles",
+        "snippet": "await client.query(`UPDATE fleet_vehicles SET status='available', \"lastMaintenanceDate\"=NOW(), \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\""
+      },
+      {
+        "file": "artifacts/api-server/src/routes/fleet.ts",
+        "line": 1601,
+        "table": "fleet_vehicles",
+        "snippet": "await client.query(`UPDATE fleet_vehicles SET status='available', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status='maintenance' "
+      },
+      {
+        "file": "artifacts/api-server/src/routes/fleet.ts",
+        "line": 2115,
+        "table": "fleet_vehicles",
+        "snippet": "`UPDATE fleet_vehicles SET status='available', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status IN ('in_use','on_trip') AND \"dele"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/fleet.ts",
+        "line": 2121,
+        "table": "fleet_drivers",
+        "snippet": "`UPDATE fleet_drivers SET status='available', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status='on_trip' AND \"deletedAt\" IS NULL`"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/fleet.ts",
+        "line": 2267,
+        "table": "fleet_vehicles",
+        "snippet": "`UPDATE fleet_vehicles SET status='available', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status='maintenance' AND \"deletedAt\" IS "
+      },
+      {
+        "file": "artifacts/api-server/src/routes/gov-integrations.ts",
+        "line": 282,
+        "table": "gov_integrations",
+        "snippet": "`UPDATE gov_integrations SET \"lastCheckedAt\"=NOW(), \"lastCheckStatus\"=$2, \"lastCheckMessage\"=$3, \"updatedAt\"=NOW() WHERE id=$1 AND \"companyI"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/gov-integrations.ts",
+        "line": 337,
+        "table": "gov_integrations",
+        "snippet": "`UPDATE gov_integrations SET \"lastCheckedAt\"=NOW(), \"lastCheckStatus\"=$2, \"lastCheckMessage\"=$3, \"updatedAt\"=NOW() WHERE id=$1 AND \"companyI"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/governance.ts",
+        "line": 331,
+        "table": "governance_policies",
+        "snippet": "`UPDATE governance_policies SET status='archived', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status IN ('draft','active') AND \"de"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-contracts.ts",
+        "line": 230,
+        "table": "employee_contracts",
+        "snippet": "`UPDATE employee_contracts SET \"approvalStatus\" = 'pending_approval', \"updatedAt\" = NOW()"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-contracts.ts",
+        "line": 258,
+        "table": "employee_contracts",
+        "snippet": "`UPDATE employee_contracts"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-contracts.ts",
+        "line": 291,
+        "table": "employee_contracts",
+        "snippet": "`UPDATE employee_contracts"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-contracts.ts",
+        "line": 385,
+        "table": "employee_contracts",
+        "snippet": "`UPDATE employee_contracts"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-contracts.ts",
+        "line": 416,
+        "table": "employee_contracts",
+        "snippet": "`UPDATE employee_contracts"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+        "line": 919,
+        "table": "employee_violations",
+        "snippet": "`UPDATE employee_violations SET status = 'rejected' WHERE id = $1 AND \"companyId\" = $2 AND status = 'pending' AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+        "line": 944,
+        "table": "employee_violations",
+        "snippet": "`UPDATE employee_violations"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+        "line": 1013,
+        "table": "employee_violations",
+        "snippet": "`UPDATE employee_violations SET status = 'cancelled'"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+        "line": 1109,
+        "table": "employee_violations",
+        "snippet": "`UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND \"companyId\" = $2 AND status = 'approved' AND \"deletedAt\" IS NUL"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-discipline.ts",
+        "line": 1164,
+        "table": "employee_violations",
+        "snippet": "`UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND \"companyId\" = $2 AND status IN ('approved', 'rejected', 'appeal_accepted"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-exit.ts",
+        "line": 534,
+        "table": "hr_exit_clearance",
+        "snippet": "`UPDATE hr_exit_clearance"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-exit.ts",
+        "line": 592,
+        "table": "employee_assignments",
+        "snippet": "`UPDATE employee_assignments SET status = 'terminated', \"endDate\" = CURRENT_DATE"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-loans.ts",
+        "line": 440,
+        "table": "hr_employee_loans",
+        "snippet": "`UPDATE hr_employee_loans SET status = 'rejected', \"rejectionReason\" = $1, \"updatedAt\" = NOW() WHERE id = $2 AND \"companyId\" = $3 AND status"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-loans.ts",
+        "line": 486,
+        "table": "hr_employee_loans",
+        "snippet": "`UPDATE hr_employee_loans"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-loans.ts",
+        "line": 591,
+        "table": "hr_employee_loans",
+        "snippet": "`UPDATE hr_employee_loans SET status = 'rejected', \"rejectionReason\" = $1, \"updatedAt\" = NOW() WHERE id = $2 AND \"companyId\" = $3 AND status"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-overtime.ts",
+        "line": 401,
+        "table": "hr_overtime_requests",
+        "snippet": "`UPDATE hr_overtime_requests SET status = 'rejected', \"rejectionReason\" = $1, \"updatedAt\" = NOW() WHERE id = $2 AND \"companyId\" = $3 AND sta"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-overtime.ts",
+        "line": 447,
+        "table": "hr_overtime_requests",
+        "snippet": "`UPDATE hr_overtime_requests"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr-overtime.ts",
+        "line": 515,
+        "table": "hr_overtime_requests",
+        "snippet": "`UPDATE hr_overtime_requests SET status = 'rejected', \"rejectionReason\" = $1, \"updatedAt\" = NOW() WHERE id = $2 AND \"companyId\" = $3 AND sta"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 1847,
+        "table": "leave_approval_stages",
+        "snippet": "`UPDATE leave_approval_stages"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 1899,
+        "table": "leave_approval_stages",
+        "snippet": "`UPDATE leave_approval_stages SET status = 'returned', decision = $1, \"decidedBy\" = $2, \"decidedAt\" = NOW() WHERE id = $3 AND status = 'pend"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 1961,
+        "table": "leave_approval_stages",
+        "snippet": "`UPDATE leave_approval_stages"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 2029,
+        "table": "leave_approval_stages",
+        "snippet": "`UPDATE leave_approval_stages"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 2048,
+        "table": "approval_requests",
+        "snippet": "`UPDATE approval_requests SET status = 'approved', \"decidedBy\" = $1, \"decidedAt\" = NOW()"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 2253,
+        "table": "leave_approval_stages",
+        "snippet": "`UPDATE leave_approval_stages SET status = 'escalated'"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 2698,
+        "table": "attendance_deductions",
+        "snippet": "`UPDATE attendance_deductions SET status = 'deducted_in_payroll'"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 2717,
+        "table": "hr_loan_installments",
+        "snippet": "`UPDATE hr_loan_installments SET status = 'paid', \"paidAt\" = NOW()"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 2722,
+        "table": "hr_employee_loans",
+        "snippet": "`UPDATE hr_employee_loans l SET"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 2737,
+        "table": "hr_overtime_requests",
+        "snippet": "`UPDATE hr_overtime_requests SET status = 'paid', \"updatedAt\" = NOW()"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 2827,
+        "table": "payroll_runs",
+        "snippet": "`UPDATE payroll_runs SET status='completed', \"approvedBy\"=$1, \"approvedAt\"=NOW() WHERE id=$2 AND \"companyId\"=$3 AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 3499,
+        "table": "email_queue",
+        "snippet": "`UPDATE email_queue SET status='cancelled', \"errorMessage\"='تم رفض الخطاب الرسمي', \"updatedAt\"=NOW()"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 3504,
+        "table": "whatsapp_queue",
+        "snippet": "`UPDATE whatsapp_queue SET status='cancelled', \"errorMessage\"='تم رفض الخطاب الرسمي', \"updatedAt\"=NOW()"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 3920,
+        "table": "official_letters",
+        "snippet": "`UPDATE official_letters SET status = 'pending_approval' WHERE id = $1 AND \"companyId\" = $2 AND status = 'draft' AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 4151,
+        "table": "hr_leave_requests",
+        "snippet": "`UPDATE hr_leave_requests SET \"deletedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND status = 'pending' AND \"deletedAt\" IS NULL RETURNIN"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 4216,
+        "table": "payroll_runs",
+        "snippet": "`UPDATE payroll_runs SET status = $1 WHERE id = $2 AND \"companyId\" = $3 AND \"deletedAt\" IS NULL AND status = $4 RETURNING *`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 4300,
+        "table": "payroll_runs",
+        "snippet": "`UPDATE payroll_runs SET status = $1 WHERE id = $2 AND \"companyId\" = $3 AND \"deletedAt\" IS NULL AND status = $4 RETURNING *`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 4334,
+        "table": "attendance_deductions",
+        "snippet": "`UPDATE attendance_deductions SET status = 'pending_payroll' WHERE period = $1 AND \"companyId\" = $2 AND status = 'deducted_in_payroll'`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 4345,
+        "table": "hr_loan_installments",
+        "snippet": "`UPDATE hr_loan_installments SET status = 'pending' WHERE \"payrollLineId\" IN (SELECT id FROM payroll_lines WHERE \"runId\" = $1) AND \"companyI"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 4358,
+        "table": "hr_overtime_requests",
+        "snippet": "`UPDATE hr_overtime_requests SET status = 'approved' WHERE \"payrollLineId\" IN (SELECT id FROM payroll_lines WHERE \"runId\" = $1) AND \"company"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 4591,
+        "table": "official_letters",
+        "snippet": "`UPDATE official_letters"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 4598,
+        "table": "official_letters",
+        "snippet": "`UPDATE official_letters SET status = $1 WHERE id = $2 AND \"companyId\" = $3 AND status = 'pending_approval' AND \"deletedAt\" IS NULL`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 4607,
+        "table": "email_queue",
+        "snippet": "`UPDATE email_queue SET status='cancelled', \"errorMessage\"='تم رفض الخطاب الرسمي', \"updatedAt\"=NOW()"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 4612,
+        "table": "whatsapp_queue",
+        "snippet": "`UPDATE whatsapp_queue SET status='cancelled', \"errorMessage\"='تم رفض الخطاب الرسمي', \"updatedAt\"=NOW()"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/hr.ts",
+        "line": 6244,
+        "table": "employee_assignments",
+        "snippet": "`UPDATE employee_assignments SET \"branchId\"=$1,\"departmentId\"=$2,\"jobTitle\"=$3,salary=$4 WHERE \"employeeId\"=$5 AND \"companyId\"=$6 AND status"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/obligations.ts",
+        "line": 136,
+        "table": "obligations",
+        "snippet": "`UPDATE obligations SET status='met', \"metAt\"=NOW(), \"updatedAt\"=NOW()"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/obligations.ts",
+        "line": 172,
+        "table": "obligations",
+        "snippet": "`UPDATE obligations SET status='cancelled', \"updatedAt\"=NOW()"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/print.ts",
+        "line": 573,
+        "table": "print_reprint_requests",
+        "snippet": "`UPDATE print_reprint_requests"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/print.ts",
+        "line": 597,
+        "table": "print_reprint_requests",
+        "snippet": "`UPDATE print_reprint_requests"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/projects.ts",
+        "line": 942,
+        "table": "project_tasks",
+        "snippet": "await client.query(`UPDATE project_tasks SET status='blocked' WHERE id=$1 AND status='todo' AND \"deletedAt\" IS NULL AND \"projectId\" IN (SELE"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/projects.ts",
+        "line": 1085,
+        "table": "project_tasks",
+        "snippet": "`UPDATE project_tasks SET status='todo'"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/properties.ts",
+        "line": 1583,
+        "table": "contract_payment_schedule",
+        "snippet": "`UPDATE contract_payment_schedule SET status='cancelled'"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/properties.ts",
+        "line": 1591,
+        "table": "property_units",
+        "snippet": "`UPDATE property_units SET status='available', \"updatedAt\"=NOW() WHERE id=$1 AND \"companyId\"=$2 AND status IN ('occupied','rented') AND \"del"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/properties.ts",
+        "line": 3525,
+        "table": "contract_payment_schedule",
+        "snippet": "`UPDATE contract_payment_schedule SET \"paidAmount\"=$1, \"paidDate\"=$2, method=$3, status=$4, \"receiptNumber\"=$5, \"updatedAt\"=NOW() WHERE id=$"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/rbacV2.ts",
+        "line": 1049,
+        "table": "rbac_jit_requests",
+        "snippet": "`UPDATE rbac_jit_requests"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/rbacV2.ts",
+        "line": 1111,
+        "table": "rbac_jit_requests",
+        "snippet": "`UPDATE rbac_jit_requests"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/rbacV2.ts",
+        "line": 1162,
+        "table": "rbac_jit_requests",
+        "snippet": "`UPDATE rbac_jit_requests"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/recruitment.ts",
+        "line": 207,
+        "table": "job_applications",
+        "snippet": "`UPDATE job_applications"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/settings.ts",
+        "line": 510,
+        "table": "branches",
+        "snippet": "`UPDATE branches SET status='inactive' WHERE id=$1 AND \"companyId\"=$2`,"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/umrah-entities.ts",
+        "line": 1524,
+        "table": "official_letters",
+        "snippet": "`UPDATE official_letters"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/umrah.ts",
+        "line": 980,
+        "table": "umrah_import_logs",
+        "snippet": "`UPDATE umrah_import_logs SET \"newRecords\"=$1,\"updatedRecords\"=$2,\"duplicateRecords\"=$3,\"errorRecords\"=$4,errors=$5,\"processedRows\"=$6,statu"
+      },
+      {
+        "file": "artifacts/api-server/src/routes/umrah.ts",
+        "line": 1393,
+        "table": "umrah_penalties",
+        "snippet": "`UPDATE umrah_penalties SET status='invoiced', \"invoiceId\"=$1 WHERE \"agentId\"=$2 AND \"seasonId\"=$3 AND \"companyId\"=$4 AND status='pending'`,"
+      }
+    ],
+    "inconsistentFromStates": []
+  }
+}
