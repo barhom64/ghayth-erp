@@ -676,6 +676,8 @@ async function probe(page, routePath, resolvedUrl, cls) {
       continue;
     }
     // === Phase 3: retry loop — harness causes only ===
+    // === Phase 5: wall-clock timing around the full probe (incl. retries) ===
+    const probeT0 = Date.now();
     let row = null;
     let attempts = 0;
     let lastThrowMsg = "";
@@ -720,6 +722,8 @@ async function probe(page, routePath, resolvedUrl, cls) {
     if (attempts > 1) {
       console.log(`[audit] route ${routePath} resolved after ${attempts} attempts (final ${row.a4 === "PASS" ? "PASS" : "FAIL"})`);
     }
+    // Phase 5: stamp wall-clock duration on every row for the metrics block.
+    row.durationMs = Date.now() - probeT0;
     results.push(row);
     const tag = [row.a1, row.a2, row.a3, row.a4, row.a5].includes("FAIL") ? "FAIL"
       : (row.a1 === "PASS" ? "PASS" : "SKIP");
@@ -823,6 +827,50 @@ async function probe(page, routePath, resolvedUrl, cls) {
       else axisCounts[ax].S++;
     }
   }
+  // === Phase 5: metrics block + timings.json ===
+  // Per-route wall-clock distribution (probeT0..probeT1 incl. retries),
+  // plus the four operational counters (chromiumCrashCount,
+  // reloginCount, apiRestartCount, totalRetries). Slow-routes list is
+  // bounded to the top-15 so the operator can quickly spot a regression
+  // without paging through the full per-route table.
+  function percentile(sortedAsc, p) {
+    if (sortedAsc.length === 0) return 0;
+    const idx = Math.min(sortedAsc.length - 1, Math.floor((p / 100) * sortedAsc.length));
+    return sortedAsc[idx];
+  }
+  const timed = results.filter((r) => Number.isFinite(r.durationMs)).map((r) => ({
+    route: r.route, durationMs: r.durationMs, retries: r.retries || 0,
+    a4: r.a4, navCause: r.navCause || "",
+  }));
+  const durationsAsc = timed.map((r) => r.durationMs).sort((a, b) => a - b);
+  const totalRetries = timed.reduce((s, r) => s + (r.retries || 0), 0);
+  const routesWithRetries = timed.filter((r) => (r.retries || 0) > 0).length;
+  const slowestN = parseInt(process.env.SLOWEST_N || "15", 10);
+  const slowestRoutes = timed.slice().sort((a, b) => b.durationMs - a.durationMs).slice(0, slowestN);
+  const metrics = {
+    timed: timed.length,
+    avgLoadMs: timed.length ? Math.round(durationsAsc.reduce((a, b) => a + b, 0) / durationsAsc.length) : 0,
+    minMs: durationsAsc[0] || 0,
+    p50Ms: percentile(durationsAsc, 50),
+    p95Ms: percentile(durationsAsc, 95),
+    p99Ms: percentile(durationsAsc, 99),
+    maxMs: durationsAsc[durationsAsc.length - 1] || 0,
+    totalProbeMs: durationsAsc.reduce((a, b) => a + b, 0),
+    totalRetries,
+    routesWithRetries,
+    chromiumCrashes: chromiumCrashCount,
+    relogins: reloginCount,
+    apiServerRestartsDetected: apiRestartCount,
+    slowestRoutes,
+  };
+  fs.writeFileSync(path.join(RUN_DIR, "timings.json"), JSON.stringify({
+    runId: RUN_ID,
+    startedAt: RUN_STARTED_AT,
+    endedAt: runEndedAt,
+    metrics,
+    routes: timed,
+  }, null, 2));
+
   fs.writeFileSync(path.join(RUN_DIR, "summary.json"), JSON.stringify({
     runId: RUN_ID,
     auditSessionId: envRecord.auditSessionId,
@@ -835,8 +883,21 @@ async function probe(page, routePath, resolvedUrl, cls) {
     axisCounts,
     a4Failures: a4Failures.length,
     categoryHistogram,
+    metrics,
     legacyAllJsonPath: out,
   }, null, 2));
+
+  // Compact human-readable summary to stdout — easy to eyeball in CI logs.
+  console.log(`\n[#runtime-v2 metrics] run=${RUN_ID}`);
+  console.log(`  routes=${results.length} pass=${counts.pass} fail=${counts.fail} skip=${counts.skip}`);
+  console.log(`  duration=${(runDurationMs/1000).toFixed(1)}s avgLoad=${metrics.avgLoadMs}ms p50=${metrics.p50Ms}ms p95=${metrics.p95Ms}ms p99=${metrics.p99Ms}ms max=${metrics.maxMs}ms`);
+  console.log(`  retries=${metrics.totalRetries} (on ${metrics.routesWithRetries} routes) · chromiumCrashes=${metrics.chromiumCrashes} · relogins=${metrics.relogins} · apiRestarts=${metrics.apiServerRestartsDetected}`);
+  if (slowestRoutes.length > 0) {
+    console.log(`  ── SLOWEST ${Math.min(5, slowestRoutes.length)} ──`);
+    for (const r of slowestRoutes.slice(0, 5)) {
+      console.log(`    ${String(r.durationMs).padStart(6)}ms  ${r.route}` + (r.retries ? ` (retries=${r.retries})` : ""));
+    }
+  }
   fs.writeFileSync(path.join(RUN_DIR, "histogram.json"), JSON.stringify({
     runId: RUN_ID,
     totalProbed: results.length,
