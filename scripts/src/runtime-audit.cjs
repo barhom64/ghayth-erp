@@ -196,15 +196,30 @@ async function probe(page, routePath, resolvedUrl, cls) {
   page.removeAllListeners("response");
   page.removeAllListeners("console");
   page.removeAllListeners("pageerror");
-  const network = { get2xx: 0, status5xx: 0, paths5xx: [] };
+  page.removeAllListeners("framenavigated");
+  const network = { get2xx: 0, status5xx: 0, status4xx: [], paths5xx: [] };
   const consoleErrs = [];
   let pageErr = null;
+  // Nav trace — issue #638 diagnosis. Records every frame navigation
+  // event and key URL samples so we can tell whether `landed=/dashboard`
+  // is caused by an in-app redirect (apiFetch 401 → window.location =
+  // /login → login.tsx auto-redirect), an AccessDenied without URL
+  // change, or a harness race. Always collected; written to a sidecar
+  // JSON only when DIAG=1 to avoid bloating normal runs.
+  const navTrace = [];
+  function recordNav(label, url) {
+    navTrace.push({ t: Date.now(), label, url });
+  }
 
   page.on("response", (r) => {
     const u = r.url();
     if (!u.includes("/api/")) return;
     const s = r.status();
     if (r.request().method() === "GET" && s >= 200 && s < 300) network.get2xx++;
+    if (s >= 400 && s < 500) {
+      const p = u.replace(/^https?:\/\/[^/]+/, "");
+      if (network.status4xx.length < 5) network.status4xx.push(`${s} ${p}`);
+    }
     if (s >= 500) {
       network.status5xx++;
       const p = u.replace(/^https?:\/\/[^/]+/, "");
@@ -213,22 +228,36 @@ async function probe(page, routePath, resolvedUrl, cls) {
   });
   page.on("console", (m) => { if (m.type() === "error") consoleErrs.push(m.text().slice(0, 200)); });
   page.on("pageerror", (e) => { pageErr = String(e.message || e).slice(0, 200); });
+  // framenavigated fires for top-level navs incl. the in-page hard
+  // redirect `window.location.href = "/login"` that apiFetch issues
+  // when a 401 escapes refresh. That's the primary suspect for the
+  // landed=/dashboard pattern flagged in #638.
+  page.on("framenavigated", (frame) => {
+    if (frame === page.mainFrame()) {
+      recordNav("framenavigated", frame.url());
+    }
+  });
 
   let landedUrl = "";
   let nav_ok = false;
   try {
+    recordNav("goto:start", `${BASE}${resolvedUrl}`);
     await page.goto(`${BASE}${resolvedUrl}`, { waitUntil: "domcontentloaded", timeout: 25000 });
     nav_ok = true;
+    recordNav("goto:domcontentloaded", page.url());
   } catch (e) {
     return {
       a1: "FAIL", a2: "SKIP", a3: "SKIP", a4: "FAIL", a5: "SKIP",
       note: `goto failed: ${String(e.message).slice(0, 120)}`,
       shot: null,
+      navTrace,
     };
   }
   try { await page.waitForNetworkIdle({ idleTime: 700, timeout: 8000 }); } catch {}
+  recordNav("networkIdle", page.url());
   await new Promise((r) => setTimeout(r, 1000));
   landedUrl = page.url();
+  recordNav("postSleep1s", landedUrl);
 
   const dom = await page.evaluate((reSrc) => {
     const re = new RegExp(reSrc, "i");
@@ -256,6 +285,13 @@ async function probe(page, routePath, resolvedUrl, cls) {
     const has404Page = /CloudRain|٤٠٤/.test(document.body.innerText.slice(0, 2000)) && /404/.test(document.body.innerText.slice(0, 2000));
     const search = !!main.querySelector('input[type=search],input[placeholder*="بحث"],input[placeholder*="Search" i]');
     const pag = /(التالي|السابق|next|previous|الصفحة)/i.test(mainText);
+    // #638 — capture whether ModuleRoute rendered <AccessDenied/>
+    // (URL keeps the requested path; AccessDenied has its own copy
+    // strings) AND the auth-state evidence we have access to from
+    // the DOM/localStorage at the time we read landedUrl.
+    const accessDenied = /(ليس لديك صلاحية|access denied|forbidden|غير مسموح|page not allowed)/i.test(mainText.slice(0, 4000));
+    let lsAssignments = null;
+    try { lsAssignments = localStorage.getItem("erp_assignments"); } catch {}
     return {
       mainEmpty: mainText.length < 20,
       mainTextLen: mainText.length,
@@ -263,6 +299,10 @@ async function probe(page, routePath, resolvedUrl, cls) {
       saveLabel: saveBtn ? (saveBtn.innerText || saveBtn.textContent || "").trim().slice(0, 40) : null,
       tableRows: tables.length,
       emptyHints, errorHints, has404Page, search, pag,
+      // #638 diagnostic fields
+      accessDenied,
+      lsHasSession: !!lsAssignments,
+      lsAssignmentsLen: lsAssignments ? lsAssignments.length : 0,
     };
   }, SAVE_RE.source);
 
@@ -381,16 +421,34 @@ async function probe(page, routePath, resolvedUrl, cls) {
     try { await page.screenshot({ path: shot, fullPage: false }); } catch { shot = null; }
   }
 
+  // #638 — surface the diagnostic classification on every nav failure
+  // so the regular audit reports tell the operator WHICH cause they
+  // hit (auth401 hard-redirect vs AccessDenied vs harness race). The
+  // sidecar JSON below carries the full per-event trace.
+  let navCause = "";
+  if (a4 === "FAIL") {
+    const firstApi4xx = network.status4xx[0] || "";
+    const has401 = /\b401\b/.test(network.status4xx.join(" "));
+    const sawLoginInTrace = navTrace.some((e) => /\/login(\?|$)/.test(e.url));
+    if (has401 && sawLoginInTrace) navCause = "navCause=api401→/login (apiFetch hard redirect)";
+    else if (dom.accessDenied) navCause = "navCause=AccessDenied (URL didn't change; expected match was prefix-based)";
+    else if (sawLoginInTrace) navCause = "navCause=app-redirect-to-login (no captured 401 — refresh path?)";
+    else if (!dom.lsHasSession) navCause = "navCause=localStorage cleared (session lost mid-nav)";
+    else if (firstApi4xx) navCause = `navCause=api4xx ${firstApi4xx}`;
+    else navCause = `navCause=unclassified (trace=${navTrace.map((e) => e.label).join(",")})`;
+  }
+
   const note = [
     a1note,
     a4note,
+    navCause,
     a5note,
     network.status5xx ? `5xx:${network.paths5xx.join("|")}` : "",
     !cls.isCreate && !cls.isEdit && network.get2xx === 0 && cls.isList ? "no api gets" : "",
     consoleErrs.length ? `consoleErr=${consoleErrs.length}` : "",
   ].filter(Boolean).join("; ");
 
-  return { a1, a2, a3, a4, a5, note, shot, landedUrl };
+  return { a1, a2, a3, a4, a5, note, shot, landedUrl, navTrace, navCause, dom4xx: network.status4xx };
 }
 
 (async () => {
@@ -489,5 +547,40 @@ async function probe(page, routePath, resolvedUrl, cls) {
   const tag = process.env.ALL === "1" ? "all" : `batch_${String(BATCH).padStart(3, "0")}`;
   const out = path.join(OUT_DIR, `${tag}.json`);
   fs.writeFileSync(out, JSON.stringify({ batch: BATCH, start, end, results }, null, 2));
+
+  // #638 — when DIAG=1 is set, write a sidecar focused only on the
+  // routes whose A4 (nav) failed, including the full per-route nav
+  // trace and the inferred navCause. Lets the operator classify the
+  // landed=/dashboard pattern without re-reading the verbose main
+  // results file. Always also writes a short summary table to stdout.
+  const a4Failures = results.filter((r) => r.a4 === "FAIL");
+  const causeHistogram = {};
+  for (const r of a4Failures) {
+    const c = (r.navCause || "navCause=unknown").replace(/^navCause=/, "");
+    causeHistogram[c] = (causeHistogram[c] || 0) + 1;
+  }
+  if (a4Failures.length > 0) {
+    console.log("\n[#638 nav-cause histogram]");
+    for (const [cause, count] of Object.entries(causeHistogram).sort((a, b) => b[1] - a[1])) {
+      console.log(`  ${String(count).padStart(4)} × ${cause}`);
+    }
+  }
+  if (process.env.DIAG === "1") {
+    const diagOut = path.join(OUT_DIR, `${tag}_nav-diag.json`);
+    fs.writeFileSync(diagOut, JSON.stringify({
+      batch: BATCH,
+      generatedAt: new Date().toISOString(),
+      summary: { totalProbed: results.length, a4Failures: a4Failures.length, causeHistogram },
+      failures: a4Failures.map((r) => ({
+        route: r.route,
+        landedUrl: r.landedUrl,
+        navCause: r.navCause,
+        navTrace: r.navTrace,
+        api4xx: r.dom4xx,
+        note: r.note,
+      })),
+    }, null, 2));
+    console.log(`[#638] DIAG sidecar → ${diagOut}`);
+  }
   console.log(`[audit] wrote ${out} (${results.length} rows)`);
 })().catch((e) => { console.error("[audit] fatal:", e); process.exit(2); });
