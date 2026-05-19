@@ -516,7 +516,13 @@ router.post("/contracts/:id/terminate", authorize({ feature: "legal.contracts", 
       id,
       scope,
       action: "legal.contract.terminated",
-      fromStates: ["active", "draft"],
+      // Issue #663 #8: dropped "draft" — drafts are *cancelled*, not
+      // *terminated*. The engine's legal_contracts state machine
+      // reflects this: `draft: ["active", "cancelled"]` has no
+      // `terminated` target, so the previous `["active","draft"]`
+      // whitelist threw `LifecycleError` at runtime when invoked on a
+      // draft contract. Terminate stays an active-contract action.
+      fromStates: ["active"],
       toState: "terminated",
       reason,
       setExtras: {
