@@ -6,7 +6,7 @@
       "endpointCount": 12,
       "writeEndpoints": 10,
       "dimAgg": {
-        "rbac": "PARTIAL",
+        "rbac": "PASS",
         "scope": "PARTIAL",
         "audit": "PARTIAL",
         "event": "FAIL",
@@ -209,9 +209,9 @@
         {
           "method": "POST",
           "path": "/:id/sign-employee",
-          "line": 338,
+          "line": 346,
           "checks": {
-            "rbac": false,
+            "rbac": true,
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
@@ -222,7 +222,7 @@
             "glPosting": false
           },
           "dims": {
-            "rbac": "FAIL",
+            "rbac": "PASS",
             "scope": "PASS",
             "audit": "PASS",
             "event": "FAIL",
@@ -233,7 +233,7 @@
         {
           "method": "POST",
           "path": "/:id/activate",
-          "line": 371,
+          "line": 379,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -257,7 +257,7 @@
         {
           "method": "POST",
           "path": "/:id/terminate",
-          "line": 400,
+          "line": 408,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -281,7 +281,7 @@
         {
           "method": "POST",
           "path": "/:id/renew",
-          "line": 432,
+          "line": 440,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
