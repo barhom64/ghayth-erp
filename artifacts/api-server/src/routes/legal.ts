@@ -471,7 +471,13 @@ router.post("/contracts/:id/renew", authorize({ feature: "legal.contracts", acti
       id,
       scope,
       action: "legal.contract.renewed",
-      fromStates: ["active", "draft", "expired"],
+      // #663 RCA: dropped "draft" — a draft contract was never in
+      // force, so it is *activated*, not *renewed*. Renewal applies
+      // only to an active contract (extends endDate, status stays
+      // active) or an expired one (reactivates it). The engine's
+      // legal_contracts graph was widened in the same change to
+      // accept active→active and expired→active for this action.
+      fromStates: ["active", "expired"],
       toState: "active",
       reason: notes ?? undefined,
       setExtras,
