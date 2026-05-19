@@ -45,6 +45,24 @@ pnpm run audit:runtime
 BATCH=0 BATCH_SIZE=20 node scripts/src/runtime-audit.cjs
 ```
 
+### Phase 9 anti-saturation knobs (env vars)
+
+The long-lived chromium renderer saturates after ~50-80 routes
+(FD/IPC/GPU process accumulation) and starts to deterministically stall
+on `page.goto:start` even though the API is healthy. Three knobs control
+the mitigation; defaults are safe for the full 397-route walk on Replit.
+
+| Env var | Default | Purpose |
+|---|---:|---|
+| `BROWSER_RECYCLE_EVERY` | `40` | Close + relaunch chromium every N routes BEFORE saturation. Lower if you see a4-FAIL clusters mid-run; raise for shorter runs to skip the recycle cost (~2-3s each). Setting it ≥ `routes.length` effectively disables recycling. |
+| `INSTRUMENT_EVERY` | `25` | Emit a `[instr] idx=… rss=…MB heap=…MB api=…/…ms recycles=… crashes=… relogins=… last=…` line every N routes. Lets you confirm in `run.log` that memory is reclaimed by recycles and the API stayed healthy throughout the run, without attaching a profiler. |
+| `RECYCLE_LOGIN_MAX_ATTEMPTS` | `3` | Bounded retries for the post-recycle login. If all attempts fail the harness aborts (fatal) rather than continuing unauthenticated and producing misleading FAIL rows. |
+
+Empirical impact (run-20260519-154303, 397 routes, Replit):
+**a4-FAIL 233 → 28 (-88%)**, duration **113 → 46 min**, 0 chromium crashes,
+RSS stable at 109-237 MB across 9 recycles. The 28 remaining a4 failures
+are real app-side stalls in `/finance/*` (deterministic, not harness noise).
+
 If your local bash session keeps getting SIGKILL'd by the container,
 register the harness as a Replit workflow instead — workflows survive
 session lifecycle:
@@ -87,6 +105,28 @@ xdg-open audit/screenshots/finance_invoices_create.png   # or scp to look at it
 - The previous "1510/1510 (100%)" claim was source-review-only and has
   been retracted in `FRONTEND_TEST_MATRIX.md` and `replit.md`.
 
+## Legacy URL aliases (Task #378)
+
+Some routes intentionally `<Redirect to=...>` to a canonical path on mount
+(e.g. `/my-leave-request → /hr/leaves/create`). The harness does
+`page.goto(<route>)` and then asserts `landedPath === expectedPath`, so
+without help every alias would be reported as an A4 FAIL even though the
+user lands on a working page.
+
+The map lives at the top of `scripts/src/runtime-audit.cjs` as the
+`ALIAS_REDIRECTS` const:
+
+```js
+const ALIAS_REDIRECTS = {
+  "/my-leave-request": "/hr/leaves/create",
+};
+```
+
+**When you add a new `<Redirect to=...>` route, add the
+`from → to` pair to `ALIAS_REDIRECTS` in the same PR.** Otherwise the
+next runtime audit will FAIL on it and the next engineer has to
+rediscover the convention by reading the harness source.
+
 ## Known limitations
 
 - A5 fills `<input>`, `<textarea>` and `<select>` but does not yet
@@ -102,3 +142,13 @@ xdg-open audit/screenshots/finance_invoices_create.png   # or scp to look at it
 
 - **Periodic re-login** every 25 routes (`RELOGIN_EVERY` constant). The 2026-05-07 v1 run had 85 routes bouncing to `/login` near the tail because the JWT in the HttpOnly cookie expired during the ~40-minute walk. With re-login in place the v2 run shows 0 A1 FAIL and 0 A5 FAIL — the only failure mode is A4 navigation, which is a real SPA bug.
 - Run with `ALL=1 pnpm run audit:runtime` to walk all 373 routes in one pass; results are written to `/tmp/runtime-audit/all.json` and copied to `audit/runtime-audit-results.json`. Screenshots land in `audit/screenshots/`, one PNG per A4 FAIL.
+
+## v3 update (2026-05-07, Task #186)
+
+- **Smarter A5 form-field probe.** The probe now also counts `[role=combobox]`, `[role=textbox]`, `[contenteditable="true"]`, and `button[aria-haspopup]` (the Radix/shadcn primitives previous v2 missed). It pre-walks every candidate, focuses each one and sends Escape (700ms grace) to trigger lazy hydration, then reports separate counts as `fields=N(<native>n+<custom>c)`.
+- **Phase-2 Radix fill.** After Phase 1 (native + contenteditable), A5 fill clicks the first 12 `button[role=combobox|aria-haspopup=listbox|menu]` triggers and selects the first `[role=option]/[role=menuitem]` for each.
+- **Heartbeat noise filter.** Write detection now excludes `intelligence/activity|notifications/seen|telemetry|audit/log|behavioral` so the activity heartbeat POST no longer counts as a form submission. This unmasked 3 real A5 FAILs (`/employees/create`, `/finance/expenses/create`, `/finance/invoices/create`) that v2 falsely reported as PASS.
+- **SPA-fallback navigation.** When direct `page.goto(<route>)` bounces to `/dashboard` (the Class N1 SPA bug), the probe now retries via `history.pushState + popstate` so wouter mounts the real page and A5 can still run. The A4 verdict is left untouched (still FAIL); the note is annotated with `spa-fallback` so it is obvious which A5 results came from the fallback path.
+- **`CREATE_ONLY=1`** filters the route set to the 70 `/create`/`/edit` pages. **`ROUTES_INCLUDE=route1,route2,...`** runs an arbitrary subset (used to merge two passes when a chromium frame crash kills the browser mid-walk).
+- **Goto timeout** raised from 25s → 60s. Even at 60s, 56 create pages still time out under audit load — filed as bug class N3 in `FRONTEND_BUGS.md`.
+- **Result file** for the create/edit run is `audit/runtime-audit-create-edit.json` (separate from the full-route file `audit/runtime-audit-results.json` from #185 v2). Per-route table and totals: `FRONTEND_RUNTIME_AUDIT.md` Task #186 section.
