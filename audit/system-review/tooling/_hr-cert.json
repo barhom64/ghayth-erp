@@ -72,7 +72,7 @@
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
             "audit": true,
-            "event": false,
+            "event": true,
             "applyTransition": false,
             "directStatusUpdate": false,
             "glPosting": false
@@ -81,7 +81,7 @@
             "rbac": "PASS",
             "scope": "PASS",
             "audit": "PASS",
-            "event": "FAIL",
+            "event": "PASS",
             "lifecycle": "SKIP",
             "glBridge": "PARTIAL"
           }
@@ -89,14 +89,14 @@
         {
           "method": "PATCH",
           "path": "/:id",
-          "line": 171,
+          "line": 183,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
             "audit": false,
-            "event": false,
+            "event": true,
             "applyTransition": false,
             "directStatusUpdate": false,
             "glPosting": false
@@ -105,7 +105,7 @@
             "rbac": "PASS",
             "scope": "PASS",
             "audit": "FAIL",
-            "event": "FAIL",
+            "event": "PASS",
             "lifecycle": "SKIP",
             "glBridge": "PARTIAL"
           }
@@ -113,14 +113,14 @@
         {
           "method": "POST",
           "path": "/:id/submit",
-          "line": 216,
+          "line": 245,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
             "scopeManualCompany": true,
             "audit": true,
-            "event": false,
+            "event": true,
             "applyTransition": false,
             "directStatusUpdate": true,
             "glPosting": false
@@ -129,7 +129,7 @@
             "rbac": "PASS",
             "scope": "PASS",
             "audit": "PASS",
-            "event": "FAIL",
+            "event": "PASS",
             "lifecycle": "FAIL",
             "glBridge": "PARTIAL"
           }
@@ -137,7 +137,7 @@
         {
           "method": "POST",
           "path": "/:id/approve",
-          "line": 244,
+          "line": 286,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -161,7 +161,7 @@
         {
           "method": "POST",
           "path": "/:id/reject",
-          "line": 288,
+          "line": 330,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -185,7 +185,7 @@
         {
           "method": "POST",
           "path": "/:id/sign-company",
-          "line": 332,
+          "line": 374,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -209,7 +209,7 @@
         {
           "method": "POST",
           "path": "/:id/sign-employee",
-          "line": 371,
+          "line": 413,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -233,7 +233,7 @@
         {
           "method": "POST",
           "path": "/:id/activate",
-          "line": 404,
+          "line": 446,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -257,7 +257,7 @@
         {
           "method": "POST",
           "path": "/:id/terminate",
-          "line": 433,
+          "line": 475,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -281,7 +281,7 @@
         {
           "method": "POST",
           "path": "/:id/renew",
-          "line": 479,
+          "line": 521,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
