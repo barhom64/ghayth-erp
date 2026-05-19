@@ -29,6 +29,8 @@ const path = require("path");
 const puppeteer = require(
   path.join(__dirname, "..", "..", "artifacts", "ghayth-erp-deck", "node_modules", "puppeteer"),
 );
+// Phase 6: machine-readable navCause taxonomy. Closed enum + metadata.
+const navTaxonomy = require("./lib/nav-cause-taxonomy.cjs");
 
 const BASE = process.env.BASE_URL || "http://localhost";
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@ghayth.com";
@@ -752,20 +754,25 @@ async function probe(page, routePath, resolvedUrl, cls) {
   //   * authz     → SPA route-guard bounce with valid session (#638 class)
   //   * auth      → real session expiry (api401, lost session)
   //   * unknown   → genuinely unclassified — needs trace inspection
-  function categorize(cause) {
-    if (!cause || /^unclassified/.test(cause)) return "unknown";
-    if (/^harness-/.test(cause)) return "harness";
-    if (/^(api401|session-lost-mid-nav|login-bounce-no-401)/.test(cause)) return "auth";
-    if (/^(forbidden-bounce|AccessDenied|api4xx-no-redirect)/.test(cause)) return "authz";
-    return "unknown";
-  }
+  //
+  // Phase 6: classification is delegated to ./lib/nav-cause-taxonomy.cjs
+  // (closed enum + per-code metadata). Every a4=FAIL row gets a
+  // canonical `code` (e.g. "harness.timeout") and the enriched
+  // {category, severity, retryable} metadata, so downstream tools no
+  // longer regex-parse the raw navCause string.
   const a4Failures = results.filter((r) => r.a4 === "FAIL");
   const causeHistogram = {};
+  const codeHistogram = {};
   const categoryHistogram = { harness: 0, authz: 0, auth: 0, unknown: 0 };
   for (const r of a4Failures) {
     const raw = (r.navCause || "unclassified").replace(/^navCause=/, "");
     causeHistogram[raw] = (causeHistogram[raw] || 0) + 1;
-    categoryHistogram[categorize(raw)]++;
+    const entry = navTaxonomy.classify(raw);
+    r.navCauseCode = entry.code;
+    r.navCauseCategory = entry.category;
+    r.navCauseSeverity = entry.severity;
+    codeHistogram[entry.code] = (codeHistogram[entry.code] || 0) + 1;
+    categoryHistogram[entry.category]++;
   }
   if (a4Failures.length > 0) {
     const total = a4Failures.length;
@@ -795,7 +802,8 @@ async function probe(page, routePath, resolvedUrl, cls) {
         route: r.route,
         landedUrl: r.landedUrl || "",
         navCause: r.navCause || "",
-        category: categorize((r.navCause || "").replace(/^navCause=/, "")),
+        category: navTaxonomy.categoryOf(r.navCause || ""),
+        code: navTaxonomy.classify(r.navCause || "").code,
         navTrace: r.navTrace || [],
         api4xx: r.dom4xx || [],
         note: r.note,
