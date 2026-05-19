@@ -119,7 +119,6 @@ const MODULE_TABLES: Record<string, readonly string[]> = {
   operations: [
     "tasks",
     "obligations",
-    "obligation_escalations",
   ],
 };
 
