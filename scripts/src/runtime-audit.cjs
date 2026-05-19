@@ -608,6 +608,17 @@ async function probe(page, routePath, resolvedUrl, cls) {
   };
   let chromiumCrashCount = 0;
   let reloginCount = 0;
+  // Phase 4 placeholder (api-server restart detection was added to the
+  // metrics block in Phase 5 but the declaration here was lost when
+  // PR #675's diff merged empty). Without this declaration, the line
+  // `apiServerRestartsDetected: apiRestartCount` at the bottom of the
+  // metrics block throws ReferenceError, which kills the audit before
+  // summary.json / timings.json / latest pointer are written —
+  // producing the DEGRADED verdict the operator was seeing. Real
+  // restart detection (periodic /healthz polling) lands in the
+  // follow-up instrumentation PR; for now the counter is a static
+  // zero so the harness writes its evidence pack cleanly.
+  let apiRestartCount = 0;
   async function launchChromium() {
     browser = await puppeteer.launch(chromiumLaunchArgs);
     page = await browser.newPage();
