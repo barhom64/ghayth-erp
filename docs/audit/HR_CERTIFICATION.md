@@ -77,8 +77,8 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 | 332 | `POST /:id/sign-company` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
 | 371 | `POST /:id/sign-employee` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
 | 404 | `POST /:id/activate` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 433 | `POST /:id/terminate` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | 🟡 PARTIAL |
-| 465 | `POST /:id/renew` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | 🟡 PARTIAL |
+| 433 | `POST /:id/terminate` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
+| 479 | `POST /:id/renew` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
 
 ### `hr-discipline.ts`
 
