@@ -3,6 +3,7 @@ import { rawQuery } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, NotFoundError } from "../lib/errorHandler.js";
 import { maskFields } from "../lib/rbac/authorize.js";
+import { buildScopedWhere } from "../lib/scopedQuery.js";
 import {
   EVENT_CATALOG,
   countEventsByDomain,
@@ -92,8 +93,17 @@ eventsRouter.get("/log", async (req, res) => {
     const { action, entity, entityId, from, to, limit = "100", cursor } =
       req.query as Record<string, string | undefined>;
 
-    const params: unknown[] = [scope.companyId];
-    let where = `"companyId" = $1`;
+    // #685 PR-A1: scope predicate via helper. Behavior preserved —
+    // single-company filter (scope.companyId), no branch column on
+    // event_logs (disableBranchScope), no soft-delete column on this
+    // table. Resulting SQL is byte-identical to the prior hand-rolled
+    // form: `"companyId" = $1` with params=[scope.companyId].
+    const { where: scopedWhere, params } = buildScopedWhere(
+      scope,
+      { companyIds: [scope.companyId] },
+      { disableBranchScope: true },
+    );
+    let where = scopedWhere;
     if (action) { params.push(action); where += ` AND action = $${params.length}`; }
     if (entity) { params.push(entity); where += ` AND entity = $${params.length}`; }
     if (entityId) { params.push(Number(entityId) || 0); where += ` AND "entityId" = $${params.length}`; }
@@ -179,14 +189,25 @@ eventsRouter.get("/log/stats", async (req, res) => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 7;
+    // #685 PR-A1: scope predicate via helper. Behavior preserved —
+    // single-company filter (scope.companyId), no branch column on
+    // event_logs (disableBranchScope). SQL identical to prior hand-rolled
+    // form: `"companyId" = $1` with params[0]=scope.companyId; $2 is
+    // bound at nextParamIndex for the windowDays interval literal.
+    const { where: scopedWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      { companyIds: [scope.companyId] },
+      { disableBranchScope: true },
+    );
+    params.push(String(days));
     const rows = await rawQuery<{ action: string; count: number }>(
       `SELECT action, COUNT(*)::int AS count
        FROM event_logs
-       WHERE "companyId" = $1 AND "createdAt" >= NOW() - ($2 || ' days')::interval
+       WHERE ${scopedWhere} AND "createdAt" >= NOW() - ($${nextParamIndex} || ' days')::interval
        GROUP BY action
        ORDER BY count DESC
        LIMIT 100`,
-      [scope.companyId, String(days)],
+      params,
     );
     const enriched = rows.map((r) => {
       const def = getEventDefinition(r.action);
