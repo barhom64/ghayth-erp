@@ -1,14 +1,13 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
-import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
-import { Edit, Wallet } from "lucide-react";
+import { Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useToast } from "@/hooks/use-toast";
@@ -52,7 +51,6 @@ function formatPeriod(payroll: any): string {
 }
 
 export default function PayrollDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/hr/payroll/:id");
   const id = params?.id ? Number(params.id) : null;
   const { toast } = useToast();
@@ -145,10 +143,6 @@ export default function PayrollDetail() {
     ];
     return sections;
   }, [payroll, netSalary, paymentMethodLabel, id]);
-
-  const handleEdit = () => {
-    setLocation(`/hr/payroll/${id}/edit`);
-  };
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -338,32 +332,18 @@ export default function PayrollDetail() {
       error={error}
       onRetry={refetch}
       actions={
-        <>
-          {payroll && (
-            <EntityPrintButton
-              branchId={payroll.branchId}
-              title={payroll.ref ? `راتب ${payroll.ref}` : "راتب"}
-              ref={payroll.ref || `PAY-${id}`}
-              date={formatDateAr(payroll.paymentDate || payroll.createdAt)}
-              sections={printSections}
-              entityType="payroll"
-              entityId={payroll.id ?? id}
-              formats={["a4"]}
-            />
-          )}
-          <GuardedButton
-            perm="hr:update"
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-            disabled={
-              !payroll || ["paid", "cancelled"].includes(payroll.status)
-            }
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
-        </>
+        payroll ? (
+          <EntityPrintButton
+            branchId={payroll.branchId}
+            title={payroll.ref ? `راتب ${payroll.ref}` : "راتب"}
+            ref={payroll.ref || `PAY-${id}`}
+            date={formatDateAr(payroll.paymentDate || payroll.createdAt)}
+            sections={printSections}
+            entityType="payroll"
+            entityId={payroll.id ?? id}
+            formats={["a4"]}
+          />
+        ) : undefined
       }
     />
   );

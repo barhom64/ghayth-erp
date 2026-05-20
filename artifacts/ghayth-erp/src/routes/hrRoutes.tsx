@@ -82,6 +82,11 @@ const HrContractDetail = lazy(() => import("@/pages/details/hr-contract-detail")
 const TransferDetail = lazy(() => import("@/pages/details/transfer-detail"));
 const PayrollDetail = lazy(() => import("@/pages/details/payroll-detail"));
 const PerformanceDetail = lazy(() => import("@/pages/details/performance-detail"));
+const TransfersEdit = lazy(() => import("@/pages/create/hr/transfers-edit"));
+const AttendanceEdit = lazy(() => import("@/pages/create/hr/attendance-edit"));
+const ExcuseEdit = lazy(() => import("@/pages/create/hr/excuse-edit"));
+const LeavesEdit = lazy(() => import("@/pages/create/hr/leaves-edit"));
+const ContractsEdit = lazy(() => import("@/pages/create/hr/contracts-edit"));
 
 export const hrRoutes = [
   { path: "/hr", component: HR },
@@ -96,12 +101,15 @@ export const hrRoutes = [
   { path: "/hr/attendance/reports", component: AttendanceReports, subKey: "attendance" },
   { path: "/hr/attendance/field-tracking", component: FieldTracking, subKey: "attendance" },
   { path: "/hr/attendance/qr-scanner", component: QRScanner, subKey: "attendance" },
+  // ":id/edit" precedes ":id" — defensive ordering (see route-shadowing fix).
+  { path: "/hr/attendance/:id/edit", component: AttendanceEdit, subKey: "attendance" },
   { path: "/hr/attendance/:id", component: AttendanceDetail, subKey: "attendance" },
   { path: "/hr/leaves", component: Leaves, subKey: "leaves" },
   { path: "/hr/leaves/create", component: LeavesCreate, subKey: "leaves" },
   // Literal sub-routes must precede "/hr/leaves/:id" (see attendance above).
   { path: "/hr/leaves/management", component: LeaveManagement, subKey: "leaves" },
   { path: "/hr/leaves/approval-chains", component: ApprovalChains, subKey: "leaves" },
+  { path: "/hr/leaves/:id/edit", component: LeavesEdit, subKey: "leaves" },
   { path: "/hr/leaves/:id", component: LeaveDetail, subKey: "leaves" },
   { path: "/hr/payroll", component: Payroll, subKey: "payroll" },
   { path: "/hr/payroll/create", component: PayrollCreate, subKey: "payroll" },
@@ -156,6 +164,7 @@ export const hrRoutes = [
   { path: "/hr/evaluation-360/:id", component: Evaluation360Detail, subKey: "performance" },
   { path: "/hr/public-holidays", component: PublicHolidays, subKey: "leaves" },
   { path: "/hr/transfers", component: Transfers, subKey: "employees" },
+  { path: "/hr/transfers/:id/edit", component: TransfersEdit, subKey: "employees" },
   { path: "/hr/transfers/:id", component: TransferDetail, subKey: "employees" },
   { path: "/hr/development-plans", component: DevelopmentPlans, subKey: "performance" },
   { path: "/hr/idp", component: IDP, subKey: "performance" },
@@ -164,9 +173,11 @@ export const hrRoutes = [
   { path: "/hr/expiring-documents", component: ExpiringDocuments, subKey: "employees" },
   { path: "/hr/contracts", component: Contracts, subKey: "employees" },
   { path: "/hr/contracts/create", component: ContractsCreate, subKey: "employees" },
+  { path: "/hr/contracts/:id/edit", component: ContractsEdit, subKey: "employees" },
   { path: "/hr/contracts/:id", component: HrContractDetail, subKey: "employees" },
   { path: "/hr/official-letters", component: OfficialLetters, subKey: "employees" },
   { path: "/hr/excuse-requests", component: ExcuseRequests, subKey: "attendance" },
   { path: "/hr/excuse-requests/create", component: ExcuseCreate, subKey: "attendance" },
+  { path: "/hr/excuse-requests/:id/edit", component: ExcuseEdit, subKey: "attendance" },
   { path: "/hr/excuse-requests/:id", component: ExcuseDetail, subKey: "attendance" },
 ];
