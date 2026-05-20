@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T15:28:49.680Z",
+  "generatedAt": "2026-05-20T17:15:12.847Z",
   "scope": "artifacts/api-server/src/routes/**.ts",
   "detector": {
     "patterns": [
@@ -12,19 +12,19 @@
   "totals": {
     "filesScanned": 88,
     "filesWithHits": 82,
-    "totalHits": 2277,
+    "totalHits": 2275,
     "byCategory": {
       "A_safe": {
-        "files": 56,
-        "hits": 1866
+        "files": 55,
+        "hits": 1855
       },
       "B_risky": {
         "files": 19,
         "hits": 304
       },
       "C_manual": {
-        "files": 6,
-        "hits": 102
+        "files": 7,
+        "hits": 111
       },
       "D_helper": {
         "files": 1,
@@ -7857,154 +7857,6 @@
       ]
     },
     {
-      "file": "artifacts/api-server/src/routes/settings.ts",
-      "handRolledHits": 23,
-      "aliasedHits": 0,
-      "usesBuildScopedWhere": 0,
-      "category": "A",
-      "reason": "aliased fraction 0% (0/23) — predominantly plain `\"companyId\" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits)",
-      "sites": [
-        {
-          "line": 282,
-          "text": "`SELECT key, value FROM system_settings WHERE \"companyId\" = $1 AND \"branchId\" IS NULL`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 286,
-          "text": "`SELECT key, value FROM system_settings WHERE \"companyId\" = $1 AND \"branchId\" = $2`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 420,
-          "text": "const [row] = await rawQuery<BranchRow>(`SELECT * FROM branches WHERE id=$1 AND \"companyId\"=$2`, [r.insertId, targetCompanyId]);",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 450,
-          "text": "const [updated] = await rawQuery(`SELECT * FROM branches WHERE id=$1 AND \"companyId\"=$2`, [id, existing.companyId]);",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 481,
-          "text": "`SELECT * FROM branches WHERE id=$1 AND \"companyId\"=$2`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 490,
-          "text": "`SELECT COUNT(*) AS cnt FROM employee_assignments WHERE \"branchId\" = $1 AND status = 'active' AND \"companyId\" = $2`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 494,
-          "text": "`SELECT COUNT(*) AS cnt FROM purchase_orders WHERE \"branchId\" = $1 AND status NOT IN ('cancelled','received','completed') AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 510,
-          "text": "`UPDATE branches SET status='inactive' WHERE id=$1 AND \"companyId\"=$2`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 536,
-          "text": "const [row] = await rawQuery<DepartmentRow>(`SELECT * FROM departments WHERE id=$1 AND \"companyId\"=$2`, [r.insertId, scope.companyId]);",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 547,
-          "text": "const { affectedRows } = await rawExecute(`UPDATE departments SET name=$1, \"nameEn\"=$2, \"managerId\"=$3 WHERE id=$4 AND \"companyId\"=$5 RETURNING id`, [name, nameEn || null, manager || null, id, scope.c",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 564,
-          "text": "`SELECT COUNT(*) AS cnt FROM employee_assignments WHERE \"departmentId\" = $1 AND status = 'active' AND \"companyId\" = $2`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 570,
-          "text": "const [beforeDept] = await rawQuery(`SELECT * FROM departments WHERE id=$1 AND \"companyId\"=$2`, [id, scope.companyId]);",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 572,
-          "text": "await rawExecute(`DELETE FROM departments WHERE id=$1 AND \"companyId\"=$2`, [id, scope.companyId]);",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 753,
-          "text": "`SELECT DISTINCT \"roleKey\", label, modules, level FROM user_roles WHERE \"companyId\" = $1 ORDER BY level DESC`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 767,
-          "text": "`UPDATE user_roles SET modules=$1 WHERE \"roleKey\"=$2 AND \"companyId\"=$3`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 784,
-          "text": "`SELECT * FROM approval_chains WHERE \"companyId\"=$1 AND \"deletedAt\" IS NULL ORDER BY \"chainType\", \"name\"`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 806,
-          "text": "const [row] = await rawQuery<ApprovalChainRow>(`SELECT * FROM approval_chains WHERE id=$1 AND \"companyId\"=$2`, [r.insertId, scope.companyId]);",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 815,
-          "text": "const [beforeChain] = await rawQuery(`SELECT * FROM approval_chains WHERE id=$1 AND \"companyId\"=$2 AND \"deletedAt\" IS NULL`, [id, scope.companyId]);",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 817,
-          "text": "await rawExecute(`UPDATE approval_chains SET \"deletedAt\" = NOW() WHERE id=$1 AND \"companyId\"=$2`, [id, scope.companyId]);",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 850,
-          "text": "`SELECT key, value FROM system_settings WHERE key = ANY($1) AND \"companyId\" = $2`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 882,
-          "text": "`DELETE FROM system_settings WHERE key=$1 AND \"companyId\"=$2`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 887,
-          "text": "`SELECT id FROM system_settings WHERE key=$1 AND \"companyId\"=$2`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 892,
-          "text": "`UPDATE system_settings SET value=$1, \"updatedAt\"=NOW() WHERE key=$2 AND \"companyId\"=$3`,",
-          "aliased": false,
-          "class": "A"
-        }
-      ]
-    },
-    {
       "file": "artifacts/api-server/src/routes/store.ts",
       "handRolledHits": 23,
       "aliasedHits": 3,
@@ -8425,6 +8277,142 @@
         {
           "line": 599,
           "text": "`UPDATE employee_contracts SET \"renewalDate\" = $2, \"updatedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $3 AND \"deletedAt\" IS NULL`,",
+          "aliased": false,
+          "class": "A"
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/settings.ts",
+      "handRolledHits": 21,
+      "aliasedHits": 0,
+      "usesBuildScopedWhere": 2,
+      "category": "A",
+      "reason": "aliased fraction 0% (0/21) — predominantly plain `\"companyId\" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits)",
+      "sites": [
+        {
+          "line": 283,
+          "text": "`SELECT key, value FROM system_settings WHERE \"companyId\" = $1 AND \"branchId\" IS NULL`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 287,
+          "text": "`SELECT key, value FROM system_settings WHERE \"companyId\" = $1 AND \"branchId\" = $2`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 421,
+          "text": "const [row] = await rawQuery<BranchRow>(`SELECT * FROM branches WHERE id=$1 AND \"companyId\"=$2`, [r.insertId, targetCompanyId]);",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 451,
+          "text": "const [updated] = await rawQuery(`SELECT * FROM branches WHERE id=$1 AND \"companyId\"=$2`, [id, existing.companyId]);",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 482,
+          "text": "`SELECT * FROM branches WHERE id=$1 AND \"companyId\"=$2`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 491,
+          "text": "`SELECT COUNT(*) AS cnt FROM employee_assignments WHERE \"branchId\" = $1 AND status = 'active' AND \"companyId\" = $2`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 495,
+          "text": "`SELECT COUNT(*) AS cnt FROM purchase_orders WHERE \"branchId\" = $1 AND status NOT IN ('cancelled','received','completed') AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 511,
+          "text": "`UPDATE branches SET status='inactive' WHERE id=$1 AND \"companyId\"=$2`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 537,
+          "text": "const [row] = await rawQuery<DepartmentRow>(`SELECT * FROM departments WHERE id=$1 AND \"companyId\"=$2`, [r.insertId, scope.companyId]);",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 548,
+          "text": "const { affectedRows } = await rawExecute(`UPDATE departments SET name=$1, \"nameEn\"=$2, \"managerId\"=$3 WHERE id=$4 AND \"companyId\"=$5 RETURNING id`, [name, nameEn || null, manager || null, id, scope.c",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 565,
+          "text": "`SELECT COUNT(*) AS cnt FROM employee_assignments WHERE \"departmentId\" = $1 AND status = 'active' AND \"companyId\" = $2`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 571,
+          "text": "const [beforeDept] = await rawQuery(`SELECT * FROM departments WHERE id=$1 AND \"companyId\"=$2`, [id, scope.companyId]);",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 573,
+          "text": "await rawExecute(`DELETE FROM departments WHERE id=$1 AND \"companyId\"=$2`, [id, scope.companyId]);",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 773,
+          "text": "`UPDATE user_roles SET modules=$1 WHERE \"roleKey\"=$2 AND \"companyId\"=$3`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 820,
+          "text": "const [row] = await rawQuery<ApprovalChainRow>(`SELECT * FROM approval_chains WHERE id=$1 AND \"companyId\"=$2`, [r.insertId, scope.companyId]);",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 829,
+          "text": "const [beforeChain] = await rawQuery(`SELECT * FROM approval_chains WHERE id=$1 AND \"companyId\"=$2 AND \"deletedAt\" IS NULL`, [id, scope.companyId]);",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 831,
+          "text": "await rawExecute(`UPDATE approval_chains SET \"deletedAt\" = NOW() WHERE id=$1 AND \"companyId\"=$2`, [id, scope.companyId]);",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 864,
+          "text": "`SELECT key, value FROM system_settings WHERE key = ANY($1) AND \"companyId\" = $2`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 896,
+          "text": "`DELETE FROM system_settings WHERE key=$1 AND \"companyId\"=$2`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 901,
+          "text": "`SELECT id FROM system_settings WHERE key=$1 AND \"companyId\"=$2`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 906,
+          "text": "`UPDATE system_settings SET value=$1, \"updatedAt\"=NOW() WHERE key=$2 AND \"companyId\"=$3`,",
           "aliased": false,
           "class": "A"
         }
@@ -10845,62 +10833,62 @@
       "handRolledHits": 9,
       "aliasedHits": 0,
       "usesBuildScopedWhere": 0,
-      "category": "A",
-      "reason": "aliased fraction 0% (0/9) — predominantly plain `\"companyId\" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits)",
+      "category": "C",
+      "reason": "business_rules uses system-default fallback `(\"companyId\" IS NULL OR \"companyId\" = $N)` at L92 (GET /) and L109 (GET /logs) — NULL companyId = applies-to-all-tenants, specific companyId = company-override; buildScopedWhere has no fallback option (would require helper rewrite, banned by #685 directive). Remaining 7 hits (L163/L185/L213/L233/L239/L261/L268) are write/detail handlers — deferred per A-series scope, will revisit when write-handler PR series begins after Class B blockers cleared. PR #685 PR-A4.",
       "sites": [
         {
           "line": 92,
           "text": "WHERE (\"companyId\" IS NULL OR \"companyId\" = $1) AND \"deletedAt\" IS NULL",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 109,
           "text": "const conditions = [`(\"companyId\" IS NULL OR \"companyId\" = $1)`];",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 163,
           "text": "const [rule] = await rawQuery<BusinessRuleRow>(`SELECT * FROM business_rules WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`, [insertId, scope.companyId]);",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 185,
           "text": "`SELECT * FROM business_rules WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 213,
           "text": "const [rule] = await rawQuery<BusinessRuleRow>(`SELECT * FROM business_rules WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`, [id, scope.companyId]);",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 233,
           "text": "`SELECT * FROM business_rules WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 239,
           "text": "const { affectedRows } = await rawExecute(`UPDATE business_rules SET \"deletedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`, [id, scope.companyId]);",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 261,
           "text": "`SELECT id, \"isActive\" FROM business_rules WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 268,
           "text": "const { affectedRows } = await rawExecute(`UPDATE business_rules SET \"isActive\" = $1, \"updatedAt\" = NOW() WHERE id = $2 AND \"companyId\" = $3 AND \"deletedAt\" IS NULL`, [newActive, id, scope.companyId])",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         }
       ]
     },

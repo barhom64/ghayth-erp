@@ -4,6 +4,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { buildScopedWhere } from "../lib/scopedQuery.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   resolveSettings,
@@ -226,7 +227,7 @@ router.put("/", authorize({ feature: "settings", action: "update" }), async (req
 
     await upsertSetting(requestedScope, scopeId, key, value);
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "update_setting",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
       entity: "settings", entityId: scopeId ?? 0,
       after: { scope: requestedScope, scopeId, key, value },
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -254,7 +255,7 @@ router.delete("/", authorize({ feature: "settings", action: "update" }), async (
 
     await deleteSetting(requestedScope, scopeId, key);
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "delete_setting",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.deleted",
       entity: "settings", entityId: scopeId ?? 0,
       before: { scope: requestedScope, scopeId, key },
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -329,7 +330,7 @@ router.put("/general", authorize({ feature: "settings", action: "update" }), asy
     }
     const scope = req.scope!;
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "update_general_settings",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
       entity: "system_settings", entityId: 0,
       after: { keys: Object.keys(entries) },
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -412,7 +413,7 @@ router.post("/branches", authorize({ feature: "settings", action: "update" }), a
       [name, nameEn || null, targetCompanyId, city || null, phone || null, logoUrl || null, address || null, taxNumber || null, crNumber || null, email || null, website || null, footerText || null]
     );
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "create_branch",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.created",
       entity: "branches", entityId: r.insertId,
       after: { name, nameEn, city, phone, companyId: targetCompanyId },
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -449,7 +450,7 @@ router.put("/branches/:id", authorize({ feature: "settings", action: "update" })
     await rawExecute(`UPDATE branches SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     const [updated] = await rawQuery(`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`, [id, existing.companyId]);
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "update_branch",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
       entity: "branches", entityId: id,
       before: existing, after: body,
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -511,7 +512,7 @@ router.delete("/branches/:id", authorize({ feature: "settings", action: "update"
       [branchId, scope.companyId],
     );
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "disable_branch",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.deleted",
       entity: "branches", entityId: branchId,
       before: beforeBranch,
       after: { ...beforeBranch, status: "inactive" },
@@ -528,7 +529,7 @@ router.post("/departments", authorize({ feature: "settings", action: "update" })
     const scope = req.scope!;
     const r = await rawExecute(`INSERT INTO departments (name, "nameEn", "companyId", "managerId") VALUES ($1,$2,$3,$4)`, [name, nameEn || null, scope.companyId, manager || null]);
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "create_department",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.created",
       entity: "departments", entityId: r.insertId,
       after: { name, nameEn, manager },
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -547,7 +548,7 @@ router.put("/departments/:id", authorize({ feature: "settings", action: "update"
     const { affectedRows } = await rawExecute(`UPDATE departments SET name=$1, "nameEn"=$2, "managerId"=$3 WHERE id=$4 AND "companyId"=$5 RETURNING id`, [name, nameEn || null, manager || null, id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("القسم غير موجود");
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "update_department",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
       entity: "departments", entityId: id,
       after: { name, manager },
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -571,7 +572,7 @@ router.delete("/departments/:id", authorize({ feature: "settings", action: "upda
     if (!beforeDept) throw new NotFoundError("القسم غير موجود");
     await rawExecute(`DELETE FROM departments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "delete_department",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.deleted",
       entity: "departments", entityId: id,
       before: beforeDept,
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -613,7 +614,7 @@ router.post("/companies", authorize({ feature: "settings", action: "update" }), 
     }
 
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "create_company",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.created",
       entity: "companies", entityId: companyId,
       after: { name, nameEn, taxNumber, crNumber, branchId },
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -653,7 +654,7 @@ router.put("/companies/:id", authorize({ feature: "settings", action: "update" }
     const { affectedRows } = await rawExecute(`UPDATE companies SET name=$1, "nameEn"=$2, "vatNumber"=$3, "crNumber"=$4 WHERE id=$5 RETURNING id`, [name, nameEn || null, taxNumber || null, crNumber || null, id]);
     if (!affectedRows) throw new NotFoundError("الشركة غير موجودة");
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "update_company",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
       entity: "companies", entityId: id,
       after: { name, nameEn, taxNumber, crNumber },
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -676,7 +677,7 @@ router.delete("/companies/:id", authorize({ feature: "settings", action: "update
     if (!beforeCompany) throw new NotFoundError("الشركة غير موجودة");
     await rawExecute(`DELETE FROM companies WHERE id=$1 RETURNING id`, [id]);
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "delete_company",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.deleted",
       entity: "companies", entityId: id,
       before: beforeCompany,
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -725,7 +726,7 @@ router.put("/system-controls", authorize({ feature: "settings", action: "update"
       }
     }
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "update_system_controls",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
       entity: "settings", entityId: 0,
       after: { keys: Object.keys(entries) },
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -749,9 +750,14 @@ router.put("/system-controls", authorize({ feature: "settings", action: "update"
 router.get("/role-modules", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // #685 PR-A6 — branch tracer-bullet: user_roles has NO branchId column (verified
+    // against information_schema 2026-05-20), so disableBranchScope:true preserves
+    // existing behavior exactly. See docs/audit/SCOPE_NORMALIZATION_RCA_685.md
+    // "Branch Scope Decision Matrix" for the schema-driven category mapping.
+    const { where, params } = buildScopedWhere(scope, {}, { disableBranchScope: true });
     const roles = await rawQuery(
-      `SELECT DISTINCT "roleKey", label, modules, level FROM user_roles WHERE "companyId" = $1 ORDER BY level DESC`,
-      [scope.companyId]
+      `SELECT DISTINCT "roleKey", label, modules, level FROM user_roles WHERE ${where} ORDER BY level DESC`,
+      params
     );
     res.json(maskFields(req, { data: roles }));
   } catch (err) { handleRouteError(err, res, "settings"); }
@@ -768,7 +774,7 @@ router.put("/role-modules/:roleKey", authorize({ feature: "settings", action: "u
       [JSON.stringify(modules), roleKey, scope.companyId]
     );
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "update_role_modules",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
       entity: "user_roles", entityId: 0,
       after: { roleKey, modules },
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -780,9 +786,17 @@ router.put("/role-modules/:roleKey", authorize({ feature: "settings", action: "u
 router.get("/approval-config", authorize({ feature: "settings", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // #685 PR-A6 — branch tracer-bullet: approval_chains has NO branchId column
+    // (verified against information_schema 2026-05-20), so disableBranchScope:true
+    // preserves existing behavior exactly. softDeleteColumn keeps the deletedAt
+    // filter inside the helper instead of hand-rolled.
+    const { where, params } = buildScopedWhere(scope, {}, {
+      disableBranchScope: true,
+      softDeleteColumn: '"deletedAt"',
+    });
     const chains = await rawQuery(
-      `SELECT * FROM approval_chains WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "chainType", "name"`,
-      [scope.companyId]
+      `SELECT * FROM approval_chains WHERE ${where} ORDER BY "chainType", "name"`,
+      params
     );
     res.json(maskFields(req, { data: chains }));
   } catch (err) { handleRouteError(err, res, "settings"); }
@@ -798,7 +812,7 @@ router.post("/approval-config", authorize({ feature: "settings", action: "update
       [scope.companyId, chainType, name || chainType, minAmount || 0, maxAmount || null, isActive !== false]
     );
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "create_approval_config",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.created",
       entity: "approval_chains", entityId: r.insertId,
       after: { chainType, name, minAmount, maxAmount, isActive },
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -816,7 +830,7 @@ router.delete("/approval-config/:id", authorize({ feature: "settings", action: "
     if (!beforeChain) throw new NotFoundError("سلسلة الاعتماد غير موجودة");
     await rawExecute(`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "delete_approval_config",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.deleted",
       entity: "approval_chains", entityId: id,
       before: beforeChain,
     }).catch((e) => logger.error(e, "settings background task failed"));
@@ -903,7 +917,7 @@ router.put("/channels", authorize({ feature: "settings", action: "update" }), as
     });
 
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "update_channels",
+      companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
       entity: "settings", entityId: 0,
       after: { keys: Object.keys(entries) },
     }).catch((e) => logger.error(e, "settings background task failed"));
