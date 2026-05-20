@@ -90,15 +90,19 @@ export const hrRoutes = [
   { path: "/employees/:id", component: EmployeeDetail, subKey: "employees" },
   { path: "/hr/attendance", component: Attendance, subKey: "attendance" },
   { path: "/hr/attendance/create", component: AttendanceCreate, subKey: "attendance" },
-  { path: "/hr/attendance/:id", component: AttendanceDetail, subKey: "attendance" },
+  // Literal sub-routes must precede "/hr/attendance/:id": wouter <Switch>
+  // renders the first match, so an earlier ":id" would capture "reports",
+  // "field-tracking" and "qr-scanner" as an id and shadow these pages.
   { path: "/hr/attendance/reports", component: AttendanceReports, subKey: "attendance" },
   { path: "/hr/attendance/field-tracking", component: FieldTracking, subKey: "attendance" },
   { path: "/hr/attendance/qr-scanner", component: QRScanner, subKey: "attendance" },
+  { path: "/hr/attendance/:id", component: AttendanceDetail, subKey: "attendance" },
   { path: "/hr/leaves", component: Leaves, subKey: "leaves" },
   { path: "/hr/leaves/create", component: LeavesCreate, subKey: "leaves" },
-  { path: "/hr/leaves/:id", component: LeaveDetail, subKey: "leaves" },
+  // Literal sub-routes must precede "/hr/leaves/:id" (see attendance above).
   { path: "/hr/leaves/management", component: LeaveManagement, subKey: "leaves" },
   { path: "/hr/leaves/approval-chains", component: ApprovalChains, subKey: "leaves" },
+  { path: "/hr/leaves/:id", component: LeaveDetail, subKey: "leaves" },
   { path: "/hr/payroll", component: Payroll, subKey: "payroll" },
   { path: "/hr/payroll/create", component: PayrollCreate, subKey: "payroll" },
   { path: "/hr/payroll/salary-components", component: SalaryComponents, subKey: "payroll" },
