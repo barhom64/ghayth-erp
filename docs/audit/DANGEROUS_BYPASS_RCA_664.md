@@ -1,291 +1,216 @@
-# Issue #664 — Dangerous Direct UPDATE RCA
+# Issue #664 — Dangerous Direct UPDATE RCA (canonical)
 
 **Generated:** 2026-05-20
-**Scope:** The 18 hits classified as `dangerous` by
-`audit/system-review/tooling/_bypass-triage.json`. These are the direct
-`UPDATE … SET status=…` calls that touch a table registered in
-`STATE_MACHINES` (`artifacts/api-server/src/lib/engines/lifecycleEngine.ts`)
-and therefore skip the central state-validation + audit-log + event-emission
-pipeline that `applyTransition({ ... })` provides.
+**Status:** RCA / documentation only. **No `applyTransition` migrations, no engine widening, no `eventCatalog` edits, no `bypass-ok` comments are landed by the PR that ships this file.** Per owner directive: #664 is a documentation/triage track; migration decisions are deferred.
 
-**This document is RCA-only.** No code is changed in the same PR as this
-report. Per the owner directive, no `applyTransition` migration starts
-until each hit has a confirmed cluster, a confirmed blast radius, and a
-named first-safe cluster.
+This document is the **single canonical merge** of two parallel RCA efforts:
+
+- **PR #706** (`docs/664-dangerous-bypass-rca`, merged) — first RCA pass over the 18-hit `dangerous` bucket with the 5-cluster (A-E) grouping by fix-shape.
+- **PR #707** (`claude/issue-664-dangerous-rca`, open at time of writing) — second RCA pass that (a) reclassified the same 18 by *fix-shape* into 6 classes (A-F) and (b) identified a detector-regex false positive that mis-flagged 3 soft-delete sites as `dangerous`.
+
+Both passes converged on the same engineering call (do not migrate blindly; classify-and-defer); they differed only in taxonomy and in whether the detector itself was buggy. **This file is now the authoritative version.** PR #707 is superseded.
 
 ## Source references
 
 | Source | Purpose |
 |---|---|
-| `docs/audit/WORKFLOW_AUDIT.md` | full 111-hit static inventory + state-machine inventory (this RCA's parent) |
-| `docs/audit/BYPASS_TRIAGE.md` | classifies the 111 into intentional / legacy / dangerous |
-| `audit/system-review/tooling/_bypass-triage.json` | machine-readable triage (the 18 hits below come from `classified[].bucket === "dangerous"`) |
-| `artifacts/api-server/src/lib/engines/lifecycleEngine.ts` | `STATE_MACHINES`, `applyTransition`, `isValidTransition` |
-| `artifacts/api-server/src/lib/entityRegistry.ts` | per-entity lifecycle block (registry side) |
+| `audit/system-review/tooling/workflow-audit.mjs` | scanner — produces the raw hit list (regex over route SQL) |
+| `audit/system-review/tooling/bypass-triage.mjs` | triager — sorts hits into `intentional` / `legacy` / `dangerous` |
+| `audit/system-review/tooling/_workflow-audit.json` | machine-readable hit inventory |
+| `audit/system-review/tooling/_bypass-triage.json` | machine-readable per-hit classification (`classified[].bucket`) |
+| `docs/audit/WORKFLOW_AUDIT.md` | rendered hit inventory |
+| `docs/audit/BYPASS_TRIAGE.md` | rendered triage |
+| `artifacts/api-server/src/lib/lifecycleEngine.ts` | `STATE_MACHINES`, `applyTransition`, `isValidTransition` |
+| `artifacts/api-server/src/lib/eventCatalog.ts` | declared event names (the `check:event-name-tense` + `check:audit-action-vocab` guards consume this) |
+
+## Headline numbers (after detector fix, this PR)
+
+```
+                       before   after   Δ
+  direct UPDATE hits      113     113      ·   (count fluctuates with feature work)
+  dangerous bucket         18      15    −3   (3 detector false positives removed)
+  intentional bucket       76      81    +5
+  legacy bucket            17      17     ·
+```
+
+The `dangerous` headline that used to read **18** is now **15** real hits. The "−3" is purely a detector-correctness change; no application code was modified to achieve it. The "+5 intentional" comes from feature work landed between PR #706 (which scanned at 111 hits) and today's regeneration — those 5 extra hits all land in the `intentional` bucket per the triage rules.
+
+> **If you see "18" or "111" anywhere else in the audit corpus, that is a stale snapshot.** Re-run `node audit/system-review/tooling/workflow-audit.mjs && node audit/system-review/tooling/bypass-triage.mjs` to refresh.
 
 ## What "dangerous" actually loses
 
-For every hit below, the direct `UPDATE` skips four things `applyTransition`
-gives you for free:
+For every hit in the `dangerous` bucket (when it really *is* a status transition), the direct UPDATE skips four things `applyTransition` gives you for free:
 
-1. **Engine state-validation** — `isValidTransition(fromState → toState)`
-   guard against impossible flips (e.g. `paid → draft`).
-2. **Audit-log row** in `audit_logs` carrying `(actor, before, after,
-   reason)`. The triage spec for #664 explicitly mentions that direct
-   UPDATEs of lifecycle tables don't appear in `audit_logs`, which breaks
-   the join the governance reports rely on.
-3. **`event_logs` emission** with the canonical past-tense action name
-   (see `lib/eventCatalog.ts` + the `check:event-name-tense` guard) — so
-   downstream subscribers (notifications, scheduled rule evaluators,
-   FNOL/SLA crons) never see the state change.
-4. **`onApply(row, client)` side-effects** — cancel pending children,
-   reverse GL, free a resource, etc., run inside the same transaction as
-   the status flip. Direct UPDATE versions either inline these by hand
-   (with all the duplication risk that implies) or skip them entirely.
+1. **Engine state-validation** — `isValidTransition(fromState → toState)` rejects impossible flips (e.g. `paid → draft`).
+2. **`audit_logs` row** carrying `(actor, before, after, reason)`. Without this, governance reports that join `audit_logs` against `event_logs` miss the event entirely.
+3. **`event_logs` emission** with the canonical past-tense action name (declared in `eventCatalog.ts`, enforced by the `check:event-name-tense` + `check:audit-action-vocab` guards). Subscribers (notifications, SLA crons, downstream evaluators) never see the state change.
+4. **`onApply(row, client)` side-effects** inside the same transaction as the status flip — cancel pending children, free a resource, reverse GL, etc. Direct UPDATEs either inline these by hand (duplication risk) or skip them entirely.
 
-NOTE: some of the 18 hits below DO emit an event / write an audit row
-manually, just not through the engine. The risk is *uniformity*: the
-guard suite has no way to know a hand-rolled `INSERT INTO event_logs` is
-the moral equivalent of `applyTransition`, so audits will continue to
-flag the site, and the next developer who edits the handler may drop the
-manual call without realising it was load-bearing.
+Several of the `dangerous` hits *do* emit an event and write an audit row manually; the structural risk is **uniformity** — the guard suite cannot tell a hand-rolled `INSERT INTO event_logs` apart from a missing one, so the next refactor may silently drop the manual call.
 
-## Cluster overview
+## Detector false positives — what changed in this PR
 
-The 18 hits fall into 5 natural clusters by what kind of edit a fix
-would be:
+`scanDirectStatusUpdates` in `workflow-audit.mjs` previously matched:
 
-| Cluster | Hits | Table(s) | First-safe? |
-|---|---:|---|---|
-| **A. journal_entries.status flip (approval handoff)** | 4 | `journal_entries` (post-create flip from `draft`→`pending_approval`) | ⚠️ touches the approval pipeline — needs design |
-| **B. journal_entries.status flip (cancel/soft-delete)** | 4 | `journal_entries` | ⚠️ touches AR/AP cancel paths — needs design |
-| **C. invoices.paidAmount + derived status** | 5 | `invoices` | 🔴 dangerous to migrate naively — derived status is a CASE expression, not a flip |
-| **D. side-effect inside another `applyTransition`** | 3 | `journal_entries` / `property_units` / `contract_payment_schedule` | 🟢 candidate for first-safe cluster — already inside a transition's `onApply` |
-| **E. one-off cancel/archive flips** | 5 | `hr_leave_requests` x2, `governance_policies`, `umrah_penalties`, `financial_periods` | 🟢 candidate for first-safe cluster — single-row flip with a fixed `toState` |
-| TOTAL | 21 (some hits touch 2 dimensions) | | |
+```js
+/\bSET\b[\s\S]{0,160}(?:"?status"?|"?approvalStatus"?|"?lifecycle_state"?)\s*=/i
+```
 
-*The cluster sum (21) is larger than the hit count (18) because three
-hits — the invoice cancel chain in `finance-invoices.ts` 963/968 and the
-property unit free in `properties.ts:1591` — sit in both Cluster B and
-Cluster D depending on how you count them.*
+The regex's **intent** was "status-like column assigned in the SET clause". Its **effect** was "status-like column mentioned anywhere within 160 characters of `SET`" — including past the `WHERE` boundary. That mis-flagged 3 soft-delete sites whose only mention of `status` was in the WHERE precondition guard:
 
-## Per-hit RCA (18 hits)
-
-### Cluster A — `journal_entries` approval-handoff flip (4 hits)
-
-These four are the same pattern: a `POST /…` handler creates a journal
-entry via `financialEngine.postJournalEntry({ ... })` (which writes the
-row with `status='draft'`), then calls `initiateApprovalChain({ ... })`,
-and if the chain says `requiresApproval`, the handler flips
-`status='draft' → 'pending_approval'` directly. The flip is on the row
-that was just inserted in the same handler.
-
-| # | File:line | Caller | Surrounding ctx |
+| Site | Actual UPDATE | Why it was flagged | Why it isn't a transition |
 |---|---|---|---|
-| A1 | `finance-custodies.ts:609` | `POST /finance/custodies` | lines 600-612: `if (approvalResult.requiresApproval) { rawExecute(UPDATE journal_entries SET status='pending_approval' WHERE id=$1 AND status='draft') }` |
-| A2 | `finance-journal.ts:528` | `POST /finance/journal/expenses` | one-liner: `if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status='pending_approval' WHERE id=$1 AND status='draft' …`) }` |
-| A3 | `finance-journal.ts:939` | `POST /finance/journal/salary-advances` | identical to A2 plus an `affectedRows` check that throws `NotFoundError` |
-| A4 | `finance-invoices.ts:1034` | `invoiceApprovalAction(... 'rejected'/'returned')`, inside an existing `applyTransition.onApply` block | flips the *companion* JE from `posted/approved → cancelled` when the invoice itself is being rejected/returned via the engine |
+| `finance-journal.ts:570` | `SET "deletedAt" = NOW() WHERE id = $1 AND … AND status = 'draft'` | `status =` within 160 chars of `SET` | only `"deletedAt"` is assigned; `status` is a precondition guard |
+| `finance-journal.ts:855` | same shape, on voucher delete | same | same |
+| `hr.ts:4151` | `SET "deletedAt" = NOW() WHERE id = $1 AND … AND status = 'pending'` | same | same |
 
-**Risk profile.** A1–A3 are post-create transitions on a row created by
-the engine in the same request. Their state is known (`draft`), the target
-is known (`pending_approval`), and `journal_entries.status` IS in
-`STATE_MACHINES` (`draft → pending_approval` is allowed). The
-*conceptually correct* fix is to push the "if approvalResult.requiresApproval
-then flip" decision into `financialEngine.postJournalEntry` itself (so the
-engine takes the chain result as an input and writes the right initial
-state). A naïve `rawExecute → applyTransition` swap would work but
-duplicates engine knowledge in 3 routes — same anti-pattern that produced
-the original drift.
+**Fix.** A tempered-token regex refuses to cross a `WHERE`:
 
-A4 is the *opposite* shape — it's an `onApply` side-effect of an
-`applyTransition` call on `invoices`. The flip target is the companion JE,
-not the invoice. `journal_entries` allows `posted → ?` and `approved → ?`
-transitions (per `STATE_MACHINES`); `cancelled` is NOT listed as a valid
-target from `posted` or `approved`. So before any fix, the engine state
-table itself needs a `posted → cancelled` and `approved → cancelled`
-edge added — otherwise `applyTransition` would refuse the flip that the
-direct UPDATE silently performs today. **That's a STATE_MACHINES edit,
-not just a route edit, which is out of scope for this RCA-only PR per
-"no DB / migrations / engine changes".**
+```js
+/\bSET\b(?:(?!\bWHERE\b)[\s\S]){0,160}(?:"?status"?|"?approvalStatus"?|"?lifecycle_state"?)\s*=/i
+```
 
-### Cluster B — `journal_entries` cancel / soft-delete flip (4 hits)
+This is a strict subset of the old pattern — it can only *remove* matches, never add. Verified against the full 18-hit set:
 
-These four flip `journal_entries.status='cancelled'` (and/or `deletedAt=NOW()`)
-on a JE that's being soft-deleted as part of a wider entity delete.
+- 3 sites removed (the 3 above) — all confirmed soft-deletes with `status` only in the WHERE.
+- 15 sites preserved — all confirmed genuine `SET status = …` assignments.
 
-| # | File:line | Caller | Notes |
-|---|---|---|---|
-| B1 | `finance-invoices.ts:963` | `DELETE /finance/invoices/:id` | flips the JE before the matching invoice flip (B3) — both inside one `withTransaction` |
-| B2 | `finance-journal.ts:570` | `DELETE /finance/journal/expenses/:id` | flips JE to `deletedAt=NOW()` only when `status='draft'`; then calls `reverseAccountBalances` outside the txn |
-| B3 | `finance-journal.ts:855` | `DELETE /finance/journal/vouchers/:id` | identical shape to B2 but on the voucher delete |
-| B4 | `finance-invoices.ts:968` | same `DELETE /finance/invoices/:id` as B1 — flips the *invoice* (companion to B1 on the JE) | inside the same `withTransaction` |
+**Blast radius:** zero on runtime behaviour (no application code changed). Detector-only.
 
-**Risk profile.** B1/B2/B3 sit on the soft-delete path where the engine
-state-machine doesn't actually have a `'cancelled'` target from every
-source state (`STATE_MACHINES.journal_entries.status: posted → []`). The
-direct UPDATE works because there's no engine guard; an
-`applyTransition`-based fix would require either (a) widening the JE
-state-graph to add `posted → cancelled` (engine change — out of scope),
-or (b) accepting that delete is a different lifecycle from
-status-transition and using `applyTransition`'s `setExtras` to land
-`deletedAt=NOW()` while leaving status alone. **Decision needed before
-any line is rewritten** — that's exactly why the owner directive
-forbids a blind swap.
+## Class A–F taxonomy (canonical)
 
-B4 has the same shape but on `invoices` — which is also in
-`STATE_MACHINES`. The current invoice graph likely doesn't allow
-`posted → cancelled` either; same engine-edit dependency.
+The 18 original hits split into 6 fix-shapes. Class A is the false-positive class identified above; Classes B-F are the 15 real hits.
 
-### Cluster C — `invoices.paidAmount` + derived status (5 hits)
+| Class | Shape | Hits | `applyTransition` migration candidate? | Disposition (this RCA) |
+|---|---|---:|---|---|
+| **A** | Detector false positive — `status` only in the WHERE guard, never assigned | 3 | No — nothing to migrate | **Closed** by detector regex fix (this PR) |
+| **B** | Soft-delete bundled with `status='cancelled'` on the same row | 4 | No without engine widening — state graph has no `posted → cancelled` / `approved → cancelled` edge | Defer — needs `STATE_MACHINES` decision (owner) |
+| **C** | Payment write — `paidAmount` arithmetic + `status` derived via SQL `CASE WHEN` | 4 | No without engine API extension — `applyTransition` takes a fixed `toState`, not a `(row) => string` resolver | Defer — needs engine API decision (owner) |
+| **D** | Pure single-row status flip on an engine-blessed transition, no side-effects | 1 | **Yes in principle, no in practice** — see "E3 correction" below | Defer — see atomicity note |
+| **E** | Bulk cascade — multi-row WHERE (`(employeeId,…)`, `(agentId,seasonId)`, etc.), not `id = $`, often inside a wider parent tx | 5 | No without engine API extension — `applyTransition` is single-row-by-id | Defer / `bypass-ok` (future PR) |
+| **F** | Transaction-internal cascade — direct UPDATE is the **side-effect of a parent `applyTransition`** that already audits/emits | 2 | Optional — nested `applyTransition` doubles audit volume for one user action | Defer / `bypass-ok` (future PR) |
 
-These five touch the `invoices` row but the primary write is
-`paidAmount = paidAmount + $1`. The `status` column is updated as a
-*side effect* via a `CASE WHEN` expression based on the new paidAmount,
-not a flat target state.
+**Key headline:** of the 15 real `dangerous` hits, **zero** are truly first-safe migration candidates without either an engine change or an atomicity trade-off. The original RCA claim that **E3 was the one clean candidate is corrected below.**
 
-| # | File:line | Caller | Status target |
-|---|---|---|---|
-| C1 | `finance-invoices.ts:752` | `POST /finance/invoices/:id/pay` (payment fully covers total) | `'paid'` + `paidAt=NOW()` |
-| C2 | `finance-invoices.ts:757` | same handler, partial payment branch | `'partial'` |
-| C3 | `finance-invoices.ts:1197` | `POST /finance/invoices/:id/credit-memo` | `CASE WHEN …>=total THEN 'paid' WHEN …>0 THEN 'partial' ELSE status END` |
-| C4 | `finance-invoices.ts:1739` | `POST /finance/customer-advances/apply` (apply advance to invoice) | identical `CASE` to C3 |
-| C5 | `finance-invoices.ts:1733` (customer_advances row) ↳ counted separately under "intentional" in the triage — listed here for context because it lives in the same `withTransaction` as C4 | — |
+### E3 correction — `governance.ts:331` is not first-safe after all
 
-**Risk profile.** This cluster is the most dangerous to migrate. The
-`applyTransition` interface takes a fixed `toState` per call — it does
-**not** natively support a SQL-side `CASE` expression that derives the
-target state from another column in the same UPDATE. To migrate C3/C4 you
-would either:
+The PR #706 RCA placed `governance.ts:331` (`governance_policies (draft|active) → archived`) as the one unambiguous single-site migration candidate. Re-reading the source carefully (lines 312-341):
 
-- compute `newStatus` in JS before the UPDATE, then call
-  `applyTransition({ toState: newStatus })` — which requires a `SELECT
-  paidAmount, total FOR UPDATE` first to avoid races with concurrent
-  payments;
-- or extend `applyTransition` to accept a `toState: (row) => string`
-  resolver — which is an engine change.
+```ts
+await withTransaction(async (client) => {
+  const ins = await client.query(
+    `INSERT INTO governance_policies (... status, ... "parentId", ...)
+     VALUES (..., 'draft', ..., $8, ...) RETURNING id`,
+    [...]
+  );
+  insertId = ins.rows[0].id;
 
-C1/C2 are simpler because the JS already computes `newStatus` before the
-UPDATE (lines 746-748), but they're inside a `withTransaction` that
-already does the `FOR UPDATE` lock — converting only the status flip
-would leave the `paidAmount` and `paidAt` writes as a separate UPDATE,
-adding a write where there is none. **Net: this cluster needs a design
-decision before a migration PR, and is the strongest candidate for "do
-not migrate, write a `// bypass-ok: paidAmount + derived status, engine
-does not model derived-from-column transitions yet` comment instead."**
+  await client.query(
+    `UPDATE governance_policies SET status='archived', "updatedAt"=NOW()
+     WHERE id=$1 AND "companyId"=$2 AND status IN ('draft','active') AND "deletedAt" IS NULL`,
+    [parentId, scope.companyId]
+  );
 
-### Cluster D — side-effect inside an existing `applyTransition` (3 hits)
+  for (const link of existingLinks) {
+    await client.query(
+      `INSERT INTO policy_module_links ("policyId", module, "companyId") VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+      [insertId, link.module, scope.companyId]
+    );
+  }
+});
+```
 
-These three are already inside an `applyTransition({ ... onApply })`
-block — the dangerous UPDATE is the *side effect* the transition triggers,
-not the primary state flip. The primary flip is already engine-driven.
+The `UPDATE … status='archived'` is **not** a standalone single-row flip. It lives inside a `withTransaction` whose atomicity guarantee is load-bearing: if the parent is archived but the new version INSERT or the link copy fails, the policy is left without an active version. The original RCA classified this as Class E ("one-off cancel/archive flip") on the strength of the `WHERE id=$1` predicate; that classification is **structurally wrong** — the right class is **F** (transaction-internal cascade), because the archive is a *side-effect* of the new-version create, not a primary user action.
 
-| # | File:line | Outer transition | Inner UPDATE |
-|---|---|---|---|
-| D1 | `finance-invoices.ts:1034` | `invoices status='rejected'/'returned'` (engine-driven) | flips the companion `journal_entries.status='cancelled'` |
-| D2 | `properties.ts:1591` | `rental_contracts status='terminated'` (engine-driven, line 1566) | flips `property_units.status='available'` |
-| D3 | `properties.ts:3525` *(legacy bucket per triage, but architecturally identical)* | rental contract early-end | flips `contract_payment_schedule.status='cancelled'` |
+**Atomicity options if this were ever migrated:**
 
-**Risk profile.** This is the cluster with the lowest blast radius
-because the outer transition already carries the audit log + event for
-the user-visible change. The inner UPDATE is "free the resource" plumbing
-that no end user sees as a separate state change. Two paths exist:
+1. **Move the INSERTs into `applyTransition.onApply`.** Preserves atomicity (the engine's own `withTransaction` wraps everything) but changes the *primary* action emitted from `governance.policy.new_version` to `governance.policy.archived`. The new-version handler would have to additionally write the `policy.new_version` audit row by hand to preserve the existing API contract — strictly more code, two audit rows per request, and the action name surfaced to the engine is now the *secondary* action.
+2. **Split into two separate transactions** (INSERT first, then `applyTransition`). Breaks atomicity — if the second tx fails the database is left with an unarchived parent and an orphan new version.
+3. **Add a new event `governance.policy.archived` to `eventCatalog.ts`** so option 1 emits a third, semantically correct event. Touches the event catalog — explicitly forbidden by current scope.
 
-1. **Wrap the inner UPDATE in a nested `applyTransition`** on the
-   resource entity — gives engine-validation of e.g. `occupied → available`
-   on `property_units`, emits an event for the unit-status change. **But**
-   adds a 2nd `applyTransition` per request, doubling audit-log volume on
-   what was conceptually one user action. May or may not be desired.
-2. **Leave as direct UPDATE, add `// bypass-ok: side-effect of outer
-   <entity>.<transition> applyTransition; resource flip is plumbing, not
-   a user-visible state change` comment**. Zero behaviour change.
-   Documents intent for the next audit.
+**Conclusion:** even E3 — the cleanest candidate in the whole 15-hit set — requires either an engine change, an `eventCatalog` change, or an atomicity trade-off. There is no zero-touch first-safe migration in this set.
 
-**Cluster D is the strongest "first-safe" candidate per the owner
-directive** — it can be addressed in a single PR that *only* adds
-`// bypass-ok` comments + verifies the outer `applyTransition` is the
-authoritative audit/event source. No engine edits, no logic change, no
-GL impact.
+### Atomicity notes (Class F generalised)
 
-### Cluster E — one-off cancel / archive flips (5 hits)
+Any direct UPDATE that lives inside a `withTransaction` whose siblings (INSERTs, UPDATEs on other tables, cascade deletes) must commit-or-rollback together cannot be naively replaced with `applyTransition`, because:
 
-Single-row status flip with a known target state and a known fromState.
-These look like the cleanest `applyTransition` migration candidates on
-paper — but each has a subtle gotcha that the RCA needs to record.
+- `applyTransition` opens its **own** `withTransaction` (separate `pool.connect()` + BEGIN/COMMIT — see `lib/rawdb.ts:75` and `lib/lifecycleEngine.ts:156`).
+- A second `withTransaction` inside an outer one acquires a fresh pg client and runs in an **independent** transaction. The two transactions are not nested; PostgreSQL has no nested-transaction semantics beyond `SAVEPOINT`.
+- Replacing the inner UPDATE with `applyTransition` therefore breaks atomicity unless the entire parent block is restructured to live inside `applyTransition.onApply`.
 
-| # | File:line | Table | From → To | Surrounding context |
+This atomicity constraint is the dominant reason 2 of the 15 hits (Class F) and the E3 reclassification (Class F) are not first-safe. It applies anywhere a `dangerous` UPDATE shares a `withTransaction` with sibling writes.
+
+## Structural-vs-migration-safe classification
+
+Cross-cutting view of the 15 real hits by what gates the fix:
+
+| Gate | Hits | Files |
+|---|---:|---|
+| **Engine state-graph widening** (`STATE_MACHINES.<entity>` needs a new edge) | 5 | `finance-invoices.ts:963/968`, `finance-journal.ts:570→removed/A`, `finance-journal.ts:855→removed/A`, `finance-invoices.ts:1034` (A4 equivalent) |
+| **Engine API extension** (`applyTransition` needs `toState: (row) => string` resolver, or `setExtras` for derived columns) | 4 | `finance-invoices.ts:752/757/1197/1739` (Class C — derived status from `paidAmount`) |
+| **Engine single-row constraint** (`applyTransition` is by-id; bulk cascades cannot use it without a loop) | 5 | `employees.ts:1288`, `umrah.ts:1393`, `finance-journal.ts:1405`, `finance-invoices.ts:963`, `properties.ts:1591` (when treated as bulk over schedule rows) |
+| **Atomicity inside parent `withTransaction`** | 3 | `governance.ts:331` (E3 corrected to F), `finance-invoices.ts:1034`, `properties.ts:1591` |
+| **`eventCatalog.ts` widening** (new event name needed, e.g. `governance.policy.archived`) | 1 | `governance.ts:331` |
+| **`bypass-ok` comment is the right answer** (current code is correct, the audit just needs documentation) | up to 7 | the Class E + F sites if owner decides cascade/atomicity sites stay as direct UPDATEs |
+| **None — truly migration-safe today** | **0** | — |
+
+The "0 truly migration-safe" row is the load-bearing finding. **Every remaining `dangerous` hit requires either an engine change, an `eventCatalog` change, an atomicity trade-off, or a `bypass-ok` documentation comment.** No naïve swap exists.
+
+## What remains — categorised
+
+### Real `dangerous` remaining: 15
+
+The full list (regenerable via `node audit/system-review/tooling/bypass-triage.mjs`):
+
+| # | File:line | Table | Class | Gate |
 |---|---|---|---|---|
-| E1 | `employees.ts:1288` | `hr_leave_requests` | `pending → cancelled` | inside the `DELETE /hr/employees/:id` termination cleanup tx — bulk flip across all the terminated employee's pending leave requests (multi-row, predicate on `"employeeId" = $1`). **Bulk** — `applyTransition` is single-row-by-id, so this would either need a loop (N round-trips) or stay as a documented bulk-operation bypass. |
-| E2 | `hr.ts:4151` | `hr_leave_requests` | `pending → deletedAt=NOW()` (soft delete) | inside `DELETE /hr/leave-requests/:id`. Target is soft-delete, not a status flip — same shape as Cluster B's `setExtras: { deletedAt: NOW() }` pattern. The hr_leave_requests state-machine does NOT define a "deleted" terminal state. |
-| E3 | `governance.ts:331` | `governance_policies` | `(draft|active) → archived` | inside `POST /governance/policies/:id/new-version` — when a new version is created the parent is archived in the same transaction. **`governance_policies` IS in STATE_MACHINES** and `(draft|active) → archived` IS a valid transition per the engine. Single-row, single id. The cleanest migration candidate in the entire 18-hit set. |
-| E4 | `umrah.ts:1393` | `umrah_penalties` | `pending → invoiced` | inside `POST /umrah/agent-invoices` — bulk flip across all `pending` penalties for an `(agent, season)` pair. **Bulk**, predicate is `(agentId, seasonId)`, no single `id`. Same constraint as E1 — would need a loop or a documented bulk bypass. |
-| E5 | `finance-journal.ts:1405` | `financial_periods` | `open → closed` | inside `POST /finance/journal/year-end-closing` (`force` branch). Multi-row loop over `missing` periods. Each iteration could call `applyTransition` (single-row) — but the loop body also has an `INSERT` branch when the period doesn't exist, so a clean `applyTransition` swap needs a guard. |
+| 1 | `employees.ts:1288` | `hr_leave_requests` | E | engine single-row |
+| 2 | `finance-custodies.ts:609` | `journal_entries` | B | engine state-graph |
+| 3 | `finance-invoices.ts:752` | `invoices` | C | engine API |
+| 4 | `finance-invoices.ts:757` | `invoices` | C | engine API |
+| 5 | `finance-invoices.ts:963` | `journal_entries` | B + E | engine state-graph + bulk |
+| 6 | `finance-invoices.ts:968` | `invoices` | B | engine state-graph |
+| 7 | `finance-invoices.ts:1034` | `journal_entries` | B + F | engine state-graph + atomicity |
+| 8 | `finance-invoices.ts:1197` | `invoices` | C | engine API |
+| 9 | `finance-invoices.ts:1739` | `invoices` | C | engine API |
+| 10 | `finance-journal.ts:528` | `journal_entries` | B | engine state-graph |
+| 11 | `finance-journal.ts:939` | `journal_entries` | B | engine state-graph |
+| 12 | `finance-journal.ts:1405` | `financial_periods` | E | engine single-row (loop) |
+| 13 | `governance.ts:331` | `governance_policies` | F (corrected from E) | atomicity + eventCatalog |
+| 14 | `properties.ts:1591` | `property_units` | F | atomicity |
+| 15 | `umrah.ts:1393` | `umrah_penalties` | E | engine single-row |
 
-**Risk profile.** Of the 5, only **E3 (`governance_policies`
-draft|active → archived)** is unambiguously a single-row engine-blessed
-transition with no "bulk" or "soft-delete" or "side-effect" complication.
+### False positives removed: 3
 
-The other 4 each have a real reason the direct UPDATE was used (E1 + E4
-bulk; E2 not actually a status flip; E5 mixed with INSERT branch). Those
-are candidates for `// bypass-ok` comments *with the specific reason*,
-not for migration.
+- `finance-journal.ts:570` — soft-delete, `status` in WHERE only
+- `finance-journal.ts:855` — soft-delete, `status` in WHERE only
+- `hr.ts:4151` — soft-delete, `status` in WHERE only
 
-## First-safe cluster recommendation
+### What needs **engine work** before any migration
 
-Per the owner directive: **no fix lands until RCA confirms first-safe.**
+- **State-graph widening** for `journal_entries` (`posted → cancelled`, `approved → cancelled`) — gates 5 hits (Class B).
+- **State-graph widening** for `invoices` (`posted → cancelled`) — gates 1 hit (B subset).
+- **`applyTransition` API extension** to accept `toState: (row) => string` resolver or first-class derived-column support — gates 4 hits (Class C, the `paidAmount` family).
+- **`applyTransition` bulk variant** (e.g. `applyTransitionWhere({ extraWhere })` returning N rows) or accepted "use loop + accept N round-trips" — gates 3 bulk hits.
+- **`onApply`-nested transition** semantics clarified — does the engine permit a nested `applyTransition` from inside another's `onApply`? Today: no public guidance.
 
-Based on the per-hit analysis above, the safe ordering is:
+### What needs a **governance decision** (owner)
 
-1. **First PR (zero behaviour change):** Cluster D + the "documented
-   bulk-operation" hits in E (E1, E2, E4, E5). Add `// bypass-ok:
-   <one-line reason>` comments on each so the triage re-runs and they
-   drop out of the dangerous bucket. This is the same engineering-rule
-   path the 76 intentional hits already follow. No logic change. No
-   engine change. No DB / GL / RBAC change.
+- Does the team accept that `bypass-ok` is the terminal answer for Class E (bulk) and Class F (atomicity) — i.e. classify-and-document rather than migrate?
+- For Class B (JE cancel), is the right shape (a) engine state-graph widening + `applyTransition({ setExtras: { deletedAt: { raw: "NOW()" } } })`, or (b) acceptance that delete is a separate lifecycle from status transitions and the direct UPDATE is correct?
+- For Class C (paidAmount + derived status), is the right shape (a) engine API extension, (b) JS-side `SELECT … FOR UPDATE` + `applyTransition({ toState: newStatus })`, or (c) `bypass-ok`?
+- For E3 specifically (`governance.policy.archived`), is adding a new event name to `eventCatalog.ts` acceptable to enable a clean migration, or is the current direct UPDATE inside `withTransaction` correct-as-written?
 
-2. **Second PR (single-site real migration):** E3 only —
-   `governance.ts:331` — migrate to `applyTransition({ entity:
-   "governance_policies", fromStates: ["draft","active"], toState:
-   "archived", … })`. Single-row, single-id, engine-blessed, no GL, no
-   companion-row side effects. This is the proof-of-concept that the
-   pattern works in this repo without scope creep.
+None of these are taken in this PR.
 
-3. **Third PR (engine extension, requires owner approval):** Cluster A
-   refactor — move "if requiresApproval → flip to pending_approval"
-   *into* `financialEngine.postJournalEntry` as a parameter. This
-   removes the direct UPDATE in A1/A2/A3 by removing the *need* for a
-   route-side flip in the first place. A4 is held back until the engine
-   change in step 4.
+## What this PR ships
 
-4. **Fourth PR (engine state-graph edit, requires owner approval):**
-   Cluster B + A4 — extend `STATE_MACHINES.journal_entries.status` to
-   include `posted → cancelled` and `approved → cancelled`. Then migrate
-   B1/B2/B3 + A4 to `applyTransition({ setExtras: { deletedAt:
-   { raw: "NOW()" } } })`. Same kind of engine edit as PR #654 (which
-   relaxed `isValidTransition`). Touches lifecycle semantics — must be
-   reviewed against the journal cancel-policy spec.
+- `audit/system-review/tooling/workflow-audit.mjs` — tempered-token regex fix (one logical line; subset semantics; documented inline).
+- `audit/system-review/tooling/_workflow-audit.json` + `audit/system-review/tooling/_bypass-triage.json` — regenerated machine artefacts.
+- `docs/audit/WORKFLOW_AUDIT.md` + `docs/audit/BYPASS_TRIAGE.md` — regenerated rendered artefacts.
+- **This file** — single canonical RCA superseding both PR #706's and PR #707's drafts, with Class A-F taxonomy, detector FP correction, E3 correction, atomicity notes, and structural-vs-migration-safe classification.
 
-5. **Fifth PR (engine API extension, requires owner approval):** Cluster C
-   — either add `toState: (row) => string` resolver support to
-   `applyTransition`, or accept that derived-from-column status writes
-   are a separate pattern and add `// bypass-ok: derived status from
-   paidAmount, engine API does not support resolver toState` comments.
-   Either way: the call is *not* a blind rewrite.
-
-## What is explicitly NOT decided by this RCA
-
-- No engine changes (`lifecycleEngine.ts`, `entityRegistry.ts`).
-- No DB migrations.
-- No package / lockfile changes.
-- No RBAC / authorize edits.
-- No GL / finance / business-logic edits.
-- No route reorganisation.
-- No `applyTransition` migration is started in this PR.
-- No `// bypass-ok` comments are added in this PR (that's the first
-  follow-up PR, gated on owner approval of the first-safe cluster
-  ordering above).
-- The 17 `legacy` and 76 `intentional` hits remain out of scope for #664
-  per the triage's own scope definition.
+**No route file is touched. No `applyTransition` migration is started. No engine, `eventCatalog`, schema, package, lockfile, RBAC, or GL change is introduced.** Comments are added only to `workflow-audit.mjs` to document the regex intent.
 
 ## How to refresh this RCA
 
@@ -296,14 +221,11 @@ node audit/system-review/tooling/workflow-audit.mjs
 # 2. Re-classify into the 3 buckets
 node audit/system-review/tooling/bypass-triage.mjs
 
-# 3. Re-read the 18 dangerous hits
+# 3. Re-read the dangerous hits
 node -e 'console.log(JSON.stringify(
   require("./audit/system-review/tooling/_bypass-triage.json")
     .classified.filter(x => x.bucket === "dangerous"), null, 2))'
 
-# 4. Update this file with the new cluster table + per-hit RCA + first-safe call
+# 4. If the dangerous count changes from 15, re-derive the Class A-F
+#    table above — the assignments are specific to today's hit set.
 ```
-
-If the headline count moves off 18 between refreshes, the cluster
-groupings + first-safe recommendation here must be re-derived — they're
-specific to the current 18-hit set.
