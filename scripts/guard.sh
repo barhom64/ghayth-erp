@@ -16,6 +16,7 @@
 #   8. Domain → routeFile mounting              → audit:domain-routes
 #   9. Migration basename collisions            → check:duplicate-migrations
 #  10. Unit/smoke tests                         → test
+#  11. Route scope-bypass inventory (report-only) → check:scope-bypass
 #
 
 set -euo pipefail
@@ -69,6 +70,9 @@ fi
 run_step "audit:boundaries"   node scripts/src/audit-domain-boundaries.mjs
 run_step "audit:domain-routes" node scripts/src/audit-domain-routes.mjs
 run_step "check:duplicate-migrations" node scripts/src/check-duplicate-migrations.mjs
+# Report-only (#685 PR-1): prints the route-layer scope-bypass inventory.
+# Always exits 0 — never blocks CI. An enforcing ratchet comes in a later PR.
+run_step "check:scope-bypass" node scripts/src/check-scope-bypass.mjs --check
 run_step "test"               pnpm -s --filter @workspace/api-server run test
 
 END=$(date +%s)
