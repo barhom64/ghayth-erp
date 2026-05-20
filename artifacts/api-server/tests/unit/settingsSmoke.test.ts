@@ -157,8 +157,12 @@ describe("Settings companyId scoping", () => {
   });
 
   it("GET /approval-config and POST /approval-config scope by companyId", () => {
+    // #685 PR-A6: GET migrated to buildScopedWhere (approval_chains has no branchId,
+    // so disableBranchScope:true; softDeleteColumn keeps deletedAt filter inside helper)
     const getIdx = SETTINGS_ROUTE.indexOf('router.get("/approval-config"');
-    expect(SETTINGS_ROUTE.slice(getIdx, getIdx + 3000)).toContain('"companyId"=$1');
+    const getSection = SETTINGS_ROUTE.slice(getIdx, getIdx + 3000);
+    expect(getSection).toContain("buildScopedWhere(scope");
+    expect(getSection).toContain("approval_chains ${where}");
 
     const postIdx = SETTINGS_ROUTE.indexOf('router.post("/approval-config"');
     const section = SETTINGS_ROUTE.slice(postIdx, postIdx + 3000);
@@ -167,10 +171,12 @@ describe("Settings companyId scoping", () => {
   });
 
   it("GET /role-modules scopes by companyId (P02-CRIT1 fix)", () => {
+    // #685 PR-A6: migrated to buildScopedWhere (user_roles has no branchId column,
+    // so disableBranchScope:true preserves existing behavior exactly)
     const idx = SETTINGS_ROUTE.indexOf('router.get("/role-modules"');
     const section = SETTINGS_ROUTE.slice(idx, idx + 3000);
-    expect(section).toContain('"companyId" = $1');
-    expect(section).toContain("scope.companyId");
+    expect(section).toContain("buildScopedWhere(scope");
+    expect(section).toContain("user_roles ${where}");
   });
 
   it("PUT /role-modules/:roleKey scopes UPDATE by companyId (P02-CRIT1 fix)", () => {
