@@ -236,7 +236,6 @@ const allNavSections: NavSection[] = [
     title: "العمليات",
     items: [
       { label: "المشاريع والمهام", path: "/projects", icon: Activity, module: "operations", children: [
-        { label: "نظرة عامة", path: "/projects", icon: LayoutDashboard },
         { label: "قائمة المشاريع", path: "/projects?tab=list", icon: Target },
         { label: "مخطط غانت", path: "/projects/gantt", icon: BarChart2 },
         { label: "المخاطر", path: "/projects/risks", icon: ShieldAlert },
@@ -244,7 +243,6 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "إدارة الأسطول", path: "/fleet", icon: Truck, module: "fleet", children: [
         { label: "لوحة التحكم", path: "/module-dashboards?tab=fleet", icon: LayoutDashboard },
-        { label: "المركبات", path: "/fleet", icon: Car },
         { label: "السائقين", path: "/fleet/drivers", icon: User },
         { label: "الرحلات", path: "/fleet/trips", icon: Navigation },
         { label: "الصيانة", path: "/fleet/maintenance", icon: Wrench },
@@ -257,7 +255,6 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "المستودعات", path: "/warehouse", icon: Package, module: "warehouse", children: [
         { label: "لوحة التحكم", path: "/module-dashboards?tab=warehouse", icon: LayoutDashboard },
-        { label: "منتجات المخزون", path: "/warehouse", icon: Package },
         { label: "حركات المخزون", path: "/warehouse/movements", icon: Activity },
         { label: "الفئات", path: "/warehouse/categories", icon: FolderOpen },
         { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
@@ -265,7 +262,6 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "المتجر", path: "/store", icon: ShoppingCart, module: "store", children: [
         { label: "لوحة التحكم", path: "/module-dashboards?tab=store", icon: LayoutDashboard },
-        { label: "منتجات المتجر", path: "/store", icon: Package },
         { label: "الطلبات", path: "/store/orders", icon: ShoppingCart },
       ]},
       { label: "إدارة الأملاك", path: "/properties/dashboard", icon: Home, module: "property", children: [
@@ -307,7 +303,6 @@ const allNavSections: NavSection[] = [
     items: [
       { label: "العملاء والمبيعات", path: "/clients", icon: Target, module: "crm", children: [
         { label: "لوحة التحكم", path: "/module-dashboards?tab=crm", icon: LayoutDashboard },
-        { label: "العملاء", path: "/clients", icon: Building2 },
         { label: "الفرص التجارية", path: "/crm", icon: Target },
         { label: "قمع المبيعات", path: "/crm/pipeline", icon: TrendingUp },
         { label: "أنشطة علاقات العملاء", path: "/crm/activities", icon: Activity },
