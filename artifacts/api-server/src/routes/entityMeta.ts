@@ -4,6 +4,7 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError, Forbid
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { buildScopedWhere } from "../lib/scopedQuery.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 
@@ -29,12 +30,24 @@ router.get("/comments/:entityType/:entityId", authorize({ feature: "projects", a
     const scope = req.scope!;
     const { entityType } = req.params;
     const entityId = parseId(req.params.entityId, "entityId");
+    // #685 PR-A3: scope predicate via helper. entity_comments has
+    // companyId but no branchId column (verified via \d) → branch
+    // scope is N/A here, NOT silently disabled. Predicate order
+    // changes (companyId first) but AND-clauses are commutative;
+    // row sets, sort, and LIMIT are unchanged.
+    const { where: scopedWhere, params, nextParamIndex } = buildScopedWhere(
+      scope, { companyIds: [scope.companyId] }, { disableBranchScope: true },
+    );
+    params.push(entityType);
+    const entityTypeIdx = nextParamIndex;
+    params.push(entityId);
+    const entityIdIdx = params.length;
     const rows = await rawQuery(
       `SELECT id, "entityType", "entityId", "userId", "userName", body, "createdAt"
        FROM entity_comments
-       WHERE "entityType" = $1 AND "entityId" = $2 AND "companyId" = $3
+       WHERE ${scopedWhere} AND "entityType" = $${entityTypeIdx} AND "entityId" = $${entityIdIdx}
        ORDER BY "createdAt" DESC LIMIT 500`,
-      [entityType, entityId, scope.companyId]
+      params,
     );
     res.json(maskFields(req, { data: rows }));
   } catch (err) {
@@ -103,12 +116,22 @@ router.get("/tags/:entityType/:entityId", authorize({ feature: "projects", actio
     const scope = req.scope!;
     const { entityType } = req.params;
     const entityId = parseId(req.params.entityId, "entityId");
+    // #685 PR-A3: scope predicate via helper. entity_tags has companyId
+    // but no branchId column (verified via \d). Predicate-order reorder
+    // is commutative; rows/sort unchanged.
+    const { where: scopedWhere, params, nextParamIndex } = buildScopedWhere(
+      scope, { companyIds: [scope.companyId] }, { disableBranchScope: true },
+    );
+    params.push(entityType);
+    const entityTypeIdx = nextParamIndex;
+    params.push(entityId);
+    const entityIdIdx = params.length;
     const rows = await rawQuery(
       `SELECT id, "entityType", "entityId", tag, color, "createdAt"
        FROM entity_tags
-       WHERE "entityType" = $1 AND "entityId" = $2 AND "companyId" = $3
+       WHERE ${scopedWhere} AND "entityType" = $${entityTypeIdx} AND "entityId" = $${entityIdIdx}
        ORDER BY "createdAt" ASC`,
-      [entityType, entityId, scope.companyId]
+      params,
     );
     res.json(maskFields(req, { data: rows }));
   } catch (err) {
@@ -184,10 +207,19 @@ router.get("/tags-filter/:entityType", authorize({ feature: "projects", action: 
     if (!tag) {
       throw new ValidationError("الوسم مطلوب للفلترة");
     }
+    // #685 PR-A3: scope predicate via helper. entity_tags has no
+    // branchId (verified). LIMIT 1000 preserved.
+    const { where: scopedWhere, params, nextParamIndex } = buildScopedWhere(
+      scope, { companyIds: [scope.companyId] }, { disableBranchScope: true },
+    );
+    params.push(entityType);
+    const entityTypeIdx = nextParamIndex;
+    params.push(tag);
+    const tagIdx = params.length;
     const rows = await rawQuery(
       `SELECT "entityId" FROM entity_tags
-       WHERE "entityType" = $1 AND tag = $2 AND "companyId" = $3 LIMIT 1000`,
-      [entityType, tag, scope.companyId]
+       WHERE ${scopedWhere} AND "entityType" = $${entityTypeIdx} AND tag = $${tagIdx} LIMIT 1000`,
+      params,
     );
     res.json(maskFields(req, { data: rows.map((r: Record<string, unknown>) => r.entityId) }));
   } catch (err) {
@@ -199,13 +231,20 @@ router.get("/tags-list/:entityType", authorize({ feature: "projects", action: "v
   try {
     const scope = req.scope!;
     const { entityType } = req.params;
+    // #685 PR-A3: scope predicate via helper. entity_tags has no
+    // branchId (verified). GROUP BY / ORDER / LIMIT preserved.
+    const { where: scopedWhere, params, nextParamIndex } = buildScopedWhere(
+      scope, { companyIds: [scope.companyId] }, { disableBranchScope: true },
+    );
+    params.push(entityType);
+    const entityTypeIdx = nextParamIndex;
     const rows = await rawQuery(
       `SELECT tag, color, COUNT(*)::int as count
        FROM entity_tags
-       WHERE "entityType" = $1 AND "companyId" = $2
+       WHERE ${scopedWhere} AND "entityType" = $${entityTypeIdx}
        GROUP BY tag, color
        ORDER BY count DESC LIMIT 500`,
-      [entityType, scope.companyId]
+      params,
     );
     res.json(maskFields(req, { data: rows }));
   } catch (err) {
