@@ -3,6 +3,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { buildScopedWhere } from "../lib/scopedQuery.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 
@@ -69,6 +70,14 @@ router.get("/", authorize({ feature: "notifications", action: "list" }), async (
     const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 50));
     const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
 
+    // #685 PR-A2: scope predicate via helper. Behavior preserved —
+    // single-company filter (scope.companyId), no branch column on
+    // `notifications` (disableBranchScope), no soft-delete column.
+    // Predicate order changes (companyId now precedes assignmentId) but
+    // AND-clauses are commutative; resulting row sets and counts are
+    // identical to the prior hand-rolled `"assignmentId" = $1 AND
+    // "companyId" = $2` form.
+    //
     // ── Cursor mode (opt-in, non-breaking) ────────────────────────
     if (cursor) {
       const decoded = decodeCursor(cursor);
@@ -76,14 +85,27 @@ router.get("/", authorize({ feature: "notifications", action: "list" }), async (
         res.status(400).json({ error: "cursor غير صالح" });
         return;
       }
+      const { where: scopedWhere, params, nextParamIndex } = buildScopedWhere(
+        scope,
+        { companyIds: [scope.companyId] },
+        { disableBranchScope: true },
+      );
+      params.push(scope.activeAssignmentId);
+      const assignmentIdx = nextParamIndex;
+      params.push(decoded.t);
+      const tIdx = params.length;
+      params.push(decoded.i);
+      const iIdx = params.length;
+      params.push(pageSize + 1);
+      const limitIdx = params.length;
       const rows = await rawQuery<NotificationListRow>(
         `SELECT id, type, title, body, priority, "isRead", "createdAt", "refType", "refId", "actionUrl"
          FROM notifications
-         WHERE "assignmentId" = $1 AND "companyId" = $2
-           AND ("createdAt", id) < ($3::timestamptz, $4)
+         WHERE ${scopedWhere} AND "assignmentId" = $${assignmentIdx}
+           AND ("createdAt", id) < ($${tIdx}::timestamptz, $${iIdx})
          ORDER BY "createdAt" DESC, id DESC
-         LIMIT $5`,
-        [scope.activeAssignmentId, scope.companyId, decoded.t, decoded.i, pageSize + 1],
+         LIMIT $${limitIdx}`,
+        params,
       );
       const hasMore = rows.length > pageSize;
       const data = hasMore ? rows.slice(0, pageSize) : rows;
@@ -99,15 +121,36 @@ router.get("/", authorize({ feature: "notifications", action: "list" }), async (
     const page = Math.max(1, Number(req.query.page) || 1);
     const offset = (page - 1) * pageSize;
 
+    // Two separate helper invocations because each rawQuery owns its
+    // own params array (Promise.all runs them in parallel).
+    const countQuery = buildScopedWhere(
+      scope, { companyIds: [scope.companyId] }, { disableBranchScope: true },
+    );
+    countQuery.params.push(scope.activeAssignmentId);
+    const countAssignmentIdx = countQuery.nextParamIndex;
+
+    const listQuery = buildScopedWhere(
+      scope, { companyIds: [scope.companyId] }, { disableBranchScope: true },
+    );
+    listQuery.params.push(scope.activeAssignmentId);
+    const listAssignmentIdx = listQuery.nextParamIndex;
+    listQuery.params.push(pageSize);
+    const listLimitIdx = listQuery.params.length;
+    listQuery.params.push(offset);
+    const listOffsetIdx = listQuery.params.length;
+
     const [[countRow], notifications] = await Promise.all([
-      rawQuery<{ count: string }>(`SELECT COUNT(*) AS count FROM notifications WHERE "assignmentId" = $1 AND "companyId" = $2`, [scope.activeAssignmentId, scope.companyId]),
+      rawQuery<{ count: string }>(
+        `SELECT COUNT(*) AS count FROM notifications WHERE ${countQuery.where} AND "assignmentId" = $${countAssignmentIdx}`,
+        countQuery.params,
+      ),
       rawQuery<NotificationListRow>(
         `SELECT id, type, title, body, priority, "isRead", "createdAt", "refType", "refId", "actionUrl"
          FROM notifications
-         WHERE "assignmentId" = $1 AND "companyId" = $2
+         WHERE ${listQuery.where} AND "assignmentId" = $${listAssignmentIdx}
          ORDER BY "createdAt" DESC, id DESC
-         LIMIT $3 OFFSET $4`,
-        [scope.activeAssignmentId, scope.companyId, pageSize, offset],
+         LIMIT $${listLimitIdx} OFFSET $${listOffsetIdx}`,
+        listQuery.params,
       ),
     ]);
 
@@ -133,7 +176,7 @@ router.patch("/:id/read", authorize({ feature: "notifications", action: "update"
     }
 
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "mark_notification_read",
+      companyId: scope.companyId, userId: scope.userId, action: "notification.read",
       entity: "notifications", entityId: id,
       after: { isRead: true },
     }).catch((e) => logger.error(e, "notifications background task failed"));
@@ -148,10 +191,18 @@ router.patch("/:id/read", authorize({ feature: "notifications", action: "update"
 router.get("/unread-count", authorize({ feature: "notifications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // #685 PR-A2: scope predicate via helper. Behavior preserved —
+    // single-company filter, no branch column, no soft-delete. Predicate
+    // order changes only (companyId first); result is identical.
+    const { where: scopedWhere, params, nextParamIndex } = buildScopedWhere(
+      scope, { companyIds: [scope.companyId] }, { disableBranchScope: true },
+    );
+    params.push(scope.activeAssignmentId);
+    const assignmentIdx = nextParamIndex;
     const [row] = await rawQuery<{ count: string }>(
       `SELECT COUNT(*) AS count FROM notifications
-       WHERE "assignmentId" = $1 AND "companyId" = $2 AND "isRead" = false`,
-      [scope.activeAssignmentId, scope.companyId]
+       WHERE ${scopedWhere} AND "assignmentId" = $${assignmentIdx} AND "isRead" = false`,
+      params,
     );
     res.json(maskFields(req, { count: Number(row?.count ?? 0) }));
   } catch (err) {
@@ -162,9 +213,18 @@ router.get("/unread-count", authorize({ feature: "notifications", action: "list"
 router.get("/preferences", authorize({ feature: "notifications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // #685 PR-A2: scope predicate via helper. Behavior preserved —
+    // single-company filter on notification_preferences (no branchId
+    // column on this table either); userId predicate stays as the
+    // per-row identity filter. Predicate order changes only.
+    const { where: scopedWhere, params, nextParamIndex } = buildScopedWhere(
+      scope, { companyIds: [scope.companyId] }, { disableBranchScope: true },
+    );
+    params.push(scope.userId);
+    const userIdx = nextParamIndex;
     const rows = await rawQuery<NotificationPreferenceRow>(
-      `SELECT * FROM notification_preferences WHERE "userId" = $1 AND "companyId" = $2 ORDER BY category`,
-      [scope.userId, scope.companyId]
+      `SELECT * FROM notification_preferences WHERE ${scopedWhere} AND "userId" = $${userIdx} ORDER BY category`,
+      params,
     );
     res.json(maskFields(req, { data: rows }));
   } catch (err) {
@@ -188,7 +248,7 @@ router.post("/preferences", authorize({ feature: "notifications", action: "updat
     const [row] = await rawQuery<NotificationPreferenceRow>(`SELECT * FROM notification_preferences WHERE id = $1 AND "companyId" = $2`, [insertId, scope.companyId]);
 
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "upsert_notification_preference",
+      companyId: scope.companyId, userId: scope.userId, action: "notification.preference.updated",
       entity: "notification_preferences", entityId: insertId,
       after: { channel, category, enabled },
     }).catch((e) => logger.error(e, "notifications background task failed"));
@@ -210,7 +270,7 @@ router.patch("/mark-all-read", authorize({ feature: "notifications", action: "up
     );
 
     createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "mark_all_notifications_read",
+      companyId: scope.companyId, userId: scope.userId, action: "notification.all_read",
       entity: "notifications", entityId: 0,
       after: { updated: affectedRows },
     }).catch((e) => logger.error(e, "notifications background task failed"));
