@@ -27,15 +27,20 @@ Both passes converged on the same engineering call (do not migrate blindly; clas
 
 ```
                        before   after   Δ
-  direct UPDATE hits      113     113      ·   (count fluctuates with feature work)
-  dangerous bucket         18      15    −3   (3 detector false positives removed)
-  intentional bucket       76      81    +5
+  direct UPDATE hits      111     106    −5
+  dangerous bucket         18      15    −3
+  intentional bucket       76      74    −2
   legacy bucket            17      17     ·
 ```
 
-The `dangerous` headline that used to read **18** is now **15** real hits. The "−3" is purely a detector-correctness change; no application code was modified to achieve it. The "+5 intentional" comes from feature work landed between PR #706 (which scanned at 111 hits) and today's regeneration — those 5 extra hits all land in the `intentional` bucket per the triage rules.
+The `dangerous` headline that used to read **18** is now **15** real hits. The change is purely a detector-correctness fix — **no application code was modified**. The tempered-token regex (see "Detector false positives" below) stops matching a `status` token that sits in a `WHERE` clause, which removes **5 false-positive hits** from the scan entirely:
 
-> **If you see "18" or "111" anywhere else in the audit corpus, that is a stale snapshot.** Re-run `node audit/system-review/tooling/workflow-audit.mjs && node audit/system-review/tooling/bypass-triage.mjs` to refresh.
+- **−3 from `dangerous`** — the 3 Class-A soft-delete sites (`finance-journal.ts:570`, `finance-journal.ts:855`, `hr.ts:4151`); `status` there is a precondition guard, not an assignment.
+- **−2 from `intentional`** — the same WHERE-clause-only pattern in `hr.ts:6244` (a genuine false positive) and `hr.ts:2722` (a genuine *multi-line* bulk update that the scanner's 2-line read window only ever matched coincidentally, via a sub-query's `WHERE … status =` token).
+
+`legacy` is unaffected. The buckets stay internally consistent: 18 + 76 + 17 = 111 before, 15 + 74 + 17 = 106 after.
+
+> **If you see a total of "113", an `intentional` of "81", or a `dangerous` of "18" anywhere else in the audit corpus, that is a stale snapshot.** Re-run `node audit/system-review/tooling/workflow-audit.mjs && node audit/system-review/tooling/bypass-triage.mjs` to refresh.
 
 ## What "dangerous" actually loses
 
