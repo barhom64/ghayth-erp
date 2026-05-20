@@ -1,0 +1,24 @@
+# scope-bypass-allowlist.txt
+#
+# Category C (manual scope handling) — files that MUST NOT migrate to
+# buildScopedWhere. Each entry pairs the route file with the documented
+# reason. Used by audit/system-review/tooling/scope-bypass.mjs to
+# classify hand-rolled "companyId" predicates as "manual-ok" rather than
+# "bypass". See docs/audit/SCOPE_NORMALIZATION_RCA_685.md §Category C.
+#
+# Format:  <relative-path-from-repo-root>:<category>:<reason>
+# Category one of: manual | helper
+#
+# Stale entries (file listed but no hand-rolled predicate found) are
+# reported as `stale-allowlist` so this file stays honest, mirroring
+# scripts/observability-coverage-allowlist.txt.
+
+artifacts/api-server/src/routes/clientPortal.ts:manual:portal own-token scope; req.scope is not the employee RequestScope
+artifacts/api-server/src/routes/careersPortal.ts:manual:portal own-token scope; req.scope is not the employee RequestScope
+artifacts/api-server/src/routes/auth.ts:manual:/me bootstrap — resolves userRoles by (userId, companyId); the scope object is what the response creates
+artifacts/api-server/src/routes/admin.ts:manual:intentionally cross-tenant; system-wide admin operations
+artifacts/api-server/src/routes/pdpl.ts:manual:PDPL exports are scoped by data-subject, not tenant-list
+
+# Category D (helper file — scope flows in from caller). Migration point
+# is the caller; helper itself stays as-is until callers are normalised.
+artifacts/api-server/src/routes/finance-gl-helpers.ts:helper:scope passed in by caller; normalise at the call site first
