@@ -76,15 +76,18 @@ only defect is that the UI never called it. Switch the UI; change nothing else.
 
 ## 4. The fix
 
-Two one-prop changes — `approveMethod` `"PATCH"` → `"POST"`:
-- `pages/finance/invoice-detail.tsx:449`
-- `pages/finance/invoices.tsx:254`
-
-`rejectMethod` / `returnMethod` stay `"PATCH"` — those handlers are correct, and
-once approval posts `JE-<ref>` their reversal lookup starts succeeding. The
+**(a) Route the UI at the GL handler** — `approveMethod` `"PATCH"` → `"POST"` at
+both call sites (`invoice-detail.tsx`, `invoices.tsx`). `rejectMethod` /
+`returnMethod` stay `"PATCH"` — those handlers are correct, and once approval
+posts `JE-<ref>` their reversal lookup starts succeeding. The
 `approveMethod="POST"` / `rejectMethod="PATCH"` asymmetry is deliberate; this RCA
 is the durable record of why a future "make the methods consistent" cleanup must
 not revert `approveMethod` to `"PATCH"`.
+
+**(b) Align the invoices-list approve gate with the POST path** — see §5.1. The
+list rendered `ApprovalActions` for `status==="pending_approval"`, a status the
+approve transition never accepts; the gate is changed to `status==="draft"`,
+matching `invoice-detail.tsx` and the POST handler's `fromStates`.
 
 **No backend change. No migration. No GL-engine change. No new code path.**
 
@@ -105,6 +108,30 @@ not revert `approveMethod` to `"PATCH"`.
 | approval amount limit | **not enforced** — `authorize({action:"update"})` ❌ | enforced — `authorize({action:"approve", amount:{from:"resource",field:"total"}})` ✓ |
 | budget consumption | not updated ❌ | `budgets.used += base` at approval (`:646-649`) ✓ |
 
+## 5.1 UI approve-button gating vs POST `fromStates`
+
+`INVOICE_TRANSITIONS` (`finance-invoices.ts:146-160`) lists `approved` as a target
+only from `draft` and `returned`. There is **no `pending_approval` key** at all.
+Both approve handlers accept exactly `["draft","returned"]`: `POST /approve`
+hardcodes it (`:602`); `PATCH /approve` derives the identical set (`:1009-1011`).
+
+| UI surface | approve shown for | POST accepts it? | verdict |
+|---|---|---|---|
+| `invoice-detail.tsx:439` | `status==="draft"` only | yes | ✅ safe — subset of POST's set |
+| `invoices.tsx:247` (before) | `status==="pending_approval"` only | **no** | ❌ broken button |
+
+The `invoices.tsx` button was already broken **before this PR** — `PATCH /approve`
+also rejected `pending_approval` (same derived `fromStates`), so the switch to
+POST does **not** regress it (it was always a transition error there, never a
+silent "no-GL" success — that only happened on `draft`). Fix (b) changes the gate
+to `status==="draft"` so every approve button shown lands on a status the POST
+handler accepts. `invoice-detail.tsx` already gates on `draft` — no change needed.
+
+**Out of scope (lifecycle-model gap):** `pending_approval` is a valid invoice
+status (`seedDemoData` seeds it) yet has no entry in `INVOICE_TRANSITIONS` — such
+invoices have no outbound transition. Adding one is a backend lifecycle change
+for a later wave; not touched here.
+
 ## 6. Double-posting / idempotency
 
 `POST /approve`'s `postJournalEntry` uses `sourceKey:"finance:invoice_approval:${id}"`
@@ -122,10 +149,9 @@ reachable by a direct API client. Removing/disabling it is recommended as a
 **small follow-up** — deliberately left out of this PR to keep the change
 frontend-only and minimal per the Wave-1 constraint; flagged for owner decision.
 
-**Observed, out of scope (unchanged):** `invoices.tsx` renders `ApprovalActions`
-for `status==="pending_approval"` rows, but the approve transition only accepts
-`draft`/`returned` — approving such a row errors regardless of method. Pre-existing;
-recorded in `FUNCTIONAL_FINANCE_VERIFICATION.md`, not addressed here.
+The `pending_approval` lifecycle-model gap noted in §5.1 is likewise left for a
+later wave — it needs a backend `INVOICE_TRANSITIONS` change, outside this Wave's
+frontend-only scope.
 
 ## 8. Guard & runtime
 
@@ -141,5 +167,5 @@ recorded in `FUNCTIONAL_FINANCE_VERIFICATION.md`, not addressed here.
 
 ## 9. Blast radius
 
-2 files · 2 functional lines (`approveMethod` value) · frontend only ·
-0 backend · 0 migration · 0 dependency change.
+2 files · frontend only · `approveMethod` value (×2 sites) + the invoices-list
+approve-button status gate (×1) · 0 backend · 0 migration · 0 dependency change.

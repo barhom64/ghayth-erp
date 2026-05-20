@@ -244,7 +244,7 @@ export default function InvoicesPage() {
           return (
             <div className="bg-surface-subtle/50 p-3">
               <div className="space-y-3">
-                {inv.status === "pending_approval" && (
+                {inv.status === "draft" && (
                   <ApprovalActions
                     entityType="invoice"
                     entityId={inv.id}
