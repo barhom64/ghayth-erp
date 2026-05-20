@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T15:07:26.335Z",
+  "generatedAt": "2026-05-20T15:16:52.142Z",
   "scope": "artifacts/api-server/src/routes/**.ts",
   "detector": {
     "patterns": [
@@ -12,11 +12,11 @@
   "totals": {
     "filesScanned": 88,
     "filesWithHits": 82,
-    "totalHits": 2286,
+    "totalHits": 2281,
     "byCategory": {
       "A_safe": {
         "files": 57,
-        "hits": 1876
+        "hits": 1871
       },
       "B_risky": {
         "files": 19,
@@ -11103,64 +11103,6 @@
       ]
     },
     {
-      "file": "artifacts/api-server/src/routes/notifications.ts",
-      "handRolledHits": 8,
-      "aliasedHits": 0,
-      "usesBuildScopedWhere": 0,
-      "category": "A",
-      "reason": "aliased fraction 0% (0/8) — predominantly plain `\"companyId\" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits)",
-      "sites": [
-        {
-          "line": 82,
-          "text": "WHERE \"assignmentId\" = $1 AND \"companyId\" = $2",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 103,
-          "text": "rawQuery<{ count: string }>(`SELECT COUNT(*) AS count FROM notifications WHERE \"assignmentId\" = $1 AND \"companyId\" = $2`, [scope.activeAssignmentId, scope.companyId]),",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 107,
-          "text": "WHERE \"assignmentId\" = $1 AND \"companyId\" = $2",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 127,
-          "text": "WHERE id = $1 AND \"assignmentId\" = $2 AND \"companyId\" = $3 RETURNING id`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 153,
-          "text": "WHERE \"assignmentId\" = $1 AND \"companyId\" = $2 AND \"isRead\" = false`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 166,
-          "text": "`SELECT * FROM notification_preferences WHERE \"userId\" = $1 AND \"companyId\" = $2 ORDER BY category`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 188,
-          "text": "const [row] = await rawQuery<NotificationPreferenceRow>(`SELECT * FROM notification_preferences WHERE id = $1 AND \"companyId\" = $2`, [insertId, scope.companyId]);",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 208,
-          "text": "WHERE \"assignmentId\" = $1 AND \"companyId\" = $2 AND \"isRead\" = false`,",
-          "aliased": false,
-          "class": "A"
-        }
-      ]
-    },
-    {
       "file": "artifacts/api-server/src/routes/pdpl.ts",
       "handRolledHits": 7,
       "aliasedHits": 4,
@@ -11453,6 +11395,34 @@
           "text": "const conditions = [`dsl.\"companyId\"=$1`];",
           "aliased": true,
           "class": "B"
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/notifications.ts",
+      "handRolledHits": 3,
+      "aliasedHits": 0,
+      "usesBuildScopedWhere": 5,
+      "category": "A",
+      "reason": "aliased fraction 0% (0/3) — predominantly plain `\"companyId\" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits)",
+      "sites": [
+        {
+          "line": 170,
+          "text": "WHERE id = $1 AND \"assignmentId\" = $2 AND \"companyId\" = $3 RETURNING id`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 248,
+          "text": "const [row] = await rawQuery<NotificationPreferenceRow>(`SELECT * FROM notification_preferences WHERE id = $1 AND \"companyId\" = $2`, [insertId, scope.companyId]);",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 268,
+          "text": "WHERE \"assignmentId\" = $1 AND \"companyId\" = $2 AND \"isRead\" = false`,",
+          "aliased": false,
+          "class": "A"
         }
       ]
     },

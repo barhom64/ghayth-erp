@@ -1,6 +1,6 @@
 # Scope Bypass — Static Detector Report
 
-Generated: 2026-05-20T15:07:26.335Z
+Generated: 2026-05-20T15:16:52.142Z
 
 Scope: `artifacts/api-server/src/routes/**.ts` only (per #685 PR-1, owner-approved boundary).
 
@@ -20,13 +20,13 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 |---|---:|
 | Route files scanned | 88 |
 | Files with ≥1 hand-rolled hit | 82 |
-| Total hand-rolled hits | 2286 |
+| Total hand-rolled hits | 2281 |
 
 ## By Category
 
 | Class | Meaning | Files | Hits |
 |---|---|---:|---:|
-| **A** | Safe — mechanical `buildScopedWhere` swap | 57 | 1876 |
+| **A** | Safe — mechanical `buildScopedWhere` swap | 57 | 1871 |
 | **B** | Risky — aliased company column / report joins | 19 | 304 |
 | **C** | Manual — allowlist (portals / auth / admin / pdpl) | 5 | 101 |
 | **D** | Helper — caller-side normalisation first | 1 | 5 |
@@ -99,7 +99,6 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 | `artifacts/api-server/src/routes/rules.ts` | A | 9 | 0 | 0 | aliased fraction 0% (0/9) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits) |
 | `artifacts/api-server/src/routes/correspondence.ts` | A | 8 | 2 | 0 | aliased fraction 25% (2/8) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 2 aliased hits) |
 | `artifacts/api-server/src/routes/hr-saudi-compliance.ts` | A | 8 | 1 | 0 | aliased fraction 13% (1/8) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 1 aliased hit) |
-| `artifacts/api-server/src/routes/notifications.ts` | A | 8 | 0 | 0 | aliased fraction 0% (0/8) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits) |
 | `artifacts/api-server/src/routes/pdpl.ts` | C | 7 | 4 | 0 | PDPL exports are scoped by data-subject, not tenant-list |
 | `artifacts/api-server/src/routes/finance-gl-helpers.ts` | D | 5 | 1 | 0 | scope passed in by caller; normalise at the call site first |
 | `artifacts/api-server/src/routes/finance-recurring.ts` | A | 5 | 1 | 1 | aliased fraction 20% (1/5) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 1 aliased hit) |
@@ -108,6 +107,7 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 | `artifacts/api-server/src/routes/scheduled-reports.ts` | B | 4 | 2 | 0 | aliased fraction 50% (2/4) — predominantly report/join queries; needs per-handler companyColumn override + branch-cascade decision |
 | `artifacts/api-server/src/routes/careersPortal.ts` | C | 3 | 0 | 0 | portal own-token scope; req.scope is not the employee RequestScope |
 | `artifacts/api-server/src/routes/digital-signature.ts` | A | 3 | 1 | 0 | aliased fraction 33% (1/3) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 1 aliased hit) |
+| `artifacts/api-server/src/routes/notifications.ts` | A | 3 | 0 | 5 | aliased fraction 0% (0/3) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits) |
 | `artifacts/api-server/src/routes/obligations.ts` | A | 3 | 0 | 0 | aliased fraction 0% (0/3) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits) |
 | `artifacts/api-server/src/routes/approvalActions.ts` | B | 2 | 2 | 0 | aliased fraction 100% (2/2) — predominantly report/join queries; needs per-handler companyColumn override + branch-cascade decision |
 | `artifacts/api-server/src/routes/auditLogs.ts` | B | 2 | 1 | 1 | aliased fraction 50% (1/2) — predominantly report/join queries; needs per-handler companyColumn override + branch-cascade decision |
@@ -1408,17 +1408,6 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 - L740: `WHERE id = $1 AND "companyId" = $2\`,`
 - L940: `WHERE "companyId" = $1 AND period = $2 AND "deletedAt" IS NULL`
 
-### `artifacts/api-server/src/routes/notifications.ts` (A, 8 hits)
-
-- L82: `WHERE "assignmentId" = $1 AND "companyId" = $2`
-- L103: `rawQuery<{ count: string }>(\`SELECT COUNT(*) AS count FROM notifications WHERE "assignmentId" = $1 AND "companyId" = $2\`, [scope.activeAssignmentId, scope.companyId]),`
-- L107: `WHERE "assignmentId" = $1 AND "companyId" = $2`
-- L127: `WHERE id = $1 AND "assignmentId" = $2 AND "companyId" = $3 RETURNING id\`,`
-- L153: `WHERE "assignmentId" = $1 AND "companyId" = $2 AND "isRead" = false\`,`
-- L166: `\`SELECT * FROM notification_preferences WHERE "userId" = $1 AND "companyId" = $2 ORDER BY category\`,`
-- L188: `const [row] = await rawQuery<NotificationPreferenceRow>(\`SELECT * FROM notification_preferences WHERE id = $1 AND "companyId" = $2\`, [insertId, scope.companyId]);`
-- L208: `WHERE "assignmentId" = $1 AND "companyId" = $2 AND "isRead" = false\`,`
-
 ### `artifacts/api-server/src/routes/pdpl.ts` (C, 7 hits)
 
 - L87: `WHERE ("companyId" IS NULL OR "companyId" = $1)`
@@ -1478,6 +1467,12 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 - L124: `\`SELECT id FROM digital_signature_otps WHERE "companyId"=$1 AND "userId"=$2 AND "entityType"=$3 AND "entityId"=$4 AND action=$5 AND otp=$6 AND used=false AND "expiresAt" > NOW() ORDER BY "createdAt" D`
 - L134: `await client.query(\`UPDATE digital_signature_otps SET used=true, "usedAt"=NOW() WHERE id=$1 AND "companyId"=$2\`, [record.id, scope.companyId]);`
 - L173 *(aliased)*: `const conditions = [\`dsl."companyId"=$1\`];`
+
+### `artifacts/api-server/src/routes/notifications.ts` (A, 3 hits)
+
+- L170: `WHERE id = $1 AND "assignmentId" = $2 AND "companyId" = $3 RETURNING id\`,`
+- L248: `const [row] = await rawQuery<NotificationPreferenceRow>(\`SELECT * FROM notification_preferences WHERE id = $1 AND "companyId" = $2\`, [insertId, scope.companyId]);`
+- L268: `WHERE "assignmentId" = $1 AND "companyId" = $2 AND "isRead" = false\`,`
 
 ### `artifacts/api-server/src/routes/obligations.ts` (A, 3 hits)
 
