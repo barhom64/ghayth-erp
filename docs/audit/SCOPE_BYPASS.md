@@ -1,6 +1,6 @@
 # Scope Bypass — Static Detector Report
 
-Generated: 2026-05-20T15:48:24.112Z
+Generated: 2026-05-20T17:09:19.613Z
 
 Scope: `artifacts/api-server/src/routes/**.ts` only (per #685 PR-1, owner-approved boundary).
 
@@ -26,9 +26,9 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 
 | Class | Meaning | Files | Hits |
 |---|---|---:|---:|
-| **A** | Safe — mechanical `buildScopedWhere` swap | 56 | 1864 |
+| **A** | Safe — mechanical `buildScopedWhere` swap | 55 | 1855 |
 | **B** | Risky — aliased company column / report joins | 19 | 304 |
-| **C** | Manual — allowlist (portals / auth / admin / pdpl) | 6 | 102 |
+| **C** | Manual — allowlist (portals / auth / admin / pdpl) | 7 | 111 |
 | **D** | Helper — caller-side normalisation first | 1 | 5 |
 
 ## Files
@@ -95,7 +95,7 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 | `artifacts/api-server/src/routes/finance-cost-centers.ts` | A | 10 | 2 | 0 | aliased fraction 20% (2/10) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 2 aliased hits) |
 | `artifacts/api-server/src/routes/impactPreview.ts` | B | 10 | 6 | 0 | aliased fraction 60% (6/10) — predominantly report/join queries; needs per-handler companyColumn override + branch-cascade decision |
 | `artifacts/api-server/src/routes/print.ts` | A | 10 | 3 | 0 | aliased fraction 30% (3/10) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 3 aliased hits) |
-| `artifacts/api-server/src/routes/rules.ts` | A | 9 | 0 | 0 | aliased fraction 0% (0/9) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits) |
+| `artifacts/api-server/src/routes/rules.ts` | C | 9 | 0 | 0 | business_rules uses system-default fallback `("companyId" IS NULL OR "companyId" = $N)` at L92 (GET /) and L109 (GET /logs) — NULL companyId = applies-to-all-tenants, specific companyId = company-override; buildScopedWhere has no fallback option (would require helper rewrite, banned by #685 directive). Remaining 7 hits (L163/L185/L213/L233/L239/L261/L268) are write/detail handlers — deferred per A-series scope, will revisit when write-handler PR series begins after Class B blockers cleared. PR #685 PR-A4. |
 | `artifacts/api-server/src/routes/correspondence.ts` | A | 8 | 2 | 0 | aliased fraction 25% (2/8) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 2 aliased hits) |
 | `artifacts/api-server/src/routes/entityMeta.ts` | A | 8 | 0 | 4 | aliased fraction 0% (0/8) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits) |
 | `artifacts/api-server/src/routes/hr-saudi-compliance.ts` | A | 8 | 1 | 0 | aliased fraction 13% (1/8) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 1 aliased hit) |
@@ -1359,7 +1359,7 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 - L557: `WHERE id = $1 AND "companyId" = $2 LIMIT 1\`,`
 - L599: `WHERE id=$1 AND "companyId"=$4\`,`
 
-### `artifacts/api-server/src/routes/rules.ts` (A, 9 hits)
+### `artifacts/api-server/src/routes/rules.ts` (C, 9 hits)
 
 - L92: `WHERE ("companyId" IS NULL OR "companyId" = $1) AND "deletedAt" IS NULL`
 - L109: `const conditions = [\`("companyId" IS NULL OR "companyId" = $1)\`];`
