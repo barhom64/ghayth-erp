@@ -1,6 +1,6 @@
 # Scope Bypass — Static Detector Report
 
-Generated: 2026-05-20T17:06:54.485Z
+Generated: 2026-05-20T17:15:12.847Z
 
 Scope: `artifacts/api-server/src/routes/**.ts` only (per #685 PR-1, owner-approved boundary).
 
