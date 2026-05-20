@@ -1,6 +1,6 @@
 # Scope Bypass — Static Detector Report
 
-Generated: 2026-05-20T15:16:52.142Z
+Generated: 2026-05-20T15:27:12.168Z
 
 Scope: `artifacts/api-server/src/routes/**.ts` only (per #685 PR-1, owner-approved boundary).
 
@@ -20,15 +20,15 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 |---|---:|
 | Route files scanned | 88 |
 | Files with ≥1 hand-rolled hit | 82 |
-| Total hand-rolled hits | 2281 |
+| Total hand-rolled hits | 2277 |
 
 ## By Category
 
 | Class | Meaning | Files | Hits |
 |---|---|---:|---:|
-| **A** | Safe — mechanical `buildScopedWhere` swap | 57 | 1871 |
+| **A** | Safe — mechanical `buildScopedWhere` swap | 56 | 1858 |
 | **B** | Risky — aliased company column / report joins | 19 | 304 |
-| **C** | Manual — allowlist (portals / auth / admin / pdpl) | 5 | 101 |
+| **C** | Manual — allowlist (portals / auth / admin / pdpl) | 6 | 110 |
 | **D** | Helper — caller-side normalisation first | 1 | 5 |
 
 ## Files
@@ -87,7 +87,6 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 | `artifacts/api-server/src/routes/finance-budget.ts` | B | 13 | 7 | 1 | aliased fraction 54% (7/13) — predominantly report/join queries; needs per-handler companyColumn override + branch-cascade decision |
 | `artifacts/api-server/src/routes/finance-vendors.ts` | B | 13 | 8 | 2 | aliased fraction 62% (8/13) — predominantly report/join queries; needs per-handler companyColumn override + branch-cascade decision |
 | `artifacts/api-server/src/routes/hr-loans.ts` | A | 13 | 4 | 0 | aliased fraction 31% (4/13) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 4 aliased hits) |
-| `artifacts/api-server/src/routes/entityMeta.ts` | A | 12 | 0 | 0 | aliased fraction 0% (0/12) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits) |
 | `artifacts/api-server/src/routes/operationsCenter.ts` | A | 12 | 1 | 1 | aliased fraction 8% (1/12) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 1 aliased hit) |
 | `artifacts/api-server/src/routes/warehouse-advanced.ts` | B | 12 | 9 | 0 | aliased fraction 75% (9/12) — predominantly report/join queries; needs per-handler companyColumn override + branch-cascade decision |
 | `artifacts/api-server/src/routes/permissions.ts` | A | 11 | 2 | 0 | aliased fraction 18% (2/11) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 2 aliased hits) |
@@ -96,8 +95,9 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 | `artifacts/api-server/src/routes/finance-cost-centers.ts` | A | 10 | 2 | 0 | aliased fraction 20% (2/10) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 2 aliased hits) |
 | `artifacts/api-server/src/routes/impactPreview.ts` | B | 10 | 6 | 0 | aliased fraction 60% (6/10) — predominantly report/join queries; needs per-handler companyColumn override + branch-cascade decision |
 | `artifacts/api-server/src/routes/print.ts` | A | 10 | 3 | 0 | aliased fraction 30% (3/10) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 3 aliased hits) |
-| `artifacts/api-server/src/routes/rules.ts` | A | 9 | 0 | 0 | aliased fraction 0% (0/9) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits) |
+| `artifacts/api-server/src/routes/rules.ts` | C | 9 | 0 | 0 | business_rules uses system-default fallback `("companyId" IS NULL OR "companyId" = $N)` at L92 (GET /) and L109 (GET /logs) — NULL companyId = applies-to-all-tenants, specific companyId = company-override; buildScopedWhere has no fallback option (would require helper rewrite, banned by #685 directive). Remaining 7 hits (L163/L185/L213/L233/L239/L261/L268) are write/detail handlers — deferred per A-series scope, will revisit when write-handler PR series begins after Class B blockers cleared. PR #685 PR-A4. |
 | `artifacts/api-server/src/routes/correspondence.ts` | A | 8 | 2 | 0 | aliased fraction 25% (2/8) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 2 aliased hits) |
+| `artifacts/api-server/src/routes/entityMeta.ts` | A | 8 | 0 | 4 | aliased fraction 0% (0/8) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits) |
 | `artifacts/api-server/src/routes/hr-saudi-compliance.ts` | A | 8 | 1 | 0 | aliased fraction 13% (1/8) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 1 aliased hit) |
 | `artifacts/api-server/src/routes/pdpl.ts` | C | 7 | 4 | 0 | PDPL exports are scoped by data-subject, not tenant-list |
 | `artifacts/api-server/src/routes/finance-gl-helpers.ts` | D | 5 | 1 | 0 | scope passed in by caller; normalise at the call site first |
@@ -1249,21 +1249,6 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 - L573: `\`SELECT * FROM hr_employee_loans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL\`,`
 - L591: `\`UPDATE hr_employee_loans SET status = 'rejected', "rejectionReason" = $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND status = 'pending' AND "deletedAt" IS NULL\`,`
 
-### `artifacts/api-server/src/routes/entityMeta.ts` (A, 12 hits)
-
-- L35: `WHERE "entityType" = $1 AND "entityId" = $2 AND "companyId" = $3`
-- L80: `\`SELECT * FROM entity_comments WHERE id = $1 AND "companyId" = $2\`,`
-- L84: `\`DELETE FROM entity_comments WHERE id = $1 AND "companyId" = $2\`,`
-- L109: `WHERE "entityType" = $1 AND "entityId" = $2 AND "companyId" = $3`
-- L158: `\`SELECT * FROM entity_tags WHERE id = $1 AND "companyId" = $2\`,`
-- L162: `\`DELETE FROM entity_tags WHERE id = $1 AND "companyId" = $2\`,`
-- L189: `WHERE "entityType" = $1 AND tag = $2 AND "companyId" = $3 LIMIT 1000\`,`
-- L205: `WHERE "entityType" = $1 AND "companyId" = $2`
-- L265: `\`UPDATE ${table} SET status = 'approved' WHERE id = ANY($1::int[]) AND "companyId" = $2 AND "deletedAt" IS NULL AND status IN ('pending','draft','pending_approval') ${extraWhere} RETURNING id\`,`
-- L272: `\`UPDATE ${table} SET status = 'rejected' WHERE id = ANY($1::int[]) AND "companyId" = $2 AND "deletedAt" IS NULL AND status IN ('pending','draft','pending_approval') ${extraWhere} RETURNING id\`,`
-- L279: `\`UPDATE ${table} SET "deletedAt" = NOW() WHERE id = ANY($1::int[]) AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('approved','posted','paid','completed') ${extraWhere} RETURNING id\`,`
-- L287: `\`UPDATE ${table} SET status = $1 WHERE id = ANY($2::int[]) AND "companyId" = $3 AND "deletedAt" IS NULL AND status NOT IN ('closed','completed','cancelled') ${extraWhere} RETURNING id\`,`
-
 ### `artifacts/api-server/src/routes/operationsCenter.ts` (A, 12 hits)
 
 - L52: `\`SELECT value FROM system_settings WHERE key='operations_center_thresholds' AND ("companyId"=$1 OR "companyId" IS NULL) ORDER BY "companyId" DESC NULLS LAST LIMIT 1\`,`
@@ -1374,7 +1359,7 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 - L557: `WHERE id = $1 AND "companyId" = $2 LIMIT 1\`,`
 - L599: `WHERE id=$1 AND "companyId"=$4\`,`
 
-### `artifacts/api-server/src/routes/rules.ts` (A, 9 hits)
+### `artifacts/api-server/src/routes/rules.ts` (C, 9 hits)
 
 - L92: `WHERE ("companyId" IS NULL OR "companyId" = $1) AND "deletedAt" IS NULL`
 - L109: `const conditions = [\`("companyId" IS NULL OR "companyId" = $1)\`];`
@@ -1396,6 +1381,17 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 - L295: `\`SELECT * FROM correspondence WHERE id = $1 AND "companyId" = $2\`,`
 - L324: `\`UPDATE correspondence SET "respondedAt" = NOW(), "responseRef" = $2, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $3\`,`
 - L354: `FROM correspondence WHERE "companyId" = $1\`,`
+
+### `artifacts/api-server/src/routes/entityMeta.ts` (A, 8 hits)
+
+- L93: `\`SELECT * FROM entity_comments WHERE id = $1 AND "companyId" = $2\`,`
+- L97: `\`DELETE FROM entity_comments WHERE id = $1 AND "companyId" = $2\`,`
+- L181: `\`SELECT * FROM entity_tags WHERE id = $1 AND "companyId" = $2\`,`
+- L185: `\`DELETE FROM entity_tags WHERE id = $1 AND "companyId" = $2\`,`
+- L304: `\`UPDATE ${table} SET status = 'approved' WHERE id = ANY($1::int[]) AND "companyId" = $2 AND "deletedAt" IS NULL AND status IN ('pending','draft','pending_approval') ${extraWhere} RETURNING id\`,`
+- L311: `\`UPDATE ${table} SET status = 'rejected' WHERE id = ANY($1::int[]) AND "companyId" = $2 AND "deletedAt" IS NULL AND status IN ('pending','draft','pending_approval') ${extraWhere} RETURNING id\`,`
+- L318: `\`UPDATE ${table} SET "deletedAt" = NOW() WHERE id = ANY($1::int[]) AND "companyId" = $2 AND "deletedAt" IS NULL AND status NOT IN ('approved','posted','paid','completed') ${extraWhere} RETURNING id\`,`
+- L326: `\`UPDATE ${table} SET status = $1 WHERE id = ANY($2::int[]) AND "companyId" = $3 AND "deletedAt" IS NULL AND status NOT IN ('closed','completed','cancelled') ${extraWhere} RETURNING id\`,`
 
 ### `artifacts/api-server/src/routes/hr-saudi-compliance.ts` (A, 8 hits)
 
