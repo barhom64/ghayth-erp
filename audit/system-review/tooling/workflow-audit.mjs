@@ -245,7 +245,13 @@ function scanDirectStatusUpdates() {
       //   UPDATE foo SET "status" = ...
       //   UPDATE bar SET "approvalStatus" = ...
       if (!/UPDATE\s+\w+/i.test(line)) continue;
-      if (!/\bSET\b[\s\S]{0,160}(?:"?status"?|"?approvalStatus"?|"?lifecycle_state"?)\s*=/i.test(line + " " + (lines[i + 1] || ""))) continue;
+      // The status-like column must be assigned in the SET clause, not
+      // merely referenced in the WHERE clause. The tempered token below
+      // refuses to cross a `WHERE`, so a soft-delete such as
+      //   UPDATE t SET "deletedAt" = NOW() WHERE id = $1 AND status = 'draft'
+      // (status is a precondition guard, not a transition) is NOT flagged.
+      // RCA #664 Class A — see docs/audit/DANGEROUS_BYPASS_RCA_664.md.
+      if (!/\bSET\b(?:(?!\bWHERE\b)[\s\S]){0,160}(?:"?status"?|"?approvalStatus"?|"?lifecycle_state"?)\s*=/i.test(line + " " + (lines[i + 1] || ""))) continue;
       // Skip the lifecycleEngine itself (legitimate engine-internal SET).
       if (/applyTransition/.test(lines.slice(Math.max(0, i - 8), i).join(" "))) continue;
       const tableMatch = line.match(/UPDATE\s+(\w+)/i);
