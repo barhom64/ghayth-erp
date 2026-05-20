@@ -1,10 +1,10 @@
 # Issue #664 Triage — Direct UPDATE Bypass Classification
 
-Generated: 2026-05-19
+Generated: 2026-05-20
 
 > **Read-only.** Regenerate with
 > `node audit/system-review/tooling/bypass-triage.mjs`. Classifies
-> the **111 direct UPDATE bypasses** found by
+> the **106 direct UPDATE bypasses** found by
 > workflow-audit into the three buckets the owner specified.
 
 ## Classification rules
@@ -19,23 +19,23 @@ Generated: 2026-05-19
 
 | Bucket | Count | % |
 |---|---:|---:|
-| intentional | **76** | 68% |
-| legacy | **17** | 15% |
-| dangerous | **18** | 16% |
-| TOTAL | 111 | 100% |
+| intentional | **74** | 70% |
+| legacy | **17** | 16% |
+| dangerous | **15** | 14% |
+| TOTAL | 106 | 100% |
 
 ## Per-file breakdown
 
 | File | Total | 🔴 dangerous | 🟡 legacy | 🟢 intentional |
 |---|---:|---:|---:|---:|
 | `finance-invoices.ts` | 8 | **7** | 0 | 1 |
-| `finance-journal.ts` | 5 | **5** | 0 | 0 |
-| `hr.ts` | 25 | **1** | 1 | 23 |
+| `finance-journal.ts` | 3 | **3** | 0 | 0 |
 | `employees.ts` | 11 | **1** | 0 | 10 |
 | `properties.ts` | 3 | **1** | 1 | 1 |
 | `umrah.ts` | 2 | **1** | 0 | 1 |
 | `finance-custodies.ts` | 1 | **1** | 0 | 0 |
 | `governance.ts` | 1 | **1** | 0 | 0 |
+| `hr.ts` | 22 | **0** | 1 | 21 |
 | `fleet.ts` | 12 | **0** | 11 | 1 |
 | `hr-contracts.ts` | 5 | **0** | 0 | 5 |
 | `hr-discipline.ts` | 5 | **0** | 0 | 5 |
@@ -62,9 +62,9 @@ Generated: 2026-05-19
 
 | Table | In `STATE_MACHINES`? | Total | dangerous | legacy | intentional |
 |---|---|---:|---:|---:|---:|
-| `journal_entries` | ✅ YES | 8 | **7** | 0 | 1 |
+| `journal_entries` | ✅ YES | 6 | **5** | 0 | 1 |
 | `invoices` | ✅ YES | 6 | **5** | 0 | 1 |
-| `hr_leave_requests` | ✅ YES | 2 | **2** | 0 | 0 |
+| `hr_leave_requests` | ✅ YES | 1 | **1** | 0 | 0 |
 | `financial_periods` | ✅ YES | 1 | **1** | 0 | 0 |
 | `governance_policies` | ✅ YES | 1 | **1** | 0 | 0 |
 | `property_units` | ✅ YES | 1 | **1** | 0 | 0 |
@@ -72,10 +72,10 @@ Generated: 2026-05-19
 | `fleet_vehicles` | — | 8 | **0** | 7 | 1 |
 | `employee_contracts` | — | 6 | **0** | 0 | 6 |
 | `leave_approval_stages` | — | 6 | **0** | 0 | 6 |
-| `employee_assignments` | — | 5 | **0** | 0 | 5 |
-| `hr_employee_loans` | — | 5 | **0** | 0 | 5 |
 | `employee_violations` | — | 5 | **0** | 0 | 5 |
 | `hr_overtime_requests` | — | 5 | **0** | 0 | 5 |
+| `employee_assignments` | — | 4 | **0** | 0 | 4 |
+| `hr_employee_loans` | — | 4 | **0** | 0 | 4 |
 | `fleet_drivers` | — | 4 | **0** | 4 | 0 |
 | `official_letters` | — | 4 | **0** | 0 | 4 |
 | `payroll_runs` | — | 3 | **0** | 1 | 2 |
@@ -122,18 +122,15 @@ Each one is a candidate fix: migrate to `applyTransition` (same pattern as #672 
 | `finance-invoices.ts` | 1197 | `invoices` | ``UPDATE invoices SET "paidAmount" = COALESCE("paidAmount",0) + $1,` |
 | `finance-invoices.ts` | 1739 | `invoices` | ``UPDATE invoices SET "paidAmount" = COALESCE("paidAmount",0) + $1,` |
 | `finance-journal.ts` | 528 | `journal_entries` | `if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pendin…` |
-| `finance-journal.ts` | 570 | `journal_entries` | `const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET "deletedAt" = NOW(…` |
-| `finance-journal.ts` | 855 | `journal_entries` | `const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET "deletedAt" = NOW(…` |
 | `finance-journal.ts` | 939 | `journal_entries` | `if (approvalResult.requiresApproval) { const { affectedRows } = await rawExecute(`UPDATE journal_ent…` |
 | `finance-journal.ts` | 1405 | `financial_periods` | ``UPDATE financial_periods SET status='closed', "closedAt"=NOW(), "closedBy"=$1, "updatedAt"=NOW() WH…` |
 | `governance.ts` | 331 | `governance_policies` | ``UPDATE governance_policies SET status='archived', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 …` |
-| `hr.ts` | 4151 | `hr_leave_requests` | ``UPDATE hr_leave_requests SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND status = 'p…` |
 | `properties.ts` | 1591 | `property_units` | ``UPDATE property_units SET status='available', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND …` |
 | `umrah.ts` | 1393 | `umrah_penalties` | ``UPDATE umrah_penalties SET status='invoiced', "invoiceId"=$1 WHERE "agentId"=$2 AND "seasonId"=$3 A…` |
 
 ## Intentional hits (require a `// bypass-ok` comment per the engineering rule)
 
-**76** intentional bypasses. Recommended action: in a low-priority PR, prepend each with a one-line comment so future audits skip it without re-classifying.
+**74** intentional bypasses. Recommended action: in a low-priority PR, prepend each with a one-line comment so future audits skip it without re-classifying.
 
 Sample (top 10):
 
@@ -149,7 +146,7 @@ Sample (top 10):
 | `employees.ts` | 1106 | `employee_assignments` | bulk update without single-row predicate; treat as documented batch operation |
 | `employees.ts` | 1268 | `employee_assignments` | bulk update without single-row predicate; treat as documented batch operation |
 | `employees.ts` | 1272 | `employees` | bulk update without single-row predicate; treat as documented batch operation |
-| _…66 more in JSON sidecar_ |  |  |  |
+| _…64 more in JSON sidecar_ |  |  |  |
 
 ## Legacy hits (migrate at convenience)
 
