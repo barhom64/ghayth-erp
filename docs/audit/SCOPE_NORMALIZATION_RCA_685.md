@@ -133,6 +133,70 @@ From safest to riskiest, with files grouped into PR-sized clusters:
 
 **Estimated total: 10-14 PRs**, each small (≤1 file, ≤14 hits), ordered so the safest land first and each next PR's risk is bounded by the prior one having succeeded.
 
+## Branch Scope Decision Matrix (added PR-A7 — alias tracer + companyColumn finding)
+
+Built during the A6 (`settings.ts`) + A7 sweep to give every future migration PR a deterministic answer to the question *"do I pass `disableBranchScope`, or `enforceBranchScope`, or `companyColumn`, or all three?"* — without per-PR debate. Each row maps a route file's tables (as referenced in its hand-rolled `WHERE "companyId" = $` sites) to one of five categories.
+
+| Category | Definition | Helper option to pass | Examples |
+|---|---|---|---|
+| **NO_BRANCHID** | Underlying table has no `branchId` column at all (verified via `information_schema.columns`). | `disableBranchScope: true` (no cascade possible). | `user_roles`, `approval_chains` (both verified in A6 — `settings.ts:753,789`); `event_logs`; `notifications` (A2); `entity_meta` (A3) |
+| **BRANCHID_UNUSED_BY_HANDLER** | Table has `branchId` but the route's WHERE clause never references it and the response doesn't surface it. Owner policy = keep current behaviour. | `disableBranchScope: true` + `// scope-ok: branch field not surfaced` comment. | (deferred — none migrated yet; `departments` is the canonical example: has `branchId` but list endpoint returns global per-company set) |
+| **BRANCHID_IS_NULL_FORK** | Predicate uses `("branchId" IS NULL OR …)` fallback for system-default rows. Cannot use cascade — would drop the NULL rows. | Cat-C allowlist (`scope-bypass-allowlist.txt`) + `// scope-ok: system-default fallback` comment. | `rules.ts` (A4 #716); `index.ts:167` (A5 #717); `system_settings` GETs in `settings.ts` (deferred) |
+| **BRANCHID_CASCADED** | Table has `branchId`, handler should respect role-based cascade (owner/GM bypass, branch_manager filtered, finance_clerk per-branch). | Default helper call — no override needed. | (no Class-B migration landed yet; this is the "happy path" pattern for future migrations) |
+| **ALIASED** | JOIN-based query where company column is aliased (`je."companyId"`, `coa."companyId"`). | `companyColumn: 'je."companyId"'` override. | Production-proven below; future targets: `finance-reports.ts`, `finance-custodies.ts`, `finance-budget.ts`, `finance-accounts.ts` (B-series) |
+| **WRITE_DEFERRED** | INSERT/UPDATE/DELETE with hand-rolled scope. Out of scope for the read-track A-series — needs a separate write-track RCA. | n/a — defer. | `branches`, `employee_assignments`, `purchase_orders`, `system_settings` writes in `settings.ts` (all deferred per A6 PR body) |
+
+**Decision rule for any future PR-Ax in this track:**
+
+```
+1. SELECT column_name FROM information_schema.columns WHERE table_name = '<table>'
+2. Does 'branchId' appear?
+   - NO  → NO_BRANCHID → disableBranchScope: true
+   - YES → grep handler for `"branchId"`:
+       - never referenced     → BRANCHID_UNUSED_BY_HANDLER → disableBranchScope + scope-ok comment
+       - IS NULL OR fork       → BRANCHID_IS_NULL_FORK → Cat-C allowlist
+       - filtered elsewhere    → BRANCHID_CASCADED → default helper call
+3. Does the company column appear with a JOIN alias?
+   - YES → add companyColumn: 'alias."companyId"' on top of the above
+   - NO  → no override
+4. Is the site INSERT/UPDATE/DELETE? → WRITE_DEFERRED, do not migrate in A-track
+```
+
+## Finding — `companyColumn` override is already production-proven
+
+A blocker repeatedly cited during the A-track scoping was *"we don't know if `companyColumn` override actually works in production — needs a tracer-bullet PR before any Class B migration"*. Re-verified during A7 sweep: **the override is already used in production main, has been since at least Task #260, and the helper's `companyColumn` option path is exercised by live traffic on every request to two distinct routes.**
+
+| File | Line | Usage |
+|---|---|---|
+| `artifacts/api-server/src/routes/auditLogs.ts` | 75 | `buildScopedWhere(scope, filters, { companyColumn: 'al."companyId"' })` — list endpoint with `audit_logs al` JOIN |
+| `artifacts/api-server/src/routes/actionCenter.ts` | 31 | `buildScopedWhere(scope, filters, { companyColumn: 'ac."companyId"', enforceBranchScope: true })` — combined override + cascade, the exact shape a Class-B finance report would need |
+
+**Implication for the migration plan above:**
+
+- The "Class B reports — branch cascade default" decision (RCA section *What needs owner decision before PR-1 lands*, item #3) is **no longer blocked on a tracer-bullet PR**. The combined `companyColumn + enforceBranchScope: true` shape is already serving live traffic via `actionCenter.ts:31` without a reported regression since merge.
+- **PR-A7 is therefore documentation-only** (this RCA append). No new code migration is required to "prove" the override pattern — that proof exists in main.
+- The remaining Class-B blocker is unchanged: each report file still needs a numeric before/after table on a fixture company for `owner / GM / branch_manager / finance_clerk` roles before merge, per RCA section *B. Risky normalisation*. That is a per-report verification step, not an "is the helper capable" question.
+
+**What this changes in the PR-by-PR plan (RCA section *Blast-radius ordering*):**
+
+- PR-2 → PR-5 (Categories A + C): unchanged.
+- PR-6 → PR-10 (Categories B + D): the per-PR scope verification still required (numeric before/after), but the *capability gate* is closed — no separate "prove the helper" PR is needed between A and B.
+
+## Cumulative — what A1..A7 actually moved
+
+| PR | File | Sites migrated | Cat-C allowlist trimmed | Real total drop |
+|---|---|---:|---:|---:|
+| A1 #712 | `events.ts` | 2 | 0 | −2 |
+| A2 #714 | `notifications.ts` | 5 | 0 | −5 |
+| A3 #715 (open) | `entityMeta.ts` | 4 | 0 | −4 (pending merge) |
+| A4 #716 (open) | `rules.ts` | 0 | 1 (reclassified Cat-C) | 0 real, allowlist tighter |
+| A5 #717 | `index.ts` | 0 | 1 (reclassified Cat-C) | 0 real, allowlist tighter |
+| A6 #718 | `settings.ts` | 2 | 0 | −2 |
+| A7 (this PR) | RCA doc only | 0 | 0 | 0 |
+| **Cumulative** | | **13 sites** | **2 Cat-C reclassifications** | **−13 real (2288 → 2275)** when A3 + A4 land |
+
+`STRICT` audit count: ✅ no regressions across the track.
+
 ## What is explicitly NOT decided by this RCA
 
 - **No route file is migrated.** Not even the smallest Category-A handler.
