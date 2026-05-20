@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-20T15:16:52.142Z",
+  "generatedAt": "2026-05-20T15:27:12.168Z",
   "scope": "artifacts/api-server/src/routes/**.ts",
   "detector": {
     "patterns": [
@@ -12,19 +12,19 @@
   "totals": {
     "filesScanned": 88,
     "filesWithHits": 82,
-    "totalHits": 2281,
+    "totalHits": 2277,
     "byCategory": {
       "A_safe": {
-        "files": 57,
-        "hits": 1871
+        "files": 56,
+        "hits": 1858
       },
       "B_risky": {
         "files": 19,
         "hits": 304
       },
       "C_manual": {
-        "files": 5,
-        "hits": 101
+        "files": 6,
+        "hits": 110
       },
       "D_helper": {
         "files": 1,
@@ -10245,88 +10245,6 @@
       ]
     },
     {
-      "file": "artifacts/api-server/src/routes/entityMeta.ts",
-      "handRolledHits": 12,
-      "aliasedHits": 0,
-      "usesBuildScopedWhere": 0,
-      "category": "A",
-      "reason": "aliased fraction 0% (0/12) — predominantly plain `\"companyId\" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits)",
-      "sites": [
-        {
-          "line": 35,
-          "text": "WHERE \"entityType\" = $1 AND \"entityId\" = $2 AND \"companyId\" = $3",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 80,
-          "text": "`SELECT * FROM entity_comments WHERE id = $1 AND \"companyId\" = $2`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 84,
-          "text": "`DELETE FROM entity_comments WHERE id = $1 AND \"companyId\" = $2`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 109,
-          "text": "WHERE \"entityType\" = $1 AND \"entityId\" = $2 AND \"companyId\" = $3",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 158,
-          "text": "`SELECT * FROM entity_tags WHERE id = $1 AND \"companyId\" = $2`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 162,
-          "text": "`DELETE FROM entity_tags WHERE id = $1 AND \"companyId\" = $2`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 189,
-          "text": "WHERE \"entityType\" = $1 AND tag = $2 AND \"companyId\" = $3 LIMIT 1000`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 205,
-          "text": "WHERE \"entityType\" = $1 AND \"companyId\" = $2",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 265,
-          "text": "`UPDATE ${table} SET status = 'approved' WHERE id = ANY($1::int[]) AND \"companyId\" = $2 AND \"deletedAt\" IS NULL AND status IN ('pending','draft','pending_approval') ${extraWhere} RETURNING id`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 272,
-          "text": "`UPDATE ${table} SET status = 'rejected' WHERE id = ANY($1::int[]) AND \"companyId\" = $2 AND \"deletedAt\" IS NULL AND status IN ('pending','draft','pending_approval') ${extraWhere} RETURNING id`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 279,
-          "text": "`UPDATE ${table} SET \"deletedAt\" = NOW() WHERE id = ANY($1::int[]) AND \"companyId\" = $2 AND \"deletedAt\" IS NULL AND status NOT IN ('approved','posted','paid','completed') ${extraWhere} RETURNING id`,",
-          "aliased": false,
-          "class": "A"
-        },
-        {
-          "line": 287,
-          "text": "`UPDATE ${table} SET status = $1 WHERE id = ANY($2::int[]) AND \"companyId\" = $3 AND \"deletedAt\" IS NULL AND status NOT IN ('closed','completed','cancelled') ${extraWhere} RETURNING id`,",
-          "aliased": false,
-          "class": "A"
-        }
-      ]
-    },
-    {
       "file": "artifacts/api-server/src/routes/operationsCenter.ts",
       "handRolledHits": 12,
       "aliasedHits": 1,
@@ -10927,62 +10845,62 @@
       "handRolledHits": 9,
       "aliasedHits": 0,
       "usesBuildScopedWhere": 0,
-      "category": "A",
-      "reason": "aliased fraction 0% (0/9) — predominantly plain `\"companyId\" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits)",
+      "category": "C",
+      "reason": "business_rules uses system-default fallback `(\"companyId\" IS NULL OR \"companyId\" = $N)` at L92 (GET /) and L109 (GET /logs) — NULL companyId = applies-to-all-tenants, specific companyId = company-override; buildScopedWhere has no fallback option (would require helper rewrite, banned by #685 directive). Remaining 7 hits (L163/L185/L213/L233/L239/L261/L268) are write/detail handlers — deferred per A-series scope, will revisit when write-handler PR series begins after Class B blockers cleared. PR #685 PR-A4.",
       "sites": [
         {
           "line": 92,
           "text": "WHERE (\"companyId\" IS NULL OR \"companyId\" = $1) AND \"deletedAt\" IS NULL",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 109,
           "text": "const conditions = [`(\"companyId\" IS NULL OR \"companyId\" = $1)`];",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 163,
           "text": "const [rule] = await rawQuery<BusinessRuleRow>(`SELECT * FROM business_rules WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`, [insertId, scope.companyId]);",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 185,
           "text": "`SELECT * FROM business_rules WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 213,
           "text": "const [rule] = await rawQuery<BusinessRuleRow>(`SELECT * FROM business_rules WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`, [id, scope.companyId]);",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 233,
           "text": "`SELECT * FROM business_rules WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 239,
           "text": "const { affectedRows } = await rawExecute(`UPDATE business_rules SET \"deletedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`, [id, scope.companyId]);",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 261,
           "text": "`SELECT id, \"isActive\" FROM business_rules WHERE id = $1 AND \"companyId\" = $2 AND \"deletedAt\" IS NULL`,",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         },
         {
           "line": 268,
           "text": "const { affectedRows } = await rawExecute(`UPDATE business_rules SET \"isActive\" = $1, \"updatedAt\" = NOW() WHERE id = $2 AND \"companyId\" = $3 AND \"deletedAt\" IS NULL`, [newActive, id, scope.companyId])",
           "aliased": false,
-          "class": "A"
+          "class": "C"
         }
       ]
     },
@@ -11039,6 +10957,64 @@
         {
           "line": 354,
           "text": "FROM correspondence WHERE \"companyId\" = $1`,",
+          "aliased": false,
+          "class": "A"
+        }
+      ]
+    },
+    {
+      "file": "artifacts/api-server/src/routes/entityMeta.ts",
+      "handRolledHits": 8,
+      "aliasedHits": 0,
+      "usesBuildScopedWhere": 4,
+      "category": "A",
+      "reason": "aliased fraction 0% (0/8) — predominantly plain `\"companyId\" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits)",
+      "sites": [
+        {
+          "line": 93,
+          "text": "`SELECT * FROM entity_comments WHERE id = $1 AND \"companyId\" = $2`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 97,
+          "text": "`DELETE FROM entity_comments WHERE id = $1 AND \"companyId\" = $2`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 181,
+          "text": "`SELECT * FROM entity_tags WHERE id = $1 AND \"companyId\" = $2`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 185,
+          "text": "`DELETE FROM entity_tags WHERE id = $1 AND \"companyId\" = $2`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 304,
+          "text": "`UPDATE ${table} SET status = 'approved' WHERE id = ANY($1::int[]) AND \"companyId\" = $2 AND \"deletedAt\" IS NULL AND status IN ('pending','draft','pending_approval') ${extraWhere} RETURNING id`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 311,
+          "text": "`UPDATE ${table} SET status = 'rejected' WHERE id = ANY($1::int[]) AND \"companyId\" = $2 AND \"deletedAt\" IS NULL AND status IN ('pending','draft','pending_approval') ${extraWhere} RETURNING id`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 318,
+          "text": "`UPDATE ${table} SET \"deletedAt\" = NOW() WHERE id = ANY($1::int[]) AND \"companyId\" = $2 AND \"deletedAt\" IS NULL AND status NOT IN ('approved','posted','paid','completed') ${extraWhere} RETURNING id`,",
+          "aliased": false,
+          "class": "A"
+        },
+        {
+          "line": 326,
+          "text": "`UPDATE ${table} SET status = $1 WHERE id = ANY($2::int[]) AND \"companyId\" = $3 AND \"deletedAt\" IS NULL AND status NOT IN ('closed','completed','cancelled') ${extraWhere} RETURNING id`,",
           "aliased": false,
           "class": "A"
         }
