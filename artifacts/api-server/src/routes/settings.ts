@@ -756,7 +756,7 @@ router.get("/role-modules", authorize({ feature: "settings", action: "view" }), 
     // "Branch Scope Decision Matrix" for the schema-driven category mapping.
     const { where, params } = buildScopedWhere(scope, {}, { disableBranchScope: true });
     const roles = await rawQuery(
-      `SELECT DISTINCT "roleKey", label, modules, level FROM user_roles ${where} ORDER BY level DESC`,
+      `SELECT DISTINCT "roleKey", label, modules, level FROM user_roles WHERE ${where} ORDER BY level DESC`,
       params
     );
     res.json(maskFields(req, { data: roles }));
@@ -795,7 +795,7 @@ router.get("/approval-config", authorize({ feature: "settings", action: "view" }
       softDeleteColumn: '"deletedAt"',
     });
     const chains = await rawQuery(
-      `SELECT * FROM approval_chains ${where} ORDER BY "chainType", "name"`,
+      `SELECT * FROM approval_chains WHERE ${where} ORDER BY "chainType", "name"`,
       params
     );
     res.json(maskFields(req, { data: chains }));
