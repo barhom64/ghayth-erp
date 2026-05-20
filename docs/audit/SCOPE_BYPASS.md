@@ -1,6 +1,6 @@
 # Scope Bypass — Static Detector Report
 
-Generated: 2026-05-20T15:28:49.680Z
+Generated: 2026-05-20T15:48:24.112Z
 
 Scope: `artifacts/api-server/src/routes/**.ts` only (per #685 PR-1, owner-approved boundary).
 
@@ -20,13 +20,13 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 |---|---:|
 | Route files scanned | 88 |
 | Files with ≥1 hand-rolled hit | 82 |
-| Total hand-rolled hits | 2277 |
+| Total hand-rolled hits | 2275 |
 
 ## By Category
 
 | Class | Meaning | Files | Hits |
 |---|---|---:|---:|
-| **A** | Safe — mechanical `buildScopedWhere` swap | 56 | 1866 |
+| **A** | Safe — mechanical `buildScopedWhere` swap | 56 | 1864 |
 | **B** | Risky — aliased company column / report joins | 19 | 304 |
 | **C** | Manual — allowlist (portals / auth / admin / pdpl) | 6 | 102 |
 | **D** | Helper — caller-side normalisation first | 1 | 5 |
@@ -66,10 +66,10 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 | `artifacts/api-server/src/routes/requests.ts` | A | 24 | 8 | 0 | aliased fraction 33% (8/24) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 8 aliased hits) |
 | `artifacts/api-server/src/routes/accounting-engine.ts` | A | 23 | 11 | 0 | aliased fraction 48% (11/23) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 11 aliased hits) |
 | `artifacts/api-server/src/routes/communications.ts` | A | 23 | 1 | 0 | aliased fraction 4% (1/23) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 1 aliased hit) |
-| `artifacts/api-server/src/routes/settings.ts` | A | 23 | 0 | 0 | aliased fraction 0% (0/23) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits) |
 | `artifacts/api-server/src/routes/store.ts` | A | 23 | 3 | 0 | aliased fraction 13% (3/23) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 3 aliased hits) |
 | `artifacts/api-server/src/routes/tasks.ts` | A | 22 | 2 | 1 | aliased fraction 9% (2/22) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 2 aliased hits) |
 | `artifacts/api-server/src/routes/hr-contracts.ts` | A | 21 | 4 | 0 | aliased fraction 19% (4/21) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 4 aliased hits) |
+| `artifacts/api-server/src/routes/settings.ts` | A | 21 | 0 | 2 | aliased fraction 0% (0/21) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits) |
 | `artifacts/api-server/src/routes/training.ts` | A | 21 | 9 | 0 | aliased fraction 43% (9/21) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 9 aliased hits) |
 | `artifacts/api-server/src/routes/activityLog.ts` | B | 20 | 12 | 0 | aliased fraction 60% (12/20) — predominantly report/join queries; needs per-handler companyColumn override + branch-cascade decision |
 | `artifacts/api-server/src/routes/marketing.ts` | A | 20 | 0 | 0 | aliased fraction 0% (0/20) — predominantly plain `"companyId" = $N`; mechanical buildScopedWhere swap candidate (per-handler review still needed for the 0 aliased hits) |
@@ -833,29 +833,6 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 - L712: `\`SELECT status, COUNT(*) as count FROM email_queue WHERE "companyId"=$1${emailDateFilter} GROUP BY status\`,`
 - L716: `\`SELECT COUNT(*) as count FROM push_subscriptions WHERE "companyId"=$1\`,`
 
-### `artifacts/api-server/src/routes/settings.ts` (A, 23 hits)
-
-- L282: `\`SELECT key, value FROM system_settings WHERE "companyId" = $1 AND "branchId" IS NULL\`,`
-- L286: `\`SELECT key, value FROM system_settings WHERE "companyId" = $1 AND "branchId" = $2\`,`
-- L420: `const [row] = await rawQuery<BranchRow>(\`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2\`, [r.insertId, targetCompanyId]);`
-- L450: `const [updated] = await rawQuery(\`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2\`, [id, existing.companyId]);`
-- L481: `\`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2\`,`
-- L490: `\`SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "branchId" = $1 AND status = 'active' AND "companyId" = $2\`,`
-- L494: `\`SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "branchId" = $1 AND status NOT IN ('cancelled','received','completed') AND "companyId" = $2 AND "deletedAt" IS NULL\`,`
-- L510: `\`UPDATE branches SET status='inactive' WHERE id=$1 AND "companyId"=$2\`,`
-- L536: `const [row] = await rawQuery<DepartmentRow>(\`SELECT * FROM departments WHERE id=$1 AND "companyId"=$2\`, [r.insertId, scope.companyId]);`
-- L547: `const { affectedRows } = await rawExecute(\`UPDATE departments SET name=$1, "nameEn"=$2, "managerId"=$3 WHERE id=$4 AND "companyId"=$5 RETURNING id\`, [name, nameEn || null, manager || null, id, scope.c`
-- L564: `\`SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "departmentId" = $1 AND status = 'active' AND "companyId" = $2\`,`
-- L570: `const [beforeDept] = await rawQuery(\`SELECT * FROM departments WHERE id=$1 AND "companyId"=$2\`, [id, scope.companyId]);`
-- L572: `await rawExecute(\`DELETE FROM departments WHERE id=$1 AND "companyId"=$2\`, [id, scope.companyId]);`
-- L753: `\`SELECT DISTINCT "roleKey", label, modules, level FROM user_roles WHERE "companyId" = $1 ORDER BY level DESC\`,`
-- L767: `\`UPDATE user_roles SET modules=$1 WHERE "roleKey"=$2 AND "companyId"=$3\`,`
-- L784: `\`SELECT * FROM approval_chains WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY "chainType", "name"\`,`
-- L806: `const [row] = await rawQuery<ApprovalChainRow>(\`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2\`, [r.insertId, scope.companyId]);`
-- L815: `const [beforeChain] = await rawQuery(\`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL\`, [id, scope.companyId]);`
-- L817: `await rawExecute(\`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2\`, [id, scope.companyId]);`
-- L850: `\`SELECT key, value FROM system_settings WHERE key = ANY($1) AND "companyId" = $2\`,`
-
 ### `artifacts/api-server/src/routes/store.ts` (A, 23 hits)
 
 - L156: `\`SELECT COUNT(*) AS total FROM store_products WHERE "companyId"=$1 AND "deletedAt" IS NULL\`,`
@@ -924,6 +901,29 @@ opt-in via env: `SCOPE_BYPASS_STRICT=1`.
 - L524: `\`SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL\`,`
 - L536: `WHERE id = $1 AND "companyId" = $4 AND status = 'active' RETURNING *\`,`
 - L570: `\`SELECT * FROM employee_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL\`,`
+
+### `artifacts/api-server/src/routes/settings.ts` (A, 21 hits)
+
+- L283: `\`SELECT key, value FROM system_settings WHERE "companyId" = $1 AND "branchId" IS NULL\`,`
+- L287: `\`SELECT key, value FROM system_settings WHERE "companyId" = $1 AND "branchId" = $2\`,`
+- L421: `const [row] = await rawQuery<BranchRow>(\`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2\`, [r.insertId, targetCompanyId]);`
+- L451: `const [updated] = await rawQuery(\`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2\`, [id, existing.companyId]);`
+- L482: `\`SELECT * FROM branches WHERE id=$1 AND "companyId"=$2\`,`
+- L491: `\`SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "branchId" = $1 AND status = 'active' AND "companyId" = $2\`,`
+- L495: `\`SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "branchId" = $1 AND status NOT IN ('cancelled','received','completed') AND "companyId" = $2 AND "deletedAt" IS NULL\`,`
+- L511: `\`UPDATE branches SET status='inactive' WHERE id=$1 AND "companyId"=$2\`,`
+- L537: `const [row] = await rawQuery<DepartmentRow>(\`SELECT * FROM departments WHERE id=$1 AND "companyId"=$2\`, [r.insertId, scope.companyId]);`
+- L548: `const { affectedRows } = await rawExecute(\`UPDATE departments SET name=$1, "nameEn"=$2, "managerId"=$3 WHERE id=$4 AND "companyId"=$5 RETURNING id\`, [name, nameEn || null, manager || null, id, scope.c`
+- L565: `\`SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "departmentId" = $1 AND status = 'active' AND "companyId" = $2\`,`
+- L571: `const [beforeDept] = await rawQuery(\`SELECT * FROM departments WHERE id=$1 AND "companyId"=$2\`, [id, scope.companyId]);`
+- L573: `await rawExecute(\`DELETE FROM departments WHERE id=$1 AND "companyId"=$2\`, [id, scope.companyId]);`
+- L773: `\`UPDATE user_roles SET modules=$1 WHERE "roleKey"=$2 AND "companyId"=$3\`,`
+- L820: `const [row] = await rawQuery<ApprovalChainRow>(\`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2\`, [r.insertId, scope.companyId]);`
+- L829: `const [beforeChain] = await rawQuery(\`SELECT * FROM approval_chains WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL\`, [id, scope.companyId]);`
+- L831: `await rawExecute(\`UPDATE approval_chains SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2\`, [id, scope.companyId]);`
+- L864: `\`SELECT key, value FROM system_settings WHERE key = ANY($1) AND "companyId" = $2\`,`
+- L896: `\`DELETE FROM system_settings WHERE key=$1 AND "companyId"=$2\`,`
+- L901: `\`SELECT id FROM system_settings WHERE key=$1 AND "companyId"=$2\`,`
 
 ### `artifacts/api-server/src/routes/training.ts` (A, 21 hits)
 
