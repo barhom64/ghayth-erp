@@ -157,12 +157,16 @@ describe("Settings companyId scoping", () => {
   });
 
   it("GET /approval-config and POST /approval-config scope by companyId", () => {
-    // #685 PR-A6: GET migrated to buildScopedWhere (approval_chains has no branchId,
-    // so disableBranchScope:true; softDeleteColumn keeps deletedAt filter inside helper)
+    // #685 PR-A6/A6.2: GET migrated to buildScopedWhere (approval_chains has no
+    // branchId → disableBranchScope:true; softDeleteColumn keeps deletedAt filter
+    // inside helper). A6.2 hotfix: assert the WHERE keyword precedes ${where}
+    // because buildScopedWhere returns CONDITIONS only, not a full WHERE clause.
     const getIdx = SETTINGS_ROUTE.indexOf('router.get("/approval-config"');
     const getSection = SETTINGS_ROUTE.slice(getIdx, getIdx + 3000);
     expect(getSection).toContain("buildScopedWhere(scope");
-    expect(getSection).toContain("approval_chains ${where}");
+    expect(getSection).toContain("disableBranchScope: true");
+    expect(getSection).toContain('softDeleteColumn: \'"deletedAt"\'');
+    expect(getSection).toContain("FROM approval_chains WHERE ${where}");
 
     const postIdx = SETTINGS_ROUTE.indexOf('router.post("/approval-config"');
     const section = SETTINGS_ROUTE.slice(postIdx, postIdx + 3000);
@@ -171,12 +175,13 @@ describe("Settings companyId scoping", () => {
   });
 
   it("GET /role-modules scopes by companyId (P02-CRIT1 fix)", () => {
-    // #685 PR-A6: migrated to buildScopedWhere (user_roles has no branchId column,
-    // so disableBranchScope:true preserves existing behavior exactly)
+    // #685 PR-A6/A6.2: migrated to buildScopedWhere (user_roles has no branchId
+    // → disableBranchScope:true). A6.2 hotfix asserts WHERE keyword.
     const idx = SETTINGS_ROUTE.indexOf('router.get("/role-modules"');
     const section = SETTINGS_ROUTE.slice(idx, idx + 3000);
     expect(section).toContain("buildScopedWhere(scope");
-    expect(section).toContain("user_roles ${where}");
+    expect(section).toContain("disableBranchScope: true");
+    expect(section).toContain("FROM user_roles WHERE ${where}");
   });
 
   it("PUT /role-modules/:roleKey scopes UPDATE by companyId (P02-CRIT1 fix)", () => {
