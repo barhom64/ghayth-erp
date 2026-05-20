@@ -1196,7 +1196,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/finance-collection.ts",
-      "line": 143,
+      "line": 185,
       "entity": "invoices",
       "action": "invoice.overdue",
       "statusColumn": "status",
@@ -1512,7 +1512,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-      "line": 758,
+      "line": 757,
       "entity": "hr_inquiry_memos",
       "action": "hr.memo.justified",
       "statusColumn": "status",
@@ -1525,7 +1525,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-      "line": 812,
+      "line": 811,
       "entity": "hr_inquiry_memos",
       "action": "hr.memo.manager_recommended",
       "statusColumn": "status",
@@ -1538,7 +1538,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-      "line": 897,
+      "line": 896,
       "entity": "hr_inquiry_memos",
       "action": "hr.memo.gm_decided",
       "statusColumn": "status",
@@ -1551,7 +1551,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-      "line": 1001,
+      "line": 1000,
       "entity": "hr_inquiry_memos",
       "action": "hr.memo.cancelled",
       "statusColumn": "status",
@@ -1567,7 +1567,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-      "line": 1044,
+      "line": 1043,
       "entity": "hr_inquiry_memos",
       "action": "hr.memo.appealed",
       "statusColumn": "status",
@@ -1580,7 +1580,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-      "line": 1094,
+      "line": 1093,
       "entity": "hr_inquiry_memos",
       "action": "hr.memo.appeal_decided",
       "statusColumn": "status",
@@ -1593,7 +1593,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-      "line": 1151,
+      "line": 1150,
       "entity": "hr_inquiry_memos",
       "action": "hr.memo.closed",
       "statusColumn": "status",
@@ -1635,7 +1635,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/hr-exit.ts",
-      "line": 580,
+      "line": 579,
       "entity": "hr_exit_requests",
       "action": "hr.exit.completed",
       "statusColumn": "status",
@@ -1976,9 +1976,9 @@
     },
     {
       "file": "artifacts/api-server/src/routes/requests.ts",
-      "line": 536,
+      "line": 533,
       "entity": "requests",
-      "action": "workflow.overridden",
+      "action": "workflow_override",
       "statusColumn": "status",
       "fromStates": [],
       "fromStatesDynamic": true,
@@ -1987,7 +1987,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/requests.ts",
-      "line": 611,
+      "line": 608,
       "entity": "requests",
       "action": "request.approved",
       "statusColumn": "status",
@@ -1998,7 +1998,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/requests.ts",
-      "line": 674,
+      "line": 671,
       "entity": "requests",
       "action": "request.rejected",
       "statusColumn": "status",
@@ -2009,7 +2009,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/requests.ts",
-      "line": 735,
+      "line": 732,
       "entity": "requests",
       "action": "request.returned",
       "statusColumn": "status",
@@ -2020,7 +2020,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/requests.ts",
-      "line": 868,
+      "line": 865,
       "entity": "requests",
       "action": "request.converted",
       "statusColumn": "status",
@@ -2482,7 +2482,7 @@
       {
         "entity": "hr_inquiry_memos",
         "statusColumn": "status",
-        "sampleSite": "artifacts/api-server/src/routes/hr-discipline.ts:758"
+        "sampleSite": "artifacts/api-server/src/routes/hr-discipline.ts:757"
       },
       {
         "entity": "employee_violations",
@@ -2542,7 +2542,7 @@
       {
         "entity": "requests",
         "statusColumn": "status",
-        "sampleSite": "artifacts/api-server/src/routes/requests.ts:536"
+        "sampleSite": "artifacts/api-server/src/routes/requests.ts:533"
       },
       {
         "entity": "training_programs",
@@ -2895,7 +2895,7 @@
     "directStatusUpdate": [
       {
         "file": "artifacts/api-server/src/routes/admin.ts",
-        "line": 1036,
+        "line": 1010,
         "table": "audit_violations",
         "snippet": "`UPDATE audit_violations SET status='resolved', \"resolvedBy\"=$1, \"resolvedAt\"=NOW() WHERE id=$2 AND \"companyId\"=$3 AND status != 'resolved'`"
       },
@@ -2913,33 +2913,15 @@
       },
       {
         "file": "artifacts/api-server/src/routes/correspondence.ts",
-        "line": 271,
+        "line": 269,
         "table": "correspondence",
         "snippet": "`UPDATE correspondence SET status = 'sent', ${sentField} = NOW(), \"updatedAt\" = NOW()"
       },
       {
         "file": "artifacts/api-server/src/routes/documents.ts",
-        "line": 532,
+        "line": 488,
         "table": "documents",
         "snippet": "`UPDATE documents SET status=$1, \"updatedAt\"=NOW() WHERE id=$2 AND \"companyId\"=$3 AND status != $1 AND \"deletedAt\" IS NULL`,"
-      },
-      {
-        "file": "artifacts/api-server/src/routes/documents.ts",
-        "line": 1132,
-        "table": "document_ocr_extractions",
-        "snippet": "`UPDATE document_ocr_extractions"
-      },
-      {
-        "file": "artifacts/api-server/src/routes/documents.ts",
-        "line": 1172,
-        "table": "document_ocr_extractions",
-        "snippet": "`UPDATE document_ocr_extractions"
-      },
-      {
-        "file": "artifacts/api-server/src/routes/documents.ts",
-        "line": 1204,
-        "table": "documents",
-        "snippet": "`UPDATE documents SET \"ocrStatus\"='pending', \"ocrError\"=NULL, \"ocrAttempts\"=0 WHERE id=$1`,"
       },
       {
         "file": "artifacts/api-server/src/routes/employees.ts",
@@ -3099,19 +3081,19 @@
       },
       {
         "file": "artifacts/api-server/src/routes/finance-zatca.ts",
-        "line": 499,
+        "line": 490,
         "table": "zatca_settings",
         "snippet": "`UPDATE zatca_settings SET \"lastConnectionTest\" = NOW(), \"connectionTestStatus\" = $1, \"connectionTestMessage\" = $2 WHERE \"companyId\" = $3`,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-zatca.ts",
-        "line": 696,
+        "line": 687,
         "table": "invoices",
         "snippet": "`UPDATE invoices SET \"zatcaUuid\" = $1::uuid, \"zatcaHash\" = $2, \"zatcaStatus\" = $3, \"zatcaQrCode\" = $4"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-zatca.ts",
-        "line": 784,
+        "line": 775,
         "table": "journal_entries",
         "snippet": "`UPDATE journal_entries SET \"zatcaUuid\" = $1::uuid, \"zatcaHash\" = $2, \"zatcaStatus\" = $3, \"zatcaQrCode\" = $4"
       },
@@ -3237,31 +3219,31 @@
       },
       {
         "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-        "line": 920,
+        "line": 919,
         "table": "employee_violations",
         "snippet": "`UPDATE employee_violations SET status = 'rejected' WHERE id = $1 AND \"companyId\" = $2 AND status = 'pending' AND \"deletedAt\" IS NULL`,"
       },
       {
         "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-        "line": 945,
+        "line": 944,
         "table": "employee_violations",
         "snippet": "`UPDATE employee_violations"
       },
       {
         "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-        "line": 1014,
+        "line": 1013,
         "table": "employee_violations",
         "snippet": "`UPDATE employee_violations SET status = 'cancelled'"
       },
       {
         "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-        "line": 1110,
+        "line": 1109,
         "table": "employee_violations",
         "snippet": "`UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND \"companyId\" = $2 AND status = 'approved' AND \"deletedAt\" IS NUL"
       },
       {
         "file": "artifacts/api-server/src/routes/hr-discipline.ts",
-        "line": 1165,
+        "line": 1164,
         "table": "employee_violations",
         "snippet": "`UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND \"companyId\" = $2 AND status IN ('approved', 'rejected', 'appeal_accepted"
       },
@@ -3273,7 +3255,7 @@
       },
       {
         "file": "artifacts/api-server/src/routes/hr-exit.ts",
-        "line": 593,
+        "line": 592,
         "table": "employee_assignments",
         "snippet": "`UPDATE employee_assignments SET status = 'terminated', \"endDate\" = CURRENT_DATE"
       },
@@ -3312,18 +3294,6 @@
         "line": 515,
         "table": "hr_overtime_requests",
         "snippet": "`UPDATE hr_overtime_requests SET status = 'rejected', \"rejectionReason\" = $1, \"updatedAt\" = NOW() WHERE id = $2 AND \"companyId\" = $3 AND sta"
-      },
-      {
-        "file": "artifacts/api-server/src/routes/hr-saudi-compliance.ts",
-        "line": 816,
-        "table": "mudad_settlements",
-        "snippet": "`UPDATE mudad_settlements"
-      },
-      {
-        "file": "artifacts/api-server/src/routes/hr-saudi-compliance.ts",
-        "line": 828,
-        "table": "mudad_settlements",
-        "snippet": "`UPDATE mudad_settlements"
       },
       {
         "file": "artifacts/api-server/src/routes/hr.ts",
@@ -3470,12 +3440,6 @@
         "snippet": "`UPDATE obligations SET status='cancelled', \"updatedAt\"=NOW()"
       },
       {
-        "file": "artifacts/api-server/src/routes/pricing-rules.ts",
-        "line": 292,
-        "table": "pricing_rules",
-        "snippet": "`UPDATE pricing_rules SET \"deletedAt\"=NOW(), status='inactive'"
-      },
-      {
         "file": "artifacts/api-server/src/routes/print.ts",
         "line": 573,
         "table": "print_reprint_requests",
@@ -3564,12 +3528,6 @@
         "line": 1393,
         "table": "umrah_penalties",
         "snippet": "`UPDATE umrah_penalties SET status='invoiced', \"invoiceId\"=$1 WHERE \"agentId\"=$2 AND \"seasonId\"=$3 AND \"companyId\"=$4 AND status='pending'`,"
-      },
-      {
-        "file": "artifacts/api-server/src/routes/warehouse-advanced.ts",
-        "line": 296,
-        "table": "warehouse_stock_serials",
-        "snippet": "`UPDATE warehouse_stock_serials"
       }
     ],
     "inconsistentFromStates": []

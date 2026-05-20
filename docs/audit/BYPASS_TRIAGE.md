@@ -4,7 +4,7 @@ Generated: 2026-05-20
 
 > **Read-only.** Regenerate with
 > `node audit/system-review/tooling/bypass-triage.mjs`. Classifies
-> the **113 direct UPDATE bypasses** found by
+> the **106 direct UPDATE bypasses** found by
 > workflow-audit into the three buckets the owner specified.
 
 ## Classification rules
@@ -19,10 +19,10 @@ Generated: 2026-05-20
 
 | Bucket | Count | % |
 |---|---:|---:|
-| intentional | **81** | 72% |
-| legacy | **17** | 15% |
-| dangerous | **15** | 13% |
-| TOTAL | 113 | 100% |
+| intentional | **74** | 70% |
+| legacy | **17** | 16% |
+| dangerous | **15** | 14% |
+| TOTAL | 106 | 100% |
 
 ## Per-file breakdown
 
@@ -39,7 +39,6 @@ Generated: 2026-05-20
 | `fleet.ts` | 12 | **0** | 11 | 1 |
 | `hr-contracts.ts` | 5 | **0** | 0 | 5 |
 | `hr-discipline.ts` | 5 | **0** | 0 | 5 |
-| `documents.ts` | 4 | **0** | 0 | 4 |
 | `finance-zatca.ts` | 3 | **0** | 0 | 3 |
 | `hr-loans.ts` | 3 | **0** | 0 | 3 |
 | `hr-overtime.ts` | 3 | **0** | 0 | 3 |
@@ -48,18 +47,16 @@ Generated: 2026-05-20
 | `finance-algorithms.ts` | 2 | **0** | 0 | 2 |
 | `gov-integrations.ts` | 2 | **0** | 2 | 0 |
 | `hr-exit.ts` | 2 | **0** | 0 | 2 |
-| `hr-saudi-compliance.ts` | 2 | **0** | 0 | 2 |
 | `obligations.ts` | 2 | **0** | 0 | 2 |
 | `print.ts` | 2 | **0** | 0 | 2 |
 | `projects.ts` | 2 | **0** | 1 | 1 |
 | `admin.ts` | 1 | **0** | 0 | 1 |
 | `correspondence.ts` | 1 | **0** | 0 | 1 |
+| `documents.ts` | 1 | **0** | 0 | 1 |
 | `finance-cost-centers.ts` | 1 | **0** | 0 | 1 |
-| `pricing-rules.ts` | 1 | **0** | 0 | 1 |
 | `recruitment.ts` | 1 | **0** | 0 | 1 |
 | `settings.ts` | 1 | **0** | 1 | 0 |
 | `umrah-entities.ts` | 1 | **0** | 0 | 1 |
-| `warehouse-advanced.ts` | 1 | **0** | 0 | 1 |
 
 ## Per-table breakdown (status column)
 
@@ -84,12 +81,9 @@ Generated: 2026-05-20
 | `payroll_runs` | — | 3 | **0** | 1 | 2 |
 | `rbac_jit_requests` | — | 3 | **0** | 0 | 3 |
 | `pbx_calls` | — | 2 | **0** | 0 | 2 |
-| `documents` | — | 2 | **0** | 0 | 2 |
-| `document_ocr_extractions` | — | 2 | **0** | 0 | 2 |
 | `approval_requests` | — | 2 | **0** | 0 | 2 |
 | `bank_statements` | — | 2 | **0** | 0 | 2 |
 | `gov_integrations` | — | 2 | **0** | 2 | 0 |
-| `mudad_settlements` | — | 2 | **0** | 0 | 2 |
 | `attendance_deductions` | — | 2 | **0** | 0 | 2 |
 | `hr_loan_installments` | — | 2 | **0** | 0 | 2 |
 | `email_queue` | — | 2 | **0** | 0 | 2 |
@@ -100,6 +94,7 @@ Generated: 2026-05-20
 | `contract_payment_schedule` | — | 2 | **0** | 1 | 1 |
 | `audit_violations` | — | 1 | **0** | 0 | 1 |
 | `correspondence` | — | 1 | **0** | 0 | 1 |
+| `documents` | — | 1 | **0** | 0 | 1 |
 | `onboarding_tasks` | — | 1 | **0** | 0 | 1 |
 | `employees` | — | 1 | **0** | 0 | 1 |
 | `tasks` | — | 1 | **0** | 0 | 1 |
@@ -107,11 +102,9 @@ Generated: 2026-05-20
 | `customer_advances` | — | 1 | **0** | 0 | 1 |
 | `zatca_settings` | — | 1 | **0** | 0 | 1 |
 | `hr_exit_clearance` | — | 1 | **0** | 0 | 1 |
-| `pricing_rules` | — | 1 | **0** | 0 | 1 |
 | `job_applications` | — | 1 | **0** | 0 | 1 |
 | `branches` | — | 1 | **0** | 1 | 0 |
 | `umrah_import_logs` | — | 1 | **0** | 0 | 1 |
-| `warehouse_stock_serials` | — | 1 | **0** | 0 | 1 |
 
 ## Dangerous hits (priority queue for cluster-by-cluster fixes)
 
@@ -137,23 +130,23 @@ Each one is a candidate fix: migrate to `applyTransition` (same pattern as #672 
 
 ## Intentional hits (require a `// bypass-ok` comment per the engineering rule)
 
-**81** intentional bypasses. Recommended action: in a low-priority PR, prepend each with a one-line comment so future audits skip it without re-classifying.
+**74** intentional bypasses. Recommended action: in a low-priority PR, prepend each with a one-line comment so future audits skip it without re-classifying.
 
 Sample (top 10):
 
 | File | Line | Table | Rationale |
 |---|---:|---|---|
-| `admin.ts` | 1036 | `audit_violations` | audit_violations is a system-signal table (not a workflow entity); status is a flag, not a state |
+| `admin.ts` | 1010 | `audit_violations` | audit_violations is a system-signal table (not a workflow entity); status is a flag, not a state |
 | `communications.ts` | 362 | `pbx_calls` | pbx_calls is a system-signal table (not a workflow entity); status is a flag, not a state |
 | `communications.ts` | 412 | `pbx_calls` | pbx_calls is a system-signal table (not a workflow entity); status is a flag, not a state |
-| `correspondence.ts` | 271 | `correspondence` | correspondence is a system-signal table (not a workflow entity); status is a flag, not a state |
-| `documents.ts` | 532 | `documents` | documents is a system-signal table (not a workflow entity); status is a flag, not a state |
-| `documents.ts` | 1132 | `document_ocr_extractions` | bulk update without single-row predicate; treat as documented batch operation |
-| `documents.ts` | 1172 | `document_ocr_extractions` | bulk update without single-row predicate; treat as documented batch operation |
-| `documents.ts` | 1204 | `documents` | documents is a system-signal table (not a workflow entity); status is a flag, not a state |
+| `correspondence.ts` | 269 | `correspondence` | correspondence is a system-signal table (not a workflow entity); status is a flag, not a state |
+| `documents.ts` | 488 | `documents` | documents is a system-signal table (not a workflow entity); status is a flag, not a state |
 | `employees.ts` | 757 | `onboarding_tasks` | bulk update without single-row predicate; treat as documented batch operation |
 | `employees.ts` | 1101 | `employee_assignments` | bulk update without single-row predicate; treat as documented batch operation |
-| _…71 more in JSON sidecar_ |  |  |  |
+| `employees.ts` | 1106 | `employee_assignments` | bulk update without single-row predicate; treat as documented batch operation |
+| `employees.ts` | 1268 | `employee_assignments` | bulk update without single-row predicate; treat as documented batch operation |
+| `employees.ts` | 1272 | `employees` | bulk update without single-row predicate; treat as documented batch operation |
+| _…64 more in JSON sidecar_ |  |  |  |
 
 ## Legacy hits (migrate at convenience)
 
