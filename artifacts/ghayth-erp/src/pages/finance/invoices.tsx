@@ -251,7 +251,7 @@ export default function InvoicesPage() {
                     approveEndpoint={`/finance/invoices/${inv.id}/approve`}
                     rejectEndpoint={`/finance/invoices/${inv.id}/reject`}
                     returnEndpoint={`/finance/invoices/${inv.id}/return`}
-                    approveMethod="PATCH"
+                    approveMethod="POST"
                     rejectMethod="PATCH"
                     returnMethod="PATCH"
                     approveBody={() => ({})}
