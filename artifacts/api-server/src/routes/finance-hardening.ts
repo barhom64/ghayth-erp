@@ -9,13 +9,14 @@ import {
 } from "../lib/errorHandler.js";
 import { z } from "zod";
 import { Router } from "express";
-import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   createAuditLog,
   emitEvent,
   todayISO,
+  checkFinancialPeriodOpen,
 } from "../lib/businessHelpers.js";
 import { requestIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib/requestIdempotency.js";
 
@@ -306,6 +307,107 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", authorize({ feature
 // draft → pending_review → approved → posted
 // ─────────────────────────────────────────────────────────────────────────────
 
+// A manual journal must not touch the ledger until it is posted. Creation
+// persists an UNPOSTED draft (status='draft'); the ledger effect — the
+// chart_of_accounts balance movement — is applied only at /post, once the
+// approval transition has succeeded.
+
+// Persist a manual journal as an unposted draft. Uses the allow-listed GL
+// primitive (lib/gl/posting.ts) with status='draft': it writes
+// journal_entries/journal_lines but — unlike createJournalEntry — does NOT
+// move chart_of_accounts.currentBalance, so a draft has no ledger effect.
+// Idempotent on sourceKey.
+async function insertDraftManualJournal(params: {
+  companyId: number;
+  branchId: number | null;
+  createdBy: number | null;
+  ref: string;
+  sourceKey: string;
+  description: string;
+  costCenter: string | null;
+  lines: z.infer<typeof journalLineSchema>[];
+}): Promise<{ journalId: number; alreadyExists: boolean }> {
+  // Idempotency — mirrors financialEngine's sourceKey guard.
+  const existing = await rawQuery<{ id: number }>(
+    `SELECT id FROM journal_entries WHERE "companyId"=$1 AND "sourceKey"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+    [params.companyId, params.sourceKey],
+  );
+  if (existing[0]) return { journalId: existing[0].id, alreadyExists: true };
+
+  // The GL primitive keys lines on accountId — resolve from accountCode.
+  const codes = [...new Set(params.lines.map((l) => l.accountCode))];
+  const accounts = await rawQuery<{ id: number; code: string }>(
+    `SELECT id, code FROM chart_of_accounts WHERE "companyId"=$1 AND code = ANY($2::text[]) AND "deletedAt" IS NULL`,
+    [params.companyId, codes],
+  );
+  const idByCode = new Map(accounts.map((a) => [a.code, a.id]));
+
+  let totalDebit = 0;
+  let totalCredit = 0;
+  const lines = params.lines.map((l) => {
+    const accountId = idByCode.get(l.accountCode);
+    if (!accountId) {
+      throw new ValidationError(`الحساب "${l.accountCode}" غير موجود في دليل الحسابات`, { field: "lines" });
+    }
+    const debit = Number(l.debit ?? 0);
+    const credit = Number(l.credit ?? 0);
+    totalDebit += debit;
+    totalCredit += credit;
+    return { accountId, debit, credit, description: l.description ?? params.description };
+  });
+
+  const { postJournalEntry } = await import("../lib/gl/posting.js");
+  const { journalEntryId } = await postJournalEntry(
+    { description: params.description, lines, totalDebit, totalCredit, balanced: true },
+    {
+      companyId: params.companyId,
+      branchId: params.branchId ?? undefined,
+      createdBy: params.createdBy ?? undefined,
+      ref: params.ref,
+      type: "general",
+      sourceType: "manual_journal",
+      sourceId: 0,
+      status: "draft",
+    },
+  );
+
+  // The GL primitive does not carry the manual-journal workflow columns —
+  // stamp them so the existing list/detail/lifecycle queries keep working.
+  await rawExecute(
+    `UPDATE journal_entries SET "approvalStatus"='draft', "isManual"=TRUE, "costCenter"=$1, "sourceKey"=$2
+     WHERE id=$3 AND "companyId"=$4`,
+    [params.costCenter, params.sourceKey, journalEntryId, params.companyId],
+  );
+
+  return { journalId: journalEntryId, alreadyExists: false };
+}
+
+// Apply the ledger effect of a manual journal at /post time: move
+// chart_of_accounts.currentBalance by each line's debit−credit. The
+// journal_entries.status flip to 'posted' is done by applyTransition in the
+// /post route; this carries the balance side-effect that draft creation
+// deferred. The balance maths mirrors createJournalEntry exactly.
+async function postManualJournalToLedger(journalId: number, companyId: number): Promise<void> {
+  const lines = await rawQuery<{ accountCode: string | null; debit: string; credit: string }>(
+    `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId"=$1`,
+    [journalId],
+  );
+  const deltas = new Map<string, number>();
+  for (const l of lines) {
+    if (!l.accountCode) continue;
+    deltas.set(l.accountCode, (deltas.get(l.accountCode) ?? 0) + (Number(l.debit) - Number(l.credit)));
+  }
+  await withTransaction(async (client) => {
+    for (const [accountCode, delta] of deltas) {
+      if (Math.abs(delta) < 0.001) continue;
+      await client.query(
+        `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1 WHERE "companyId"=$2 AND code=$3`,
+        [delta, companyId, accountCode],
+      );
+    }
+  });
+}
+
 financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -342,22 +444,18 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
       return;
     }
 
-    const { financialEngine } = await import("../lib/engines/index.js");
-    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
+    // Posting integrity: a manual journal is persisted as an UNPOSTED draft.
+    // No GL/ledger effect happens here — it is deferred to /post, which calls
+    // postManualJournalToLedger after the approval transition succeeds.
+    const { journalId, alreadyExists } = await insertDraftManualJournal({
       companyId: scope.companyId,
-      branchId: scope.branchId,
-      createdBy: scope.activeAssignmentId,
+      branchId: scope.branchId ?? null,
+      createdBy: scope.activeAssignmentId ?? null,
       ref,
-      description: description ?? "قيد يدوي",
-      sourceType: "manual_journal",
-      sourceId: 0,
       sourceKey: `finance:manual:${ref}`,
+      description: description ?? "قيد يدوي",
+      costCenter: costCenter ?? null,
       lines,
-      headerMeta: {
-        approvalStatus: "draft",
-        isManual: true,
-        costCenter: costCenter ?? null,
-      },
     });
     markIdempotencyReplay(req, res, alreadyExists);
 
@@ -625,6 +723,15 @@ financeHardeningRouter.patch("/journal-manual/:id/post", authorize({ feature: "f
     );
     if (!je) throw new NotFoundError("القيد غير موجود");
 
+    // Posting integrity: the draft hits the ledger now (not at creation), so
+    // the financial-period guard runs here, at posting time.
+    const period = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!period.open) {
+      throw new ConflictError(
+        `الفترة المالية "${period.periodName ?? ""}" مغلقة — لا يمكن ترحيل القيد`,
+      );
+    }
+
     // Posting flips BOTH approvalStatus='posted' AND status='posted'. The
     // engine drives the approvalStatus transition (gate check + row update),
     // and setExtras carries the mirror write to status and the posting
@@ -645,6 +752,11 @@ financeHardeningRouter.patch("/journal-manual/:id/post", authorize({ feature: "f
       },
       after: { ref: je.ref, postingStatus: "posted" },
     });
+
+    // Draft creation deferred the ledger effect — apply it now. One-shot:
+    // applyTransition above only succeeds from approvalStatus='approved', so a
+    // retried /post cannot re-apply the balance movement.
+    await postManualJournalToLedger(journalId, scope.companyId);
 
     res.json({
       message: "تم ترحيل القيد اليدوي بنجاح",
