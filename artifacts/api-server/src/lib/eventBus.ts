@@ -3,6 +3,8 @@ import { rawExecute, rawQuery } from "./rawdb.js";
 import { logger } from "./logger.js";
 import { isKnownEvent } from "./eventCatalog.js";
 import { setGauge } from "./metrics.js";
+import { getRequestId, runWithCorrelationId } from "./requestContext.js";
+import { randomUUID } from "node:crypto";
 
 export interface EventPayload {
   /** Envelope version — stamped by EventBus.emit (see EVENT_ENVELOPE_VERSION). */
@@ -251,7 +253,13 @@ export function registerCrossDomainHandler(
   handler: (payload: EventPayload) => Promise<void>
 ): void {
   eventBus.on(eventName, (payload: EventPayload) => {
-    void runHandlerWithRetry(eventName, handler, payload);
+    // Keep the correlation id of the emitting unit (an HTTP request, a cron
+    // run) so the handler's logs trace back to what triggered the event;
+    // mint one only when the event was emitted with no ambient context.
+    const reqId = getRequestId() ?? `event-${eventName}-${randomUUID()}`;
+    void runWithCorrelationId(reqId, () =>
+      runHandlerWithRetry(eventName, handler, payload),
+    );
   });
 }
 

@@ -37,6 +37,8 @@ import { abcMonthlyClassificationCron } from "./inventory/abc-analysis.js";
 import { iqamaDailyAlertCron } from "./saudi-compliance/iqama-cron.js";
 import { saudizationMonthlySnapshotCron } from "./saudi-compliance/saudization-snapshot.js";
 import { recordJobRun } from "./observability.js";
+import { runWithCorrelationId } from "./requestContext.js";
+import { randomUUID } from "node:crypto";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -3654,7 +3656,13 @@ export async function startCronScheduler(): Promise<void> {
     try {
       const tz = await getSystemTimezone();
       const task = cron.schedule(def.schedule, async () => {
-        await runJob(def);
+        // A scheduled fire has no ambient context — give the whole run a
+        // correlation id so every log line it emits (handler included) is
+        // traceable to this one execution.
+        await runWithCorrelationId(
+          `cron-${def.name}-${randomUUID()}`,
+          () => runJob(def),
+        );
       }, {
         timezone: tz,
       });
