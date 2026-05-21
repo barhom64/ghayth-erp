@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm, cp, mkdir } from "node:fs/promises";
+import { rm, cp, mkdir, writeFile } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -15,7 +15,13 @@ async function buildAll() {
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    // Two bundles: the server (dist/server.mjs) and the OpenTelemetry tracing
+    // preload (dist/otel.mjs). The process entry dist/index.mjs is a generated
+    // shim — see writeEntryShim() below.
+    entryPoints: {
+      server: path.resolve(artifactDir, "src/index.ts"),
+      otel: path.resolve(artifactDir, "src/otel.ts"),
+    },
     platform: "node",
     bundle: true,
     format: "esm",
@@ -29,6 +35,11 @@ async function buildAll() {
     // - use path traversal to read files (e.g. @google-cloud/secret-manager loads sibling .proto files)
     external: [
       "*.node",
+      // express and pg are externalised so OpenTelemetry auto-instrumentation
+      // can patch them when loaded — patching is impossible once a package is
+      // inlined into the bundle. See src/otel.ts and lib/tracing.ts.
+      "express",
+      "pg",
       "pdfkit",
       "fontkit",
       "sharp",
@@ -144,7 +155,20 @@ async function copyMigrations() {
   }
 }
 
-buildAll().then(copyAssets).then(copyMigrations).catch((err) => {
+// dist/index.mjs is the process entry point (Dockerfile CMD, e2e workflow,
+// package.json start) and stays so — but it is now a thin generated shim. It
+// imports the tracing preload (dist/otel.mjs) to completion FIRST so
+// OpenTelemetry installs its require hooks, THEN dynamically imports the
+// server bundle so the server's externalised express/pg imports resolve
+// afterwards and get instrumented. A static import of the server would be
+// hoisted above the preload and defeat this ordering.
+async function writeEntryShim() {
+  const distDir = path.resolve(artifactDir, "dist");
+  const shim = `import "./otel.mjs";\nawait import("./server.mjs");\n`;
+  await writeFile(path.resolve(distDir, "index.mjs"), shim, "utf8");
+}
+
+buildAll().then(writeEntryShim).then(copyAssets).then(copyMigrations).catch((err) => {
   console.error(err);
   process.exit(1);
 });
