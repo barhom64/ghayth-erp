@@ -25,7 +25,8 @@ const financialPeriodGuard: GuardFn = async (companyId, context) => {
      ORDER BY "startDate" DESC LIMIT 1`,
     [companyId, context.date]
   );
-  if (period && period.status === "closed") {
+  // A `locked` period is stricter than `closed` — both bar GL posting.
+  if (period && (period.status === "closed" || period.status === "locked")) {
     return { allowed: false, guardName: "financial_period", reason: `الفترة المالية مغلقة — لا يمكن ترحيل قيود في تاريخ ${context.date}` };
   }
   return { allowed: true, guardName: "financial_period" };

@@ -205,7 +205,8 @@ custodiesRouter.get("/custodies", authorize({ feature: "finance.custodies", acti
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'${dateFilter}
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id
-       ORDER BY je."createdAt" DESC`,
+       ORDER BY je."createdAt" DESC
+       LIMIT 1000`,
       queryParams
     );
 
@@ -289,7 +290,8 @@ custodiesRouter.get("/custodies/report", authorize({ feature: "finance.custodies
        LEFT JOIN employees e ON e.id = ea."employeeId"
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je.notes, je."dueDate", e.name, ea.id, e.id
-       ORDER BY e.name, je."createdAt" DESC`,
+       ORDER BY e.name, je."createdAt" DESC
+       LIMIT 1000`,
       [scope.companyId]
     );
 
