@@ -289,4 +289,37 @@ router.get("/health/config", authMiddleware, requirePermission("settings:read"),
   res.json(describeConfig());
 });
 
+/**
+ * Unified operator system-health view — one endpoint aggregating liveness,
+ * readiness, the metrics snapshot, dead-letter-queue depth and recent cron
+ * failures, so an operator has a single pane instead of polling six probes.
+ * Read-only; reuses the /health/metrics access policy.
+ */
+router.get("/health/system", authMiddleware, requirePermission("settings:read"), async (_req, res) => {
+  try {
+    const liveness = getLiveness();
+    const readiness = await getReadiness();
+    const metrics = getObservabilitySnapshot();
+    const [dlqRow] = await rawQuery<{ unresolved: number }>(
+      `SELECT COUNT(*)::int AS unresolved FROM event_dlq WHERE "resolvedAt" IS NULL`,
+    );
+    const [cronRow] = await rawQuery<{ failures: number }>(
+      `SELECT COUNT(*)::int AS failures FROM cron_logs
+        WHERE error IS NOT NULL AND "createdAt" > NOW() - INTERVAL '1 hour'`,
+    );
+    res.json({
+      status: readiness.status,
+      collectedAt: new Date().toISOString(),
+      liveness,
+      readiness,
+      metrics,
+      deadLetterQueue: { unresolved: dlqRow?.unresolved ?? 0 },
+      cron: { failuresLastHour: cronRow?.failures ?? 0 },
+    });
+  } catch (err) {
+    logger.error(err, "system health endpoint failed");
+    res.status(503).json({ status: "error", error: "system health unavailable" });
+  }
+});
+
 export default router;
