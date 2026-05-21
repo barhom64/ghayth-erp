@@ -5,6 +5,7 @@ import { logger } from "../lib/logger.js";
 import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
 import { getLiveness, getReadiness } from "../lib/health.js";
 import { getObservabilitySnapshot } from "../lib/observability.js";
+import { renderPrometheus } from "../lib/metrics.js";
 import { describeConfig } from "../lib/config.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -273,6 +274,17 @@ router.get("/health/schema", async (_req, res) => {
  */
 router.get("/health/metrics", authMiddleware, requirePermission("settings:read"), (_req, res) => {
   res.json(getObservabilitySnapshot());
+});
+
+/**
+ * Prometheus exposition endpoint — the same metrics as /health/metrics
+ * rendered in the Prometheus text format (v0.0.4) for a scraper. Reuses the
+ * /health/metrics access policy: a scraper authenticates with a
+ * `settings:read` service account. Exposing it unauthenticated is a separate
+ * ops decision and is intentionally not done here.
+ */
+router.get("/metrics", authMiddleware, requirePermission("settings:read"), (_req, res) => {
+  res.type("text/plain; version=0.0.4; charset=utf-8").send(renderPrometheus());
 });
 
 /**
