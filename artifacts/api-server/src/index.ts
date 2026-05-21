@@ -1,3 +1,7 @@
+// Production Hardening — Phase 0. Imported first so the consolidated
+// environment guard validates (and fails fast) before any other module
+// runs its own ad-hoc process.env check.
+import "./lib/env.js";
 import app from "./app.js";
 import { logger } from "./lib/logger.js";
 import { runMigrations } from "./lib/migrate.js";
