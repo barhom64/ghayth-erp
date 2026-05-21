@@ -310,7 +310,14 @@ vendorsRouter.get("/receivables", authorize({ feature: "finance.vendors", action
        ORDER BY i."dueDate" ASC LIMIT 100`,
       [scope.companyId]
     );
-    res.json(maskFields(req, { data: rows, total: rows.length }));
+    const summary = {
+      totalReceivable: rows.reduce((s, r) => s + Number(r.remainingAmount), 0),
+      overdueAmount: rows
+        .filter((r) => r.status === "overdue")
+        .reduce((s, r) => s + Number(r.remainingAmount), 0),
+      count: rows.length,
+    };
+    res.json(maskFields(req, { data: rows, total: rows.length, summary }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -445,7 +452,11 @@ vendorsRouter.get("/payments", authorize({ feature: "finance.vendors", action: "
        ORDER BY je."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
-    res.json(maskFields(req, { data: rows, total: rows.length }));
+    const summary = {
+      totalPayments: rows.reduce((s, r) => s + Number(r.amount), 0),
+      count: rows.length,
+    };
+    res.json(maskFields(req, { data: rows, total: rows.length, summary }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -475,7 +486,11 @@ vendorsRouter.get("/commitments", authorize({ feature: "finance.vendors", action
        ORDER BY po."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
-    res.json(maskFields(req, { data: rows, total: rows.length }));
+    const summary = {
+      totalCommitments: rows.reduce((s, r) => s + Number(r.amount), 0),
+      count: rows.length,
+    };
+    res.json(maskFields(req, { data: rows, total: rows.length, summary }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
@@ -538,7 +553,12 @@ vendorsRouter.get("/financial-requests", authorize({ feature: "finance.vendors",
        ORDER BY wr."createdAt" DESC LIMIT 100`,
       [scope.companyId]
     );
-    res.json(maskFields(req, { data: rows, total: rows.length }));
+    const summary = {
+      total: rows.length,
+      pending: rows.filter((r) => r.status === "pending").length,
+      approved: rows.filter((r) => r.status === "approved").length,
+    };
+    res.json(maskFields(req, { data: rows, total: rows.length, summary }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
   }
