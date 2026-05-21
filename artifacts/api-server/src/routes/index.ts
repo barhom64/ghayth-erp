@@ -293,11 +293,11 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), inv
 router.use("/finance", requireModule("finance"), requireGuards("financial"), journalRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), glHelpersRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), purchaseRouter);
-router.use("/finance", requireModule("finance"), reportsRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), reportsRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), custodiesRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), zatcaRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), accountingEngineRouter);
-router.use("/finance", requireModule("finance"), financeAlgorithmsRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), financeAlgorithmsRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), collectionRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), budgetRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), accountsRouter);
