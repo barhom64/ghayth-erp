@@ -3786,6 +3786,10 @@ async function violationApprovalAction(req: any, res: any, newStatus: "approved"
       action: `violation.${newStatus}`,
       toState: newStatus,
       reason: notes || undefined,
+      // employee_violations has no "updatedAt" column; opt out of the
+      // engine's automatic `"updatedAt" = NOW()` clause so the approve
+      // transition does not fail with a 42703 (HR functional audit C7).
+      skipUpdatedAt: true,
       onApply: async (_row, client) => {
         await client.query(
           `INSERT INTO approval_actions ("entityType","entityId",action,notes,"actionBy","companyId") VALUES ('violation',$1,$2,$3,$4,$5)`,
