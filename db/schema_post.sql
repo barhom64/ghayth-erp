@@ -12279,6 +12279,43 @@ ALTER TABLE ONLY public.print_reprint_requests
 
 
 --
+-- Name: umrah_transport_pilgrims id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_transport_pilgrims ALTER COLUMN id SET DEFAULT nextval('public.umrah_transport_pilgrims_id_seq'::regclass);
+
+
+--
+-- Name: umrah_transport_pilgrims umrah_transport_pilgrims_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_transport_pilgrims
+    ADD CONSTRAINT umrah_transport_pilgrims_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: umrah_transport_pilgrims umrah_transport_pilgrims_transportId_pilgrimId_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_transport_pilgrims
+    ADD CONSTRAINT "umrah_transport_pilgrims_transportId_pilgrimId_key" UNIQUE ("transportId", "pilgrimId");
+
+
+--
+-- Name: idx_umrah_transport_pilgrims_transport; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_umrah_transport_pilgrims_transport ON public.umrah_transport_pilgrims USING btree ("transportId");
+
+
+--
+-- Name: idx_umrah_transport_pilgrims_pilgrim; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_umrah_transport_pilgrims_pilgrim ON public.umrah_transport_pilgrims USING btree ("pilgrimId");
+
+
+--
 -- PostgreSQL database dump complete
 --
 
