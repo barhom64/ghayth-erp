@@ -4,6 +4,8 @@ import { rawQuery } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
 import { getLiveness, getReadiness } from "../lib/health.js";
+import { getObservabilitySnapshot } from "../lib/observability.js";
+import { describeConfig } from "../lib/config.js";
 
 const router: IRouter = Router();
 
@@ -255,6 +257,26 @@ router.get("/health/schema", async (_req, res) => {
       checkedAt: new Date().toISOString(),
     });
   }
+});
+
+/**
+ * Operator metrics snapshot — in-memory counters, gauges, and latency
+ * histograms collected by the observability layer (HTTP requests, DB
+ * queries, slow queries, cron jobs). Like `/health/schema` this is an
+ * operator-only diagnostic and is not part of the OpenAPI contract.
+ */
+router.get("/health/metrics", (_req, res) => {
+  res.json(getObservabilitySnapshot());
+});
+
+/**
+ * Effective configuration snapshot — the resolved, validated environment
+ * config with all secret values masked (see config.SECRET_ENV_KEYS). Lets
+ * an operator confirm exactly what the server resolved, so a deployment
+ * outside Replit never has to guess at its own configuration.
+ */
+router.get("/health/config", (_req, res) => {
+  res.json(describeConfig());
 });
 
 export default router;

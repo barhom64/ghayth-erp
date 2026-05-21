@@ -1,6 +1,7 @@
 import pg from "pg";
 import { logger } from "./logger.js";
 import { config } from "./config.js";
+import { recordQuery } from "./observability.js";
 
 const { Pool } = pg;
 
@@ -30,7 +31,10 @@ export const pool = new Proxy({} as pg.Pool, {
 });
 
 export async function rawQuery<T = any>(sql: string, params: unknown[] = []): Promise<T[]> {
-  const result = await pool.query(sql, params);
+  const start = Date.now();
+  const result = await pool
+    .query(sql, params)
+    .finally(() => recordQuery(sql, Date.now() - start));
   return result.rows as T[];
 }
 
@@ -52,7 +56,10 @@ export async function rawExecute(
   const isDDL = /^\s*(CREATE|ALTER|DROP|TRUNCATE|COMMENT|GRANT|REVOKE|SET|DO|VACUUM|ANALYZE|REINDEX)\b/i.test(cleanSQL);
   const finalSQL = hasReturning || isDDL ? cleanSQL : `${cleanSQL} RETURNING id`;
 
-  const result = await pool.query(finalSQL, cleanParams(params));
+  const start = Date.now();
+  const result = await pool
+    .query(finalSQL, cleanParams(params))
+    .finally(() => recordQuery(finalSQL, Date.now() - start));
   const insertId = result.rows[0]?.id ?? 0;
   return { insertId, affectedRows: result.rowCount ?? 0 };
 }
