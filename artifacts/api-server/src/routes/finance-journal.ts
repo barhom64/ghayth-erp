@@ -548,8 +548,16 @@ journalRouter.patch("/expenses/:id", authorize({ feature: "finance.journal", act
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { description } = zodParse(updateDescriptionSchema.safeParse(req.body ?? {}));
-    const [existing] = await rawQuery<Record<string, unknown>>(`SELECT id, "createdAt" FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<Record<string, unknown>>(`SELECT id, status, "createdAt" FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المصروف غير موجود");
+    // PD-4: a posted journal entry is immutable — a posted expense is
+    // corrected via a reversing entry, never an in-place description edit.
+    if (existing.status === "posted") {
+      throw new ConflictError("لا يمكن تعديل مصروف مُرحَّل — صحّحه عبر قيد عاكس", {
+        field: "status",
+        fix: "أنشئ قيداً عاكساً بدل تعديل المصروف المُرحَّل",
+      });
+    }
     const expenseDate = toDateISO(existing.createdAt as string);
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, expenseDate);
     if (!periodCheck.open) {
