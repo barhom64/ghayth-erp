@@ -179,13 +179,13 @@ export default function TransferDetail() {
                 currentStatus={transfer.status}
                 approveEndpoint={`/hr/transfers/${id}/approve`}
                 rejectEndpoint={`/hr/transfers/${id}/approve`}
-                returnEndpoint={`/hr/transfers/${id}/approve`}
+                returnEndpoint={`/hr/transfers/${id}/return`}
                 approveMethod="PATCH"
                 rejectMethod="PATCH"
                 returnMethod="PATCH"
                 approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
                 rejectBody={(notes) => ({ approved: false, notes })}
-                returnBody={(notes) => ({ approved: "returned", notes })}
+                returnBody={(notes) => ({ notes })}
                 pendingStatuses={["pending", "returned"]}
                 invalidateKeys={[["transfers"]]}
                 onDone={() => {
