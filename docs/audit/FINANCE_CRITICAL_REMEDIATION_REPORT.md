@@ -5,6 +5,8 @@ Track: Finance Critical Remediation (Waves 1–9)
 Basis: `docs/audit/FUNCTIONAL_FINANCE_VERIFICATION.md` (the functional verification
 that opened this track). Mode: static remediation; runtime verification deferred
 to Replit (no DB in this environment).
+Status (2026-05-21): all six fix waves are **merged to `main`** —
+#728/#729, #730, #731, #732, #734, #736. This report is delivered via PR #737.
 
 ---
 
@@ -32,10 +34,10 @@ runtime-verified** — see §6.
 |---|---|---|---|---|
 | 1 | Invoice Approval Runtime Integrity | #728, #729 | ✅ merged | UI approve hit `PATCH /approve` (status-only, no GL, no amount-limit). Routed it to `POST /approve` → posts DR AR / CR Revenue / CR VAT and enforces `rbac_approval_limits`. #729 aligned the invoices-list approve gate (`pending_approval`→`draft`) with the POST `fromStates`. |
 | 2 | Manual Journal Posting Integrity | #730 | ✅ merged | `POST /journal-manual` posted GL at draft creation (`status='posted'` + balances moved); rejected drafts were never reversed. Now creates an unposted `status='draft'` entry via `lib/gl/posting.ts`; the ledger effect (status→posted + `currentBalance`) happens once, at `/post`, behind a financial-period guard. |
-| 4 | Financial-Request Approval | #731 | 🟢 open, guard green | `PATCH /financial-requests/:id/approve` ran `applyTransition` on `workflow_instances`, but the GET endpoints read `workflow_requests` — a different table/id-sequence. Approve hit a non-existent or unrelated row. Pointed the transition at `workflow_requests`. |
-| 7-C7 | Bank Manual-Match Contract | #732 | 🟢 open, guard green | `bank-manual-match.tsx` read the wrong response key (`.lines` vs `.rows`), searched `/finance/journal` (journal *entries*) and passed an entry id where a journal *line* id was required, and POSTed `bankLineId` (schema wants `bankStatementId`). Manual matching was 100% broken; now aligned to the backend contract via `/finance/journal-lines/search`. |
-| 8 | Route Integrity | #734 | 🟢 open, guard green | Added `requireGuards("financial")` to the `finance-hardening` mount (it bypassed the financial system-governor guard every sibling router has); removed the dead `GET /stats` in `finance-vendors.ts` (shadowed by `finance-accounts.ts`); fixed the ZATCA `enabled` toggle (sent as a string `"true"`/`"false"` against a `z.boolean()` schema → never persisted → ZATCA submission stayed blocked). |
-| 9 | List Summaries + CashFlow Shape | #736 | 🟢 open, guard green | Four list endpoints (`/receivables`, `/payments`, `/commitments`, `/financial-requests`) never returned the `summary` object their pages read → every KPI card showed 0. Added aggregated summaries. `GET /reports/cash-flow` now returns flat `inflows`/`outflows` arrays → the CashFlow report tab's two tables (previously always empty) populate. |
+| 4 | Financial-Request Approval | #731 | ✅ merged | `PATCH /financial-requests/:id/approve` ran `applyTransition` on `workflow_instances`, but the GET endpoints read `workflow_requests` — a different table/id-sequence. Approve hit a non-existent or unrelated row. Pointed the transition at `workflow_requests`. |
+| 7-C7 | Bank Manual-Match Contract | #732 | ✅ merged | `bank-manual-match.tsx` read the wrong response key (`.lines` vs `.rows`), searched `/finance/journal` (journal *entries*) and passed an entry id where a journal *line* id was required, and POSTed `bankLineId` (schema wants `bankStatementId`). Manual matching was 100% broken; now aligned to the backend contract via `/finance/journal-lines/search`. |
+| 8 | Route Integrity | #734 | ✅ merged | Added `requireGuards("financial")` to the `finance-hardening` mount (it bypassed the financial system-governor guard every sibling router has); removed the dead `GET /stats` in `finance-vendors.ts` (shadowed by `finance-accounts.ts`); fixed the ZATCA `enabled` toggle (sent as a string `"true"`/`"false"` against a `z.boolean()` schema → never persisted → ZATCA submission stayed blocked). |
+| 9 | List Summaries + CashFlow Shape | #736 | ✅ merged | Four list endpoints (`/receivables`, `/payments`, `/commitments`, `/financial-requests`) never returned the `summary` object their pages read → every KPI card showed 0. Added aggregated summaries. `GET /reports/cash-flow` now returns flat `inflows`/`outflows` arrays → the CashFlow report tab's two tables (previously always empty) populate. |
 
 All six waves: scoped, single-purpose PRs; `guard.sh` green locally; precise
 runtime test plans in each PR body.
@@ -159,7 +161,7 @@ Decision Track — it must not be rushed.
 
 ## 4. Operational integrity status
 
-After the six waves merge, the Finance operational path stands at:
+With all six fix waves merged to `main`, the Finance operational path stands at:
 
 - **Invoice → GL:** ✅ correct — UI approval posts a balanced journal entry and
   enforces approval limits (Wave 1).
@@ -204,7 +206,7 @@ and `check:ghost-rows` skip for that reason), so the verification throughout the
 track is static code-tracing.
 
 Each PR carries a precise, scenario-level runtime test plan. **Recommendation:**
-run Replit (or any DB-backed) runtime verification on each PR before merge —
+run Replit (or any DB-backed) runtime verification on the six merged waves —
 in particular the GL-affecting waves (1, 2) and the contract-alignment waves
 (4, 7, 9). The static evidence is strong but is not a substitute for a live
 ledger assertion.
@@ -213,9 +215,9 @@ ledger assertion.
 
 ## 7. Recommended next-wave ordering
 
-1. **Runtime-verify and merge the four open PRs** — #731, #732, #734, #736
-   (#728/#729/#730 already merged). Highest priority — they are scoped, green,
-   and close real defects.
+1. **Runtime-verify the six merged fix waves** — #728/#729, #730, #731, #732,
+   #734, #736 (all merged to `main`). Highest priority — confirm each fix
+   against a live ledger.
 2. **Decision Track 3.3 — Purchasing GL chain** — highest integrity risk (AP
    understated). Needs explicit migration authorization + a dedicated executive
    RCA before any code.
