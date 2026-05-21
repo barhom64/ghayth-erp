@@ -35,9 +35,10 @@ async function buildAll() {
     // - use path traversal to read files (e.g. @google-cloud/secret-manager loads sibling .proto files)
     external: [
       "*.node",
-      // pg is externalised so OpenTelemetry's instrumentation-pg can patch it
-      // at require time — patching is impossible once a package is inlined
-      // into the bundle. See src/otel.ts and lib/tracing.ts (OBS-9).
+      // express and pg are externalised so OpenTelemetry auto-instrumentation
+      // can patch them when loaded — patching is impossible once a package is
+      // inlined into the bundle. See src/otel.ts and lib/tracing.ts.
+      "express",
       "pg",
       "pdfkit",
       "fontkit",
