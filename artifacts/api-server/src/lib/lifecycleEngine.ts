@@ -739,6 +739,62 @@ export const STATE_MACHINES: StateMachine[] = [
       cancelled: [],
     },
   },
+  // HR functional audit M17 — these four HR entities drive their status
+  // with manual `UPDATE ... WHERE status IN (...)` + a local `fromStates`
+  // list in the route; they do NOT call `applyTransition`. Registering
+  // their state graphs here centralises the canonical lifecycle (visible
+  // to the lifecycle/admin introspection) and arms the engine's
+  // defence-in-depth check the moment a route adopts `applyTransition`.
+  // It is purely additive — these routes don't consult the engine today,
+  // so no behaviour changes. `employee_transfers` is deliberately NOT
+  // listed: it already calls `applyTransition`, so registering a machine
+  // for it would start enforcing — a behaviour change kept out of scope.
+  {
+    entity: "payroll_runs",
+    label: "مسير رواتب",
+    transitions: {
+      draft: ["pending_approval", "cancelled"],
+      pending_approval: ["completed", "cancelled"],
+      completed: ["posted", "cancelled"],
+      posted: [],
+      cancelled: [],
+    },
+  },
+  {
+    entity: "hr_employee_loans",
+    label: "سلفة موظف",
+    transitions: {
+      pending: ["approved", "rejected"],
+      approved: ["active", "cancelled"],
+      active: ["completed"],
+      rejected: [],
+      completed: [],
+      cancelled: [],
+    },
+  },
+  {
+    entity: "hr_overtime_requests",
+    label: "طلب عمل إضافي",
+    transitions: {
+      pending: ["approved", "rejected"],
+      approved: [],
+      rejected: [],
+    },
+  },
+  {
+    entity: "employee_contracts",
+    label: "عقد موظف",
+    transitions: {
+      draft: ["pending_approval", "cancelled"],
+      pending_approval: ["approved", "rejected"],
+      approved: ["signed", "active", "cancelled"],
+      signed: ["active", "cancelled"],
+      active: ["terminated"],
+      rejected: ["draft"],
+      terminated: [],
+      cancelled: [],
+    },
+  },
 ];
 
 function _smKey(entity: string, statusColumn?: string): string {
