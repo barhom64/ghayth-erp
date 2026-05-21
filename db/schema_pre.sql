@@ -8473,6 +8473,11 @@ CREATE TABLE public.job_applications (
     "createdAt" timestamp without time zone DEFAULT now(),
     "applicantAccountId" integer,
     "coverLetter" text,
+    source text,
+    experience text,
+    education text,
+    "expectedSalary" numeric(15,2),
+    "currentCompany" text,
     "deletedAt" timestamp with time zone
 );
 
@@ -8519,6 +8524,11 @@ CREATE TABLE public.job_postings (
     "closedAt" timestamp with time zone,
     "closedReason" text,
     "reopenedAt" timestamp with time zone,
+    "experienceLevel" text,
+    education text,
+    vacancies integer,
+    benefits text,
+    skills text,
     "deletedAt" timestamp with time zone
 );
 
@@ -10080,6 +10090,8 @@ CREATE TABLE public.payroll_runs (
     "approvedAt" timestamp without time zone,
     "paidAt" timestamp without time zone,
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+    reference text,
+    notes text,
     "deletedAt" timestamp with time zone
 );
 
@@ -12569,6 +12581,8 @@ CREATE TABLE public.shifts (
     "flexStartEarliest" time without time zone,
     "flexStartLatest" time without time zone,
     "updatedAt" timestamp with time zone DEFAULT now(),
+    "breakMinutes" integer,
+    "gracePeriod" integer,
     "deletedAt" timestamp with time zone
 );
 
@@ -13527,6 +13541,8 @@ CREATE TABLE public.training_programs (
     cost numeric(12,2) DEFAULT 0 NOT NULL,
     "maxParticipants" integer,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    objectives text,
+    "targetAudience" text,
     "deletedAt" timestamp with time zone,
     CONSTRAINT chk_training_programs_status CHECK (((status)::text = ANY ((ARRAY['planned'::character varying, 'upcoming'::character varying, 'active'::character varying, 'completed'::character varying, 'cancelled'::character varying])::text[])))
 );

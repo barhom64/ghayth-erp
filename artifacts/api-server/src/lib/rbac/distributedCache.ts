@@ -22,6 +22,7 @@
  */
 
 import { logger } from "../logger.js";
+import { config } from "../config.js";
 
 const CHANNEL = "rbac:invalidate";
 
@@ -66,11 +67,10 @@ function normaliseRedisUrl(raw: string | undefined): string | undefined {
 function getRedisUrl(): string | null {
   // Prefer the same env vars the rate-limit store uses so ops only set Redis
   // once. Order: REDIS_URL → REDIS_HOST/PORT.
-  const url = normaliseRedisUrl(process.env.REDIS_URL);
+  const url = normaliseRedisUrl(config.redis.url);
   if (url) return url;
-  const host = process.env.REDIS_HOST;
-  const port = process.env.REDIS_PORT;
-  if (host) return `redis://${host}:${port || 6379}`;
+  const host = config.redis.host;
+  if (host) return `redis://${host}:${config.redis.port}`;
   return null;
 }
 
