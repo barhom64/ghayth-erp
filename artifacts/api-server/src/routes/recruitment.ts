@@ -58,6 +58,11 @@ const createPostingSchema = z.object({
   salaryMax: z.coerce.number().optional().nullable(),
   status: z.enum(["open", "closed", "draft", "paused"]).default("open"),
   closingDate: z.string().optional().nullable(),
+  experienceLevel: z.string().optional().nullable(),
+  education: z.string().optional().nullable(),
+  vacancies: z.coerce.number().int().optional().nullable(),
+  benefits: z.string().optional().nullable(),
+  skills: z.string().optional().nullable(),
 });
 
 const createApplicationSchema = z.object({
@@ -69,6 +74,11 @@ const createApplicationSchema = z.object({
   status: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   rating: z.coerce.number().optional().nullable(),
+  source: z.string().optional().nullable(),
+  experience: z.string().optional().nullable(),
+  education: z.string().optional().nullable(),
+  expectedSalary: z.coerce.number().optional().nullable(),
+  currentCompany: z.string().optional().nullable(),
 });
 
 const updatePostingSchema = z.object({
@@ -108,7 +118,7 @@ router.get("/postings", authorize({ feature: "hr.recruitment", action: "list" })
 router.post("/postings", authorize({ feature: "hr.recruitment", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { title, department, location, type, description, requirements, salaryMin, salaryMax, status, closingDate } = zodParse(createPostingSchema.safeParse(req.body));
+    const { title, department, location, type, description, requirements, salaryMin, salaryMax, status, closingDate, experienceLevel, education, vacancies, benefits, skills } = zodParse(createPostingSchema.safeParse(req.body));
     if (salaryMin !== undefined && salaryMin !== null && salaryMax !== undefined && salaryMax !== null && Number(salaryMax) < Number(salaryMin)) {
       throw new ValidationError("الحد الأعلى للراتب أقل من الحد الأدنى", {
         field: "salaryMax",
@@ -116,8 +126,8 @@ router.post("/postings", authorize({ feature: "hr.recruitment", action: "create"
       });
     }
     const r = await rawExecute(
-      `INSERT INTO job_postings (title, department, location, type, description, requirements, "salaryMin", "salaryMax", status, "closingDate", "companyId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [String(title).trim(), department ?? null, location ?? null, type || "full-time", description ?? null, requirements ?? null, salaryMin ?? null, salaryMax ?? null, status || "open", closingDate ?? null, scope.companyId]
+      `INSERT INTO job_postings (title, department, location, type, description, requirements, "salaryMin", "salaryMax", status, "closingDate", "companyId", "experienceLevel", education, vacancies, benefits, skills) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+      [String(title).trim(), department ?? null, location ?? null, type || "full-time", description ?? null, requirements ?? null, salaryMin ?? null, salaryMax ?? null, status || "open", closingDate ?? null, scope.companyId, experienceLevel ?? null, education ?? null, vacancies ?? null, benefits ?? null, skills ?? null]
     );
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -298,15 +308,15 @@ router.get("/applications", authorize({ feature: "hr.recruitment", action: "list
 router.post("/applications", authorize({ feature: "hr.recruitment", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { postingId, applicantName, email, phone, resumeUrl, status, notes, rating } = zodParse(createApplicationSchema.safeParse(req.body));
+    const { postingId, applicantName, email, phone, resumeUrl, status, notes, rating, source, experience, education, expectedSalary, currentCompany } = zodParse(createApplicationSchema.safeParse(req.body));
     const [posting] = await rawQuery<{ id: number }>(
       `SELECT id FROM job_postings WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
       [Number(postingId), scope.companyId]
     );
     if (!posting) throw new NotFoundError("الإعلان الوظيفي غير موجود");
     const r = await rawExecute(
-      `INSERT INTO job_applications ("postingId", "applicantName", email, phone, "resumeUrl", status, notes, rating) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [Number(postingId), String(applicantName).trim(), email ?? null, phone ?? null, resumeUrl ?? null, status || "new", notes ?? null, rating ?? null]
+      `INSERT INTO job_applications ("postingId", "applicantName", email, phone, "resumeUrl", status, notes, rating, source, experience, education, "expectedSalary", "currentCompany") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [Number(postingId), String(applicantName).trim(), email ?? null, phone ?? null, resumeUrl ?? null, status || "new", notes ?? null, rating ?? null, source ?? null, experience ?? null, education ?? null, expectedSalary ?? null, currentCompany ?? null]
     );
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
