@@ -5,6 +5,7 @@
 // ============================================================================
 
 import { Router } from "express";
+import type { PoolClient } from "pg";
 import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
@@ -209,20 +210,29 @@ async function logMemoEvent(params: {
   action: string;
   payload?: any;
   note?: string;
+  // When supplied, the row is written on the caller's transaction client so
+  // it is atomic with the memo transition. A separate connection deadlocks:
+  // the FK to hr_inquiry_memos needs FOR KEY SHARE on the memo row, which the
+  // surrounding applyTransition already holds FOR UPDATE.
+  client?: PoolClient;
 }) {
-  await rawExecute(
+  const sql =
     `INSERT INTO hr_inquiry_memo_events ("memoId","companyId","actorId","actorRole",action,payload,note)
-     VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7)`,
-    [
-      params.memoId,
-      params.companyId,
-      params.actorId ?? null,
-      params.actorRole,
-      params.action,
-      params.payload ? JSON.stringify(params.payload) : null,
-      params.note ?? null,
-    ]
-  );
+     VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7)`;
+  const args = [
+    params.memoId,
+    params.companyId,
+    params.actorId ?? null,
+    params.actorRole,
+    params.action,
+    params.payload ? JSON.stringify(params.payload) : null,
+    params.note ?? null,
+  ];
+  if (params.client) {
+    await params.client.query(sql, args);
+  } else {
+    await rawExecute(sql, args);
+  }
 }
 
 async function getMemo(companyId: number, memoId: number) {
@@ -767,9 +777,9 @@ router.post("/memos/:id/justify", authorize({ feature: "hr.discipline", action: 
         employeeDeclined: !!declined,
       },
       after: { status: "pending_manager", declined: !!declined },
-      onApply: async (_row, _client) => {
+      onApply: async (_row, client) => {
         await logMemoEvent({
-          memoId: id, companyId: scope.companyId, actorId: scope.userId,
+          memoId: id, companyId: scope.companyId, actorId: scope.userId, client,
           actorRole: "employee", action: "justified",
           payload: { declined: !!declined },
           note: declined ? "رفض الموظف تقديم تبرير" : "قدّم الموظف تبريره",
@@ -822,9 +832,9 @@ router.post("/memos/:id/manager-recommendation", authorize({ feature: "hr.discip
         managerDecidedAt: { raw: "NOW()" },
       },
       after: { status: "pending_gm", recommendation, comment },
-      onApply: async (_row, _client) => {
+      onApply: async (_row, client) => {
         await logMemoEvent({
-          memoId: id, companyId: scope.companyId, actorId: scope.userId,
+          memoId: id, companyId: scope.companyId, actorId: scope.userId, client,
           actorRole: "direct_manager", action: "manager_recommended",
           payload: { recommendation }, note: comment ?? undefined,
         });
@@ -915,10 +925,16 @@ router.post("/memos/:id/gm-decision", authorize({ feature: "hr.discipline", acti
       onApply: async (_row, client) => {
         if (decision === "rejected") {
           if (memo.violationId) {
-            await client.query(
-              `UPDATE employee_violations SET status = 'rejected' WHERE id = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL`,
-              [memo.violationId, scope.companyId]
-            );
+            await applyTransition({
+              entity: "employee_violations",
+              id: memo.violationId as number,
+              scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+              action: "hr.violation.memo_rejected",
+              fromStates: ["pending"],
+              toState: "rejected",
+              extraWhere: `"deletedAt" IS NULL`,
+              client,
+            });
           }
         } else {
           // إدخال الخصم في attendance_deductions (pending_payroll) إن وجد مبلغ
@@ -940,27 +956,34 @@ router.post("/memos/:id/gm-decision", authorize({ feature: "hr.discipline", acti
           }
           // تحديث employee_violations المرتبط (إن وجد)
           if (memo.violationId) {
+            await applyTransition({
+              entity: "employee_violations",
+              id: memo.violationId as number,
+              scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+              action: "hr.violation.memo_approved",
+              toState: "approved",
+              setExtras: { occurrenceCount, deduction: baseAmount + extraAmount },
+              extraWhere: `"deletedAt" IS NULL`,
+              client,
+            });
+            // regulationId keeps any value already present on the violation row.
             await client.query(
-              `UPDATE employee_violations
-                  SET status = 'approved',
-                      "regulationId" = COALESCE("regulationId", $1),
-                      "occurrenceCount" = $2,
-                      deduction = $3
-                WHERE id = $4 AND "companyId" = $5 AND "deletedAt" IS NULL`,
-              [memo.regulationId, occurrenceCount, baseAmount + extraAmount, memo.violationId, scope.companyId]
+              `UPDATE employee_violations SET "regulationId" = COALESCE("regulationId", $1)
+                WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+              [memo.regulationId, memo.violationId, scope.companyId]
             );
           }
         }
 
         await logMemoEvent({
-          memoId: id, companyId: scope.companyId, actorId: scope.userId,
+          memoId: id, companyId: scope.companyId, actorId: scope.userId, client,
           actorRole: "gm", action: "gm_decided",
           payload: { decision }, note: comment ?? undefined,
         });
 
         if (decision === "approved") {
           await logMemoEvent({
-            memoId: id, companyId: scope.companyId, actorId: scope.userId,
+            memoId: id, companyId: scope.companyId, actorId: scope.userId, client,
             actorRole: "system", action: "penalty_applied",
             note: "تم تطبيق الجزاء على كشف الرواتب",
           });
@@ -1006,17 +1029,22 @@ router.post("/memos/:id/cancel", authorize({ feature: "hr.discipline", action: "
       toState: "cancelled",
       reason: reason ?? undefined,
       after: { status: "cancelled", reason, memoNumber: memo.memoNumber },
-      onApply: async (_row, _client) => {
+      onApply: async (_row, client) => {
         // إذا كان مرتبطاً بمخالفة، نُلغي ربطها
         if (memo.violationId) {
-          await _client.query(
-            `UPDATE employee_violations SET status = 'cancelled'
-              WHERE id = $1 AND "companyId" = $2 AND status IN ('pending', 'under_review') AND "deletedAt" IS NULL`,
-            [memo.violationId, scope.companyId]
-          );
+          await applyTransition({
+            entity: "employee_violations",
+            id: memo.violationId as number,
+            scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+            action: "hr.violation.memo_cancelled",
+            fromStates: ["pending", "under_review"],
+            toState: "cancelled",
+            extraWhere: `"deletedAt" IS NULL`,
+            client,
+          });
         }
         await logMemoEvent({
-          memoId: id, companyId: scope.companyId, actorId: scope.userId,
+          memoId: id, companyId: scope.companyId, actorId: scope.userId, client,
           actorRole: "hr", action: "cancelled", note: reason ?? undefined,
         });
       },
@@ -1053,9 +1081,9 @@ router.post("/memos/:id/appeal", authorize({ feature: "hr.discipline", action: "
         appealDate: { raw: "NOW()" },
       },
       after: { status: "appeal_pending", reason: reason.trim(), memoNumber: memo.memoNumber },
-      onApply: async (_row, _client) => {
+      onApply: async (_row, client) => {
         await logMemoEvent({
-          memoId: id, companyId: scope.companyId, actorId: scope.userId,
+          memoId: id, companyId: scope.companyId, actorId: scope.userId, client,
           actorRole: "employee", action: "appeal_submitted", note: reason.trim(),
         });
       },
@@ -1103,15 +1131,21 @@ router.post("/memos/:id/appeal-decision", authorize({ feature: "hr.discipline", 
         appealDecidedAt: { raw: "NOW()" },
       },
       after: { status: newStatus, decision, comment, memoNumber: memo.memoNumber },
-      onApply: async (_row, _client) => {
+      onApply: async (_row, client) => {
         if (decision === "accepted" && memo.violationId) {
-          await _client.query(
-            `UPDATE employee_violations SET status = 'appeal_accepted' WHERE id = $1 AND "companyId" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
-            [memo.violationId, scope.companyId]
-          );
+          await applyTransition({
+            entity: "employee_violations",
+            id: memo.violationId as number,
+            scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+            action: "hr.violation.appeal_accepted",
+            fromStates: ["approved"],
+            toState: "appeal_accepted",
+            extraWhere: `"deletedAt" IS NULL`,
+            client,
+          });
         }
         await logMemoEvent({
-          memoId: id, companyId: scope.companyId, actorId: scope.userId,
+          memoId: id, companyId: scope.companyId, actorId: scope.userId, client,
           actorRole: "gm", action: decision === "accepted" ? "appeal_accepted" : "appeal_rejected",
           note: comment ?? undefined,
         });
@@ -1158,15 +1192,21 @@ router.post("/memos/:id/close", authorize({ feature: "hr.discipline", action: "u
         closedAt: { raw: "NOW()" },
       },
       after: { status: "closed", previousStatus: memo.status, memoNumber: memo.memoNumber },
-      onApply: async (_row, _client) => {
+      onApply: async (_row, client) => {
         if (memo.violationId) {
-          await _client.query(
-            `UPDATE employee_violations SET status = 'closed' WHERE id = $1 AND "companyId" = $2 AND status IN ('approved', 'rejected', 'appeal_accepted', 'cancelled') AND "deletedAt" IS NULL`,
-            [memo.violationId, scope.companyId]
-          );
+          await applyTransition({
+            entity: "employee_violations",
+            id: memo.violationId as number,
+            scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+            action: "hr.violation.memo_closed",
+            fromStates: ["approved", "rejected", "appeal_accepted", "cancelled"],
+            toState: "closed",
+            extraWhere: `"deletedAt" IS NULL`,
+            client,
+          });
         }
         await logMemoEvent({
-          memoId: id, companyId: scope.companyId, actorId: scope.userId,
+          memoId: id, companyId: scope.companyId, actorId: scope.userId, client,
           actorRole: "hr", action: "closed", note: body.note ?? undefined,
         });
       },
