@@ -109,6 +109,16 @@ export interface ApplyTransitionOptions {
   notifications?: LifecycleNotification[];
   /** Skip the auto `"updatedAt" = NOW()` clause (for tables without that column). */
   skipUpdatedAt?: boolean;
+  /**
+   * Optional existing transaction client. When supplied, applyTransition runs
+   * on this client — joining the caller's transaction instead of opening its
+   * own. Required for a *nested* transition issued inside another transition's
+   * `onApply` callback, so both stay atomic. When a client is supplied the
+   * post-commit side-effects (audit log, event-bus emit, notifications) are
+   * skipped, because the engine cannot observe the caller's commit; the
+   * in-transaction `event_logs` row is still written.
+   */
+  client?: pg.PoolClient;
 }
 
 export class LifecycleError extends Error {
@@ -153,7 +163,15 @@ export async function applyTransition<TRow = any>(
   const statusCol = statusColumn ?? "status";
   const statusColId = quoteIdent(statusCol);
 
-  const { updated, existingStatus } = await withTransaction(async (client) => {
+  // Run on a caller-supplied client (nested transition) or open our own.
+  const externalClient = opts.client;
+  const runInTransaction: <T>(
+    fn: (client: pg.PoolClient) => Promise<T>
+  ) => Promise<T> = externalClient
+    ? (fn) => fn(externalClient)
+    : withTransaction;
+
+  const { updated, existingStatus } = await runInTransaction(async (client) => {
     // 1. Lock the row and validate state.
     if (extraWhere && !/^[\w\s"'.=()]+$/.test(extraWhere)) {
       throw new LifecycleError("extraWhere contains disallowed characters", 400);
@@ -267,6 +285,14 @@ export async function applyTransition<TRow = any>(
 
     return { updated: updatedRow, existingStatus: existing[statusCol] ?? null };
   });
+
+  // A caller-supplied transaction client means this transition is nested
+  // inside another's `onApply`; we cannot observe the caller's commit, so the
+  // post-commit side-effects below are skipped. The in-transaction
+  // `event_logs` row written above is the durable lifecycle record.
+  if (externalClient) {
+    return updated as TRow;
+  }
 
   // --- After commit ------------------------------------------------------
   // Audit log, event bus fan-out, and notifications all run outside the

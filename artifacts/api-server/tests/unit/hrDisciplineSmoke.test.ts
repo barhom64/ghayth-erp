@@ -281,10 +281,10 @@ describe("Memo step 3: GM final decision", () => {
     expect(section).toContain("pending_payroll");
   });
 
-  it("GM decision updates linked employee_violations on approval", () => {
+  it("GM decision routes the linked employee_violations through applyTransition", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('"/memos/:id/gm-decision"');
-    const section = DISCIPLINE_ROUTE.slice(idx, idx + 4000);
-    expect(section).toContain("UPDATE employee_violations");
+    const section = DISCIPLINE_ROUTE.slice(idx, idx + 5000);
+    expect(section).toContain('entity: "employee_violations"');
     expect(section).toContain("memo.violationId");
   });
 
@@ -320,10 +320,11 @@ describe("Memo cancel flow", () => {
     expect(section).toContain('"cancelled"');
   });
 
-  it("cancel also cancels linked violation", () => {
+  it("cancel also cancels the linked violation via applyTransition", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('"/memos/:id/cancel"');
-    const section = DISCIPLINE_ROUTE.slice(idx, idx + 1500);
-    expect(section).toContain("UPDATE employee_violations SET status = 'cancelled'");
+    const section = DISCIPLINE_ROUTE.slice(idx, idx + 2500);
+    expect(section).toContain('entity: "employee_violations"');
+    expect(section).toContain('toState: "cancelled"');
   });
 });
 
@@ -354,11 +355,11 @@ describe("Appeal workflow", () => {
     expect(line).toContain('authorize(');
   });
 
-  it("appeal acceptance updates linked violation", () => {
+  it("appeal acceptance updates the linked violation via applyTransition", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('"/memos/:id/appeal-decision"');
-    const section = DISCIPLINE_ROUTE.slice(idx, idx + 2000);
-    expect(section).toContain("appeal_accepted");
-    expect(section).toContain("UPDATE employee_violations");
+    const section = DISCIPLINE_ROUTE.slice(idx, idx + 2800);
+    expect(section).toContain('entity: "employee_violations"');
+    expect(section).toContain('toState: "appeal_accepted"');
   });
 
   it("appeal notifies employee of result", () => {
@@ -386,10 +387,11 @@ describe("Memo close flow", () => {
     expect(section).toContain("closedAt");
   });
 
-  it("close also closes linked violation", () => {
+  it("close also closes the linked violation via applyTransition", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('"/memos/:id/close"');
-    const section = DISCIPLINE_ROUTE.slice(idx, idx + 1500);
-    expect(section).toContain("UPDATE employee_violations SET status = 'closed'");
+    const section = DISCIPLINE_ROUTE.slice(idx, idx + 2500);
+    expect(section).toContain('entity: "employee_violations"');
+    expect(section).toContain('toState: "closed"');
   });
 });
 
