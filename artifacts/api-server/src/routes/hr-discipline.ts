@@ -1378,10 +1378,13 @@ router.get("/auto-detection/log", authorize({ feature: "hr.discipline", action: 
 router.get("/auto-detection/summary", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    // إحصائيات آخر 30 يوم
+    // إحصائيات آخر 30 يوم. each auto_detection_log row IS one detection,
+    // so "totalRuns" counts distinct detection days (the table has no
+    // run-id) and "totalDetected" counts rows. The old query aliased
+    // COUNT(*) to both, making them always equal (HR functional audit M8).
     const stats = await rawQuery<DetectionStatsRow>(
       `SELECT
-         COUNT(*) AS "totalRuns",
+         COUNT(DISTINCT DATE("detectedAt")) AS "totalRuns",
          COUNT(*) AS "totalDetected",
          COUNT(*) FILTER (WHERE "violationId" IS NOT NULL) AS "totalViolations",
          0 AS "totalMemos",
@@ -1393,16 +1396,17 @@ router.get("/auto-detection/summary", authorize({ feature: "hr.discipline", acti
       [scope.companyId]
     ).catch((e) => { logger.error(e, "hr discipline query failed"); return [] as DetectionStatsRow[]; });
 
-    // تفصيل حسب النوع من آخر 30 يوم
+    // تفصيل حسب النوع من آخر 30 يوم. The detection type lives in the
+    // "ruleType" column — the old query ran jsonb_array_elements over a
+    // "details" object that is not a JSON array (HR functional audit M8).
     const byType = await rawQuery<DetectionByTypeRow>(
       `SELECT
-         d.value->>'type' AS type,
+         "ruleType" AS type,
          COUNT(*) AS count
-       FROM auto_detection_log adl,
-            jsonb_array_elements(adl.details) AS d(value)
-       WHERE adl."companyId" = $1
-         AND adl."detectedAt" >= NOW() - INTERVAL '30 days'
-       GROUP BY d.value->>'type'
+       FROM auto_detection_log
+       WHERE "companyId" = $1
+         AND "detectedAt" >= NOW() - INTERVAL '30 days'
+       GROUP BY "ruleType"
        ORDER BY count DESC`,
       [scope.companyId]
     ).catch((e) => { logger.error(e, "hr discipline query failed"); return []; });
