@@ -409,10 +409,14 @@ const publicHolidayPatchSchema = z.object({
 });
 
 const transferApprovalSchema = z.object({
-  // PATCH /transfers/:id/approve is multi-purpose: an absent flag means
-  // "approve"; `false` rejects; `"returned"` sends the request back to the
-  // requester for correction (it can then be edited + resubmitted).
-  approved: z.union([z.boolean(), z.literal("returned")]).optional().default(true),
+  // PATCH /transfers/:id/approve — an absent flag means "approve"; `false`
+  // rejects. Returning a transfer for correction is a separate explicit route
+  // (PATCH /transfers/:id/return), not an overload of this flag.
+  approved: z.boolean().optional().default(true),
+  notes: z.string().optional(),
+});
+
+const transferReturnSchema = z.object({
   notes: z.string().optional(),
 });
 
@@ -6309,24 +6313,7 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
       );
     }
 
-    if (approved === "returned") {
-      await applyTransition({
-        entity: "employee_transfers",
-        id,
-        scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
-        action: "hr.transfer.returned",
-        fromStates: ["pending", "returned"],
-        toState: "returned",
-        reason: notes || undefined,
-        setExtras: { notes: notes || null },
-        onApply: async (_row, client) => {
-          await client.query(
-            `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('transfer',$1,'returned',$2,$3,$4)`,
-            [id, notes || null, scope.userId, scope.companyId]
-          );
-        },
-      });
-    } else if (approved) {
+    if (approved) {
       const [receivingMgr] = await rawQuery<Record<string, unknown>>(
         `SELECT ea.id FROM employee_assignments ea
          WHERE ea."companyId"=$1 AND ea."branchId"=$2
@@ -6395,6 +6382,66 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Approve transfer error:"); }
+});
+
+// ── Return a transfer to the requester for correction ──
+router.patch("/transfers/:id/return", authorize({ feature: "hr.exit", action: "update" }), async (req, res) => {
+  // Explicit return action. A returned transfer is editable via
+  // PATCH /transfers/:id, which resubmits it (returned -> pending). This is a
+  // dedicated route rather than an overload of the /approve `approved` flag.
+  try {
+    const scope = req.scope!;
+    if (!HR_ROLES.includes(scope.role)) {
+      throw new ForbiddenError("هذه الخطوة محصورة بمدير الموارد البشرية أو المدير العام", {
+        fix: "اطلب من مدير الموارد البشرية اتخاذ القرار.",
+      });
+    }
+    const id = parseId(req.params.id, "id");
+    const { notes } = zodParse(transferReturnSchema.safeParse(req.body ?? {}));
+    const [transfer] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (!transfer) {
+      throw new NotFoundError("طلب النقل غير موجود");
+    }
+    if (transfer.status !== "pending" && transfer.status !== "returned") {
+      throw new ConflictError(
+        `لا يمكن إرجاع طلب نقل في الحالة "${transfer.status}"`,
+        {
+          field: "status",
+          fix: "الإرجاع متاح فقط على طلب نقل معلّق.",
+          meta: { currentStatus: transfer.status },
+        }
+      );
+    }
+    await applyTransition({
+      entity: "employee_transfers",
+      id,
+      scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+      action: "hr.transfer.returned",
+      fromStates: ["pending", "returned"],
+      toState: "returned",
+      reason: notes || undefined,
+      setExtras: { notes: notes || null },
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('transfer',$1,'returned',$2,$3,$4)`,
+          [id, notes || null, scope.userId, scope.companyId]
+        );
+      },
+    });
+
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "employee_transfers", entityId: id,
+      after: { status: row?.status, notes: notes ?? null },
+    }).catch((e) => logger.error(e, "hr background task failed"));
+
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Return transfer error:"); }
 });
 
 // ── Step 2: Receiving branch manager confirms the transfer ──
