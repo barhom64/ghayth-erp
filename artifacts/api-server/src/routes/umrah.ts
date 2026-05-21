@@ -1522,9 +1522,16 @@ router.get("/transport/:id", authorize({ feature: "umrah", action: "view" }), as
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("رحلة النقل غير موجودة");
+    // C4 (DT-3): the trip's pilgrims come from the join table — not from
+    // every company pilgrim that happens to carry the transportAssigned
+    // flag.
     const pilgrims = await rawQuery(
-      `SELECT id, "fullName", "passportNumber", nationality, status FROM umrah_pilgrims WHERE "companyId"=$1 AND "transportAssigned"=true AND "deletedAt" IS NULL ORDER BY "fullName"`,
-      [scope.companyId]
+      `SELECT p.id, p."fullName", p."passportNumber", p.nationality, p.status
+       FROM umrah_transport_pilgrims tp
+       JOIN umrah_pilgrims p ON p.id = tp."pilgrimId"
+       WHERE tp."transportId"=$1 AND tp."companyId"=$2 AND p."deletedAt" IS NULL
+       ORDER BY p."fullName"`,
+      [id, scope.companyId]
     );
     res.json(maskFields(req, { ...row, pilgrims }));
   } catch (err) { handleRouteError(err, res, "Get transport error"); }
@@ -1670,18 +1677,40 @@ router.post("/transport/:id/assign-pilgrims", authorize({ feature: "umrah", acti
     if (transport.status === "completed" || transport.status === "cancelled") {
       throw new ConflictError("لا يمكن إضافة معتمرين لرحلة مكتملة أو ملغاة");
     }
-    const newCount = (Number(transport.pilgrimCount) || 0) + pilgrimIds.length;
-    if (newCount > (Number(transport.capacity) || 45)) {
-      throw new ValidationError(`عدد المعتمرين (${newCount}) يتجاوز سعة المركبة (${transport.capacity || 45})`);
+    // C4 (DT-3): capacity + count derive from the join table.
+    const [linkedRow] = await rawQuery<{ linked: number }>(
+      `SELECT COUNT(*)::int AS linked FROM umrah_transport_pilgrims WHERE "transportId"=$1 AND "companyId"=$2`,
+      [transportId, scope.companyId]
+    );
+    const capacity = Number(transport.capacity) || 45;
+    if (Number(linkedRow?.linked ?? 0) + pilgrimIds.length > capacity) {
+      throw new ValidationError(`عدد المعتمرين قد يتجاوز سعة المركبة (${capacity})`);
     }
     const placeholders = pilgrimIds.map((_: any, i: number) => `$${i + 2}`).join(",");
+    let newCount = Number(linkedRow?.linked ?? 0);
     await withTransaction(async (client) => {
+      // Idempotent link rows — re-assigning an already-linked pilgrim is a
+      // no-op (UNIQUE transportId,pilgrimId), so the count never drifts.
+      for (const pid of pilgrimIds) {
+        await client.query(
+          `INSERT INTO umrah_transport_pilgrims ("companyId","transportId","pilgrimId")
+           VALUES ($1,$2,$3) ON CONFLICT ("transportId","pilgrimId") DO NOTHING`,
+          [scope.companyId, transportId, pid]
+        );
+      }
+      // Denormalised flag kept for any reader still using it.
       await client.query(
         `UPDATE umrah_pilgrims SET "transportAssigned"=true, "updatedAt"=NOW() WHERE "companyId"=$1 AND "deletedAt" IS NULL AND id IN (${placeholders})`,
         [scope.companyId, ...pilgrimIds]
       );
+      // pilgrimCount is now derived from the join — accurate, dedup-safe.
+      const cntRes = await client.query(
+        `SELECT COUNT(*)::int AS c FROM umrah_transport_pilgrims WHERE "transportId"=$1`,
+        [transportId]
+      );
+      newCount = Number(cntRes.rows[0]?.c ?? 0);
       await client.query(
-        `UPDATE umrah_transport SET "pilgrimCount"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+        `UPDATE umrah_transport SET "pilgrimCount"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
         [newCount, transportId, scope.companyId]
       );
     });

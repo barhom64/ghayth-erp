@@ -15627,3 +15627,36 @@ CREATE TABLE public.zatca_submission_log (
     CONSTRAINT "zatca_submission_log_entityType_check" CHECK ((("entityType")::text = ANY ((ARRAY['invoice'::character varying, 'expense'::character varying])::text[]))),
     CONSTRAINT zatca_submission_log_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'submitted'::character varying, 'accepted'::character varying, 'rejected'::character varying, 'error'::character varying])::text[])))
 );
+
+
+--
+-- Name: umrah_transport_pilgrims; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.umrah_transport_pilgrims (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "transportId" integer NOT NULL,
+    "pilgrimId" integer NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now()
+);
+
+
+--
+-- Name: umrah_transport_pilgrims_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.umrah_transport_pilgrims_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: umrah_transport_pilgrims_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.umrah_transport_pilgrims_id_seq OWNED BY public.umrah_transport_pilgrims.id;
