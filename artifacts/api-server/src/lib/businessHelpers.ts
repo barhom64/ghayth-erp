@@ -456,8 +456,8 @@ export async function createJournalEntry(params: {
   const uniqueCodes = [...new Set(params.lines.map(l => l.accountCode).filter(Boolean))];
   if (uniqueCodes.length > 0) {
     const placeholders = uniqueCodes.map((_, i) => `$${i + 2}`).join(",");
-    const accountRows = await rawQuery<{ code: string; allowPosting: boolean }>(
-      `SELECT code, "allowPosting" FROM chart_of_accounts WHERE "companyId" = $1 AND code IN (${placeholders}) AND "deletedAt" IS NULL`,
+    const accountRows = await rawQuery<{ code: string; allowPosting: boolean; isActive: boolean }>(
+      `SELECT code, "allowPosting", "isActive" FROM chart_of_accounts WHERE "companyId" = $1 AND code IN (${placeholders}) AND "deletedAt" IS NULL`,
       [params.companyId, ...uniqueCodes]
     );
     const accountMap = new Map(accountRows.map((a) => [a.code, a]));
@@ -468,6 +468,9 @@ export async function createJournalEntry(params: {
       }
       if (acc.allowPosting === false) {
         throw new ValidationError(`لا يمكن الترحيل على الحساب "${code}" — هذا حساب تجميعي (رئيسي). استخدم حساباً فرعياً يقبل الحركة`, { field: "accountCode", fix: "اختر حساباً فرعياً (تفصيلياً) يقبل الحركة" });
+      }
+      if (acc.isActive === false) {
+        throw new ValidationError(`لا يمكن الترحيل على الحساب "${code}" — الحساب معطّل (غير نشط)`, { field: "accountCode", fix: "فعّل الحساب أو اختر حساباً نشطاً" });
       }
     }
   }
