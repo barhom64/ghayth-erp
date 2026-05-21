@@ -4,6 +4,10 @@ import { logger } from "./logger.js";
 import { isKnownEvent } from "./eventCatalog.js";
 
 export interface EventPayload {
+  /** Envelope version — stamped by EventBus.emit (see EVENT_ENVELOPE_VERSION). */
+  v?: number;
+  /** ISO-8601 emit timestamp — stamped by EventBus.emit. */
+  occurredAt?: string;
   companyId?: number;
   branchId?: number;
   userId?: number;
@@ -56,9 +60,36 @@ export type EventName =
   | "workflow.sla_warning"
   | string;
 
+/**
+ * Event envelope version. Every event emitted through `eventBus.emit` is
+ * stamped with this. Bump it when the envelope shape changes so persisted
+ * events (`event_logs`, `event_dlq`) and subscribers can branch on `v`.
+ */
+export const EVENT_ENVELOPE_VERSION = 1;
+
+/**
+ * Return a copy of `payload` with the envelope fields (`v`, `occurredAt`)
+ * guaranteed present. The caller's object is never mutated; a payload that
+ * already carries either field keeps its value, so re-stamping a forwarded
+ * event is idempotent.
+ */
+export function stampEnvelope(
+  payload?: EventPayload,
+): EventPayload | undefined {
+  if (payload == null) return payload;
+  return {
+    ...payload,
+    v: payload.v ?? EVENT_ENVELOPE_VERSION,
+    occurredAt: payload.occurredAt ?? new Date().toISOString(),
+  };
+}
+
 class EventBus extends EventEmitter {
   emit(event: EventName, payload?: EventPayload): boolean {
-    return super.emit(event, payload);
+    // Single chokepoint — every emit path (emitEvent, safeEmitEvent, the
+    // domain engines, eventCatalog) routes through here, so stamping the
+    // envelope once guarantees every event is versioned + timestamped.
+    return super.emit(event, stampEnvelope(payload));
   }
 
   on(event: EventName, listener: (payload: EventPayload) => void): this {
