@@ -1382,9 +1382,13 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
     const ref = await generateBranchRef(scope, "invoice_prefix", "UMRAH-INV");
     let invoiceRow: any;
     await withTransaction(async (client) => {
+      // C1: generated directly as 'sent'. The umrah_agent_invoices state
+      // machine (lifecycleEngine) has no 'draft' state and no draft->sent
+      // endpoint exists, so a 'draft' invoice could never reach
+      // record-payment (fromStates: sent/partially_paid/overdue).
       const insRes = await client.query(
         `INSERT INTO umrah_agent_invoices ("companyId","agentId","seasonId",ref,type,"pilgrimCount","penaltiesTotal","servicesTotal",subtotal,commission,total,status)
-         VALUES ($1,$2,$3,$4,'sales',$5,$6,$7,$8,$9,$10,'draft') RETURNING *`,
+         VALUES ($1,$2,$3,$4,'sales',$5,$6,$7,$8,$9,$10,'sent') RETURNING *`,
         [scope.companyId, agentId, seasonId, ref, pilgrimCount, penaltiesTotal, servicesTotal, subtotal, commission, total]
       );
       invoiceRow = insRes.rows[0];
