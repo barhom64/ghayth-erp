@@ -293,6 +293,31 @@ accountsRouter.patch("/accounts/:id", authorize({ feature: "finance.accounts", a
         [id, scope.companyId],
       );
       if (!existing) throw new NotFoundError("الحساب غير موجود");
+
+      // COA-4: changing an account's `type` retroactively re-classifies every
+      // posting already booked to it — any financial statement built on
+      // `type` would silently change. Refuse a type change once the account
+      // carries journal lines (mirrors the DELETE handler's usage guard);
+      // correct via a new correctly-typed account + a reversing entry.
+      if (b.type !== undefined && b.type !== existing.type) {
+        const [typeUsage] = await rawQuery<JournalCountRow>(
+          `SELECT COUNT(*) AS cnt FROM journal_lines jl
+           JOIN journal_entries je ON je.id = jl."journalId"
+           WHERE jl."accountCode" = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL`,
+          [existing.code, scope.companyId],
+        );
+        if (Number(typeUsage?.cnt ?? 0) > 0) {
+          throw new ConflictError(
+            `لا يمكن تغيير نوع الحساب "${existing.code}" — مرتبط به ${typeUsage.cnt} سطر في القيود المحاسبية`,
+            {
+              field: "type",
+              fix: "النوع جزء من التصنيف المحاسبي؛ أنشئ حساباً جديداً بالنوع الصحيح وأجرِ ترحيلاً تصحيحياً",
+              meta: { journalLinesCount: Number(typeUsage.cnt) },
+            },
+          );
+        }
+      }
+
       const effectiveType = b.type ?? existing.type;
       const effectiveParentCode = b.parentCode !== undefined ? b.parentCode : existing.parentCode;
       if (effectiveParentCode) {
