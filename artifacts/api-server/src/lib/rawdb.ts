@@ -1,5 +1,6 @@
 import pg from "pg";
 import { logger } from "./logger.js";
+import { config } from "./config.js";
 
 const { Pool } = pg;
 
@@ -7,12 +8,12 @@ let _pool: pg.Pool | undefined;
 
 function getPool(): pg.Pool {
   if (!_pool) {
-    if (!process.env.DATABASE_URL) {
+    if (!config.databaseUrl) {
       throw new Error("DATABASE_URL must be set");
     }
     _pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: Number(process.env.PG_POOL_MAX) || 20,
+      connectionString: config.databaseUrl,
+      max: config.pgPoolMax,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
     });
