@@ -39,7 +39,6 @@ import { iqamaDailyAlertCron } from "./saudi-compliance/iqama-cron.js";
 import { saudizationMonthlySnapshotCron } from "./saudi-compliance/saudization-snapshot.js";
 import { recordJobRun } from "./observability.js";
 import { runWithCorrelationId } from "./requestContext.js";
-import { randomUUID } from "node:crypto";
 
 async function getSystemTimezone(): Promise<string> {
   try {
