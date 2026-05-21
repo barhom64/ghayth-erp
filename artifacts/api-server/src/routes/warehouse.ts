@@ -20,10 +20,10 @@ import {
   todayISO,
   toDateISO,
   roundTo2,
-  roundTo4,
   generateTimeRef,
 } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { runningWeightedAverageCost } from "../lib/inventory/valuation/running-average.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -140,10 +140,11 @@ const COUNT_TRANSITIONS: Record<string, readonly string[]> = {
 // Weighted-average cost maintenance helper.
 // The canonical weighted-average cost for a product is stored on
 // warehouse_products.costPrice (and mirrored in lastWaCost). There is no
-// separate avgCost column. See `POST /movements` for the in-route logic that
-// already maintains this; this helper exists so callers outside the movement
-// route (e.g. inventory-count approval, transfers-in from other modules) can
-// keep the weighted-average in sync without duplicating math.
+// separate avgCost column. Both this helper and the `POST /movements` route
+// derive the new cost from the single shared `runningWeightedAverageCost`
+// function, so the formula cannot drift between the two write paths. This
+// helper exists for callers outside the movement route (e.g. inventory-count
+// approval, transfers-in from other modules).
 // ─────────────────────────────────────────────────────────────────────────────
 async function updateWeightedAverageCost(
   productId: number,
@@ -163,12 +164,7 @@ async function updateWeightedAverageCost(
     const movQty = Math.abs(Number(qty));
     const movCost = Number(unitCost ?? 0);
     if (direction === "in") {
-      const newTotalValue = prevQty * prevCost + movQty * movCost;
-      const newTotalQty = prevQty + movQty;
-      const newWa =
-        newTotalQty > 0
-          ? roundTo4(newTotalValue / newTotalQty)
-          : movCost;
+      const newWa = runningWeightedAverageCost(prevQty, prevCost, movQty, movCost);
       await rawExecute(
         `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
         [newWa, productId, companyId]
@@ -678,9 +674,7 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
         const incomingCost = Number(b.unitCost ?? 0);
         const prevStock = Math.max(0, Number(product.currentStock));
         const prevCost = Number(product.costPrice ?? 0);
-        const newTotalValue = prevStock * prevCost + incomingQty * incomingCost;
-        const newTotalQty = prevStock + incomingQty;
-        const newWaCost = newTotalQty > 0 ? roundTo4(newTotalValue / newTotalQty) : incomingCost;
+        const newWaCost = runningWeightedAverageCost(prevStock, prevCost, incomingQty, incomingCost);
         await client.query(
           `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
           [newWaCost, b.productId, scope.companyId]
