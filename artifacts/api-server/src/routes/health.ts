@@ -6,6 +6,8 @@ import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
 import { getLiveness, getReadiness } from "../lib/health.js";
 import { getObservabilitySnapshot } from "../lib/observability.js";
 import { describeConfig } from "../lib/config.js";
+import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requirePermission } from "../middlewares/permissionMiddleware.js";
 
 const router: IRouter = Router();
 
@@ -262,10 +264,14 @@ router.get("/health/schema", async (_req, res) => {
 /**
  * Operator metrics snapshot — in-memory counters, gauges, and latency
  * histograms collected by the observability layer (HTTP requests, DB
- * queries, slow queries, cron jobs). Like `/health/schema` this is an
- * operator-only diagnostic and is not part of the OpenAPI contract.
+ * queries, slow queries, cron jobs). Not part of the OpenAPI contract.
+ *
+ * Unlike the unauthenticated probes (`/healthz`, `/livez`, `/readyz`,
+ * `/health/schema`), this exposes internal operational state — so it
+ * requires an authenticated session holding `settings:read` (owner
+ * bypasses). The probes stay public so orchestrators can always reach them.
  */
-router.get("/health/metrics", (_req, res) => {
+router.get("/health/metrics", authMiddleware, requirePermission("settings:read"), (_req, res) => {
   res.json(getObservabilitySnapshot());
 });
 
@@ -274,8 +280,12 @@ router.get("/health/metrics", (_req, res) => {
  * config with all secret values masked (see config.SECRET_ENV_KEYS). Lets
  * an operator confirm exactly what the server resolved, so a deployment
  * outside Replit never has to guess at its own configuration.
+ *
+ * Secret values are already masked, but the snapshot still reveals internal
+ * posture (hostname, CORS allowlist, feature flags, env-issue counts), so it
+ * requires an authenticated session holding `settings:read` (owner bypasses).
  */
-router.get("/health/config", (_req, res) => {
+router.get("/health/config", authMiddleware, requirePermission("settings:read"), (_req, res) => {
   res.json(describeConfig());
 });
 
