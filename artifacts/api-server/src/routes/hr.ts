@@ -6262,6 +6262,9 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
         toState: "pending_receiving_manager",
         reason: notes || undefined,
         setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: notes || null },
+        // employee_transfers has no "updatedAt" column — opt out of the
+        // engine's auto `"updatedAt" = NOW()` clause (HR audit C7 follow-up).
+        skipUpdatedAt: true,
         notifications: receivingMgr ? [{
           assignmentId: receivingMgr.id as number,
           type: "transfer_receiving_approval", title: "طلب استقبال موظف منقول",
@@ -6283,6 +6286,9 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
         toState: "rejected",
         reason: notes || undefined,
         setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: notes || null },
+        // employee_transfers has no "updatedAt" column — opt out of the
+        // engine's auto `"updatedAt" = NOW()` clause (HR audit C7 follow-up).
+        skipUpdatedAt: true,
         notifications: empAssign ? [{
           assignmentId: empAssign.id as number,
           type: "transfer_decision", title: "تم رفض طلب النقل",
@@ -6377,6 +6383,9 @@ router.patch("/transfers/:id/receive", authorize({ feature: "hr.exit", action: "
         toState: "approved",
         reason: notes || undefined,
         setExtras: { receivedBy: scope.employeeId, receivedAt: { raw: "NOW()" } },
+        // employee_transfers has no "updatedAt" column — opt out of the
+        // engine's auto `"updatedAt" = NOW()` clause (HR audit C7 follow-up).
+        skipUpdatedAt: true,
         onApply: async (_row, client) => {
           await client.query(
             `UPDATE employee_assignments SET "branchId"=$1,"departmentId"=$2,"jobTitle"=$3,salary=$4 WHERE "employeeId"=$5 AND "companyId"=$6 AND status='active'`,
@@ -6408,6 +6417,9 @@ router.patch("/transfers/:id/receive", authorize({ feature: "hr.exit", action: "
         toState: "rejected_by_receiver",
         reason: notes || undefined,
         setExtras: { receivedBy: scope.employeeId, receivedAt: { raw: "NOW()" } },
+        // employee_transfers has no "updatedAt" column — opt out of the
+        // engine's auto `"updatedAt" = NOW()` clause (HR audit C7 follow-up).
+        skipUpdatedAt: true,
         notifications: empAssign ? [{
           assignmentId: empAssign.id as number,
           type: "transfer_decision", title: "رفض الفرع المستقبل طلب نقلك",
