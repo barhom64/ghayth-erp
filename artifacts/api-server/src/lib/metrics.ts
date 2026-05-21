@@ -112,6 +112,43 @@ export function snapshotMetrics(): MetricsSnapshot {
   };
 }
 
+/** Sanitize a metric name to the Prometheus charset `[a-zA-Z0-9_:]`. */
+function promName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_:]/g, "_");
+}
+
+/**
+ * Render the current metrics in the Prometheus text exposition format
+ * (v0.0.4): counters → `counter`, gauges → `gauge`, histograms → `summary`
+ * (quantiles + `_count` + `_sum`). Dependency-free string formatting over
+ * `snapshotMetrics()` — the documented export seam.
+ */
+export function renderPrometheus(): string {
+  const snap = snapshotMetrics();
+  const lines: string[] = [];
+  for (const [name, value] of Object.entries(snap.counters)) {
+    const n = promName(name);
+    lines.push(`# TYPE ${n} counter`, `${n} ${value}`);
+  }
+  for (const [name, value] of Object.entries(snap.gauges)) {
+    const n = promName(name);
+    lines.push(`# TYPE ${n} gauge`, `${n} ${value}`);
+  }
+  lines.push(`# TYPE app_uptime_seconds gauge`, `app_uptime_seconds ${snap.uptimeSec}`);
+  for (const [name, h] of Object.entries(snap.histograms)) {
+    const n = promName(name);
+    lines.push(
+      `# TYPE ${n} summary`,
+      `${n}{quantile="0.5"} ${h.p50}`,
+      `${n}{quantile="0.95"} ${h.p95}`,
+      `${n}{quantile="0.99"} ${h.p99}`,
+      `${n}_count ${h.count}`,
+      `${n}_sum ${h.sum}`,
+    );
+  }
+  return lines.join("\n") + "\n";
+}
+
 /** Clear every metric. Intended for tests only. */
 export function resetMetrics(): void {
   counters.clear();
