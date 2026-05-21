@@ -398,7 +398,9 @@ const publicHolidayPatchSchema = z.object({
 });
 
 const transferApprovalSchema = z.object({
-  approved: z.boolean().optional(),
+  // The route is PATCH /transfers/:id/approve — absence of the flag means
+  // "approve". Rejection is the explicit opt-out (`approved: false`).
+  approved: z.boolean().optional().default(true),
   notes: z.string().optional(),
 });
 
@@ -6258,6 +6260,12 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
         toState: "pending_receiving_manager",
         reason: notes || undefined,
         setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: notes || null },
+        onApply: async (_row, client) => {
+          await client.query(
+            `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('transfer',$1,'approved',$2,$3,$4)`,
+            [id, notes || null, scope.userId, scope.companyId]
+          );
+        },
         notifications: receivingMgr ? [{
           assignmentId: receivingMgr.id as number,
           type: "transfer_receiving_approval", title: "طلب استقبال موظف منقول",
@@ -6279,6 +6287,12 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
         toState: "rejected",
         reason: notes || undefined,
         setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: notes || null },
+        onApply: async (_row, client) => {
+          await client.query(
+            `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('transfer',$1,'rejected',$2,$3,$4)`,
+            [id, notes || null, scope.userId, scope.companyId]
+          );
+        },
         notifications: empAssign ? [{
           assignmentId: empAssign.id as number,
           type: "transfer_decision", title: "تم رفض طلب النقل",
