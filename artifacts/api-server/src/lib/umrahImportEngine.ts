@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import { parseFirstSheetAOA } from "./excelCompat.js";
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { emitEvent, createAuditLog, createGuardedJournalEntry, getAccountCodeFromMapping, toDateISO } from "./businessHelpers.js";
 import { ValidationError } from "./errorHandler.js";
@@ -131,20 +131,16 @@ export interface ParsedRow {
   [key: string]: string | number | boolean | null;
 }
 
-export function parseMutamersWorkbook(buffer: Buffer): ParsedRow[] {
+export function parseMutamersWorkbook(buffer: Buffer): Promise<ParsedRow[]> {
   return parseWorkbook(buffer, MUTAMER_HEADER_MAP, "mutamers");
 }
 
-export function parseVouchersWorkbook(buffer: Buffer): ParsedRow[] {
+export function parseVouchersWorkbook(buffer: Buffer): Promise<ParsedRow[]> {
   return parseWorkbook(buffer, VOUCHER_HEADER_MAP, "vouchers");
 }
 
-function parseWorkbook(buffer: Buffer, headerMap: Record<string, string>, fileType: string): ParsedRow[] {
-  const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
-  const sheetName = wb.SheetNames[0];
-  if (!sheetName) throw new ValidationError("الملف لا يحتوي على أي ورقة");
-  const sheet = wb.Sheets[sheetName]!;
-  const raw: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+async function parseWorkbook(buffer: Buffer, headerMap: Record<string, string>, fileType: string): Promise<ParsedRow[]> {
+  const raw: any[][] = await parseFirstSheetAOA(buffer);
   if (raw.length < 2) throw new ValidationError("الملف لا يحتوي على بيانات");
 
   const headerRow = raw[0]!;
