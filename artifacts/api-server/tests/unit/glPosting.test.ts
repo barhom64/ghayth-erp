@@ -19,13 +19,26 @@ import { rawQuery, rawExecute } from "../../src/lib/rawdb.js";
 const mockRawQuery = rawQuery as unknown as ReturnType<typeof vi.fn>;
 const mockRawExecute = rawExecute as unknown as ReturnType<typeof vi.fn>;
 
-function setupAccountResolve(accounts: Array<{ id: number; code: string }>, insertedId = 999) {
+// A `posted` entry runs a financial-period-close check (one rawQuery to
+// financial_periods) BEFORE the account lookup. `periodOpen` controls that
+// first mocked call ([] = no closed period). `skipPeriodCheck` is for draft
+// entries, which are exempt from the gate and never issue that query.
+function setupAccountResolve(
+  accounts: Array<{ id: number; code: string }>,
+  insertedId = 999,
+  opts: { periodOpen?: boolean; skipPeriodCheck?: boolean } = {},
+) {
+  const { periodOpen = true, skipPeriodCheck = false } = opts;
   mockRawQuery.mockReset();
   mockRawExecute.mockReset();
+  if (!skipPeriodCheck) {
+    // checkFinancialPeriodOpen — [] means no closed period covers the date.
+    mockRawQuery.mockResolvedValueOnce(periodOpen ? [] : [{ name: "2026-Q1" }]);
+  }
   mockRawQuery
-    // first call = account lookup
+    // account lookup
     .mockResolvedValueOnce(accounts)
-    // second call = INSERT into journal_entries RETURNING id
+    // INSERT into journal_entries RETURNING id
     .mockResolvedValueOnce([{ id: insertedId }]);
   mockRawExecute.mockResolvedValue({ affectedRows: 1 });
 }
@@ -183,6 +196,7 @@ describe("postJournalEntry — INSERT shape", () => {
         { id: 490, code: "4900" },
       ],
       2,
+      { skipPeriodCheck: true },
     );
     const payload = buildSimpleEntry({
       description: "X",
@@ -198,5 +212,71 @@ describe("postJournalEntry — INSERT shape", () => {
     );
     const params = headerCall?.[1] as any[];
     expect(params[7]).toBe("draft");
+  });
+});
+
+describe("postJournalEntry — financial period close (H1)", () => {
+  it("blocks a posted entry whose effective date lands in a closed period", async () => {
+    setupAccountResolve(
+      [
+        { id: 100, code: "1100" },
+        { id: 490, code: "4900" },
+      ],
+      1,
+      { periodOpen: false },
+    );
+    const payload = buildSimpleEntry({
+      description: "X",
+      amount: 50,
+      debitAccountId: 100,
+      creditAccountId: 490,
+    });
+    await expect(
+      postJournalEntry(payload, { companyId: 5, date: "2026-01-15" }),
+    ).rejects.toThrow(/مغلقة/);
+  });
+
+  it("posts a posted entry when the period covering its date is open", async () => {
+    setupAccountResolve(
+      [
+        { id: 100, code: "1100" },
+        { id: 490, code: "4900" },
+      ],
+      8,
+    );
+    const payload = buildSimpleEntry({
+      description: "X",
+      amount: 50,
+      debitAccountId: 100,
+      creditAccountId: 490,
+    });
+    const r = await postJournalEntry(payload, { companyId: 5, date: "2026-06-01" });
+    expect(r.status).toBe("posted");
+    expect(r.journalEntryId).toBe(8);
+  });
+
+  it("exempts a draft entry from the period-close gate", async () => {
+    // status:'draft' issues no period query — a draft is allowed even for a
+    // date inside a closed period; the gate fires when the draft is posted.
+    setupAccountResolve(
+      [
+        { id: 100, code: "1100" },
+        { id: 490, code: "4900" },
+      ],
+      9,
+      { skipPeriodCheck: true },
+    );
+    const payload = buildSimpleEntry({
+      description: "X",
+      amount: 50,
+      debitAccountId: 100,
+      creditAccountId: 490,
+    });
+    const r = await postJournalEntry(payload, {
+      companyId: 5,
+      date: "2026-01-15",
+      status: "draft",
+    });
+    expect(r.status).toBe("draft");
   });
 });
