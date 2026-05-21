@@ -107,6 +107,29 @@ export default function ApplicationListPage() {
         );
       },
     },
+    {
+      key: "actions",
+      header: "",
+      render: (v) => {
+        if ((v.status || v.stage) !== "hired") return null;
+        const qs = new URLSearchParams({
+          name: v.applicantName || v.name || "",
+          email: v.email || "",
+          phone: v.phone || "",
+        }).toString();
+        return (
+          <GuardedButton
+            perm="hr:create"
+            size="sm"
+            variant="outline"
+            className="text-xs"
+            onClick={() => navigate(`/employees/create?${qs}`)}
+          >
+            تحويل لموظف
+          </GuardedButton>
+        );
+      },
+    },
   ];
 
   return (

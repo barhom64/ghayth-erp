@@ -129,10 +129,9 @@ export default function PayrollPage() {
         config={{
           searchPlaceholder: "بحث بالفترة...",
           statuses: [
-            { value: "draft", label: "مسودة" },
-            { value: "completed", label: "مكتمل" },
-            { value: "approved", label: "معتمد" },
-            { value: "paid", label: "مدفوع" },
+            { value: "pending_approval", label: "بانتظار الاعتماد" },
+            { value: "completed", label: "معتمد" },
+            { value: "posted", label: "مُرحَّل محاسبيًا" },
           ],
           showDateRange: true,
         }}

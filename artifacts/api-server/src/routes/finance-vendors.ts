@@ -636,7 +636,10 @@ vendorsRouter.patch("/financial-requests/:id/approve", authorize({ feature: "fin
     const newStatus = approved === "returned" ? "returned" : approved === true ? "approved" : "rejected";
     if (newStatus === "rejected" && !notes) throw new ValidationError("يجب ذكر سبب الرفض");
     const updated = await applyTransition<Record<string, unknown>>({
-      entity: "workflow_instances",
+      // Financial requests are rows in `workflow_requests` — see the GET
+      // endpoints above. The approve transition must target that same table;
+      // `workflow_instances` is a different table with its own id sequence.
+      entity: "workflow_requests",
       id,
       scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
       action: `financial_request.${newStatus}`,

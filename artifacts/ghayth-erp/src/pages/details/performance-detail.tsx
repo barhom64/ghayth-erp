@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiPatch } from "@/lib/api";
 import {
   useDetailEditDelete,
   DetailActionButtons,
@@ -11,7 +11,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ActionHistory } from "@/components/approval-actions";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { useToast } from "@/hooks/use-toast";
 import { Edit, Star, Target, TrendingUp } from "lucide-react";
@@ -32,10 +32,10 @@ import { useRegistryTabs } from "@/hooks/use-registry-tabs";
  */
 
 const STATUS_LABELS: Record<string, string> = {
-  draft: "مسودة",
+  pending: "بانتظار التقييم",
   in_progress: "قيد التقييم",
   completed: "مكتمل",
-  archived: "مؤرشف",
+  acknowledged: "مُقَرّ من الموظف",
 };
 
 const RATING_LABELS: Record<string, string> = {
@@ -48,10 +48,8 @@ const RATING_LABELS: Record<string, string> = {
 
 function statusTone(status?: string | null) {
   if (!status) return "default" as const;
-  if (status === "completed") return "success" as const;
-  if (status === "archived") return "muted" as const;
+  if (status === "completed" || status === "acknowledged") return "success" as const;
   if (status === "in_progress") return "info" as const;
-  if (status === "draft") return "default" as const;
   return "default" as const;
 }
 
@@ -90,6 +88,20 @@ export default function PerformanceDetail() {
   );
 
   const review = data;
+  const [progressing, setProgressing] = useState(false);
+
+  const progressStatus = async (status: string) => {
+    setProgressing(true);
+    try {
+      await apiPatch(`/hr/performance/${id}`, { status });
+      toast({ title: "تم تحديث حالة التقييم" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذّر تحديث الحالة", description: err?.fix ?? err?.message });
+    } finally {
+      setProgressing(false);
+    }
+  };
 
   // Scores breakdown. The server may project this either as an object
   // map ({ leadership: 4, teamwork: 5 }) or an array of
@@ -168,11 +180,11 @@ export default function PerformanceDetail() {
     if (review.strengths) {
       sections.push({ kind: "text", title: "نقاط القوة", body: review.strengths });
     }
-    if (review.areasForImprovement) {
+    if (review.improvements) {
       sections.push({
         kind: "text",
         title: "مجالات التحسين",
-        body: review.areasForImprovement,
+        body: review.improvements,
       });
     }
     if (review.goals) {
@@ -202,9 +214,9 @@ export default function PerformanceDetail() {
     listPath: "/hr/performance",
     initialValues: review,
     fields: [
-      { key: "overallRating", label: "التقييم العام", type: "number" },
+      { key: "overallScore", label: "التقييم العام", type: "number" },
       { key: "strengths", label: "نقاط القوة" },
-      { key: "areasForImprovement", label: "مجالات التحسين" },
+      { key: "improvements", label: "مجالات التحسين" },
       { key: "comments", label: "ملاحظات" },
     ],
     invalidateKeys: [["performance-review", String(id)], ["performance-reviews"]],
@@ -317,11 +329,11 @@ export default function PerformanceDetail() {
               <p className="text-status-neutral-foreground whitespace-pre-wrap">{review.strengths}</p>
             </div>
           )}
-          {review?.areasForImprovement && (
+          {review?.improvements && (
             <div className="pt-3 border-t">
               <p className="text-xs text-muted-foreground mb-1">مجالات التحسين</p>
               <p className="text-status-neutral-foreground whitespace-pre-wrap">
-                {review.areasForImprovement}
+                {review.improvements}
               </p>
             </div>
           )}
@@ -346,33 +358,38 @@ export default function PerformanceDetail() {
       </Card>
 
       <div className="space-y-3">
-        {/* Approval actions */}
-        {id && review && ["pending", "draft", "returned"].includes(review.status) && (
+        {/* Status progression — performance reviews advance
+            pending → in_progress → completed → acknowledged. There is no
+            approve/reject workflow: the performance_reviews status CHECK
+            only allows these four states, so this drives the real
+            PATCH /hr/performance/:id endpoint. */}
+        {id && review && review.status !== "acknowledged" && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
+              <CardTitle className="text-sm">إجراءات التقييم</CardTitle>
             </CardHeader>
-            <CardContent>
-              <ApprovalActions
-                entityType="performance"
-                entityId={id}
-                currentStatus={review.status}
-                approveEndpoint={`/hr/performance/${id}/approve`}
-                rejectEndpoint={`/hr/performance/${id}/approve`}
-                returnEndpoint={`/hr/performance/${id}/approve`}
-                approveMethod="PATCH"
-                rejectMethod="PATCH"
-                returnMethod="PATCH"
-                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
-                rejectBody={(notes) => ({ approved: false, notes })}
-                returnBody={(notes) => ({ approved: "returned", notes })}
-                pendingStatuses={["pending", "draft", "returned"]}
-                invalidateKeys={[["performance"]]}
-                onDone={() => {
-                  refetch();
-                  toast({ title: "تم تحديث التقييم" });
-                }}
-              />
+            <CardContent className="space-y-2">
+              {["pending", "in_progress"].includes(review.status) && (
+                <GuardedButton
+                  perm="hr:update"
+                  className="w-full"
+                  disabled={progressing}
+                  onClick={() => progressStatus("completed")}
+                >
+                  اعتماد التقييم (إكمال)
+                </GuardedButton>
+              )}
+              {review.status === "completed" && (
+                <GuardedButton
+                  perm="hr:update"
+                  variant="outline"
+                  className="w-full"
+                  disabled={progressing}
+                  onClick={() => progressStatus("acknowledged")}
+                >
+                  إقرار الموظف بالاطلاع
+                </GuardedButton>
+              )}
             </CardContent>
           </Card>
         )}
