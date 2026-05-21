@@ -149,8 +149,9 @@ describe("postJournalEntry — INSERT shape", () => {
     expect(result.journalEntryId).toBe(4242);
     expect(result.status).toBe("posted");
 
-    // The INSERT INTO journal_lines call shape — one per line.
-    expect(mockRawExecute).toHaveBeenCalledTimes(2);
+    // rawExecute shape: one INSERT INTO journal_lines per line (×2), then
+    // one currentBalance UPDATE per account (×2) — RCA PD-1 fix.
+    expect(mockRawExecute).toHaveBeenCalledTimes(4);
     const firstLineCall = mockRawExecute.mock.calls[0];
     expect(String(firstLineCall[0])).toContain("INSERT INTO journal_lines");
     expect(firstLineCall[1]).toEqual([
@@ -160,6 +161,13 @@ describe("postJournalEntry — INSERT shape", () => {
     expect(secondLineCall[1]).toEqual([
       4242, 490, "4900", 0, 30, "FX gain Q1",
     ]);
+    // currentBalance moves by debit−credit per account: +30 on the debit
+    // account (1100), −30 on the credit account (4900).
+    const firstBalanceCall = mockRawExecute.mock.calls[2];
+    expect(String(firstBalanceCall[0])).toContain('UPDATE chart_of_accounts SET "currentBalance"');
+    expect(firstBalanceCall[1]).toEqual([30, 5, "1100"]);
+    const secondBalanceCall = mockRawExecute.mock.calls[3];
+    expect(secondBalanceCall[1]).toEqual([-30, 5, "4900"]);
   });
 
   it("defaults status to 'posted' and stamps postedAt", async () => {
