@@ -21,5 +21,9 @@
 -- aligns the table with the 5 other HR lifecycle tables that already have
 -- "updatedAt" (hr_leave_requests, hr_inquiry_memos, hr_exit_requests,
 -- hr_excuse_requests, evaluation_cycles).
+--
+-- @rollback: ALTER TABLE employee_violations DROP COLUMN IF EXISTS "updatedAt";
+--   Safe to drop — the column is additive; no code reads it directly
+--   (the lifecycle engine only writes it, gated by skipUpdatedAt).
 
 ALTER TABLE employee_violations ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ DEFAULT now();
