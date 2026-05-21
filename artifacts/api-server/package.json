@@ -21,6 +21,7 @@
     "@opentelemetry/api": "catalog:",
     "@opentelemetry/exporter-trace-otlp-http": "catalog:",
     "@opentelemetry/instrumentation-http": "catalog:",
+    "@opentelemetry/instrumentation-pg": "catalog:",
     "@opentelemetry/sdk-node": "catalog:",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
