@@ -112,6 +112,7 @@ export async function postJournalEntry(
        WHERE id = ANY($1::int[])
          AND "companyId" = $2
          AND "deletedAt" IS NULL
+         AND "isActive" = true
          AND "allowPosting" = true`,
       [accountIds, ctx.companyId],
     );
@@ -119,7 +120,7 @@ export async function postJournalEntry(
     const missing = accountIds.filter((id) => !valid.has(id));
     if (missing.length > 0) {
       throw new Error(
-        `postJournalEntry: account IDs not postable (deleted, blocked, or wrong company): ${missing.join(", ")}`,
+        `postJournalEntry: account IDs not postable (deleted, inactive, not a posting account, or wrong company): ${missing.join(", ")}`,
       );
     }
 
