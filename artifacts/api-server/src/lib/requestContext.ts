@@ -2,18 +2,31 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
 
-// Request-scoped correlation context. A single id is assigned per request and
-// carried through the async call stack, so the pino `mixin` in lib/logger.ts
-// can stamp `reqId` onto every log line without changing any call site.
-interface RequestContext {
+// Correlation context for one unit of execution. A single id is assigned per
+// unit — an HTTP request OR a background unit (a cron job run, a cross-domain
+// event delivery) — and carried through the async call stack, so the pino
+// `mixin` in lib/logger.ts can stamp `reqId` onto every log line without
+// changing any call site.
+interface CorrelationContext {
   reqId: string;
 }
 
-const storage = new AsyncLocalStorage<RequestContext>();
+const storage = new AsyncLocalStorage<CorrelationContext>();
 
-/** The correlation id of the in-flight request, or undefined outside one. */
+/** The correlation id of the in-flight execution unit, or undefined outside one. */
 export function getRequestId(): string | undefined {
   return storage.getStore()?.reqId;
+}
+
+/**
+ * Run `fn` inside a correlation context carrying `reqId`. Used to give a
+ * background execution unit — a cron job run, a cross-domain event delivery —
+ * the same per-unit log correlation an HTTP request gets from
+ * `requestContextMiddleware`: every log line emitted within `fn` and its async
+ * continuations is stamped with `reqId`.
+ */
+export function runWithCorrelationId<T>(reqId: string, fn: () => T): T {
+  return storage.run({ reqId }, fn);
 }
 
 /**
@@ -28,5 +41,5 @@ export function requestContextMiddleware(req: Request, res: Response, next: Next
   const reqId = (typeof inbound === "string" && inbound.trim()) || randomUUID();
   (req as { id?: string }).id = reqId;
   res.setHeader("X-Request-Id", reqId);
-  storage.run({ reqId }, () => next());
+  runWithCorrelationId(reqId, () => next());
 }
