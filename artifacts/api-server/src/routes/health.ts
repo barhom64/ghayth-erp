@@ -5,6 +5,7 @@ import { logger } from "../lib/logger.js";
 import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
 import { getLiveness, getReadiness } from "../lib/health.js";
 import { getObservabilitySnapshot } from "../lib/observability.js";
+import { renderPrometheus } from "../lib/metrics.js";
 import { describeConfig } from "../lib/config.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
@@ -276,6 +277,17 @@ router.get("/health/metrics", authMiddleware, requirePermission("settings:read")
 });
 
 /**
+ * Prometheus exposition endpoint — the same metrics as /health/metrics
+ * rendered in the Prometheus text format (v0.0.4) for a scraper. Reuses the
+ * /health/metrics access policy: a scraper authenticates with a
+ * `settings:read` service account. Exposing it unauthenticated is a separate
+ * ops decision and is intentionally not done here.
+ */
+router.get("/metrics", authMiddleware, requirePermission("settings:read"), (_req, res) => {
+  res.type("text/plain; version=0.0.4; charset=utf-8").send(renderPrometheus());
+});
+
+/**
  * Effective configuration snapshot — the resolved, validated environment
  * config with all secret values masked (see config.SECRET_ENV_KEYS). Lets
  * an operator confirm exactly what the server resolved, so a deployment
@@ -287,6 +299,39 @@ router.get("/health/metrics", authMiddleware, requirePermission("settings:read")
  */
 router.get("/health/config", authMiddleware, requirePermission("settings:read"), (_req, res) => {
   res.json(describeConfig());
+});
+
+/**
+ * Unified operator system-health view — one endpoint aggregating liveness,
+ * readiness, the metrics snapshot, dead-letter-queue depth and recent cron
+ * failures, so an operator has a single pane instead of polling six probes.
+ * Read-only; reuses the /health/metrics access policy.
+ */
+router.get("/health/system", authMiddleware, requirePermission("settings:read"), async (_req, res) => {
+  try {
+    const liveness = getLiveness();
+    const readiness = await getReadiness();
+    const metrics = getObservabilitySnapshot();
+    const [dlqRow] = await rawQuery<{ unresolved: number }>(
+      `SELECT COUNT(*)::int AS unresolved FROM event_dlq WHERE "resolvedAt" IS NULL`,
+    );
+    const [cronRow] = await rawQuery<{ failures: number }>(
+      `SELECT COUNT(*)::int AS failures FROM cron_logs
+        WHERE error IS NOT NULL AND "createdAt" > NOW() - INTERVAL '1 hour'`,
+    );
+    res.json({
+      status: readiness.status,
+      collectedAt: new Date().toISOString(),
+      liveness,
+      readiness,
+      metrics,
+      deadLetterQueue: { unresolved: dlqRow?.unresolved ?? 0 },
+      cron: { failuresLastHour: cronRow?.failures ?? 0 },
+    });
+  } catch (err) {
+    logger.error(err, "system health endpoint failed");
+    res.status(503).json({ status: "error", error: "system health unavailable" });
+  }
 });
 
 export default router;
