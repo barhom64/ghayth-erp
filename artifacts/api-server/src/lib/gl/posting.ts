@@ -20,6 +20,7 @@
  */
 import { rawQuery, rawExecute, withTransaction } from "../rawdb.js";
 import { logger } from "../logger.js";
+import { checkFinancialPeriodOpen, todayISO } from "../businessHelpers.js";
 import type { JournalEntryPayload } from "./journal-poster.js";
 
 export type JournalEntryStatus = "draft" | "posted";
@@ -82,6 +83,23 @@ export async function postJournalEntry(
   }
 
   const status: JournalEntryStatus = ctx.status ?? "posted";
+
+  // Financial-period-close gate. A *posted* entry must never land in a
+  // closed financial period. Drafts are exempt — the gate is enforced
+  // when the draft is later posted. This is the single chokepoint for the
+  // FX, inventory and Mudad-payroll posters that call this primitive
+  // directly; `financialEngine.postJournalEntry` carries its own check.
+  // The sanctioned way to post into a closed period is to reopen it via
+  // the audited fiscal-period reopen flow.
+  if (status === "posted") {
+    const effectiveDate = ctx.date ?? todayISO();
+    const period = await checkFinancialPeriodOpen(ctx.companyId, effectiveDate);
+    if (!period.open) {
+      throw new Error(
+        `الفترة المالية "${period.periodName ?? effectiveDate}" مغلقة — لا يمكن ترحيل قيد محاسبي`,
+      );
+    }
+  }
 
   return withTransaction(async () => {
     // Validate every account exists + allows posting BEFORE we

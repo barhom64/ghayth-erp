@@ -105,13 +105,16 @@ describe("Warehouse movement types", () => {
 });
 
 describe("Warehouse weighted-average cost", () => {
-  it("implements updateWeightedAverageCost function", () => {
+  it("implements updateWeightedAverageCost helper", () => {
     expect(WH_ROUTE).toContain("updateWeightedAverageCost");
   });
 
-  it("WAC formula uses total-value / total-quantity", () => {
-    expect(WH_ROUTE).toContain("newTotalValue");
-    expect(WH_ROUTE).toContain("newTotalQty");
+  it("derives the WAC from the shared runningWeightedAverageCost function", () => {
+    // The formula is unified in lib/inventory/valuation/running-average.ts so
+    // the POST /movements route and the updateWeightedAverageCost helper
+    // cannot drift apart. The formula itself is covered by
+    // warehouseCosting.test.ts.
+    expect(WH_ROUTE).toContain("runningWeightedAverageCost");
   });
 });
 

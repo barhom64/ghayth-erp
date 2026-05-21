@@ -306,7 +306,7 @@ const createViolationSchema = z.object({
   subAgentId: z.coerce.number().optional().nullable(),
   description: z.string().optional().nullable(),
   penaltyAmount: z.coerce.number().optional(),
-  status: z.string().optional(),
+  status: z.enum(["detected", "open", "invoiced", "paid", "disputed", "closed"]).optional(),
 });
 
 const patchViolationSchema = z.object({
@@ -318,7 +318,7 @@ const patchViolationSchema = z.object({
   subAgentId: z.coerce.number().optional().nullable(),
   description: z.string().optional().nullable(),
   penaltyAmount: z.coerce.number().optional(),
-  status: z.string().optional(),
+  status: z.enum(["detected", "open", "invoiced", "paid", "disputed", "closed"]).optional(),
   linkedInvoiceId: z.coerce.number().optional().nullable(),
 });
 
@@ -1121,17 +1121,35 @@ router.post("/run-penalty-engine", authorize({ feature: "umrah", action: "create
       [today, scope.companyId]
     );
     let created = 0;
+    let violationsLinked = 0;
     for (const p of overstayed) {
       if (Number(p.daysOver) >= overstayDays) {
         const amount = Number(p.daysOver) * dailyRate;
-        const penRows = await withTransaction(async (client) => {
+        const result = await withTransaction(async (client) => {
           const penRes = await client.query(
             `INSERT INTO umrah_penalties ("companyId","pilgrimId","agentId","seasonId",type,"daysOverstayed",amount,notes)
              VALUES ($1,$2,$3,$4,'overstay',$5,$6,$7) RETURNING id`,
             [scope.companyId, p.id, p.agentId, p.seasonId, p.daysOver, amount, `غرامة تأخر ${p.daysOver} يوم — ${p.fullName}`]
           );
-          return penRes.rows;
+          // DT-2 (C3): attach the operational violation to its financial
+          // penalty. The detection cron writes the umrah_violations row;
+          // this links that row to the penalty just created so the two
+          // parallel systems are no longer disjoint.
+          const penaltyId = penRes.rows[0]?.id;
+          let linked = 0;
+          if (penaltyId) {
+            const upd = await client.query(
+              `UPDATE umrah_violations SET "linkedPenaltyId" = $1, "updatedAt" = NOW()
+               WHERE "mutamerId" = $2 AND type = 'overstay' AND "companyId" = $3
+                 AND "linkedPenaltyId" IS NULL AND "deletedAt" IS NULL`,
+              [penaltyId, p.id, scope.companyId]
+            );
+            linked = upd.rowCount ?? 0;
+          }
+          return { rows: penRes.rows, linked };
         });
+        const penRows = result.rows;
+        violationsLinked += result.linked;
         await applyTransition({
           entity: "umrah_pilgrims",
           id: p.id,
@@ -1153,9 +1171,9 @@ router.post("/run-penalty-engine", authorize({ feature: "umrah", action: "create
         created++;
       }
     }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: 0, after: { checked: overstayed.length, penaltiesCreated: created } }).catch((e) => logger.error(e, "umrah background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.penalty_engine.run", entity: "umrah_penalties", entityId: 0, details: JSON.stringify({ checked: overstayed.length, penaltiesCreated: created }) }).catch((e) => logger.error(e, "umrah background task failed"));
-    res.json({ checked: overstayed.length, penaltiesCreated: created });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: 0, after: { checked: overstayed.length, penaltiesCreated: created, violationsLinked } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.penalty_engine.run", entity: "umrah_penalties", entityId: 0, details: JSON.stringify({ checked: overstayed.length, penaltiesCreated: created, violationsLinked }) }).catch((e) => logger.error(e, "umrah background task failed"));
+    res.json({ checked: overstayed.length, penaltiesCreated: created, violationsLinked });
   } catch (err) { handleRouteError(err, res, "Penalty engine error"); }
 });
 
@@ -1382,9 +1400,13 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
     const ref = await generateBranchRef(scope, "invoice_prefix", "UMRAH-INV");
     let invoiceRow: any;
     await withTransaction(async (client) => {
+      // C1: generated directly as 'sent'. The umrah_agent_invoices state
+      // machine (lifecycleEngine) has no 'draft' state and no draft->sent
+      // endpoint exists, so a 'draft' invoice could never reach
+      // record-payment (fromStates: sent/partially_paid/overdue).
       const insRes = await client.query(
         `INSERT INTO umrah_agent_invoices ("companyId","agentId","seasonId",ref,type,"pilgrimCount","penaltiesTotal","servicesTotal",subtotal,commission,total,status)
-         VALUES ($1,$2,$3,$4,'sales',$5,$6,$7,$8,$9,$10,'draft') RETURNING *`,
+         VALUES ($1,$2,$3,$4,'sales',$5,$6,$7,$8,$9,$10,'sent') RETURNING *`,
         [scope.companyId, agentId, seasonId, ref, pilgrimCount, penaltiesTotal, servicesTotal, subtotal, commission, total]
       );
       invoiceRow = insRes.rows[0];
@@ -1500,9 +1522,16 @@ router.get("/transport/:id", authorize({ feature: "umrah", action: "view" }), as
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("رحلة النقل غير موجودة");
+    // C4 (DT-3): the trip's pilgrims come from the join table — not from
+    // every company pilgrim that happens to carry the transportAssigned
+    // flag.
     const pilgrims = await rawQuery(
-      `SELECT id, "fullName", "passportNumber", nationality, status FROM umrah_pilgrims WHERE "companyId"=$1 AND "transportAssigned"=true AND "deletedAt" IS NULL ORDER BY "fullName"`,
-      [scope.companyId]
+      `SELECT p.id, p."fullName", p."passportNumber", p.nationality, p.status
+       FROM umrah_transport_pilgrims tp
+       JOIN umrah_pilgrims p ON p.id = tp."pilgrimId"
+       WHERE tp."transportId"=$1 AND tp."companyId"=$2 AND p."deletedAt" IS NULL
+       ORDER BY p."fullName"`,
+      [id, scope.companyId]
     );
     res.json(maskFields(req, { ...row, pilgrims }));
   } catch (err) { handleRouteError(err, res, "Get transport error"); }
@@ -1648,18 +1677,40 @@ router.post("/transport/:id/assign-pilgrims", authorize({ feature: "umrah", acti
     if (transport.status === "completed" || transport.status === "cancelled") {
       throw new ConflictError("لا يمكن إضافة معتمرين لرحلة مكتملة أو ملغاة");
     }
-    const newCount = (Number(transport.pilgrimCount) || 0) + pilgrimIds.length;
-    if (newCount > (Number(transport.capacity) || 45)) {
-      throw new ValidationError(`عدد المعتمرين (${newCount}) يتجاوز سعة المركبة (${transport.capacity || 45})`);
+    // C4 (DT-3): capacity + count derive from the join table.
+    const [linkedRow] = await rawQuery<{ linked: number }>(
+      `SELECT COUNT(*)::int AS linked FROM umrah_transport_pilgrims WHERE "transportId"=$1 AND "companyId"=$2`,
+      [transportId, scope.companyId]
+    );
+    const capacity = Number(transport.capacity) || 45;
+    if (Number(linkedRow?.linked ?? 0) + pilgrimIds.length > capacity) {
+      throw new ValidationError(`عدد المعتمرين قد يتجاوز سعة المركبة (${capacity})`);
     }
     const placeholders = pilgrimIds.map((_: any, i: number) => `$${i + 2}`).join(",");
+    let newCount = Number(linkedRow?.linked ?? 0);
     await withTransaction(async (client) => {
+      // Idempotent link rows — re-assigning an already-linked pilgrim is a
+      // no-op (UNIQUE transportId,pilgrimId), so the count never drifts.
+      for (const pid of pilgrimIds) {
+        await client.query(
+          `INSERT INTO umrah_transport_pilgrims ("companyId","transportId","pilgrimId")
+           VALUES ($1,$2,$3) ON CONFLICT ("transportId","pilgrimId") DO NOTHING`,
+          [scope.companyId, transportId, pid]
+        );
+      }
+      // Denormalised flag kept for any reader still using it.
       await client.query(
         `UPDATE umrah_pilgrims SET "transportAssigned"=true, "updatedAt"=NOW() WHERE "companyId"=$1 AND "deletedAt" IS NULL AND id IN (${placeholders})`,
         [scope.companyId, ...pilgrimIds]
       );
+      // pilgrimCount is now derived from the join — accurate, dedup-safe.
+      const cntRes = await client.query(
+        `SELECT COUNT(*)::int AS c FROM umrah_transport_pilgrims WHERE "transportId"=$1`,
+        [transportId]
+      );
+      newCount = Number(cntRes.rows[0]?.c ?? 0);
       await client.query(
-        `UPDATE umrah_transport SET "pilgrimCount"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+        `UPDATE umrah_transport SET "pilgrimCount"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
         [newCount, transportId, scope.companyId]
       );
     });
@@ -1783,6 +1834,11 @@ router.patch("/violations/:id", authorize({ feature: "umrah", action: "update" }
       params
     );
     if (!row) throw new NotFoundError("المخالفة غير موجودة");
+    // M6: the update handler wrote no audit row and emitted no event,
+    // unlike the sibling delete handler. Mirror it so violation edits
+    // are traceable and `umrah.violation.updated` finally has an emitter.
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_violations", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.violation.updated", entity: "umrah_violations", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update violation error"); }
 });

@@ -69,7 +69,7 @@ export function ZatcaSettingsTab() {
     try {
       await apiFetch("/finance/zatca/settings", {
         method: "PUT",
-        body: JSON.stringify({ ...values, enabled: values.enabled ? "true" : "false" }),
+        body: JSON.stringify({ ...values, enabled: !!values.enabled }),
       });
       toast({ title: "تم الحفظ", description: "تم حفظ إعدادات هيئة الزكاة والضريبة بنجاح" });
       refetch();

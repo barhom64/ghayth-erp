@@ -21,6 +21,7 @@ import {
 import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { processFallbackChains } from "./notificationEngine.js";
 import { checkSlaStatus } from "./workflowEngine.js";
+import { applyTransition } from "./lifecycleEngine.js";
 import { runAllProactiveChecks, registerProactiveEventListeners } from "./proactiveEngine.js";
 import { eventBus } from "./eventBus.js";
 import { decryptSecret } from "./secrets.js";
@@ -35,6 +36,7 @@ import { lotExpiryScanCron } from "./inventory/lots.js";
 import { abcMonthlyClassificationCron } from "./inventory/abc-analysis.js";
 import { iqamaDailyAlertCron } from "./saudi-compliance/iqama-cron.js";
 import { saudizationMonthlySnapshotCron } from "./saudi-compliance/saudization-snapshot.js";
+import { recordJobRun } from "./observability.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -135,11 +137,13 @@ async function runJob(def: CronJobDef): Promise<void> {
     const result = await def.handler();
     const duration = Date.now() - start;
     await logCronJob(def.name, "success", duration, result);
+    recordJobRun(def.name, "success", duration);
     logger.info({ job: def.name, result, duration }, "CRON job completed");
   } catch (err) {
     const duration = Date.now() - start;
     const errMsg = err instanceof Error ? err.message : String(err);
     await logCronJob(def.name, "failed", duration, "Job failed", errMsg);
+    recordJobRun(def.name, "failed", duration);
     logger.error(err, `[CRON] ${def.name} failed:`);
   } finally {
     await releaseCronLock(def.name);
@@ -3102,6 +3106,94 @@ async function umrahMonthlyFinancialSummary(): Promise<string> {
   return `الملخص المالي الشهري للعمرة: ${sent} شركة`;
 }
 
+// C5 (DT-4) — daily pilgrim-status advance.
+//
+// `POST /umrah/run-daily-status` is the only thing that walks a pilgrim
+// through pending → arrived → overstayed / departed, and nothing ever
+// triggered it: the daily run depended on an operator remembering to press
+// the button. Because `run-penalty-engine` only looks at pilgrims already in
+// `overstayed`, a forgotten click silently froze the whole overstay→penalty
+// path. This cron runs the exact same status logic for every active company
+// so the lifecycle advances on its own.
+//
+// Deliberately STATUS-ONLY (DT-4): it does not run the penalty engine and
+// posts no GL. Penalty creation stays a manual, supervised action — the cron
+// only keeps statuses current so that manual step has accurate input.
+async function umrahDailyStatusAdvance(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies WHERE status = 'active'`);
+  const today = todayISO();
+  let arrived = 0, overstayed = 0, departed = 0;
+  for (const c of companies) {
+    const scope = { companyId: c.id, userId: 0, branchId: null };
+    const [pendingToArrived, toOverstayed, toDeparted] = await Promise.all([
+      rawQuery<{ id: number }>(
+        `SELECT id FROM umrah_pilgrims WHERE "companyId"=$1 AND status='pending' AND "arrivalDate" <= $2 AND ("departureDate" IS NULL OR "departureDate" >= $2) AND "deletedAt" IS NULL`,
+        [c.id, today]
+      ),
+      rawQuery<{ id: number }>(
+        `SELECT id FROM umrah_pilgrims WHERE "companyId"=$1 AND status IN ('arrived','active') AND "departureDate" < $2 AND "actualDeparture" IS NULL AND "deletedAt" IS NULL`,
+        [c.id, today]
+      ),
+      rawQuery<{ id: number }>(
+        `SELECT id FROM umrah_pilgrims WHERE "companyId"=$1 AND status IN ('arrived','active') AND "actualDeparture" IS NOT NULL AND "actualDeparture" <= $2 AND "deletedAt" IS NULL`,
+        [c.id, today]
+      ),
+    ]);
+
+    let cArrived = 0, cOverstayed = 0, cDeparted = 0;
+    for (const p of pendingToArrived) {
+      try {
+        await applyTransition({
+          entity: "umrah_pilgrims", id: p.id, scope,
+          action: "umrah.pilgrim.arrived",
+          fromStates: ["pending"], toState: "arrived",
+          setExtras: { actualArrival: today },
+          extraWhere: `"deletedAt" IS NULL`,
+        });
+        cArrived++;
+      } catch (e) { logger.warn(e, "[umrah_daily_status] arrival transition skipped"); }
+    }
+    for (const p of toOverstayed) {
+      try {
+        await applyTransition({
+          entity: "umrah_pilgrims", id: p.id, scope,
+          action: "umrah.pilgrim.overstayed",
+          fromStates: ["arrived", "active"], toState: "overstayed",
+          extraWhere: `"deletedAt" IS NULL`,
+        });
+        cOverstayed++;
+      } catch (e) { logger.warn(e, "[umrah_daily_status] overstayed transition skipped"); }
+    }
+    for (const p of toDeparted) {
+      try {
+        await applyTransition({
+          entity: "umrah_pilgrims", id: p.id, scope,
+          action: "umrah.pilgrim.departed",
+          fromStates: ["arrived", "active"], toState: "departed",
+          extraWhere: `"deletedAt" IS NULL`,
+        });
+        cDeparted++;
+      } catch (e) { logger.warn(e, "[umrah_daily_status] departed transition skipped"); }
+    }
+
+    arrived += cArrived; overstayed += cOverstayed; departed += cDeparted;
+    if (cArrived + cOverstayed + cDeparted > 0) {
+      emitEvent({
+        companyId: c.id, userId: null,
+        action: "umrah.daily_status.run", entity: "umrah_pilgrims", entityId: 0,
+        details: JSON.stringify({
+          date: today,
+          arrivedUpdated: cArrived,
+          overstayedUpdated: cOverstayed,
+          departedUpdated: cDeparted,
+          source: "cron",
+        }),
+      }).catch((e) => logger.error(e, "[cronScheduler] umrah daily status event failed"));
+    }
+  }
+  return `تقديم حالة المعتمرين: ${arrived} وصول، ${overstayed} تجاوز، ${departed} مغادرة عبر ${companies.length} شركة`;
+}
+
 // --- Rate-limit fallback alerter (Task #176) ---------------------------------
 // Notify GM/owner when getRedisRateLimitStatus() degrades to fallback-memory
 // (and on recovery). Cooldown gates ALL fallback alerts (including flap
@@ -3443,6 +3535,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "umrah_weekly_agent_performance", description: "تقرير أداء وكلاء العمرة الأسبوعي", schedule: "0 9 * * 0", handler: umrahWeeklyAgentPerformance },
   { name: "umrah_visa_expiry_alerts", description: "تنبيهات انتهاء تأشيرات العمرة", schedule: "0 7 * * *", handler: umrahVisaExpiryAlerts },
   { name: "umrah_monthly_financial_summary", description: "ملخص العمرة المالي الشهري", schedule: "0 9 1 * *", handler: umrahMonthlyFinancialSummary },
+  { name: "umrah_daily_status_advance", description: "C5 — تقديم حالة المعتمرين اليومية (وصول/تجاوز/مغادرة) — حالة فقط دون غرامات", schedule: "0 5 * * *", handler: umrahDailyStatusAdvance },
   { name: "daily_invoice_overdue", description: "تصعيد الفواتير المتأخرة 6 مراحل", schedule: "0 8 * * *", handler: dailyInvoiceOverdueEscalation },
   { name: "daily_fuel_monitor", description: "مراقبة استهلاك الوقود", schedule: "0 9 * * *", handler: dailyFuelMonitor },
   { name: "daily_inventory_check", description: "فحص المخزون + طلب شراء تلقائي", schedule: "0 10 * * *", handler: dailyInventoryCheck },

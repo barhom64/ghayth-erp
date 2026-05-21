@@ -10,25 +10,21 @@ import { bootstrapAdminUser } from "./lib/bootstrapAdmin.js";
 import { syncFeatureCatalog } from "./lib/rbac/catalogSync.js";
 import { syncLegacyToV2 } from "./lib/rbac/autoMigrate.js";
 import { pool } from "./lib/rawdb.js";
+import { config, assertEnvOrExit, describeConfig } from "./lib/config.js";
 import http from "http";
 import fs from "node:fs";
 import path from "node:path";
 
-const rawPort = process.env["PORT"];
+// Fail-fast: validate the whole environment before any other startup work.
+// lib/config.ts is the single source of truth — it parses and validates every
+// variable; a fatal misconfiguration prints an actionable report and exits
+// here, so a bad value never surfaces as a confusing error deep in a handler.
+assertEnvOrExit();
+logger.info({ env: describeConfig() }, "environment validated");
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
+const port = config.port;
 
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
-
-const isDev = process.env.NODE_ENV === "development";
+const isDev = config.isDevelopment;
 
 process.on("unhandledRejection", (reason, promise) => {
   logger.error({ reason, promise }, "Unhandled Promise Rejection — NOT crashing, logged for investigation");
@@ -58,7 +54,7 @@ async function start() {
   // company+branch when none exist, so it must run BEFORE bootstrapAdminUser
   // (which requires company id=1 to already exist) on fresh CI databases.
   // Logic is NOT duplicated in JS — the SQL file is the single source of truth.
-  if (process.env.SEED_DEMO_DATA === "true") {
+  if (config.seedDemoData) {
     const seedPath = path.resolve(process.cwd(), "db/seed-admin-user.sql");
     try {
       const sql = fs.readFileSync(seedPath, "utf-8");
@@ -88,7 +84,7 @@ async function start() {
     logger.warn({ err: rbacErr }, "RBAC v2 sync skipped or failed (legacy RBAC still active)");
   }
 
-  if (process.env.SEED_DEMO_DATA === "true") {
+  if (config.seedDemoData) {
     try {
       await seedDemoData();
       logger.info("Demo data seeding complete");
@@ -103,7 +99,7 @@ async function start() {
   registerRulesEngineListener();
   logger.info("Event listeners and rules engine registered");
 
-  if (!isDev && process.env.PERSIST_ALL_EVENTS !== "true") {
+  if (!isDev && !config.persistAllEvents) {
     logger.warn(
       "PERSIST_ALL_EVENTS is unset/false in a non-development environment. " +
       "Only events flagged `critical: true` in the catalog will land in event_logs; " +

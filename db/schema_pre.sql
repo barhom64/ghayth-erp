@@ -8427,6 +8427,10 @@ CREATE TABLE public.invoices (
     "zatcaClearedXml" text,
     "zatcaClearanceStatus" character varying(20),
     "zatcaClearedAt" timestamp with time zone,
+    "approvedBy" integer,
+    "approvedAt" timestamp without time zone,
+    "postedBy" integer,
+    "postedAt" timestamp without time zone,
     CONSTRAINT chk_invoices_status CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'pending_approval'::character varying, 'approved'::character varying, 'sent'::character varying, 'partially_paid'::character varying, 'paid'::character varying, 'overdue'::character varying, 'void'::character varying, 'rejected'::character varying, 'cancelled'::character varying])::text[])))
 );
 
@@ -15248,7 +15252,12 @@ CREATE TABLE public.workflow_requests (
     "approvedBy" integer,
     "approvedAt" timestamp with time zone,
     "createdAt" timestamp with time zone DEFAULT now(),
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "entityType" character varying(100),
+    "workflowType" character varying(100),
+    "requestedBy" integer,
+    notes text,
+    "deletedAt" timestamp with time zone
 );
 
 
@@ -15618,3 +15627,36 @@ CREATE TABLE public.zatca_submission_log (
     CONSTRAINT "zatca_submission_log_entityType_check" CHECK ((("entityType")::text = ANY ((ARRAY['invoice'::character varying, 'expense'::character varying])::text[]))),
     CONSTRAINT zatca_submission_log_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'submitted'::character varying, 'accepted'::character varying, 'rejected'::character varying, 'error'::character varying])::text[])))
 );
+
+
+--
+-- Name: umrah_transport_pilgrims; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.umrah_transport_pilgrims (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "transportId" integer NOT NULL,
+    "pilgrimId" integer NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now()
+);
+
+
+--
+-- Name: umrah_transport_pilgrims_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.umrah_transport_pilgrims_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: umrah_transport_pilgrims_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.umrah_transport_pilgrims_id_seq OWNED BY public.umrah_transport_pilgrims.id;

@@ -206,8 +206,7 @@ router.post("/postings/:id/close", authorize({ feature: "hr.recruitment", action
         await client.query(
           `UPDATE job_applications
               SET status = 'withdrawn_due_to_job_closure',
-                  notes  = COALESCE(notes || E'\n', '') || $2,
-                  "updatedAt" = NOW()
+                  notes  = COALESCE(notes || E'\n', '') || $2
             WHERE "postingId" = $1
               AND status NOT IN ('hired', 'rejected', 'withdrawn', 'withdrawn_due_to_job_closure')`,
           [id, `تم إغلاق الإعلان الوظيفي: ${reason}`]
