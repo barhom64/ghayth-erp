@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -235,6 +235,17 @@ export default function ExitRequestsPage() {
         values={filters}
         onChange={setFilters}
         resultCount={filtered.length}
+        onExportCSV={() =>
+          exportToCSV(filtered, [
+            { key: "exitNumber", label: "رقم الطلب" },
+            { key: "employeeName", label: "الموظف" },
+            { key: "exitType", label: "النوع" },
+            { key: "lastWorkingDay", label: "آخر يوم عمل" },
+            { key: "gratuityAmount", label: "مكافأة نهاية الخدمة" },
+            { key: "netSettlement", label: "صافي التصفية" },
+            { key: "status", label: "الحالة" },
+          ], "طلبات_إخلاء_الطرف")
+        }
       />
 
       <DataTable
