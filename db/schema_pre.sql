@@ -15248,7 +15248,12 @@ CREATE TABLE public.workflow_requests (
     "approvedBy" integer,
     "approvedAt" timestamp with time zone,
     "createdAt" timestamp with time zone DEFAULT now(),
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "entityType" character varying(100),
+    "workflowType" character varying(100),
+    "requestedBy" integer,
+    notes text,
+    "deletedAt" timestamp with time zone
 );
 
 
