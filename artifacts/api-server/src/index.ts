@@ -2,6 +2,7 @@ import app from "./app.js";
 import { logger } from "./lib/logger.js";
 import { runMigrations } from "./lib/migrate.js";
 import { startCronScheduler, stopCronScheduler } from "./lib/cronScheduler.js";
+import { startAlertEvaluation, stopAlertEvaluation } from "./lib/alertRules.js";
 import { registerEventListeners } from "./lib/eventListeners.js";
 import { registerRulesEngineListener } from "./lib/rulesEngine.js";
 import "./lib/engines/hrEngine.js";
@@ -128,6 +129,9 @@ async function start() {
     } catch (cronErr) {
       logger.error({ err: cronErr }, "Failed to start cron scheduler");
     }
+
+    startAlertEvaluation();
+    logger.info("Runtime threshold-alert evaluation started");
   });
 
   async function shutdown(signal: string) {
@@ -135,6 +139,8 @@ async function start() {
 
     stopCronScheduler();
     logger.info("Cron scheduler stopped");
+
+    stopAlertEvaluation();
 
     server.close(async (err) => {
       if (err) {
