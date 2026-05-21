@@ -4,7 +4,7 @@
  * plus a metadata sheet built from the top-level entity fields.
  */
 
-import * as XLSX from "xlsx";
+import { buildXlsxBuffer, type ExcelSheet } from "../../excelCompat.js";
 import type { FormatAdapter, RenderContext } from "../types.js";
 
 function pickRows(data: Record<string, unknown>): {
@@ -33,15 +33,49 @@ function flatten(obj: Record<string, unknown>, prefix = ""): Record<string, unkn
   return out;
 }
 
+/** Coerce an arbitrary payload value into a plain cell the compat layer
+ *  accepts. Mirrors the old `xlsx.json_to_sheet` coercion: dates/numbers
+ *  stay typed, booleans render as TRUE/FALSE, everything else stringifies. */
+function toCell(v: unknown): string | number | Date | null {
+  if (v === null || v === undefined) return null;
+  if (v instanceof Date) return v;
+  switch (typeof v) {
+    case "number":
+      return Number.isFinite(v) ? v : String(v);
+    case "string":
+      return v;
+    case "boolean":
+      return v ? "TRUE" : "FALSE";
+    default:
+      return String(v);
+  }
+}
+
+/** Build a sheet from an array of objects, the way `xlsx.json_to_sheet`
+ *  did: column set is the union of keys in first-seen order. */
+function sheetFromObjects(name: string, objs: Record<string, unknown>[]): ExcelSheet {
+  const headers: string[] = [];
+  const seen = new Set<string>();
+  for (const o of objs) {
+    for (const k of Object.keys(o)) {
+      if (!seen.has(k)) {
+        seen.add(k);
+        headers.push(k);
+      }
+    }
+  }
+  const rows = objs.map((o) => headers.map((h) => toCell(o[h])));
+  return { name, headers, rows };
+}
+
 export const excelAdapter: FormatAdapter = {
   format: "excel",
   async render(ctx) {
-    const wb = XLSX.utils.book_new();
+    const sheets: ExcelSheet[] = [];
     const { rows, label } = pickRows(ctx.data);
 
     if (rows.length > 0) {
-      const sheet = XLSX.utils.json_to_sheet(rows);
-      XLSX.utils.book_append_sheet(wb, sheet, label);
+      sheets.push(sheetFromObjects(label, rows));
     }
 
     const entity = (ctx.data.entity as Record<string, unknown>) ?? {};
@@ -55,10 +89,9 @@ export const excelAdapter: FormatAdapter = {
       _copyNumber: ctx.copyNumber,
     });
     const metaRows = Object.entries(meta).map(([k, v]) => ({ field: k, value: v }));
-    const metaSheet = XLSX.utils.json_to_sheet(metaRows);
-    XLSX.utils.book_append_sheet(wb, metaSheet, "Info");
+    sheets.push(sheetFromObjects("Info", metaRows));
 
-    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+    const buf = await buildXlsxBuffer(sheets);
     return {
       bytes: buf,
       mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
