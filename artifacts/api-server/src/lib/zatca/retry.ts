@@ -17,9 +17,10 @@
  * the queue with `requeue(rowId)`.
  */
 import { rawQuery, rawExecute } from "../rawdb.js";
+import { config } from "../config.js";
 
-const MAX_ATTEMPTS = Number(process.env.ZATCA_RETRY_MAX_ATTEMPTS ?? 5);
-const BASE_DELAY_MS = Number(process.env.ZATCA_RETRY_BASE_DELAY_MS ?? 60_000);
+const MAX_ATTEMPTS = config.zatca.retryMaxAttempts;
+const BASE_DELAY_MS = config.zatca.retryBaseDelayMs;
 const MAX_DELAY_MS = 24 * 60 * 60 * 1000; // 24h
 
 export interface RetryRow {
