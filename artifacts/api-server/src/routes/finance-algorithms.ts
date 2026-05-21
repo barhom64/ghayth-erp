@@ -1394,7 +1394,7 @@ financeAlgorithmsRouter.get("/fx/rates", authorize({ feature: "finance.algorithm
     await ensureFxTables();
     const { from, to, type } = req.query as Record<string, string | undefined>;
     const params: unknown[] = [scope.companyId];
-    let where = `"companyId"=$1 AND "deletedAt" IS NULL`;
+    let where = `"companyId"=$1`;
     if (from) { params.push(from); where += ` AND "fromCurrency"=$${params.length}`; }
     if (to) { params.push(to); where += ` AND "toCurrency"=$${params.length}`; }
     if (type) { params.push(type); where += ` AND source=$${params.length}`; }
@@ -1415,11 +1415,15 @@ financeAlgorithmsRouter.post("/fx/rates", authorize({ feature: "finance.algorith
     assertFinanceRole(scope);
     const { rateDate, fromCurrency, toCurrency, rate, type } = zodParse(fxRateUpsertSchema.safeParse(req.body ?? {}));
     await ensureFxTables();
+    // `rateDate` is the legacy NOT NULL column; the FX subsystem keys on
+    // `effectiveDate`, so mirror the request date into both. The upsert key
+    // is the existing uq_fx_rates_company_pair_date unique index — the same
+    // conflict target the FX fetch cron (lib/fx/jobs.ts) uses.
     const [row] = await rawQuery<Record<string, unknown>>(
-      `INSERT INTO fx_rates ("companyId","effectiveDate","fromCurrency","toCurrency",rate,source)
-       VALUES ($1,$2,$3,$4,$5,$6)
-       ON CONFLICT ("companyId","effectiveDate","fromCurrency","toCurrency","source")
-       DO UPDATE SET rate=EXCLUDED.rate
+      `INSERT INTO fx_rates ("companyId","rateDate","effectiveDate","fromCurrency","toCurrency",rate,source)
+       VALUES ($1,$2,$2,$3,$4,$5,$6)
+       ON CONFLICT ("companyId","fromCurrency","toCurrency","effectiveDate")
+       DO UPDATE SET rate=EXCLUDED.rate, source=EXCLUDED.source
        RETURNING *`,
       [scope.companyId, rateDate, fromCurrency.toUpperCase(), toCurrency.toUpperCase(), rate, type]
     );
