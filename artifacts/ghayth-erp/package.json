@@ -75,7 +75,6 @@
     "dompurify": "^3.3.3",
     "exceljs": "^4.4.0",
     "html-to-image": "^1.11.13",
-    "leaflet": "^1.9.4",
-    "xlsx": "^0.18.5"
+    "leaflet": "^1.9.4"
   }
 }
