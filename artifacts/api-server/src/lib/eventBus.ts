@@ -3,6 +3,8 @@ import { rawExecute, rawQuery } from "./rawdb.js";
 import { logger } from "./logger.js";
 import { isKnownEvent } from "./eventCatalog.js";
 import { setGauge } from "./metrics.js";
+import { getRequestId, runWithCorrelationId } from "./requestContext.js";
+import { randomUUID } from "node:crypto";
 
 export interface EventPayload {
   /** Envelope version — stamped by EventBus.emit (see EVENT_ENVELOPE_VERSION). */
@@ -233,7 +235,13 @@ export function registerCrossDomainHandler(
   handler: (payload: EventPayload) => Promise<void>
 ): void {
   eventBus.on(eventName, (payload: EventPayload) => {
-    void runHandlerWithRetry(eventName, handler, payload);
+    // Keep the correlation id of the emitting unit (an HTTP request, a cron
+    // run) so the handler's logs trace back to what triggered the event;
+    // mint one only when the event was emitted with no ambient context.
+    const reqId = getRequestId() ?? `event-${eventName}-${randomUUID()}`;
+    void runWithCorrelationId(reqId, () =>
+      runHandlerWithRetry(eventName, handler, payload),
+    );
   });
 }
 
@@ -255,10 +263,11 @@ export function safeEmitEvent(payload: unknown & { companyId?: number }): void {
   }
 }
 
-// ─────────────────────────── DLQ maintenance ──────────────────────────────
-// `event_dlq` is otherwise a write-only, unbounded table with no visibility.
-// This pass adds the two things it lacked: observability (a `dlq.pending`
-// gauge) and bounded growth (aged entries are purged).
+// ──────────────────────── DLQ & outbox maintenance ────────────────────────
+// `event_dlq` and `event_outbox` are otherwise write-only, unbounded tables
+// with no visibility. This pass adds the two things they lacked:
+// observability (`dlq.pending` / `outbox.pending` gauges) and bounded growth
+// (aged entries are purged).
 //
 // It deliberately does NOT auto-redeliver. A naive re-emit re-runs *every*
 // listener of the event — double-firing the ones that already succeeded.
@@ -307,6 +316,47 @@ export async function purgeAgedDlqEntries(
   return result.affectedRows;
 }
 
+/** event_outbox rows older than this many days are purged. */
+const OUTBOX_RETENTION_DAYS = 7;
+
+export interface OutboxStats {
+  /** event_outbox rows with status 'pending'. */
+  pending: number;
+  /** Age of the oldest row in seconds, or null when the table is empty. */
+  oldestAgeSec: number | null;
+}
+
+/** Count pending event_outbox rows and the age of the oldest. */
+export async function getOutboxStats(): Promise<OutboxStats> {
+  const rows = await rawQuery<{ pending: string; oldest: string | null }>(
+    `SELECT (count(*) FILTER (WHERE status = 'pending'))::text AS pending,
+            extract(epoch FROM (now() - min("createdAt")))::text AS oldest
+       FROM event_outbox`,
+  );
+  const row = rows[0];
+  return {
+    pending: Number(row?.pending ?? 0),
+    oldestAgeSec: row?.oldest != null ? Math.round(Number(row.oldest)) : null,
+  };
+}
+
+/**
+ * Delete aged event_outbox rows. Phase 2 — the outbox is a durable capture
+ * log and the in-process emitter is still the dispatcher, so aged rows are
+ * purged wholesale to bound table growth. When the relay becomes the
+ * dispatcher (phase 3) this MUST become status-aware so an unprocessed
+ * 'pending' row is never purged. Idempotent; safe to run concurrently.
+ */
+export async function purgeAgedOutboxEntries(
+  retentionDays: number = OUTBOX_RETENTION_DAYS,
+): Promise<number> {
+  const result = await rawExecute(
+    `DELETE FROM event_outbox WHERE "createdAt" < now() - make_interval(days => $1)`,
+    [retentionDays],
+  );
+  return result.affectedRows;
+}
+
 async function runDlqMaintenance(): Promise<void> {
   try {
     const purged = await purgeAgedDlqEntries();
@@ -320,6 +370,19 @@ async function runDlqMaintenance(): Promise<void> {
     }
   } catch (err) {
     logger.error(err, "[DLQ] maintenance pass failed");
+  }
+  try {
+    const purged = await purgeAgedOutboxEntries();
+    const stats = await getOutboxStats();
+    setGauge("outbox.pending", stats.pending);
+    if (purged > 0) {
+      logger.info(
+        { purged, pending: stats.pending },
+        "[outbox] maintenance pass — purged aged entries",
+      );
+    }
+  } catch (err) {
+    logger.error(err, "[outbox] maintenance pass failed");
   }
 }
 
