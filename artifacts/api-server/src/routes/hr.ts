@@ -398,9 +398,10 @@ const publicHolidayPatchSchema = z.object({
 });
 
 const transferApprovalSchema = z.object({
-  // The route is PATCH /transfers/:id/approve — absence of the flag means
-  // "approve". Rejection is the explicit opt-out (`approved: false`).
-  approved: z.boolean().optional().default(true),
+  // PATCH /transfers/:id/approve is multi-purpose: an absent flag means
+  // "approve"; `false` rejects; `"returned"` sends the request back to the
+  // requester for correction (it can then be edited + resubmitted).
+  approved: z.union([z.boolean(), z.literal("returned")]).optional().default(true),
   notes: z.string().optional(),
 });
 
@@ -6073,7 +6074,7 @@ router.patch("/transfers/:id", authorize({ feature: "hr.exit", action: "update" 
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("طلب النقل غير موجود");
-    if (existing.status !== "pending") {
+    if (existing.status !== "pending" && existing.status !== "returned") {
       throw new ConflictError("لا يمكن تعديل طلب نقل بعد اعتماده أو رفضه", {
         field: "status",
         fix: "التعديل متاح فقط على الطلبات المعلقة.",
@@ -6091,11 +6092,13 @@ router.patch("/transfers/:id", authorize({ feature: "hr.exit", action: "update" 
       }
     }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
+    // Editing a returned transfer resubmits it for HR review (returned -> pending).
+    sets.push("status = 'pending'");
 
     params.push(id, scope.companyId);
     const [row] = await rawQuery<Record<string, unknown>>(
       `UPDATE employee_transfers SET ${sets.join(", ")}
-       WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND status = 'pending'
+       WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND status IN ('pending','returned')
        RETURNING *`,
       params
     );
@@ -6232,7 +6235,7 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
     if (!transfer) {
       throw new NotFoundError("طلب النقل غير موجود");
     }
-    if (transfer.status !== "pending") {
+    if (transfer.status !== "pending" && transfer.status !== "returned") {
       throw new ConflictError(
         `لا يمكن اعتماد طلب نقل في الحالة "${transfer.status}"`,
         {
@@ -6243,7 +6246,24 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
       );
     }
 
-    if (approved) {
+    if (approved === "returned") {
+      await applyTransition({
+        entity: "employee_transfers",
+        id,
+        scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+        action: "hr.transfer.returned",
+        fromStates: ["pending", "returned"],
+        toState: "returned",
+        reason: notes || undefined,
+        setExtras: { notes: notes || null },
+        onApply: async (_row, client) => {
+          await client.query(
+            `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('transfer',$1,'returned',$2,$3,$4)`,
+            [id, notes || null, scope.userId, scope.companyId]
+          );
+        },
+      });
+    } else if (approved) {
       const [receivingMgr] = await rawQuery<Record<string, unknown>>(
         `SELECT ea.id FROM employee_assignments ea
          WHERE ea."companyId"=$1 AND ea."branchId"=$2
@@ -6256,7 +6276,7 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
         id,
         scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
         action: "hr.transfer.hr_approved",
-        fromStates: ["pending"],
+        fromStates: ["pending", "returned"],
         toState: "pending_receiving_manager",
         reason: notes || undefined,
         setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: notes || null },
@@ -6283,7 +6303,7 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
         id,
         scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
         action: "hr.transfer.rejected",
-        fromStates: ["pending"],
+        fromStates: ["pending", "returned"],
         toState: "rejected",
         reason: notes || undefined,
         setExtras: { approvedBy: scope.employeeId, approvedAt: { raw: "NOW()" }, notes: notes || null },

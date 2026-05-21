@@ -183,9 +183,9 @@ export default function TransferDetail() {
                 approveMethod="PATCH"
                 rejectMethod="PATCH"
                 returnMethod="PATCH"
-                approveBody={(notes) => ({ approved: true, reason: notes || undefined })}
-                rejectBody={(notes) => ({ approved: false, reason: notes })}
-                returnBody={(notes) => ({ approved: "returned", reason: notes })}
+                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+                rejectBody={(notes) => ({ approved: false, notes })}
+                returnBody={(notes) => ({ approved: "returned", notes })}
                 pendingStatuses={["pending", "returned"]}
                 invalidateKeys={[["transfers"]]}
                 onDone={() => {
