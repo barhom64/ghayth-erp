@@ -35,6 +35,7 @@ import { lotExpiryScanCron } from "./inventory/lots.js";
 import { abcMonthlyClassificationCron } from "./inventory/abc-analysis.js";
 import { iqamaDailyAlertCron } from "./saudi-compliance/iqama-cron.js";
 import { saudizationMonthlySnapshotCron } from "./saudi-compliance/saudization-snapshot.js";
+import { recordJobRun } from "./observability.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -135,11 +136,13 @@ async function runJob(def: CronJobDef): Promise<void> {
     const result = await def.handler();
     const duration = Date.now() - start;
     await logCronJob(def.name, "success", duration, result);
+    recordJobRun(def.name, "success", duration);
     logger.info({ job: def.name, result, duration }, "CRON job completed");
   } catch (err) {
     const duration = Date.now() - start;
     const errMsg = err instanceof Error ? err.message : String(err);
     await logCronJob(def.name, "failed", duration, "Job failed", errMsg);
+    recordJobRun(def.name, "failed", duration);
     logger.error(err, `[CRON] ${def.name} failed:`);
   } finally {
     await releaseCronLock(def.name);

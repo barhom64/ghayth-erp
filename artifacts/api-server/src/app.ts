@@ -10,6 +10,7 @@ import { eventBusMiddleware } from "./middlewares/eventBusMiddleware.js";
 import { auditMiddleware } from "./middlewares/auditMiddleware.js";
 import { classifyDbError } from "./lib/errorHandler.js";
 import { activityTrackerMiddleware } from "./lib/activityTracker.js";
+import { httpMetricsMiddleware } from "./lib/observability.js";
 
 const app: Express = express();
 
@@ -34,6 +35,12 @@ app.use(
     },
   }),
 );
+
+// Times every request and feeds the observability metrics (http.requests,
+// status-class counters, request-duration histogram). Attaches only a
+// `finish` listener — it reads nothing from the request/response body and
+// changes no behaviour.
+app.use(httpMetricsMiddleware);
 
 app.use(
   helmet({
