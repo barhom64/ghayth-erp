@@ -1741,10 +1741,19 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
   try {
     const scope = req.scope!;
     const { seasonId } = req.query as Record<string, string | undefined>;
+    const seasonNum = seasonId ? Number(seasonId) : null;
 
-    const seasonFilter = seasonId
-      ? { fragment: ` AND "seasonId" = $2`, params: [scope.companyId, Number(seasonId)] }
-      : { fragment: "", params: [scope.companyId] };
+    // M1: the season filter was computed but never applied to any of the
+    // three reconciliation queries. umrah_nusk_invoices carries no
+    // seasonId, so amountDiffs/countDiffs scope through the invoice's
+    // group; overstayGaps scopes the pilgrim directly. $2 is bound only
+    // when a season is requested.
+    const params: unknown[] = seasonNum != null ? [scope.companyId, seasonNum] : [scope.companyId];
+    const nuskSeasonClause = seasonNum != null
+      ? ` AND ni."groupId" IN (SELECT id FROM umrah_groups WHERE "companyId" = $1 AND "seasonId" = $2)`
+      : "";
+    const groupSeasonClause = seasonNum != null ? ` AND g."seasonId" = $2` : "";
+    const pilgrimSeasonClause = seasonNum != null ? ` AND p."seasonId" = $2` : "";
 
     // 1. Amount diff: nusk total vs posted JE total
     const amountDiffs = await rawQuery<Record<string, unknown>>(
@@ -1767,11 +1776,11 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
               AND jl."accountCode" LIKE '5%'
          ) je_rf ON true
         WHERE ni."companyId" = $1 AND ni."deletedAt" IS NULL
-          AND ni."nuskStatus" != 'cancelled'
+          AND ni."nuskStatus" != 'cancelled'${nuskSeasonClause}
           AND ABS(ni."totalAmount" - COALESCE(je_ap.total, 0) + COALESCE(je_rf.total, 0)) > 0.01
         ORDER BY ABS(ni."totalAmount" - COALESCE(je_ap.total, 0) + COALESCE(je_rf.total, 0)) DESC
         LIMIT 500`,
-      [scope.companyId]
+      params
     );
 
     // 2. Mutamer count diff: file says X, system has Y in the linked group
@@ -1785,7 +1794,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
          FROM umrah_nusk_invoices ni
     LEFT JOIN umrah_groups g ON g.id = ni."groupId"
         WHERE ni."companyId" = $1 AND ni."deletedAt" IS NULL
-          AND ni."groupId" IS NOT NULL
+          AND ni."groupId" IS NOT NULL${groupSeasonClause}
           AND ni."mutamerCount" IS NOT NULL
           AND ni."mutamerCount" != (
             SELECT COUNT(*)::int FROM umrah_pilgrims p
@@ -1800,7 +1809,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
                 AND p."deletedAt" IS NULL
           )) DESC
         LIMIT 500`,
-      [scope.companyId]
+      params
     );
 
     // 3. Overstays without a violation row
@@ -1811,7 +1820,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
     LEFT JOIN umrah_groups g ON g.id = p."groupId"
     LEFT JOIN umrah_sub_agents sa ON sa.id = p."subAgentId"
         WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
-          AND COALESCE(p."overstayDays", 0) > 0
+          AND COALESCE(p."overstayDays", 0) > 0${pilgrimSeasonClause}
           AND NOT EXISTS (
             SELECT 1 FROM umrah_violations v
              WHERE v."mutamerId" = p.id
@@ -1821,7 +1830,7 @@ router.get("/reports/reconciliation", authorize({ feature: "umrah", action: "vie
           )
         ORDER BY p."overstayDays" DESC
         LIMIT 500`,
-      [scope.companyId]
+      params
     );
 
     res.json(maskFields(req, {
