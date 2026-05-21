@@ -1115,6 +1115,14 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     if (!Number.isFinite(id)) { throw new ValidationError("معرّف القيد غير صالح"); return; }
+    // Branch isolation (RCA BR-2): a branch-scoped user must not read a
+    // journal entry outside their assigned branches — apply the same
+    // company + branch scope the /journal list endpoints already enforce.
+    const { where: scopeWhere, params: scopeParams } = buildScopedWhere(
+      scope, parseScopeFilters(req),
+      { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true },
+      2,
+    );
     const [je] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*,
               ro.ref AS "reversalOfRef", ro.description AS "reversalOfDescription",
@@ -1122,9 +1130,9 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
        FROM journal_entries je
        LEFT JOIN journal_entries ro ON ro.id = je."reversalOfId" AND ro."deletedAt" IS NULL
        LEFT JOIN journal_entries rb ON rb.id = je."reversedById" AND rb."deletedAt" IS NULL
-       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       WHERE je.id = $1 AND ${scopeWhere} AND je."deletedAt" IS NULL
        LIMIT 1`,
-      [id, scope.companyId]
+      [id, ...scopeParams]
     );
     if (!je) throw new NotFoundError("القيد غير موجود");
     const lines = await rawQuery<Record<string, unknown>>(
@@ -1161,9 +1169,16 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
       throw new ValidationError("سبب عكس القيد مطلوب", { field: "reason", fix: "أدخل سبب عكس القيد" });
     }
 
+    // Branch isolation (RCA BR-2): a branch-scoped user must not reverse a
+    // journal entry outside their assigned branches.
+    const { where: revScopeWhere, params: revScopeParams } = buildScopedWhere(
+      scope, parseScopeFilters(req),
+      { enforceBranchScope: true },
+      2,
+    );
     const [original] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
-      [id, scope.companyId]
+      `SELECT * FROM journal_entries WHERE id = $1 AND ${revScopeWhere} AND "deletedAt" IS NULL LIMIT 1`,
+      [id, ...revScopeParams]
     );
     if (!original) throw new NotFoundError("القيد الأصلي غير موجود");
     if (original.reversedById) {
