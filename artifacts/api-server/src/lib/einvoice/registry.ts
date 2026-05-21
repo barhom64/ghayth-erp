@@ -14,6 +14,7 @@
 
 import type { EInvoiceProvider } from "./provider.js";
 import { mockEInvoiceProvider } from "./providers/mock/index.js";
+import { config } from "../config.js";
 
 // Static registry. Add new entries here when a real provider lands.
 // The map is intentionally tiny because the only caller is the
@@ -30,7 +31,7 @@ const PROVIDERS: Record<string, EInvoiceProvider> = {
  * Resolution order:
  *   1. company-level override (system_settings.key='einvoice.provider')
  *      — not yet read (future work; today returns env default)
- *   2. env override (process.env.EINVOICE_DEFAULT_PROVIDER)
+ *   2. env override (config.zatca.defaultProvider — EINVOICE_DEFAULT_PROVIDER)
  *   3. hard-coded fallback: "mock"
  *
  * The function is intentionally synchronous-feeling so callers can
@@ -41,7 +42,7 @@ const PROVIDERS: Record<string, EInvoiceProvider> = {
  */
 export async function getProvider(companyId: number): Promise<EInvoiceProvider> {
   void companyId; // referenced by real providers; mock ignores
-  const envOverride = (process.env.EINVOICE_DEFAULT_PROVIDER ?? "").trim();
+  const envOverride = config.zatca.defaultProvider ?? "";
   const key = envOverride || "mock";
   return PROVIDERS[key] ?? PROVIDERS.mock!;
 }
