@@ -1,0 +1,25 @@
+-- Migration 182: add the "updatedAt" column to employee_violations.
+--
+-- Symptom (HR functional audit C7 — GitHub issue #745):
+--   PATCH /api/hr/violations/:id/{approve,reject,return}  -> HTTP 500
+--   column "updatedAt" of relation "employee_violations" does not exist
+--   (trace: lifecycleEngine.ts applyTransition -> withTransaction)
+--
+-- Root cause: the lifecycle engine appends `"updatedAt" = NOW()` to its
+-- UPDATE for every lifecycle table unless the caller passes
+-- `skipUpdatedAt: true`. employee_violations was created without that
+-- column, so the violation approve/reject/return transition aborts.
+--
+-- PR #738 added `skipUpdatedAt: true` at the violation call site. That
+-- source fix is correct, but a call-site opt-out only protects a build
+-- that actually contains it — a deployment running an older bundle still
+-- emits the `updatedAt` clause and 500s, which is what issue #745 hit.
+--
+-- employee_violations lifecycles through the generic engine, so it should
+-- satisfy the engine's default contract. Adding the column makes
+-- approve/reject/return succeed regardless of which build is deployed, and
+-- aligns the table with the 5 other HR lifecycle tables that already have
+-- "updatedAt" (hr_leave_requests, hr_inquiry_memos, hr_exit_requests,
+-- hr_excuse_requests, evaluation_cycles).
+
+ALTER TABLE employee_violations ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ DEFAULT now();
