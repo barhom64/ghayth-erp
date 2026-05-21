@@ -163,9 +163,11 @@ export async function findStaleRates(): Promise<
 // ─────────────────────────────────────────────────────────────────────
 
 async function upsertRate(companyId: number, rate: FetchedRate): Promise<void> {
+  // `rateDate` is the legacy NOT NULL column; the FX subsystem keys on
+  // `effectiveDate`, so the same date is written into both.
   await rawExecute(
-    `INSERT INTO fx_rates ("companyId", "fromCurrency", "toCurrency", rate, "effectiveDate", source)
-     VALUES ($1, $2, $3, $4, $5::date, $6)
+    `INSERT INTO fx_rates ("companyId", "fromCurrency", "toCurrency", rate, "rateDate", "effectiveDate", source)
+     VALUES ($1, $2, $3, $4, $5::date, $5::date, $6)
      ON CONFLICT ("companyId", "fromCurrency", "toCurrency", "effectiveDate")
        DO UPDATE SET rate = EXCLUDED.rate, source = EXCLUDED.source`,
     [companyId, rate.fromCurrency, rate.toCurrency, rate.rate, rate.effectiveDate, rate.source],
