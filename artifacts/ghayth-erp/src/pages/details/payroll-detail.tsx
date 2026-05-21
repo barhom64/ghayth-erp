@@ -1,33 +1,29 @@
 import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ActionHistory } from "@/components/approval-actions";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
-import { Wallet } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
+import { Wallet, Users } from "lucide-react";
+import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 /**
- * PayrollDetail — unified detail page for a single payroll record.
+ * PayrollDetail — detail page for a payroll *run*.
  *
- * Fetches from `/hr/payroll/:id`. Shows the classic payroll breakdown:
- * basic salary, allowances, deductions, overtime and bonuses feeding
- * into the hero "net salary" number, plus payment method / bank
- * account metadata and the employee link.
+ * `GET /hr/payroll/:id` returns a run aggregate (`payroll_runs` + its
+ * `payroll_lines`), not a single payslip. The page therefore shows the
+ * run summary — period, headcount, the run-level totals — and a table
+ * of the per-employee lines (HR functional audit M6).
  */
 
-// Vocabulary matches what the server actually produces: a run is created
-// `pending_approval`, approval moves it to `completed`, and posting the
-// journal entry moves it to `posted` (HR functional audit C2).
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
   pending_approval: "بانتظار الاعتماد",
@@ -48,10 +44,31 @@ function statusTone(status?: string | null) {
 function formatPeriod(payroll: any): string {
   if (!payroll) return "-";
   if (payroll.period) return payroll.period;
-  if (payroll.month && payroll.year) return `${payroll.month}/${payroll.year}`;
   if (payroll.month) return String(payroll.month);
   return "-";
 }
+
+interface PayrollLine {
+  id: number;
+  employeeName?: string | null;
+  basic?: number | string | null;
+  housingAllowance?: number | string | null;
+  transportAllowance?: number | string | null;
+  overtime?: number | string | null;
+  commission?: number | string | null;
+  gosi?: number | string | null;
+  lateDeduction?: number | string | null;
+  absenceDeduction?: number | string | null;
+  violationDeduction?: number | string | null;
+  loanDeduction?: number | string | null;
+  netSalary?: number | string | null;
+}
+
+const lineAllowances = (l: PayrollLine) =>
+  Number(l.housingAllowance || 0) + Number(l.transportAllowance || 0);
+const lineDeductions = (l: PayrollLine) =>
+  Number(l.gosi || 0) + Number(l.lateDeduction || 0) + Number(l.absenceDeduction || 0) +
+  Number(l.violationDeduction || 0) + Number(l.loanDeduction || 0);
 
 export default function PayrollDetail() {
   const [, params] = useRoute("/hr/payroll/:id");
@@ -69,9 +86,34 @@ export default function PayrollDetail() {
   const payroll = data;
   const [acting, setActing] = useState(false);
 
-  // Approve uses PATCH /hr/payroll/:id/approve (pending_approval -> completed);
-  // post uses PATCH /hr/payroll/:id { status: "posted" } (completed -> posted,
-  // which triggers the journal entry). There is no reject endpoint.
+  const lines: PayrollLine[] = useMemo(
+    () => (Array.isArray(payroll?.lines) ? payroll.lines : []),
+    [payroll?.lines]
+  );
+
+  // Run-level totals. The server already projects these (gated on the
+  // payroll role); fall back to summing the lines so the page is correct
+  // even when only `lines` come through.
+  const totals = useMemo(() => {
+    const basic = payroll?.basicSalary != null
+      ? Number(payroll.basicSalary)
+      : lines.reduce((s, l) => s + Number(l.basic || 0), 0);
+    const allowances = payroll?.allowances != null
+      ? Number(payroll.allowances)
+      : lines.reduce((s, l) => s + lineAllowances(l), 0);
+    const overtime = lines.reduce((s, l) => s + Number(l.overtime || 0), 0);
+    const deductions = payroll?.deductions != null
+      ? Number(payroll.deductions)
+      : lines.reduce((s, l) => s + lineDeductions(l), 0);
+    const net = Number(payroll?.netSalary ?? payroll?.totalNet ?? 0)
+      || lines.reduce((s, l) => s + Number(l.netSalary || 0), 0);
+    return { basic, allowances, overtime, deductions, net };
+  }, [payroll, lines]);
+
+  const employeeCount = Number(payroll?.employeeCount ?? lines.length);
+
+  // Approve: PATCH /hr/payroll/:id/approve (pending_approval -> completed).
+  // Post:    PATCH /hr/payroll/:id { status: "posted" } (-> posted, journal).
   const runPayrollAction = async (kind: "approve" | "post") => {
     setActing(true);
     try {
@@ -90,175 +132,126 @@ export default function PayrollDetail() {
     }
   };
 
-  // Compute a net salary in case the server didn't project it: the
-  // formula is basic + allowances + overtime + bonus − deductions.
-  // This is used both for the hero number and the print summary so
-  // the two can never drift apart.
-  const netSalary = useMemo(() => {
-    if (!payroll) return 0;
-    if (payroll.netSalary != null) return Number(payroll.netSalary);
-    const basic = Number(payroll.basicSalary || 0);
-    const allowances = Number(payroll.allowances || 0);
-    const overtime = Number(payroll.overtime || 0);
-    const bonus = Number(payroll.bonus || 0);
-    const deductions = Number(payroll.deductions || 0);
-    return basic + allowances + overtime + bonus - deductions;
-  }, [payroll]);
-
-  const paymentMethodLabel = payroll?.paymentMethod
-    ? PAYMENT_METHODS[payroll.paymentMethod] || payroll.paymentMethod
-    : null;
-
-  const relatedEntities: RelatedEntity[] = useMemo(() => {
-    const out: RelatedEntity[] = [];
-    if (!payroll) return out;
-    if (payroll.employeeId) {
-      out.push({
-        type: "employee",
-        id: payroll.employeeId,
-        label: payroll.employeeName || `موظف #${payroll.employeeId}`,
-        sublabel: "الموظف",
-        href: `/employees/${payroll.employeeId}`,
-      });
-    }
-    return out;
-  }, [payroll]);
-
   const printSections: PrintSection[] = useMemo(() => {
     if (!payroll) return [];
-    const period = formatPeriod(payroll);
     const sections: PrintSection[] = [
       {
         kind: "info-grid",
         items: [
-          { label: "رقم المرجع", value: payroll.ref || `PAY-${id}` },
-          { label: "الموظف", value: payroll.employeeName || "-" },
-          { label: "الفترة", value: period },
-          ...(paymentMethodLabel
-            ? [{ label: "طريقة الدفع", value: paymentMethodLabel }]
-            : []),
-          ...(payroll.bankAccount
-            ? [{ label: "الحساب البنكي", value: payroll.bankAccount }]
-            : []),
-          ...(payroll.paymentDate
-            ? [{ label: "تاريخ الدفع", value: formatDateAr(payroll.paymentDate) }]
-            : []),
+          { label: "رقم المرجع", value: payroll.reference || payroll.ref || `PAY-${id}` },
+          { label: "الفترة", value: formatPeriod(payroll) },
+          { label: "عدد الموظفين", value: formatNumber(employeeCount) },
           { label: "الحالة", value: STATUS_LABELS[payroll.status] || payroll.status || "-" },
+          { label: "نفّذه", value: payroll.runByName || "-" },
           { label: "تاريخ الإنشاء", value: formatDateAr(payroll.createdAt) },
         ],
       },
       {
         kind: "summary",
         items: [
-          { label: "الراتب الأساسي", value: formatCurrency(Number(payroll.basicSalary || 0)) },
-          { label: "البدلات", value: formatCurrency(Number(payroll.allowances || 0)) },
-          { label: "العمل الإضافي", value: formatCurrency(Number(payroll.overtime || 0)) },
-          { label: "المكافآت", value: formatCurrency(Number(payroll.bonus || 0)) },
-          { label: "الخصومات", value: formatCurrency(Number(payroll.deductions || 0)) },
-          { label: "صافي الراتب", value: formatCurrency(netSalary), bold: true },
-        ],
-      },
-      {
-        kind: "signature",
-        parties: [
-          { label: "المستلم", name: payroll.employeeName || "" },
-          { label: "المعتمد", name: payroll.approvedByName || payroll.createdByName || "" },
+          { label: "إجمالي الراتب الأساسي", value: formatCurrency(totals.basic) },
+          { label: "إجمالي البدلات", value: formatCurrency(totals.allowances) },
+          { label: "إجمالي العمل الإضافي", value: formatCurrency(totals.overtime) },
+          { label: "إجمالي الخصومات", value: formatCurrency(totals.deductions) },
+          { label: "إجمالي صافي المسير", value: formatCurrency(totals.net), bold: true },
         ],
       },
     ];
+    if (lines.length > 0) {
+      sections.push({
+        kind: "text",
+        title: "كشف الموظفين",
+        body: lines
+          .map((l, i) => `${i + 1}. ${l.employeeName || `موظف #${l.id}`} — صافي ${formatCurrency(Number(l.netSalary || 0))}`)
+          .join("\n"),
+      });
+    }
+    if (payroll.notes) {
+      sections.push({ kind: "text", title: "ملاحظات", body: payroll.notes });
+    }
+    sections.push({
+      kind: "signature",
+      parties: [
+        { label: "أعدّه", name: payroll.runByName || "" },
+        { label: "المعتمد", name: payroll.approvedByName || "" },
+      ],
+    });
     return sections;
-  }, [payroll, netSalary, paymentMethodLabel, id]);
+  }, [payroll, totals, lines, employeeCount, id]);
+
+  const lineColumns: DataTableColumn<PayrollLine>[] = [
+    { key: "employeeName", header: "الموظف", render: (l) => <span className="font-medium">{l.employeeName || `موظف #${l.id}`}</span> },
+    { key: "basic", header: "الأساسي", render: (l) => formatCurrency(Number(l.basic || 0)) },
+    { key: "allowances", header: "البدلات", render: (l) => formatCurrency(lineAllowances(l)) },
+    { key: "overtime", header: "الإضافي", render: (l) => formatCurrency(Number(l.overtime || 0)) },
+    { key: "deductions", header: "الخصومات", render: (l) => <span className="text-status-error-foreground">{formatCurrency(lineDeductions(l))}</span> },
+    { key: "netSalary", header: "الصافي", render: (l) => <span className="font-semibold text-status-success-foreground">{formatCurrency(Number(l.netSalary || 0))}</span> },
+  ];
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
-      {/* Primary info — employee + breakdown feeding the hero net */}
+      {/* Run summary */}
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
             <Wallet className="h-4 w-4 text-muted-foreground" />
-            بيانات الراتب
+            ملخّص مسير الرواتب
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
-          {/* Hero net salary */}
           <div className="border-b pb-3">
-            <p className="text-xs text-muted-foreground mb-1">صافي الراتب</p>
+            <p className="text-xs text-muted-foreground mb-1">إجمالي صافي المسير</p>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-status-success-foreground">
-                {formatCurrency(netSalary)}
+                {formatCurrency(totals.net)}
               </span>
               <span className="text-xs text-muted-foreground">ر.س</span>
             </div>
-            {payroll?.employeeName && (
-              <p className="mt-2 text-sm text-status-neutral-foreground">
-                للموظف: <span className="font-medium">{payroll.employeeName}</span>
-              </p>
-            )}
+            <p className="mt-2 text-sm text-status-neutral-foreground flex items-center gap-1">
+              <Users className="h-3.5 w-3.5 text-muted-foreground" />
+              {formatNumber(employeeCount)} موظف — فترة {formatPeriod(payroll)}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-xs text-muted-foreground mb-0.5">الفترة</p>
-              <Badge variant="outline">{formatPeriod(payroll)}</Badge>
+              <p className="text-xs text-muted-foreground mb-0.5">إجمالي الراتب الأساسي</p>
+              <span className="text-status-neutral-foreground font-medium">{formatCurrency(totals.basic)}</span>
             </div>
-            {payroll?.basicSalary != null && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">إجمالي البدلات</p>
+              <span className="text-status-neutral-foreground">{formatCurrency(totals.allowances)}</span>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">إجمالي العمل الإضافي</p>
+              <span className="text-status-neutral-foreground">{formatCurrency(totals.overtime)}</span>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">إجمالي الخصومات</p>
+              <span className="text-status-error-foreground">{formatCurrency(totals.deductions)}</span>
+            </div>
+            {payroll?.reference && (
               <div>
-                <p className="text-xs text-muted-foreground mb-0.5">الراتب الأساسي</p>
-                <span className="text-status-neutral-foreground font-medium">
-                  {formatCurrency(Number(payroll.basicSalary))}
-                </span>
+                <p className="text-xs text-muted-foreground mb-0.5">المرجع</p>
+                <span className="text-status-neutral-foreground font-mono text-xs">{payroll.reference}</span>
               </div>
             )}
-            {payroll?.allowances != null && (
+            {payroll?.runByName && (
               <div>
-                <p className="text-xs text-muted-foreground mb-0.5">البدلات</p>
-                <span className="text-status-neutral-foreground">
-                  {formatCurrency(Number(payroll.allowances))}
-                </span>
+                <p className="text-xs text-muted-foreground mb-0.5">نفّذ المسير</p>
+                <span className="text-status-neutral-foreground">{payroll.runByName}</span>
               </div>
             )}
-            {payroll?.overtime != null && (
+            {payroll?.approvedAt && (
               <div>
-                <p className="text-xs text-muted-foreground mb-0.5">العمل الإضافي</p>
-                <span className="text-status-neutral-foreground">
-                  {formatCurrency(Number(payroll.overtime))}
-                </span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الاعتماد</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(payroll.approvedAt)}</span>
               </div>
             )}
-            {payroll?.bonus != null && (
+            {payroll?.paidAt && (
               <div>
-                <p className="text-xs text-muted-foreground mb-0.5">المكافآت</p>
-                <span className="text-status-neutral-foreground">
-                  {formatCurrency(Number(payroll.bonus))}
-                </span>
-              </div>
-            )}
-            {payroll?.deductions != null && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">الخصومات</p>
-                <span className="text-status-error-foreground">
-                  {formatCurrency(Number(payroll.deductions))}
-                </span>
-              </div>
-            )}
-            {paymentMethodLabel && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">طريقة الدفع</p>
-                <Badge variant="secondary">{paymentMethodLabel}</Badge>
-              </div>
-            )}
-            {payroll?.paymentDate && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الدفع</p>
-                <span className="text-status-neutral-foreground">{formatDateAr(payroll.paymentDate)}</span>
-              </div>
-            )}
-            {payroll?.bankAccount && (
-              <div className="col-span-2">
-                <p className="text-xs text-muted-foreground mb-0.5">الحساب البنكي</p>
-                <span className="text-status-neutral-foreground font-mono text-xs">
-                  {payroll.bankAccount}
-                </span>
+                <p className="text-xs text-muted-foreground mb-0.5">تاريخ الصرف</p>
+                <span className="text-status-neutral-foreground">{formatDateAr(payroll.paidAt)}</span>
               </div>
             )}
           </div>
@@ -273,9 +266,7 @@ export default function PayrollDetail() {
       </Card>
 
       <div className="space-y-3">
-        {/* Payroll lifecycle — pending_approval → completed → posted.
-            There is no reject endpoint, so the generic ApprovalActions
-            (whose reject/return would misfire onto /approve) is not used. */}
+        {/* Payroll lifecycle — pending_approval → completed → posted. */}
         {id && payroll && ["pending_approval", "completed"].includes(payroll.status) && (
           <Card>
             <CardHeader className="pb-2">
@@ -306,7 +297,6 @@ export default function PayrollDetail() {
           </Card>
         )}
 
-        {/* Action history */}
         {id && (
           <Card>
             <CardHeader className="pb-2">
@@ -319,8 +309,26 @@ export default function PayrollDetail() {
         )}
       </div>
 
-      {id && <ApprovalTimeline entityType="payroll" entityId={id} />}
+      {/* Per-employee payroll lines */}
+      <Card className="md:col-span-3">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            كشف الموظفين ({formatNumber(employeeCount)})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DataTable
+            columns={lineColumns}
+            data={lines}
+            noToolbar
+            emptyMessage="لا توجد بنود لهذا المسير"
+            pageSize={25}
+          />
+        </CardContent>
+      </Card>
 
+      {id && <ApprovalTimeline entityType="payroll" entityId={id} />}
       {id && <EntityComments entityType="payroll" entityId={id} />}
       {id && <EntityTags entityType="payroll" entityId={id} />}
     </div>
@@ -328,14 +336,14 @@ export default function PayrollDetail() {
 
   return (
     <DetailPageLayout
-      title={payroll?.ref ? `راتب ${payroll.ref}` : "تفاصيل الراتب"}
+      title={payroll?.reference ? `مسير ${payroll.reference}` : `مسير الرواتب ${formatPeriod(payroll)}`}
       subtitle={
         payroll
-          ? `${payroll.employeeName || ""}${payroll.employeeName ? " — " : ""}${formatPeriod(payroll)}`
+          ? `${formatNumber(employeeCount)} موظف — فترة ${formatPeriod(payroll)}`
           : undefined
       }
       backPath="/hr/payroll"
-      refNumber={payroll?.ref || (id ? `PAY-${id}` : undefined)}
+      refNumber={payroll?.reference || (id ? `PAY-${id}` : undefined)}
       status={
         payroll
           ? {
@@ -347,9 +355,8 @@ export default function PayrollDetail() {
       typeLabel={formatPeriod(payroll)}
       createdAt={payroll?.createdAt}
       updatedAt={payroll?.updatedAt}
-      createdByName={payroll?.createdByName}
+      createdByName={payroll?.runByName}
       assignedToName={payroll?.approvedByName}
-      relatedEntities={relatedEntities}
       entityType="payroll"
       entityId={id ?? 0}
       overview={overview}
@@ -362,9 +369,9 @@ export default function PayrollDetail() {
         payroll ? (
           <EntityPrintButton
             branchId={payroll.branchId}
-            title={payroll.ref ? `راتب ${payroll.ref}` : "راتب"}
-            ref={payroll.ref || `PAY-${id}`}
-            date={formatDateAr(payroll.paymentDate || payroll.createdAt)}
+            title={payroll.reference ? `مسير ${payroll.reference}` : "مسير الرواتب"}
+            ref={payroll.reference || `PAY-${id}`}
+            date={formatDateAr(payroll.paidAt || payroll.createdAt)}
             sections={printSections}
             entityType="payroll"
             entityId={payroll.id ?? id}
