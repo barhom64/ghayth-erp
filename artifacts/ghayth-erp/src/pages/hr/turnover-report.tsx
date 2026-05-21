@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { exportToCSV } from "@/components/shared/advanced-filters";
 
 const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 
@@ -208,9 +209,16 @@ export default function TurnoverReportPage() {
                 },
               ] as DataTableColumn<any>[]}
               data={data.recentTerminations}
-              noToolbar
               emptyMessage="لا يوجد مغادرين"
               pageSize={10}
+              onExportCSV={() =>
+                exportToCSV(data.recentTerminations, [
+                  { key: "employeeName", label: "الموظف" },
+                  { key: "deptName", label: "القسم" },
+                  { key: "terminationType", label: "سبب المغادرة" },
+                  { key: "terminationDate", label: "تاريخ المغادرة" },
+                ], "تقرير_دوران_الموظفين")
+              }
             />
           </CardContent>
         </Card>
