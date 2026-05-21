@@ -1,11 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ActionHistory } from "@/components/approval-actions";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -24,20 +25,22 @@ import { useRegistryTabs } from "@/hooks/use-registry-tabs";
  * account metadata and the employee link.
  */
 
+// Vocabulary matches what the server actually produces: a run is created
+// `pending_approval`, approval moves it to `completed`, and posting the
+// journal entry moves it to `posted` (HR functional audit C2).
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
-  pending: "معلق",
-  approved: "معتمد",
-  paid: "مدفوع",
+  pending_approval: "بانتظار الاعتماد",
+  completed: "معتمد",
+  posted: "مُرحَّل محاسبيًا",
   cancelled: "ملغى",
 };
 
 function statusTone(status?: string | null) {
   if (!status) return "default" as const;
-  if (status === "paid") return "success" as const;
-  if (status === "approved") return "success" as const;
+  if (status === "posted" || status === "completed") return "success" as const;
   if (status === "cancelled") return "destructive" as const;
-  if (status === "pending") return "info" as const;
+  if (status === "pending_approval") return "info" as const;
   if (status === "draft") return "muted" as const;
   return "default" as const;
 }
@@ -64,6 +67,28 @@ export default function PayrollDetail() {
   );
 
   const payroll = data;
+  const [acting, setActing] = useState(false);
+
+  // Approve uses PATCH /hr/payroll/:id/approve (pending_approval -> completed);
+  // post uses PATCH /hr/payroll/:id { status: "posted" } (completed -> posted,
+  // which triggers the journal entry). There is no reject endpoint.
+  const runPayrollAction = async (kind: "approve" | "post") => {
+    setActing(true);
+    try {
+      if (kind === "approve") {
+        await apiFetch(`/hr/payroll/${id}/approve`, { method: "PATCH", body: JSON.stringify({}) });
+        toast({ title: "تمت الموافقة على مسير الرواتب" });
+      } else {
+        await apiFetch(`/hr/payroll/${id}`, { method: "PATCH", body: JSON.stringify({ status: "posted" }) });
+        toast({ title: "تم ترحيل مسير الرواتب محاسبيًا" });
+      }
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذّر تنفيذ الإجراء", description: err?.fix ?? err?.message });
+    } finally {
+      setActing(false);
+    }
+  };
 
   // Compute a net salary in case the server didn't project it: the
   // formula is basic + allowances + overtime + bonus − deductions.
@@ -248,33 +273,35 @@ export default function PayrollDetail() {
       </Card>
 
       <div className="space-y-3">
-        {/* Approval actions — payroll goes pending → approved → paid */}
-        {id && payroll && payroll.status === "pending" && (
+        {/* Payroll lifecycle — pending_approval → completed → posted.
+            There is no reject endpoint, so the generic ApprovalActions
+            (whose reject/return would misfire onto /approve) is not used. */}
+        {id && payroll && ["pending_approval", "completed"].includes(payroll.status) && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
+              <CardTitle className="text-sm">إجراءات المسير</CardTitle>
             </CardHeader>
-            <CardContent>
-              <ApprovalActions
-                entityType="payroll"
-                entityId={id}
-                currentStatus={payroll.status}
-                approveEndpoint={`/hr/payroll/${id}/approve`}
-                rejectEndpoint={`/hr/payroll/${id}/approve`}
-                returnEndpoint={`/hr/payroll/${id}/approve`}
-                approveMethod="PATCH"
-                rejectMethod="PATCH"
-                returnMethod="PATCH"
-                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
-                rejectBody={(notes) => ({ approved: false, notes })}
-                returnBody={(notes) => ({ approved: "returned", notes })}
-                pendingStatuses={["pending", "draft", "returned", "pending_approval"]}
-                invalidateKeys={[["payroll"]]}
-                onDone={() => {
-                  refetch();
-                  toast({ title: "تم تحديث الراتب" });
-                }}
-              />
+            <CardContent className="space-y-2">
+              {payroll.status === "pending_approval" && (
+                <GuardedButton
+                  perm="hr:approve"
+                  className="w-full"
+                  disabled={acting}
+                  onClick={() => runPayrollAction("approve")}
+                >
+                  اعتماد المسير
+                </GuardedButton>
+              )}
+              {payroll.status === "completed" && (
+                <GuardedButton
+                  perm="hr:update"
+                  className="w-full"
+                  disabled={acting}
+                  onClick={() => runPayrollAction("post")}
+                >
+                  ترحيل المسير محاسبيًا
+                </GuardedButton>
+              )}
             </CardContent>
           </Card>
         )}
