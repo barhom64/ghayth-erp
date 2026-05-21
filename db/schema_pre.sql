@@ -5717,7 +5717,8 @@ CREATE TABLE public.employee_transfers (
     "fromSalary" numeric(12,2),
     "toSalary" numeric(12,2),
     "receivedBy" integer,
-    "receivedAt" timestamp with time zone
+    "receivedAt" timestamp with time zone,
+    "updatedAt" timestamp with time zone DEFAULT now()
 );
 
 
@@ -5760,7 +5761,8 @@ CREATE TABLE public.employee_violations (
     "regulationId" integer,
     "occurrenceCount" integer DEFAULT 1,
     status text DEFAULT 'pending_inquiry'::text,
-    source text DEFAULT 'manual'::text
+    source text DEFAULT 'manual'::text,
+    "updatedAt" timestamp with time zone DEFAULT now()
 );
 
 
@@ -8529,6 +8531,7 @@ CREATE TABLE public.job_postings (
     vacancies integer,
     benefits text,
     skills text,
+    "updatedAt" timestamp with time zone DEFAULT now(),
     "deletedAt" timestamp with time zone
 );
 
@@ -14107,6 +14110,7 @@ CREATE TABLE public.umrah_penalties (
     "invoiceId" integer,
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
     CONSTRAINT umrah_penalties_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'invoiced'::character varying, 'paid'::character varying, 'waived'::character varying])::text[]))),
     CONSTRAINT umrah_penalties_type_check CHECK (((type)::text = ANY ((ARRAY['overstay'::character varying, 'violation'::character varying, 'lost'::character varying, 'regulatory'::character varying])::text[])))
 );
@@ -14556,7 +14560,9 @@ CREATE TABLE public.umrah_violations (
     "updatedBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "linkedPenaltyId" integer,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT umrah_violations_status_check CHECK (((status)::text = ANY ((ARRAY['detected'::character varying, 'open'::character varying, 'invoiced'::character varying, 'paid'::character varying, 'disputed'::character varying, 'closed'::character varying])::text[])))
 );
 
 
