@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -286,6 +286,17 @@ export default function LoansPage() {
         values={filters}
         onChange={setFilters}
         resultCount={filtered.length}
+        onExportCSV={() =>
+          exportToCSV(filtered, [
+            { key: "loanNumber", label: "رقم السلفة" },
+            { key: "employeeName", label: "الموظف" },
+            { key: "loanType", label: "النوع" },
+            { key: "amount", label: "المبلغ" },
+            { key: "installmentCount", label: "الأقساط" },
+            { key: "remainingAmount", label: "المتبقي" },
+            { key: "status", label: "الحالة" },
+          ], "السلف")
+        }
       />
 
       <BulkActionsBar
