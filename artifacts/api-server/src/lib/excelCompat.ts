@@ -49,7 +49,7 @@ export function normalizeCellValue(v: unknown): unknown {
     return r;
   }
   if ("error" in o) return "";
-  return v;
+  return "";
 }
 
 /** Parse the first worksheet of an .xlsx buffer into an array-of-arrays

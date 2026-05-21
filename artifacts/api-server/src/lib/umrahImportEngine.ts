@@ -132,14 +132,14 @@ export interface ParsedRow {
 }
 
 export function parseMutamersWorkbook(buffer: Buffer): Promise<ParsedRow[]> {
-  return parseWorkbook(buffer, MUTAMER_HEADER_MAP, "mutamers");
+  return parseWorkbook(buffer, MUTAMER_HEADER_MAP);
 }
 
 export function parseVouchersWorkbook(buffer: Buffer): Promise<ParsedRow[]> {
-  return parseWorkbook(buffer, VOUCHER_HEADER_MAP, "vouchers");
+  return parseWorkbook(buffer, VOUCHER_HEADER_MAP);
 }
 
-async function parseWorkbook(buffer: Buffer, headerMap: Record<string, string>, fileType: string): Promise<ParsedRow[]> {
+async function parseWorkbook(buffer: Buffer, headerMap: Record<string, string>): Promise<ParsedRow[]> {
   const raw: any[][] = await parseFirstSheetAOA(buffer);
   if (raw.length < 2) throw new ValidationError("الملف لا يحتوي على بيانات");
 
