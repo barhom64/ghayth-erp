@@ -77,8 +77,9 @@ describe("requireGuards middleware behavior", () => {
 describe("Guard business rules", () => {
   const source = readFileSync(join(API_SRC, "lib/systemGovernor.ts"), "utf8");
 
-  it("financial period guard checks for closed status", () => {
+  it("financial period guard blocks both closed and locked periods", () => {
     expect(source).toContain('period.status === "closed"');
+    expect(source).toContain('period.status === "locked"');
   });
 
   it("company active guard checks for suspended and inactive", () => {

@@ -1041,9 +1041,12 @@ export async function checkFinancialPeriodOpen(
   companyId: number,
   date: string
 ): Promise<{ open: boolean; periodName?: string }> {
+  // Both `closed` and `locked` periods bar GL posting — `locked` is the
+  // stricter state. Treating only `closed` as blocking would let a posted
+  // entry slip into a locked period.
   const rows = await rawQuery<{ name: string }>(
     `SELECT name FROM financial_periods
-     WHERE "companyId" = $1 AND status = 'closed'
+     WHERE "companyId" = $1 AND status IN ('closed', 'locked')
        AND "deletedAt" IS NULL
        AND "startDate" <= $2 AND "endDate" >= $2
      LIMIT 1`,
