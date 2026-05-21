@@ -306,7 +306,7 @@ const createViolationSchema = z.object({
   subAgentId: z.coerce.number().optional().nullable(),
   description: z.string().optional().nullable(),
   penaltyAmount: z.coerce.number().optional(),
-  status: z.string().optional(),
+  status: z.enum(["detected", "open", "invoiced", "paid", "disputed", "closed"]).optional(),
 });
 
 const patchViolationSchema = z.object({
@@ -318,7 +318,7 @@ const patchViolationSchema = z.object({
   subAgentId: z.coerce.number().optional().nullable(),
   description: z.string().optional().nullable(),
   penaltyAmount: z.coerce.number().optional(),
-  status: z.string().optional(),
+  status: z.enum(["detected", "open", "invoiced", "paid", "disputed", "closed"]).optional(),
   linkedInvoiceId: z.coerce.number().optional().nullable(),
 });
 
@@ -1121,17 +1121,35 @@ router.post("/run-penalty-engine", authorize({ feature: "umrah", action: "create
       [today, scope.companyId]
     );
     let created = 0;
+    let violationsLinked = 0;
     for (const p of overstayed) {
       if (Number(p.daysOver) >= overstayDays) {
         const amount = Number(p.daysOver) * dailyRate;
-        const penRows = await withTransaction(async (client) => {
+        const result = await withTransaction(async (client) => {
           const penRes = await client.query(
             `INSERT INTO umrah_penalties ("companyId","pilgrimId","agentId","seasonId",type,"daysOverstayed",amount,notes)
              VALUES ($1,$2,$3,$4,'overstay',$5,$6,$7) RETURNING id`,
             [scope.companyId, p.id, p.agentId, p.seasonId, p.daysOver, amount, `غرامة تأخر ${p.daysOver} يوم — ${p.fullName}`]
           );
-          return penRes.rows;
+          // DT-2 (C3): attach the operational violation to its financial
+          // penalty. The detection cron writes the umrah_violations row;
+          // this links that row to the penalty just created so the two
+          // parallel systems are no longer disjoint.
+          const penaltyId = penRes.rows[0]?.id;
+          let linked = 0;
+          if (penaltyId) {
+            const upd = await client.query(
+              `UPDATE umrah_violations SET "linkedPenaltyId" = $1, "updatedAt" = NOW()
+               WHERE "mutamerId" = $2 AND type = 'overstay' AND "companyId" = $3
+                 AND "linkedPenaltyId" IS NULL AND "deletedAt" IS NULL`,
+              [penaltyId, p.id, scope.companyId]
+            );
+            linked = upd.rowCount ?? 0;
+          }
+          return { rows: penRes.rows, linked };
         });
+        const penRows = result.rows;
+        violationsLinked += result.linked;
         await applyTransition({
           entity: "umrah_pilgrims",
           id: p.id,
@@ -1153,9 +1171,9 @@ router.post("/run-penalty-engine", authorize({ feature: "umrah", action: "create
         created++;
       }
     }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: 0, after: { checked: overstayed.length, penaltiesCreated: created } }).catch((e) => logger.error(e, "umrah background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.penalty_engine.run", entity: "umrah_penalties", entityId: 0, details: JSON.stringify({ checked: overstayed.length, penaltiesCreated: created }) }).catch((e) => logger.error(e, "umrah background task failed"));
-    res.json({ checked: overstayed.length, penaltiesCreated: created });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_penalties", entityId: 0, after: { checked: overstayed.length, penaltiesCreated: created, violationsLinked } }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.penalty_engine.run", entity: "umrah_penalties", entityId: 0, details: JSON.stringify({ checked: overstayed.length, penaltiesCreated: created, violationsLinked }) }).catch((e) => logger.error(e, "umrah background task failed"));
+    res.json({ checked: overstayed.length, penaltiesCreated: created, violationsLinked });
   } catch (err) { handleRouteError(err, res, "Penalty engine error"); }
 });
 
