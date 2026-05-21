@@ -19,6 +19,9 @@
 //      - any destructive statement (DROP TABLE / TRUNCATE / DROP COLUMN /
 //        DROP DATABASE / DROP SCHEMA) is explicitly acknowledged with a
 //        `-- @policy:destructive` line
+//      - any backward-incompatible statement (ALTER … TYPE / SET NOT NULL /
+//        DROP CONSTRAINT / ADD COLUMN … NOT NULL without DEFAULT) is
+//        explicitly acknowledged with a `-- @policy:breaking` line
 //
 // The allowlist freezes the migrations that pre-date this policy so the
 // guard never retroactively fails historical files — exactly the pattern
@@ -50,13 +53,63 @@ const DESTRUCTIVE_ACK_RE = /--\s*@policy:destructive\b/i;
 const DESTRUCTIVE_RE =
   /\b(?:DROP\s+TABLE|TRUNCATE(?:\s+TABLE)?|DROP\s+COLUMN|DROP\s+DATABASE|DROP\s+SCHEMA)\b/i;
 const NON_IDEMPOTENT_CREATE_RE = /\bCREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS)/i;
+const BREAKING_ACK_RE = /--\s*@policy:breaking\b/i;
+
+// Backward-incompatible ("breaking") changes that do NOT destroy data but
+// break a concurrently-running OLD app version during a rolling deploy
+// (see docs/MIGRATION_POLICY.md §4 + §7/§8). Reversible, unlike DROP/TRUNCATE,
+// yet they still need a conscious, reviewed acknowledgement.
+const BREAKING_STATEMENT_PATTERNS = [
+  {
+    label: "column type change (ALTER … TYPE)",
+    re: /\bALTER\s+(?:COLUMN\s+)?(?:"[^"]+"|[A-Za-z_]\w*)\s+(?:SET\s+DATA\s+)?TYPE\b/i,
+  },
+  { label: "SET NOT NULL on an existing column", re: /\bSET\s+NOT\s+NULL\b/i },
+  { label: "DROP CONSTRAINT", re: /\bDROP\s+CONSTRAINT\b/i },
+];
 
 /** Remove SQL comments + string literals so keyword scans don't false-match. */
-function stripSql(sql) {
+export function stripSql(sql) {
   return sql
     .replace(/\/\*[\s\S]*?\*\//g, " ")
     .replace(/--[^\n]*/g, " ")
     .replace(/'(?:[^']|'')*'/g, "''");
+}
+
+/** Split stripped SQL into individual statements on top-level `;`. */
+export function splitStatements(strippedSql) {
+  return strippedSql
+    .split(";")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+/**
+ * Detect backward-incompatible statements in already-stripped SQL (pass the
+ * output of `stripSql` — comments and string literals removed). Returns a
+ * de-duplicated list of human-readable labels; empty for a purely additive
+ * migration.
+ *
+ * `ADD COLUMN … NOT NULL` counts as breaking ONLY without a DEFAULT: a NOT
+ * NULL add WITH a default, and any NOT NULL inside a fresh `CREATE TABLE`,
+ * are safe and are deliberately not flagged.
+ */
+export function findBreakingStatements(strippedSql) {
+  const found = new Set();
+  for (const { label, re } of BREAKING_STATEMENT_PATTERNS) {
+    if (re.test(strippedSql)) found.add(label);
+  }
+  for (const stmt of splitStatements(strippedSql)) {
+    if (
+      /\bADD\s+(?:COLUMN\s+)?/i.test(stmt) &&
+      /\bNOT\s+NULL\b/i.test(stmt) &&
+      !/\bDEFAULT\b/i.test(stmt)
+    ) {
+      found.add("ADD COLUMN … NOT NULL without a DEFAULT");
+      break;
+    }
+  }
+  return [...found];
 }
 
 function firstNonEmptyLine(content) {
@@ -150,6 +203,17 @@ async function main() {
       );
     }
 
+    const breaking = findBreakingStatements(stripped);
+    if (breaking.length > 0 && !BREAKING_ACK_RE.test(content)) {
+      errors.push(
+        `${file}: contains a backward-incompatible statement ` +
+          `(${breaking.join("; ")}) without a "-- @policy:breaking" ` +
+          "acknowledgement line. A narrowing/locking change breaks the old " +
+          "app version still running during a rolling deploy — it must be " +
+          "explicit and follow expand/contract. See docs/MIGRATION_POLICY.md §4.",
+      );
+    }
+
     if (NON_IDEMPOTENT_CREATE_RE.test(stripped)) {
       warnings.push(
         `${file}: CREATE TABLE without "IF NOT EXISTS" — prefer idempotent ` +
@@ -181,7 +245,11 @@ async function main() {
   );
 }
 
-main().catch((err) => {
-  console.error("[check-migration-policy] crashed:", err);
-  process.exit(1);
-});
+// Run only when executed directly — importing this module (e.g. from
+// check-migration-policy.test.mjs) must not trigger the full check.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((err) => {
+    console.error("[check-migration-policy] crashed:", err);
+    process.exit(1);
+  });
+}

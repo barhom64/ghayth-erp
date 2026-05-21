@@ -15,7 +15,7 @@
 #   7. Cross-domain SQL writes (boundary leak)  → audit:domain-boundaries
 #   8. Domain → routeFile mounting              → audit:domain-routes
 #   9. Migration basename collisions            → check:duplicate-migrations
-#  10. Migration header/rollback/destructive policy → check:migration-policy
+#  10. Migration header/rollback/destructive/breaking policy → check:migration-policy
 #  11. Unit/smoke tests                         → test
 #
 
@@ -70,6 +70,9 @@ fi
 run_step "audit:boundaries"   node scripts/src/audit-domain-boundaries.mjs
 run_step "audit:domain-routes" node scripts/src/audit-domain-routes.mjs
 run_step "check:duplicate-migrations" node scripts/src/check-duplicate-migrations.mjs
+# Pure-logic fixtures for the breaking-change detection — no DB needed,
+# guards the guard itself (same pattern as check:ghost-rows:tests above).
+run_step "check:migration-policy:tests" node scripts/src/check-migration-policy.test.mjs
 run_step "check:migration-policy" node scripts/src/check-migration-policy.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test
 
