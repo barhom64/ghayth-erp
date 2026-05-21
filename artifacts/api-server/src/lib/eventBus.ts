@@ -3,6 +3,8 @@ import { rawExecute, rawQuery } from "./rawdb.js";
 import { logger } from "./logger.js";
 import { isKnownEvent } from "./eventCatalog.js";
 import { setGauge } from "./metrics.js";
+import { getRequestId, runWithCorrelationId } from "./requestContext.js";
+import { randomUUID } from "node:crypto";
 
 export interface EventPayload {
   /** Envelope version — stamped by EventBus.emit (see EVENT_ENVELOPE_VERSION). */
@@ -85,12 +87,37 @@ export function stampEnvelope(
   };
 }
 
+// Transactional-outbox capture (Decision Brief #2, phase 1). Every emitted
+// event is recorded durably in event_outbox. Phase 1 captures only — the
+// in-process dispatch via super.emit is unchanged and remains the active
+// dispatcher; the relay that drains the outbox and the dispatch-source
+// switch land in follow-up PRs. Skipped under the test runner (no DB),
+// mirroring startDlqMaintenance.
+const OUTBOX_CAPTURE_ENABLED =
+  process.env.NODE_ENV !== "test" && !process.env.VITEST;
+
+function captureToOutbox(eventName: string, payload?: EventPayload): void {
+  if (!OUTBOX_CAPTURE_ENABLED) return;
+  // Fire-and-forget — emit() stays synchronous and is never blocked on the DB.
+  void rawExecute(
+    `INSERT INTO event_outbox ("eventName", payload, "companyId")
+     VALUES ($1, $2, $3)`,
+    [
+      eventName,
+      payload != null ? JSON.stringify(payload) : null,
+      payload?.companyId ?? null,
+    ],
+  ).catch((err) => logger.warn(err, "[outbox] failed to capture event"));
+}
+
 class EventBus extends EventEmitter {
   emit(event: EventName, payload?: EventPayload): boolean {
     // Single chokepoint — every emit path (emitEvent, safeEmitEvent, the
     // domain engines, eventCatalog) routes through here, so stamping the
     // envelope once guarantees every event is versioned + timestamped.
-    return super.emit(event, stampEnvelope(payload));
+    const stamped = stampEnvelope(payload);
+    captureToOutbox(event, stamped);
+    return super.emit(event, stamped);
   }
 
   on(event: EventName, listener: (payload: EventPayload) => void): this {
@@ -109,65 +136,22 @@ class EventBus extends EventEmitter {
 export const eventBus = new EventBus();
 eventBus.setMaxListeners(200);
 
-export interface DLQEntry {
-  type: "event" | "notification" | "audit" | "workflow";
-  eventName?: string;
-  payload: unknown;
-  error: string;
-  companyId?: number;
-  retryCount: number;
-  createdAt: Date;
-}
+export type DLQType = "event" | "notification" | "audit" | "workflow";
 
-const MAX_DLQ_BUFFER = 1000;
-const dlqBuffer: DLQEntry[] = [];
-let flushTimer: NodeJS.Timeout | null = null;
-let isFlushing = false;
-
-function scheduleDLQFlush(): void {
-  if (flushTimer || isFlushing) return;
-  flushTimer = setTimeout(async () => {
-    flushTimer = null;
-    isFlushing = true;
-    try {
-      await flushDLQ();
-    } finally {
-      isFlushing = false;
-      if (dlqBuffer.length > 0) scheduleDLQFlush();
-    }
-  }, 5000);
-  // Best-effort: a pending DLQ flush must never hold a shutting-down process
-  // (or a test worker) open.
-  flushTimer.unref();
-}
-
-async function flushDLQ(): Promise<void> {
-  if (dlqBuffer.length === 0) return;
-  const batch = dlqBuffer.splice(0, dlqBuffer.length);
-  for (const entry of batch) {
-    try {
-      await rawExecute(
-        `INSERT INTO event_dlq (type, "eventName", payload, error, "companyId", "retryCount", "createdAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT DO NOTHING`,
-        [
-          entry.type,
-          entry.eventName ?? null,
-          JSON.stringify(entry.payload),
-          entry.error,
-          entry.companyId ?? null,
-          entry.retryCount,
-          entry.createdAt,
-        ]
-      );
-    } catch (dbErr) {
-      logger.error(dbErr, "[DLQ] Failed to persist DLQ entry:");
-    }
-  }
-}
-
+/**
+ * Route a failed event/handler to the dead-letter queue.
+ *
+ * Durable on write — the entry is persisted straight to `event_dlq`.
+ * (It was previously held in an in-memory buffer flushed every 5s, which
+ * lost unflushed entries on process death — routine under autoscale
+ * recycling — and silently dropped the oldest entry on buffer overflow:
+ * RT-FAIL-001 / RT-FAIL-002.)
+ *
+ * Fire-and-forget: the caller is not blocked on the INSERT; a DB failure
+ * is logged. `ON CONFLICT DO NOTHING` keeps the write idempotent.
+ */
 export function pushToDLQ(
-  type: DLQEntry["type"],
+  type: DLQType,
   payload: unknown,
   error: unknown,
   companyId?: number,
@@ -175,12 +159,12 @@ export function pushToDLQ(
   retryCount = 0,
 ): void {
   const errMsg = error instanceof Error ? error.message : String(error);
-  if (dlqBuffer.length >= MAX_DLQ_BUFFER) {
-    logger.error(`[DLQ] Buffer full (${MAX_DLQ_BUFFER} entries) — dropping oldest entry`);
-    dlqBuffer.shift();
-  }
-  dlqBuffer.push({ type, eventName, payload, error: errMsg, companyId, retryCount, createdAt: new Date() });
-  scheduleDLQFlush();
+  void rawExecute(
+    `INSERT INTO event_dlq (type, "eventName", payload, error, "companyId", "retryCount", "createdAt")
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT DO NOTHING`,
+    [type, eventName ?? null, JSON.stringify(payload), errMsg, companyId ?? null, retryCount],
+  ).catch((dbErr) => logger.error(dbErr, "[DLQ] Failed to persist DLQ entry:"));
 }
 
 /** Max attempts for a cross-domain handler before its event is dead-lettered. */
@@ -251,7 +235,13 @@ export function registerCrossDomainHandler(
   handler: (payload: EventPayload) => Promise<void>
 ): void {
   eventBus.on(eventName, (payload: EventPayload) => {
-    void runHandlerWithRetry(eventName, handler, payload);
+    // Keep the correlation id of the emitting unit (an HTTP request, a cron
+    // run) so the handler's logs trace back to what triggered the event;
+    // mint one only when the event was emitted with no ambient context.
+    const reqId = getRequestId() ?? `event-${eventName}-${randomUUID()}`;
+    void runWithCorrelationId(reqId, () =>
+      runHandlerWithRetry(eventName, handler, payload),
+    );
   });
 }
 
@@ -273,15 +263,11 @@ export function safeEmitEvent(payload: unknown & { companyId?: number }): void {
   }
 }
 
-/** Current DLQ buffer length. Test-only — used to assert dead-lettering. */
-export function __dlqBufferLength(): number {
-  return dlqBuffer.length;
-}
-
-// ─────────────────────────── DLQ maintenance ──────────────────────────────
-// `event_dlq` is otherwise a write-only, unbounded table with no visibility.
-// This pass adds the two things it lacked: observability (a `dlq.pending`
-// gauge) and bounded growth (aged entries are purged).
+// ──────────────────────── DLQ & outbox maintenance ────────────────────────
+// `event_dlq` and `event_outbox` are otherwise write-only, unbounded tables
+// with no visibility. This pass adds the two things they lacked:
+// observability (`dlq.pending` / `outbox.pending` gauges) and bounded growth
+// (aged entries are purged).
 //
 // It deliberately does NOT auto-redeliver. A naive re-emit re-runs *every*
 // listener of the event — double-firing the ones that already succeeded.
@@ -330,6 +316,47 @@ export async function purgeAgedDlqEntries(
   return result.affectedRows;
 }
 
+/** event_outbox rows older than this many days are purged. */
+const OUTBOX_RETENTION_DAYS = 7;
+
+export interface OutboxStats {
+  /** event_outbox rows with status 'pending'. */
+  pending: number;
+  /** Age of the oldest row in seconds, or null when the table is empty. */
+  oldestAgeSec: number | null;
+}
+
+/** Count pending event_outbox rows and the age of the oldest. */
+export async function getOutboxStats(): Promise<OutboxStats> {
+  const rows = await rawQuery<{ pending: string; oldest: string | null }>(
+    `SELECT (count(*) FILTER (WHERE status = 'pending'))::text AS pending,
+            extract(epoch FROM (now() - min("createdAt")))::text AS oldest
+       FROM event_outbox`,
+  );
+  const row = rows[0];
+  return {
+    pending: Number(row?.pending ?? 0),
+    oldestAgeSec: row?.oldest != null ? Math.round(Number(row.oldest)) : null,
+  };
+}
+
+/**
+ * Delete aged event_outbox rows. Phase 2 — the outbox is a durable capture
+ * log and the in-process emitter is still the dispatcher, so aged rows are
+ * purged wholesale to bound table growth. When the relay becomes the
+ * dispatcher (phase 3) this MUST become status-aware so an unprocessed
+ * 'pending' row is never purged. Idempotent; safe to run concurrently.
+ */
+export async function purgeAgedOutboxEntries(
+  retentionDays: number = OUTBOX_RETENTION_DAYS,
+): Promise<number> {
+  const result = await rawExecute(
+    `DELETE FROM event_outbox WHERE "createdAt" < now() - make_interval(days => $1)`,
+    [retentionDays],
+  );
+  return result.affectedRows;
+}
+
 async function runDlqMaintenance(): Promise<void> {
   try {
     const purged = await purgeAgedDlqEntries();
@@ -343,6 +370,19 @@ async function runDlqMaintenance(): Promise<void> {
     }
   } catch (err) {
     logger.error(err, "[DLQ] maintenance pass failed");
+  }
+  try {
+    const purged = await purgeAgedOutboxEntries();
+    const stats = await getOutboxStats();
+    setGauge("outbox.pending", stats.pending);
+    if (purged > 0) {
+      logger.info(
+        { purged, pending: stats.pending },
+        "[outbox] maintenance pass — purged aged entries",
+      );
+    }
+  } catch (err) {
+    logger.error(err, "[outbox] maintenance pass failed");
   }
 }
 

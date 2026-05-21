@@ -378,6 +378,13 @@ ALTER TABLE ONLY public.daily_close_log ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
+-- Name: daily_closures id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.daily_closures ALTER COLUMN id SET DEFAULT nextval('public.daily_closures_id_seq'::regclass);
+
+
+--
 -- Name: data_access_requests id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -452,6 +459,13 @@ ALTER TABLE ONLY public.document_entity_links ALTER COLUMN id SET DEFAULT nextva
 --
 
 ALTER TABLE ONLY public.document_folders ALTER COLUMN id SET DEFAULT nextval('public.document_folders_id_seq'::regclass);
+
+
+--
+-- Name: document_ocr_extractions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_ocr_extractions ALTER COLUMN id SET DEFAULT nextval('public.document_ocr_extractions_id_seq'::regclass);
 
 
 --
@@ -557,6 +571,13 @@ ALTER TABLE ONLY public.employee_monthly_attendance ALTER COLUMN id SET DEFAULT 
 --
 
 ALTER TABLE ONLY public.employee_of_month ALTER COLUMN id SET DEFAULT nextval('public.employee_of_month_id_seq'::regclass);
+
+
+--
+-- Name: employee_salary_components id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employee_salary_components ALTER COLUMN id SET DEFAULT nextval('public.employee_salary_components_id_seq'::regclass);
 
 
 --
@@ -756,6 +777,13 @@ ALTER TABLE ONLY public.fx_rates ALTER COLUMN id SET DEFAULT nextval('public.fx_
 
 
 --
+-- Name: fx_realized_postings id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fx_realized_postings ALTER COLUMN id SET DEFAULT nextval('public.fx_realized_postings_id_seq'::regclass);
+
+
+--
 -- Name: fx_revaluation_lines id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -928,6 +956,13 @@ ALTER TABLE ONLY public.hr_overtime_requests ALTER COLUMN id SET DEFAULT nextval
 --
 
 ALTER TABLE ONLY public.hr_violations ALTER COLUMN id SET DEFAULT nextval('public.hr_violations_id_seq'::regclass);
+
+
+--
+-- Name: idempotency_keys id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.idempotency_keys ALTER COLUMN id SET DEFAULT nextval('public.idempotency_keys_id_seq'::regclass);
 
 
 --
@@ -1134,6 +1169,13 @@ ALTER TABLE ONLY public.loan_accounts ALTER COLUMN id SET DEFAULT nextval('publi
 
 
 --
+-- Name: lot_expiry_alerts id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lot_expiry_alerts ALTER COLUMN id SET DEFAULT nextval('public.lot_expiry_alerts_id_seq'::regclass);
+
+
+--
 -- Name: maintenance_requests id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1313,6 +1355,55 @@ ALTER TABLE ONLY public.policy_compliance_actions ALTER COLUMN id SET DEFAULT ne
 --
 
 ALTER TABLE ONLY public.policy_module_links ALTER COLUMN id SET DEFAULT nextval('public.policy_module_links_id_seq'::regclass);
+
+
+--
+-- Name: pricing_actions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_actions ALTER COLUMN id SET DEFAULT nextval('public.pricing_actions_id_seq'::regclass);
+
+
+--
+-- Name: pricing_conditions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_conditions ALTER COLUMN id SET DEFAULT nextval('public.pricing_conditions_id_seq'::regclass);
+
+
+--
+-- Name: pricing_rule_applications id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_rule_applications ALTER COLUMN id SET DEFAULT nextval('public.pricing_rule_applications_id_seq'::regclass);
+
+
+--
+-- Name: pricing_rules id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_rules ALTER COLUMN id SET DEFAULT nextval('public.pricing_rules_id_seq'::regclass);
+
+
+--
+-- Name: print_jobs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_jobs ALTER COLUMN id SET DEFAULT nextval('public.print_jobs_id_seq'::regclass);
+
+
+--
+-- Name: print_reprint_requests id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_reprint_requests ALTER COLUMN id SET DEFAULT nextval('public.print_reprint_requests_id_seq'::regclass);
+
+
+--
+-- Name: print_template_assignments id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_template_assignments ALTER COLUMN id SET DEFAULT nextval('public.print_template_assignments_id_seq'::regclass);
 
 
 --
@@ -1967,6 +2058,13 @@ ALTER TABLE ONLY public.umrah_transport ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
+-- Name: umrah_transport_pilgrims id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_transport_pilgrims ALTER COLUMN id SET DEFAULT nextval('public.umrah_transport_pilgrims_id_seq'::regclass);
+
+
+--
 -- Name: umrah_violations id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2023,6 +2121,13 @@ ALTER TABLE ONLY public.warehouse_cycle_count_lines ALTER COLUMN id SET DEFAULT 
 
 
 --
+-- Name: warehouse_cycle_count_plans id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.warehouse_cycle_count_plans ALTER COLUMN id SET DEFAULT nextval('public.warehouse_cycle_count_plans_id_seq'::regclass);
+
+
+--
 -- Name: warehouse_cycle_counts id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2062,6 +2167,13 @@ ALTER TABLE ONLY public.warehouse_stock_lots ALTER COLUMN id SET DEFAULT nextval
 --
 
 ALTER TABLE ONLY public.warehouse_stock_serials ALTER COLUMN id SET DEFAULT nextval('public.warehouse_stock_serials_id_seq'::regclass);
+
+
+--
+-- Name: warehouses id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.warehouses ALTER COLUMN id SET DEFAULT nextval('public.warehouses_id_seq'::regclass);
 
 
 --
@@ -2114,6 +2226,13 @@ ALTER TABLE ONLY public.workflows ALTER COLUMN id SET DEFAULT nextval('public.wo
 
 
 --
+-- Name: wps_bank_credentials id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.wps_bank_credentials ALTER COLUMN id SET DEFAULT nextval('public.wps_bank_credentials_id_seq'::regclass);
+
+
+--
 -- Name: wps_run_lines id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2125,6 +2244,20 @@ ALTER TABLE ONLY public.wps_run_lines ALTER COLUMN id SET DEFAULT nextval('publi
 --
 
 ALTER TABLE ONLY public.wps_runs ALTER COLUMN id SET DEFAULT nextval('public.wps_runs_id_seq'::regclass);
+
+
+--
+-- Name: wps_skip_alerts id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.wps_skip_alerts ALTER COLUMN id SET DEFAULT nextval('public.wps_skip_alerts_id_seq'::regclass);
+
+
+--
+-- Name: zatca_b2c_pause_events id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.zatca_b2c_pause_events ALTER COLUMN id SET DEFAULT nextval('public.zatca_b2c_pause_events_id_seq'::regclass);
 
 
 --
@@ -2653,6 +2786,22 @@ ALTER TABLE ONLY public.daily_close_log
 
 
 --
+-- Name: daily_closures daily_closures_companyId_date_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.daily_closures
+    ADD CONSTRAINT "daily_closures_companyId_date_key" UNIQUE ("companyId", date);
+
+
+--
+-- Name: daily_closures daily_closures_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.daily_closures
+    ADD CONSTRAINT daily_closures_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: data_access_requests data_access_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2754,6 +2903,14 @@ ALTER TABLE ONLY public.document_entity_links
 
 ALTER TABLE ONLY public.document_folders
     ADD CONSTRAINT document_folders_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: document_ocr_extractions document_ocr_extractions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_ocr_extractions
+    ADD CONSTRAINT document_ocr_extractions_pkey PRIMARY KEY (id);
 
 
 --
@@ -2890,6 +3047,22 @@ ALTER TABLE ONLY public.employee_of_month
 
 ALTER TABLE ONLY public.employee_of_month
     ADD CONSTRAINT employee_of_month_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: employee_salary_components employee_salary_components_assignmentId_componentId_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employee_salary_components
+    ADD CONSTRAINT "employee_salary_components_assignmentId_componentId_key" UNIQUE ("assignmentId", "componentId");
+
+
+--
+-- Name: employee_salary_components employee_salary_components_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employee_salary_components
+    ADD CONSTRAINT employee_salary_components_pkey PRIMARY KEY (id);
 
 
 --
@@ -3157,6 +3330,14 @@ ALTER TABLE ONLY public.fx_rates
 
 
 --
+-- Name: fx_realized_postings fx_realized_postings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fx_realized_postings
+    ADD CONSTRAINT fx_realized_postings_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: fx_revaluation_lines fx_revaluation_lines_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3370,6 +3551,22 @@ ALTER TABLE ONLY public.hr_overtime_requests
 
 ALTER TABLE ONLY public.hr_violations
     ADD CONSTRAINT hr_violations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idempotency_keys idempotency_keys_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.idempotency_keys
+    ADD CONSTRAINT idempotency_keys_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idempotency_keys idempotency_keys_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.idempotency_keys
+    ADD CONSTRAINT idempotency_keys_unique UNIQUE ("companyId", "userId", method, path, key);
 
 
 --
@@ -3629,6 +3826,22 @@ ALTER TABLE ONLY public.loan_accounts
 
 
 --
+-- Name: lot_expiry_alerts lot_expiry_alerts_lotId_thresholdDays_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lot_expiry_alerts
+    ADD CONSTRAINT "lot_expiry_alerts_lotId_thresholdDays_key" UNIQUE ("lotId", "thresholdDays");
+
+
+--
+-- Name: lot_expiry_alerts lot_expiry_alerts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lot_expiry_alerts
+    ADD CONSTRAINT lot_expiry_alerts_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: maintenance_requests maintenance_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3866,6 +4079,78 @@ ALTER TABLE ONLY public.policy_module_links
 
 ALTER TABLE ONLY public.policy_module_links
     ADD CONSTRAINT "policy_module_links_policyId_module_key" UNIQUE ("policyId", module);
+
+
+--
+-- Name: pricing_actions pricing_actions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_actions
+    ADD CONSTRAINT pricing_actions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pricing_actions pricing_actions_ruleId_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_actions
+    ADD CONSTRAINT "pricing_actions_ruleId_key" UNIQUE ("ruleId");
+
+
+--
+-- Name: pricing_conditions pricing_conditions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_conditions
+    ADD CONSTRAINT pricing_conditions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pricing_rule_applications pricing_rule_applications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_rule_applications
+    ADD CONSTRAINT pricing_rule_applications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pricing_rules pricing_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_rules
+    ADD CONSTRAINT pricing_rules_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: print_jobs print_jobs_jobId_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_jobs
+    ADD CONSTRAINT "print_jobs_jobId_key" UNIQUE ("jobId");
+
+
+--
+-- Name: print_jobs print_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_jobs
+    ADD CONSTRAINT print_jobs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: print_reprint_requests print_reprint_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_reprint_requests
+    ADD CONSTRAINT print_reprint_requests_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: print_template_assignments print_template_assignments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_template_assignments
+    ADD CONSTRAINT print_template_assignments_pkey PRIMARY KEY (id);
 
 
 --
@@ -4733,6 +5018,22 @@ ALTER TABLE ONLY public.umrah_sub_agents
 
 
 --
+-- Name: umrah_transport_pilgrims umrah_transport_pilgrims_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_transport_pilgrims
+    ADD CONSTRAINT umrah_transport_pilgrims_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: umrah_transport_pilgrims umrah_transport_pilgrims_transportId_pilgrimId_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_transport_pilgrims
+    ADD CONSTRAINT "umrah_transport_pilgrims_transportId_pilgrimId_key" UNIQUE ("transportId", "pilgrimId");
+
+
+--
 -- Name: umrah_transport umrah_transport_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4821,6 +5122,22 @@ ALTER TABLE ONLY public.warehouse_cycle_count_lines
 
 
 --
+-- Name: warehouse_cycle_count_plans warehouse_cycle_count_plans_companyId_warehouseId_period_pl_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.warehouse_cycle_count_plans
+    ADD CONSTRAINT "warehouse_cycle_count_plans_companyId_warehouseId_period_pl_key" UNIQUE ("companyId", "warehouseId", period, "planType");
+
+
+--
+-- Name: warehouse_cycle_count_plans warehouse_cycle_count_plans_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.warehouse_cycle_count_plans
+    ADD CONSTRAINT warehouse_cycle_count_plans_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: warehouse_cycle_counts warehouse_cycle_counts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4866,6 +5183,14 @@ ALTER TABLE ONLY public.warehouse_stock_lots
 
 ALTER TABLE ONLY public.warehouse_stock_serials
     ADD CONSTRAINT warehouse_stock_serials_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: warehouses warehouses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.warehouses
+    ADD CONSTRAINT warehouses_pkey PRIMARY KEY (id);
 
 
 --
@@ -4941,6 +5266,14 @@ ALTER TABLE ONLY public.workflows
 
 
 --
+-- Name: wps_bank_credentials wps_bank_credentials_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.wps_bank_credentials
+    ADD CONSTRAINT wps_bank_credentials_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: wps_run_lines wps_run_lines_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4965,6 +5298,22 @@ ALTER TABLE ONLY public.wps_settings
 
 
 --
+-- Name: wps_skip_alerts wps_skip_alerts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.wps_skip_alerts
+    ADD CONSTRAINT wps_skip_alerts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: zatca_b2c_pause_events zatca_b2c_pause_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.zatca_b2c_pause_events
+    ADD CONSTRAINT zatca_b2c_pause_events_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: zatca_icv_counters zatca_icv_counters_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4978,14 +5327,6 @@ ALTER TABLE ONLY public.zatca_icv_counters
 
 ALTER TABLE ONLY public.zatca_retry_queue
     ADD CONSTRAINT zatca_retry_queue_pkey PRIMARY KEY (id);
-
-
---
--- Name: zatca_settings zatca_settings_companyId_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.zatca_settings
-    ADD CONSTRAINT "zatca_settings_companyId_key" UNIQUE ("companyId");
 
 
 --
@@ -6167,6 +6508,20 @@ CREATE INDEX idx_doc_entity_links_entity ON public.document_entity_links USING b
 
 
 --
+-- Name: idx_doc_ocr_extractions_company_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_doc_ocr_extractions_company_status ON public.document_ocr_extractions USING btree ("companyId", status) WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: idx_doc_ocr_extractions_document; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_doc_ocr_extractions_document ON public.document_ocr_extractions USING btree ("documentId") WHERE ("deletedAt" IS NULL);
+
+
+--
 -- Name: idx_doc_versions_docid; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6206,6 +6561,20 @@ CREATE INDEX idx_documents_category ON public.documents USING btree (category);
 --
 
 CREATE INDEX idx_documents_companyid ON public.documents USING btree ("companyId");
+
+
+--
+-- Name: idx_documents_ocr_status_pending; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_documents_ocr_status_pending ON public.documents USING btree ("ocrStatus", "createdAt") WHERE (("ocrStatus")::text = 'pending'::text);
+
+
+--
+-- Name: idx_documents_ocr_text_trgm; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_documents_ocr_text_trgm ON public.documents USING gin ("ocrText" public.gin_trgm_ops) WHERE ("ocrText" IS NOT NULL);
 
 
 --
@@ -6255,6 +6624,20 @@ CREATE INDEX idx_ect_plan ON public.employee_commission_tiers USING btree ("plan
 --
 
 CREATE INDEX idx_email_queue_companyid ON public.email_queue USING btree ("companyId");
+
+
+--
+-- Name: idx_emp_salary_comp_company; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_emp_salary_comp_company ON public.employee_salary_components USING btree ("companyId");
+
+
+--
+-- Name: idx_emp_salary_comp_employee; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_emp_salary_comp_employee ON public.employee_salary_components USING btree ("employeeId");
 
 
 --
@@ -6566,6 +6949,13 @@ CREATE INDEX idx_fleet_preventive_plans_companyid ON public.fleet_preventive_pla
 
 
 --
+-- Name: idx_fleet_preventive_plans_deletedat; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fleet_preventive_plans_deletedat ON public.fleet_preventive_plans USING btree ("deletedAt");
+
+
+--
 -- Name: idx_fleet_traffic_violations_companyid; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6605,6 +6995,13 @@ CREATE INDEX idx_fx_rates_company ON public.fx_rates USING btree ("companyId");
 --
 
 CREATE INDEX idx_fx_rates_lookup ON public.fx_rates USING btree ("companyId", "fromCurrency", "toCurrency", "effectiveDate" DESC);
+
+
+--
+-- Name: idx_fx_realized_postings_company_posted_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_fx_realized_postings_company_posted_at ON public.fx_realized_postings USING btree ("companyId", "postedAt" DESC);
 
 
 --
@@ -6916,6 +7313,13 @@ CREATE INDEX idx_hr_violations_status ON public.hr_violations USING btree (statu
 
 
 --
+-- Name: idx_idempotency_keys_createdat; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_idempotency_keys_createdat ON public.idempotency_keys USING btree ("createdAt");
+
+
+--
 -- Name: idx_import_batches_company_entity; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7084,10 +7488,24 @@ CREATE INDEX idx_invoices_status ON public.invoices USING btree (status);
 
 
 --
+-- Name: idx_invoices_zatca_b2c_reportable; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_invoices_zatca_b2c_reportable ON public.invoices USING btree ("companyId", "createdAt") WHERE (("isTaxLinked" = true) AND ("deletedAt" IS NULL) AND (("zatcaStatus" IS NULL) OR (("zatcaStatus")::text = ANY ((ARRAY['pending'::character varying, 'queued'::character varying, 'error'::character varying])::text[]))) AND ((("invoiceTypeCode")::text = '388'::text) OR ("invoiceTypeCode" IS NULL)));
+
+
+--
 -- Name: idx_job_applications_deletedat; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_job_applications_deletedat ON public.job_applications USING btree ("deletedAt");
+
+
+--
+-- Name: idx_job_applications_employee; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_job_applications_employee ON public.job_applications USING btree ("createdEmployeeId") WHERE ("createdEmployeeId" IS NOT NULL);
 
 
 --
@@ -7116,6 +7534,13 @@ CREATE INDEX idx_job_titles_companyid ON public.job_titles USING btree ("company
 --
 
 CREATE INDEX idx_journal_entries_approved_by ON public.journal_entries USING btree ("approvedBy");
+
+
+--
+-- Name: idx_journal_entries_original_currency; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_journal_entries_original_currency ON public.journal_entries USING btree ("companyId", "originalCurrency") WHERE (("originalCurrency" IS NOT NULL) AND ("originalCurrency" <> 'SAR'::bpchar));
 
 
 --
@@ -7252,10 +7677,24 @@ CREATE INDEX idx_legal_judgments_companyid ON public.legal_judgments USING btree
 
 
 --
+-- Name: idx_legal_sessions_deletedat; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_legal_sessions_deletedat ON public.legal_sessions USING btree ("deletedAt");
+
+
+--
 -- Name: idx_loan_accounts_companyid; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_loan_accounts_companyid ON public.loan_accounts USING btree ("companyId");
+
+
+--
+-- Name: idx_lot_expiry_alerts_company; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_lot_expiry_alerts_company ON public.lot_expiry_alerts USING btree ("companyId", "alertedAt");
 
 
 --
@@ -7357,6 +7796,13 @@ CREATE INDEX idx_notification_webhooks_companyid ON public.notification_webhooks
 
 
 --
+-- Name: idx_notifications_ack; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notifications_ack ON public.notifications USING btree ("requiresAck", "acknowledgedAt") WHERE ("requiresAck" = true);
+
+
+--
 -- Name: idx_notifications_companyid; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7382,6 +7828,13 @@ CREATE INDEX idx_obligations_entity ON public.obligations USING btree ("companyI
 --
 
 CREATE INDEX idx_obligations_scan ON public.obligations USING btree (status, "dueAt");
+
+
+--
+-- Name: idx_official_letters_source; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_official_letters_source ON public.official_letters USING btree ("sourceRequestType", "sourceRequestId");
 
 
 --
@@ -7910,6 +8363,13 @@ CREATE INDEX idx_rfm_segment ON public.client_rfm_scores USING btree ("companyId
 
 
 --
+-- Name: idx_role_permissions_branchid; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_role_permissions_branchid ON public.role_permissions USING btree ("branchId") WHERE ("branchId" IS NOT NULL);
+
+
+--
 -- Name: idx_role_permissions_role; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7935,6 +8395,13 @@ CREATE INDEX idx_routing_rules_company ON public.notification_routing_rules USIN
 --
 
 CREATE INDEX idx_routing_rules_event ON public.notification_routing_rules USING btree ("eventCategory");
+
+
+--
+-- Name: idx_salary_history_company; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_salary_history_company ON public.salary_history USING btree ("companyId");
 
 
 --
@@ -8033,6 +8500,13 @@ CREATE INDEX idx_store_order_items_order ON public.store_order_items USING btree
 --
 
 CREATE INDEX idx_store_orders_journal ON public.store_orders USING btree ("journalEntryId") WHERE ("journalEntryId" IS NOT NULL);
+
+
+--
+-- Name: idx_support_tickets_branchid; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_support_tickets_branchid ON public.support_tickets USING btree ("branchId") WHERE ("branchId" IS NOT NULL);
 
 
 --
@@ -8190,6 +8664,13 @@ CREATE INDEX idx_umrah_agent_invoices_agent ON public.umrah_agent_invoices USING
 
 
 --
+-- Name: idx_umrah_agent_invoices_branch_alive; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_umrah_agent_invoices_branch_alive ON public.umrah_agent_invoices USING btree ("branchId") WHERE ("deletedAt" IS NULL);
+
+
+--
 -- Name: idx_umrah_agent_invoices_company; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8208,6 +8689,13 @@ CREATE INDEX idx_umrah_agent_invoices_companyid ON public.umrah_agent_invoices U
 --
 
 CREATE INDEX idx_umrah_agent_invoices_season ON public.umrah_agent_invoices USING btree ("seasonId");
+
+
+--
+-- Name: idx_umrah_import_batches_branch_alive; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_umrah_import_batches_branch_alive ON public.umrah_import_batches USING btree ("branchId") WHERE ("deletedAt" IS NULL);
 
 
 --
@@ -8246,6 +8734,13 @@ CREATE INDEX idx_umrah_import_changes_entity ON public.umrah_import_changes USIN
 
 
 --
+-- Name: idx_umrah_import_logs_branch_alive; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_umrah_import_logs_branch_alive ON public.umrah_import_logs USING btree ("branchId") WHERE ("deletedAt" IS NULL);
+
+
+--
 -- Name: idx_umrah_import_logs_companyid; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8271,6 +8766,13 @@ CREATE INDEX idx_umrah_nusk_invoices_companyid ON public.umrah_nusk_invoices USI
 --
 
 CREATE INDEX idx_umrah_nusk_invoices_deletedat ON public.umrah_nusk_invoices USING btree ("deletedAt");
+
+
+--
+-- Name: idx_umrah_packages_branch_alive; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_umrah_packages_branch_alive ON public.umrah_packages USING btree ("branchId") WHERE ("deletedAt" IS NULL);
 
 
 --
@@ -8327,6 +8829,13 @@ CREATE INDEX idx_umrah_payments_deletedat ON public.umrah_payments USING btree (
 --
 
 CREATE INDEX idx_umrah_penalties_agent ON public.umrah_penalties USING btree ("agentId");
+
+
+--
+-- Name: idx_umrah_penalties_branch_alive; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_umrah_penalties_branch_alive ON public.umrah_penalties USING btree ("branchId") WHERE ("deletedAt" IS NULL);
 
 
 --
@@ -8456,6 +8965,13 @@ CREATE INDEX idx_umrah_sales_invoices_deletedat ON public.umrah_sales_invoices U
 
 
 --
+-- Name: idx_umrah_seasons_branch_alive; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_umrah_seasons_branch_alive ON public.umrah_seasons USING btree ("branchId") WHERE ("deletedAt" IS NULL);
+
+
+--
 -- Name: idx_umrah_seasons_companyid; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8484,6 +9000,13 @@ CREATE INDEX idx_umrah_sub_agents_deletedat ON public.umrah_sub_agents USING btr
 
 
 --
+-- Name: idx_umrah_transport_branch_alive; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_umrah_transport_branch_alive ON public.umrah_transport USING btree ("branchId") WHERE ("deletedAt" IS NULL);
+
+
+--
 -- Name: idx_umrah_transport_companyid; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8495,6 +9018,20 @@ CREATE INDEX idx_umrah_transport_companyid ON public.umrah_transport USING btree
 --
 
 CREATE INDEX idx_umrah_transport_deletedat ON public.umrah_transport USING btree ("deletedAt");
+
+
+--
+-- Name: idx_umrah_transport_pilgrims_pilgrim; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_umrah_transport_pilgrims_pilgrim ON public.umrah_transport_pilgrims USING btree ("pilgrimId");
+
+
+--
+-- Name: idx_umrah_transport_pilgrims_transport; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_umrah_transport_pilgrims_transport ON public.umrah_transport_pilgrims USING btree ("transportId");
 
 
 --
@@ -8519,6 +9056,13 @@ CREATE INDEX idx_umrah_violations_deletedat ON public.umrah_violations USING btr
 
 
 --
+-- Name: idx_umrah_violations_responsible_assignment; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_umrah_violations_responsible_assignment ON public.umrah_violations USING btree ("responsibleAssignmentId") WHERE (("deletedAt" IS NULL) AND ("responsibleAssignmentId" IS NOT NULL));
+
+
+--
 -- Name: idx_user_roles_companyid; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8530,6 +9074,13 @@ CREATE INDEX idx_user_roles_companyid ON public.user_roles USING btree ("company
 --
 
 CREATE INDEX idx_user_sessions_user ON public.user_sessions USING btree ("userId", "expiresAt");
+
+
+--
+-- Name: idx_violations_excluded; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_violations_excluded ON public.employee_violations USING btree ("excludedByLeave") WHERE ("excludedByLeave" = true);
 
 
 --
@@ -8551,6 +9102,76 @@ CREATE INDEX idx_warehouse_categories_companyid ON public.warehouse_categories U
 --
 
 CREATE INDEX idx_warehouse_categories_deletedat ON public.warehouse_categories USING btree ("deletedAt");
+
+
+--
+-- Name: idx_warehouse_cycle_counts_plan; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_warehouse_cycle_counts_plan ON public.warehouse_cycle_counts USING btree ("planId") WHERE ("planId" IS NOT NULL);
+
+
+--
+-- Name: idx_warehouse_movements_lot; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_warehouse_movements_lot ON public.warehouse_movements USING btree ("lotId") WHERE ("lotId" IS NOT NULL);
+
+
+--
+-- Name: idx_warehouse_movements_serial; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_warehouse_movements_serial ON public.warehouse_movements USING btree ("serialId") WHERE ("serialId" IS NOT NULL);
+
+
+--
+-- Name: idx_warehouse_stock_serials_lot; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_warehouse_stock_serials_lot ON public.warehouse_stock_serials USING btree ("lotId");
+
+
+--
+-- Name: idx_warehouse_stock_serials_product; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_warehouse_stock_serials_product ON public.warehouse_stock_serials USING btree ("productId");
+
+
+--
+-- Name: idx_warehouse_stock_serials_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_warehouse_stock_serials_status ON public.warehouse_stock_serials USING btree ("companyId", status);
+
+
+--
+-- Name: idx_warehouse_stock_serials_warehouse; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_warehouse_stock_serials_warehouse ON public.warehouse_stock_serials USING btree ("warehouseId");
+
+
+--
+-- Name: idx_warehouses_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_warehouses_active ON public.warehouses USING btree ("companyId") WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: idx_warehouses_branch; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_warehouses_branch ON public.warehouses USING btree ("branchId");
+
+
+--
+-- Name: idx_warehouses_company; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_warehouses_company ON public.warehouses USING btree ("companyId");
 
 
 --
@@ -8652,10 +9273,24 @@ CREATE INDEX idx_wps_lines_run ON public.wps_run_lines USING btree ("wpsRunId");
 
 
 --
+-- Name: idx_wps_runs_delivery_pending; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_wps_runs_delivery_pending ON public.wps_runs USING btree ("deliveryChannel", status, "lastPolledAt") WHERE (("deliveryChannel" IS NOT NULL) AND ((status)::text = ANY ((ARRAY['submitted'::character varying, 'partial'::character varying])::text[])));
+
+
+--
 -- Name: idx_wps_runs_status_period; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_wps_runs_status_period ON public.wps_runs USING btree (status, period);
+
+
+--
+-- Name: idx_wps_skip_alerts_company_period; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_wps_skip_alerts_company_period ON public.wps_skip_alerts USING btree ("companyId", period);
 
 
 --
@@ -8687,10 +9322,24 @@ CREATE INDEX idx_zatca_retry_queue_due ON public.zatca_retry_queue USING btree (
 
 
 --
+-- Name: idx_zatca_settings_branchid; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_zatca_settings_branchid ON public.zatca_settings USING btree ("branchId") WHERE ("branchId" IS NOT NULL);
+
+
+--
 -- Name: idx_zatca_settings_companyid; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_zatca_settings_companyid ON public.zatca_settings USING btree ("companyId");
+
+
+--
+-- Name: idx_zatca_submission_log_pending; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_zatca_submission_log_pending ON public.zatca_submission_log USING btree ("companyId", "createdAt" DESC) WHERE ((status)::text = ANY ((ARRAY['pending'::character varying, 'submitted'::character varying])::text[]));
 
 
 --
@@ -8806,6 +9455,13 @@ CREATE INDEX leave_balances_employee_idx ON public.leave_balances USING btree ("
 
 
 --
+-- Name: mudad_settlements_journal_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX mudad_settlements_journal_idx ON public.mudad_settlements USING btree ("journalEntryId") WHERE ("journalEntryId" IS NOT NULL);
+
+
+--
 -- Name: official_letters_branch_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8862,6 +9518,13 @@ CREATE INDEX payroll_runs_deleted_at_idx ON public.payroll_runs USING btree ("de
 
 
 --
+-- Name: pc_rule_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX pc_rule_idx ON public.pricing_conditions USING btree ("ruleId");
+
+
+--
 -- Name: peer_evaluations_company_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8915,6 +9578,76 @@ CREATE UNIQUE INDEX permissions_user_perm_company_uq ON public.permissions USING
 --
 
 CREATE UNIQUE INDEX permissions_user_perm_global_uq ON public.permissions USING btree ("userId", permission) WHERE ("companyId" IS NULL);
+
+
+--
+-- Name: pr_company_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX pr_company_idx ON public.pricing_rules USING btree ("companyId");
+
+
+--
+-- Name: pr_deleted_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX pr_deleted_idx ON public.pricing_rules USING btree ("deletedAt");
+
+
+--
+-- Name: pr_priority_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX pr_priority_idx ON public.pricing_rules USING btree (priority DESC);
+
+
+--
+-- Name: pr_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX pr_status_idx ON public.pricing_rules USING btree (status);
+
+
+--
+-- Name: pr_validity_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX pr_validity_idx ON public.pricing_rules USING btree ("validFrom", "validTo");
+
+
+--
+-- Name: pra_applied_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX pra_applied_idx ON public.pricing_rule_applications USING btree ("appliedAt");
+
+
+--
+-- Name: pra_client_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX pra_client_idx ON public.pricing_rule_applications USING btree ("clientId");
+
+
+--
+-- Name: pra_company_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX pra_company_idx ON public.pricing_rule_applications USING btree ("companyId");
+
+
+--
+-- Name: pra_entity_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX pra_entity_idx ON public.pricing_rule_applications USING btree ("entityType", "entityId");
+
+
+--
+-- Name: pra_rule_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX pra_rule_idx ON public.pricing_rule_applications USING btree ("ruleId");
 
 
 --
@@ -8995,17 +9728,24 @@ CREATE INDEX role_permissions_role_company_idx ON public.role_permissions USING 
 
 
 --
+-- Name: role_permissions_role_perm_branch_uq; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX role_permissions_role_perm_branch_uq ON public.role_permissions USING btree (role, permission, "companyId", "branchId") WHERE ("branchId" IS NOT NULL);
+
+
+--
 -- Name: role_permissions_role_perm_company_uq; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX role_permissions_role_perm_company_uq ON public.role_permissions USING btree (role, permission, "companyId") WHERE ("companyId" IS NOT NULL);
+CREATE UNIQUE INDEX role_permissions_role_perm_company_uq ON public.role_permissions USING btree (role, permission, "companyId") WHERE (("companyId" IS NOT NULL) AND ("branchId" IS NULL));
 
 
 --
 -- Name: role_permissions_role_perm_global_uq; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX role_permissions_role_perm_global_uq ON public.role_permissions USING btree (role, permission) WHERE ("companyId" IS NULL);
+CREATE UNIQUE INDEX role_permissions_role_perm_global_uq ON public.role_permissions USING btree (role, permission) WHERE (("companyId" IS NULL) AND ("branchId" IS NULL));
 
 
 --
@@ -9114,6 +9854,13 @@ CREATE UNIQUE INDEX uq_fx_rates_company_pair_date ON public.fx_rates USING btree
 
 
 --
+-- Name: uq_fx_realized_postings_triple; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_fx_realized_postings_triple ON public.fx_realized_postings USING btree ("companyId", "invoiceId", "paymentDate", "settlementRate");
+
+
+--
 -- Name: uq_goods_receipts_ref; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9149,10 +9896,31 @@ CREATE UNIQUE INDEX uq_serials_company_serial ON public.warehouse_stock_serials 
 
 
 --
+-- Name: uq_warehouse_stock_serials_company_serial; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_warehouse_stock_serials_company_serial ON public.warehouse_stock_serials USING btree ("companyId", "serialNumber") WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: uq_wps_bank_credentials_company_bank; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_wps_bank_credentials_company_bank ON public.wps_bank_credentials USING btree ("companyId", "bankCode");
+
+
+--
 -- Name: uq_wps_runs_company_period_bank; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX uq_wps_runs_company_period_bank ON public.wps_runs USING btree ("companyId", period, "bankCode");
+
+
+--
+-- Name: uq_wps_skip_alerts_company_run; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_wps_skip_alerts_company_run ON public.wps_skip_alerts USING btree ("companyId", "wpsRunId");
 
 
 --
@@ -9174,6 +9942,48 @@ CREATE INDEX viol_memo_idx ON public.employee_violations USING btree ("inquiryMe
 --
 
 CREATE INDEX viol_regulation_idx ON public.employee_violations USING btree ("regulationId") WHERE ("regulationId" IS NOT NULL);
+
+
+--
+-- Name: warehouse_movements_gl_status_failed_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX warehouse_movements_gl_status_failed_idx ON public.warehouse_movements USING btree ("companyId", "glStatus") WHERE (("glStatus")::text = 'failed'::text);
+
+
+--
+-- Name: warehouse_stock_lots_writeoff_journal_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX warehouse_stock_lots_writeoff_journal_idx ON public.warehouse_stock_lots USING btree ("writeoffJournalEntryId") WHERE ("writeoffJournalEntryId" IS NOT NULL);
+
+
+--
+-- Name: zatca_b2c_pause_events_company_created_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX zatca_b2c_pause_events_company_created_idx ON public.zatca_b2c_pause_events USING btree ("companyId", "createdAt" DESC);
+
+
+--
+-- Name: zatca_b2c_pause_events_company_day_uk; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX zatca_b2c_pause_events_company_day_uk ON public.zatca_b2c_pause_events USING btree ("companyId", "pauseDate");
+
+
+--
+-- Name: zatca_settings_company_branch_uq; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX zatca_settings_company_branch_uq ON public.zatca_settings USING btree ("companyId", "branchId") WHERE ("branchId" IS NOT NULL);
+
+
+--
+-- Name: zatca_settings_company_default_uq; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX zatca_settings_company_default_uq ON public.zatca_settings USING btree ("companyId") WHERE ("branchId" IS NULL);
 
 
 --
@@ -10177,6 +10987,30 @@ ALTER TABLE ONLY public.fx_rates
 
 
 --
+-- Name: fx_realized_postings fx_realized_postings_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fx_realized_postings
+    ADD CONSTRAINT "fx_realized_postings_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: fx_realized_postings fx_realized_postings_invoiceId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fx_realized_postings
+    ADD CONSTRAINT "fx_realized_postings_invoiceId_fkey" FOREIGN KEY ("invoiceId") REFERENCES public.invoices(id);
+
+
+--
+-- Name: fx_realized_postings fx_realized_postings_journalEntryId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fx_realized_postings
+    ADD CONSTRAINT "fx_realized_postings_journalEntryId_fkey" FOREIGN KEY ("journalEntryId") REFERENCES public.journal_entries(id);
+
+
+--
 -- Name: fx_revaluation_lines fx_revaluation_lines_revaluationLogId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -10921,6 +11755,14 @@ ALTER TABLE ONLY public.loan_accounts
 
 
 --
+-- Name: lot_expiry_alerts lot_expiry_alerts_lotId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lot_expiry_alerts
+    ADD CONSTRAINT "lot_expiry_alerts_lotId_fkey" FOREIGN KEY ("lotId") REFERENCES public.warehouse_stock_lots(id) ON DELETE CASCADE;
+
+
+--
 -- Name: maintenance_requests maintenance_requests_contractId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -11206,6 +12048,118 @@ ALTER TABLE ONLY public.policy_module_links
 
 ALTER TABLE ONLY public.policy_module_links
     ADD CONSTRAINT "policy_module_links_policyId_fkey" FOREIGN KEY ("policyId") REFERENCES public.governance_policies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pricing_actions pricing_actions_ruleId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_actions
+    ADD CONSTRAINT "pricing_actions_ruleId_fkey" FOREIGN KEY ("ruleId") REFERENCES public.pricing_rules(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pricing_conditions pricing_conditions_ruleId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_conditions
+    ADD CONSTRAINT "pricing_conditions_ruleId_fkey" FOREIGN KEY ("ruleId") REFERENCES public.pricing_rules(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pricing_rule_applications pricing_rule_applications_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_rule_applications
+    ADD CONSTRAINT "pricing_rule_applications_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: pricing_rule_applications pricing_rule_applications_ruleId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_rule_applications
+    ADD CONSTRAINT "pricing_rule_applications_ruleId_fkey" FOREIGN KEY ("ruleId") REFERENCES public.pricing_rules(id);
+
+
+--
+-- Name: pricing_rules pricing_rules_branchId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_rules
+    ADD CONSTRAINT "pricing_rules_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id);
+
+
+--
+-- Name: pricing_rules pricing_rules_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pricing_rules
+    ADD CONSTRAINT "pricing_rules_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: print_jobs print_jobs_branchId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_jobs
+    ADD CONSTRAINT "print_jobs_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id) ON DELETE SET NULL;
+
+
+--
+-- Name: print_jobs print_jobs_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_jobs
+    ADD CONSTRAINT "print_jobs_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: print_jobs print_jobs_templateId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_jobs
+    ADD CONSTRAINT "print_jobs_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES public.document_templates(id) ON DELETE SET NULL;
+
+
+--
+-- Name: print_reprint_requests print_reprint_requests_branchId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_reprint_requests
+    ADD CONSTRAINT "print_reprint_requests_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id) ON DELETE SET NULL;
+
+
+--
+-- Name: print_reprint_requests print_reprint_requests_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_reprint_requests
+    ADD CONSTRAINT "print_reprint_requests_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: print_template_assignments print_template_assignments_branchId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_template_assignments
+    ADD CONSTRAINT "print_template_assignments_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id) ON DELETE CASCADE;
+
+
+--
+-- Name: print_template_assignments print_template_assignments_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_template_assignments
+    ADD CONSTRAINT "print_template_assignments_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: print_template_assignments print_template_assignments_templateId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_template_assignments
+    ADD CONSTRAINT "print_template_assignments_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES public.document_templates(id) ON DELETE CASCADE;
 
 
 --
@@ -11577,6 +12531,14 @@ ALTER TABLE ONLY public.requests
 
 
 --
+-- Name: role_permissions role_permissions_branchId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.role_permissions
+    ADD CONSTRAINT "role_permissions_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id) ON DELETE CASCADE;
+
+
+--
 -- Name: role_permissions role_permissions_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -11678,6 +12640,14 @@ ALTER TABLE ONLY public.subsidiary_accounts
 
 ALTER TABLE ONLY public.subsidiary_accounts
     ADD CONSTRAINT "subsidiary_accounts_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: support_tickets support_tickets_branchId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.support_tickets
+    ADD CONSTRAINT "support_tickets_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id);
 
 
 --
@@ -11801,11 +12771,51 @@ ALTER TABLE ONLY public.umrah_agent_invoices
 
 
 --
+-- Name: umrah_agent_invoices umrah_agent_invoices_branchId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_agent_invoices
+    ADD CONSTRAINT "umrah_agent_invoices_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id);
+
+
+--
+-- Name: umrah_agent_invoices umrah_agent_invoices_createdBy_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_agent_invoices
+    ADD CONSTRAINT "umrah_agent_invoices_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES public.users(id);
+
+
+--
 -- Name: umrah_agent_invoices umrah_agent_invoices_seasonId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.umrah_agent_invoices
     ADD CONSTRAINT "umrah_agent_invoices_seasonId_fkey" FOREIGN KEY ("seasonId") REFERENCES public.umrah_seasons(id);
+
+
+--
+-- Name: umrah_agent_invoices umrah_agent_invoices_updatedBy_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_agent_invoices
+    ADD CONSTRAINT "umrah_agent_invoices_updatedBy_fkey" FOREIGN KEY ("updatedBy") REFERENCES public.users(id);
+
+
+--
+-- Name: umrah_import_batches umrah_import_batches_createdBy_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_import_batches
+    ADD CONSTRAINT "umrah_import_batches_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES public.users(id);
+
+
+--
+-- Name: umrah_import_batches umrah_import_batches_updatedBy_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_import_batches
+    ADD CONSTRAINT "umrah_import_batches_updatedBy_fkey" FOREIGN KEY ("updatedBy") REFERENCES public.users(id);
 
 
 --
@@ -11817,6 +12827,22 @@ ALTER TABLE ONLY public.umrah_import_changes
 
 
 --
+-- Name: umrah_import_logs umrah_import_logs_branchId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_import_logs
+    ADD CONSTRAINT "umrah_import_logs_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id);
+
+
+--
+-- Name: umrah_import_logs umrah_import_logs_createdBy_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_import_logs
+    ADD CONSTRAINT "umrah_import_logs_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES public.users(id);
+
+
+--
 -- Name: umrah_import_logs umrah_import_logs_seasonId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -11825,11 +12851,43 @@ ALTER TABLE ONLY public.umrah_import_logs
 
 
 --
+-- Name: umrah_import_logs umrah_import_logs_updatedBy_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_import_logs
+    ADD CONSTRAINT "umrah_import_logs_updatedBy_fkey" FOREIGN KEY ("updatedBy") REFERENCES public.users(id);
+
+
+--
+-- Name: umrah_packages umrah_packages_branchId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_packages
+    ADD CONSTRAINT "umrah_packages_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id);
+
+
+--
+-- Name: umrah_packages umrah_packages_createdBy_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_packages
+    ADD CONSTRAINT "umrah_packages_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES public.users(id);
+
+
+--
 -- Name: umrah_packages umrah_packages_seasonId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.umrah_packages
     ADD CONSTRAINT "umrah_packages_seasonId_fkey" FOREIGN KEY ("seasonId") REFERENCES public.umrah_seasons(id);
+
+
+--
+-- Name: umrah_packages umrah_packages_updatedBy_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_packages
+    ADD CONSTRAINT "umrah_packages_updatedBy_fkey" FOREIGN KEY ("updatedBy") REFERENCES public.users(id);
 
 
 --
@@ -11865,6 +12923,22 @@ ALTER TABLE ONLY public.umrah_penalties
 
 
 --
+-- Name: umrah_penalties umrah_penalties_branchId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_penalties
+    ADD CONSTRAINT "umrah_penalties_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id);
+
+
+--
+-- Name: umrah_penalties umrah_penalties_createdBy_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_penalties
+    ADD CONSTRAINT "umrah_penalties_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES public.users(id);
+
+
+--
 -- Name: umrah_penalties umrah_penalties_pilgrimId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -11878,6 +12952,14 @@ ALTER TABLE ONLY public.umrah_penalties
 
 ALTER TABLE ONLY public.umrah_penalties
     ADD CONSTRAINT "umrah_penalties_seasonId_fkey" FOREIGN KEY ("seasonId") REFERENCES public.umrah_seasons(id);
+
+
+--
+-- Name: umrah_penalties umrah_penalties_updatedBy_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_penalties
+    ADD CONSTRAINT "umrah_penalties_updatedBy_fkey" FOREIGN KEY ("updatedBy") REFERENCES public.users(id);
 
 
 --
@@ -11945,11 +13027,43 @@ ALTER TABLE ONLY public.umrah_sales_invoices
 
 
 --
+-- Name: umrah_transport umrah_transport_branchId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_transport
+    ADD CONSTRAINT "umrah_transport_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id);
+
+
+--
+-- Name: umrah_transport umrah_transport_createdBy_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_transport
+    ADD CONSTRAINT "umrah_transport_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES public.users(id);
+
+
+--
 -- Name: umrah_transport umrah_transport_seasonId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.umrah_transport
     ADD CONSTRAINT "umrah_transport_seasonId_fkey" FOREIGN KEY ("seasonId") REFERENCES public.umrah_seasons(id);
+
+
+--
+-- Name: umrah_transport umrah_transport_updatedBy_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_transport
+    ADD CONSTRAINT "umrah_transport_updatedBy_fkey" FOREIGN KEY ("updatedBy") REFERENCES public.users(id);
+
+
+--
+-- Name: umrah_violations umrah_violations_responsibleAssignmentId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.umrah_violations
+    ADD CONSTRAINT "umrah_violations_responsibleAssignmentId_fkey" FOREIGN KEY ("responsibleAssignmentId") REFERENCES public.employee_assignments(id);
 
 
 --
@@ -12025,6 +13139,14 @@ ALTER TABLE ONLY public.warehouse_cycle_count_lines
 
 
 --
+-- Name: warehouse_cycle_count_plans warehouse_cycle_count_plans_warehouseId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.warehouse_cycle_count_plans
+    ADD CONSTRAINT "warehouse_cycle_count_plans_warehouseId_fkey" FOREIGN KEY ("warehouseId") REFERENCES public.warehouses(id);
+
+
+--
 -- Name: warehouse_cycle_counts warehouse_cycle_counts_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12033,11 +13155,35 @@ ALTER TABLE ONLY public.warehouse_cycle_counts
 
 
 --
+-- Name: warehouse_cycle_counts warehouse_cycle_counts_planId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.warehouse_cycle_counts
+    ADD CONSTRAINT "warehouse_cycle_counts_planId_fkey" FOREIGN KEY ("planId") REFERENCES public.warehouse_cycle_count_plans(id);
+
+
+--
+-- Name: warehouse_movements warehouse_movements_lotId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.warehouse_movements
+    ADD CONSTRAINT "warehouse_movements_lotId_fkey" FOREIGN KEY ("lotId") REFERENCES public.warehouse_stock_lots(id);
+
+
+--
 -- Name: warehouse_movements warehouse_movements_productId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.warehouse_movements
     ADD CONSTRAINT "warehouse_movements_productId_fkey" FOREIGN KEY ("productId") REFERENCES public.warehouse_products(id);
+
+
+--
+-- Name: warehouse_movements warehouse_movements_serialId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.warehouse_movements
+    ADD CONSTRAINT "warehouse_movements_serialId_fkey" FOREIGN KEY ("serialId") REFERENCES public.warehouse_stock_serials(id);
 
 
 --
@@ -12121,6 +13267,14 @@ ALTER TABLE ONLY public.workflows
 
 
 --
+-- Name: wps_bank_credentials wps_bank_credentials_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.wps_bank_credentials
+    ADD CONSTRAINT "wps_bank_credentials_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
 -- Name: wps_run_lines wps_run_lines_wpsRunId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12142,6 +13296,14 @@ ALTER TABLE ONLY public.wps_runs
 
 ALTER TABLE ONLY public.wps_settings
     ADD CONSTRAINT "wps_settings_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: wps_skip_alerts wps_skip_alerts_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.wps_skip_alerts
+    ADD CONSTRAINT "wps_skip_alerts_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
 
 
 --
@@ -12169,6 +13331,14 @@ ALTER TABLE ONLY public.zatca_retry_queue
 
 
 --
+-- Name: zatca_settings zatca_settings_branchId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.zatca_settings
+    ADD CONSTRAINT "zatca_settings_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id);
+
+
+--
 -- Name: zatca_settings zatca_settings_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12185,139 +13355,8 @@ ALTER TABLE ONLY public.zatca_submission_log
 
 
 --
--- Print Engine v2 — tables and document_templates columns added by
--- migrations 171_print_engine_foundations.sql + 172_print_engine_seed.sql.
--- Mirrored here so check:schema-drift sees them in information_schema
--- without having to boot the api-server (which is the place that runs
--- the migrations).
---
-
-ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "entityType" character varying(60);
-ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "paperSize" character varying(20) DEFAULT 'A4';
-ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "mode" character varying(10) DEFAULT 'preset';
-ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "presetKey" character varying(40);
-ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "layoutJson" jsonb;
-ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "cssOverrides" text;
-ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "headerOverride" jsonb;
-ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "footerOverride" jsonb;
-ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "version" integer DEFAULT 1;
-ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "isThermal" boolean DEFAULT false;
-ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS "createdBy" integer;
-
-CREATE TABLE IF NOT EXISTS public.print_template_assignments (
-    id serial PRIMARY KEY,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "entityType" character varying(60) NOT NULL,
-    "templateId" integer NOT NULL,
-    "isDefault" boolean DEFAULT true NOT NULL,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "createdBy" integer
-);
-
-ALTER TABLE ONLY public.print_template_assignments
-    ADD CONSTRAINT "print_template_assignments_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.print_template_assignments
-    ADD CONSTRAINT "print_template_assignments_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.print_template_assignments
-    ADD CONSTRAINT "print_template_assignments_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES public.document_templates(id) ON DELETE CASCADE;
-
-CREATE TABLE IF NOT EXISTS public.print_jobs (
-    id serial PRIMARY KEY,
-    "jobId" uuid DEFAULT gen_random_uuid() NOT NULL UNIQUE,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "userId" integer,
-    "entityType" character varying(60) NOT NULL,
-    "entityId" character varying(64) NOT NULL,
-    "templateId" integer,
-    "format" character varying(20) NOT NULL,
-    "paperSize" character varying(20),
-    "copyNumber" integer DEFAULT 1 NOT NULL,
-    "isReprint" boolean DEFAULT false NOT NULL,
-    "watermark" character varying(120),
-    "pdfStorageKey" text,
-    "pdfBytes" integer,
-    "status" character varying(24) DEFAULT 'rendering' NOT NULL,
-    "approvedBy" integer,
-    "approvedAt" timestamp with time zone,
-    "errorMessage" text,
-    "ipAddress" character varying(64),
-    "userAgent" text,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
-);
-
-ALTER TABLE ONLY public.print_jobs
-    ADD CONSTRAINT "print_jobs_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.print_jobs
-    ADD CONSTRAINT "print_jobs_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id) ON DELETE SET NULL;
-ALTER TABLE ONLY public.print_jobs
-    ADD CONSTRAINT "print_jobs_templateId_fkey" FOREIGN KEY ("templateId") REFERENCES public.document_templates(id) ON DELETE SET NULL;
-
-CREATE TABLE IF NOT EXISTS public.print_reprint_requests (
-    id serial PRIMARY KEY,
-    "companyId" integer NOT NULL,
-    "branchId" integer,
-    "entityType" character varying(60) NOT NULL,
-    "entityId" character varying(64) NOT NULL,
-    "requestedBy" integer,
-    "reason" text,
-    "status" character varying(24) DEFAULT 'pending' NOT NULL,
-    "approvedBy" integer,
-    "approvedAt" timestamp with time zone,
-    "rejectedReason" text,
-    "resultJobId" uuid,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
-    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
-);
-
-ALTER TABLE ONLY public.print_reprint_requests
-    ADD CONSTRAINT "print_reprint_requests_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.print_reprint_requests
-    ADD CONSTRAINT "print_reprint_requests_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES public.branches(id) ON DELETE SET NULL;
-
-
---
--- Name: umrah_transport_pilgrims id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.umrah_transport_pilgrims ALTER COLUMN id SET DEFAULT nextval('public.umrah_transport_pilgrims_id_seq'::regclass);
-
-
---
--- Name: umrah_transport_pilgrims umrah_transport_pilgrims_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.umrah_transport_pilgrims
-    ADD CONSTRAINT umrah_transport_pilgrims_pkey PRIMARY KEY (id);
-
-
---
--- Name: umrah_transport_pilgrims umrah_transport_pilgrims_transportId_pilgrimId_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.umrah_transport_pilgrims
-    ADD CONSTRAINT "umrah_transport_pilgrims_transportId_pilgrimId_key" UNIQUE ("transportId", "pilgrimId");
-
-
---
--- Name: idx_umrah_transport_pilgrims_transport; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_umrah_transport_pilgrims_transport ON public.umrah_transport_pilgrims USING btree ("transportId");
-
-
---
--- Name: idx_umrah_transport_pilgrims_pilgrim; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_umrah_transport_pilgrims_pilgrim ON public.umrah_transport_pilgrims USING btree ("pilgrimId");
-
-
---
 -- PostgreSQL database dump complete
 --
 
-\unrestrict H0CUdY3LSk7vOjI6ZlPwPxuZAuIfbBetcRNTuwn8AO71HecXOYoIPEMfp1mVHFf
+\unrestrict PJZYf5tQGQlQSQsTq0FUcDsPHrPiGC9XO0zojxPgva1FIspPzAXLvMevQgkqaIw
 

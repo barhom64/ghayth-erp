@@ -1,3 +1,4 @@
+import { startTracing, stopTracing } from "./lib/tracing.js";
 import app from "./app.js";
 import { logger } from "./lib/logger.js";
 import { runMigrations } from "./lib/migrate.js";
@@ -16,6 +17,10 @@ import { config, assertEnvOrExit, describeConfig } from "./lib/config.js";
 import http from "http";
 import fs from "node:fs";
 import path from "node:path";
+
+// Start OpenTelemetry tracing first so HTTP instrumentation is installed
+// before the server is created. No-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set.
+startTracing();
 
 // Fail-fast: validate the whole environment before any other startup work.
 // lib/config.ts is the single source of truth — it parses and validates every
@@ -146,6 +151,7 @@ async function start() {
 
     stopRuntimeTelemetry();
     stopAlertEvaluation();
+    await stopTracing();
 
     server.close(async (err) => {
       if (err) {
