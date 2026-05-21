@@ -1,12 +1,12 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, FileText, Users, Package, Calendar, Wallet } from "lucide-react";
+import { FileText, Users, Package, Calendar, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
@@ -33,7 +33,6 @@ function statusTone(status?: string | null) {
 }
 
 export default function UmrahInvoiceDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/umrah/invoices/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("umrah-invoice", id ?? 0);
@@ -143,10 +142,6 @@ export default function UmrahInvoiceDetail() {
     });
     return sections;
   }, [invoice, amount, paidAmount, remainingAmount, payments, id]);
-
-  const handleEdit = () => {
-    setLocation(`/umrah/invoices/${id}/edit`);
-  };
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -328,16 +323,6 @@ export default function UmrahInvoiceDetail() {
               formats={["a4"]}
             />
           )}
-          <GuardedButton
-            perm="operations:update"
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-            disabled={!invoice || ["paid", "cancelled"].includes(invoice.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

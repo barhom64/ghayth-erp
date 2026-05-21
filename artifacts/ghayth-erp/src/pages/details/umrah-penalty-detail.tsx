@@ -1,12 +1,12 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, AlertTriangle, Users, Calendar } from "lucide-react";
+import { AlertTriangle, Users, Calendar } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
@@ -39,7 +39,6 @@ function statusTone(status?: string | null) {
 }
 
 export default function UmrahPenaltyDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/umrah/penalties/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("umrah-penalty", id ?? 0);
@@ -125,10 +124,6 @@ export default function UmrahPenaltyDetail() {
     });
     return sections;
   }, [penalty, amount, id]);
-
-  const handleEdit = () => {
-    setLocation(`/umrah/penalties/${id}/edit`);
-  };
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -283,27 +278,15 @@ export default function UmrahPenaltyDetail() {
       error={error}
       onRetry={refetch}
       actions={
-        <>
-          {penalty && (
-            <EntityPrintButton
-              branchId={penalty.branchId}
-              title="غرامة عمرة"
-              ref={`PEN-${id}`}
-              date={formatDateAr(penalty.createdAt)}
-              sections={printSections}
-            />
-          )}
-          <GuardedButton
-            perm="operations:update"
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-            disabled={!penalty || ["paid", "waived"].includes(penalty.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
-        </>
+        penalty ? (
+          <EntityPrintButton
+            branchId={penalty.branchId}
+            title="غرامة عمرة"
+            ref={`PEN-${id}`}
+            date={formatDateAr(penalty.createdAt)}
+            sections={printSections}
+          />
+        ) : undefined
       }
     />
   );
