@@ -253,7 +253,7 @@ export default function UmrahViolations() {
       render: (v) => (
         <div className="flex gap-1">
           <Button asChild size="sm" variant="ghost">
-            <Link href={`/details/umrah-violation/${v.id}`}>
+            <Link href={`/umrah/violations/${v.id}`}>
               <Eye className="h-3.5 w-3.5" />
             </Link>
           </Button>
