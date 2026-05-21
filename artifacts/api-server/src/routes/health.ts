@@ -3,6 +3,7 @@ import { HealthCheckResponse } from "@workspace/api-zod";
 import { rawQuery } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
+import { getLiveness, getReadiness } from "../lib/health.js";
 
 const router: IRouter = Router();
 
@@ -13,6 +14,31 @@ router.get("/healthz", (_req, res) => {
   // (see artifacts/api-server/src/lib/rateLimitStore.ts).
   const data = HealthCheckResponse.parse({ status: "ok" });
   res.json({ ...data, redisRateLimit: getRedisRateLimitStatus() });
+});
+
+/**
+ * Liveness probe — "is this process alive?". Process-local only: never
+ * touches the database or any dependency, so a slow/unreachable dependency
+ * can never trigger a container restart loop. An orchestrator that gets a
+ * non-200 here should RESTART the container.
+ */
+router.get("/livez", (_req, res) => {
+  res.json(getLiveness());
+});
+
+/**
+ * Readiness probe — "can this instance serve traffic right now?". Runs the
+ * cached, timeout-bounded dependency probes (see lib/health.ts). An
+ * orchestrator that gets a 503 here should PULL the instance from the
+ * load-balancer rotation but NOT restart it.
+ *
+ *   status "ready"       → 200, all required dependencies healthy
+ *   status "degraded"    → 200, serving but an optional dependency is impaired
+ *   status "unavailable" → 503, a required dependency failed
+ */
+router.get("/readyz", async (_req, res) => {
+  const report = await getReadiness();
+  res.status(report.status === "unavailable" ? 503 : 200).json(report);
 });
 
 /**
