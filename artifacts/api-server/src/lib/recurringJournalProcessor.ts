@@ -1,4 +1,4 @@
-import { rawQuery, rawExecute } from "./rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { todayISO } from "./businessHelpers.js";
 import { logger } from "./logger.js";
 
@@ -48,18 +48,25 @@ export async function runRecurringJournal(params: {
 
     const today = todayISO();
     const next = computeNextRunDate(today, recurring.frequency);
-    await rawExecute(
-      `UPDATE recurring_journals
-         SET "lastRunDate" = $1, "nextRunDate" = $2, "runsCount" = "runsCount" + 1, "updatedAt" = NOW()
-       WHERE id = $3`,
-      [today, next, recurring.id]
-    );
-    await rawExecute(
-      `INSERT INTO recurring_journal_runs
-         ("companyId","recurringJournalId","journalEntryId","runDate",status,"triggeredBy")
-       VALUES ($1,$2,$3,$4,'success',$5)`,
-      [companyId, recurring.id, journalId, today, triggeredBy]
-    );
+    // Advance the schedule counter and write the success run-row in one
+    // transaction so the run history can never desync from the recurring
+    // journal's state on a partial failure. The journal entry itself is
+    // sourceKey-idempotent, so a retry after a rolled-back block re-uses
+    // the same JE rather than posting a duplicate.
+    await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE recurring_journals
+           SET "lastRunDate" = $1, "nextRunDate" = $2, "runsCount" = "runsCount" + 1, "updatedAt" = NOW()
+         WHERE id = $3`,
+        [today, next, recurring.id]
+      );
+      await client.query(
+        `INSERT INTO recurring_journal_runs
+           ("companyId","recurringJournalId","journalEntryId","runDate",status,"triggeredBy")
+         VALUES ($1,$2,$3,$4,'success',$5)`,
+        [companyId, recurring.id, journalId, today, triggeredBy]
+      );
+    });
 
     return { success: true, journalId, ref };
   } catch (err) {
