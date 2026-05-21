@@ -463,7 +463,7 @@ export default function Evaluation360DetailPage() {
     <DetailPageLayout
       title={cycle ? `تقييم 360° — ${cycle.employeeName}` : "تقييم 360°"}
       subtitle={cycle ? `${cycle.period} · ${cycle.jobTitle}` : undefined}
-      backPath="/hr/evaluations"
+      backPath="/hr/evaluation-360"
       backLabel="العودة"
       entityType="hr-evaluation-360"
       entityId={cycleId}

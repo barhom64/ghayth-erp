@@ -8,7 +8,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 
 export default function OrganizationPage() {
   const { data: depts, isLoading, isError } = useApiQuery<any>(["departments"], "/settings/departments");
-  const { data: empData } = useApiQuery<any>(["employees"], "/employees");
+  const { data: empData } = useApiQuery<any>(["employees"], "/employees?limit=200");
   const items = depts?.data || [];
   const employees = empData?.data || [];
 

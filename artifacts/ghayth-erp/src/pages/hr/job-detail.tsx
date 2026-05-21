@@ -220,7 +220,7 @@ export default function JobDetailPage() {
     <DetailPageLayout
       title={job?.title || (notFound ? "الوظيفة غير موجودة" : "...")}
       subtitle={job?.department || undefined}
-      backPath="/hr/jobs"
+      backPath="/hr/recruitment"
       backLabel="العودة للتوظيف"
       entityType="hr-job"
       entityId={id}

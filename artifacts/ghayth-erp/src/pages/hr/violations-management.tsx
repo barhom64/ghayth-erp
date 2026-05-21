@@ -20,13 +20,17 @@ export default function ViolationsManagementPage() {
   const { data: stats } = useApiQuery<any>(["violations-stats"], "/hr/violations-stats");
   const items = data?.data || [];
 
-  const updateViolationMut = useApiMutation<any, { id: number; status?: string }>(
-    (body) => `/hr/violations/${body.id}`,
+  // Approve drives the real lifecycle endpoint (applyTransition +
+  // discipline ladder). The old "resolve" button PATCHed /hr/violations/:id
+  // with {status:"resolved"} — a field the patch schema rejects — and was
+  // gated on a non-existent "active" status (HR functional audit C7).
+  const approveViolationMut = useApiMutation<any, { id: number }>(
+    (body) => `/hr/violations/${body.id}/approve`,
     "PATCH",
     [["violations"], ["violations-stats"]],
-    { successMessage: "تم التحديث" }
+    { successMessage: "تم اعتماد المخالفة" }
   );
-  const resolvingId = updateViolationMut.isPending ? updateViolationMut.variables?.id ?? null : null;
+  const approvingId = approveViolationMut.isPending ? approveViolationMut.variables?.id ?? null : null;
 
   const [filters, setFilters] = useFilters();
 
@@ -70,16 +74,16 @@ export default function ViolationsManagementPage() {
       key: "actions",
       header: "إجراء",
       render: (v) => (
-        v.status === "active" ? (
+        !["approved", "rejected"].includes(v.status) ? (
           <GuardedButton
             perm="hr:approve"
             size="sm"
             variant="outline"
             className="text-xs"
-            onClick={(e) => { e.stopPropagation(); updateViolationMut.mutate({ id: v.id, status: "resolved" }); }}
-            disabled={resolvingId === v.id}
+            onClick={(e) => { e.stopPropagation(); approveViolationMut.mutate({ id: v.id }); }}
+            disabled={approvingId === v.id}
           >
-            <Shield className="h-3 w-3 me-1" />{resolvingId === v.id ? "..." : "حل"}
+            <Shield className="h-3 w-3 me-1" />{approvingId === v.id ? "..." : "اعتماد"}
           </GuardedButton>
         ) : null
       ),

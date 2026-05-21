@@ -303,7 +303,7 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), bud
 router.use("/finance", requireModule("finance"), requireGuards("financial"), accountsRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), vendorsRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), vendorContractsRouter);
-router.use("/finance", requireModule("finance"), financeHardeningRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), costCentersRouter);
 // financeRouter (finance.ts monolith) removed in Phase 7.1 — the 13
