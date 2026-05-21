@@ -1199,6 +1199,10 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
       sourceType: "journal_reversal",
       sourceId: id,
       sourceKey: `finance:reversal:${id}`,
+      // Stamp the reversal on its requested date so the period-close check
+      // validates the entry's true ledger date, not today. Defaults to today
+      // when the caller gives no reverseDate.
+      postingDate: reverseDate ? toDateISO(reverseDate) : currentDateInTz("Asia/Riyadh"),
       lines: reversedLines,
     });
 
