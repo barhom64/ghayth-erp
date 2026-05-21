@@ -50,8 +50,8 @@ export default function UmrahSeasonDetail() {
     if (!season) return [];
     const items: Array<{ label: string; value: string }> = [
       { label: "رقم المرجع", value: `SN-${id}` },
-      { label: "اسم الموسم", value: season.name || season.title || "-" },
-      { label: "السنة", value: String(season.year ?? "-") },
+      { label: "اسم الموسم", value: season.title || "-" },
+      { label: "السنة", value: String(season.hijriYear ?? "-") },
       { label: "تاريخ البداية", value: season.startDate ? formatDateAr(season.startDate) : "-" },
       { label: "تاريخ النهاية", value: season.endDate ? formatDateAr(season.endDate) : "-" },
       { label: "السعة", value: String(season.capacity ?? "-") },
@@ -104,11 +104,11 @@ export default function UmrahSeasonDetail() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">اسم الموسم</p>
-              <span className="text-status-neutral-foreground font-medium">{season?.name || season?.title || "-"}</span>
+              <span className="text-status-neutral-foreground font-medium">{season?.title || "-"}</span>
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">السنة</p>
-              <span className="text-status-neutral-foreground">{season?.year || "-"}</span>
+              <span className="text-status-neutral-foreground">{season?.hijriYear || "-"}</span>
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">تاريخ البداية</p>
@@ -194,8 +194,8 @@ export default function UmrahSeasonDetail() {
 
   return (
     <DetailPageLayout
-      title={season?.name || season?.title || "تفاصيل الموسم"}
-      subtitle={season?.year ? `موسم ${season.year}` : undefined}
+      title={season?.title || "تفاصيل الموسم"}
+      subtitle={season?.hijriYear ? `موسم ${season.hijriYear}` : undefined}
       backPath="/umrah/seasons"
       refNumber={id ? `SN-${id}` : undefined}
       status={
@@ -221,7 +221,7 @@ export default function UmrahSeasonDetail() {
           extra={
             <EntityPrintButton
               branchId={season?.branchId}
-              title={`الموسم — ${season?.name || season?.title || ""}`}
+              title={`الموسم — ${season?.title || ""}`}
               ref={`SN-${id}`}
               date={formatDateAr(new Date().toISOString())}
               sections={printSections}
