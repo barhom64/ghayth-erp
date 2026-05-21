@@ -95,6 +95,28 @@ path still references the table or column. Prefer the expand/contract
 sequence in §7 — a `DROP` should land at least one release **after** the
 code that used it stopped shipping.
 
+### Backward-incompatible (breaking) changes
+
+Some statements destroy no data but still break the **old** application
+version that is still running during a rolling deploy:
+
+- `ALTER COLUMN … TYPE` — a column type change
+- `ALTER COLUMN … SET NOT NULL` — locking an existing column
+- `ADD COLUMN … NOT NULL` **without** a `DEFAULT`
+- `DROP CONSTRAINT`
+
+They are reversible (unlike a `DROP`), but must follow the expand/contract
+sequence in §7 and be acknowledged with a `-- @policy:breaking` line:
+
+```sql
+-- @policy:breaking
+ALTER TABLE invoices ALTER COLUMN amount TYPE numeric(14,2);
+```
+
+Without the `-- @policy:breaking` acknowledgement the guard fails the build.
+An `ADD COLUMN … NOT NULL` **with** a `DEFAULT`, and any `NOT NULL` inside a
+fresh `CREATE TABLE`, are safe and need no acknowledgement.
+
 ---
 
 ## 5. Idempotency
