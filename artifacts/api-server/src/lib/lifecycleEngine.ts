@@ -739,16 +739,22 @@ export const STATE_MACHINES: StateMachine[] = [
       cancelled: [],
     },
   },
-  // HR functional audit M17 — these four HR entities drive their status
-  // with manual `UPDATE ... WHERE status IN (...)` + a local `fromStates`
-  // list in the route; they do NOT call `applyTransition`. Registering
-  // their state graphs here centralises the canonical lifecycle (visible
-  // to the lifecycle/admin introspection) and arms the engine's
-  // defence-in-depth check the moment a route adopts `applyTransition`.
-  // It is purely additive — these routes don't consult the engine today,
-  // so no behaviour changes. `employee_transfers` is deliberately NOT
-  // listed: it already calls `applyTransition`, so registering a machine
-  // for it would start enforcing — a behaviour change kept out of scope.
+  // HR functional audit M17 — these HR entities drive their status with a
+  // manual `UPDATE ... WHERE status IN (...)` + a local `fromStates` list
+  // in the route; they do NOT call `applyTransition`. Registering their
+  // state graphs here centralises the canonical lifecycle. It is purely
+  // additive — these routes don't consult the engine, so no behaviour
+  // changes today; the registry arms the engine's defence-in-depth check
+  // the moment a route adopts `applyTransition`.
+  //
+  // Each graph mirrors the transitions the route code actually performs,
+  // verified against hr.ts (payroll), hr-loans.ts, hr-overtime.ts and
+  // hr-contracts.ts. `employee_contracts` is keyed on its `approvalStatus`
+  // column — that is the lifecycle the contract route drives end to end;
+  // its separate `status` column only flips active↔terminated.
+  // `employee_transfers` is deliberately NOT listed: it already calls
+  // `applyTransition`, so registering a machine would start enforcing — a
+  // behaviour change kept out of scope.
   {
     entity: "payroll_runs",
     label: "مسير رواتب",
@@ -761,15 +767,16 @@ export const STATE_MACHINES: StateMachine[] = [
     },
   },
   {
+    // hr-loans.ts: approve sets status='active' WHERE status='pending'
+    // (pending→active directly — there is no intermediate 'approved');
+    // reject sets status='rejected' WHERE status='pending'.
     entity: "hr_employee_loans",
     label: "سلفة موظف",
     transitions: {
-      pending: ["approved", "rejected"],
-      approved: ["active", "cancelled"],
+      pending: ["active", "rejected"],
       active: ["completed"],
       rejected: [],
       completed: [],
-      cancelled: [],
     },
   },
   {
@@ -782,17 +789,22 @@ export const STATE_MACHINES: StateMachine[] = [
     },
   },
   {
+    // hr-contracts.ts drives the `approvalStatus` column: submit
+    // draft→pending_approval, approve→approved, reject→rejected, the sign
+    // handlers →signed, activate→active, terminate→terminated. `expired`
+    // is the remaining terminal in the approvalStatus CHECK constraint.
     entity: "employee_contracts",
     label: "عقد موظف",
+    statusColumn: "approvalStatus",
     transitions: {
-      draft: ["pending_approval", "cancelled"],
+      draft: ["pending_approval"],
       pending_approval: ["approved", "rejected"],
-      approved: ["signed", "active", "cancelled"],
-      signed: ["active", "cancelled"],
-      active: ["terminated"],
-      rejected: ["draft"],
+      approved: ["signed"],
+      signed: ["active"],
+      active: ["terminated", "expired"],
+      rejected: [],
+      expired: [],
       terminated: [],
-      cancelled: [],
     },
   },
 ];
