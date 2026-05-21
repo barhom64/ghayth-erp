@@ -8,6 +8,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
+import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
@@ -165,11 +166,17 @@ router.get("/contracts", authorize({ feature: "legal.contracts", action: "list" 
   try {
     const scope = req.scope!;
     const { status } = req.query as Record<string, string | undefined>;
-    const conditions = [`"companyId" = $1`];
-    const params: unknown[] = [scope.companyId];
-    if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
-    conditions.push(`"deletedAt" IS NULL`);
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE ${conditions.join(" AND ")} ORDER BY id DESC LIMIT 500`, params);
+    // legal_contracts has no branchId column → disableBranchScope. The helper
+    // still centralises the company predicate, honours the multi-company
+    // picker (?companyIds=), and applies the soft-delete filter.
+    const filters = parseScopeFilters(req);
+    const { where: baseWhere, params } = buildScopedWhere(scope, filters, {
+      disableBranchScope: true,
+      softDeleteColumn: '"deletedAt"',
+    });
+    let where = baseWhere;
+    if (status) { params.push(status); where += ` AND status = $${params.length}`; }
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE ${where} ORDER BY id DESC LIMIT 500`, params);
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Legal contracts error:"); }
 });
@@ -569,11 +576,15 @@ router.get("/cases", authorize({ feature: "legal.cases", action: "list" }), asyn
   try {
     const scope = req.scope!;
     const { status } = req.query as Record<string, string | undefined>;
-    const conditions = [`"companyId" = $1`];
-    const params: unknown[] = [scope.companyId];
-    if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
-    conditions.push(`"deletedAt" IS NULL`);
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE ${conditions.join(" AND ")} ORDER BY id DESC LIMIT 500`, params);
+    // legal_cases has no branchId column → disableBranchScope. See /contracts.
+    const filters = parseScopeFilters(req);
+    const { where: baseWhere, params } = buildScopedWhere(scope, filters, {
+      disableBranchScope: true,
+      softDeleteColumn: '"deletedAt"',
+    });
+    let where = baseWhere;
+    if (status) { params.push(status); where += ` AND status = $${params.length}`; }
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE ${where} ORDER BY id DESC LIMIT 500`, params);
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Legal cases error:"); }
 });
