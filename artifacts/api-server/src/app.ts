@@ -11,10 +11,16 @@ import { auditMiddleware } from "./middlewares/auditMiddleware.js";
 import { classifyDbError } from "./lib/errorHandler.js";
 import { activityTrackerMiddleware } from "./lib/activityTracker.js";
 import { httpMetricsMiddleware } from "./lib/observability.js";
+import { requestContextMiddleware, getRequestId } from "./lib/requestContext.js";
 
 const app: Express = express();
 
 app.set("trust proxy", 1);
+
+// First in the chain: assign the request correlation id so pino-http's access
+// log, every downstream log line, the X-Request-Id response header, and the
+// central error handler all share one id.
+app.use(requestContextMiddleware);
 
 app.use(
   pinoHttp({
@@ -166,7 +172,7 @@ app.use("/api", (req: Request, res: Response) => {
 });
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  const requestId = randomUUID();
+  const requestId = getRequestId() ?? randomUUID();
   logger.error({ err, requestId, path: req.originalUrl, method: req.method }, "Unhandled error reached central middleware");
   if (res.headersSent) return next(err);
   const { status, message } = classifyDbError(err);
