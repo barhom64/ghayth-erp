@@ -6388,6 +6388,23 @@ ALTER SEQUENCE public.evaluation_summaries_id_seq OWNED BY public.evaluation_sum
 
 
 --
+-- Name: event_outbox; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.event_outbox (
+    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "eventName" character varying(150) NOT NULL,
+    payload jsonb,
+    "companyId" integer,
+    status character varying(20) DEFAULT 'pending'::character varying NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "processedAt" timestamp with time zone,
+    "lastError" text
+);
+
+
+--
 -- Name: event_dlq; Type: TABLE; Schema: public; Owner: -
 --
 
