@@ -1787,6 +1787,11 @@ router.patch("/violations/:id", authorize({ feature: "umrah", action: "update" }
       params
     );
     if (!row) throw new NotFoundError("المخالفة غير موجودة");
+    // M6: the update handler wrote no audit row and emitted no event,
+    // unlike the sibling delete handler. Mirror it so violation edits
+    // are traceable and `umrah.violation.updated` finally has an emitter.
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_violations", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.violation.updated", entity: "umrah_violations", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update violation error"); }
 });
