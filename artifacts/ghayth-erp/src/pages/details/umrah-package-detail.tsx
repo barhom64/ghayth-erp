@@ -50,7 +50,7 @@ export default function UmrahPackageDetail() {
       out.push({
         type: "season",
         id: pkg.seasonId,
-        label: pkg.seasonName || `موسم #${pkg.seasonId}`,
+        label: pkg.seasonTitle || `موسم #${pkg.seasonId}`,
         sublabel: "الموسم",
         href: `/umrah/seasons/${pkg.seasonId}`,
         icon: Calendar,
@@ -64,14 +64,14 @@ export default function UmrahPackageDetail() {
     const items: Array<{ label: string; value: string }> = [
       { label: "رقم المرجع", value: `PKG-${id}` },
       { label: "اسم الباقة", value: pkg.name || "-" },
-      { label: "السعر", value: formatCurrency(Number(pkg.price ?? 0)) },
+      { label: "السعر", value: formatCurrency(Number(pkg.sellPrice ?? 0)) },
       { label: "المدة", value: pkg.duration ? `${pkg.duration} يوم` : "-" },
       { label: "الفندق", value: pkg.hotelName || "-" },
       { label: "تصنيف الفندق", value: pkg.hotelStars ? `${pkg.hotelStars} نجوم` : "-" },
       { label: "النقل", value: pkg.transportType || "-" },
       { label: "الوجبات", value: pkg.mealsIncluded || "-" },
       { label: "السعة", value: String(pkg.capacity ?? "-") },
-      { label: "المحجوز", value: String(pkg.bookedCount ?? 0) },
+      { label: "المحجوز", value: String(pkg.pilgrimCount ?? 0) },
       { label: "الحالة", value: STATUS_LABELS[pkg.status] || pkg.status || "-" },
     ];
     return [{ kind: "info-grid", items }];
@@ -109,7 +109,7 @@ export default function UmrahPackageDetail() {
           {/* Hero price */}
           <div className="flex items-baseline gap-2 border-b pb-3">
             <span className="text-3xl font-bold text-gray-900">
-              {formatCurrency(Number(pkg?.price ?? 0))}
+              {formatCurrency(Number(pkg?.sellPrice ?? 0))}
             </span>
             <span className="text-xs text-muted-foreground">سعر الباقة</span>
           </div>
@@ -162,7 +162,7 @@ export default function UmrahPackageDetail() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">المحجوز</p>
-              <span className="text-status-neutral-foreground font-semibold">{pkg?.bookedCount ?? 0}</span>
+              <span className="text-status-neutral-foreground font-semibold">{pkg?.pilgrimCount ?? 0}</span>
             </div>
           </div>
 
@@ -191,7 +191,7 @@ export default function UmrahPackageDetail() {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">المحجوز</span>
-                <span className="font-semibold">{pkg?.bookedCount ?? 0}</span>
+                <span className="font-semibold">{pkg?.pilgrimCount ?? 0}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">السعة</span>
@@ -202,7 +202,7 @@ export default function UmrahPackageDetail() {
                   <div
                     className="bg-status-info-surface0 h-2 rounded-full"
                     style={{
-                      width: `${Math.min(100, ((pkg.bookedCount ?? 0) / pkg.capacity) * 100)}%`,
+                      width: `${Math.min(100, ((pkg.pilgrimCount ?? 0) / pkg.capacity) * 100)}%`,
                     }}
                   />
                 </div>
@@ -211,7 +211,7 @@ export default function UmrahPackageDetail() {
           </CardContent>
         </Card>
 
-        {pkg?.seasonName && (
+        {pkg?.seasonTitle && (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
@@ -220,7 +220,7 @@ export default function UmrahPackageDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-sm">
-              <p className="font-medium">{pkg.seasonName}</p>
+              <p className="font-medium">{pkg.seasonTitle}</p>
               {pkg.seasonId && (
                 <Badge variant="outline" className="mt-1 text-[10px]">SN-{pkg.seasonId}</Badge>
               )}

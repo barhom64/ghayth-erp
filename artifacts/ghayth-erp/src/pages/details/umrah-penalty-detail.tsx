@@ -91,7 +91,7 @@ export default function UmrahPenaltyDetail() {
       {
         label: "نوع الغرامة",
         value:
-          PENALTY_TYPE_LABELS[penalty.penaltyType] || penalty.penaltyType || "-",
+          PENALTY_TYPE_LABELS[penalty.type] || penalty.type || "-",
       },
       { label: "المبلغ", value: formatCurrency(amount) },
       ...(penalty.reason ? [{ label: "السبب", value: penalty.reason }] : []),
@@ -149,11 +149,11 @@ export default function UmrahPenaltyDetail() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            {penalty?.penaltyType && (
+            {penalty?.type && (
               <div>
                 <p className="text-xs text-muted-foreground mb-0.5">نوع الغرامة</p>
                 <Badge variant="destructive">
-                  {PENALTY_TYPE_LABELS[penalty.penaltyType] || penalty.penaltyType}
+                  {PENALTY_TYPE_LABELS[penalty.type] || penalty.type}
                 </Badge>
               </div>
             )}
@@ -244,8 +244,8 @@ export default function UmrahPenaltyDetail() {
   return (
     <DetailPageLayout
       title={
-        penalty?.penaltyType
-          ? `غرامة — ${PENALTY_TYPE_LABELS[penalty.penaltyType] || penalty.penaltyType}`
+        penalty?.type
+          ? `غرامة — ${PENALTY_TYPE_LABELS[penalty.type] || penalty.type}`
           : "تفاصيل الغرامة"
       }
       subtitle={
@@ -266,8 +266,8 @@ export default function UmrahPenaltyDetail() {
           : undefined
       }
       typeLabel={
-        penalty?.penaltyType
-          ? PENALTY_TYPE_LABELS[penalty.penaltyType] || penalty.penaltyType
+        penalty?.type
+          ? PENALTY_TYPE_LABELS[penalty.type] || penalty.type
           : undefined
       }
       createdAt={penalty?.createdAt}
