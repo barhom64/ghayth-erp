@@ -135,6 +135,9 @@ function scheduleDLQFlush(): void {
       if (dlqBuffer.length > 0) scheduleDLQFlush();
     }
   }, 5000);
+  // Best-effort: a pending DLQ flush must never hold a shutting-down process
+  // (or a test worker) open.
+  flushTimer.unref();
 }
 
 async function flushDLQ(): Promise<void> {
@@ -167,34 +170,87 @@ export function pushToDLQ(
   payload: unknown,
   error: unknown,
   companyId?: number,
-  eventName?: string
+  eventName?: string,
+  retryCount = 0,
 ): void {
   const errMsg = error instanceof Error ? error.message : String(error);
   if (dlqBuffer.length >= MAX_DLQ_BUFFER) {
     logger.error(`[DLQ] Buffer full (${MAX_DLQ_BUFFER} entries) — dropping oldest entry`);
     dlqBuffer.shift();
   }
-  dlqBuffer.push({ type, eventName, payload, error: errMsg, companyId, retryCount: 0, createdAt: new Date() });
+  dlqBuffer.push({ type, eventName, payload, error: errMsg, companyId, retryCount, createdAt: new Date() });
   scheduleDLQFlush();
 }
 
+/** Max attempts for a cross-domain handler before its event is dead-lettered. */
+export const HANDLER_MAX_ATTEMPTS = 3;
+/** Base delay for the exponential backoff between handler retries (ms). */
+const HANDLER_RETRY_BASE_MS = 200;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
- * Register a cross-domain event handler that automatically routes failures
- * to the DLQ instead of silently logging. Used for events where the
- * originating action has already committed and we must preserve the
- * cross-domain effect (e.g. fixed asset registration after vehicle creation).
+ * Run a cross-domain handler with bounded exponential-backoff retries. A
+ * transient failure (a deadlock, a brief connectivity blip) is retried
+ * instead of being dead-lettered immediately. Only after HANDLER_MAX_ATTEMPTS
+ * failures is the event pushed to the DLQ — with the real attempt count
+ * recorded on the entry.
+ *
+ * Handlers registered through `registerCrossDomainHandler` already assume
+ * reprocess-safety — the DLQ exists precisely to re-run them — so an
+ * in-process retry is consistent with that contract.
+ */
+async function runHandlerWithRetry(
+  eventName: string,
+  handler: (payload: EventPayload) => Promise<void>,
+  payload: EventPayload,
+): Promise<void> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= HANDLER_MAX_ATTEMPTS; attempt++) {
+    try {
+      await handler(payload);
+      return;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < HANDLER_MAX_ATTEMPTS) {
+        const delayMs = HANDLER_RETRY_BASE_MS * 2 ** (attempt - 1);
+        logger.warn(
+          { err, eventName, attempt, delayMs },
+          `[CrossDomain] handler for ${eventName} failed (attempt ${attempt}/${HANDLER_MAX_ATTEMPTS}) — retrying`,
+        );
+        await sleep(delayMs);
+      }
+    }
+  }
+  logger.error(
+    lastErr,
+    `[CrossDomain] handler for ${eventName} failed after ${HANDLER_MAX_ATTEMPTS} attempts — dead-lettering:`,
+  );
+  pushToDLQ(
+    "event",
+    payload,
+    lastErr,
+    payload?.companyId,
+    eventName,
+    HANDLER_MAX_ATTEMPTS,
+  );
+}
+
+/**
+ * Register a cross-domain event handler that retries transient failures with
+ * exponential backoff and routes a terminal failure to the DLQ instead of
+ * silently logging. Used for events where the originating action has already
+ * committed and we must preserve the cross-domain effect (e.g. fixed-asset
+ * registration after vehicle creation).
  */
 export function registerCrossDomainHandler(
   eventName: string,
   handler: (payload: EventPayload) => Promise<void>
 ): void {
-  eventBus.on(eventName, async (payload: EventPayload) => {
-    try {
-      await handler(payload);
-    } catch (err) {
-      logger.error(err, `[CrossDomain] handler for ${eventName} failed:`);
-      pushToDLQ("event", payload, err, payload?.companyId, eventName);
-    }
+  eventBus.on(eventName, (payload: EventPayload) => {
+    void runHandlerWithRetry(eventName, handler, payload);
   });
 }
 
@@ -214,4 +270,9 @@ export function safeEmitEvent(payload: unknown & { companyId?: number }): void {
     // as-any-reason: justified-external - external/dynamic shape (event payload, SDK proxy, JSON.parse)
     pushToDLQ("event", payload, err, (payload as any)?.companyId, action);
   }
+}
+
+/** Current DLQ buffer length. Test-only — used to assert dead-lettering. */
+export function __dlqBufferLength(): number {
+  return dlqBuffer.length;
 }
