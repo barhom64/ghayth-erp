@@ -8427,6 +8427,10 @@ CREATE TABLE public.invoices (
     "zatcaClearedXml" text,
     "zatcaClearanceStatus" character varying(20),
     "zatcaClearedAt" timestamp with time zone,
+    "approvedBy" integer,
+    "approvedAt" timestamp without time zone,
+    "postedBy" integer,
+    "postedAt" timestamp without time zone,
     CONSTRAINT chk_invoices_status CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'pending_approval'::character varying, 'approved'::character varying, 'sent'::character varying, 'partially_paid'::character varying, 'paid'::character varying, 'overdue'::character varying, 'void'::character varying, 'rejected'::character varying, 'cancelled'::character varying])::text[])))
 );
 
