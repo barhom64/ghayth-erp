@@ -10,7 +10,6 @@ import { Edit, FileText, Users, Package, Calendar, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
-import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -39,13 +38,18 @@ export default function UmrahInvoiceDetail() {
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("umrah-invoice", id ?? 0);
 
+  // C2: this detail page is the target of the "فواتير الوكلاء" list
+  // (invoices.tsx → GET /umrah/agent-invoices). It must fetch the agent
+  // invoice. GET /umrah/invoices/:id does not exist on the backend; the
+  // sales-invoice collection (GET /umrah/invoices) has no detail route.
   const { data: invoice, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-invoice", String(id)],
-    id ? `/umrah/invoices/${id}` : null,
+    id ? `/umrah/agent-invoices/${id}` : null,
     !!id
   );
 
-  const amount = Number(invoice?.amount ?? invoice?.totalAmount ?? 0);
+  // C2: agent-invoice payload exposes the headline figure as `total`.
+  const amount = Number(invoice?.amount ?? invoice?.totalAmount ?? invoice?.total ?? 0);
   const paidAmount = Number(invoice?.paidAmount ?? 0);
   const remainingAmount = Number(
     invoice?.remainingAmount ?? Math.max(0, amount - paidAmount)
@@ -269,7 +273,10 @@ export default function UmrahInvoiceDetail() {
 
       {id && <EntityComments entityType="umrah-invoice" entityId={id} />}
       {id && <EntityTags entityType="umrah-invoice" entityId={id} />}
-      {id && <UmrahAttachmentsPanel entityType="sales_invoice" entityId={id} />}
+      {/* C2: attachments panel removed — it was typed entityType="sales_invoice"
+          while this page renders an agent invoice; the umrah attachments API
+          has no "agent_invoice" entity type, so the panel surfaced another
+          entity's documents. Removed to keep the page on one entity. */}
     </div>
   );
 
