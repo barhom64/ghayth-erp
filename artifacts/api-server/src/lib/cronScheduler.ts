@@ -1,4 +1,5 @@
 import cron from "node-cron";
+import { randomUUID } from "node:crypto";
 import { rawQuery, rawExecute, pool, withTransaction } from "./rawdb.js";
 import { logger } from "./logger.js";
 import { saveAllCompaniesKPISnapshots } from "./kpiEngine.js";
@@ -87,8 +88,14 @@ async function logCronJob(
   }
 }
 
-const LOCK_OWNER = process.env.HOSTNAME ?? "api-server";
-const LOCK_TTL_MINUTES = 30;
+// A process-unique lock owner. HOSTNAME alone is not guaranteed unique per
+// autoscale replica, and releaseCronLock/renewCronLock match on locked_by —
+// a shared owner id would let one replica release or renew another's lock.
+const LOCK_OWNER = `${process.env.HOSTNAME ?? "api-server"}:${randomUUID()}`;
+// Short TTL so a crashed replica frees the lock within minutes (not 30). A
+// live job keeps its lock past the TTL via renewCronLock heartbeats.
+const LOCK_TTL_MINUTES = 5;
+const LOCK_HEARTBEAT_MS = 60_000;
 
 async function acquireCronLock(jobName: string): Promise<boolean> {
   try {
@@ -119,6 +126,22 @@ async function releaseCronLock(jobName: string): Promise<void> {
   }
 }
 
+// Heartbeat: push the lock's expiry forward while the job is still running,
+// so a job that outlives LOCK_TTL_MINUTES never has its lock expire under it
+// (which would let another replica double-run it). Matches on locked_by so
+// it only ever renews this process's own lock.
+async function renewCronLock(jobName: string): Promise<void> {
+  try {
+    await pool.query(
+      `UPDATE cron_locks SET expires_at = NOW() + make_interval(mins => $3)
+       WHERE job_name = $1 AND locked_by = $2`,
+      [jobName, LOCK_OWNER, LOCK_TTL_MINUTES]
+    );
+  } catch (e) {
+    logger.warn(e, `[cronScheduler] failed to renew cron lock for ${jobName}`);
+  }
+}
+
 async function runJob(def: CronJobDef): Promise<void> {
   const isEnabled = await rawQuery<{ isActive: boolean }>(
     `SELECT "isActive" FROM cron_jobs WHERE name=$1`,
@@ -134,6 +157,9 @@ async function runJob(def: CronJobDef): Promise<void> {
     return;
   }
 
+  const heartbeat = setInterval(() => { void renewCronLock(def.name); }, LOCK_HEARTBEAT_MS);
+  heartbeat.unref();
+
   const start = Date.now();
   try {
     const result = await def.handler();
@@ -148,6 +174,7 @@ async function runJob(def: CronJobDef): Promise<void> {
     recordJobRun(def.name, "failed", duration);
     logger.error(err, `[CRON] ${def.name} failed:`);
   } finally {
+    clearInterval(heartbeat);
     await releaseCronLock(def.name);
   }
 }
@@ -3685,6 +3712,9 @@ export async function triggerJobByName(jobName: string): Promise<{ success: bool
     return { success: false, error: `Job "${jobName}" is already running on another instance` };
   }
 
+  const heartbeat = setInterval(() => { void renewCronLock(def.name); }, LOCK_HEARTBEAT_MS);
+  heartbeat.unref();
+
   const start = Date.now();
   try {
     const result = await def.handler();
@@ -3697,6 +3727,7 @@ export async function triggerJobByName(jobName: string): Promise<{ success: bool
     await logCronJob(def.name, "failed", duration, "Job failed", errMsg);
     return { success: false, error: errMsg };
   } finally {
+    clearInterval(heartbeat);
     await releaseCronLock(def.name);
   }
 }

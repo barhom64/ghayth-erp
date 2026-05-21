@@ -127,6 +127,57 @@ interface ExpenseSummaryRow {
   total: number | string;
 }
 
+/**
+ * SUB-1 guard: validate a proposed parent for a chart-of-accounts account.
+ * Walks the parent's ancestry with a depth-bounded recursive CTE and rejects:
+ *   - a parent that does not exist,
+ *   - a cycle (the child appearing among its own would-be ancestors — this
+ *     also catches an account set as its own parent),
+ *   - a parent whose `type` differs from the account's type.
+ * The depth bound keeps a pre-existing corrupt cycle in the data from
+ * looping the recursion.
+ */
+async function assertValidAccountParent(
+  companyId: number,
+  childCode: string,
+  childType: string,
+  parentCode: string,
+): Promise<void> {
+  const ancestry = await rawQuery<{ code: string; type: string }>(
+    `WITH RECURSIVE ancestry AS (
+       SELECT code, "parentCode", type, 1 AS depth
+         FROM chart_of_accounts
+        WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL
+       UNION ALL
+       SELECT c.code, c."parentCode", c.type, a.depth + 1
+         FROM chart_of_accounts c
+         JOIN ancestry a ON c.code = a."parentCode"
+        WHERE c."companyId" = $1 AND c."deletedAt" IS NULL AND a.depth < 64
+     )
+     SELECT code, type FROM ancestry ORDER BY depth`,
+    [companyId, parentCode],
+  );
+  if (ancestry.length === 0) {
+    throw new ValidationError(`الحساب الأب "${parentCode}" غير موجود`, {
+      field: "parentCode",
+      fix: "اختر رمز حساب أب موجوداً ضمن دليل الحسابات",
+    });
+  }
+  if (ancestry.some((a) => a.code === childCode)) {
+    throw new ConflictError(
+      `لا يمكن جعل "${parentCode}" أباً للحساب "${childCode}" — ينشئ ذلك حلقة في شجرة الحسابات`,
+      { field: "parentCode", fix: "اختر حساباً أب ليس فرعاً من هذا الحساب" },
+    );
+  }
+  const parentType = ancestry[0]!.type;
+  if (parentType !== childType) {
+    throw new ValidationError(
+      `نوع الحساب الأب (${parentType}) لا يطابق نوع الحساب (${childType})`,
+      { field: "parentCode", fix: "يجب أن يكون الحساب الأب من نفس نوع الحساب الفرعي" },
+    );
+  }
+}
+
 accountsRouter.get("/chart-of-accounts", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -180,6 +231,9 @@ accountsRouter.post("/accounts", authorize({ feature: "finance.accounts", action
     const scope = req.scope!;
 
     const b = zodParse(createAccountSchema.safeParse(req.body ?? {}));
+    if (b.parentCode) {
+      await assertValidAccountParent(scope.companyId, b.code, b.type, b.parentCode);
+    }
     const [row] = await rawQuery<ChartOfAccountsRow>(
       `INSERT INTO chart_of_accounts ("companyId", code, name, type, "parentCode", "nameEn", nature, "allowPosting", "isAnalytical")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
@@ -229,6 +283,48 @@ accountsRouter.patch("/accounts/:id", authorize({ feature: "finance.accounts", a
 
     const id = parseId(req.params.id, "id");
     const b = zodParse(updateAccountSchema.safeParse(req.body ?? {}));
+
+    // SUB-1: when the parent link or the account type changes, re-validate
+    // the effective parent — it must exist, not create a cycle, and share
+    // the account's type.
+    if (b.parentCode !== undefined || b.type !== undefined) {
+      const [existing] = await rawQuery<{ code: string; type: string; parentCode: string | null }>(
+        `SELECT code, type, "parentCode" FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!existing) throw new NotFoundError("الحساب غير موجود");
+
+      // COA-4: changing an account's `type` retroactively re-classifies every
+      // posting already booked to it — any financial statement built on
+      // `type` would silently change. Refuse a type change once the account
+      // carries journal lines (mirrors the DELETE handler's usage guard);
+      // correct via a new correctly-typed account + a reversing entry.
+      if (b.type !== undefined && b.type !== existing.type) {
+        const [typeUsage] = await rawQuery<JournalCountRow>(
+          `SELECT COUNT(*) AS cnt FROM journal_lines jl
+           JOIN journal_entries je ON je.id = jl."journalId"
+           WHERE jl."accountCode" = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL`,
+          [existing.code, scope.companyId],
+        );
+        if (Number(typeUsage?.cnt ?? 0) > 0) {
+          throw new ConflictError(
+            `لا يمكن تغيير نوع الحساب "${existing.code}" — مرتبط به ${typeUsage.cnt} سطر في القيود المحاسبية`,
+            {
+              field: "type",
+              fix: "النوع جزء من التصنيف المحاسبي؛ أنشئ حساباً جديداً بالنوع الصحيح وأجرِ ترحيلاً تصحيحياً",
+              meta: { journalLinesCount: Number(typeUsage.cnt) },
+            },
+          );
+        }
+      }
+
+      const effectiveType = b.type ?? existing.type;
+      const effectiveParentCode = b.parentCode !== undefined ? b.parentCode : existing.parentCode;
+      if (effectiveParentCode) {
+        await assertValidAccountParent(scope.companyId, existing.code, effectiveType, effectiveParentCode);
+      }
+    }
+
     const fields: string[] = [];
     const params: unknown[] = [];
     const addField = (col: string, val: unknown) => { if (val !== undefined) { params.push(val); fields.push(`"${col}" = $${params.length}`); } };

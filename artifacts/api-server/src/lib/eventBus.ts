@@ -87,12 +87,37 @@ export function stampEnvelope(
   };
 }
 
+// Transactional-outbox capture (Decision Brief #2, phase 1). Every emitted
+// event is recorded durably in event_outbox. Phase 1 captures only — the
+// in-process dispatch via super.emit is unchanged and remains the active
+// dispatcher; the relay that drains the outbox and the dispatch-source
+// switch land in follow-up PRs. Skipped under the test runner (no DB),
+// mirroring startDlqMaintenance.
+const OUTBOX_CAPTURE_ENABLED =
+  process.env.NODE_ENV !== "test" && !process.env.VITEST;
+
+function captureToOutbox(eventName: string, payload?: EventPayload): void {
+  if (!OUTBOX_CAPTURE_ENABLED) return;
+  // Fire-and-forget — emit() stays synchronous and is never blocked on the DB.
+  void rawExecute(
+    `INSERT INTO event_outbox ("eventName", payload, "companyId")
+     VALUES ($1, $2, $3)`,
+    [
+      eventName,
+      payload != null ? JSON.stringify(payload) : null,
+      payload?.companyId ?? null,
+    ],
+  ).catch((err) => logger.warn(err, "[outbox] failed to capture event"));
+}
+
 class EventBus extends EventEmitter {
   emit(event: EventName, payload?: EventPayload): boolean {
     // Single chokepoint — every emit path (emitEvent, safeEmitEvent, the
     // domain engines, eventCatalog) routes through here, so stamping the
     // envelope once guarantees every event is versioned + timestamped.
-    return super.emit(event, stampEnvelope(payload));
+    const stamped = stampEnvelope(payload);
+    captureToOutbox(event, stamped);
+    return super.emit(event, stamped);
   }
 
   on(event: EventName, listener: (payload: EventPayload) => void): this {
@@ -111,65 +136,22 @@ class EventBus extends EventEmitter {
 export const eventBus = new EventBus();
 eventBus.setMaxListeners(200);
 
-export interface DLQEntry {
-  type: "event" | "notification" | "audit" | "workflow";
-  eventName?: string;
-  payload: unknown;
-  error: string;
-  companyId?: number;
-  retryCount: number;
-  createdAt: Date;
-}
+export type DLQType = "event" | "notification" | "audit" | "workflow";
 
-const MAX_DLQ_BUFFER = 1000;
-const dlqBuffer: DLQEntry[] = [];
-let flushTimer: NodeJS.Timeout | null = null;
-let isFlushing = false;
-
-function scheduleDLQFlush(): void {
-  if (flushTimer || isFlushing) return;
-  flushTimer = setTimeout(async () => {
-    flushTimer = null;
-    isFlushing = true;
-    try {
-      await flushDLQ();
-    } finally {
-      isFlushing = false;
-      if (dlqBuffer.length > 0) scheduleDLQFlush();
-    }
-  }, 5000);
-  // Best-effort: a pending DLQ flush must never hold a shutting-down process
-  // (or a test worker) open.
-  flushTimer.unref();
-}
-
-async function flushDLQ(): Promise<void> {
-  if (dlqBuffer.length === 0) return;
-  const batch = dlqBuffer.splice(0, dlqBuffer.length);
-  for (const entry of batch) {
-    try {
-      await rawExecute(
-        `INSERT INTO event_dlq (type, "eventName", payload, error, "companyId", "retryCount", "createdAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT DO NOTHING`,
-        [
-          entry.type,
-          entry.eventName ?? null,
-          JSON.stringify(entry.payload),
-          entry.error,
-          entry.companyId ?? null,
-          entry.retryCount,
-          entry.createdAt,
-        ]
-      );
-    } catch (dbErr) {
-      logger.error(dbErr, "[DLQ] Failed to persist DLQ entry:");
-    }
-  }
-}
-
+/**
+ * Route a failed event/handler to the dead-letter queue.
+ *
+ * Durable on write — the entry is persisted straight to `event_dlq`.
+ * (It was previously held in an in-memory buffer flushed every 5s, which
+ * lost unflushed entries on process death — routine under autoscale
+ * recycling — and silently dropped the oldest entry on buffer overflow:
+ * RT-FAIL-001 / RT-FAIL-002.)
+ *
+ * Fire-and-forget: the caller is not blocked on the INSERT; a DB failure
+ * is logged. `ON CONFLICT DO NOTHING` keeps the write idempotent.
+ */
 export function pushToDLQ(
-  type: DLQEntry["type"],
+  type: DLQType,
   payload: unknown,
   error: unknown,
   companyId?: number,
@@ -177,12 +159,12 @@ export function pushToDLQ(
   retryCount = 0,
 ): void {
   const errMsg = error instanceof Error ? error.message : String(error);
-  if (dlqBuffer.length >= MAX_DLQ_BUFFER) {
-    logger.error(`[DLQ] Buffer full (${MAX_DLQ_BUFFER} entries) — dropping oldest entry`);
-    dlqBuffer.shift();
-  }
-  dlqBuffer.push({ type, eventName, payload, error: errMsg, companyId, retryCount, createdAt: new Date() });
-  scheduleDLQFlush();
+  void rawExecute(
+    `INSERT INTO event_dlq (type, "eventName", payload, error, "companyId", "retryCount", "createdAt")
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT DO NOTHING`,
+    [type, eventName ?? null, JSON.stringify(payload), errMsg, companyId ?? null, retryCount],
+  ).catch((dbErr) => logger.error(dbErr, "[DLQ] Failed to persist DLQ entry:"));
 }
 
 /** Max attempts for a cross-domain handler before its event is dead-lettered. */
@@ -279,11 +261,6 @@ export function safeEmitEvent(payload: unknown & { companyId?: number }): void {
     // as-any-reason: justified-external - external/dynamic shape (event payload, SDK proxy, JSON.parse)
     pushToDLQ("event", payload, err, (payload as any)?.companyId, action);
   }
-}
-
-/** Current DLQ buffer length. Test-only — used to assert dead-lettering. */
-export function __dlqBufferLength(): number {
-  return dlqBuffer.length;
 }
 
 // ─────────────────────────── DLQ maintenance ──────────────────────────────
