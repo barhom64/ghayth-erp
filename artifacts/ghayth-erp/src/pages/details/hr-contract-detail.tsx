@@ -1,12 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ActionHistory } from "@/components/approval-actions";
 import { Edit, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -59,6 +59,23 @@ export default function HrContractDetail() {
   );
 
   const contract = data;
+  const [acting, setActing] = useState(false);
+
+  // Drives the real POST /hr/contracts/:id/<action> lifecycle endpoints.
+  // The old approval card used ApprovalActions with method PATCH against
+  // a non-existent return endpoint — every decision 404'd (audit C3).
+  const runAction = async (action: string, successMsg: string) => {
+    setActing(true);
+    try {
+      await apiFetch(`/hr/contracts/${id}/${action}`, { method: "POST", body: JSON.stringify({}) });
+      toast({ title: successMsg });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذّر تنفيذ الإجراء", description: err?.fix ?? err?.message });
+    } finally {
+      setActing(false);
+    }
+  };
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -177,32 +194,9 @@ export default function HrContractDetail() {
       </Card>
 
       <div className="space-y-3">
-        {/* Approval actions */}
-        {id && contract && ["pending", "draft", "returned"].includes(contract.status) && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ApprovalActions
-                entityType="hr-contract"
-                entityId={id}
-                currentStatus={contract.status}
-                approveEndpoint={`/hr/contracts/${id}/approve`}
-                rejectEndpoint={`/hr/contracts/${id}/approve`}
-                returnEndpoint={`/hr/contracts/${id}/approve`}
-                approveMethod="PATCH"
-                rejectMethod="PATCH"
-                returnMethod="PATCH"
-                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
-                rejectBody={(notes) => ({ approved: false, notes })}
-                returnBody={(notes) => ({ approved: "returned", notes })}
-                pendingStatuses={["pending", "draft", "returned"]}
-                invalidateKeys={[["contracts"]]}
-                onDone={() => { refetch(); }}
-              />
-            </CardContent>
-          </Card>
+        {/* Contract lifecycle actions */}
+        {contract && (
+          <ContractLifecycleActions contract={contract} acting={acting} onAction={runAction} />
         )}
 
         {/* Action history */}
@@ -276,9 +270,7 @@ export default function HrContractDetail() {
             variant="outline"
             size="sm"
             onClick={handleEdit}
-            disabled={
-              !contract || ["terminated", "expired"].includes(contract.status)
-            }
+            disabled={!contract || contract.approvalStatus !== "draft"}
           >
             <Edit className="h-4 w-4 ms-1" />
             تعديل
@@ -286,5 +278,77 @@ export default function HrContractDetail() {
         </>
       }
     />
+  );
+}
+
+/**
+ * ContractLifecycleActions — the contract state machine surfaced as
+ * buttons. Each button maps to a real POST /hr/contracts/:id/<action>
+ * endpoint. `sign-employee` and `renew` had no UI anywhere before, so
+ * a contract could not progress past `approved` from the app (audit C3).
+ */
+function ContractLifecycleActions({
+  contract,
+  acting,
+  onAction,
+}: {
+  contract: any;
+  acting: boolean;
+  onAction: (action: string, successMsg: string) => void;
+}) {
+  const a = contract.approvalStatus;
+  const s = contract.status;
+  const items: {
+    action: string;
+    label: string;
+    msg: string;
+    perm: string;
+    variant?: "outline" | "destructive";
+  }[] = [];
+
+  if (a === "draft") {
+    items.push({ action: "submit", label: "تقديم للاعتماد", msg: "تم تقديم العقد للاعتماد", perm: "hr:create" });
+  }
+  if (a === "pending_approval") {
+    items.push({ action: "approve", label: "اعتماد العقد", msg: "تم اعتماد العقد", perm: "hr:approve" });
+    items.push({ action: "reject", label: "رفض العقد", msg: "تم رفض العقد", perm: "hr:approve", variant: "destructive" });
+  }
+  if ((a === "approved" || a === "signed") && !contract.signedByCompany) {
+    items.push({ action: "sign-company", label: "توقيع الشركة", msg: "تم توقيع العقد من الشركة", perm: "hr:approve" });
+  }
+  if ((a === "approved" || a === "signed") && !contract.signedByEmployee) {
+    items.push({ action: "sign-employee", label: "توقيع الموظف", msg: "تم توقيع العقد من الموظف", perm: "hr:update", variant: "outline" });
+  }
+  if (a === "signed") {
+    items.push({ action: "activate", label: "تفعيل العقد", msg: "تم تفعيل العقد", perm: "hr:update" });
+  }
+  if (s === "active") {
+    items.push({ action: "renew", label: "تجديد العقد", msg: "تم إنشاء عقد تجديد كمسودة", perm: "hr:create", variant: "outline" });
+    items.push({ action: "terminate", label: "إنهاء العقد", msg: "تم إنهاء العقد", perm: "hr:update", variant: "destructive" });
+  }
+
+  if (items.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">إجراءات العقد</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {items.map((it) => (
+          <GuardedButton
+            key={it.action}
+            perm={it.perm}
+            variant={it.variant}
+            size="sm"
+            className="w-full"
+            disabled={acting}
+            onClick={() => onAction(it.action, it.msg)}
+          >
+            {it.label}
+          </GuardedButton>
+        ))}
+      </CardContent>
+    </Card>
   );
 }

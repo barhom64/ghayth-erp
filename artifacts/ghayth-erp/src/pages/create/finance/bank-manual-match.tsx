@@ -28,7 +28,7 @@ export default function BankManualMatchPage() {
     params?.batchId ? `/finance/bank-reconciliation/${params.batchId}` : null,
     { enabled: !!params?.batchId }
   );
-  const rows = batchDetail?.data?.lines || batchDetail?.lines || [];
+  const rows = batchDetail?.rows || [];
   const row = rows.find((r: any) => String(r.id) === params?.rowId);
 
   const manualMatchMutation = useApiMutation("/finance/bank-reconciliation/manual-match", "POST");
@@ -43,7 +43,9 @@ export default function BankManualMatchPage() {
     if (firstError) return;
     setJeSearching(true);
     try {
-      const res = await apiFetch(`/finance/journal?search=${encodeURIComponent(form.jeSearch)}&limit=20`);
+      // Must search journal *lines* — manual-match needs a journal_lines.id.
+      // /finance/journal returns journal_entries (wrong id type).
+      const res = await apiFetch(`/finance/journal-lines/search?search=${encodeURIComponent(form.jeSearch)}&pageSize=20`);
       setJeResults(res?.data || []);
     } catch {
       setJeResults([]);
@@ -55,7 +57,7 @@ export default function BankManualMatchPage() {
   async function handleManualMatch(journalLineId: number) {
     try {
       await manualMatchMutation.mutateAsync({
-        bankLineId: Number(params?.rowId),
+        bankStatementId: Number(params?.rowId),
         journalLineId,
       });
       setMatchMsg("تمت المطابقة بنجاح");
