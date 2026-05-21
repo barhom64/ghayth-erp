@@ -607,9 +607,15 @@ function renderReport(): string {
   const fatal = envIssues.filter((i) => i.severity === "fatal");
   const warn = envIssues.filter((i) => i.severity === "warn");
   const lines: string[] = [];
+  // The banner reflects severity: a warning-only report must NOT claim the
+  // check "FAILED" — startup succeeds when there are no fatal issues.
+  const banner =
+    fatal.length > 0
+      ? "ENVIRONMENT CONFIGURATION CHECK FAILED"
+      : "ENVIRONMENT CONFIGURATION — WARNINGS";
   lines.push("");
   lines.push("══════════════════════════════════════════════════════════════════");
-  lines.push("  ENVIRONMENT CONFIGURATION CHECK FAILED");
+  lines.push(`  ${banner}`);
   lines.push("══════════════════════════════════════════════════════════════════");
   lines.push(`  NODE_ENV = ${config.nodeEnv}`);
   lines.push("");
