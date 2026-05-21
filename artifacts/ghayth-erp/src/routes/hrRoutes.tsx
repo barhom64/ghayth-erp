@@ -62,7 +62,6 @@ const Evaluation360Upward = lazy(() => import("@/pages/hr/evaluation-360-upward"
 const Evaluation360History = lazy(() => import("@/pages/hr/evaluation-360-history"));
 const PublicHolidays = lazy(() => import("@/pages/hr/public-holidays"));
 const Transfers = lazy(() => import("@/pages/hr/transfers"));
-const DevelopmentPlans = lazy(() => import("@/pages/hr/development-plans"));
 const IDP = lazy(() => import("@/pages/hr/idp"));
 const Gratuity = lazy(() => import("@/pages/hr/gratuity"));
 const TurnoverReport = lazy(() => import("@/pages/hr/turnover-report"));
@@ -166,7 +165,6 @@ export const hrRoutes = [
   { path: "/hr/transfers", component: Transfers, subKey: "employees" },
   { path: "/hr/transfers/:id/edit", component: TransfersEdit, subKey: "employees" },
   { path: "/hr/transfers/:id", component: TransferDetail, subKey: "employees" },
-  { path: "/hr/development-plans", component: DevelopmentPlans, subKey: "performance" },
   { path: "/hr/idp", component: IDP, subKey: "performance" },
   { path: "/hr/gratuity", component: Gratuity, subKey: "payroll" },
   { path: "/hr/turnover-report", component: TurnoverReport, subKey: "performance" },

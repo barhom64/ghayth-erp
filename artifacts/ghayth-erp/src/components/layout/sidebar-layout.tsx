@@ -149,7 +149,6 @@ const allNavSections: NavSection[] = [
         { label: "تقييم الأداء", path: "/hr/performance", icon: Target, subKey: "performance" },
         { label: "التقييم المتقدم", path: "/hr/performance/advanced", icon: BarChart3, subKey: "performance" },
         { label: "التقييم 360°", path: "/hr/evaluation-360", icon: Activity, subKey: "performance" },
-        { label: "خطط التطوير", path: "/hr/development-plans", icon: TrendingUp, subKey: "performance" },
         { label: "خطط التطوير الفردية", path: "/hr/idp", icon: BookOpen, subKey: "performance" },
         { label: "تقرير الدوران", path: "/hr/turnover-report", icon: FileBarChart, subKey: "performance" },
       ]},
