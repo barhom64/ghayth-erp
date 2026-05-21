@@ -10,16 +10,17 @@ import { bootstrapAdminUser } from "./lib/bootstrapAdmin.js";
 import { syncFeatureCatalog } from "./lib/rbac/catalogSync.js";
 import { syncLegacyToV2 } from "./lib/rbac/autoMigrate.js";
 import { pool } from "./lib/rawdb.js";
-import { config, assertEnvOrExit } from "./lib/config.js";
+import { config, assertEnvOrExit, describeConfig } from "./lib/config.js";
 import http from "http";
 import fs from "node:fs";
 import path from "node:path";
 
 // Fail-fast: validate the whole environment before any other startup work.
-// On a fatal misconfiguration this prints an actionable report and exits,
-// so a missing/invalid variable never surfaces as a confusing error deep
-// inside a request handler.
+// lib/config.ts is the single source of truth — it parses and validates every
+// variable; a fatal misconfiguration prints an actionable report and exits
+// here, so a bad value never surfaces as a confusing error deep in a handler.
 assertEnvOrExit();
+logger.info({ env: describeConfig() }, "environment validated");
 
 const port = config.port;
 
