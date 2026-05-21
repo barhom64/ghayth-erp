@@ -1139,6 +1139,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
       sourceType: "intercompany",
       sourceId: 0,
       sourceKey: `finance:intercompany:from:${idempotencyToken}`,
+      postingDate: txDate,
       lines: fromLines,
     });
     markIdempotencyReplay(req, res, fromResult.alreadyExists);
@@ -1155,6 +1156,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
         sourceType: "intercompany",
         sourceId: 0,
         sourceKey: `finance:intercompany:to:${idempotencyToken}`,
+        postingDate: txDate,
         lines: toLines,
       });
     } catch (err) {
