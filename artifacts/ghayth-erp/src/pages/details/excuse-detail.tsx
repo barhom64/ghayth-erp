@@ -171,20 +171,22 @@ export default function ExcuseDetail() {
               <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Excuse requests only support pending -> approved/rejected.
+                  The old config offered a "return" action whose
+                  approved:"returned" payload failed the boolean schema and
+                  silently rejected, and reject sent `reason` while the
+                  endpoint reads `rejectionReason` (HR functional audit M11). */}
               <ApprovalActions
                 entityType="excuse"
                 entityId={id}
                 currentStatus={excuse.status}
                 approveEndpoint={`/hr/excuse-requests/${id}/approve`}
                 rejectEndpoint={`/hr/excuse-requests/${id}/approve`}
-                returnEndpoint={`/hr/excuse-requests/${id}/approve`}
                 approveMethod="PATCH"
                 rejectMethod="PATCH"
-                returnMethod="PATCH"
-                approveBody={(notes) => ({ approved: true, reason: notes || undefined })}
-                rejectBody={(notes) => ({ approved: false, reason: notes })}
-                returnBody={(notes) => ({ approved: "returned", reason: notes })}
-                pendingStatuses={["pending", "returned"]}
+                approveBody={() => ({ approved: true })}
+                rejectBody={(notes) => ({ approved: false, rejectionReason: notes })}
+                pendingStatuses={["pending"]}
                 invalidateKeys={[["excuse-requests"]]}
                 onDone={() => {
                   refetch();
