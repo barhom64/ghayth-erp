@@ -303,6 +303,33 @@ const payrollPatchSchema = z.object({
   status: z.string().optional(),
 });
 
+const transferPatchSchema = z.object({
+  effectiveDate: z.string().optional(),
+  reason: z.string().optional(),
+  notes: z.string().optional(),
+  toJobTitle: z.string().optional(),
+  toSalary: z.coerce.number().optional().nullable(),
+});
+
+const attendancePatchSchema = z.object({
+  status: z.string().optional(),
+  checkIn: z.string().optional().nullable(),
+  checkOut: z.string().optional().nullable(),
+  lateMinutes: z.coerce.number().optional(),
+  earlyLeaveMinutes: z.coerce.number().optional(),
+  overtimeMinutes: z.coerce.number().optional(),
+  notes: z.string().optional(),
+});
+
+const excuseRequestPatchSchema = z.object({
+  excuseDate: z.string().optional(),
+  excuseType: z.enum(["early_leave", "late_arrival", "personal"]).optional(),
+  startTime: z.string().optional().nullable(),
+  endTime: z.string().optional().nullable(),
+  estimatedMinutes: z.coerce.number().optional(),
+  reason: z.string().optional(),
+});
+
 const performancePatchSchema = z.object({
   overallScore: z.coerce.number().optional(),
   score: z.coerce.number().optional(),
@@ -1126,6 +1153,54 @@ router.get("/attendance/:id", authorize({ feature: "hr.attendance", action: "vie
     if (!row) throw new NotFoundError("سجل الحضور غير موجود");
     res.json(maskFields(req, row));
   } catch (err) { handleRouteError(err, res, "Get attendance detail error:"); }
+});
+
+// Manual correction of an attendance record by HR. Resolves the dead
+// "تعديل" button on the attendance detail page (HR functional audit C8).
+// This is an explicit override tool: it does NOT recompute late/overtime
+// minutes from the punch times, so the form lets HR set both together.
+router.patch("/attendance/:id", authorize({ feature: "hr.attendance", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!HR_ROLES.includes(scope.role)) {
+      throw new ForbiddenError("غير مصرح: تعديل سجلات الحضور مقصور على HR أو المالك");
+    }
+    const id = parseId(req.params.id, "id");
+    const body = zodParse(attendancePatchSchema.safeParse(req.body ?? {}));
+
+    const allowed = ["status", "checkIn", "checkOut", "lateMinutes", "earlyLeaveMinutes", "overtimeMinutes", "notes"];
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    for (const key of allowed) {
+      if ((body as Record<string, unknown>)[key] !== undefined) {
+        params.push((body as Record<string, unknown>)[key]);
+        sets.push(`"${key}" = $${params.length}`);
+      }
+    }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
+
+    params.push(id, scope.companyId);
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `UPDATE attendance SET ${sets.join(", ")}
+       WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL
+       RETURNING *`,
+      params
+    );
+    if (!row) throw new NotFoundError("سجل الحضور غير موجود");
+
+    const changed = sets.map((s) => s.match(/"([^"]+)"/)?.[1]).filter((k): k is string => !!k);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "attendance", entityId: id,
+      after: { changed },
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "attendance.updated", entity: "attendance", entityId: id,
+      details: JSON.stringify({ id, changed }),
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Update attendance error:"); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -5980,6 +6055,65 @@ router.get("/transfers/:id", authorize({ feature: "hr.exit", action: "view" }), 
   } catch (err) { handleRouteError(err, res, "Transfer detail error:"); }
 });
 
+// Edit a transfer request while it is still pending. Resolves the dead
+// "تعديل" button on the transfer detail page (HR functional audit C8).
+router.patch("/transfers/:id", authorize({ feature: "hr.exit", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!HR_ROLES.includes(scope.role)) {
+      throw new ForbiddenError("غير مصرح: تعديل طلبات النقل مقصور على HR أو المالك");
+    }
+    const id = parseId(req.params.id, "id");
+    const body = zodParse(transferPatchSchema.safeParse(req.body ?? {}));
+
+    const [existing] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, status FROM employee_transfers WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("طلب النقل غير موجود");
+    if (existing.status !== "pending") {
+      throw new ConflictError("لا يمكن تعديل طلب نقل بعد اعتماده أو رفضه", {
+        field: "status",
+        fix: "التعديل متاح فقط على الطلبات المعلقة.",
+        meta: { currentStatus: existing.status },
+      });
+    }
+
+    const allowed = ["effectiveDate", "reason", "notes", "toJobTitle", "toSalary"];
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    for (const key of allowed) {
+      if ((body as Record<string, unknown>)[key] !== undefined) {
+        params.push((body as Record<string, unknown>)[key]);
+        sets.push(`"${key}" = $${params.length}`);
+      }
+    }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
+
+    params.push(id, scope.companyId);
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `UPDATE employee_transfers SET ${sets.join(", ")}
+       WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND status = 'pending'
+       RETURNING *`,
+      params
+    );
+    if (!row) throw new ConflictError("تم تحديث طلب النقل مسبقاً — أعد التحميل");
+
+    const changed = sets.map((s) => s.match(/"([^"]+)"/)?.[1]).filter((k): k is string => !!k);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "employee_transfers", entityId: id,
+      after: { changed },
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "hr.transfer.updated", entity: "employee_transfers", entityId: id,
+      details: JSON.stringify({ id, changed }),
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Update transfer error:"); }
+});
+
 router.post("/transfers", authorize({ feature: "hr.exit", action: "create" }), async (req, res) => {
   // Step 3 of the HR operational audit — transfer request creation.
   // Converts the 2 raw res.status(...) error sites to typed throws and
@@ -7189,6 +7323,68 @@ router.patch("/excuse-requests/:id/approve", authorize({ feature: "hr.attendance
     }
     handleRouteError(err, res, "Approve excuse request error:");
   }
+});
+
+// Edit an excuse request while it is still pending. Resolves the dead
+// "تعديل" button on the excuse detail page (HR functional audit C8).
+router.patch("/excuse-requests/:id", authorize({ feature: "hr.attendance", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    if (!HR_ROLES.includes(scope.role)) {
+      throw new ForbiddenError("غير مصرح: تعديل طلبات الاستئذان مقصور على HR أو المالك");
+    }
+    const id = parseId(req.params.id, "id");
+    const body = zodParse(excuseRequestPatchSchema.safeParse(req.body ?? {}));
+
+    const [existing] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, status FROM hr_excuse_requests WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("طلب الاستئذان غير موجود");
+    if (existing.status !== "pending") {
+      throw new ConflictError("لا يمكن تعديل طلب استئذان بعد اعتماده أو رفضه", {
+        field: "status",
+        fix: "التعديل متاح فقط على الطلبات المعلقة.",
+        meta: { currentStatus: existing.status },
+      });
+    }
+
+    const allowed = ["excuseDate", "excuseType", "startTime", "endTime", "estimatedMinutes", "reason"];
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    for (const key of allowed) {
+      if ((body as Record<string, unknown>)[key] !== undefined) {
+        params.push((body as Record<string, unknown>)[key]);
+        sets.push(`"${key}" = $${params.length}`);
+      }
+    }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
+    sets.push(`"updatedAt" = NOW()`);
+
+    params.push(id, scope.companyId);
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `UPDATE hr_excuse_requests SET ${sets.join(", ")}
+       WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND status = 'pending'
+       RETURNING *`,
+      params
+    );
+    if (!row) throw new ConflictError("تم تحديث طلب الاستئذان مسبقاً — أعد التحميل");
+
+    const changed = sets
+      .map((s) => s.match(/"([^"]+)"/)?.[1])
+      .filter((k): k is string => !!k && k !== "updatedAt");
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "hr_excuse_requests", entityId: id,
+      after: { changed },
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "excuse.updated", entity: "hr_excuse_requests", entityId: id,
+      details: JSON.stringify({ id, changed }),
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Update excuse request error:"); }
 });
 
 export default router;

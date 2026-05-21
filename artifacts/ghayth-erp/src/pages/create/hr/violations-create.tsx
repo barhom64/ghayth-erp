@@ -26,34 +26,42 @@ import { getCurrencySymbol } from "@/lib/formatters";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+// `value` MUST match the discipline engine's knownIncidentTypes
+// (hr.ts POST /violations) — late · early_leave · absence · behavior ·
+// organization · custom. Sending Arabic labels here made every manual
+// violation fall through to "custom", so no regulation article or
+// penalty was ever resolved (HR functional audit C7).
 const violationTypes = [
-  { value: "تأخر", label: "تأخر", icon: "⏰", desc: "تأخر عن موعد الحضور" },
+  { value: "late", label: "تأخر", icon: "⏰", desc: "تأخر عن موعد الحضور" },
   {
-    value: "غياب",
+    value: "early_leave",
+    label: "انصراف مبكر",
+    icon: "🚪",
+    desc: "مغادرة قبل نهاية الدوام",
+  },
+  {
+    value: "absence",
     label: "غياب بدون عذر",
     icon: "❌",
     desc: "غياب بدون إذن مسبق",
   },
   {
-    value: "سلوك",
+    value: "behavior",
     label: "سلوك غير لائق",
     icon: "⚠️",
     desc: "تصرف مخالف لأخلاقيات العمل",
   },
   {
-    value: "إهمال",
-    label: "إهمال في العمل",
-    icon: "📋",
-    desc: "عدم إنجاز المهام المطلوبة",
-  },
-  {
-    value: "مخالفة_نظام",
+    value: "organization",
     label: "مخالفة نظام داخلي",
     icon: "📜",
     desc: "مخالفة السياسات والإجراءات",
   },
-  { value: "أخرى", label: "أخرى", icon: "📝", desc: "مخالفة غير مصنفة" },
+  { value: "custom", label: "أخرى", icon: "📝", desc: "مخالفة غير مصنفة" },
 ];
+
+const violationTypeLabel = (value?: string): string =>
+  violationTypes.find((t) => t.value === value)?.label || value || "";
 
 const severityLevels = [
   {
@@ -307,7 +315,7 @@ function ViolationSummary({ employees }: { employees: any[] }) {
       <h4 className="text-sm font-semibold mb-2">ملخص المخالفة</h4>
       <div className="flex flex-wrap gap-2">
         {emp && <Badge variant="outline">{emp.name}</Badge>}
-        {type && <Badge variant="outline">{type}</Badge>}
+        {type && <Badge variant="outline">{violationTypeLabel(type)}</Badge>}
         <Badge variant="outline">
           {severityLevels.find((s) => s.value === severity)?.label ||
             "متوسطة"}
