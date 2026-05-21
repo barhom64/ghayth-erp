@@ -111,6 +111,8 @@ const EnvSchema = z.object({
   // -- object storage ------------------------------------------------------
   PUBLIC_OBJECT_SEARCH_PATHS: optStr(),
   PRIVATE_OBJECT_DIR: optStr(),
+  STORAGE_DRIVER: z.enum(["replit", "local"]).catch("replit"),
+  STORAGE_LOCAL_DIR: optStr(),
 
   // -- web push ------------------------------------------------------------
   VAPID_PUBLIC_KEY: optStr(),
@@ -210,6 +212,10 @@ export interface AppConfig {
   };
 
   readonly objectStorage: {
+    /** Selected storage backend — see lib/storage/. */
+    readonly driver: "replit" | "local";
+    /** Root directory for the local-filesystem driver. */
+    readonly localDir: string | undefined;
     readonly publicSearchPaths: readonly string[];
     readonly privateDir: string | undefined;
     /** True when object storage has enough config to be usable. */
@@ -337,6 +343,8 @@ function buildConfig(env: RawEnv): AppConfig {
     },
 
     objectStorage: {
+      driver: env.STORAGE_DRIVER,
+      localDir: env.STORAGE_LOCAL_DIR,
       publicSearchPaths: splitList(env.PUBLIC_OBJECT_SEARCH_PATHS),
       privateDir: env.PRIVATE_OBJECT_DIR,
       configured: Boolean(env.PRIVATE_OBJECT_DIR),
@@ -582,6 +590,17 @@ function collectEnvIssues(cfg: AppConfig, raw: NodeJS.ProcessEnv): EnvIssue[] {
     });
   }
 
+  if (cfg.objectStorage.driver === "local" && !cfg.objectStorage.localDir) {
+    issues.push({
+      key: "STORAGE_LOCAL_DIR",
+      severity: "fatal",
+      message:
+        "STORAGE_DRIVER=local but STORAGE_LOCAL_DIR is not set — the " +
+        "local-filesystem storage adapter has no root directory.",
+      hint: "Set STORAGE_LOCAL_DIR to a writable directory, or use STORAGE_DRIVER=replit.",
+    });
+  }
+
   return issues;
 }
 
@@ -679,6 +698,7 @@ export function describeConfig(): Record<string, unknown> {
     seedDemoData: config.seedDemoData,
     persistAllEvents: config.persistAllEvents,
     objectStorage: {
+      driver: config.objectStorage.driver,
       configured: config.objectStorage.configured,
       publicSearchPaths: config.objectStorage.publicSearchPaths.length,
     },
