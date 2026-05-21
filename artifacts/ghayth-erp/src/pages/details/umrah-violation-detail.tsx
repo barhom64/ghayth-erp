@@ -51,8 +51,8 @@ export default function UmrahViolationDetail() {
         </CardHeader>
         <CardContent className="text-sm space-y-2">
           <div className="grid grid-cols-2 gap-3">
-            <div><span className="text-muted-foreground">النوع:</span> {violation?.violationType || "—"}</div>
-            <div><span className="text-muted-foreground">الغرامة:</span> {violation?.fineAmount ?? "—"}</div>
+            <div><span className="text-muted-foreground">النوع:</span> {violation?.type || "—"}</div>
+            <div><span className="text-muted-foreground">الغرامة:</span> {violation?.penaltyAmount ?? "—"}</div>
             <div><span className="text-muted-foreground">التاريخ:</span> {violation?.createdAt ? formatDateAr(violation.createdAt) : "—"}</div>
             <div><span className="text-muted-foreground">الحالة:</span> {violation?.status || "—"}</div>
           </div>
@@ -64,7 +64,7 @@ export default function UmrahViolationDetail() {
 
   return (
     <DetailPageLayout
-      title={`مخالفة ${violation?.violationType || ""}`}
+      title={`مخالفة ${violation?.type || ""}`}
       backPath="/umrah/violations"
       backLabel="العودة"
       entityType="violation"
