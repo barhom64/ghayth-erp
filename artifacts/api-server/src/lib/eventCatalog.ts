@@ -1037,6 +1037,8 @@ export const EVENT_CATALOG: EventDefinition[] = [
   { name: "recurring_journal.updated", label: "تحديث قيد متكرر", domain: "finance", description: "تُصدر عند تحديث قيد متكرر", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
   { name: "rent_payment.received", label: "استلام دفعة إيجار", domain: "finance", description: "تُصدر عند استلام دفعة إيجار", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["gl_post","audit","notification"] },
   { name: "salary_component.created", label: "إنشاء مكون راتب", domain: "finance", description: "تُصدر عند إنشاء مكون راتب", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
+  { name: "salary_component.updated", label: "تحديث مكون راتب", domain: "finance", description: "تُصدر عند تحديث مكون راتب", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
+  { name: "salary_component.deleted", label: "حذف مكون راتب", domain: "finance", description: "تُصدر عند حذف مكون راتب", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"], critical: true },
   { name: "vendor.created", label: "إنشاء مورد", domain: "finance", description: "تُصدر عند إنشاء مورد", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "vendor.deleted", label: "حذف مورد", domain: "finance", description: "تُصدر عند حذف مورد", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"], critical: true },
   { name: "vendor.updated", label: "تحديث مورد", domain: "finance", description: "تُصدر عند تحديث مورد", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },

@@ -118,6 +118,15 @@ const salaryComponentSchema = z.object({
   taxable: z.boolean().optional(),
 });
 
+const salaryComponentPatchSchema = z.object({
+  name: z.string().min(1).optional(),
+  type: z.enum(["earning", "deduction", "benefit"]).optional(),
+  calculationType: z.enum(["fixed", "percentage", "formula"]).optional(),
+  value: z.coerce.number().optional(),
+  taxable: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+});
+
 const approvalChainSchema = z.object({
   name: z.string().min(1, "اسم السلسلة مطلوب"),
   chainType: z.enum(["leaves", "purchases", "expenses", "advances", "letters", "loans", "overtime", "exit"], { required_error: "نوع السلسلة مطلوب" }),
@@ -3351,6 +3360,53 @@ router.post("/salary-components", authorize({ feature: "hr.payroll.runs", action
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, name, type: type ?? "earning", calculationType: calculationType ?? "fixed", value: Number(value ?? 0), taxable: taxable ?? true, status: "active" });
   } catch (err) { handleRouteError(err, res, "Create salary component error:"); }
+});
+
+router.patch("/salary-components/:id", authorize({ feature: "hr.payroll.runs", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(salaryComponentPatchSchema.safeParse(req.body ?? {}));
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (b.name !== undefined) { params.push(String(b.name).trim()); sets.push(`name=$${params.length}`); }
+    if (b.type !== undefined) { params.push(b.type); sets.push(`type=$${params.length}`); }
+    if (b.calculationType !== undefined) { params.push(b.calculationType); sets.push(`"calculationType"=$${params.length}`); }
+    if (b.value !== undefined) { params.push(Number(b.value)); sets.push(`value=$${params.length}`); }
+    if (b.taxable !== undefined) { params.push(b.taxable); sets.push(`"isTaxable"=$${params.length}`); }
+    if (b.isActive !== undefined) { params.push(b.isActive); sets.push(`"isActive"=$${params.length}`); }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
+    sets.push(`"updatedAt"=NOW()`);
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    params.push(id); params.push(scope.companyId);
+    const { affectedRows } = await rawExecute(`UPDATE salary_components SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    if (!affectedRows) throw new NotFoundError("مكوّن الراتب غير موجود");
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "salary_components", entityId: id,
+      before: beforeRow ?? {}, after: row ?? {},
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "salary_component.updated", entity: "hr_salary_components", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Patch salary component error:"); }
+});
+
+router.delete("/salary-components/:id", authorize({ feature: "hr.payroll.runs", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!beforeRow) throw new NotFoundError("مكوّن الراتب غير موجود");
+    await rawExecute(`DELETE FROM salary_components WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "salary_components", entityId: id,
+      before: beforeRow,
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "salary_component.deleted", entity: "hr_salary_components", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json({ message: "تم حذف مكوّن الراتب" });
+  } catch (err) { handleRouteError(err, res, "Delete salary component error:"); }
 });
 
 router.get("/approval-chains", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
