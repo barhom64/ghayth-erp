@@ -16,9 +16,9 @@ import { ProcessStages, type StageStep } from "@/components/shared/entity-timeli
 import { useQueryClient } from "@tanstack/react-query";
 
 const EXIT_LIFECYCLE = [
-  { key: "pending",     label: "بانتظار الموافقة" },
-  { key: "in_progress", label: "جاري التنفيذ" },
-  { key: "completed",   label: "مكتمل" },
+  { key: "pending",   label: "بانتظار الموافقة" },
+  { key: "approved",  label: "معتمد — جاري الإجراءات" },
+  { key: "completed", label: "مكتمل" },
 ];
 
 function buildExitSteps(status: string | undefined): StageStep[] {
@@ -66,6 +66,24 @@ export default function ExitDetail() {
     queryClient.invalidateQueries({ queryKey: ["hr-exit-detail", id] });
   };
 
+  // Clearance items and final completion had no UI at all — an exit
+  // request froze at `approved` (HR functional audit C6).
+  const clearanceMut = useApiMutation((body: any) => `/hr/exit/clearance/${body.id}`, "PATCH", [["hr-exit"]], {
+    successMessage: "تم تحديث إخلاء الطرف",
+  });
+  const completeMut = useApiMutation(() => `/hr/exit/${id}/complete`, "PATCH", [["hr-exit"]], {
+    successMessage: "تم إتمام نهاية الخدمة",
+  });
+
+  const handleClearItem = async (clearanceItemId: number, status: "cleared" | "rejected") => {
+    await clearanceMut.mutateAsync({ id: clearanceItemId, status } as any);
+    queryClient.invalidateQueries({ queryKey: ["hr-exit-detail", id] });
+  };
+  const handleComplete = async () => {
+    await completeMut.mutateAsync({} as any);
+    queryClient.invalidateQueries({ queryKey: ["hr-exit-detail", id] });
+  };
+
   const st = EXIT_REQUEST_STATUS[item?.status] ?? { label: item?.status ?? "—", color: "bg-surface-subtle text-muted-foreground" };
   const clearance: any[] = item?.clearance || [];
 
@@ -81,7 +99,7 @@ export default function ExitDetail() {
         { label: "الموظف", value: item.employeeName, icon: User, color: "text-status-info-foreground bg-status-info-surface", size: "sm" },
         { label: "نوع الإنهاء", value: EXIT_TYPES[item.exitType] || item.exitType, icon: LogOut, color: "text-status-error-foreground bg-status-error-surface", size: "sm" },
         { label: "سنوات الخدمة", value: yearsOfService, icon: Calendar, color: "text-purple-600 bg-purple-50", size: "sm" },
-        { label: "المكافأة المقدّرة", value: formatCurrency(Number(item.estimatedGratuity || 0)), icon: DollarSign, color: "text-status-success-foreground bg-status-success-surface", size: "sm" },
+        { label: "المكافأة المقدّرة", value: formatCurrency(Number(item.gratuityAmount || 0)), icon: DollarSign, color: "text-status-success-foreground bg-status-success-surface", size: "sm" },
       ]} />
 
       {/* شريط مراحل نهاية الخدمة */}
@@ -161,7 +179,7 @@ export default function ExitDetail() {
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">مكافأة نهاية الخدمة</span>
-              <span className="font-medium text-status-success-foreground">{formatCurrency(Number(item.estimatedGratuity || 0))}</span>
+              <span className="font-medium text-status-success-foreground">{formatCurrency(Number(item.gratuityAmount || 0))}</span>
             </div>
             {item.leaveBalance != null && (
               <div className="flex justify-between">
@@ -169,10 +187,10 @@ export default function ExitDetail() {
                 <span className="font-medium">{item.leaveBalance} يوم</span>
               </div>
             )}
-            {item.leaveCashOut != null && (
+            {item.leaveCompensation != null && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">تعويض الإجازات</span>
-                <span className="font-medium text-status-info-foreground">{formatCurrency(Number(item.leaveCashOut))}</span>
+                <span className="font-medium text-status-info-foreground">{formatCurrency(Number(item.leaveCompensation))}</span>
               </div>
             )}
             {Number(item.otherDeductions) > 0 && (
@@ -181,10 +199,10 @@ export default function ExitDetail() {
                 <span className="font-medium text-status-error-foreground">-{formatCurrency(Number(item.otherDeductions))}</span>
               </div>
             )}
-            {Number(item.loanBalance) > 0 && (
+            {Number(item.loanDeductions) > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">رصيد سلف متبقي</span>
-                <span className="font-medium text-status-error-foreground">-{formatCurrency(Number(item.loanBalance))}</span>
+                <span className="font-medium text-status-error-foreground">-{formatCurrency(Number(item.loanDeductions))}</span>
               </div>
             )}
             {item.netSettlement != null && (
@@ -218,6 +236,18 @@ export default function ExitDetail() {
                   return <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", cSt.color)}>{cSt.label}</span>;
                 } },
                 { key: "notes", header: "ملاحظات", render: (v) => <span className="text-muted-foreground text-xs">{v.notes || "—"}</span> },
+                { key: "actions", header: "", render: (v) => v.status === "pending" ? (
+                  <GuardedButton
+                    perm="hr:update"
+                    size="sm"
+                    variant="outline"
+                    className="text-xs"
+                    disabled={clearanceMut.isPending}
+                    onClick={() => handleClearItem(v.id, "cleared")}
+                  >
+                    تم الإخلاء
+                  </GuardedButton>
+                ) : null },
               ] as DataTableColumn<any>[]}
               data={clearance}
               noToolbar
@@ -258,6 +288,17 @@ export default function ExitDetail() {
           >
             <CheckCircle className="h-4 w-4 ml-1" />
             اعتماد
+          </GuardedButton>
+        ) : item?.status === "approved" ? (
+          <GuardedButton
+            perm="hr:update"
+            size="sm"
+            onClick={handleComplete}
+            disabled={completeMut.isPending || !item?.clearanceCompleted}
+            rateLimitAware
+          >
+            <CheckCircle className="h-4 w-4 ml-1" />
+            إتمام نهاية الخدمة
           </GuardedButton>
         ) : undefined
       }
