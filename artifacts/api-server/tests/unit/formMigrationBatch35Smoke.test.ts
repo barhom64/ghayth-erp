@@ -62,10 +62,10 @@ describe("settings/zatca-settings-tab — multi-card edit on FormShell + zod", (
     expect(stripComments(SRC)).not.toMatch(/useState\(\{\s*enabled:\s*false\s*,\s*environment:\s*"sandbox"/);
   });
 
-  it("handleSave takes typed ZatcaForm and stringifies `enabled` back for the server", () => {
+  it("handleSave takes typed ZatcaForm and sends `enabled` as a real boolean", () => {
     expect(SRC).toContain("type ZatcaForm = z.infer<typeof zatcaSchema>");
     expect(SRC).toContain("const handleSave = async (values: ZatcaForm)");
-    expect(SRC).toMatch(/enabled:\s*values\.enabled\s*\?\s*"true"\s*:\s*"false"/);
+    expect(SRC).toMatch(/enabled:\s*!!values\.enabled/);
   });
 
   it("handleTestConnection preserved — unrelated POST action, not part of save", () => {
