@@ -1,7 +1,8 @@
 import { EventEmitter } from "events";
-import { rawExecute } from "./rawdb.js";
+import { rawExecute, rawQuery } from "./rawdb.js";
 import { logger } from "./logger.js";
 import { isKnownEvent } from "./eventCatalog.js";
+import { setGauge } from "./metrics.js";
 
 export interface EventPayload {
   /** Envelope version — stamped by EventBus.emit (see EVENT_ENVELOPE_VERSION). */
@@ -275,4 +276,96 @@ export function safeEmitEvent(payload: unknown & { companyId?: number }): void {
 /** Current DLQ buffer length. Test-only — used to assert dead-lettering. */
 export function __dlqBufferLength(): number {
   return dlqBuffer.length;
+}
+
+// ─────────────────────────── DLQ maintenance ──────────────────────────────
+// `event_dlq` is otherwise a write-only, unbounded table with no visibility.
+// This pass adds the two things it lacked: observability (a `dlq.pending`
+// gauge) and bounded growth (aged entries are purged).
+//
+// It deliberately does NOT auto-redeliver. A naive re-emit re-runs *every*
+// listener of the event — double-firing the ones that already succeeded.
+// Safe, targeted redelivery needs per-handler addressing (a recorded
+// handler id so only the failed handler re-runs) — a separate increment.
+
+/** DLQ entries older than this many days are purged by the maintenance pass. */
+const DLQ_RETENTION_DAYS = 30;
+const DLQ_MAINTENANCE_INTERVAL_MS = 10 * 60 * 1000;
+
+let maintenanceTimer: NodeJS.Timeout | null = null;
+
+export interface DlqStats {
+  /** Rows currently in event_dlq. */
+  pending: number;
+  /** Age of the oldest row in seconds, or null when the table is empty. */
+  oldestAgeSec: number | null;
+}
+
+/** Count pending DLQ rows and the age of the oldest. */
+export async function getDlqStats(): Promise<DlqStats> {
+  const rows = await rawQuery<{ pending: string; oldest: string | null }>(
+    `SELECT count(*)::text AS pending,
+            extract(epoch FROM (now() - min("createdAt")))::text AS oldest
+       FROM event_dlq`,
+  );
+  const row = rows[0];
+  return {
+    pending: Number(row?.pending ?? 0),
+    oldestAgeSec:
+      row?.oldest != null ? Math.round(Number(row.oldest)) : null,
+  };
+}
+
+/**
+ * Delete DLQ rows older than `retentionDays`. Idempotent and safe to run
+ * concurrently from multiple instances. Returns the number of rows removed.
+ */
+export async function purgeAgedDlqEntries(
+  retentionDays: number = DLQ_RETENTION_DAYS,
+): Promise<number> {
+  const result = await rawExecute(
+    `DELETE FROM event_dlq WHERE "createdAt" < now() - make_interval(days => $1)`,
+    [retentionDays],
+  );
+  return result.affectedRows;
+}
+
+async function runDlqMaintenance(): Promise<void> {
+  try {
+    const purged = await purgeAgedDlqEntries();
+    const stats = await getDlqStats();
+    setGauge("dlq.pending", stats.pending);
+    if (purged > 0) {
+      logger.info(
+        { purged, pending: stats.pending },
+        "[DLQ] maintenance pass — purged aged entries",
+      );
+    }
+  } catch (err) {
+    logger.error(err, "[DLQ] maintenance pass failed");
+  }
+}
+
+/**
+ * Start the periodic DLQ maintenance pass (idempotent). The interval is
+ * `unref()`'d so it never holds a shutting-down process open.
+ */
+export function startDlqMaintenance(): void {
+  if (maintenanceTimer) return;
+  maintenanceTimer = setInterval(() => {
+    void runDlqMaintenance();
+  }, DLQ_MAINTENANCE_INTERVAL_MS);
+  maintenanceTimer.unref();
+}
+
+/** Stop the maintenance pass. Test-only. */
+export function __stopDlqMaintenance(): void {
+  if (maintenanceTimer) clearInterval(maintenanceTimer);
+  maintenanceTimer = null;
+}
+
+// Auto-start on a real server boot. Skipped under the test runner so unit
+// tests never open a DB-querying interval.
+if (process.env.NODE_ENV !== "test" && !process.env.VITEST) {
+  startDlqMaintenance();
 }
