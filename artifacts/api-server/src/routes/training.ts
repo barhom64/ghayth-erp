@@ -125,7 +125,7 @@ router.post("/programs", authorize({ feature: "hr.training", action: "create" })
   try {
     const body = zodParse(createProgramSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { title, description, category, startDate, endDate, location, trainer, capacity, status, type, provider, duration, durationUnit, cost, maxParticipants } = body;
+    const { title, description, category, startDate, endDate, location, trainer, capacity, status, type, provider, duration, durationUnit, cost, maxParticipants, objectives, targetAudience } = body;
     if (!String(title).trim()) {
       throw new ValidationError("عنوان البرنامج التدريبي مطلوب", {
         field: "title",
@@ -139,8 +139,8 @@ router.post("/programs", authorize({ feature: "hr.training", action: "create" })
       });
     }
     const r = await rawExecute(
-      `INSERT INTO training_programs (title, description, category, "startDate", "endDate", location, trainer, capacity, status, "companyId", type, provider, duration, "durationUnit", cost, "maxParticipants") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-      [String(title).trim(), description ?? null, category ?? null, startDate ?? null, endDate ?? null, location ?? null, trainer ?? null, Number(capacity ?? 0), status ?? "upcoming", scope.companyId, type ?? null, provider ?? null, duration ? Number(duration) : null, durationUnit ?? null, cost ? Number(cost) : 0, maxParticipants ? Number(maxParticipants) : null]
+      `INSERT INTO training_programs (title, description, category, "startDate", "endDate", location, trainer, capacity, status, "companyId", type, provider, duration, "durationUnit", cost, "maxParticipants", objectives, "targetAudience") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+      [String(title).trim(), description ?? null, category ?? null, startDate ?? null, endDate ?? null, location ?? null, trainer ?? null, Number(capacity ?? 0), status ?? "upcoming", scope.companyId, type ?? null, provider ?? null, duration ? Number(duration) : null, durationUnit ?? null, cost ? Number(cost) : 0, maxParticipants ? Number(maxParticipants) : null, objectives ?? null, targetAudience ?? null]
     );
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
