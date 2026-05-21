@@ -8,6 +8,7 @@ import {
   getObjectAclPolicy,
   setObjectAclPolicy,
 } from "./objectAcl.js";
+import { getStorageAdapter } from "./storage/index.js";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
@@ -120,12 +121,17 @@ export class ObjectStorageService {
 
     const { bucketName, objectName } = parseObjectPath(fullPath);
 
-    return signObjectURL({
-      bucketName,
-      objectName,
-      method: "PUT",
-      ttlSec: 900,
-    });
+    // Route through the storage abstraction (lib/storage/) so the presigned
+    // upload URL comes from the configured backend. The default Replit
+    // adapter performs the same sidecar signing call as before — no
+    // behaviour change — while a future backend just implements the adapter.
+    const adapter = getStorageAdapter();
+    if (!adapter.createUploadUrl) {
+      throw new Error(
+        `Storage adapter "${adapter.id}" does not support presigned upload URLs`,
+      );
+    }
+    return adapter.createUploadUrl(`${bucketName}/${objectName}`, 900);
   }
 
   async getObjectEntityFile(objectPath: string): Promise<File> {
@@ -225,43 +231,4 @@ function parseObjectPath(path: string): {
     bucketName,
     objectName,
   };
-}
-
-async function signObjectURL({
-  bucketName,
-  objectName,
-  method,
-  ttlSec,
-}: {
-  bucketName: string;
-  objectName: string;
-  method: "GET" | "PUT" | "DELETE" | "HEAD";
-  ttlSec: number;
-}): Promise<string> {
-  const request = {
-    bucket_name: bucketName,
-    object_name: objectName,
-    method,
-    expires_at: new Date(Date.now() + ttlSec * 1000).toISOString(),
-  };
-  const response = await fetch(
-    `${REPLIT_SIDECAR_ENDPOINT}/object-storage/signed-object-url`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(request),
-      signal: AbortSignal.timeout(30_000),
-    }
-  );
-  if (!response.ok) {
-    throw new Error(
-      `Failed to sign object URL, errorcode: ${response.status}, ` +
-        `make sure you're running on Replit`
-    );
-  }
-
-  const { signed_url: signedURL } = (await response.json()) as { signed_url: string };
-  return signedURL;
 }
