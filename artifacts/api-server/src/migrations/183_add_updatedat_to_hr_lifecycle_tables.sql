@@ -1,0 +1,36 @@
+-- Migration 183: add the "updatedAt" column to the two HR-module lifecycle
+-- tables still missing it — employee_transfers and job_postings.
+--
+-- Background (HR Lifecycle Compatibility audit):
+--   lifecycleEngine.ts applyTransition appends `"updatedAt" = NOW()` to its
+--   UPDATE for every lifecycle table unless the caller passes
+--   `skipUpdatedAt: true`. A table without the column therefore aborts the
+--   transition with HTTP 500 / SQLSTATE 42703.
+--
+--   * employee_violations — fixed in #738 (call-site opt-out) then #753
+--     (migration 182 added the column).
+--   * employee_transfers — its 4 applyTransition sites in routes/hr.ts only
+--     run today because #743 added `skipUpdatedAt: true` at each.
+--   * job_postings — the 2 applyTransition sites in routes/recruitment.ts
+--     (POST /hr/recruitment/postings/:id/{close,reopen}) pass NEITHER the
+--     opt-out NOR the column, so both currently 500:
+--       column "updatedAt" of relation "job_postings" does not exist
+--     This is the same engine-schema mismatch, never covered by #738/#743.
+--
+-- Root fix: rather than scatter more `skipUpdatedAt` opt-outs, give every HR
+-- lifecycle table the column the engine's default contract expects. After
+-- this migration all HR lifecycle tables (hr_leave_requests, hr_inquiry_memos,
+-- hr_exit_requests, hr_excuse_requests, evaluation_cycles, training_programs,
+-- employee_violations, employee_transfers, job_postings) carry "updatedAt",
+-- and the same change-set removes the `skipUpdatedAt` opt-outs at the
+-- violation + transfer call sites so the engine maintains the column
+-- uniformly. Additive + idempotent — safe to re-run.
+--
+-- @rollback: ALTER TABLE employee_transfers DROP COLUMN IF EXISTS "updatedAt";
+--            ALTER TABLE job_postings       DROP COLUMN IF EXISTS "updatedAt";
+--   Safe to drop — additive columns; the lifecycle engine only writes them,
+--   no code reads them directly. (Reverting also requires restoring the
+--   `skipUpdatedAt: true` opt-outs removed from routes/hr.ts in this PR.)
+
+ALTER TABLE employee_transfers ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ DEFAULT now();
+ALTER TABLE job_postings       ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ DEFAULT now();
