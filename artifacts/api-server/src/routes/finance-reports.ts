@@ -324,10 +324,26 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
     const netChange = operating + investing + financing;
     const closingCash = openingCash + netChange;
 
+    // Flat inflow/outflow rows for the cash-flow report tables, derived from
+    // the section items already computed above (no extra query).
+    const cfItems = [
+      ...sections.operating.items,
+      ...sections.investing.items,
+      ...sections.financing.items,
+    ];
+    const inflows = cfItems
+      .filter((i) => Number(i.inflow) > 0)
+      .map((i) => ({ description: i.description, amount: roundTo2(Number(i.inflow)), date: i.date }));
+    const outflows = cfItems
+      .filter((i) => Number(i.outflow) > 0)
+      .map((i) => ({ description: i.description, amount: roundTo2(Number(i.outflow)), date: i.date }));
+
     res.json(maskFields(req, {
       period: { from, to },
       openingCash: roundTo2(openingCash),
       closingCash: roundTo2(closingCash),
+      inflows,
+      outflows,
       sections: {
         operating: {
           inflows: roundTo2(sections.operating.inflows),
