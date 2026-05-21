@@ -46,8 +46,8 @@ describe("finance-vendors — CRUD", () => {
 });
 
 describe("finance-vendors — financial features", () => {
-  it("stats endpoint exists", () => {
-    expect(VENDORS_SRC).toContain('"/stats"');
+  it("stats endpoint removed — was a dead route shadowed by finance-accounts /stats", () => {
+    expect(VENDORS_SRC).not.toContain('"/stats"');
   });
 
   it("receivables endpoints exist", () => {

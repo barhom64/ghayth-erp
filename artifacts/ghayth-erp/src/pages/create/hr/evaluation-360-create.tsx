@@ -59,7 +59,7 @@ export default function Evaluation360Create() {
     period: string;
     notes?: string;
     participants: { evaluatorId: number; evaluatorRole: "manager" | "peer" }[];
-  }>("/hr/evaluation-cycles", "POST", [["evaluation-360"]], {
+  }>("/hr/evaluation-cycles", "POST", [["evaluation-cycles"]], {
     successMessage: "تم بدء دورة التقييم بنجاح",
   });
 

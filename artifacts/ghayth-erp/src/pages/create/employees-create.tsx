@@ -73,6 +73,26 @@ export default function EmployeesCreate() {
     }
   }, [selectedBranchId, selectedCompanyIds]);
 
+  // One-time prefill when arriving from "تحويل لموظف" on a hired
+  // applicant. A job application only carries name/email/phone — the
+  // legally required fields (national id, nationality, department,
+  // salary, contract) are completed here by HR. This is the recruitment
+  // → employee bridge that the pipeline previously lacked (audit C5).
+  useEffect(() => {
+    const qp = new URLSearchParams(window.location.search);
+    const name = qp.get("name");
+    const email = qp.get("email");
+    const phone = qp.get("phone");
+    if (name || email || phone) {
+      setForm((f) => ({
+        ...f,
+        name: name || f.name,
+        email: email || f.email,
+        phone: phone || f.phone,
+      }));
+    }
+  }, []);
+
   const [creationResult, setCreationResult] = useState<Record<string, any> | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
