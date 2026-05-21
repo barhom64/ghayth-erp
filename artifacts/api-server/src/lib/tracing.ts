@@ -5,17 +5,16 @@
  * set. A deployment without an OTLP collector configured pays zero tracing
  * cost and sees no behaviour change — tracing is strictly opt-in via env.
  *
- * Scope: HTTP and PostgreSQL instrumentation — incoming-request and outbound
- * http/https spans, `pg` query spans, and W3C `traceparent` context
- * propagation. Express route/middleware-layer spans are intentionally not
- * included: the server bundle imports express as an ES module, which OTel can
- * only instrument via its experimental import-in-the-middle loader hook — a
- * process-wide experimental mechanism deferred as a separate increment.
+ * Scope: HTTP, Express and PostgreSQL instrumentation — incoming-request and
+ * outbound http/https spans, Express route/middleware-layer spans, `pg` query
+ * spans, and W3C `traceparent` context propagation.
  *
- * Load order: `pg` auto-instrumentation patches the package when it is
- * loaded, so this must run before it is imported. It is started from the
- * `dist/otel.mjs` preload (src/otel.ts), which the `dist/index.mjs` shim
- * imports ahead of the server bundle. `startTracing()` is idempotent
+ * Load order: express/pg auto-instrumentation patches each package when it is
+ * loaded, so this must run before they are imported. It is started from the
+ * `dist/otel.mjs` preload (src/otel.ts) — which also registers OTel's ESM
+ * loader hook so the server bundle's ES-module imports can be patched — and
+ * the `dist/index.mjs` shim imports that preload ahead of the server bundle.
+ * `startTracing()` is idempotent
  * across that preload and the server bundle via a process-global SDK handle,
  * so the existing call in index.ts is a harmless no-op once the preload has
  * already started it.
@@ -23,6 +22,7 @@
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
+import { ExpressInstrumentation } from "@opentelemetry/instrumentation-express";
 import { PgInstrumentation } from "@opentelemetry/instrumentation-pg";
 import { logger } from "./logger.js";
 
@@ -45,6 +45,7 @@ export function startTracing(): void {
       traceExporter: new OTLPTraceExporter(),
       instrumentations: [
         new HttpInstrumentation(),
+        new ExpressInstrumentation(),
         new PgInstrumentation(),
       ],
     });

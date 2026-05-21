@@ -7,9 +7,10 @@ const tracing = readFileSync(join(dir, "lib/tracing.ts"), "utf8");
 const otel = readFileSync(join(dir, "otel.ts"), "utf8");
 const build = readFileSync(join(dir, "../build.mjs"), "utf8");
 
-describe("tracing — OpenTelemetry bootstrap (OBS-6/OBS-9)", () => {
-  it("registers HTTP and PostgreSQL instrumentation", () => {
+describe("tracing — OpenTelemetry bootstrap (OBS-6/OBS-9/OBS-10)", () => {
+  it("registers HTTP, Express and PostgreSQL instrumentation", () => {
     expect(tracing).toContain("new HttpInstrumentation()");
+    expect(tracing).toContain("new ExpressInstrumentation()");
     expect(tracing).toContain("new PgInstrumentation()");
   });
 
@@ -24,12 +25,20 @@ describe("tracing — OpenTelemetry bootstrap (OBS-6/OBS-9)", () => {
   });
 });
 
-describe("tracing — preload load order (OBS-9)", () => {
+describe("tracing — preload load order (OBS-9/OBS-10)", () => {
   it("otel.ts preload starts tracing", () => {
     expect(otel).toContain("startTracing()");
   });
 
-  it("build externalises pg so instrumentation-pg can patch it", () => {
+  it("otel.ts registers the ESM loader hook behind the tracing gate", () => {
+    expect(otel).toContain("process.env.OTEL_EXPORTER_OTLP_ENDPOINT");
+    expect(otel).toContain(
+      'register("@opentelemetry/instrumentation/hook.mjs"',
+    );
+  });
+
+  it("build externalises express and pg so they can be instrumented", () => {
+    expect(build).toMatch(/external:[\s\S]*"express"/);
     expect(build).toMatch(/external:[\s\S]*"pg"/);
   });
 
