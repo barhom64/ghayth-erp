@@ -10,7 +10,7 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { emitEvent, createAuditLog, currentPeriod } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { applyTransition } from "../lib/lifecycleEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
@@ -247,42 +247,6 @@ vendorsRouter.delete("/vendors/:id", authorize({ feature: "finance.vendors", act
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete vendor error:");
-  }
-});
-
-vendorsRouter.get("/stats", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const filters = parseScopeFilters(req);
-    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters);
-    const monthStart = currentPeriod() + "-01";
-    params.push(monthStart);
-
-    interface RevenueStatsRow {
-      totalRevenue: number | string;
-      pendingAmount: number | string;
-      overdueAmount: number | string;
-      paidThisMonth: number | string;
-    }
-    const [stats] = await rawQuery<RevenueStatsRow>(
-      `SELECT
-         COALESCE(SUM("paidAmount"), 0) AS "totalRevenue",
-         COALESCE(SUM(total - "paidAmount") FILTER (WHERE status IN ('sent','partial')), 0) AS "pendingAmount",
-         COALESCE(SUM(total - "paidAmount") FILTER (WHERE status = 'overdue'), 0) AS "overdueAmount",
-         COALESCE(SUM("paidAmount") FILTER (WHERE DATE("createdAt") >= $${nextParamIndex}), 0) AS "paidThisMonth"
-       FROM invoices
-       WHERE ${where} AND "deletedAt" IS NULL`,
-      params
-    );
-
-    res.json(maskFields(req, {
-      totalRevenue: Number(stats?.totalRevenue ?? 0),
-      pendingAmount: Number(stats?.pendingAmount ?? 0),
-      overdueAmount: Number(stats?.overdueAmount ?? 0),
-      paidThisMonth: Number(stats?.paidThisMonth ?? 0),
-    }));
-  } catch (err) {
-    handleRouteError(err, res, "خطأ غير متوقع");
   }
 });
 
