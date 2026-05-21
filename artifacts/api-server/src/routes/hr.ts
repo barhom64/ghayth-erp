@@ -2415,11 +2415,13 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
     const id = parseId(req.params.id, "id");
     if (req.path.endsWith("/lines")) return; // let next handler handle it
     const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT pr.*, e.name AS "runByName",
+      `SELECT pr.*, e.name AS "runByName", e2.name AS "approvedByName",
               (SELECT COUNT(*) FROM payroll_lines pl WHERE pl."runId" = pr.id AND pl."deletedAt" IS NULL)::int AS "employeeCount"
        FROM payroll_runs pr
        LEFT JOIN employee_assignments ea ON ea.id = pr."runBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employee_assignments ea2 ON ea2.id = pr."approvedBy"
+       LEFT JOIN employees e2 ON e2.id = ea2."employeeId"
        WHERE pr.id = $1 AND pr."companyId" = $2 AND pr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
