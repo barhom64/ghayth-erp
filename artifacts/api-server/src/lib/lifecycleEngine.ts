@@ -173,7 +173,12 @@ export async function applyTransition<TRow = any>(
 
   const { updated, existingStatus } = await runInTransaction(async (client) => {
     // 1. Lock the row and validate state.
-    if (extraWhere && !/^[\w\s"'.=()]+$/.test(extraWhere)) {
+    // `%` is whitelisted for `LIKE 'PREFIX%'` filters — several lifecycle
+    // routes scope by ref prefix (expense `EXP%`, custody `CUSTODY%`,
+    // salary-advance `SALARY-ADV%`, voucher `VOUCHER%`). `extraWhere` is
+    // built from route-side string literals, never user input, and `%`
+    // cannot break out of a string literal, so this stays injection-safe.
+    if (extraWhere && !/^[\w\s"'.=()%]+$/.test(extraWhere)) {
       throw new LifecycleError("extraWhere contains disallowed characters", 400);
     }
     const lockSql =
