@@ -3,6 +3,9 @@ import { HealthCheckResponse } from "@workspace/api-zod";
 import { rawQuery } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { getRedisRateLimitStatus } from "../lib/rateLimitStore.js";
+import { getLiveness, getReadiness } from "../lib/health.js";
+import { getObservabilitySnapshot } from "../lib/observability.js";
+import { describeConfig } from "../lib/config.js";
 
 const router: IRouter = Router();
 
@@ -13,6 +16,31 @@ router.get("/healthz", (_req, res) => {
   // (see artifacts/api-server/src/lib/rateLimitStore.ts).
   const data = HealthCheckResponse.parse({ status: "ok" });
   res.json({ ...data, redisRateLimit: getRedisRateLimitStatus() });
+});
+
+/**
+ * Liveness probe — "is this process alive?". Process-local only: never
+ * touches the database or any dependency, so a slow/unreachable dependency
+ * can never trigger a container restart loop. An orchestrator that gets a
+ * non-200 here should RESTART the container.
+ */
+router.get("/livez", (_req, res) => {
+  res.json(getLiveness());
+});
+
+/**
+ * Readiness probe — "can this instance serve traffic right now?". Runs the
+ * cached, timeout-bounded dependency probes (see lib/health.ts). An
+ * orchestrator that gets a 503 here should PULL the instance from the
+ * load-balancer rotation but NOT restart it.
+ *
+ *   status "ready"       → 200, all required dependencies healthy
+ *   status "degraded"    → 200, serving but an optional dependency is impaired
+ *   status "unavailable" → 503, a required dependency failed
+ */
+router.get("/readyz", async (_req, res) => {
+  const report = await getReadiness();
+  res.status(report.status === "unavailable" ? 503 : 200).json(report);
 });
 
 /**
@@ -229,6 +257,26 @@ router.get("/health/schema", async (_req, res) => {
       checkedAt: new Date().toISOString(),
     });
   }
+});
+
+/**
+ * Operator metrics snapshot — in-memory counters, gauges, and latency
+ * histograms collected by the observability layer (HTTP requests, DB
+ * queries, slow queries, cron jobs). Like `/health/schema` this is an
+ * operator-only diagnostic and is not part of the OpenAPI contract.
+ */
+router.get("/health/metrics", (_req, res) => {
+  res.json(getObservabilitySnapshot());
+});
+
+/**
+ * Effective configuration snapshot — the resolved, validated environment
+ * config with all secret values masked (see config.SECRET_ENV_KEYS). Lets
+ * an operator confirm exactly what the server resolved, so a deployment
+ * outside Replit never has to guess at its own configuration.
+ */
+router.get("/health/config", (_req, res) => {
+  res.json(describeConfig());
 });
 
 export default router;

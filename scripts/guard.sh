@@ -15,7 +15,8 @@
 #   7. Cross-domain SQL writes (boundary leak)  → audit:domain-boundaries
 #   8. Domain → routeFile mounting              → audit:domain-routes
 #   9. Migration basename collisions            → check:duplicate-migrations
-#  10. Unit/smoke tests                         → test
+#  10. Migration header/rollback/destructive policy → check:migration-policy
+#  11. Unit/smoke tests                         → test
 #
 
 set -euo pipefail
@@ -84,6 +85,7 @@ fi
 run_step "audit:boundaries"   node scripts/src/audit-domain-boundaries.mjs
 run_step "audit:domain-routes" node scripts/src/audit-domain-routes.mjs
 run_step "check:duplicate-migrations" node scripts/src/check-duplicate-migrations.mjs
+run_step "check:migration-policy" node scripts/src/check-migration-policy.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test
 
 END=$(date +%s)
