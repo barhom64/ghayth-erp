@@ -85,12 +85,37 @@ export function stampEnvelope(
   };
 }
 
+// Transactional-outbox capture (Decision Brief #2, phase 1). Every emitted
+// event is recorded durably in event_outbox. Phase 1 captures only — the
+// in-process dispatch via super.emit is unchanged and remains the active
+// dispatcher; the relay that drains the outbox and the dispatch-source
+// switch land in follow-up PRs. Skipped under the test runner (no DB),
+// mirroring startDlqMaintenance.
+const OUTBOX_CAPTURE_ENABLED =
+  process.env.NODE_ENV !== "test" && !process.env.VITEST;
+
+function captureToOutbox(eventName: string, payload?: EventPayload): void {
+  if (!OUTBOX_CAPTURE_ENABLED) return;
+  // Fire-and-forget — emit() stays synchronous and is never blocked on the DB.
+  void rawExecute(
+    `INSERT INTO event_outbox ("eventName", payload, "companyId")
+     VALUES ($1, $2, $3)`,
+    [
+      eventName,
+      payload != null ? JSON.stringify(payload) : null,
+      payload?.companyId ?? null,
+    ],
+  ).catch((err) => logger.warn(err, "[outbox] failed to capture event"));
+}
+
 class EventBus extends EventEmitter {
   emit(event: EventName, payload?: EventPayload): boolean {
     // Single chokepoint — every emit path (emitEvent, safeEmitEvent, the
     // domain engines, eventCatalog) routes through here, so stamping the
     // envelope once guarantees every event is versioned + timestamped.
-    return super.emit(event, stampEnvelope(payload));
+    const stamped = stampEnvelope(payload);
+    captureToOutbox(event, stamped);
+    return super.emit(event, stamped);
   }
 
   on(event: EventName, listener: (payload: EventPayload) => void): this {
