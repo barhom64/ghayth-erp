@@ -12,7 +12,7 @@ import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } fro
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
@@ -191,6 +191,16 @@ export default function RecruitmentPage() {
         values={filters}
         onChange={setFilters}
         resultCount={filteredJobs.length + filteredApps.length}
+        onExportCSV={() =>
+          exportToCSV(filteredJobs, [
+            { key: "title", label: "المسمى الوظيفي" },
+            { key: "department", label: "القسم" },
+            { key: "location", label: "الموقع" },
+            { key: "type", label: "النوع" },
+            { key: "applicantsCount", label: "المتقدمين" },
+            { key: "status", label: "الحالة" },
+          ], "التوظيف")
+        }
       />
 
       <BulkActionsBar

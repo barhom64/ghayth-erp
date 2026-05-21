@@ -417,7 +417,10 @@ const transferApprovalSchema = z.object({
 });
 
 const transferConfirmSchema = z.object({
-  confirmed: z.boolean().optional(),
+  // PATCH /transfers/:id/receive — an absent flag means "confirm/receive";
+  // `false` is the explicit decline. Mirrors transferApprovalSchema: a route
+  // named /receive must not silently decline when the flag is omitted.
+  confirmed: z.boolean().optional().default(true),
   notes: z.string().optional(),
 });
 

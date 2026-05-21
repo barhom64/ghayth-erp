@@ -240,20 +240,24 @@ If the migration runner errors, the server exits — fix the migration locally a
 Run these from a workstation against the live API to confirm the deployment is healthy:
 
 ```bash
-# 1. Liveness — should return 200 with build info
-curl -sf https://api.example.com/api/health
+# 1. Liveness — process is up (never touches the DB). A non-200 → restart.
+curl -sf https://api.example.com/api/livez
 
-# 2. Schema probe — confirms critical tables present + migrations applied
+# 2. Readiness — required dependencies reachable. 503 → pull the instance
+#    from the load-balancer rotation; do NOT restart on this signal.
+curl -sf https://api.example.com/api/readyz | jq .
+
+# 3. Schema probe — confirms critical tables present + migrations applied.
 #    Returns 503 if any CRITICAL_TABLES row is missing; 200 + status="degraded"
 #    if a module table is missing (won't page out, but flags partial deploy).
 curl -sf https://api.example.com/api/health/schema | jq .
 
-# 3. Login as the first admin — should return a JWT
+# 4. Login as the first admin — should return a JWT
 curl -sf -X POST https://api.example.com/api/auth/login \
   -H 'content-type: application/json' \
   -d '{"email":"ops@example.com","password":"<your-password>"}' | jq .accessToken
 
-# 4. RBAC catalog — confirms feature catalog loaded
+# 5. RBAC catalog — confirms feature catalog loaded
 curl -sf -H "Authorization: Bearer <token>" \
   https://api.example.com/api/admin/rbac/features | jq '.data | length'
 ```

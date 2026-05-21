@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertTriangle, Scale, DollarSign, Shield, TrendingUp } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { PageShell } from "@/components/page-shell";
 import { SEVERITY_LEVELS } from "@/lib/hr-type-maps";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
@@ -124,6 +124,16 @@ export default function ViolationsManagementPage() {
               values={filters}
               onChange={setFilters}
               resultCount={filtered.length}
+              onExportCSV={() =>
+                exportToCSV(filtered, [
+                  { key: "employeeName", label: "الموظف" },
+                  { key: "type", label: "النوع" },
+                  { key: "description", label: "الوصف" },
+                  { key: "severity", label: "الشدة" },
+                  { key: "deduction", label: "الخصم" },
+                  { key: "status", label: "الحالة" },
+                ], "المخالفات")
+              }
             />
             <DataTable
               columns={columns}
