@@ -1003,6 +1003,19 @@ journalRouter.patch("/salary-advances/:id/approve", authorize({ feature: "financ
       after: { ref: entry.ref, decision: newStatus, notes: notes ?? null },
     });
 
+    // FIN-005 — the advance posts a GL entry at creation (DR advance
+    // receivable / CR cash), which moves account balances. Rejecting it must
+    // undo that balance movement, the same way expense rejection does;
+    // without this the receivable and cash stay shifted for a never-granted
+    // advance.
+    if (newStatus === "rejected") {
+      try {
+        await reverseAccountBalances(scope.companyId, advanceId);
+      } catch (e) {
+        logger.error(e, "Failed to reverse salary advance GL on rejection:");
+      }
+    }
+
     res.json({
       id: advanceId,
       status: updated.status,
