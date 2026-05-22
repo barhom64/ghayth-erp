@@ -710,10 +710,27 @@ export async function applyJournalEntryBalances(
   // yet had its balances applied is processed. Entries that predate FIN-007
   // were created with balancesApplied = true and are skipped here.
   const { rows: jeRows } = await client.query(
-    `SELECT "balancesApplied" FROM journal_entries WHERE id = $1 AND "companyId" = $2`,
+    `SELECT "balancesApplied", "createdAt" FROM journal_entries WHERE id = $1 AND "companyId" = $2`,
     [journalId, companyId]
   );
   if (!jeRows[0] || jeRows[0].balancesApplied) return;
+
+  // H2 — applying a deferred entry's balances posts it to the ledger as of
+  // the entry's own date. If that financial period has since closed or
+  // locked (e.g. a voucher created in an open month, approved after the
+  // month closed) the apply is refused — approval must not silently post
+  // into a closed period. The caller's transaction rolls back, leaving the
+  // document unapproved until the period is reopened or the entry redated.
+  const periodCheck = await checkFinancialPeriodOpen(
+    companyId,
+    toDateISO(jeRows[0].createdAt as string)
+  );
+  if (!periodCheck.open) {
+    throw new ValidationError(
+      `الفترة المالية "${periodCheck.periodName}" مُقفلة — لا يمكن ترحيل قيد بتاريخها`,
+      { field: "financialPeriod", fix: "افتح الفترة المالية أو أعد تأريخ القيد" }
+    );
+  }
 
   const { rows: lines } = await client.query(
     `SELECT jl."accountCode", jl.debit, jl.credit
