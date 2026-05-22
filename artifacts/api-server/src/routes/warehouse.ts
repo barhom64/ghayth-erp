@@ -661,8 +661,8 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
 
       const sign = (b.type === 'in' || b.type === 'return' || b.type === 'transfer_in') ? 1 : -1;
       const movRes = await client.query(
-        `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-        [scope.companyId, b.productId, b.type, b.quantity, unitCost, b.reference, b.notes, scope.userId]
+        `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy","branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [scope.companyId, b.productId, b.type, b.quantity, unitCost, b.reference, b.notes, scope.userId, scope.branchId]
       );
       insertId = movRes.rows[0]?.id ?? 0;
 
@@ -876,16 +876,16 @@ router.post("/transfers", authorize({ feature: "warehouse.transfers", action: "c
       unitCost = Number(product.costPrice) || 0;
 
       const outRes = await client.query(
-        `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,"fromLocation","toLocation",notes,"createdBy")
-         VALUES ($1,$2,'transfer_out',$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-        [scope.companyId, b.productId, b.quantity, unitCost, transferRef, fromLocation, toLocation, `تحويل من ${fromLocation} إلى ${toLocation}`, scope.userId]
+        `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,"fromLocation","toLocation",notes,"createdBy","branchId")
+         VALUES ($1,$2,'transfer_out',$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+        [scope.companyId, b.productId, b.quantity, unitCost, transferRef, fromLocation, toLocation, `تحويل من ${fromLocation} إلى ${toLocation}`, scope.userId, scope.branchId]
       );
       outId = outRes.rows[0].id;
 
       const inRes = await client.query(
-        `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,"fromLocation","toLocation",notes,"createdBy")
-         VALUES ($1,$2,'transfer_in',$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-        [scope.companyId, b.productId, b.quantity, unitCost, transferRef, fromLocation, toLocation, `استلام تحويل من ${fromLocation} في ${toLocation}`, scope.userId]
+        `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,"fromLocation","toLocation",notes,"createdBy","branchId")
+         VALUES ($1,$2,'transfer_in',$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+        [scope.companyId, b.productId, b.quantity, unitCost, transferRef, fromLocation, toLocation, `استلام تحويل من ${fromLocation} في ${toLocation}`, scope.userId, scope.branchId]
       );
       inId = inRes.rows[0].id;
 
@@ -1489,11 +1489,11 @@ router.post("/inventory-counts/:id/approve", authorize({ feature: "warehouse.inv
           );
 
           const movRes = await client.query(
-            `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy")
-             VALUES ($1,$2,$3,$4,$5,'INV-COUNT-' || $6,$7,$8) RETURNING id`,
+            `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy","branchId")
+             VALUES ($1,$2,$3,$4,$5,'INV-COUNT-' || $6,$7,$8,$9) RETURNING id`,
             [scope.companyId, item.productId, movType, qty, preCost, countId,
              variance > 0 ? `فائض جرد — ${qty} وحدة` : `عجز جرد — ${qty} وحدة`,
-             scope.userId]
+             scope.userId, scope.branchId]
           );
           const movementId = movRes.rows[0]?.id;
 
