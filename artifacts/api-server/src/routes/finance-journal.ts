@@ -501,31 +501,45 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat });
     if (subAccountCode && subAccountCode !== accountCode) { journalLines[0].accountCode = subAccountCode; }
 
-    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, type: "expense", sourceType: operationType || "expense", sourceId: 0, sourceKey: `finance:expense:${idempotencyToken}`, lines: journalLines });
-    markIdempotencyReplay(req, res, alreadyExists);
+    // C3 — the journal entry, its header metadata and the approval chain are
+    // created in ONE transaction. A failure anywhere (or a crash) rolls the
+    // whole thing back, so there is never a posted expense entry without its
+    // approval request, nor an approval chain pointing at a missing entry.
+    // postJournalEntry's own withTransaction joins this one via savepoint;
+    // rawExecute joins via the transaction async-context.
+    const { journalId, alreadyExists, approvalResult } = await withTransaction(async () => {
+      const posted = await financialEngine.postJournalEntry({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, type: "expense", sourceType: operationType || "expense", sourceId: 0, sourceKey: `finance:expense:${idempotencyToken}`, lines: journalLines });
 
-    await rawExecute(
-      `UPDATE journal_entries SET "costCenter" = $1, "departmentId" = $2, "relatedEntityType" = $3, "relatedEntityId" = $4, "paymentMethod" = $5, reference = $6, "isPaid" = $7, "attachmentUrl" = $8, "attachmentType" = $9, "expenseType" = $10, "operationType" = $11, "projectId" = $12, "taxCategory" = $13, "govSyncEnabled" = $14, "govIntegrationId" = $15, "govEntityType" = $16, "govEntityId" = $17 WHERE id = $18 AND "companyId" = $19 AND "deletedAt" IS NULL`,
-      [costCenter ?? null, departmentId ?? null, relatedEntityType ?? null, relatedEntityId ?? null, paymentMethod ?? "cash", reference ?? null, isPaid != null ? !!isPaid : true, attachmentUrl ?? null, attachmentType ?? null, expenseType ?? null, operationType ?? "expense", projectId ?? null, taxCategory ?? null, govSyncEnabled ? true : false, govIntegrationId ? Number(govIntegrationId) : null, govEntityType ?? null, govEntityId ? Number(govEntityId) : null, journalId, effectiveCompanyId]
-    ).catch((err) => logger.error(err, "Failed to update expense metadata:"));
-
-    if (govSyncEnabled && govIntegrationId && govEntityType && govEntityId) {
-      const [validIntegration] = await rawQuery<Record<string, unknown>>(
-        `SELECT id FROM gov_integrations WHERE id = $1 AND "companyId" = $2`,
-        [Number(govIntegrationId), effectiveCompanyId]
+      await rawExecute(
+        `UPDATE journal_entries SET "costCenter" = $1, "departmentId" = $2, "relatedEntityType" = $3, "relatedEntityId" = $4, "paymentMethod" = $5, reference = $6, "isPaid" = $7, "attachmentUrl" = $8, "attachmentType" = $9, "expenseType" = $10, "operationType" = $11, "projectId" = $12, "taxCategory" = $13, "govSyncEnabled" = $14, "govIntegrationId" = $15, "govEntityType" = $16, "govEntityId" = $17 WHERE id = $18 AND "companyId" = $19 AND "deletedAt" IS NULL`,
+        [costCenter ?? null, departmentId ?? null, relatedEntityType ?? null, relatedEntityId ?? null, paymentMethod ?? "cash", reference ?? null, isPaid != null ? !!isPaid : true, attachmentUrl ?? null, attachmentType ?? null, expenseType ?? null, operationType ?? "expense", projectId ?? null, taxCategory ?? null, govSyncEnabled ? true : false, govIntegrationId ? Number(govIntegrationId) : null, govEntityType ?? null, govEntityId ? Number(govEntityId) : null, posted.journalId, effectiveCompanyId]
       );
-      if (validIntegration) {
-        await rawExecute(
-          `INSERT INTO gov_integration_links ("companyId", "integrationId", "entityType", "entityId", "externalRef", enabled, "syncStatus")
-           VALUES ($1, $2, $3, $4, $5, true, 'pending')
-           ON CONFLICT ("companyId", "integrationId", "entityType", "entityId") DO NOTHING`,
-          [effectiveCompanyId, Number(govIntegrationId), govEntityType, Number(govEntityId), ref]
-        ).catch((e) => logger.error(e, "finance-journal background task failed"));
-      }
-    }
 
-    const approvalResult = await initiateApprovalChain({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, chainType: "expenses", refType: "expense", refId: journalId, amount: Number(amount ?? 0) });
-    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`, [journalId, effectiveCompanyId]); }
+      if (govSyncEnabled && govIntegrationId && govEntityType && govEntityId) {
+        const [validIntegration] = await rawQuery<Record<string, unknown>>(
+          `SELECT id FROM gov_integrations WHERE id = $1 AND "companyId" = $2`,
+          [Number(govIntegrationId), effectiveCompanyId]
+        );
+        if (validIntegration) {
+          // Best-effort — isolated in its own savepoint so a failed link
+          // insert rolls back alone and never poisons the expense txn.
+          await withTransaction(async () => {
+            await rawExecute(
+              `INSERT INTO gov_integration_links ("companyId", "integrationId", "entityType", "entityId", "externalRef", enabled, "syncStatus")
+               VALUES ($1, $2, $3, $4, $5, true, 'pending')
+               ON CONFLICT ("companyId", "integrationId", "entityType", "entityId") DO NOTHING`,
+              [effectiveCompanyId, Number(govIntegrationId), govEntityType, Number(govEntityId), ref]
+            );
+          }).catch((e) => logger.error(e, "finance-journal background task failed"));
+        }
+      }
+
+      const approval = await initiateApprovalChain({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, chainType: "expenses", refType: "expense", refId: posted.journalId, amount: Number(amount ?? 0) });
+      if (approval.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`, [posted.journalId, effectiveCompanyId]); }
+
+      return { journalId: posted.journalId, alreadyExists: posted.alreadyExists, approvalResult: approval };
+    });
+    markIdempotencyReplay(req, res, alreadyExists);
 
     emitEvent({ companyId: effectiveCompanyId, userId: scope.userId, action: "expense.created", entity: "expenses", entityId: journalId, details: JSON.stringify({ ref, accountCode, amount: baseAmount, vatAmount: computedVat, totalWithVat, sourceAccountCode: sourceAcct, approvalRequired: approvalResult.requiresApproval, operationType, expenseType, relatedEntityType, relatedEntityId }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
