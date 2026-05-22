@@ -157,28 +157,28 @@ describe("hrEngine ref patterns", () => {
 describe("hrEngine debit/credit structure", () => {
   it("postPayrollGL: basic salary is always debit", () => {
     const idx = ENGINE_SRC.indexOf("async postPayrollGL");
-    const section = ENGINE_SRC.slice(idx, idx + 1200);
-    expect(section).toContain("debit: payroll.totalBasic, credit: 0");
+    const section = ENGINE_SRC.slice(idx, idx + 5000);
+    expect(section).toContain("debit: totalBasic, credit: 0");
   });
 
   it("postPayrollGL: allowances are conditionally added when > 0", () => {
     const idx = ENGINE_SRC.indexOf("async postPayrollGL");
     const section = ENGINE_SRC.slice(idx, idx + 5000);
-    expect(section).toContain("payroll.totalAllowances > 0");
-    expect(section).toContain("debit: payroll.totalAllowances");
+    expect(section).toContain("totalAllowances > 0");
+    expect(section).toContain("debit: totalAllowances");
   });
 
   it("postPayrollGL: deductions are conditionally added when > 0", () => {
     const idx = ENGINE_SRC.indexOf("async postPayrollGL");
     const section = ENGINE_SRC.slice(idx, idx + 5000);
-    expect(section).toContain("payroll.totalDeductions > 0");
-    expect(section).toContain("credit: payroll.totalDeductions");
+    expect(section).toContain("totalDeductions > 0");
+    expect(section).toContain("credit: totalDeductions");
   });
 
   it("postPayrollGL: net salary is always credit (payable)", () => {
     const idx = ENGINE_SRC.indexOf("async postPayrollGL");
     const section = ENGINE_SRC.slice(idx, idx + 5000);
-    expect(section).toContain("credit: payroll.totalNet");
+    expect(section).toContain("credit: totalNet");
   });
 
   it("postLoanDisbursementGL: debit receivable, credit disbursement", () => {
@@ -198,7 +198,7 @@ describe("hrEngine debit/credit structure", () => {
 
   it("postPayrollRunGL: filters out zero-value lines", () => {
     const idx = ENGINE_SRC.indexOf("async postPayrollRunGL");
-    const section = ENGINE_SRC.slice(idx, idx + 2500);
+    const section = ENGINE_SRC.slice(idx, idx + 3500);
     expect(section).toContain(".filter(l => l.debit > 0 || l.credit > 0)");
   });
 

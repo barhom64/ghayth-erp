@@ -487,39 +487,14 @@ export async function createJournalEntry(params: {
   const totalDebit = roundTo2(params.lines.reduce((s, l) => s + l.debit, 0));
   const totalCredit = roundTo2(params.lines.reduce((s, l) => s + l.credit, 0));
   const imbalance = roundTo4(totalDebit - totalCredit);
-  if (Math.abs(imbalance) > 0.001 && Math.abs(imbalance) <= 0.05) {
-    let [roundingAcc] = await rawQuery<Record<string, unknown>>(
-      `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' LIMIT 1`,
-      [params.companyId]
-    );
-    if (!roundingAcc) {
-      await rawExecute(
-        `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, level, "allowPosting")
-         VALUES ($1, '9999', 'فروقات التقريب', 'Rounding Differences', 'expense', 2, true)
-         ON CONFLICT DO NOTHING`,
-        [params.companyId]
-      );
-      [roundingAcc] = await rawQuery<Record<string, unknown>>(
-        `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' LIMIT 1`,
-        [params.companyId]
-      );
-    }
-    if (roundingAcc) {
-      params.lines.push({
-        accountCode: "9999",
-        debit: imbalance < 0 ? Math.abs(imbalance) : 0,
-        credit: imbalance > 0 ? imbalance : 0,
-        description: "فرق تقريب تلقائي",
-      });
-      rawExecute(
-        `INSERT INTO audit_logs ("companyId","userId",action,entity,"entityId","after")
-         VALUES ($1,$2,'rounding_adjustment','journal_entry',0,$3)`,
-        [params.companyId, params.createdBy, JSON.stringify({
-          ref: params.ref, imbalance, totalDebit, totalCredit,
-        })]
-      ).catch((e) => logger.error(e, "[businessHelpers] background task failed"));
-    }
-  } else if (Math.abs(imbalance) > 0.05) {
+  // A correctly-built journal entry MUST balance to the cent. debit/credit
+  // amounts are 2-decimal, so any non-zero gap here is a real arithmetic
+  // bug in the caller that built the lines — it must derive the balancing
+  // line as `total − Σ(other lines)`, never compute both sides by
+  // independent rounding. Reject it loudly. The previous behaviour silently
+  // plugged a 0.001–0.05 gap into a "9999 rounding differences" expense,
+  // which hid the calculation bug and let that account drift without bound.
+  if (Math.abs(imbalance) >= 0.005) {
     throw new ValidationError(
       `قيد غير متوازن: مدين=${totalDebit.toFixed(2)} ≠ دائن=${totalCredit.toFixed(2)} (${params.ref})`
     );
