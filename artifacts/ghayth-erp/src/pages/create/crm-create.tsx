@@ -29,7 +29,9 @@ export default function CrmCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const addOpp = useApiMutation("/crm/opportunities", "POST", [["crm-opportunities"], ["crm-stats"], ["crm-pipeline"]]);
   const { data: clientsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
-  const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
+  // CRM-003 — /crm/assignees is gated by the CRM feature; GET /employees
+  // required hr.employees and 403'd for CRM-only users.
+  const { data: employeesData } = useApiQuery<{ data: any[] }>(["crm-assignees"], "/crm/assignees");
   const clients = clientsData?.data || [];
   const employees = employeesData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
