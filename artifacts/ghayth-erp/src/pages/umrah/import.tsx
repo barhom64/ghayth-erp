@@ -62,17 +62,14 @@ export default function UmrahImport() {
     setResult(null);
     setFileName(name);
     try {
-      const XLSX = await import("xlsx");
+      const { parseXlsxToObjects } = await import("@/lib/excel-import");
       const base64 = dataUrl.split(",")[1];
       const binaryStr = atob(base64);
       const bytes = new Uint8Array(binaryStr.length);
       for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-      const wb = XLSX.read(bytes, { type: "array", cellDates: true });
-      const sheetName = wb.SheetNames[0];
-      if (!sheetName) { setParseError("الملف لا يحتوي على أوراق عمل"); return; }
-      const data = XLSX.utils.sheet_to_json<any>(wb.Sheets[sheetName], { defval: "" });
+      const data = await parseXlsxToObjects(bytes);
       if (data.length === 0) { setParseError("الملف فارغ أو لا يحتوي على بيانات"); return; }
-      const rows = data.map((row: any) => {
+      const rows = data.map((row) => {
         const keys = Object.keys(row);
         const mapped: any = {};
         const fieldMap: Record<string, string> = {

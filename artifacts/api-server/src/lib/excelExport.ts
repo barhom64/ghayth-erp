@@ -1,46 +1,5 @@
-import * as XLSX from "xlsx";
+import { buildXlsxBuffer, type ExcelSheet } from "./excelCompat.js";
 import { rawQuery } from "./rawdb.js";
-
-interface ExcelSheet {
-  name: string;
-  headers: string[];
-  rows: (string | number | null)[][];
-  colWidths?: number[];
-}
-
-function buildWorkbook(sheets: ExcelSheet[]): XLSX.WorkBook {
-  const wb = XLSX.utils.book_new();
-  for (const sheet of sheets) {
-    const data = [sheet.headers, ...sheet.rows];
-    const ws = XLSX.utils.aoa_to_sheet(data);
-
-    const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
-
-    for (let C = range.s.c; C <= range.e.c; C++) {
-      const cellAddr = XLSX.utils.encode_cell({ r: 0, c: C });
-      if (!ws[cellAddr]) continue;
-      ws[cellAddr].s = {
-        font: { bold: true },
-        fill: { fgColor: { rgb: "E2E8F0" } },
-        alignment: { horizontal: "center" },
-      };
-    }
-
-    if (sheet.colWidths) {
-      ws["!cols"] = sheet.colWidths.map((w) => ({ wch: w }));
-    } else {
-      const widths = sheet.headers.map((h) => Math.max(h.length + 4, 12));
-      ws["!cols"] = widths.map((w) => ({ wch: w }));
-    }
-
-    XLSX.utils.book_append_sheet(wb, ws, sheet.name.slice(0, 31));
-  }
-  return wb;
-}
-
-export function workbookToBuffer(wb: XLSX.WorkBook): Buffer {
-  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
-}
 
 export async function exportTrialBalanceExcel(companyId: number, startDate?: string, endDate?: string): Promise<Buffer> {
   let dateFilter = "";
@@ -74,8 +33,7 @@ export async function exportTrialBalanceExcel(companyId: number, startDate?: str
   const totalCredit = rows.reduce((s: number, r: any) => s + Number(r.totalCredit), 0);
   sheet.rows.push(["", "المجموع", "", totalDebit, totalCredit, totalDebit - totalCredit]);
 
-  const wb = buildWorkbook([sheet]);
-  return workbookToBuffer(wb);
+  return buildXlsxBuffer([sheet]);
 }
 
 export async function exportIncomeStatementExcel(companyId: number, startDate?: string, endDate?: string): Promise<Buffer> {
@@ -111,8 +69,7 @@ export async function exportIncomeStatementExcel(companyId: number, startDate?: 
     colWidths: [12, 40, 18],
   };
 
-  const wb = buildWorkbook([revenueSheet, expenseSheet]);
-  return workbookToBuffer(wb);
+  return buildXlsxBuffer([revenueSheet, expenseSheet]);
 }
 
 export async function exportInvoicesExcel(companyId: number, startDate?: string, endDate?: string): Promise<Buffer> {
@@ -146,8 +103,7 @@ export async function exportInvoicesExcel(companyId: number, startDate?: string,
     colWidths: [14, 30, 12, 14, 12, 14, 14, 14, 16, 16],
   };
 
-  const wb = buildWorkbook([sheet]);
-  return workbookToBuffer(wb);
+  return buildXlsxBuffer([sheet]);
 }
 
 export async function exportPayrollExcel(companyId: number, period?: string): Promise<Buffer> {
@@ -200,8 +156,7 @@ export async function exportPayrollExcel(companyId: number, period?: string): Pr
     });
   }
 
-  const wb = buildWorkbook(sheets);
-  return workbookToBuffer(wb);
+  return buildXlsxBuffer(sheets);
 }
 
 export async function exportAttendanceExcel(companyId: number, startDate?: string, endDate?: string): Promise<Buffer> {
@@ -244,8 +199,7 @@ export async function exportAttendanceExcel(companyId: number, startDate?: strin
     colWidths: [25, 20, 14, 12, 12, 12, 12, 30],
   };
 
-  const wb = buildWorkbook([sheet]);
-  return workbookToBuffer(wb);
+  return buildXlsxBuffer([sheet]);
 }
 
 export async function exportFleetExcel(companyId: number): Promise<Buffer> {
@@ -308,6 +262,5 @@ export async function exportFleetExcel(companyId: number): Promise<Buffer> {
     colWidths: [12, 20, 20, 20, 18, 18, 12, 12],
   };
 
-  const wb = buildWorkbook([vehicleSheet, tripSheet]);
-  return workbookToBuffer(wb);
+  return buildXlsxBuffer([vehicleSheet, tripSheet]);
 }

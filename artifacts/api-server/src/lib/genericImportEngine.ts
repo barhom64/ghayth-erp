@@ -17,7 +17,7 @@
 // Adapters live in importAdapters.ts. Adding a new entity = new adapter
 // entry only — no engine changes required.
 
-import * as XLSX from "xlsx";
+import { parseFirstSheetAOA } from "./excelCompat.js";
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { ValidationError } from "./errorHandler.js";
 import { logger } from "./logger.js";
@@ -95,18 +95,16 @@ const BOOL_FALSE = new Set(["لا", "no", "false", "0", "خطأ", "n", ""]);
  * field types. Returns an empty array for empty sheets — caller decides
  * whether that's an error.
  */
-export function parseSpreadsheet(buffer: Buffer, entityKey: ImportEntity): ParsedRow[] {
+export async function parseSpreadsheet(
+  buffer: Buffer,
+  entityKey: ImportEntity,
+): Promise<ParsedRow[]> {
   const adapter = ADAPTERS[entityKey];
   if (!adapter) {
     throw new ValidationError(`Unknown import entity: ${entityKey}`);
   }
 
-  const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
-  const sheetName = wb.SheetNames[0];
-  if (!sheetName) throw new ValidationError("الملف لا يحتوي على أي ورقة");
-  const sheet = wb.Sheets[sheetName]!;
-
-  const raw = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "" });
+  const raw = await parseFirstSheetAOA(buffer);
   if (raw.length < 2) throw new ValidationError("الملف لا يحتوي على بيانات");
 
   const headerRow = raw[0] as unknown[];

@@ -145,8 +145,12 @@ describe("pdfExport — security", () => {
 // ══════════════════════════════════════════════════════════════════════════
 
 describe("excelExport — exported functions", () => {
-  it("exports workbookToBuffer", () => {
-    expect(EXCEL).toContain("export function workbookToBuffer");
+  it("builds workbooks via the exceljs compat layer", () => {
+    // xlsx@0.18.5 (Prototype Pollution + ReDoS, no upstream fix) was
+    // replaced by exceljs behind lib/excelCompat.ts (Task #269).
+    expect(EXCEL).toContain('from "./excelCompat.js"');
+    expect(EXCEL).toContain("buildXlsxBuffer");
+    expect(EXCEL).not.toContain('from "xlsx"');
   });
 
   it("exports exportTrialBalanceExcel", () => {
