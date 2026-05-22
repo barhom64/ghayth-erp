@@ -310,8 +310,11 @@ const leaveCancelSchema = z.object({
   reason: z.string().optional(),
 });
 
+// HR-002 — PATCH /payroll/:id only posts an already-approved run. Free-text
+// status was how a run could be moved straight to "posted" without the
+// maker-checker approval; the enum makes "posted" the only accepted value.
 const payrollPatchSchema = z.object({
-  status: z.string().optional(),
+  status: z.enum(["posted"]),
 });
 
 const transferPatchSchema = z.object({
@@ -4343,7 +4346,17 @@ router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "up
     );
     if (!existing) throw new NotFoundError("دورة الرواتب غير موجودة");
 
-    if (status === "posted" && existing.status !== "posted") {
+    // HR-002 — a run may only be posted after the maker-checker approval
+    // (PATCH /payroll/:id/approve takes pending_approval → completed). Posting
+    // from any other state — which used to be possible — bypassed approval.
+    if (existing.status === "posted") {
+      throw new ConflictError("دورة الرواتب مُرحَّلة مسبقاً");
+    }
+    if (existing.status !== "completed") {
+      throw new ConflictError(`لا يمكن ترحيل مسير لم تتم الموافقة عليه — الحالة الحالية: ${existing.status}`);
+    }
+
+    if (status === "posted") {
       const period = existing.period as string;
       const totalNet = Number(existing.totalNet ?? 0);
 
@@ -4434,20 +4447,6 @@ router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "up
       res.json(row);
       return;
     }
-
-    const [row] = await rawQuery<Record<string, unknown>>(
-      `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL AND status = $4 RETURNING *`,
-      [status, id, scope.companyId, existing.status]
-    );
-    if (!row) throw new NotFoundError("دورة الرواتب غير موجودة");
-
-    createAuditLog({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "update", entity: "payroll_runs", entityId: id,
-      before: { status: existing.status },
-      after: { status },
-    }).catch((e) => logger.error(e, "hr background task failed"));
-    res.json(row);
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
