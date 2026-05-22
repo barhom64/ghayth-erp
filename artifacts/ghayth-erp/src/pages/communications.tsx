@@ -11,7 +11,7 @@ import { PageStatusBadge } from "@/components/page-status-badge";
 import { formatDateAr , todayLocal } from "@/lib/formatters";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { ErrorState } from "@/components/shared/loading-error-states";
-import { MessageCircle, Mail, Phone, Send, Search, ArrowRightLeft, ClipboardList, Headphones, FileText, ChevronDown, ChevronUp, Bell, BellOff, BellRing, CheckCircle2, XCircle, Clock, Activity } from "lucide-react";
+import { MessageCircle, Mail, Phone, Send, Search, ArrowRightLeft, ClipboardList, Headphones, FileText, ChevronDown, ChevronUp, Bell, BellOff, BellRing, CheckCircle2, XCircle, Clock, Activity, Pencil, Trash2, Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
@@ -432,6 +432,72 @@ function ConvertCommButton({ logEntry, onSuccess }: { logEntry: any; onSuccess: 
   );
 }
 
+const COMM_LOG_STATUSES = ["queued", "sent", "delivered", "received", "read", "failed"];
+
+function CommLogActions({ logEntry, onSuccess }: { logEntry: any; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState({ subject: logEntry.subject || "", status: logEntry.status || "queued" });
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await apiFetch(`/communications/log/${logEntry.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ subject: form.subject, status: form.status }),
+      });
+      toast({ title: "تم تحديث السجل" });
+      setEditing(false);
+      onSuccess();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "خطأ", description: err.message });
+    } finally { setBusy(false); }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await apiFetch(`/communications/log/${logEntry.id}`, { method: "DELETE" });
+      toast({ title: "تم حذف السجل" });
+      onSuccess();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "خطأ", description: err.message });
+    } finally { setBusy(false); }
+  };
+
+  if (editing) {
+    return (
+      <div className="inline-flex items-center gap-1">
+        <Input value={form.subject} onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} placeholder="الموضوع" className="h-7 w-28 text-xs" />
+        <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
+          <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {COMM_LOG_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Button variant="ghost" size="sm" className="h-7 px-2" disabled={busy} onClick={save}><Check className="h-3 w-3" /></Button>
+        <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setEditing(false)}><X className="h-3 w-3" /></Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="inline-flex items-center gap-1">
+      <GuardedButton perm="communications:update" variant="ghost" size="sm" className="h-7 px-2" onClick={() => setEditing(true)}><Pencil className="h-3 w-3" /></GuardedButton>
+      {confirmDelete ? (
+        <>
+          <GuardedButton perm="communications:delete" variant="outline" size="sm" className="h-7 px-2 text-[11px] text-status-error-foreground" disabled={busy} onClick={remove}>تأكيد</GuardedButton>
+          <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setConfirmDelete(false)}><X className="h-3 w-3" /></Button>
+        </>
+      ) : (
+        <GuardedButton perm="communications:delete" variant="ghost" size="sm" className="h-7 px-2 text-status-error-foreground" onClick={() => setConfirmDelete(true)}><Trash2 className="h-3 w-3" /></GuardedButton>
+      )}
+    </div>
+  );
+}
+
 function CommLogTab() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -449,7 +515,12 @@ function CommLogTab() {
     { key: "subject", header: "الموضوع", sortable: true, render: (l) => <span className="max-w-[200px] truncate inline-block">{l.subject || "-"}</span> },
     { key: "status", header: "الحالة", sortable: true, render: (l) => <PageStatusBadge status={l.status} /> },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (l) => formatDateAr(l.createdAt) },
-    { key: "actions", header: "إجراء", render: (l) => l.relatedType ? <Badge variant="outline" className="text-[10px]">{l.relatedType}</Badge> : <ConvertCommButton logEntry={l} onSuccess={() => refetch()} /> },
+    { key: "actions", header: "إجراء", render: (l) => (
+      <div className="inline-flex items-center gap-1">
+        {l.relatedType ? <Badge variant="outline" className="text-[10px]">{l.relatedType}</Badge> : <ConvertCommButton logEntry={l} onSuccess={() => refetch()} />}
+        <CommLogActions logEntry={l} onSuccess={() => refetch()} />
+      </div>
+    ) },
   ];
 
   return (
