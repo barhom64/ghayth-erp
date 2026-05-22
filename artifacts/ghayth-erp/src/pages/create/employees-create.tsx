@@ -64,6 +64,12 @@ export default function EmployeesCreate() {
     emergencyContact: "", emergencyPhone: "",
   });
 
+  // HR-005 — when the page is opened from a recruitment application, the
+  // application id rides along so the POST links the application, emits
+  // recruitment.application.converted_to_employee and writes the audit.
+  // Creation still goes through the same /employees pipeline.
+  const [sourceApplicationId, setSourceApplicationId] = useState<string | null>(null);
+
   useEffect(() => {
     if (selectedBranchId && !form.branchId) {
       setForm((f) => ({ ...f, branchId: String(selectedBranchId) }));
@@ -73,7 +79,7 @@ export default function EmployeesCreate() {
     }
   }, [selectedBranchId, selectedCompanyIds]);
 
-  // One-time prefill when arriving from "تحويل لموظف" on a hired
+  // One-time prefill when arriving from "إنشاء موظف من الطلب" on a hired
   // applicant. A job application only carries name/email/phone — the
   // legally required fields (national id, nationality, department,
   // salary, contract) are completed here by HR. This is the recruitment
@@ -83,6 +89,8 @@ export default function EmployeesCreate() {
     const name = qp.get("name");
     const email = qp.get("email");
     const phone = qp.get("phone");
+    const appId = qp.get("sourceApplicationId");
+    if (appId) setSourceApplicationId(appId);
     if (name || email || phone) {
       setForm((f) => ({
         ...f,
@@ -125,6 +133,7 @@ export default function EmployeesCreate() {
         branchId: form.branchId ? Number(form.branchId) : undefined,
         managerId: form.managerId ? Number(form.managerId) : undefined,
         ...(attachments.length > 0 ? { attachments } : {}),
+        ...(sourceApplicationId ? { sourceApplicationId: Number(sourceApplicationId) } : {}),
       });
       clearDraft();
       toast({ title: "تم إضافة الموظف بنجاح" });
@@ -237,6 +246,12 @@ export default function EmployeesCreate() {
         <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
           <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
+      {sourceApplicationId && (
+        <div className="mb-4 flex items-center gap-2 bg-status-info-surface border border-status-info-surface rounded-lg px-4 py-2 text-sm text-status-info-foreground">
+          <Briefcase className="h-4 w-4 shrink-0" />
+          <span>يتم إنشاء هذا الموظف من طلب التوظيف رقم #{sourceApplicationId} — أكمل البيانات المطلوبة ثم احفظ.</span>
         </div>
       )}
       <div className="mb-4">
