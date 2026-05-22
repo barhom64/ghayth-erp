@@ -627,23 +627,18 @@ journalRouter.patch("/expenses/:id/approve", authorize({ feature: "finance.journ
            VALUES ('expense',$1,$2,$3,$4,$5)`,
           [expenseId, newStatus, notes || null, scope.userId, scope.companyId]
         );
+        // The expense moved GL balances at creation time; a rejected /
+        // returned expense must reverse them or the books stay overstated.
+        // This runs in the SAME transaction as the status change — if the
+        // reversal fails the whole decision rolls back, so the status can
+        // never flip without the matching reversal. reverseAccountBalances'
+        // rawQuery/rawExecute join this transaction via the async context.
+        if (newStatus === "rejected" || newStatus === "returned") {
+          await reverseAccountBalances(scope.companyId, expenseId);
+        }
       },
       after: { ref: exp.ref, decision: newStatus, notes: notes ?? null },
     });
-
-    // CRITICAL: Expense journal_entries update GL balances at creation time.
-    // If the expense is rejected or returned after that posting, the GL
-    // balances must be reversed or the books stay overstated. Runs OUTSIDE
-    // the lifecycle transaction because reverseAccountBalances has its own
-    // transactional flow; failures are logged but don't block the status
-    // change (which has already succeeded).
-    if (newStatus === "rejected" || newStatus === "returned") {
-      try {
-        await reverseAccountBalances(scope.companyId, expenseId);
-      } catch (e) {
-        logger.error(e, "Failed to reverse expense GL on rejection:");
-      }
-    }
 
     const labels: Record<string, string> = { approved: "تمت الموافقة", rejected: "تم الرفض", returned: "تم الإرجاع" };
     res.json({
@@ -1003,22 +998,16 @@ journalRouter.patch("/salary-advances/:id/approve", authorize({ feature: "financ
            VALUES ('salary_advance',$1,$2,$3,$4,$5)`,
           [advanceId, newStatus, notes || null, scope.userId, scope.companyId]
         );
+        // FIN-005 — the advance posts a GL entry at creation (DR advance
+        // receivable / CR cash). Rejecting it must undo that movement, in
+        // the SAME transaction as the status change so a rejected advance
+        // can never leave the receivable and cash shifted.
+        if (newStatus === "rejected") {
+          await reverseAccountBalances(scope.companyId, advanceId);
+        }
       },
       after: { ref: entry.ref, decision: newStatus, notes: notes ?? null },
     });
-
-    // FIN-005 — the advance posts a GL entry at creation (DR advance
-    // receivable / CR cash), which moves account balances. Rejecting it must
-    // undo that balance movement, the same way expense rejection does;
-    // without this the receivable and cash stay shifted for a never-granted
-    // advance.
-    if (newStatus === "rejected") {
-      try {
-        await reverseAccountBalances(scope.companyId, advanceId);
-      } catch (e) {
-        logger.error(e, "Failed to reverse salary advance GL on rejection:");
-      }
-    }
 
     res.json({
       id: advanceId,
