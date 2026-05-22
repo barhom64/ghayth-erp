@@ -106,6 +106,10 @@ const createEmployeeSchema = z.object({
   emergencyContact: z.string().optional().nullable(),
   emergencyPhone: z.string().optional().nullable(),
   attachments: z.any().optional(),
+  // HR-005: when set, this employee is created from a recruitment
+  // application. Creation still runs through this single pipeline — the id
+  // only adds the application↔employee link, conversion event and audit.
+  sourceApplicationId: z.coerce.number().int().positive().optional().nullable(),
 });
 
 const patchEmployeeSchema = z.object({
@@ -290,6 +294,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       borderNumber, visaNumber, visaType, visaExpiry,
       sponsorNumber, workPermitNumber, workPermitExpiry, iqamaStatus,
       bankName, bankAccount, iban, emergencyContact, emergencyPhone,
+      sourceApplicationId,
       // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent destructure does not require explicit per-field generics; behavior unchanged
     } = body as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
@@ -429,6 +434,38 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       }
     }
 
+    // HR-005 — recruitment→employee conversion guard. The application is the
+    // hiring "draft"; we reject conversion before the transaction so a bad
+    // application id never leaves a half-created employee behind. The
+    // race-safe re-check inside the transaction is the real lock.
+    if (sourceApplicationId) {
+      const [application] = await rawQuery<{ id: number; status: string | null; createdEmployeeId: number | null }>(
+        `SELECT a.id, a.status, a."createdEmployeeId"
+           FROM job_applications a
+           LEFT JOIN job_postings jp ON jp.id = a."postingId"
+          WHERE a.id = $1 AND (jp."companyId" = $2 OR jp."companyId" IS NULL) AND a."deletedAt" IS NULL`,
+        [Number(sourceApplicationId), scope.companyId]
+      );
+      if (!application) {
+        throw new ValidationError("طلب التوظيف غير موجود", {
+          field: "sourceApplicationId",
+          fix: "تحقق من طلب التوظيف المصدر.",
+        });
+      }
+      if (application.createdEmployeeId) {
+        throw new ConflictError("طلب التوظيف محوّل مسبقاً إلى موظف", {
+          field: "sourceApplicationId",
+          fix: "هذا الطلب مرتبط بموظف قائم — افتح ملف الموظف بدلاً من إنشاء سجل جديد.",
+        });
+      }
+      if (!["offer", "hired"].includes(String(application.status))) {
+        throw new ValidationError("لا يمكن تحويل طلب التوظيف إلى موظف في هذه المرحلة", {
+          field: "sourceApplicationId",
+          fix: "انقل طلب التوظيف إلى مرحلة العرض أو التوظيف قبل التحويل.",
+        });
+      }
+    }
+
     const result = await withTransaction(async (client) => {
       // ── Step 1: Auto-generate employee number (EMP-YYYY-NNN) ──
       let finalEmpNumber = empNumber;
@@ -459,6 +496,25 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
          (body as any).attachments ? JSON.stringify((body as any).attachments) : null]
       );
       const empId = empRes.rows[0].id;
+
+      // ── HR-005: link the source recruitment application ──
+      // Race-safe: the `createdEmployeeId IS NULL` predicate makes a
+      // concurrent second conversion of the same application affect 0 rows,
+      // which throws here and rolls back the whole employee creation.
+      if (sourceApplicationId) {
+        const linkRes = await client.query(
+          `UPDATE job_applications
+              SET "createdEmployeeId" = $1, "onboardedAt" = NOW()
+            WHERE id = $2 AND "createdEmployeeId" IS NULL AND "deletedAt" IS NULL`,
+          [empId, Number(sourceApplicationId)]
+        );
+        if (linkRes.rowCount !== 1) {
+          throw new ConflictError("طلب التوظيف محوّل مسبقاً إلى موظف", {
+            field: "sourceApplicationId",
+            fix: "هذا الطلب مرتبط بموظف قائم — افتح ملف الموظف بدلاً من إنشاء سجل جديد.",
+          });
+        }
+      }
 
       // ── Step 3: Create first assignment ──
       // as-any-reason: justified-pragmatic - defensive read of optional jobTitleId field on parsed body; behavior unchanged
@@ -675,6 +731,21 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       action: "create", entity: "employees", entityId: empId,
       after: { name, empNumber: finalEmpNumber, jobTitle, role, salary, contractType, probationDays: Number(probationDays) },
     });
+
+    // ── Step 11b: HR-005 — recruitment conversion event + audit ──
+    if (sourceApplicationId) {
+      await emitEvent({
+        companyId: scope.companyId, userId: scope.userId,
+        action: "recruitment.application.converted_to_employee",
+        entity: "job_applications", entityId: Number(sourceApplicationId),
+        details: JSON.stringify({ sourceApplicationId: Number(sourceApplicationId), createdEmployeeId: empId, empNumber: finalEmpNumber }),
+      });
+      await createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "convert", entity: "job_applications", entityId: Number(sourceApplicationId),
+        after: { createdEmployeeId: empId, empNumber: finalEmpNumber, sourceApplicationId: Number(sourceApplicationId) },
+      });
+    }
 
     // ── Step 12: Auto-create subsidiary accounting accounts ──
     createSubsidiaryAccountsForEntity(scope.companyId, "employee", empId, name).catch((e) => logger.error(e, "employees background task failed"));

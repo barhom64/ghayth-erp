@@ -111,8 +111,23 @@ export default function ApplicationListPage() {
       key: "actions",
       header: "",
       render: (v) => {
+        // HR-005 — already converted: link straight to the employee file
+        // instead of offering a second (now-blocked) conversion.
+        if (v.createdEmployeeId) {
+          return (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-xs text-status-success-foreground"
+              onClick={() => navigate(`/employees/${v.createdEmployeeId}`)}
+            >
+              عرض الموظف
+            </Button>
+          );
+        }
         if ((v.status || v.stage) !== "hired") return null;
         const qs = new URLSearchParams({
+          sourceApplicationId: String(v.id),
           name: v.applicantName || v.name || "",
           email: v.email || "",
           phone: v.phone || "",
@@ -125,7 +140,7 @@ export default function ApplicationListPage() {
             className="text-xs"
             onClick={() => navigate(`/employees/create?${qs}`)}
           >
-            تحويل لموظف
+            إنشاء موظف من الطلب
           </GuardedButton>
         );
       },
