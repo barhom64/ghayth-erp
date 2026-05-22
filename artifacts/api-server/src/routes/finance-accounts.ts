@@ -554,7 +554,7 @@ accountsRouter.get("/ledger/:accountCode", authorize({ feature: "finance.account
               jl.debit, jl.credit
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = $2 AND jl."deletedAt" IS NULL
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' ${dateFilter}
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}
        ORDER BY je."createdAt" ASC LIMIT 5000`,
       params
     );
@@ -606,7 +606,7 @@ accountsRouter.get("/summary", authorize({ feature: "finance.accounts", action: 
     const [exp] = await rawQuery<ExpenseSummaryRow>(
       `SELECT COUNT(*) AS count, COALESCE(SUM(jl.debit),0) AS total
        FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id
-       WHERE je."companyId" = $1 AND jl."accountCode" LIKE '5%' AND je."deletedAt" IS NULL AND je.status = 'posted'`,
+       WHERE je."companyId" = $1 AND jl."accountCode" LIKE '5%' AND je."deletedAt" IS NULL AND je."balancesApplied" = true`,
       [scope.companyId]
     );
     res.json(maskFields(req, {
