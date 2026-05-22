@@ -246,11 +246,16 @@ class HREngineImpl implements DomainEngine {
       totalOtherDeductions: number;
     }
   ) {
-    const [salaryExpenseCode, gosiExpenseCode, overtimeExpenseCode, bankCode, gosiPayableCode, deductionsPayableCode] = await Promise.all([
+    // HR-001 — accrual leg. Run creation recognises the payroll expense and
+    // the matching liabilities; it does NOT touch the bank. The net pay is
+    // credited to salary_payable, settled later by postPayrollPostGL when the
+    // run is posted. Crediting the bank here (and again at posting) was the
+    // source of the double-count.
+    const [salaryExpenseCode, gosiExpenseCode, overtimeExpenseCode, salaryPayableCode, gosiPayableCode, deductionsPayableCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_salary_expense", "debit", "5100"),
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_expense", "debit", "5110"),
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_overtime_expense", "debit", "5120"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_bank_payout", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "credit", "2120"),
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_payable", "credit", "2200"),
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_deductions_payable", "credit", "2210"),
     ]);
@@ -259,7 +264,7 @@ class HREngineImpl implements DomainEngine {
       { accountCode: salaryExpenseCode, debit: payroll.totalGross, credit: 0 },
       { accountCode: overtimeExpenseCode, debit: payroll.totalOvertime, credit: 0 },
       { accountCode: gosiExpenseCode, debit: roundTo2(payroll.totalGosiEmployer), credit: 0 },
-      { accountCode: bankCode, debit: 0, credit: payroll.totalBankPayout },
+      { accountCode: salaryPayableCode, debit: 0, credit: payroll.totalBankPayout },
       { accountCode: gosiPayableCode, debit: 0, credit: payroll.totalGosiPayable },
       { accountCode: deductionsPayableCode, debit: 0, credit: payroll.totalOtherDeductions },
     ].filter(l => l.debit > 0 || l.credit > 0);
@@ -269,7 +274,7 @@ class HREngineImpl implements DomainEngine {
       branchId: ctx.branchId,
       createdBy: ctx.createdBy,
       ref: `PAYROLL-${payroll.period}`,
-      description: `صرف رواتب ${payroll.period} – ${payroll.employeeCount} موظف`,
+      description: `استحقاق رواتب ${payroll.period} – ${payroll.employeeCount} موظف`,
       type: "general",
       sourceType: "payroll_runs",
       sourceId: payroll.runId,
@@ -285,47 +290,37 @@ class HREngineImpl implements DomainEngine {
     payroll: {
       runId: number;
       period: string;
-      totalGross: number;
-      totalGosiEmployer: number;
       totalBankPayout: number;
-      totalGosiPayable: number;
     }
   ) {
-    const [salaryExpenseCode, gosiExpenseCode, bankCode, gosiPayableCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_salary_expense", "debit", "5100"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_expense", "debit", "5110"),
+    // HR-001 — payment leg. Posting a run settles the net-pay liability that
+    // postPayrollRunGL accrued: it moves the amount from salary_payable to the
+    // bank. The expense and the GOSI/deductions liabilities were already
+    // recognised at accrual, so re-posting them here would double-count.
+    const amount = roundTo2(payroll.totalBankPayout);
+    if (amount <= 0) return null;
+
+    const [salaryPayableCode, bankCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "debit", "2120"),
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_bank_payout", "credit", "1100"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_payable", "credit", "2200"),
     ]);
-
-    const jlLines = [
-      { accountCode: salaryExpenseCode, debit: payroll.totalGross, credit: 0, description: "مصاريف رواتب" },
-      { accountCode: gosiExpenseCode, debit: roundTo2(payroll.totalGosiEmployer), credit: 0, description: "تأمينات اجتماعية صاحب عمل" },
-      { accountCode: bankCode, debit: 0, credit: payroll.totalBankPayout, description: "صرف رواتب — بنك" },
-      { accountCode: gosiPayableCode, debit: 0, credit: roundTo2(payroll.totalGosiPayable), description: "تأمينات اجتماعية مستحقة" },
-    ].filter(l => l.debit > 0 || l.credit > 0);
-
-    const totalJeDebit = jlLines.reduce((s, l) => s + l.debit, 0);
-    const totalJeCredit = jlLines.reduce((s, l) => s + l.credit, 0);
-    if (Math.abs(totalJeDebit - totalJeCredit) > 0.01) {
-      throw new Error(
-        `لا يمكن ترحيل الرواتب: القيد المحاسبي غير متوازن (مدين=${totalJeDebit.toFixed(2)} ≠ دائن=${totalJeCredit.toFixed(2)})`
-      );
-    }
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
       branchId: ctx.branchId,
       createdBy: ctx.createdBy,
       ref: `PAYROLL-POST-${payroll.period}`,
-      description: `قيد إقفال رواتب ${payroll.period}`,
+      description: `سداد رواتب ${payroll.period}`,
       type: "payroll",
       sourceType: "payroll_run",
       sourceId: payroll.runId,
       sourceKey: `hr:payroll_post:${payroll.runId}`,
       guardTable: "payroll_runs",
       guardId: payroll.runId,
-      lines: jlLines,
+      lines: [
+        { accountCode: salaryPayableCode, debit: amount, credit: 0, description: "تسوية رواتب مستحقة" },
+        { accountCode: bankCode, debit: 0, credit: amount, description: "سداد رواتب — بنك" },
+      ],
     });
   }
 
