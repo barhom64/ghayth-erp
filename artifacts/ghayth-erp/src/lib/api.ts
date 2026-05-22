@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRef } from "react";
 import { toast } from "@/hooks/use-toast";
 import { notifyRateLimited } from "./rate-limit-toast";
 import { useAppContextOptional } from "@/contexts/app-context";
@@ -400,6 +401,13 @@ export function useApiMutation<TData = any, TBody = any>(
   options?: ApiMutationOptions<TData, TBody>
 ) {
   const qc = useQueryClient();
+  // H4 — idempotency key for POST. Generated once, reused while the
+  // mutation keeps failing, and cleared on success. A POST retried after
+  // a lost response (network blip after the server already committed)
+  // therefore carries the SAME key, so the server dedupes it instead of
+  // creating a duplicate record; a deliberate next submission after a
+  // success gets a fresh key.
+  const idempotencyKey = useRef<string | null>(null);
   return useMutation<TData, Error, TBody>({
     mutationFn: (body: TBody) => {
       const url = typeof path === "function" ? path(body) : path;
@@ -408,12 +416,19 @@ export function useApiMutation<TData = any, TBody = any>(
       // The DELETE / POST / PATCH body is still the same body object
       // — the function form only affects the URL, never the request
       // payload.
+      const headers: Record<string, string> = {};
+      if (method.toUpperCase() === "POST") {
+        if (!idempotencyKey.current) idempotencyKey.current = crypto.randomUUID();
+        headers["idempotency-key"] = idempotencyKey.current;
+      }
       return apiFetch<TData>(url, {
         method,
         body: JSON.stringify(body),
+        headers,
       });
     },
     onSuccess: (data, body) => {
+      idempotencyKey.current = null;
       invalidateKeys?.forEach((key) => qc.invalidateQueries({ queryKey: key }));
       if (options?.successMessage !== false && options?.successMessage !== undefined) {
         toast({ title: options.successMessage });
