@@ -9,6 +9,19 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const isDev = config.isDevelopment;
 
+// Migrations are named NNN_description.sql. They must run in numeric
+// order — a plain lexical .sort() is correct only while every prefix has
+// the same digit width; once a four-digit migration appears ("1000_…")
+// lexical order is wrong ("1000_" sorts before "200_"). Sort by the
+// integer prefix and tie-break deterministically by full filename so
+// files that share a number always run in a stable order.
+function compareMigrationFiles(a: string, b: string): number {
+  const na = parseInt(a, 10);
+  const nb = parseInt(b, 10);
+  if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+  return a.localeCompare(b);
+}
+
 /**
  * Other PostgreSQL statements that cannot run inside a transaction block.
  * Same `25001 PreventInTransactionBlock` family as
@@ -401,7 +414,7 @@ async function detectAndApplyBaselineIfNeeded(client: any): Promise<void> {
   const migrationsDir = resolve(__dirname, "./migrations");
   const migrationFiles = readdirSync(migrationsDir)
     .filter((f) => f.endsWith(".sql"))
-    .sort();
+    .sort(compareMigrationFiles);
   for (const file of migrationFiles) {
     await client.query(
       `INSERT INTO schema_migrations (filename) VALUES ($1)
@@ -436,7 +449,7 @@ export async function runMigrations(): Promise<void> {
     try {
       files = readdirSync(migrationsDir)
         .filter((f) => f.endsWith(".sql"))
-        .sort();
+        .sort(compareMigrationFiles);
     } catch {
       logger.info("No migrations directory found, skipping migrations");
       return;
