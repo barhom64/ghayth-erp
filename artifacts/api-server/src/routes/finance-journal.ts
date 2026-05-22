@@ -101,6 +101,13 @@ const approvalSchema = z.object({
   notes: z.string().optional(),
 });
 
+const voucherAllocationSchema = z.object({
+  obligationType: z.enum(["purchase_order", "nusk_invoice", "expense", "manual"]),
+  obligationId: z.coerce.number().int().positive(),
+  amount: z.coerce.number().positive().finite(),
+  notes: z.string().optional(),
+});
+
 const createVoucherSchema = z.object({
   type: z.string().optional(),
   amount: z.any().optional(),
@@ -128,6 +135,7 @@ const createVoucherSchema = z.object({
   operationType: z.string().optional(),
   date: z.string().optional(),
   costCenter: z.string().optional(),
+  allocations: z.array(voucherAllocationSchema).optional(),
 });
 
 const createSalaryAdvanceSchema = z.object({
@@ -728,8 +736,19 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
       contractId, invoiceId, reference, attachmentUrl, attachmentType,
       vatRate: rawVatRate, vatAmount: rawVatAmount,
       beneficiaryType, entitlementType, branchId, departmentId,
-      autoDescription, operationType,
+      autoDescription, operationType, allocations,
     } = b;
+
+    // C4 + C5 — allocations tie this voucher to specific AP obligations
+    // (purchase_orders, umrah_nusk_invoices, …). Σ allocations must not
+    // exceed the voucher amount and only PV (payment) vouchers carry them.
+    // Σ-vs-amount is re-checked once baseAmount is resolved below.
+    if (allocations && allocations.length > 0 && type !== "payment") {
+      throw new ValidationError("التخصيصات مدعومة لسندات الصرف فقط", {
+        field: "allocations",
+        fix: "احذف التخصيصات أو غيّر نوع السند إلى صرف",
+      });
+    }
 
     if (!type) {
       throw new ValidationError("نوع السند مطلوب", { field: "type", fix: "اختر receipt (قبض) أو payment (صرف)" });
@@ -781,6 +800,17 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
 
     const baseAmount = roundTo2(Number(amount) || 0);
     if (!baseAmount || isNaN(baseAmount)) throw new ValidationError("المبلغ غير صالح", { field: "amount" });
+
+    if (allocations && allocations.length > 0) {
+      const allocTotal = roundTo2(allocations.reduce((s, a) => s + Number(a.amount), 0));
+      if (allocTotal > baseAmount + 0.005) {
+        throw new ValidationError(
+          `مجموع التخصيصات (${allocTotal}) يتجاوز مبلغ السند (${baseAmount})`,
+          { field: "allocations", fix: "خفّض مبالغ التخصيصات أو ارفع مبلغ السند" }
+        );
+      }
+    }
+
     const vatRateVal = rawVatRate != null ? (Number(rawVatRate) || 0) : 0;
     const computedVat = roundTo2(rawVatAmount != null ? (Number(rawVatAmount) || 0) : computeVat(baseAmount, vatRateVal));
     const totalWithVat = roundTo2(baseAmount + computedVat);
@@ -840,6 +870,29 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
       `UPDATE journal_entries SET "paymentMethod" = $1, reference = $2, "attachmentUrl" = $3, "attachmentType" = $4, "relatedEntityType" = $5, "relatedEntityId" = $6, "operationType" = $7, "departmentId" = $8 WHERE id = $9 AND "companyId" = $10 AND "deletedAt" IS NULL`,
       [method ?? "cash", reference ?? null, attachmentUrl ?? null, attachmentType ?? null, relatedEntityType ?? null, relatedEntityId ?? null, operationType ?? type, departmentId ?? null, journalId, scope.companyId]
     ).catch((err) => logger.error(err, "Failed to update voucher metadata:"));
+
+    // C4 + C5 — link the voucher to the AP obligation(s) it pays. Skip on
+    // idempotent replay (rows already exist from the original insert).
+    if (allocations && allocations.length > 0 && !alreadyExists) {
+      for (const a of allocations) {
+        await rawExecute(
+          `INSERT INTO supplier_payment_allocations
+             ("companyId", "branchId", "journalEntryId",
+              "obligationType", "obligationId", amount, notes, "createdBy")
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            scope.companyId,
+            branchId ?? scope.branchId ?? null,
+            journalId,
+            a.obligationType,
+            a.obligationId,
+            roundTo2(Number(a.amount)),
+            a.notes ?? null,
+            scope.activeAssignmentId ?? null,
+          ]
+        );
+      }
+    }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `voucher.${type}`, entity: "vouchers", entityId: journalId, details: JSON.stringify({ ref, type, amount: baseAmount, vatAmount: computedVat, totalWithVat, accountCode, payee, method }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
