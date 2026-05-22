@@ -112,6 +112,7 @@ export async function postJournalEntry(
        WHERE id = ANY($1::int[])
          AND "companyId" = $2
          AND "deletedAt" IS NULL
+         AND "isActive" = true
          AND "allowPosting" = true`,
       [accountIds, ctx.companyId],
     );
@@ -119,7 +120,7 @@ export async function postJournalEntry(
     const missing = accountIds.filter((id) => !valid.has(id));
     if (missing.length > 0) {
       throw new Error(
-        `postJournalEntry: account IDs not postable (deleted, blocked, or wrong company): ${missing.join(", ")}`,
+        `postJournalEntry: account IDs not postable (deleted, inactive, not a posting account, or wrong company): ${missing.join(", ")}`,
       );
     }
 
@@ -152,6 +153,7 @@ export async function postJournalEntry(
     );
     const journalEntryId = header.id;
 
+    const balanceDeltas = new Map<string, number>();
     for (const line of payload.lines) {
       const accountCode = codeById.get(line.accountId);
       if (!accountCode) {
@@ -168,6 +170,27 @@ export async function postJournalEntry(
           line.debit, line.credit, line.description,
         ],
       );
+      balanceDeltas.set(
+        accountCode,
+        (balanceDeltas.get(accountCode) ?? 0) + (line.debit - line.credit),
+      );
+    }
+
+    // Keep chart_of_accounts.currentBalance in step with the ledger. The
+    // sibling poster (createJournalEntry) maintains it; without the same
+    // here, every FX / inventory / payroll entry posted through this
+    // primitive leaves the trial balance read from currentBalance silently
+    // diverged from the journal_lines sum. `draft` entries are skipped —
+    // their ledger effect is applied when the draft is later posted.
+    if (status === "posted") {
+      for (const [accountCode, delta] of balanceDeltas) {
+        if (Math.abs(delta) < 0.001) continue;
+        await rawExecute(
+          `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1
+           WHERE "companyId" = $2 AND code = $3`,
+          [delta, ctx.companyId, accountCode],
+        );
+      }
     }
 
     logger.info(

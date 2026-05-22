@@ -717,18 +717,22 @@ financeHardeningRouter.patch("/journal-manual/:id/post", authorize({ feature: "f
 
     const journalId = parseId(req.params.id, "id");
 
-    const [je] = await rawQuery<Record<string, unknown>>(
-      `SELECT ref FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
+    const [je] = await rawQuery<{ ref: string; entryDate: string }>(
+      `SELECT ref, date::text AS "entryDate" FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "isManual"=TRUE AND "deletedAt" IS NULL`,
       [journalId, scope.companyId]
     );
     if (!je) throw new NotFoundError("القيد غير موجود");
 
     // Posting integrity: the draft hits the ledger now (not at creation), so
-    // the financial-period guard runs here, at posting time.
-    const period = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    // the financial-period guard runs here, at posting time. The guard checks
+    // the entry's own ledger date (journal_entries.date) — NOT today: a draft
+    // created while a period was open must not post once that period has
+    // closed (RCA finding PER-2). The ledger effect carries the entry date,
+    // so the period gate must be evaluated against the same date.
+    const period = await checkFinancialPeriodOpen(scope.companyId, je.entryDate);
     if (!period.open) {
       throw new ConflictError(
-        `الفترة المالية "${period.periodName ?? ""}" مغلقة — لا يمكن ترحيل القيد`,
+        `الفترة المالية "${period.periodName ?? ""}" مغلقة — لا يمكن ترحيل قيد بتاريخ ${je.entryDate}`,
       );
     }
 
@@ -1139,6 +1143,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
       sourceType: "intercompany",
       sourceId: 0,
       sourceKey: `finance:intercompany:from:${idempotencyToken}`,
+      postingDate: txDate,
       lines: fromLines,
     });
     markIdempotencyReplay(req, res, fromResult.alreadyExists);
@@ -1155,6 +1160,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
         sourceType: "intercompany",
         sourceId: 0,
         sourceKey: `finance:intercompany:to:${idempotencyToken}`,
+        postingDate: txDate,
         lines: toLines,
       });
     } catch (err) {
@@ -1285,12 +1291,15 @@ financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening
   try {
     const scope = req.scope!;
 
-    const { name, description, budget, startDate, endDate, branchId, ref } = zodParse(createProjectSchema.safeParse(req.body ?? {}));
+    const { name, description, budget, startDate, endDate, ref } = zodParse(createProjectSchema.safeParse(req.body ?? {}));
+    // PRJ-003: the `projects` table has no `ref` or `branchId` column — the
+    // old INSERT referenced both and aborted with SQLSTATE 42703. Insert only
+    // the columns that exist; projectRef is kept for the audit/event details.
     const projectRef = ref ?? `PRJ-${Date.now()}`;
     const { insertId } = await rawExecute(
-      `INSERT INTO projects ("companyId","branchId",ref,name,description,budget,"startDate","endDate","managerId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, branchId ?? scope.branchId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
+      `INSERT INTO projects ("companyId",name,description,budget,"startDate","endDate","managerId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [scope.companyId, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
     );
     assertInsert(insertId, "projects");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);

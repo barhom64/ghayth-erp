@@ -300,18 +300,20 @@ describe("Legal security contracts", () => {
     expect(section).toContain("companyId");
   });
 
-  it("contract list filters deletedAt IS NULL", () => {
+  it("contract list filters soft-deleted rows via buildScopedWhere", () => {
     const idx = LEGAL_ROUTE.indexOf('router.get("/contracts"');
     const endIdx = LEGAL_ROUTE.indexOf("router.", idx + 10);
     const section = LEGAL_ROUTE.slice(idx, endIdx);
-    expect(section).toContain('"deletedAt" IS NULL');
+    // Soft-delete is now applied through buildScopedWhere's softDeleteColumn
+    // option, which appends `"deletedAt" IS NULL` to the generated WHERE.
+    expect(section).toContain(`softDeleteColumn: '"deletedAt"'`);
   });
 
-  it("case list filters deletedAt IS NULL", () => {
+  it("case list filters soft-deleted rows via buildScopedWhere", () => {
     const idx = LEGAL_ROUTE.indexOf('router.get("/cases"');
     const endIdx = LEGAL_ROUTE.indexOf("router.", idx + 10);
     const section = LEGAL_ROUTE.slice(idx, endIdx);
-    expect(section).toContain('"deletedAt" IS NULL');
+    expect(section).toContain(`softDeleteColumn: '"deletedAt"'`);
   });
 
   it("validates contract input with zod on create", () => {

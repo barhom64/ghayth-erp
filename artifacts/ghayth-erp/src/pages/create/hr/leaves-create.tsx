@@ -149,13 +149,7 @@ export default function LeavesCreate() {
                   {leaveTypes.length > 0 ? leaveTypes.map((lt: any) => (
                     <SelectItem key={lt.id} value={String(lt.id)}>{lt.name}</SelectItem>
                   )) : (
-                    <>
-                      <SelectItem value="1">إجازة سنوية</SelectItem>
-                      <SelectItem value="2">إجازة مرضية</SelectItem>
-                      <SelectItem value="3">إجازة شخصية</SelectItem>
-                      <SelectItem value="4">إجازة بدون راتب</SelectItem>
-                      <SelectItem value="5">إجازة طارئة</SelectItem>
-                    </>
+                    <SelectItem value="none" disabled>لا توجد أنواع إجازات معرّفة — يرجى إعدادها أولاً</SelectItem>
                   )}
                 </SelectContent>
               </Select>

@@ -104,11 +104,21 @@ export default function Clients() {
     },
     {
       key: "totalRevenue",
-      header: "إجمالي الإيرادات",
+      header: "الإيرادات الفعلية",
       sortable: true,
       render: (client) => (
         <span className="font-bold">
           {client.totalRevenue ? formatCurrency(client.totalRevenue) : "-"}
+        </span>
+      ),
+    },
+    {
+      key: "expectedRevenue",
+      header: "الإيرادات المتوقعة",
+      sortable: true,
+      render: (client) => (
+        <span>
+          {client.expectedRevenue ? formatCurrency(client.expectedRevenue) : "-"}
         </span>
       ),
     },
@@ -178,7 +188,8 @@ export default function Clients() {
           { key: "phone", label: "الجوال" },
           { key: "email", label: "البريد" },
           { key: "classification", label: "التصنيف" },
-          { key: "totalRevenue", label: "الإيرادات" },
+          { key: "totalRevenue", label: "الإيرادات الفعلية" },
+          { key: "expectedRevenue", label: "الإيرادات المتوقعة" },
         ], "العملاء")}
         resultCount={filteredClients?.length}
       />

@@ -636,7 +636,12 @@ vendorsRouter.patch("/vouchers/:id/approve", authorize({ feature: "finance.vendo
       fromStates: ["draft", "pending_approval", "returned"],
       toState: newStatus,
       reason: notes ?? undefined,
-      extraWhere: `"deletedAt" IS NULL AND ref LIKE 'VOUCHER%'`,
+      // Vouchers are journal_entries whose ref is RV-<token> (receipt) or
+      // PV-<token> (payment) — see POST /vouchers in finance-journal.ts. The
+      // old `VOUCHER%` filter matched nothing, so no voucher could ever be
+      // approved. (No hyphen in the LIKE patterns: applyTransition's
+      // extraWhere whitelist rejects `-`; `RV%`/`PV%` cover `RV-`/`PV-`.)
+      extraWhere: `"deletedAt" IS NULL AND (ref LIKE 'RV%' OR ref LIKE 'PV%')`,
       onApply: async (_row, client) => {
         await client.query(
           `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('voucher',$1,$2,$3,$4,$5)`,

@@ -109,6 +109,16 @@ export interface ApplyTransitionOptions {
   notifications?: LifecycleNotification[];
   /** Skip the auto `"updatedAt" = NOW()` clause (for tables without that column). */
   skipUpdatedAt?: boolean;
+  /**
+   * Optional existing transaction client. When supplied, applyTransition runs
+   * on this client — joining the caller's transaction instead of opening its
+   * own. Required for a *nested* transition issued inside another transition's
+   * `onApply` callback, so both stay atomic. When a client is supplied the
+   * post-commit side-effects (audit log, event-bus emit, notifications) are
+   * skipped, because the engine cannot observe the caller's commit; the
+   * in-transaction `event_logs` row is still written.
+   */
+  client?: pg.PoolClient;
 }
 
 export class LifecycleError extends Error {
@@ -153,9 +163,22 @@ export async function applyTransition<TRow = any>(
   const statusCol = statusColumn ?? "status";
   const statusColId = quoteIdent(statusCol);
 
-  const { updated, existingStatus } = await withTransaction(async (client) => {
+  // Run on a caller-supplied client (nested transition) or open our own.
+  const externalClient = opts.client;
+  const runInTransaction: <T>(
+    fn: (client: pg.PoolClient) => Promise<T>
+  ) => Promise<T> = externalClient
+    ? (fn) => fn(externalClient)
+    : withTransaction;
+
+  const { updated, existingStatus } = await runInTransaction(async (client) => {
     // 1. Lock the row and validate state.
-    if (extraWhere && !/^[\w\s"'.=()]+$/.test(extraWhere)) {
+    // `%` is whitelisted for `LIKE 'PREFIX%'` filters — several lifecycle
+    // routes scope by ref prefix (expense `EXP%`, custody `CUSTODY%`,
+    // salary-advance `SALARY-ADV%`, voucher `VOUCHER%`). `extraWhere` is
+    // built from route-side string literals, never user input, and `%`
+    // cannot break out of a string literal, so this stays injection-safe.
+    if (extraWhere && !/^[\w\s"'.=()%]+$/.test(extraWhere)) {
       throw new LifecycleError("extraWhere contains disallowed characters", 400);
     }
     const lockSql =
@@ -267,6 +290,14 @@ export async function applyTransition<TRow = any>(
 
     return { updated: updatedRow, existingStatus: existing[statusCol] ?? null };
   });
+
+  // A caller-supplied transaction client means this transition is nested
+  // inside another's `onApply`; we cannot observe the caller's commit, so the
+  // post-commit side-effects below are skipped. The in-transaction
+  // `event_logs` row written above is the durable lifecycle record.
+  if (externalClient) {
+    return updated as TRow;
+  }
 
   // --- After commit ------------------------------------------------------
   // Audit log, event bus fan-out, and notifications all run outside the
@@ -711,6 +742,74 @@ export const STATE_MACHINES: StateMachine[] = [
       overdue: ["partially_paid", "paid", "cancelled"],
       paid: [],
       cancelled: [],
+    },
+  },
+  // HR functional audit M17 — these HR entities drive their status with a
+  // manual `UPDATE ... WHERE status IN (...)` + a local `fromStates` list
+  // in the route; they do NOT call `applyTransition`. Registering their
+  // state graphs here centralises the canonical lifecycle. It is purely
+  // additive — these routes don't consult the engine, so no behaviour
+  // changes today; the registry arms the engine's defence-in-depth check
+  // the moment a route adopts `applyTransition`.
+  //
+  // Each graph mirrors the transitions the route code actually performs,
+  // verified against hr.ts (payroll), hr-loans.ts, hr-overtime.ts and
+  // hr-contracts.ts. `employee_contracts` is keyed on its `approvalStatus`
+  // column — that is the lifecycle the contract route drives end to end;
+  // its separate `status` column only flips active↔terminated.
+  // `employee_transfers` is deliberately NOT listed: it already calls
+  // `applyTransition`, so registering a machine would start enforcing — a
+  // behaviour change kept out of scope.
+  {
+    entity: "payroll_runs",
+    label: "مسير رواتب",
+    transitions: {
+      draft: ["pending_approval", "cancelled"],
+      pending_approval: ["completed", "cancelled"],
+      completed: ["posted", "cancelled"],
+      posted: [],
+      cancelled: [],
+    },
+  },
+  {
+    // hr-loans.ts: approve sets status='active' WHERE status='pending'
+    // (pending→active directly — there is no intermediate 'approved');
+    // reject sets status='rejected' WHERE status='pending'.
+    entity: "hr_employee_loans",
+    label: "سلفة موظف",
+    transitions: {
+      pending: ["active", "rejected"],
+      active: ["completed"],
+      rejected: [],
+      completed: [],
+    },
+  },
+  {
+    entity: "hr_overtime_requests",
+    label: "طلب عمل إضافي",
+    transitions: {
+      pending: ["approved", "rejected"],
+      approved: [],
+      rejected: [],
+    },
+  },
+  {
+    // hr-contracts.ts drives the `approvalStatus` column: submit
+    // draft→pending_approval, approve→approved, reject→rejected, the sign
+    // handlers →signed, activate→active, terminate→terminated. `expired`
+    // is the remaining terminal in the approvalStatus CHECK constraint.
+    entity: "employee_contracts",
+    label: "عقد موظف",
+    statusColumn: "approvalStatus",
+    transitions: {
+      draft: ["pending_approval"],
+      pending_approval: ["approved", "rejected"],
+      approved: ["signed"],
+      signed: ["active"],
+      active: ["terminated", "expired"],
+      rejected: [],
+      expired: [],
+      terminated: [],
     },
   },
 ];

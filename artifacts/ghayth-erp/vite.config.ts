@@ -98,6 +98,11 @@ export default defineConfig({
           if (id.includes("date-fns") || id.includes("dayjs")) {
             return "vendor-dates";
           }
+          // Spreadsheet engine — exceljs ships a self-contained browser
+          // bundle and is only ever reached through the Umrah import
+          // wizards' dynamic import(). Its own chunk keeps it lazy
+          // instead of weighing down the eager vendor-misc payload.
+          if (id.includes("/exceljs/")) return "vendor-excel";
           // Everything else from node_modules drops into a single fallback
           // vendor chunk so the entry bundle stays lean.
           return "vendor-misc";

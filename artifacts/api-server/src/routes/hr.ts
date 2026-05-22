@@ -118,6 +118,15 @@ const salaryComponentSchema = z.object({
   taxable: z.boolean().optional(),
 });
 
+const salaryComponentPatchSchema = z.object({
+  name: z.string().min(1).optional(),
+  type: z.enum(["earning", "deduction", "benefit"]).optional(),
+  calculationType: z.enum(["fixed", "percentage", "formula"]).optional(),
+  value: z.coerce.number().optional(),
+  taxable: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+});
+
 const approvalChainSchema = z.object({
   name: z.string().min(1, "اسم السلسلة مطلوب"),
   chainType: z.enum(["leaves", "purchases", "expenses", "advances", "letters", "loans", "overtime", "exit"], { required_error: "نوع السلسلة مطلوب" }),
@@ -239,6 +248,8 @@ const approvalDecisionSchema = z.object({
 
 const payrollRunSchema = z.object({
   month: z.string().optional(),
+  reference: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
 });
 
 const approvalRequestDecisionSchema = z.object({
@@ -398,15 +409,22 @@ const publicHolidayPatchSchema = z.object({
 });
 
 const transferApprovalSchema = z.object({
-  // PATCH /transfers/:id/approve is multi-purpose: an absent flag means
-  // "approve"; `false` rejects; `"returned"` sends the request back to the
-  // requester for correction (it can then be edited + resubmitted).
-  approved: z.union([z.boolean(), z.literal("returned")]).optional().default(true),
+  // PATCH /transfers/:id/approve — an absent flag means "approve"; `false`
+  // rejects. Returning a transfer for correction is a separate explicit route
+  // (PATCH /transfers/:id/return), not an overload of this flag.
+  approved: z.boolean().optional().default(true),
+  notes: z.string().optional(),
+});
+
+const transferReturnSchema = z.object({
   notes: z.string().optional(),
 });
 
 const transferConfirmSchema = z.object({
-  confirmed: z.boolean().optional(),
+  // PATCH /transfers/:id/receive — an absent flag means "confirm/receive";
+  // `false` is the explicit decline. Mirrors transferApprovalSchema: a route
+  // named /receive must not silently decline when the flag is omitted.
+  confirmed: z.boolean().optional().default(true),
   notes: z.string().optional(),
 });
 
@@ -2397,11 +2415,13 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
     const id = parseId(req.params.id, "id");
     if (req.path.endsWith("/lines")) return; // let next handler handle it
     const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT pr.*, e.name AS "runByName",
+      `SELECT pr.*, e.name AS "runByName", e2.name AS "approvedByName",
               (SELECT COUNT(*) FROM payroll_lines pl WHERE pl."runId" = pr.id AND pl."deletedAt" IS NULL)::int AS "employeeCount"
        FROM payroll_runs pr
        LEFT JOIN employee_assignments ea ON ea.id = pr."runBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employee_assignments ea2 ON ea2.id = pr."approvedBy"
+       LEFT JOIN employees e2 ON e2.id = ea2."employeeId"
        WHERE pr.id = $1 AND pr."companyId" = $2 AND pr."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -2477,7 +2497,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
         },
       });
     }
-    const { month } = zodParse(payrollRunSchema.safeParse(req.body ?? {}));
+    const { month, reference, notes } = zodParse(payrollRunSchema.safeParse(req.body ?? {}));
     const targetPeriod = month ?? currentPeriod();
 
     // P02-S5-CRIT — every other GL writer in this file (HR accruals at
@@ -2743,9 +2763,9 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
 
     const runId = await withTransaction(async (client) => {
       const runResult = await client.query(
-        `INSERT INTO payroll_runs ("companyId", period, status, "totalNet", "runBy")
-         VALUES ($1,$2,'pending_approval',$3,$4) RETURNING id`,
-        [scope.companyId, targetPeriod, roundTo2(totalNet), scope.activeAssignmentId]
+        `INSERT INTO payroll_runs ("companyId", period, status, "totalNet", "runBy", reference, notes)
+         VALUES ($1,$2,'pending_approval',$3,$4,$5,$6) RETURNING id`,
+        [scope.companyId, targetPeriod, roundTo2(totalNet), scope.activeAssignmentId, reference ?? null, notes ?? null]
       );
       const newRunId = runResult.rows[0].id;
 
@@ -3110,6 +3130,7 @@ router.post("/shifts", authorize({ feature: "hr.attendance", action: "create" })
       shiftType, remoteAllowed,
       splitBreakStart, splitBreakEnd,
       flexStartEarliest, flexStartLatest,
+      breakMinutes, gracePeriod,
     } = parsed;
     const effectiveBranchId = branchId ?? scope.branchId;
     // shiftType: 'fixed' (default) | 'flexible' | 'remote' | 'split'
@@ -3137,12 +3158,13 @@ router.post("/shifts", authorize({ feature: "hr.attendance", action: "create" })
         await client.query(`UPDATE shifts SET "isDefault" = false WHERE "companyId" = $1 AND "deletedAt" IS NULL`, [scope.companyId]);
       }
       const result = await client.query(
-        `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status,"shiftType","remoteAllowed","splitBreakStart","splitBreakEnd","flexStartEarliest","flexStartLatest")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11,$12,$13) RETURNING id`,
+        `INSERT INTO shifts ("companyId","branchId",name,"startTime","endTime",days,"isDefault",status,"shiftType","remoteAllowed","splitBreakStart","splitBreakEnd","flexStartEarliest","flexStartLatest","breakMinutes","gracePeriod")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
         [scope.companyId, effectiveBranchId, String(name).trim(), startTime ?? null, endTime ?? null, days ?? "0,1,2,3,4", isDefault ?? false,
          effectiveShiftType, effectiveRemote,
          splitBreakStart || null, splitBreakEnd || null,
-         flexStartEarliest || null, flexStartLatest || null]
+         flexStartEarliest || null, flexStartLatest || null,
+         breakMinutes ?? null, gracePeriod ?? null]
       );
       insertId = result.rows[0].id;
     });
@@ -3351,6 +3373,53 @@ router.post("/salary-components", authorize({ feature: "hr.payroll.runs", action
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, name, type: type ?? "earning", calculationType: calculationType ?? "fixed", value: Number(value ?? 0), taxable: taxable ?? true, status: "active" });
   } catch (err) { handleRouteError(err, res, "Create salary component error:"); }
+});
+
+router.patch("/salary-components/:id", authorize({ feature: "hr.payroll.runs", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(salaryComponentPatchSchema.safeParse(req.body ?? {}));
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (b.name !== undefined) { params.push(String(b.name).trim()); sets.push(`name=$${params.length}`); }
+    if (b.type !== undefined) { params.push(b.type); sets.push(`type=$${params.length}`); }
+    if (b.calculationType !== undefined) { params.push(b.calculationType); sets.push(`"calculationType"=$${params.length}`); }
+    if (b.value !== undefined) { params.push(Number(b.value)); sets.push(`value=$${params.length}`); }
+    if (b.taxable !== undefined) { params.push(b.taxable); sets.push(`"isTaxable"=$${params.length}`); }
+    if (b.isActive !== undefined) { params.push(b.isActive); sets.push(`"isActive"=$${params.length}`); }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
+    sets.push(`"updatedAt"=NOW()`);
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    params.push(id); params.push(scope.companyId);
+    const { affectedRows } = await rawExecute(`UPDATE salary_components SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
+    if (!affectedRows) throw new NotFoundError("مكوّن الراتب غير موجود");
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "salary_components", entityId: id,
+      before: beforeRow ?? {}, after: row ?? {},
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "salary_component.updated", entity: "hr_salary_components", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Patch salary component error:"); }
+});
+
+router.delete("/salary-components/:id", authorize({ feature: "hr.payroll.runs", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    if (!beforeRow) throw new NotFoundError("مكوّن الراتب غير موجود");
+    await rawExecute(`DELETE FROM salary_components WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "salary_components", entityId: id,
+      before: beforeRow,
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "salary_component.deleted", entity: "hr_salary_components", entityId: id, details: JSON.stringify({ id }) }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json({ message: "تم حذف مكوّن الراتب" });
+  } catch (err) { handleRouteError(err, res, "Delete salary component error:"); }
 });
 
 router.get("/approval-chains", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
@@ -6246,24 +6315,7 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
       );
     }
 
-    if (approved === "returned") {
-      await applyTransition({
-        entity: "employee_transfers",
-        id,
-        scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
-        action: "hr.transfer.returned",
-        fromStates: ["pending", "returned"],
-        toState: "returned",
-        reason: notes || undefined,
-        setExtras: { notes: notes || null },
-        onApply: async (_row, client) => {
-          await client.query(
-            `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('transfer',$1,'returned',$2,$3,$4)`,
-            [id, notes || null, scope.userId, scope.companyId]
-          );
-        },
-      });
-    } else if (approved) {
+    if (approved) {
       const [receivingMgr] = await rawQuery<Record<string, unknown>>(
         `SELECT ea.id FROM employee_assignments ea
          WHERE ea."companyId"=$1 AND ea."branchId"=$2
@@ -6332,6 +6384,66 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
 
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Approve transfer error:"); }
+});
+
+// ── Return a transfer to the requester for correction ──
+router.patch("/transfers/:id/return", authorize({ feature: "hr.exit", action: "update" }), async (req, res) => {
+  // Explicit return action. A returned transfer is editable via
+  // PATCH /transfers/:id, which resubmits it (returned -> pending). This is a
+  // dedicated route rather than an overload of the /approve `approved` flag.
+  try {
+    const scope = req.scope!;
+    if (!HR_ROLES.includes(scope.role)) {
+      throw new ForbiddenError("هذه الخطوة محصورة بمدير الموارد البشرية أو المدير العام", {
+        fix: "اطلب من مدير الموارد البشرية اتخاذ القرار.",
+      });
+    }
+    const id = parseId(req.params.id, "id");
+    const { notes } = zodParse(transferReturnSchema.safeParse(req.body ?? {}));
+    const [transfer] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    if (!transfer) {
+      throw new NotFoundError("طلب النقل غير موجود");
+    }
+    if (transfer.status !== "pending" && transfer.status !== "returned") {
+      throw new ConflictError(
+        `لا يمكن إرجاع طلب نقل في الحالة "${transfer.status}"`,
+        {
+          field: "status",
+          fix: "الإرجاع متاح فقط على طلب نقل معلّق.",
+          meta: { currentStatus: transfer.status },
+        }
+      );
+    }
+    await applyTransition({
+      entity: "employee_transfers",
+      id,
+      scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
+      action: "hr.transfer.returned",
+      fromStates: ["pending", "returned"],
+      toState: "returned",
+      reason: notes || undefined,
+      setExtras: { notes: notes || null },
+      onApply: async (_row, client) => {
+        await client.query(
+          `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('transfer',$1,'returned',$2,$3,$4)`,
+          [id, notes || null, scope.userId, scope.companyId]
+        );
+      },
+    });
+
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_transfers WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "employee_transfers", entityId: id,
+      after: { status: row?.status, notes: notes ?? null },
+    }).catch((e) => logger.error(e, "hr background task failed"));
+
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Return transfer error:"); }
 });
 
 // ── Step 2: Receiving branch manager confirms the transfer ──

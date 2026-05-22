@@ -548,8 +548,16 @@ journalRouter.patch("/expenses/:id", authorize({ feature: "finance.journal", act
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { description } = zodParse(updateDescriptionSchema.safeParse(req.body ?? {}));
-    const [existing] = await rawQuery<Record<string, unknown>>(`SELECT id, "createdAt" FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<Record<string, unknown>>(`SELECT id, status, "createdAt" FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("المصروف غير موجود");
+    // PD-4: a posted journal entry is immutable — a posted expense is
+    // corrected via a reversing entry, never an in-place description edit.
+    if (existing.status === "posted") {
+      throw new ConflictError("لا يمكن تعديل مصروف مُرحَّل — صحّحه عبر قيد عاكس", {
+        field: "status",
+        fix: "أنشئ قيداً عاكساً بدل تعديل المصروف المُرحَّل",
+      });
+    }
     const expenseDate = toDateISO(existing.createdAt as string);
     const periodCheck = await checkFinancialPeriodOpen(scope.companyId, expenseDate);
     if (!periodCheck.open) {
@@ -864,7 +872,7 @@ journalRouter.delete("/vouchers/:id", authorize({ feature: "finance.journal", ac
 journalRouter.get("/salary-advances", authorize({ feature: "finance.journal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, 'active' AS status FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%' GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId]);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%' GROUP BY je.id, je.ref, je.description, je.status, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json(maskFields(req, { data: rows, summary: { total: rows.length, totalAmount: rows.reduce((s: number, r) => s + Number(r.amount), 0) } }));
   } catch (err) {
     res.json({ data: [], summary: { total: 0, totalAmount: 0 } });
@@ -1107,6 +1115,14 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     if (!Number.isFinite(id)) { throw new ValidationError("معرّف القيد غير صالح"); return; }
+    // Branch isolation (RCA BR-2): a branch-scoped user must not read a
+    // journal entry outside their assigned branches — apply the same
+    // company + branch scope the /journal list endpoints already enforce.
+    const { where: scopeWhere, params: scopeParams } = buildScopedWhere(
+      scope, parseScopeFilters(req),
+      { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true },
+      2,
+    );
     const [je] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*,
               ro.ref AS "reversalOfRef", ro.description AS "reversalOfDescription",
@@ -1114,9 +1130,9 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
        FROM journal_entries je
        LEFT JOIN journal_entries ro ON ro.id = je."reversalOfId" AND ro."deletedAt" IS NULL
        LEFT JOIN journal_entries rb ON rb.id = je."reversedById" AND rb."deletedAt" IS NULL
-       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       WHERE je.id = $1 AND ${scopeWhere} AND je."deletedAt" IS NULL
        LIMIT 1`,
-      [id, scope.companyId]
+      [id, ...scopeParams]
     );
     if (!je) throw new NotFoundError("القيد غير موجود");
     const lines = await rawQuery<Record<string, unknown>>(
@@ -1153,9 +1169,16 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
       throw new ValidationError("سبب عكس القيد مطلوب", { field: "reason", fix: "أدخل سبب عكس القيد" });
     }
 
+    // Branch isolation (RCA BR-2): a branch-scoped user must not reverse a
+    // journal entry outside their assigned branches.
+    const { where: revScopeWhere, params: revScopeParams } = buildScopedWhere(
+      scope, parseScopeFilters(req),
+      { enforceBranchScope: true },
+      2,
+    );
     const [original] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
-      [id, scope.companyId]
+      `SELECT * FROM journal_entries WHERE id = $1 AND ${revScopeWhere} AND "deletedAt" IS NULL LIMIT 1`,
+      [id, ...revScopeParams]
     );
     if (!original) throw new NotFoundError("القيد الأصلي غير موجود");
     if (original.reversedById) {
@@ -1199,6 +1222,10 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
       sourceType: "journal_reversal",
       sourceId: id,
       sourceKey: `finance:reversal:${id}`,
+      // Stamp the reversal on its requested date so the period-close check
+      // validates the entry's true ledger date, not today. Defaults to today
+      // when the caller gives no reverseDate.
+      postingDate: reverseDate ? toDateISO(reverseDate) : currentDateInTz("Asia/Riyadh"),
       lines: reversedLines,
     });
 

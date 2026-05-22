@@ -20,6 +20,7 @@
  */
 
 import { logger } from "../logger.js";
+import { config } from "../config.js";
 
 export interface SiemEvent {
   timestamp: string;
@@ -39,9 +40,9 @@ export interface SiemEvent {
 const TIMEOUT_MS = 2_000;
 
 function getWebhookConfig(): { url: string; auth?: string } | null {
-  const url = process.env.RBAC_SIEM_WEBHOOK_URL;
+  const url = config.rbac.siemWebhookUrl;
   if (!url) return null;
-  return { url, auth: process.env.RBAC_SIEM_AUTH_HEADER };
+  return { url, auth: config.rbac.siemAuthHeader };
 }
 
 /**

@@ -1652,5 +1652,141 @@ export function registerEventListeners() {
     );
   });
 
+  // ──────────────────────────────────────────────────────────────────────
+  // HR operational-events closure pass — 2026-05-21 (functional audit M15)
+  //
+  // Loans, contracts, overtime, exit and the recruitment posting/application
+  // + training lifecycles all `emitEvent(...)` on every transition but had
+  // no `eventBus.on(...)` subscriber. `emitEvent` only persists to
+  // `event_logs` for critical events or when PERSIST_ALL_EVENTS is set, so
+  // these non-critical HR events were emitted into the void — no log row.
+  //
+  // These subscribers call `logEvent` ONLY, to give each event its
+  // `event_logs` row. They deliberately do NOT call `logAudit`: every one
+  // of these HR routes already writes `audit_logs` directly via
+  // `createAuditLog(...)` in the emitting handler, so a `logAudit` here
+  // would insert a duplicate audit row. No GL, no lifecycle side-effects.
+  // ──────────────────────────────────────────────────────────────────────
+
+  // ── HR — employee loans ──
+  eventBus.on("hr.loan.created", async (payload) => {
+    await logEvent("hr.loan.created", payload);
+  });
+  eventBus.on("hr.loan.approved", async (payload) => {
+    await logEvent("hr.loan.approved", payload);
+  });
+  eventBus.on("hr.loan.rejected", async (payload) => {
+    await logEvent("hr.loan.rejected", payload);
+  });
+
+  // ── HR — employee contracts ──
+  eventBus.on("hr.contract.created", async (payload) => {
+    await logEvent("hr.contract.created", payload);
+  });
+  eventBus.on("hr.contract.updated", async (payload) => {
+    await logEvent("hr.contract.updated", payload);
+  });
+  eventBus.on("hr.contract.submitted", async (payload) => {
+    await logEvent("hr.contract.submitted", payload);
+  });
+  eventBus.on("hr.contract.approved", async (payload) => {
+    await logEvent("hr.contract.approved", payload);
+  });
+  eventBus.on("hr.contract.rejected", async (payload) => {
+    await logEvent("hr.contract.rejected", payload);
+  });
+  eventBus.on("hr.contract.signed_by_company", async (payload) => {
+    await logEvent("hr.contract.signed_by_company", payload);
+  });
+  eventBus.on("hr.contract.signed_by_employee", async (payload) => {
+    await logEvent("hr.contract.signed_by_employee", payload);
+  });
+  eventBus.on("hr.contract.activated", async (payload) => {
+    await logEvent("hr.contract.activated", payload);
+  });
+  eventBus.on("hr.contract.renewed", async (payload) => {
+    await logEvent("hr.contract.renewed", payload);
+  });
+  eventBus.on("hr.contract.terminated", async (payload) => {
+    await logEvent("hr.contract.terminated", payload);
+  });
+
+  // ── HR — overtime requests ──
+  eventBus.on("hr.overtime.created", async (payload) => {
+    await logEvent("hr.overtime.created", payload);
+  });
+  eventBus.on("hr.overtime.approved", async (payload) => {
+    await logEvent("hr.overtime.approved", payload);
+  });
+  eventBus.on("hr.overtime.rejected", async (payload) => {
+    await logEvent("hr.overtime.rejected", payload);
+  });
+
+  // ── HR — exit / end-of-service ──
+  eventBus.on("hr.exit.created", async (payload) => {
+    await logEvent("hr.exit.created", payload);
+  });
+  eventBus.on("hr.exit.approved", async (payload) => {
+    await logEvent("hr.exit.approved", payload);
+  });
+  eventBus.on("hr.exit.rejected", async (payload) => {
+    await logEvent("hr.exit.rejected", payload);
+  });
+  eventBus.on("hr.exit.completed", async (payload) => {
+    await logEvent("hr.exit.completed", payload);
+  });
+
+  // ── HR — training programs + enrollments ──
+  eventBus.on("training.program.created", async (payload) => {
+    await logEvent("training.program.created", payload);
+  });
+  eventBus.on("training.program.updated", async (payload) => {
+    await logEvent("training.program.updated", payload);
+  });
+  eventBus.on("training.program.deleted", async (payload) => {
+    await logEvent("training.program.deleted", payload);
+  });
+  eventBus.on("training.program.approved", async (payload) => {
+    await logEvent("training.program.approved", payload);
+  });
+  eventBus.on("training.program.rejected", async (payload) => {
+    await logEvent("training.program.rejected", payload);
+  });
+  eventBus.on("training.enrollment.created", async (payload) => {
+    await logEvent("training.enrollment.created", payload);
+  });
+  eventBus.on("training.enrollment.updated", async (payload) => {
+    await logEvent("training.enrollment.updated", payload);
+  });
+  eventBus.on("training.enrollment.deleted", async (payload) => {
+    await logEvent("training.enrollment.deleted", payload);
+  });
+
+  // ── HR — recruitment postings + applications ──
+  eventBus.on("recruitment.posting.created", async (payload) => {
+    await logEvent("recruitment.posting.created", payload);
+  });
+  eventBus.on("recruitment.posting.updated", async (payload) => {
+    await logEvent("recruitment.posting.updated", payload);
+  });
+  eventBus.on("recruitment.posting.deleted", async (payload) => {
+    await logEvent("recruitment.posting.deleted", payload);
+  });
+  eventBus.on("recruitment.posting.closed", async (payload) => {
+    await logEvent("recruitment.posting.closed", payload);
+  });
+  eventBus.on("recruitment.posting.reopened", async (payload) => {
+    await logEvent("recruitment.posting.reopened", payload);
+  });
+  eventBus.on("recruitment.application.created", async (payload) => {
+    await logEvent("recruitment.application.created", payload);
+  });
+  eventBus.on("recruitment.application.updated", async (payload) => {
+    await logEvent("recruitment.application.updated", payload);
+  });
+  eventBus.on("recruitment.application.deleted", async (payload) => {
+    await logEvent("recruitment.application.deleted", payload);
+  });
+
   logger.info("All event listeners registered successfully");
 }

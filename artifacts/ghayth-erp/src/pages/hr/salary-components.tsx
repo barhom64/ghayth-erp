@@ -7,10 +7,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { Plus, DollarSign, TrendingUp, Percent, FileText } from "lucide-react";
+import { Plus, DollarSign, TrendingUp, Percent, FileText, Pencil, Trash2, Power } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { PageShell } from "@/components/page-shell";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -45,15 +46,31 @@ const defaultSalaryComponent: SalaryComponentForm = {
 
 export default function SalaryComponentsPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["salary-components"], "/hr/salary-components");
-  const items = data?.data || [];
+  // The DB row carries `isActive` (boolean); the table + filter key on a
+  // string `status`. Derive it once so the status badge and the status
+  // filter both reflect reality instead of always reading "inactive".
+  const items = (data?.data || []).map((c: any) => ({
+    ...c,
+    status: c.isActive === false ? "inactive" : "active",
+  }));
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null);
+
+  const closeForm = () => { setShowForm(false); setEditing(null); };
+
   const createMut = useApiMutation<unknown, SalaryComponentForm>(
     "/hr/salary-components",
     "POST",
     [["salary-components"]],
     { successMessage: "تم إضافة المكون بنجاح" },
   );
-
+  const updateMut = useApiMutation<unknown, Partial<SalaryComponentForm> & { id: number; isActive?: boolean }>(
+    (body) => `/hr/salary-components/${body.id}`,
+    "PATCH",
+    [["salary-components"]],
+    { successMessage: "تم تحديث المكون" },
+  );
 
   const [filters, setFilters] = useFilters();
   const filtered = applyFilters(items, filters, { searchFields: ["name", "type", "calculationType"], statusField: "status" });
@@ -86,6 +103,39 @@ export default function SalaryComponentsPage() {
       sortable: true,
       render: (c) => <PageStatusBadge status={c.status || "inactive"} />,
     },
+    {
+      key: "__actions",
+      header: "إجراءات",
+      render: (c) => (
+        <div className="flex items-center gap-1">
+          <GuardedButton
+            perm="hr:update"
+            size="sm"
+            variant="ghost"
+            onClick={() => { setEditing(c); setShowForm(true); }}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </GuardedButton>
+          <GuardedButton
+            perm="hr:update"
+            size="sm"
+            variant="ghost"
+            title={c.isActive === false ? "تفعيل" : "تعطيل"}
+            onClick={() => updateMut.mutateAsync({ id: c.id, isActive: c.isActive === false })}
+          >
+            <Power className={`h-3.5 w-3.5 ${c.isActive === false ? "text-muted-foreground" : "text-status-success-foreground"}`} />
+          </GuardedButton>
+          <GuardedButton
+            perm="hr:delete"
+            size="sm"
+            variant="ghost"
+            onClick={() => setDeleting({ id: c.id, name: c.name || "—" })}
+          >
+            <Trash2 className="h-3.5 w-3.5 text-status-error-foreground" />
+          </GuardedButton>
+        </div>
+      ),
+    },
   ];
 
   if (isLoading) return <LoadingSpinner />;
@@ -97,7 +147,7 @@ export default function SalaryComponentsPage() {
       subtitle="إدارة البدلات والخصومات والمكونات الراتبية"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "مكونات الرواتب" }]}
       actions={
-        <GuardedButton perm="hr:create" size="sm" onClick={() => setShowForm(!showForm)}>
+        <GuardedButton perm="hr:create" size="sm" onClick={() => { if (showForm) { closeForm(); } else { setEditing(null); setShowForm(true); } }}>
           <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "إضافة مكون"}
         </GuardedButton>
       }
@@ -126,18 +176,29 @@ export default function SalaryComponentsPage() {
         <Card className="border-status-info-surface bg-status-info-surface">
           <CardContent className="p-4">
             <FormShell
+              key={editing ? `edit-${editing.id}` : "new"}
               schema={salaryComponentSchema}
-              defaultValues={defaultSalaryComponent}
-              submitLabel="حفظ"
+              defaultValues={editing ? {
+                name: editing.name ?? "",
+                calculationType: editing.calculationType ?? "fixed",
+                type: editing.type ?? "earning",
+                value: Number(editing.value ?? 0),
+                taxable: editing.taxable ?? editing.isTaxable ?? true,
+              } : defaultSalaryComponent}
+              submitLabel={editing ? "تحديث" : "حفظ"}
               secondaryActions={
-                <Button type="button" size="sm" variant="ghost" onClick={() => setShowForm(false)}>
+                <Button type="button" size="sm" variant="ghost" onClick={closeForm}>
                   إلغاء
                 </Button>
               }
               onSubmit={async (values, ctx) => {
-                await createMut.mutateAsync(values);
+                if (editing) {
+                  await updateMut.mutateAsync({ ...values, id: editing.id });
+                } else {
+                  await createMut.mutateAsync(values);
+                }
                 ctx.reset();
-                setShowForm(false);
+                closeForm();
               }}
             >
               <FormGrid cols={3}>
@@ -173,6 +234,16 @@ export default function SalaryComponentsPage() {
         noToolbar
         emptyMessage="لا توجد مكونات رواتب"
         pageSize={20}
+      />
+
+      <ConfirmDeleteDialog
+        open={deleting !== null}
+        onOpenChange={(v) => { if (!v) setDeleting(null); }}
+        entity={{ type: "salary_component", id: deleting?.id ?? 0, name: deleting?.name ?? "" }}
+        deletePath={`/hr/salary-components/${deleting?.id}`}
+        invalidateKeys={[["salary-components"]]}
+        successMessage="تم حذف المكون"
+        onDeleted={() => setDeleting(null)}
       />
     </PageShell>
   );

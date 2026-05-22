@@ -1,7 +1,10 @@
+import { startTracing, stopTracing } from "./lib/tracing.js";
 import app from "./app.js";
 import { logger } from "./lib/logger.js";
 import { runMigrations } from "./lib/migrate.js";
 import { startCronScheduler, stopCronScheduler } from "./lib/cronScheduler.js";
+import { startRuntimeTelemetry, stopRuntimeTelemetry } from "./lib/runtimeTelemetry.js";
+import { startAlertEvaluation, stopAlertEvaluation } from "./lib/alertRules.js";
 import { registerEventListeners } from "./lib/eventListeners.js";
 import { registerRulesEngineListener } from "./lib/rulesEngine.js";
 import "./lib/engines/hrEngine.js";
@@ -14,6 +17,10 @@ import { config, assertEnvOrExit, describeConfig } from "./lib/config.js";
 import http from "http";
 import fs from "node:fs";
 import path from "node:path";
+
+// Start OpenTelemetry tracing first so HTTP instrumentation is installed
+// before the server is created. No-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set.
+startTracing();
 
 // Fail-fast: validate the whole environment before any other startup work.
 // lib/config.ts is the single source of truth — it parses and validates every
@@ -128,6 +135,12 @@ async function start() {
     } catch (cronErr) {
       logger.error({ err: cronErr }, "Failed to start cron scheduler");
     }
+
+    startRuntimeTelemetry();
+    logger.info("Runtime telemetry sampler started");
+
+    startAlertEvaluation();
+    logger.info("Runtime threshold-alert evaluation started");
   });
 
   async function shutdown(signal: string) {
@@ -135,6 +148,10 @@ async function start() {
 
     stopCronScheduler();
     logger.info("Cron scheduler stopped");
+
+    stopRuntimeTelemetry();
+    stopAlertEvaluation();
+    await stopTracing();
 
     server.close(async (err) => {
       if (err) {

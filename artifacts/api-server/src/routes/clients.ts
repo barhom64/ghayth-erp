@@ -17,7 +17,7 @@ import type { ClientRow, InvoiceRow } from "../lib/dbTypes.js";
 type ClientListRow = Pick<
   ClientRow,
   "id" | "name" | "phone" | "email" | "classification" | "source" | "isBlacklisted" | "createdAt"
-> & { totalRevenue: number | string | null };
+> & { totalRevenue: number | string | null; expectedRevenue: number | string | null };
 
 type ClientInvoiceRow = Pick<InvoiceRow, "id" | "ref" | "status" | "createdAt" | "dueDate"> & {
   total: number | string;
@@ -161,7 +161,7 @@ router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (re
 
     const clients = await rawQuery<ClientListRow>(
       `SELECT id, name, phone, email, classification, source,
-              "totalRevenue", "isBlacklisted", "createdAt"
+              "totalRevenue", "expectedRevenue", "isBlacklisted", "createdAt"
        FROM clients
        WHERE ${where}
        ORDER BY name ASC
