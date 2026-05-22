@@ -16,9 +16,12 @@ export default function LettersCreate() {
   const { toast } = useToast();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("letters_create", {
-    subject: "", channel: "email", fromNumber: "", toNumber: "", body: "", relatedProjectId: "",
+    subject: "", channel: "letter", fromNumber: "", toNumber: "", body: "", relatedProjectId: "",
   });
-  const createMut = useApiMutation<unknown, Record<string, any>>("/communications/send", "POST", [["comm-letters"]]);
+  // COM-003 — official letters are correspondence records, not dispatchable
+  // messages. POST /communications/send rejects channel "letter"; the letter
+  // is created in the correspondence module instead.
+  const createMut = useApiMutation<unknown, Record<string, any>>("/correspondence", "POST", [["correspondence"]]);
   const { data: clientsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const { data: projectsData } = useApiQuery<{ data: any[] }>(["projects-list"], "/projects");
@@ -41,15 +44,16 @@ export default function LettersCreate() {
       return;
     }
     createMut.mutate({
+      direction: "outgoing",
       subject: form.subject,
       channel: form.channel,
-      fromNumber: form.fromNumber || undefined,
-      toNumber: form.toNumber,
-      body: form.body || undefined,
-      ...(form.relatedProjectId ? { relatedType: "project", relatedId: Number(form.relatedProjectId) } : {}),
+      content: form.body || undefined,
+      senderName: form.fromNumber || undefined,
+      recipientName: form.toNumber,
+      ...(form.relatedProjectId ? { entityType: "project", entityId: Number(form.relatedProjectId) } : {}),
       ...(attachments.length > 0 ? { attachments } : {}),
     }, {
-      onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء الخطاب بنجاح" }); setLocation("/communications"); },
+      onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء الخطاب بنجاح" }); setLocation("/correspondence"); },
       onError: (err: any) => {
         setApiError(err);
         toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الخطاب", description: err?.fix ?? err?.message });
@@ -58,7 +62,7 @@ export default function LettersCreate() {
   };
 
   return (
-    <CreatePageLayout title="خطاب جديد" backPath="/letters">
+    <CreatePageLayout title="خطاب جديد" backPath="/correspondence">
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
@@ -123,7 +127,7 @@ export default function LettersCreate() {
         <TextAreaField label="المحتوى" value={form.body} onChange={(v) => setForm((f) => ({ ...f, body: v }))} placeholder="نص الخطاب..." rows={5} />
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
         <div className="flex justify-end gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={() => setLocation("/communications")}>إلغاء</Button>
+          <Button type="button" variant="outline" onClick={() => setLocation("/correspondence")}>إلغاء</Button>
           <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>{createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}</Button>
         </div>
       </div>
