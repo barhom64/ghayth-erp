@@ -661,6 +661,17 @@ export async function reverseAccountBalances(
   companyId: number,
   journalId: number
 ) {
+  // FIN-007 follow-up — only an entry whose balances were actually applied
+  // can be reversed. A deferred entry (e.g. an unapproved voucher) never
+  // moved chart_of_accounts.currentBalance, so reversing it would corrupt
+  // the ledger by the negative of an entry that never posted. The flag also
+  // makes a double reversal a no-op.
+  const [je] = await rawQuery<{ balancesApplied: boolean }>(
+    `SELECT "balancesApplied" FROM journal_entries WHERE id = $1 AND "companyId" = $2`,
+    [journalId, companyId]
+  );
+  if (!je || je.balancesApplied === false) return;
+
   const lines = await rawQuery<{ accountCode: string; debit: number; credit: number }>(
     `SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" WHERE jl."journalId" = $1 AND je."companyId" = $2`,
     [journalId, companyId]
@@ -677,6 +688,10 @@ export async function reverseAccountBalances(
       [delta, companyId, accountCode]
     );
   }
+  await rawExecute(
+    `UPDATE journal_entries SET "balancesApplied" = false WHERE id = $1 AND "companyId" = $2`,
+    [journalId, companyId]
+  );
 }
 
 /**
