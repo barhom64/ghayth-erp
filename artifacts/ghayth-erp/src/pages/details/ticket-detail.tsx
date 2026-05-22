@@ -17,6 +17,27 @@ import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
+// SUP-006 — mirror of the support_tickets state machine in
+// lib/lifecycleEngine.ts. The status selector must offer only the
+// transitions the backend will accept, not a fixed list of four states.
+const TICKET_STATUS_TRANSITIONS: Record<string, string[]> = {
+  open: ["in_progress", "pending_customer", "field_visit", "resolved", "closed"],
+  in_progress: ["pending_customer", "field_visit", "resolved", "closed", "open"],
+  pending_customer: ["in_progress", "field_visit", "resolved", "closed"],
+  field_visit: ["in_progress", "resolved", "closed"],
+  resolved: ["closed", "in_progress"],
+  closed: [],
+};
+
+const TICKET_STATUS_LABELS: Record<string, string> = {
+  open: "مفتوحة",
+  in_progress: "قيد المعالجة",
+  pending_customer: "بانتظار العميل",
+  field_visit: "زيارة ميدانية",
+  resolved: "تم الحل",
+  closed: "مغلقة",
+};
+
 export default function TicketDetail() {
   const [, params] = useRoute("/support/:id");
   const id = params?.id;
@@ -40,14 +61,12 @@ export default function TicketDetail() {
   const statusTone = (s: string) =>
     s === "open" ? "warning" as const :
     s === "in_progress" ? "info" as const :
+    s === "pending_customer" ? "warning" as const :
+    s === "field_visit" ? "info" as const :
     s === "resolved" ? "success" as const :
     s === "closed" ? "muted" as const : "default" as const;
 
-  const statusLabel = (s: string) =>
-    s === "open" ? "مفتوحة" :
-    s === "in_progress" ? "قيد المعالجة" :
-    s === "resolved" ? "تم الحل" :
-    s === "closed" ? "مغلقة" : s;
+  const statusLabel = (s: string) => TICKET_STATUS_LABELS[s] ?? s;
 
   const handleSendReply = async () => {
     if (!newReply.trim()) return;
@@ -133,13 +152,16 @@ export default function TicketDetail() {
           <CardHeader><CardTitle className="text-base">معلومات التذكرة</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="flex justify-between py-2 border-b"><span className="text-muted-foreground">الحالة</span>
-              <Select value={ticket.status} onValueChange={(v) => handleStatusChange(v)}>
+              <Select
+                value={ticket.status}
+                onValueChange={(v) => handleStatusChange(v)}
+                disabled={(TICKET_STATUS_TRANSITIONS[ticket.status] ?? []).length === 0}
+              >
                 <SelectTrigger className="w-[140px] h-8 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="open">مفتوحة</SelectItem>
-                  <SelectItem value="in_progress">قيد المعالجة</SelectItem>
-                  <SelectItem value="resolved">تم الحل</SelectItem>
-                  <SelectItem value="closed">مغلقة</SelectItem>
+                  {[ticket.status, ...(TICKET_STATUS_TRANSITIONS[ticket.status] ?? [])].map((s) => (
+                    <SelectItem key={s} value={s}>{statusLabel(s)}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
