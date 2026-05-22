@@ -95,22 +95,18 @@ export default function LeadDetailPage() {
 
   const handleConvert = async () => {
     try {
-      const newClient = await apiFetch<any>("/clients", {
+      // CRM-006: use the canonical convert endpoint. The old code POSTed a
+      // brand-new /clients row every time (never linking an existing client)
+      // and then PATCHed an out-of-enum status="converted". The canonical
+      // endpoint runs handleDealWon (creates/links the client correctly) and
+      // applyTransition to `won`, and is idempotent (rejects a re-convert).
+      const result = await apiFetch<any>(`/crm/opportunities/${id}/convert`, {
         method: "POST",
-        body: JSON.stringify({
-          name: lead?.contactName || lead?.title || "",
-          email: lead?.email || "",
-          phone: lead?.phone || "",
-          company: lead?.clientName || "",
-        }),
-      });
-      await apiFetch(`/crm/opportunities/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "converted" }),
+        body: JSON.stringify({}),
       });
       queryClient.invalidateQueries({ queryKey: ["crm-lead", id] });
       toast({ title: "تم تحويل العميل المحتمل إلى عميل بنجاح" });
-      const clientId = newClient?.id || newClient?.data?.id;
+      const clientId = result?.convertedClientId;
       navigate(clientId ? `/clients/${clientId}` : "/clients");
     } catch (err: any) {
       toast({
