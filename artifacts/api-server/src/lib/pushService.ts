@@ -2,14 +2,15 @@ import webpush from "web-push";
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { decryptPushEndpoint } from "./pushCrypto.js";
 import { logger } from "./logger.js";
+import { config } from "./config.js";
 
 let vapidInitialized = false;
 
 function ensureVapidKeys(): void {
   if (vapidInitialized) return;
-  const publicKey = process.env.VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT ?? "mailto:admin@ghayth.app";
+  const publicKey = config.vapid.publicKey;
+  const privateKey = config.vapid.privateKey;
+  const subject = config.vapid.subject ?? "mailto:admin@ghayth.app";
 
   if (!publicKey || !privateKey) {
     logger.warn("[Push] VAPID keys not set — push notifications will not work. Generate with: npx web-push generate-vapid-keys");
@@ -94,5 +95,5 @@ export async function sendPushToCompany(
 }
 
 export function getVapidPublicKey(): string | null {
-  return process.env.VAPID_PUBLIC_KEY ?? null;
+  return config.vapid.publicKey ?? null;
 }

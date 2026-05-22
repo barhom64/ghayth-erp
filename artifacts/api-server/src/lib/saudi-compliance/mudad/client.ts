@@ -23,8 +23,9 @@ import {
   type MudadEnvironment,
 } from "./endpoints.js";
 import { bearerHeader, getMudadAccessToken, type MudadCredentials } from "./auth.js";
+import { config } from "../../config.js";
 
-const DEFAULT_TIMEOUT_MS = Number(process.env.MUDAD_REQUEST_TIMEOUT_MS ?? 30_000);
+const DEFAULT_TIMEOUT_MS = config.mudad.requestTimeoutMs;
 
 export interface SalarySubmission {
   /** YYYY-MM. */

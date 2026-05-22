@@ -1,5 +1,6 @@
 import { MemoryStore, type Store } from "express-rate-limit";
 import { logger } from "./logger.js";
+import { config } from "./config.js";
 
 // Shared Redis-backed store factory for express-rate-limit.
 //
@@ -39,7 +40,7 @@ let lastErrorLogAt = 0;
 let cachedRedisUrl: string | null | undefined = undefined;
 function getRedisUrl(): string | null {
   if (cachedRedisUrl !== undefined) return cachedRedisUrl;
-  const v = normaliseRedisUrl(process.env.REDIS_URL);
+  const v = normaliseRedisUrl(config.redis.url);
   cachedRedisUrl = v && v.length > 0 ? v : null;
   return cachedRedisUrl;
 }

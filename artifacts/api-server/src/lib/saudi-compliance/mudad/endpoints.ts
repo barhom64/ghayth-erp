@@ -12,13 +12,15 @@
  * testing, or when Mudad rotates the gateway.
  */
 
+import { config } from "../../config.js";
+
 export type MudadEnvironment = "sandbox" | "production";
 
 export function mudadBaseUrl(env: MudadEnvironment): string {
   const fromEnv =
     env === "production"
-      ? process.env.MUDAD_PROD_URL
-      : process.env.MUDAD_SANDBOX_URL;
+      ? config.mudad.prodUrl
+      : config.mudad.sandboxUrl;
   if (fromEnv && fromEnv.length > 0) return stripTrailingSlash(fromEnv);
 
   // Spec defaults — same host for both, environment-scoped via the

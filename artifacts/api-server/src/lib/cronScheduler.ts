@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { randomUUID } from "node:crypto";
 import { rawQuery, rawExecute, pool, withTransaction } from "./rawdb.js";
 import { logger } from "./logger.js";
+import { config } from "./config.js";
 import { saveAllCompaniesKPISnapshots } from "./kpiEngine.js";
 import { runSmartAlertsAllCompanies } from "./smartAlerts.js";
 import { runSelfAuditAllCompanies } from "./selfAuditEngine.js";
@@ -90,7 +91,7 @@ async function logCronJob(
 // A process-unique lock owner. HOSTNAME alone is not guaranteed unique per
 // autoscale replica, and releaseCronLock/renewCronLock match on locked_by —
 // a shared owner id would let one replica release or renew another's lock.
-const LOCK_OWNER = `${process.env.HOSTNAME ?? "api-server"}:${randomUUID()}`;
+const LOCK_OWNER = `${config.hostname}:${randomUUID()}`;
 // Short TTL so a crashed replica frees the lock within minutes (not 30). A
 // live job keeps its lock past the TTL via renewCronLock heartbeats.
 const LOCK_TTL_MINUTES = 5;
@@ -3323,8 +3324,7 @@ function parseEmailList(raw: string): string[] {
 }
 
 function getInfraAdminEmailsFromEnv(): string[] {
-  const raw = process.env.INFRA_ADMIN_EMAILS ?? "";
-  return parseEmailList(raw);
+  return parseEmailList(config.admin.infraAdminEmails.join(","));
 }
 
 async function getInfraAdminEmailsFromSettings(): Promise<string[]> {

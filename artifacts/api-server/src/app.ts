@@ -12,6 +12,7 @@ import { classifyDbError } from "./lib/errorHandler.js";
 import { activityTrackerMiddleware } from "./lib/activityTracker.js";
 import { httpMetricsMiddleware } from "./lib/observability.js";
 import { requestContextMiddleware, getRequestId } from "./lib/requestContext.js";
+import { config } from "./lib/config.js";
 
 const app: Express = express();
 
@@ -67,20 +68,10 @@ app.use(
   })
 );
 
-const allowedOrigins: Set<string> = new Set();
-if (process.env.REPLIT_DEV_DOMAIN) {
-  allowedOrigins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
-}
-if (process.env.REPLIT_DEPLOYMENT_URL) {
-  allowedOrigins.add(process.env.REPLIT_DEPLOYMENT_URL.replace(/\/$/, ""));
-}
-if (process.env.CORS_ORIGINS) {
-  process.env.CORS_ORIGINS.split(",").forEach(o => allowedOrigins.add(o.trim().replace(/\/$/, "")));
-}
-if (process.env.CORS_ORIGIN) {
-  process.env.CORS_ORIGIN.split(",").forEach(s => allowedOrigins.add(s.trim().replace(/\/$/, "")));
-}
-if (process.env.NODE_ENV !== "production") {
+// config.corsOrigins already merges REPLIT_DEV_DOMAIN / REPLIT_DEPLOYMENT_URL
+// / CORS_ORIGINS / CORS_ORIGIN into one normalised, de-duplicated allowlist.
+const allowedOrigins: Set<string> = new Set(config.corsOrigins);
+if (!config.isProduction) {
   // In dev, the Replit proxy serves apps on http(s)://localhost (port 80/443),
   // so the browser sends Origin: http://localhost for same-origin XHRs.
   // Allow common dev origins so internal calls (e.g. activity tracking) don't 500.
@@ -91,11 +82,11 @@ if (process.env.NODE_ENV !== "production") {
   allowedOrigins.add("http://localhost:80");
 }
 
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = config.isProduction;
 
 const replitDevHostPattern: RegExp | null = (() => {
   if (isProduction) return null;
-  const dev = process.env.REPLIT_DEV_DOMAIN;
+  const dev = config.replitDevDomain;
   if (!dev) return null;
   const prefix = dev.split(".")[0];
   if (!prefix) return null;
@@ -177,7 +168,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   if (res.headersSent) return next(err);
   const { status, message } = classifyDbError(err);
   const body: Record<string, unknown> = { error: message, requestId };
-  if (process.env.NODE_ENV !== "production") {
+  if (!config.isProduction) {
     body.detail = err?.message ?? String(err);
   }
   res.status(status).json(body);

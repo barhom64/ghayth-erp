@@ -1,7 +1,8 @@
 import { createCipheriv, createDecipheriv, createHmac, createHash, randomBytes } from "node:crypto";
+import { config } from "./config.js";
 
 function getPushSecret(): string {
-  const secret = process.env.JWT_SECRET;
+  const secret = config.jwtSecret;
   if (!secret) throw new Error("JWT_SECRET environment variable is required for push encryption");
   return secret;
 }

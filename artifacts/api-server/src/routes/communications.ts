@@ -4,6 +4,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, Integ
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { logger } from "../lib/logger.js";
+import { config } from "../lib/config.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -81,9 +82,9 @@ const pushUnsubscribeSchema = z.object({
 
 const router = Router();
 
-const WA_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? "ghayth_erp_verify";
-const WA_ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN ?? "";
-const WA_PHONE_ID = process.env.WHATSAPP_PHONE_ID ?? "";
+const WA_VERIFY_TOKEN = config.whatsapp.verifyToken ?? "ghayth_erp_verify";
+const WA_ACCESS_TOKEN = config.whatsapp.accessToken ?? "";
+const WA_PHONE_ID = config.whatsapp.phoneId ?? "";
 
 async function matchSenderToEntity(phone: string, companyId: number): Promise<{ type: "client" | "employee" | "unknown"; id: number | null; name: string }> {
   const normalizedPhone = phone.replace(/\D/g, "").slice(-9);
