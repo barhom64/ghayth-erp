@@ -219,10 +219,24 @@ const grantsSchema = z.object({
   })),
 });
 
+// Security: a role id taken from the URL must belong to the caller's
+// company before its grants / field-policies / approval-limits may be
+// rewritten. Without this an RBAC admin in one tenant could pass another
+// tenant's role id and overwrite that role's permissions. Templates are
+// global definitions and are never editable per-company.
+async function assertRoleOwned(roleId: number, companyId: number): Promise<void> {
+  const [row] = await rawQuery<{ id: number }>(
+    `SELECT id FROM rbac_roles WHERE id = $1 AND "companyId" = $2`,
+    [roleId, companyId]
+  );
+  if (!row) throw new NotFoundError("الدور غير موجود");
+}
+
 router.put("/roles/:id/grants", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    await assertRoleOwned(id, scope.companyId);
     const parsed = grantsSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError("بيانات الصلاحيات غير صالحة");
 
@@ -298,6 +312,7 @@ router.put("/roles/:id/field-policies", authorize({ feature: "admin.roles", acti
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    await assertRoleOwned(id, scope.companyId);
     const parsed = fieldPoliciesSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError("بيانات سياسة الحقول غير صالحة");
 
@@ -360,6 +375,7 @@ router.put("/roles/:id/approval-limits", authorize({ feature: "admin.roles", act
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    await assertRoleOwned(id, scope.companyId);
     const parsed = approvalLimitsSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError("بيانات سقوف الاعتماد غير صالحة");
 
@@ -828,6 +844,14 @@ router.post("/users/:userId/roles", authorize({ feature: "admin.roles", action: 
     const scope = req.scope!;
     const userId = parseId(req.params.userId, "userId");
     const { roleId, branchId, departmentId, isPrimary, expiresAt } = zodParse(assignUserRoleSchema.safeParse(req.body));
+
+    // Security: the role being assigned must be the caller's own company
+    // role (or a global template) — never another tenant's role.
+    const [roleRow] = await rawQuery<{ id: number }>(
+      `SELECT id FROM rbac_roles WHERE id = $1 AND ("companyId" = $2 OR is_template)`,
+      [roleId, scope.companyId]
+    );
+    if (!roleRow) throw new NotFoundError("الدور غير موجود");
 
     await rawExecute(
       `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, "branchId", "departmentId", is_primary, expires_at, "assignedBy")
