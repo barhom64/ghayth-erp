@@ -530,10 +530,21 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
       `SELECT COALESCE(SUM(total), 0) AS total FROM invoices WHERE "clientId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND "createdAt" < $3${obInvBranchCond}`,
       obInvParams
     );
-    // invoice_payments has no branchId column — scoped by companyId only
+    // invoice_payments has no branchId column — derive the payment's branch
+    // from the linked invoice so a per-branch statement only deducts the
+    // payments that hit invoices on the user's branch(es). Without this
+    // join, a payment that settled a Branch B invoice would show up as a
+    // deduction on Branch A's opening balance for the same customer.
+    const obPayParams: unknown[] = [clientId, scope.companyId, from];
+    const obPayBranchCond = csBranchIds
+      ? (() => { obPayParams.push(csBranchIds); return ` AND i."branchId" = ANY($${obPayParams.length}::int[])`; })()
+      : "";
     const [obPayRow] = await rawQuery<Record<string, unknown>>(
-      `SELECT COALESCE(SUM(amount), 0) AS total FROM invoice_payments WHERE "clientId"=$1 AND "companyId"=$2 AND "paidAt" < $3`,
-      [clientId, scope.companyId, from]
+      `SELECT COALESCE(SUM(ip.amount), 0) AS total
+         FROM invoice_payments ip
+         JOIN invoices i ON i.id = ip."invoiceId" AND i."deletedAt" IS NULL
+        WHERE ip."clientId" = $1 AND ip."companyId" = $2 AND ip."paidAt" < $3${obPayBranchCond}`,
+      obPayParams
     );
     const openingBalance = Number(obInvRow?.total ?? 0) - Number(obPayRow?.total ?? 0);
 
@@ -551,17 +562,24 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
         ORDER BY "createdAt"`,
       csBaseParams(csBranchIds || undefined)
     );
-    // In-period payments (invoice_payments may not have branchId — scope via companyId only)
+    // In-period payments — JOINed on invoices to derive the payment's
+    // branch (invoice_payments has no branchId of its own). Same scoping
+    // logic as the opening balance above keeps the statement consistent.
+    const payParams: unknown[] = [clientId, scope.companyId, from, asOf];
+    const payBranchCond = csBranchIds
+      ? (() => { payParams.push(csBranchIds); return ` AND i."branchId" = ANY($${payParams.length}::int[])`; })()
+      : "";
     const payments = await rawQuery<Record<string, unknown>>(
       `SELECT ip.id, COALESCE(ip."transactionRef", CONCAT('PAY-', ip.id)) AS ref,
               ip."paidAt" AS date, 0 AS debit, ip.amount AS credit,
               NULL AS "dueDate", 'paid' AS status, 'payment' AS "movementType",
               CONCAT('دفعة (', COALESCE(ip.method,'manual'), ')') AS description
          FROM invoice_payments ip
-        WHERE ip."clientId"=$1 AND ip."companyId"=$2
-          AND ip."paidAt" >= $3 AND ip."paidAt" <= $4
+         JOIN invoices i ON i.id = ip."invoiceId" AND i."deletedAt" IS NULL
+        WHERE ip."clientId" = $1 AND ip."companyId" = $2
+          AND ip."paidAt" >= $3 AND ip."paidAt" <= $4${payBranchCond}
         ORDER BY ip."paidAt"`,
-      [clientId, scope.companyId, from, asOf]
+      payParams
     );
 
     const all = [...invoices, ...payments].sort(
