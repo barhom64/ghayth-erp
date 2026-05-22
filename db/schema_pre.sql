@@ -3938,6 +3938,7 @@ CREATE TABLE public.clients (
     source character varying(20) DEFAULT 'whatsapp'::character varying,
     "assignedTo" integer,
     "totalRevenue" numeric(15,2) DEFAULT 0,
+    "expectedRevenue" numeric(15,2) DEFAULT 0,
     "avgRating" numeric(3,2),
     tags jsonb,
     "isBlacklisted" boolean DEFAULT false,
