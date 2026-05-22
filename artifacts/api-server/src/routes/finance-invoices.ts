@@ -1320,10 +1320,13 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
         }
       }
 
-      // Increase invoice total to reflect additional charge
+      // Increase invoice subtotal + VAT + total to reflect the additional
+      // charge. Missing subtotal here broke the `subtotal = total - vatAmount`
+      // invariant and made any report that read `subtotal` for "net revenue"
+      // under-report by the debit-memo net.
       await client.query(
-        `UPDATE invoices SET total = total + $1, "vatAmount" = "vatAmount" + $2 WHERE id = $3 AND "companyId" = $4 AND "deletedAt" IS NULL`,
-        [chargeAmount, vat, id, scope.companyId]
+        `UPDATE invoices SET subtotal = subtotal + $1, "vatAmount" = "vatAmount" + $2, total = total + $3 WHERE id = $4 AND "companyId" = $5 AND "deletedAt" IS NULL`,
+        [net, vat, chargeAmount, id, scope.companyId]
       );
     });
 
