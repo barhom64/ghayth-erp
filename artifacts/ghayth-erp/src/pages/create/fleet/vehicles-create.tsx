@@ -17,6 +17,7 @@ const INITIAL = {
   fuelType: "gasoline", currentMileage: "", fuelCapacity: "", status: "available",
   insuranceExpiry: "", registrationExpiry: "", notes: "",
   registrationNumber: "", plateType: "", sequenceNumber: "", inspectionDate: "", nextInspectionDate: "",
+  purchasePrice: "", purchaseDate: "",
 };
 
 export default function VehiclesCreate() {
@@ -56,6 +57,8 @@ export default function VehiclesCreate() {
         sequenceNumber: form.sequenceNumber || undefined,
         inspectionDate: form.inspectionDate || undefined,
         nextInspectionDate: form.nextInspectionDate || undefined,
+        purchasePrice: form.purchasePrice ? Number(form.purchasePrice) : undefined,
+        purchaseDate: form.purchaseDate || undefined,
         notes: form.notes || undefined,
       });
       clearDraft();
@@ -142,6 +145,19 @@ export default function VehiclesCreate() {
             </FormFieldWrapper>
             <FormFieldWrapper label="تاريخ الفحص الدوري القادم">
               <DatePicker value={form.nextInspectionDate} onChange={(v) => setForm((f) => ({ ...f, nextInspectionDate: v }))} />
+            </FormFieldWrapper>
+          </div>
+        </div>
+
+        <div className="border-t pt-4 mt-2">
+          <h3 className="text-sm font-semibold text-status-info-foreground mb-3 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-status-info-surface0 inline-block" />
+            بيانات الشراء — تُستخدم في تقرير التكلفة الإجمالية وقيد رسملة الأصل
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <NumberField label="سعر الشراء" value={form.purchasePrice} onChange={(v) => setForm((f) => ({ ...f, purchasePrice: v }))} placeholder="٠٫٠٠" />
+            <FormFieldWrapper label="تاريخ الشراء">
+              <DatePicker value={form.purchaseDate} onChange={(v) => setForm((f) => ({ ...f, purchaseDate: v }))} />
             </FormFieldWrapper>
           </div>
         </div>

@@ -7128,7 +7128,9 @@ CREATE TABLE public.fleet_vehicles (
     "plateType" character varying(30),
     "sequenceNumber" character varying(20),
     "deletedAt" timestamp with time zone,
-    "inspectionExpiry" date
+    "inspectionExpiry" date,
+    "purchasePrice" numeric(14,2),
+    "purchaseDate" date
 );
 
 
