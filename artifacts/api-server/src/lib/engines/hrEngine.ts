@@ -41,24 +41,33 @@ class HREngineImpl implements DomainEngine {
         financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "credit", "2120"),
       ]);
 
+    // The four payroll totals are each rounded independently, so Σdebit can
+    // drift a sub-cent from Σcredit. The salary-expense debit is DERIVED as
+    // the exact complement of the credit legs so the entry balances to the
+    // cent — net pay and the deduction liability stay exact.
+    const totalAllowances = roundTo2(payroll.totalAllowances);
+    const totalDeductions = roundTo2(payroll.totalDeductions);
+    const totalNet = roundTo2(payroll.totalNet);
+    const totalBasic = roundTo2(totalDeductions + totalNet - totalAllowances);
+
     const lines = [
-      { accountCode: salaryExpense, debit: payroll.totalBasic, credit: 0, description: `رواتب أساسية — ${payroll.month}/${payroll.year}` },
+      { accountCode: salaryExpense, debit: totalBasic, credit: 0, description: `رواتب أساسية — ${payroll.month}/${payroll.year}` },
     ];
 
-    if (payroll.totalAllowances > 0) {
+    if (totalAllowances > 0) {
       lines.push({
         accountCode: allowanceExpense,
-        debit: payroll.totalAllowances,
+        debit: totalAllowances,
         credit: 0,
         description: `بدلات — ${payroll.month}/${payroll.year}`,
       });
     }
 
-    if (payroll.totalDeductions > 0) {
+    if (totalDeductions > 0) {
       lines.push({
         accountCode: deductionAccount,
         debit: 0,
-        credit: payroll.totalDeductions,
+        credit: totalDeductions,
         description: `خصومات — ${payroll.month}/${payroll.year}`,
       });
     }
@@ -66,7 +75,7 @@ class HREngineImpl implements DomainEngine {
     lines.push({
       accountCode: salaryPayable,
       debit: 0,
-      credit: payroll.totalNet,
+      credit: totalNet,
       description: `صافي رواتب مستحقة — ${payroll.month}/${payroll.year}`,
     });
 
@@ -260,13 +269,26 @@ class HREngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_deductions_payable", "credit", "2210"),
     ]);
 
+    // The six payroll aggregates are each rounded independently, so Σdebit
+    // can drift a sub-cent from Σcredit. The salary-expense debit is DERIVED
+    // as the exact balancing figure (Σcredit − the other debits) — it is
+    // always the dominant line and the rounding remainder belongs in payroll
+    // cost. Net pay, GOSI payable and the deduction liabilities stay exact,
+    // so this accrual still matches the later payment leg to the cent.
+    const totalOvertime = roundTo2(payroll.totalOvertime);
+    const gosiEmployer = roundTo2(payroll.totalGosiEmployer);
+    const bankPayout = roundTo2(payroll.totalBankPayout);
+    const gosiPayable = roundTo2(payroll.totalGosiPayable);
+    const otherDeductions = roundTo2(payroll.totalOtherDeductions);
+    const totalGross = roundTo2(bankPayout + gosiPayable + otherDeductions - totalOvertime - gosiEmployer);
+
     const lines = [
-      { accountCode: salaryExpenseCode, debit: payroll.totalGross, credit: 0 },
-      { accountCode: overtimeExpenseCode, debit: payroll.totalOvertime, credit: 0 },
-      { accountCode: gosiExpenseCode, debit: roundTo2(payroll.totalGosiEmployer), credit: 0 },
-      { accountCode: salaryPayableCode, debit: 0, credit: payroll.totalBankPayout },
-      { accountCode: gosiPayableCode, debit: 0, credit: payroll.totalGosiPayable },
-      { accountCode: deductionsPayableCode, debit: 0, credit: payroll.totalOtherDeductions },
+      { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
+      { accountCode: overtimeExpenseCode, debit: totalOvertime, credit: 0 },
+      { accountCode: gosiExpenseCode, debit: gosiEmployer, credit: 0 },
+      { accountCode: salaryPayableCode, debit: 0, credit: bankPayout },
+      { accountCode: gosiPayableCode, debit: 0, credit: gosiPayable },
+      { accountCode: deductionsPayableCode, debit: 0, credit: otherDeductions },
     ].filter(l => l.debit > 0 || l.credit > 0);
 
     return financialEngine.postJournalEntry({
