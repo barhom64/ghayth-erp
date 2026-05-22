@@ -10,7 +10,7 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog, applyJournalEntryBalances } from "../lib/businessHelpers.js";
 import { applyTransition } from "../lib/lifecycleEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { pushToDLQ } from "../lib/eventBus.js";
@@ -647,6 +647,13 @@ vendorsRouter.patch("/vouchers/:id/approve", authorize({ feature: "finance.vendo
           `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('voucher',$1,$2,$3,$4,$5)`,
           [id, newStatus, notes || null, scope.userId, scope.companyId]
         );
+        // FIN-007 — the voucher was recorded as a deferred (draft) entry that
+        // did not move account balances. Approval applies them now, inside
+        // this same transaction. Rejection/return never reaches here, so a
+        // non-approved voucher never affects the ledger.
+        if (newStatus === "approved") {
+          await applyJournalEntryBalances(client, scope.companyId, id);
+        }
       },
     });
     res.json(updated);

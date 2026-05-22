@@ -24,6 +24,11 @@ export interface GLPostingRequest {
   guardTable?: string;
   guardId?: number;
   skipPeriodCheck?: boolean;
+  // FIN-007 — when true the entry is recorded WITHOUT moving
+  // chart_of_accounts.currentBalance; the balances are applied later by
+  // applyJournalEntryBalances (e.g. when a voucher is approved). Used for
+  // documents that must not hit the ledger before approval.
+  deferBalances?: boolean;
   // Optional final status for the journal entry — defaults to DB default ('draft').
   // Allows callers (e.g. manual journals posted immediately) to land in 'posted'
   // without doing a follow-up UPDATE from a route.

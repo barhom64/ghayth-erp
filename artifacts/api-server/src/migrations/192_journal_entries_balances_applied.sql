@@ -1,0 +1,26 @@
+-- Migration 192: track whether a journal entry's account-balance movement
+-- has been applied.
+--
+-- RCA finding FIN-007 (docs/audit/RESCAN_2026-05-22.md), Wave-2 defect.
+--
+-- Vouchers (RV-/PV-) used to move chart_of_accounts.currentBalance the
+-- moment they were created, before any approval. They now post as a
+-- deferred entry — recorded with the lines, but balances applied only
+-- when the voucher is approved (applyJournalEntryBalances).
+--
+-- This flag makes that application idempotent and safe across a rolling
+-- deploy:
+--   * every existing journal entry already had its balances applied, so
+--     the column defaults to true — approving a voucher that predates
+--     this change will NOT re-apply (and double) its balances.
+--   * createJournalEntry sets it false only for deferBalances entries.
+--   * applyJournalEntryBalances applies the movement only while the flag
+--     is false, then flips it true.
+--
+-- Additive column with a NOT NULL DEFAULT — every existing row is
+-- backfilled to true by the default, no rolling-deploy hazard.
+--
+-- @rollback:
+--   ALTER TABLE journal_entries DROP COLUMN IF EXISTS "balancesApplied";
+
+ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS "balancesApplied" boolean NOT NULL DEFAULT true;
