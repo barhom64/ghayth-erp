@@ -104,6 +104,7 @@ export type ClientRow = InferSelectModel<typeof clients> & {
   assignedTo?: number | null;
   isBlacklisted?: boolean | null;
   totalRevenue?: number | string | null;
+  expectedRevenue?: number | string | null;
   avgRating?: number | string | null;
   tags?: unknown;
   lat?: number | string | null;
