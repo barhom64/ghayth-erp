@@ -93,7 +93,19 @@ export function authorize(opts: AuthorizeOptions) {
           `SELECT ${cols} FROM "${safeTable}" WHERE id = $1 LIMIT 1`,
           [recordId]
         ).catch(() => [] as ResourceRecord[]);
-        if (record) spec.resource = { record };
+        if (record) {
+          // Tenant isolation — a record belonging to another company is
+          // treated as not-found here, so authorize({resource}) can never
+          // become a cross-tenant IDOR. checkAccess short-circuits to
+          // allowed for owners *before* per-record scope evaluation, so
+          // this guard must live here and apply to owners too.
+          const recCompany = (record as { companyId?: number | null }).companyId;
+          if (recCompany != null && recCompany !== scope.companyId) {
+            res.status(404).json({ error: "السجل غير موجود", code: "NOT_FOUND" });
+            return;
+          }
+          spec.resource = { record };
+        }
       }
     }
 
