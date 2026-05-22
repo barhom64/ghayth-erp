@@ -2,6 +2,7 @@ import pg from "pg";
 import { logger } from "./logger.js";
 import { config } from "./config.js";
 import { recordQuery } from "./observability.js";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 const { Pool } = pg;
 
@@ -30,9 +31,22 @@ export const pool = new Proxy({} as pg.Pool, {
   },
 });
 
+// Transaction context — while code runs inside a withTransaction callback
+// the active PoolClient is bound here, so rawQuery / rawExecute issue their
+// statements on the SAME connection (and therefore the SAME transaction)
+// instead of grabbing an independent pool connection. Before this, a
+// rawQuery / rawExecute inside a withTransaction block silently ran as its
+// own autocommitted statement on a separate connection — the BEGIN/COMMIT
+// wrapped an idle connection and the "transaction" had no atomicity.
+const txStore = new AsyncLocalStorage<pg.PoolClient>();
+
+function currentExecutor(): pg.Pool | pg.PoolClient {
+  return txStore.getStore() ?? pool;
+}
+
 export async function rawQuery<T = any>(sql: string, params: unknown[] = []): Promise<T[]> {
   const start = Date.now();
-  const result = await pool
+  const result = await currentExecutor()
     .query(sql, params)
     .finally(() => recordQuery(sql, Date.now() - start));
   return result.rows as T[];
@@ -57,7 +71,7 @@ export async function rawExecute(
   const finalSQL = hasReturning || isDDL ? cleanSQL : `${cleanSQL} RETURNING id`;
 
   const start = Date.now();
-  const result = await pool
+  const result = await currentExecutor()
     .query(finalSQL, cleanParams(params))
     .finally(() => recordQuery(finalSQL, Date.now() - start));
   const insertId = result.rows[0]?.id ?? 0;
@@ -86,7 +100,9 @@ export async function withTransaction<T>(
   const client = await pool.connect();
   await client.query("BEGIN");
   try {
-    const result = await fn(client);
+    // Bind this client as the active executor so any rawQuery / rawExecute
+    // run by `fn` (directly or via helpers it calls) joins this transaction.
+    const result = await txStore.run(client, () => fn(client));
     await client.query("COMMIT");
     return result;
   } catch (err) {

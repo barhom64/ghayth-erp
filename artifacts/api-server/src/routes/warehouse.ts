@@ -31,7 +31,7 @@ const router = Router();
 // ─────────────────────────────────────────────────────────────────────────────
 // WAREHOUSE STATE MACHINES — Phase C.8 Warehouse audit
 // ─────────────────────────────────────────────────────────────────────────────
-const MOVEMENT_TYPES = ["in", "out", "return", "transfer_in", "transfer_out", "adjustment"] as const;
+const MOVEMENT_TYPES = ["in", "out", "return", "transfer_in", "transfer_out", "adjustment_in", "adjustment_out"] as const;
 
 const createProductSchema = z.object({
   name: z.string().min(1, "اسم المنتج مطلوب"),
@@ -194,7 +194,9 @@ type InventoryGlTrigger =
   | "issue"
   | "transfer"
   | "variance_in"
-  | "variance_out";
+  | "variance_out"
+  | "adjustment_in"
+  | "adjustment_out";
 
 async function postInventoryMovementGl(params: {
   companyId: number;
@@ -247,7 +249,7 @@ async function postInventoryMovementGl(params: {
         ? `${params.reference}-JE-${params.movementId}`
         : `INV-MV-${params.movementId}`;
 
-    const trigger = params.trigger as "receipt" | "issue" | "variance_in" | "variance_out";
+    const trigger = params.trigger as Exclude<InventoryGlTrigger, "transfer">;
     const { warehouseEngine } = await import("../lib/engines/index.js");
     const glResult = await warehouseEngine.postMovementGL(
       { companyId: params.companyId, branchId: params.branchId, createdBy: params.createdBy },
@@ -587,6 +589,11 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
     const scope = req.scope!;
     const b = zodParse(createMovementSchema.safeParse(req.body));
     const qtyNum = b.quantity;
+    // A movement either raises or lowers on-hand stock. `adjustment_in`
+    // (stock-up correction) behaves like a receipt; `adjustment_out`
+    // (write-down) behaves like an issue.
+    const isInbound = b.type === 'in' || b.type === 'return' || b.type === 'transfer_in' || b.type === 'adjustment_in';
+    const isOutbound = b.type === 'out' || b.type === 'transfer_out' || b.type === 'adjustment_out';
 
     let unitCost = b.unitCost || 0;
     let insertId = 0;
@@ -602,8 +609,8 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
       const product = prodRes.rows[0];
       if (!product) throw new NotFoundError("المنتج غير موجود");
 
-      // Prevent overdraw on out / transfer_out
-      if ((b.type === 'out' || b.type === 'transfer_out') && Number(product.currentStock) < qtyNum) {
+      // Prevent overdraw on any stock-lowering movement
+      if (isOutbound && Number(product.currentStock) < qtyNum) {
         throw new ConflictError(
           `الكمية المطلوبة (${qtyNum}) تتجاوز المخزون الحالي (${product.currentStock})`,
           { field: "quantity", fix: `المخزون المتاح: ${product.currentStock}` }
@@ -616,8 +623,14 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
       const preCost = Number(product.costPrice ?? 0);
       const preLastWa = Number(product.lastWaCost ?? 0);
       preMovementAvgCost = preCost > 0 ? preCost : preLastWa;
+      // An adjustment-in is a quantity correction, not a purchase: when no
+      // explicit unit cost is given, value the added units at the existing
+      // weighted-average cost so the average stays stable.
+      if (b.type === 'adjustment_in' && !(Number(b.unitCost) > 0)) {
+        unitCost = preMovementAvgCost;
+      }
 
-      if (b.type === 'out' || b.type === 'transfer_out') {
+      if (isOutbound) {
         const batchRes = await client.query(
           `SELECT id, quantity, "unitCost", "receivedDate" FROM warehouse_stock_batches WHERE "productId"=$1 AND quantity > 0 ORDER BY "receivedDate" ASC`,
           [b.productId]
@@ -659,7 +672,7 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
         );
       }
 
-      const sign = (b.type === 'in' || b.type === 'return' || b.type === 'transfer_in') ? 1 : -1;
+      const sign = isInbound ? 1 : -1;
       const movRes = await client.query(
         `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy","branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
         [scope.companyId, b.productId, b.type, b.quantity, unitCost, b.reference, b.notes, scope.userId, scope.branchId]
@@ -669,17 +682,22 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
       const newStock = Number(product.currentStock) + sign * Math.abs(Number(b.quantity));
       await client.query(`UPDATE warehouse_products SET "currentStock" = "currentStock" + $1, "updatedAt" = NOW() WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [sign * Math.abs(b.quantity), b.productId, scope.companyId]);
 
-      if (b.type === 'in' || b.type === 'return' || b.type === 'transfer_in') {
+      if (isInbound) {
         const incomingQty = Math.abs(Number(b.quantity));
-        const incomingCost = Number(b.unitCost ?? 0);
         const prevStock = Math.max(0, Number(product.currentStock));
         const prevCost = Number(product.costPrice ?? 0);
+        // An adjustment-in with no explicit cost is valued at the existing
+        // average, so re-blending leaves the average unchanged.
+        const incomingCost =
+          b.type === 'adjustment_in' && !(Number(b.unitCost) > 0)
+            ? prevCost
+            : Number(b.unitCost ?? 0);
         const newWaCost = runningWeightedAverageCost(prevStock, prevCost, incomingQty, incomingCost);
         await client.query(
           `UPDATE warehouse_products SET "costPrice"=$1, "lastWaCost"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
           [newWaCost, b.productId, scope.companyId]
         );
-      } else if ((b.type === 'out' || b.type === 'transfer_out') && newStock <= 0) {
+      } else if (isOutbound && newStock <= 0) {
         await client.query(
           `UPDATE warehouse_products SET "lastWaCost"="costPrice", "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
           [b.productId, scope.companyId]
@@ -750,6 +768,31 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
         } else {
           logger.warn(
             `[warehouse-gl] issue movement ${insertId} has no unit cost (WA or fallback) — GL posting skipped`
+          );
+        }
+      } else if (mvType === "adjustment_in" || mvType === "adjustment_out") {
+        // Stock adjustment — post to the inventory-variance account at the
+        // movement's recorded unit cost (set above: supplied cost for an
+        // adjustment-in, pre-movement weighted-average for an adjustment-out).
+        let adjCost = unitCost;
+        if (!(adjCost > 0)) adjCost = preMovementAvgCost > 0 ? preMovementAvgCost : productCost;
+        if (adjCost > 0) {
+          journalEntryId = await postInventoryMovementGl({
+            companyId: scope.companyId,
+            branchId: scope.branchId,
+            // as-any-reason: justified-external - scope.activeAssignmentId is injected by authMiddleware at runtime but not exposed on the Scope type here
+            createdBy: (scope as any).activeAssignmentId ?? scope.userId,
+            movementId: insertId,
+            productId: Number(b.productId),
+            productName,
+            trigger: mvType === "adjustment_in" ? "adjustment_in" : "adjustment_out",
+            quantity: qty,
+            unitCost: adjCost,
+            reference: b.reference ?? null,
+          });
+        } else {
+          logger.warn(
+            `[warehouse-gl] adjustment movement ${insertId} has no unit cost — GL posting skipped`
           );
         }
       }

@@ -11,7 +11,13 @@ interface WarehouseGLContext {
   createdBy: number;
 }
 
-type MovementTrigger = "receipt" | "issue" | "variance_in" | "variance_out";
+type MovementTrigger =
+  | "receipt"
+  | "issue"
+  | "variance_in"
+  | "variance_out"
+  | "adjustment_in"
+  | "adjustment_out";
 
 class WarehouseEngineImpl implements DomainEngine {
   readonly domainId = "warehouse";
@@ -71,6 +77,23 @@ class WarehouseEngineImpl implements DomainEngine {
         creditMapping = "inventory_variance";
         creditFallback = "1151";
         description = `عجز جرد${productLabel} — ${movement.totalValue.toFixed(2)} ريال`;
+        break;
+      case "adjustment_in":
+        // Manual stock-up correction — same inventory-variance accounts
+        // as a count surplus, distinct description.
+        debitMapping = "inventory_variance";
+        debitFallback = "1151";
+        creditMapping = "inventory_variance";
+        creditFallback = "5150";
+        description = `تسوية مخزون — زيادة${productLabel} — ${movement.totalValue.toFixed(2)} ريال`;
+        break;
+      case "adjustment_out":
+        // Manual write-down correction.
+        debitMapping = "inventory_variance";
+        debitFallback = "5150";
+        creditMapping = "inventory_variance";
+        creditFallback = "1151";
+        description = `تسوية مخزون — نقص${productLabel} — ${movement.totalValue.toFixed(2)} ريال`;
         break;
     }
 
