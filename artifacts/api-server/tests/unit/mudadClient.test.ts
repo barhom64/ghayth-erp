@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   buildMudadUrl,
   mudadBaseUrl,
@@ -17,36 +17,39 @@ import {
 } from "../../src/lib/saudi-compliance/mudad/auth.js";
 import { parseMudadResponse } from "../../src/lib/saudi-compliance/mudad/client.js";
 
+// Spec-default Mudad sandbox host (no env override) — see mudad/endpoints.ts.
+const DEFAULT_SANDBOX = "https://api-sandbox.mudad.com.sa";
+
 describe("Mudad endpoints — URL building", () => {
   it("returns sandbox vs production base URLs", () => {
     expect(mudadBaseUrl("sandbox")).toMatch(/^https:\/\/[^/]+/);
     expect(mudadBaseUrl("production")).toMatch(/^https:\/\/[^/]+/);
   });
 
-  it("env vars override the spec defaults per environment", () => {
-    process.env.MUDAD_SANDBOX_URL = "https://sb.example.test/";
-    process.env.MUDAD_PROD_URL = "https://prod.example.test";
-    expect(mudadBaseUrl("sandbox")).toBe("https://sb.example.test");
-    expect(mudadBaseUrl("production")).toBe("https://prod.example.test");
-    delete process.env.MUDAD_SANDBOX_URL;
-    delete process.env.MUDAD_PROD_URL;
+  it("env vars override the spec defaults per environment", async () => {
+    // The override is resolved in lib/config.ts at module-load time, so
+    // the env vars must be stubbed before the graph is re-imported.
+    vi.stubEnv("MUDAD_SANDBOX_URL", "https://sb.example.test/");
+    vi.stubEnv("MUDAD_PROD_URL", "https://prod.example.test");
+    vi.resetModules();
+    const endpoints = await import("../../src/lib/saudi-compliance/mudad/endpoints.js");
+    expect(endpoints.mudadBaseUrl("sandbox")).toBe("https://sb.example.test");
+    expect(endpoints.mudadBaseUrl("production")).toBe("https://prod.example.test");
+    vi.unstubAllEnvs();
+    vi.resetModules();
   });
 
   it("buildMudadUrl joins base + spec-fixed paths correctly", () => {
-    process.env.MUDAD_SANDBOX_URL = "https://sb.test";
-    expect(buildMudadUrl("sandbox", MUDAD_TOKEN_PATH)).toBe("https://sb.test/oauth2/token");
+    expect(buildMudadUrl("sandbox", MUDAD_TOKEN_PATH)).toBe(`${DEFAULT_SANDBOX}/oauth2/token`);
     expect(buildMudadUrl("sandbox", MUDAD_SALARY_PATH)).toContain("/payroll/salary");
     expect(buildMudadUrl("sandbox", MUDAD_LEAVE_UNPAID_PATH)).toContain("/leave/unpaid");
     expect(buildMudadUrl("sandbox", MUDAD_TERMINATION_PATH)).toContain("/contract/termination");
     expect(buildMudadUrl("sandbox", MUDAD_STATUS_PATH)).toContain("/status");
-    delete process.env.MUDAD_SANDBOX_URL;
   });
 
   it("handles paths with or without a leading slash", () => {
-    process.env.MUDAD_SANDBOX_URL = "https://x.test";
-    expect(buildMudadUrl("sandbox", "foo/bar")).toBe("https://x.test/foo/bar");
-    expect(buildMudadUrl("sandbox", "/foo/bar")).toBe("https://x.test/foo/bar");
-    delete process.env.MUDAD_SANDBOX_URL;
+    expect(buildMudadUrl("sandbox", "foo/bar")).toBe(`${DEFAULT_SANDBOX}/foo/bar`);
+    expect(buildMudadUrl("sandbox", "/foo/bar")).toBe(`${DEFAULT_SANDBOX}/foo/bar`);
   });
 });
 

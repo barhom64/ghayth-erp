@@ -28,8 +28,9 @@ import type { FetchedRate, RateSource } from "./source-fetchers/types.js";
 import { ecbSource } from "./source-fetchers/ecb.js";
 import { manualSource } from "./source-fetchers/manual.js";
 import { samaSource, SamaNotConfiguredError } from "./source-fetchers/sama.js";
+import { config } from "../config.js";
 
-const STALENESS_ALERT_DAYS = Number(process.env.FX_RATE_STALENESS_ALERT_DAYS ?? 3);
+const STALENESS_ALERT_DAYS = config.fx.stalenessAlertDays;
 
 export interface DailyFetchOutcome {
   companies: number;

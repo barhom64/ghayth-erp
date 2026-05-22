@@ -48,6 +48,7 @@ import { spawn } from "node:child_process";
 import { writeFile, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { config } from "../config.js";
 
 export interface CsrInput {
   /** Company legal name in Arabic — mapped to organizationName (2.5.4.10). */
@@ -98,7 +99,7 @@ export interface GeneratedCsr {
  * their OTP.
  */
 export async function generateCsr(input: CsrInput): Promise<GeneratedCsr> {
-  if (process.env.NODE_ENV === "production" && !process.env.ZATCA_ALLOW_CSR_GEN) {
+  if (config.isProduction && !config.zatca.allowCsrGen) {
     // Belt and braces — CSR generation in production should be a
     // deliberate, audited action, not something the onboarding screen
     // does silently. The route handler can flip the env var after

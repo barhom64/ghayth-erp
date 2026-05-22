@@ -45,6 +45,7 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const API_SRC_DIR = join(REPO_ROOT, "artifacts/api-server/src");
 const ROUTES_DIR = join(REPO_ROOT, "artifacts/api-server/src/routes");
 const LIB_DIR = join(REPO_ROOT, "artifacts/api-server/src/lib");
 const MIDDLEWARES_DIR = join(REPO_ROOT, "artifacts/api-server/src/middlewares");
@@ -155,6 +156,19 @@ const RULES = [
       "numerals across users. Import `formatNumber` from `@/lib/formatters` " +
       "(returns Arabic-Indic digits with en-US grouping) or pass an " +
       "explicit locale string if you need a non-default behaviour.",
+  },
+  {
+    id: "direct-process-env-read",
+    scan: [API_SRC_DIR],
+    // lib/config.ts is the ONE module allowed to touch process.env — it
+    // parses and validates every variable into the typed `config` object.
+    skip: (file) => file.endsWith("/lib/config.ts"),
+    regex: /\bprocess\.env\b/,
+    message:
+      "Direct `process.env` access is forbidden outside lib/config.ts (FND-003). " +
+      "Declare the variable in the lib/config.ts zod schema, expose it on the " +
+      "`AppConfig` shape, and read it through the typed `config` object. This " +
+      "keeps validation, defaults and the startup fail-fast gate in one place.",
   },
 ];
 

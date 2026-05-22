@@ -137,7 +137,7 @@ describe("app — error handling", () => {
   });
 
   it("hides error details in production", () => {
-    expect(APP).toContain('process.env.NODE_ENV !== "production"');
+    expect(APP).toContain("!config.isProduction");
   });
 });
 

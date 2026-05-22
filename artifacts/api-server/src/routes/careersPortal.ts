@@ -12,9 +12,10 @@ import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "../lib/logger.js";
+import { config } from "../lib/config.js";
 
 const router = Router();
-const SECRET: string = process.env.JWT_SECRET ?? (() => { throw new Error("JWT_SECRET is required for careers portal"); })();
+const SECRET: string = config.jwtSecret || (() => { throw new Error("JWT_SECRET is required for careers portal"); })();
 
 const careersRegisterSchema = z.object({
   name: z.string().min(1, "الاسم مطلوب"),

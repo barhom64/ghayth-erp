@@ -6,6 +6,7 @@ import { sendNotification } from "./notificationService.js";
 import { validateEventPayload, getEventDefinition } from "./eventCatalog.js";
 import { logger } from "./logger.js";
 import { FINANCE_ROLES, OWNER_GM_ROLES } from "./rbacCatalog.js";
+import { config } from "./config.js";
 
 // Task #428 — these "what's the current date/period/year?" helpers are now
 // timezone-aware (Asia/Riyadh by default). Pre-Task #428 they all delegated
@@ -271,7 +272,7 @@ export async function emitEvent(params: {
   // a busy tenant. The original audit flagged "event_logs is empty";
   // turning the env flag on is the supported way to fix that without
   // surprising existing deployments with a behaviour change.
-  const persistAll = process.env.PERSIST_ALL_EVENTS === "true";
+  const persistAll = config.persistAllEvents;
   if (isCritical || persistAll) {
     await rawExecute(
       `INSERT INTO event_logs ("companyId","userId",action,entity,"entityId",details)

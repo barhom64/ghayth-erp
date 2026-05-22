@@ -1,8 +1,9 @@
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "../lib/logger.js";
+import { config } from "../lib/config.js";
 
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = config.isProduction;
 const COOKIE_NAME = "erp_csrf";
 const HEADER_NAME = "x-csrf-token";
 const TOKEN_BYTES = 32;

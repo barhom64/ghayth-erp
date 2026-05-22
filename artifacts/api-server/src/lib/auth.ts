@@ -1,8 +1,9 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
+import { config } from "./config.js";
 
-const _jwtSecret = process.env.JWT_SECRET;
+const _jwtSecret = config.jwtSecret;
 if (!_jwtSecret) {
   console.error("FATAL: JWT_SECRET environment variable must be set. Exiting.");
   process.exit(1);

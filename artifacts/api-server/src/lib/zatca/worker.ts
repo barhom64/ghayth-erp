@@ -38,8 +38,9 @@ import {
   recordFailure,
   type RetryRow,
 } from "./retry.js";
+import { config } from "../config.js";
 
-const DEFAULT_BATCH_SIZE = Number(process.env.ZATCA_RETRY_BATCH_SIZE ?? 25);
+const DEFAULT_BATCH_SIZE = config.zatca.retryBatchSize;
 
 export interface WorkerOutcome {
   scanned: number;
