@@ -23,11 +23,16 @@ import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { withListFilters } from "@/lib/list-query";
 
+// PRJ-005 — these must match the task statuses the backend recognises
+// (VALID_TASK_TRANSITIONS in tasks.ts). "overdue" is a derived view, not a
+// stored status — filtering or setting it never matched a row; "blocked"
+// and "cancelled" are real statuses the user could not previously pick.
 const statusOptions = [
   { value: "pending", label: "معلق", color: "bg-status-warning-surface text-status-warning-foreground" },
   { value: "in_progress", label: "جاري", color: "bg-status-info-surface text-status-info-foreground" },
+  { value: "blocked", label: "محجوب", color: "bg-rose-100 text-rose-700" },
   { value: "completed", label: "مكتمل", color: "bg-status-success-surface text-status-success-foreground" },
-  { value: "overdue", label: "متأخر", color: "bg-rose-100 text-rose-700" },
+  { value: "cancelled", label: "ملغاة", color: "bg-slate-100 text-slate-600" },
 ];
 
 const typeLabels: Record<string, string> = { task: "مهمة عامة", meeting: "اجتماع", call: "مكالمة" };
