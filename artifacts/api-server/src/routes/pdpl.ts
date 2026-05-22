@@ -14,6 +14,7 @@ import rateLimit from "express-rate-limit";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { logger } from "../lib/logger.js";
+import { config } from "../lib/config.js";
 
 // /pdpl mixes one anonymous endpoint (/privacy-notice) with several
 // authenticated ones. Per-IP cap goes only on the anonymous endpoint;
@@ -21,7 +22,7 @@ import { logger } from "../lib/logger.js";
 // on a shared proxy IP aren't lumped together.
 const privacyNoticeIpLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: process.env.NODE_ENV === "production" ? 100 : 2000,
+  max: config.isProduction ? 100 : 2000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة لاحقاً" },

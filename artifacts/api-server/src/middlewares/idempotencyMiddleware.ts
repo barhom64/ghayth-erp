@@ -2,6 +2,7 @@ import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
+import { config } from "../lib/config.js";
 
 // Idempotency middleware for sensitive financial POSTs.
 //
@@ -23,15 +24,10 @@ import { logger } from "../lib/logger.js";
 // whole point of the middleware.
 
 const HEADER = "idempotency-key";
-// TTL in hours for cached idempotency rows. Configurable via env so the
-// cleanup cron and the middleware lookup window stay in sync. Defaults to
-// 24h — long enough to catch retries from flaky clients without letting
-// the table grow unbounded.
-export const IDEMPOTENCY_TTL_HOURS: number = (() => {
-  const raw = process.env.IDEMPOTENCY_TTL_HOURS;
-  const parsed = raw ? Number(raw) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 24;
-})();
+// TTL in hours for cached idempotency rows — keeps the cleanup cron and
+// the middleware lookup window in sync. Sourced from config (env
+// IDEMPOTENCY_TTL_HOURS, default 24h).
+export const IDEMPOTENCY_TTL_HOURS: number = config.idempotencyTtlHours;
 const TTL_HOURS = IDEMPOTENCY_TTL_HOURS;
 const MAX_KEY_LEN = 200;
 const MAX_BODY_BYTES = 200_000;

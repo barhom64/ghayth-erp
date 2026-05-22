@@ -9,6 +9,7 @@ import rateLimit from "express-rate-limit";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { logger } from "../lib/logger.js";
+import { config } from "../lib/config.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
@@ -96,7 +97,7 @@ interface AssignmentSwitchRow {
   role: string;
 }
 
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = config.isProduction;
 
 function setAccessTokenCookie(res: ExpressResponse, token: string) {
   res.cookie("erp_access", token, {
@@ -179,7 +180,7 @@ const loginLimiter = rateLimit({
 const authedUserLimiter = createPerUserLimiter({
   prefix: "auth:authed",
   windowMs: 60 * 1000,
-  max: process.env.NODE_ENV === "production" ? 120 : 1200,
+  max: isProduction ? 120 : 1200,
   message: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة بعد دقيقة",
 });
 

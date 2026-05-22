@@ -25,6 +25,7 @@ import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
 import { ExpressInstrumentation } from "@opentelemetry/instrumentation-express";
 import { PgInstrumentation } from "@opentelemetry/instrumentation-pg";
 import { logger } from "./logger.js";
+import { config } from "./config.js";
 
 // The SDK handle lives on globalThis, not in a module-local: the preload
 // bundle (dist/otel.mjs) and the server bundle (dist/server.mjs) each carry
@@ -39,7 +40,7 @@ const g = globalThis as typeof globalThis & { __ghaythOtelSdk?: NodeSDK };
  */
 export function startTracing(): void {
   if (g.__ghaythOtelSdk) return;
-  if (!process.env.OTEL_EXPORTER_OTLP_ENDPOINT) return;
+  if (!config.otelExporterEndpoint) return;
   try {
     const sdk = new NodeSDK({
       traceExporter: new OTLPTraceExporter(),
@@ -52,7 +53,7 @@ export function startTracing(): void {
     sdk.start();
     g.__ghaythOtelSdk = sdk;
     logger.info(
-      { endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT },
+      { endpoint: config.otelExporterEndpoint },
       "OpenTelemetry tracing started",
     );
   } catch (err) {

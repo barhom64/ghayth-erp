@@ -6,6 +6,7 @@ import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import rateLimit from "express-rate-limit";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
 import { logger } from "../lib/logger.js";
+import { config } from "../lib/config.js";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("الرجاء إدخال بريد إلكتروني صحيح"),
@@ -15,7 +16,7 @@ const router = Router();
 
 const publicLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: process.env.NODE_ENV === "production" ? 30 : 1000,
+  max: config.isProduction ? 30 : 1000,
   standardHeaders: true,
   legacyHeaders: false,
   validate: { ip: false, trustProxy: false },

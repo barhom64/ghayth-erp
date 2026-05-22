@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
+import { config } from "./config.js";
 
 /**
  * Symmetric encryption for secrets stored in the database
@@ -7,10 +8,10 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:
  * Uses AES-256-GCM with a per-value random IV. The ciphertext is stored
  * as a single string: "enc:v1:<iv_b64>:<tag_b64>:<ciphertext_b64>".
  *
- * The master key is derived from process.env.SECRETS_ENCRYPTION_KEY via
- * scrypt. In production this variable MUST be set to a strong value (at
- * least 32 characters of high entropy). The derivation salt is fixed so
- * that the same env value always yields the same runtime key.
+ * The master key is derived from config.secretsEncryptionKey (env
+ * SECRETS_ENCRYPTION_KEY) via scrypt. In production this MUST be set to a
+ * strong value (at least 32 characters of high entropy). The derivation
+ * salt is fixed so the same env value always yields the same runtime key.
  */
 
 const ALGORITHM = "aes-256-gcm";
@@ -21,7 +22,7 @@ let cachedKey: Buffer | null = null;
 
 function getKey(): Buffer {
   if (cachedKey) return cachedKey;
-  const raw = process.env.SECRETS_ENCRYPTION_KEY;
+  const raw = config.secretsEncryptionKey;
   if (!raw || raw.length < 16) {
     throw new Error(
       "SECRETS_ENCRYPTION_KEY environment variable is required and must be at least 16 characters"

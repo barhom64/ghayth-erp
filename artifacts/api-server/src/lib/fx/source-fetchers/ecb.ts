@@ -17,12 +17,13 @@
  * instead of silently producing zero rates.
  */
 import type { FetchedRate, RateSource } from "./types.js";
+import { config } from "../../config.js";
 
 const ECB_FEED_URL =
-  process.env.ECB_FX_FEED_URL ??
+  config.fx.feedUrl ??
   "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
 
-const FETCH_TIMEOUT_MS = Number(process.env.ECB_FETCH_TIMEOUT_MS ?? 10_000);
+const FETCH_TIMEOUT_MS = config.fx.fetchTimeoutMs;
 
 export const ecbSource: RateSource = {
   name: "ecb",

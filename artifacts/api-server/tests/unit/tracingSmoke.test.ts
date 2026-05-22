@@ -15,9 +15,7 @@ describe("tracing — OpenTelemetry bootstrap (OBS-6/OBS-9/OBS-10)", () => {
   });
 
   it("is gated behind OTEL_EXPORTER_OTLP_ENDPOINT (inert by default)", () => {
-    expect(tracing).toContain(
-      "if (!process.env.OTEL_EXPORTER_OTLP_ENDPOINT) return",
-    );
+    expect(tracing).toContain("if (!config.otelExporterEndpoint) return");
   });
 
   it("shares the SDK handle across the preload and server bundles", () => {
@@ -31,7 +29,7 @@ describe("tracing — preload load order (OBS-9/OBS-10)", () => {
   });
 
   it("otel.ts registers the ESM loader hook behind the tracing gate", () => {
-    expect(otel).toContain("process.env.OTEL_EXPORTER_OTLP_ENDPOINT");
+    expect(otel).toContain("config.otelExporterEndpoint");
     expect(otel).toContain(
       'register("@opentelemetry/instrumentation/hook.mjs"',
     );

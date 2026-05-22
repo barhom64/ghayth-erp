@@ -19,6 +19,7 @@
  * runner lands in week 4.
  */
 import type { ZatcaEnvironment } from "./types.js";
+import { config } from "../config.js";
 
 /**
  * Resolve the base URL for the given environment. The defaults below
@@ -30,8 +31,8 @@ import type { ZatcaEnvironment } from "./types.js";
 export function fatoraaBaseUrl(env: ZatcaEnvironment): string {
   const fromEnv =
     env === "production"
-      ? process.env.ZATCA_FATOORA_PROD_URL
-      : process.env.ZATCA_FATOORA_SANDBOX_URL;
+      ? config.zatca.prodUrl
+      : config.zatca.sandboxUrl;
   if (fromEnv && fromEnv.length > 0) return stripTrailingSlash(fromEnv);
 
   // Spec defaults (gw-fatoora.zatca.gov.sa). Same host for both,

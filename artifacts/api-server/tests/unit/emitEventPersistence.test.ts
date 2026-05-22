@@ -22,8 +22,8 @@ const ENV_EXAMPLE = readFileSync(
  * trail can flip it on without forcing the bloat on every deployment.
  */
 describe("emitEvent — opt-in full persistence via PERSIST_ALL_EVENTS", () => {
-  it("reads PERSIST_ALL_EVENTS from process.env", () => {
-    expect(SRC).toContain('process.env.PERSIST_ALL_EVENTS === "true"');
+  it("reads PERSIST_ALL_EVENTS via the central config", () => {
+    expect(SRC).toContain("config.persistAllEvents");
   });
 
   it("falls through to INSERT when isCritical OR persistAll is true", () => {
@@ -47,11 +47,11 @@ describe("emitEvent — opt-in full persistence via PERSIST_ALL_EVENTS", () => {
   });
 
   it("default behaviour (no env flag set) is still critical-only — no behaviour change", () => {
-    // The persistAll const must default to FALSE when the var is absent
-    // or any value other than the exact string "true". This is a safety
-    // assertion to protect against `process.env.PERSIST_ALL_EVENTS` being
-    // truthy-checked instead of strict-equals.
-    expect(SRC).toContain('=== "true"');
-    expect(SRC).not.toMatch(/process\.env\.PERSIST_ALL_EVENTS\)/);
+    // persistAll is sourced from config.persistAllEvents, which lib/config.ts
+    // parses with boolEnv(false): an absent flag (or any value other than a
+    // recognised truthy literal) yields false, so the critical-only default
+    // is preserved and businessHelpers no longer probes process.env directly.
+    expect(SRC).toContain("config.persistAllEvents");
+    expect(SRC).not.toMatch(/process\.env\.PERSIST_ALL_EVENTS/);
   });
 });

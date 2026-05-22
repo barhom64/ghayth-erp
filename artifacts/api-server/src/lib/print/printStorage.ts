@@ -11,6 +11,7 @@
 import { Storage } from "@google-cloud/storage";
 import { objectStorageClient } from "../objectStorage.js";
 import { logger } from "../logger.js";
+import { config } from "../config.js";
 
 function parseObjectPath(path: string): { bucketName: string; objectName: string } {
   if (!path.startsWith("/")) path = `/${path}`;
@@ -28,7 +29,7 @@ export async function storePrintArtifact(opts: {
   bytes: Buffer;
   mime: string;
 }): Promise<string | null> {
-  const dir = process.env.PRIVATE_OBJECT_DIR;
+  const dir = config.objectStorage.privateDir;
   if (!dir) return null;
   try {
     // utc-ok: object-storage path partition only, not a business date
@@ -52,7 +53,7 @@ export async function fetchPrintArtifact(opts: {
   companyId: number;
   storageKey: string;
 }): Promise<Buffer | null> {
-  const dir = process.env.PRIVATE_OBJECT_DIR;
+  const dir = config.objectStorage.privateDir;
   if (!dir) return null;
   try {
     const fullPath = `${dir.replace(/\/+$/, "")}/${opts.storageKey}`;

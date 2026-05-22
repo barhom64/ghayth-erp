@@ -18,8 +18,9 @@
  */
 import { register } from "node:module";
 import { startTracing } from "./lib/tracing.js";
+import { config } from "./lib/config.js";
 
-if (process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
+if (config.otelExporterEndpoint) {
   // The server bundle imports express as an ES module; OTel can only patch an
   // ES-module package when its import-in-the-middle loader hook is registered
   // before that bundle is imported.

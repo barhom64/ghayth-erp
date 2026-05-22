@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { logger } from "../lib/logger.js";
+import { config } from "../lib/config.js";
 import healthRouter from "./health.js";
 import authRouter from "./auth.js";
 import dashboardRouter from "./dashboard.js";
@@ -111,7 +112,7 @@ router.use(healthRouter);
 // /api/health is excluded so liveness probes never trip the cap.
 const anonymousIpLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: process.env.NODE_ENV === "production" ? 100 : 2000,
+  max: config.isProduction ? 100 : 2000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة لاحقاً" },
@@ -156,7 +157,7 @@ router.get("/settings/display", async (req, res) => {
     if (rawToken) {
       try {
         const jwt = await import("jsonwebtoken");
-        const SECRET = process.env.JWT_SECRET;
+        const SECRET = config.jwtSecret;
         const payload: any = jwt.default.verify(rawToken, SECRET!, { algorithms: ["HS256"] });
         if (payload?.companyId && payload?.type !== "client_portal") companyId = payload.companyId;
       } catch (e) { logger.debug(e, "public-settings JWT decode (optional)"); }
@@ -178,7 +179,7 @@ router.get("/settings/display", async (req, res) => {
 
 // Route discovery endpoint — disabled in production, admin-only otherwise.
 router.get("/_routes", (req, res, next): void => {
-  if (process.env.NODE_ENV === "production") {
+  if (config.isProduction) {
     res.status(404).json({ error: "المسار غير موجود" });
     return;
   }
@@ -218,7 +219,7 @@ router.use(csrfMiddleware);
 const globalUserLimiter = createPerUserLimiter({
   prefix: "api:global",
   windowMs: 60 * 1000,
-  max: process.env.NODE_ENV === "production" ? 600 : 6000,
+  max: config.isProduction ? 600 : 6000,
   message: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة لاحقاً",
 });
 router.use(globalUserLimiter);

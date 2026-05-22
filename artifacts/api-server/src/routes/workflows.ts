@@ -392,6 +392,16 @@ router.put("/definitions/:id", authorize({ feature: "admin", action: "update" })
     const id = parseId(req.params.id, "id");
     const { requestTypeLabel, description, isReturnable, enableEscalation, defaultSlaHours, isActive, steps } = body;
 
+    // Security: confirm the definition belongs to the caller's company
+    // BEFORE the transaction — the workflow_steps DELETE/INSERT below is
+    // keyed only by definitionId, so a foreign id would wipe and rewrite
+    // another tenant's approval chain.
+    const [defOwned] = await rawQuery<{ id: number }>(
+      `SELECT id FROM workflow_definitions WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (!defOwned) throw new NotFoundError("تعريف سير العمل غير موجود");
+
     await withTransaction(async (client) => {
       await client.query(
         `UPDATE workflow_definitions SET "requestTypeLabel" = COALESCE($1, "requestTypeLabel"),

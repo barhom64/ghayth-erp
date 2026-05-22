@@ -23,16 +23,20 @@ const TYPE_LABELS: Record<string, string> = {
   in: "وارد",
   out: "صادر",
   transfer: "نقل",
+  transfer_in: "تحويل وارد",
+  transfer_out: "تحويل صادر",
   adjustment: "تسوية",
+  adjustment_in: "تسوية - زيادة",
+  adjustment_out: "تسوية - نقص",
   return: "مرتجع",
 };
 
 function typeTone(type?: string | null) {
   if (!type) return "default" as const;
-  if (type === "in") return "success" as const;
-  if (type === "out") return "destructive" as const;
+  if (type === "in" || type === "transfer_in") return "success" as const;
+  if (type === "out" || type === "transfer_out") return "destructive" as const;
   if (type === "transfer") return "info" as const;
-  if (type === "adjustment") return "warning" as const;
+  if (type.startsWith("adjustment")) return "warning" as const;
   if (type === "return") return "warning" as const;
   return "default" as const;
 }
@@ -270,7 +274,7 @@ export default function WarehouseMovementDetail() {
               ref={movement.ref || `MVT-${id}`}
               date={formatDateAr(movement.date || movement.createdAt)}
               sections={printSections}
-              entityType={movement.type === "adjustment" ? "stock_adjustment" : "stock_transfer"}
+              entityType={String(movement.type ?? "").startsWith("adjustment") ? "stock_adjustment" : "stock_transfer"}
               entityId={movement.id ?? id}
               formats={["a4", "label"]}
             />
