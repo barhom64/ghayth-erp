@@ -40,6 +40,7 @@ import { iqamaDailyAlertCron } from "./saudi-compliance/iqama-cron.js";
 import { saudizationMonthlySnapshotCron } from "./saudi-compliance/saudization-snapshot.js";
 import { recordJobRun } from "./observability.js";
 import { runWithCorrelationId } from "./requestContext.js";
+import { escalateSlaAllCompanies } from "./supportSlaEscalation.js";
 
 async function getSystemTimezone(): Promise<string> {
   try {
@@ -872,31 +873,8 @@ async function dailySmartAlertScan(): Promise<string> {
 }
 
 async function hourlySlaEscalation(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
-  let escalated = 0;
-  for (const company of companies) {
-    const tickets = await rawQuery<Record<string, unknown>>(
-      `SELECT id, ref, title, priority, "assigneeId"
-       FROM support_tickets
-       WHERE "companyId" = $1 AND status IN ('open','in_progress')
-         AND "slaDeadline" IS NOT NULL AND "slaDeadline" < NOW()
-         AND "slaBreached" = false`,
-      [company.id]
-    );
-    for (const t of tickets) {
-      await rawExecute(
-        `UPDATE support_tickets SET "slaBreached" = true, "escalationLevel" = COALESCE("escalationLevel",0) + 1 WHERE id = $1`,
-        [t.id]
-      );
-      await broadcastAlert(
-        company.id, "sla_breach",
-        `خرق SLA: ${t.ref}`,
-        `التذكرة "${t.title}" (${t.priority}) تجاوزت SLA`,
-        "critical", "support_ticket", t.id as number
-      );
-      escalated++;
-    }
-  }
+  // SUP-015: escalation rule lives in one place — supportSlaEscalation.
+  const escalated = await escalateSlaAllCompanies();
   return `Escalated ${escalated} SLA-breached tickets`;
 }
 
@@ -1357,17 +1335,8 @@ async function dailyCrmCheck(): Promise<string> {
 }
 
 async function dailySlaGeneral(): Promise<string> {
-  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
-  let updated = 0;
-  for (const company of companies) {
-    const { affectedRows } = await rawExecute(
-      `UPDATE support_tickets SET "slaBreached" = true
-       WHERE "companyId" = $1 AND status IN ('open','in_progress') AND "slaBreached" = false
-         AND "slaDeadline" IS NOT NULL AND "slaDeadline" < NOW()`,
-      [company.id]
-    );
-    updated += affectedRows;
-  }
+  // SUP-015: daily safety sweep — same unified rule as the hourly job.
+  const updated = await escalateSlaAllCompanies();
   return `General SLA check: ${updated} tickets breached`;
 }
 
