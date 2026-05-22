@@ -52,24 +52,22 @@ describe("hrEngine GL account resolution patterns", () => {
     expect(section).toContain("eos_accrual_liability");
   });
 
-  it("postPayrollRunGL resolves 6 accounts: salary, gosi, overtime, bank, gosi payable, deductions payable", () => {
+  it("postPayrollRunGL (accrual) resolves expense + salary_payable + GOSI/deductions payable", () => {
     const idx = ENGINE_SRC.indexOf("async postPayrollRunGL");
     const section = ENGINE_SRC.slice(idx, idx + 1800);
     expect(section).toContain("payroll_salary_expense");
     expect(section).toContain("payroll_gosi_expense");
     expect(section).toContain("payroll_overtime_expense");
-    expect(section).toContain("payroll_bank_payout");
+    expect(section).toContain("salary_payable");
     expect(section).toContain("payroll_gosi_payable");
     expect(section).toContain("payroll_deductions_payable");
   });
 
-  it("postPayrollPostGL resolves 4 accounts for closing entry", () => {
+  it("postPayrollPostGL (payment) resolves salary_payable + bank only", () => {
     const idx = ENGINE_SRC.indexOf("async postPayrollPostGL");
     const section = ENGINE_SRC.slice(idx, idx + 1200);
-    expect(section).toContain("payroll_salary_expense");
-    expect(section).toContain("payroll_gosi_expense");
+    expect(section).toContain("salary_payable");
     expect(section).toContain("payroll_bank_payout");
-    expect(section).toContain("payroll_gosi_payable");
   });
 
   it("postMonthlyAccrualsGL resolves 4 accounts: leave + EOS expense/liability", () => {
@@ -204,11 +202,11 @@ describe("hrEngine debit/credit structure", () => {
     expect(section).toContain(".filter(l => l.debit > 0 || l.credit > 0)");
   });
 
-  it("postPayrollPostGL: validates debit == credit balance before posting", () => {
+  it("postPayrollPostGL: payment leg is balanced by construction (DR salary_payable = CR bank)", () => {
     const idx = ENGINE_SRC.indexOf("async postPayrollPostGL");
     const section = ENGINE_SRC.slice(idx, idx + 2500);
-    expect(section).toContain("Math.abs(totalJeDebit - totalJeCredit) > 0.01");
-    expect(section).toContain("القيد المحاسبي غير متوازن");
+    expect(section).toContain("debit: amount, credit: 0");
+    expect(section).toContain("debit: 0, credit: amount");
   });
 
   it("postMonthlyAccrualsGL: filters zero-value lines", () => {
