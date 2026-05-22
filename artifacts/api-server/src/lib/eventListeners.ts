@@ -799,47 +799,42 @@ export function registerEventListeners() {
     await logEvent("payroll.posted", payload);
     await logAudit("payroll.posted", { ...payload, action: "post", entity: "payroll_run" });
 
-    // Cross-module: when payroll is posted, create GL journal entry for total salaries
+    // HR-001 — the payroll salary expense is recognised once, by
+    // postPayrollRunGL at run creation; re-posting it here on payroll.posted
+    // double-counted it. This listener now only reclassifies pre-accrued
+    // sales commission into salary_payable, since commission is paid through
+    // the payroll run.
     if (payload.companyId && payload.entityId) {
       try {
         const [runTotals] = await rawQuery<Record<string, unknown>>(
-          `SELECT COALESCE(SUM("grossSalary"),0)::numeric(12,2) AS gross,
-                  COALESCE(SUM(commission),0)::numeric(12,2) AS comm,
-                  COALESCE(SUM("netSalary"),0)::numeric(12,2) AS net
+          `SELECT COALESCE(SUM(commission),0)::numeric(12,2) AS comm
            FROM payroll_lines WHERE "runId"=$1 AND "deletedAt" IS NULL`,
           [payload.entityId]
         );
-        const gross = Number(runTotals?.gross) || 0;
         const comm = Number(runTotals?.comm) || 0;
-        if (gross + comm > 0) {
-          const [salaryExpCode, salaryPayableCode] = await Promise.all([
-            getAccountCodeFromMapping(payload.companyId, "salary_expense", "debit", "6100"),
-            getAccountCodeFromMapping(payload.companyId, "salary_payable", "credit", "2100"),
+        if (comm > 0) {
+          const [commPayableCode, salaryPayableCode] = await Promise.all([
+            getAccountCodeFromMapping(payload.companyId, "commission_payable", "debit", "2150"),
+            getAccountCodeFromMapping(payload.companyId, "salary_payable", "credit", "2120"),
           ]);
-          const lines: Array<{ accountCode: string; debit: number; credit: number; description?: string }> = [
-            { accountCode: salaryExpCode, debit: gross, credit: 0, description: "مصروف رواتب" },
-            { accountCode: salaryPayableCode, debit: 0, credit: gross, description: "رواتب مستحقة" },
-          ];
-          if (comm > 0) {
-            const commPayableCode = await getAccountCodeFromMapping(payload.companyId, "commission_payable", "credit", "2150");
-            lines.push({ accountCode: commPayableCode, debit: comm, credit: 0, description: "تسوية عمولات مستحقة سابقاً" });
-            lines.push({ accountCode: salaryPayableCode, debit: 0, credit: comm, description: "عمولات ضمن الرواتب" });
-          }
           await createGuardedJournalEntry({
             companyId: payload.companyId,
             branchId: (payload.branchId as number) || 0,
             createdBy: (payload.userId as number) || 0,
-            ref: `JE-PAY-${payload.entityId}`,
-            description: `ترحيل مسيّر رواتب #${payload.entityId}`,
+            ref: `JE-PAYCOMM-${payload.entityId}`,
+            description: `تسوية عمولات ضمن مسيّر رواتب #${payload.entityId}`,
             type: "payroll",
             sourceType: "payroll_runs",
             sourceId: payload.entityId as number,
-            lines,
+            lines: [
+              { accountCode: commPayableCode, debit: comm, credit: 0, description: "تسوية عمولات مستحقة سابقاً" },
+              { accountCode: salaryPayableCode, debit: 0, credit: comm, description: "عمولات ضمن الرواتب المستحقة" },
+            ],
           }, { table: "payroll_runs", id: payload.entityId as number });
         }
       } catch (glErr) {
         // createGuardedJournalEntry already records in financial_posting_failures
-        logger.error(glErr, `[EventListener] payroll GL posting failed for run #${payload.entityId}`);
+        logger.error(glErr, `[EventListener] payroll commission GL posting failed for run #${payload.entityId}`);
       }
     }
   });
