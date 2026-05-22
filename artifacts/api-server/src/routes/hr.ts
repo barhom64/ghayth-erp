@@ -3859,6 +3859,10 @@ async function violationApprovalAction(req: any, res: any, newStatus: "approved"
       id,
       scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
       action: `violation.${newStatus}`,
+      // HR-003 — a violation may be decided only while it is awaiting the
+      // inquiry decision (or after being returned for revision); an
+      // already-approved or already-rejected violation cannot be re-decided.
+      fromStates: ["pending_inquiry", "returned"],
       toState: newStatus,
       reason: notes || undefined,
       onApply: async (_row, client) => {

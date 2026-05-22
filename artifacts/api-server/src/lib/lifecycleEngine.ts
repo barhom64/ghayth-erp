@@ -432,6 +432,19 @@ export const STATE_MACHINES: StateMachine[] = [
     },
   },
   {
+    // HR-003 — disciplinary violations had no state machine, so the
+    // approve/reject/return transition could fire from any state (even
+    // re-deciding an already-approved violation).
+    entity: "employee_violations",
+    label: "مخالفة موظف",
+    transitions: {
+      pending_inquiry: ["approved", "rejected", "returned"],
+      returned: ["approved", "rejected"],
+      approved: [],
+      rejected: [],
+    },
+  },
+  {
     entity: "purchase_requests",
     label: "طلب شراء",
     transitions: {
