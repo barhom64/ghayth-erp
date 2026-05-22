@@ -338,8 +338,12 @@ router.use("/settings", requireModule("settings"), requireMinLevel(70), settings
 router.use("/rules", requireModule("settings"), requireMinLevel(70), rulesRouter);
 router.use("/module-dashboards", requireModule("bi"), moduleDashboardsRouter);
 router.use("/admin", requireModule("admin"), requireMinLevel(90), adminRouter);
-router.use("/permissions", permissionsRouter);
-router.use("/rbac/v2", rbacV2Router);
+// FND-004 — RBAC administration surfaces. permissions.ts is fully
+// authorize()-guarded per route; rbacV2.ts had a few routes without one;
+// gating the mount at level 90 (consistent with /admin) closes the gap
+// and is defence-in-depth against any future unguarded route.
+router.use("/permissions", requireMinLevel(90), permissionsRouter);
+router.use("/rbac/v2", requireMinLevel(90), rbacV2Router);
 router.use("/audit-logs", requireMinLevel(70), auditLogsRouter);
 router.use("/search", searchRouter);
 router.use("/activity-log", requireMinLevel(70), activityLogRouter);
@@ -363,7 +367,10 @@ router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);
 router.use("/notification-engine", requireModule("notifications"), notificationEngineRouter);
 router.use("/gov-integrations", govIntegrationsRouter);
 router.use("/digital-signature", digitalSignatureRouter);
-router.use("/events", eventsRouter);
+// FND-004 / FND-005 — events.ts exposes only read-only event-log and
+// event-catalog endpoints, none of which carried an authorize() check.
+// Event-log access is audit-level; gate the mount at 70 (as /audit-logs).
+router.use("/events", requireMinLevel(70), eventsRouter);
 router.use("/exec-dashboard", requireMinLevel(70), execDashboardRouter);
 router.use("/obligations", obligationsRouter);
 router.use("/calendar", calendarRouter);
