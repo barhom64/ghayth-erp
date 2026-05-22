@@ -751,6 +751,39 @@ budgetRouter.post("/fiscal-periods/:period/close", authorize({ feature: "finance
       );
     }
 
+    // Actually lock the period. Without this row, `checkFinancialPeriodOpen`
+    // returns `open: true` for the period forever and every subsequent post
+    // sails through — the operator thinks the books are closed but new
+    // entries silently land in the "closed" month. Idempotent: re-running
+    // close on an already-closed period is a no-op.
+    const startDate = `${period}-01`;
+    await rawExecute(
+      `WITH upd AS (
+         UPDATE financial_periods
+            SET status = 'closed',
+                "closedAt" = NOW(),
+                "closedBy" = $1,
+                "updatedAt" = NOW()
+          WHERE "companyId" = $2
+            AND "startDate" = $3::date
+            AND "deletedAt" IS NULL
+            AND status = 'open'
+          RETURNING id
+       )
+       INSERT INTO financial_periods
+         ("companyId", name, "startDate", "endDate", status, "closedAt", "closedBy")
+       SELECT $2, $4, $3::date,
+              (date_trunc('month', $3::date) + interval '1 month - 1 day')::date,
+              'closed', NOW(), $1
+       WHERE NOT EXISTS (
+         SELECT 1 FROM financial_periods
+          WHERE "companyId" = $2
+            AND "startDate" = $3::date
+            AND "deletedAt" IS NULL
+       )`,
+      [scope.userId ?? null, scope.companyId, startDate, period],
+    );
+
     res.json({ message: `تم إقفال الفترة المالية ${period} بنجاح`, period, totalDebit, totalCredit });
   } catch (err) {
     handleRouteError(err, res, "Close fiscal period error:");
