@@ -40,6 +40,11 @@ export default function OpportunityDetail() {
 
   const [editForm, setEditForm] = useState<Record<string, string>>({});
 
+  const ACT_INITIAL = { type: "call", description: "", scheduledAt: "" };
+  const [addingActivity, setAddingActivity] = useState(false);
+  const [savingActivity, setSavingActivity] = useState(false);
+  const [actForm, setActForm] = useState(ACT_INITIAL);
+
   const actTypeMap: Record<string, { label: string; icon: LucideIcon }> = {
     meeting: { label: "اجتماع", icon: User },
     call: { label: "مكالمة", icon: Phone },
@@ -83,6 +88,31 @@ export default function OpportunityDetail() {
     } catch (err) {
       toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
     }
+  };
+
+  const submitActivity = async () => {
+    if (!actForm.description.trim() || !actForm.scheduledAt) {
+      toast({ variant: "destructive", title: "الوصف وتاريخ النشاط مطلوبان" });
+      return;
+    }
+    setSavingActivity(true);
+    try {
+      await apiFetch(`/crm/opportunities/${id}/activities`, {
+        method: "POST",
+        body: JSON.stringify({
+          type: actForm.type,
+          description: actForm.description.trim(),
+          scheduledAt: actForm.scheduledAt,
+        }),
+      });
+      toast({ title: "تمت إضافة النشاط" });
+      setActForm(ACT_INITIAL);
+      setAddingActivity(false);
+      qc.invalidateQueries({ queryKey: ["opportunity-activities", id || ""] });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+    setSavingActivity(false);
   };
 
   const value = Number(opportunity?.value) || 0;
@@ -162,9 +192,45 @@ export default function OpportunityDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <Card>
-            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Target className="w-5 h-5" /> الأنشطة</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2"><Target className="w-5 h-5" /> الأنشطة</CardTitle>
+              {!addingActivity && (
+                <Button size="sm" variant="outline" onClick={() => setAddingActivity(true)}>نشاط جديد</Button>
+              )}
+            </CardHeader>
             <CardContent className="space-y-3">
-              {activities.length === 0 && <p className="text-center text-muted-foreground py-4">لا توجد أنشطة</p>}
+              {addingActivity && (
+                <div className="rounded-lg border p-3 space-y-3 bg-surface-subtle">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Select value={actForm.type} onValueChange={(v) => setActForm((f) => ({ ...f, type: v }))}>
+                      <SelectTrigger><SelectValue placeholder="النوع" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="call">مكالمة</SelectItem>
+                        <SelectItem value="meeting">اجتماع</SelectItem>
+                        <SelectItem value="email">بريد</SelectItem>
+                        <SelectItem value="follow_up">متابعة</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="date"
+                      value={actForm.scheduledAt}
+                      onChange={(e) => setActForm((f) => ({ ...f, scheduledAt: e.target.value }))}
+                    />
+                  </div>
+                  <Input
+                    placeholder="وصف النشاط"
+                    value={actForm.description}
+                    onChange={(e) => setActForm((f) => ({ ...f, description: e.target.value }))}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => { setAddingActivity(false); setActForm(ACT_INITIAL); }}>إلغاء</Button>
+                    <Button size="sm" disabled={savingActivity} onClick={submitActivity} rateLimitAware>
+                      {savingActivity ? "جاري الحفظ..." : "حفظ النشاط"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {activities.length === 0 && !addingActivity && <p className="text-center text-muted-foreground py-4">لا توجد أنشطة</p>}
               {activities.map((a: any) => {
                 const at = actTypeMap[a.type];
                 const Icon = at?.icon || MessageSquare;
