@@ -111,6 +111,10 @@ function captureToOutbox(eventName: string, payload?: EventPayload): void {
 }
 
 class EventBus extends EventEmitter {
+  // Maps a caller's listener to the safety-wrapped function actually
+  // registered, so off() can still remove it by the original reference.
+  private wrappedListeners = new WeakMap<object, (payload: EventPayload) => void>();
+
   emit(event: EventName, payload?: EventPayload): boolean {
     // Single chokepoint — every emit path (emitEvent, safeEmitEvent, the
     // domain engines, eventCatalog) routes through here, so stamping the
@@ -120,16 +124,41 @@ class EventBus extends EventEmitter {
     return super.emit(event, stamped);
   }
 
+  // EventEmitter never awaits async listeners, so a rejecting handler
+  // registered via .on() escaped as an unhandledRejection and its
+  // side-effect (audit row, notification, cross-domain GL hook) was lost
+  // with no trace. Wrapping every listener catches sync throws and async
+  // rejections and dead-letters them, so the failure is visible and
+  // retryable. A resolved promise / sync return is untouched.
+  private wrap(
+    event: EventName,
+    listener: (payload: EventPayload) => void,
+  ): (payload: EventPayload) => void {
+    const safe = (payload: EventPayload): void => {
+      const companyId = (payload as { companyId?: number })?.companyId;
+      try {
+        const result = listener(payload) as unknown;
+        if (result instanceof Promise) {
+          result.catch((err) => pushToDLQ("event", payload, err, companyId, event));
+        }
+      } catch (err) {
+        pushToDLQ("event", payload, err, companyId, event);
+      }
+    };
+    this.wrappedListeners.set(listener, safe);
+    return safe;
+  }
+
   on(event: EventName, listener: (payload: EventPayload) => void): this {
-    return super.on(event, listener);
+    return super.on(event, this.wrap(event, listener));
   }
 
   once(event: EventName, listener: (payload: EventPayload) => void): this {
-    return super.once(event, listener);
+    return super.once(event, this.wrap(event, listener));
   }
 
   off(event: EventName, listener: (payload: EventPayload) => void): this {
-    return super.off(event, listener);
+    return super.off(event, this.wrappedListeners.get(listener) ?? listener);
   }
 }
 
