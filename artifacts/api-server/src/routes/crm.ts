@@ -772,9 +772,12 @@ async function handleDealWon(scope: RequestScope, opp: CrmOpportunityRow, dealVa
 
     if (clientId) {
       try {
-        await rawExecute(`UPDATE clients SET "totalRevenue"=COALESCE("totalRevenue",0)+$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [dealValue, clientId, scope.companyId]);
+        // CRM-013 — a won deal feeds expectedRevenue (pipeline value).
+        // totalRevenue stays owned by finance (recognised on invoice
+        // approval); writing it here too double-counted the same money.
+        await rawExecute(`UPDATE clients SET "expectedRevenue"=COALESCE("expectedRevenue",0)+$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`, [dealValue, clientId, scope.companyId]);
       } catch (revenueErr) {
-        logger.error(revenueErr, "Failed to update client totalRevenue:");
+        logger.error(revenueErr, "Failed to update client expectedRevenue:");
       }
     }
 
