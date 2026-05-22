@@ -12,7 +12,7 @@ import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/fo
 
 const DRAFT_KEY = "warehouse_movements_create";
 const INITIAL = { productId: "", type: "in", quantity: "", unitCost: "", reference: "", notes: "" };
-const STOCK_DECREASE_TYPES = new Set(["out", "transfer_out"]);
+const STOCK_DECREASE_TYPES = new Set(["out", "transfer_out", "adjustment_out"]);
 
 export default function MovementsCreate() {
   const [, setLocation] = useLocation();
@@ -92,7 +92,7 @@ export default function MovementsCreate() {
 
           {form.productId && (
             <div className="mt-3">
-              <ProductContextCard productId={form.productId} section={form.type === "out" ? "out" : "in"} />
+              <ProductContextCard productId={form.productId} section={STOCK_DECREASE_TYPES.has(form.type) ? "out" : "in"} />
             </div>
           )}
         </FormFieldWrapper>
@@ -106,7 +106,8 @@ export default function MovementsCreate() {
               <SelectItem value="return">إرجاع</SelectItem>
               <SelectItem value="transfer_in">تحويل وارد</SelectItem>
               <SelectItem value="transfer_out">تحويل صادر</SelectItem>
-              <SelectItem value="adjustment">تعديل</SelectItem>
+              <SelectItem value="adjustment_in">تسوية - زيادة</SelectItem>
+              <SelectItem value="adjustment_out">تسوية - نقص</SelectItem>
             </SelectContent>
           </Select>
         </FormFieldWrapper>
