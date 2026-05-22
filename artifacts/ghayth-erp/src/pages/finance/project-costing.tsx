@@ -52,8 +52,11 @@ export default function ProjectCostingPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const [showAddCost, setShowAddCost] = useState(false);
+  // FIN-010: the cost is recorded by POST /projects/:id/costs (projects.ts) —
+  // there is no POST under /finance/projects/:id/costs (finance-hardening
+  // exposes only the GET), so the old URL 404'd on every "add cost".
   const addCostMutation = useApiMutation<any, any>(
-    (body) => `/finance/projects/${body.projectId}/costs`,
+    (body) => `/projects/${body.projectId}/costs`,
     "POST",
     [["projects-finance"]],
     { successMessage: "تم تسجيل التكلفة بنجاح" },
@@ -63,6 +66,8 @@ export default function ProjectCostingPage() {
     await addCostMutation.mutateAsync({
       ...values,
       projectId: Number(values.projectId),
+      // createCostSchema expects `costDate`; the form field is `date`.
+      costDate: values.date,
     });
     setShowAddCost(false);
   };
