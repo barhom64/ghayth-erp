@@ -108,9 +108,14 @@ export default function TripDetailPage() {
 
   const handleComplete = async () => {
     try {
-      await apiFetch(`/fleet/trips/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "completed" }),
+      // FLT-001: trip lifecycle is driven by the dedicated endpoint, not a
+      // raw PATCH of `status` — the server rejects a terminal status via
+      // PATCH with 409. /complete computes cost, posts the GL entry and
+      // frees the vehicle + driver. completeTripSchema is all-optional, so
+      // an empty body completes the trip with no extra metering data.
+      await apiFetch(`/fleet/trips/${id}/complete`, {
+        method: "POST",
+        body: JSON.stringify({}),
       });
       queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
       toast({ title: "تم إكمال الرحلة بنجاح" });
@@ -125,10 +130,17 @@ export default function TripDetailPage() {
   };
 
   const handleCancel = async () => {
+    // FLT-001: /cancel frees the vehicle + driver and requires a reason.
+    const reason = window.prompt("سبب إلغاء الرحلة:");
+    if (reason === null) return; // user dismissed the prompt
+    if (!reason.trim()) {
+      toast({ variant: "destructive", title: "سبب الإلغاء مطلوب" });
+      return;
+    }
     try {
-      await apiFetch(`/fleet/trips/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "cancelled" }),
+      await apiFetch(`/fleet/trips/${id}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim() }),
       });
       queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
       toast({ title: "تم إلغاء الرحلة" });
