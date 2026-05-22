@@ -606,14 +606,19 @@ export const STATE_MACHINES: StateMachine[] = [
     },
   },
   {
+    // SUP-016 — single source of truth for the support-ticket lifecycle.
+    // support.ts derives its inline transition guard from this machine, so
+    // there is no second (divergent) map. Statuses match the columns the
+    // SLA checks and the UI actually use (pending_customer, field_visit).
     entity: "support_tickets",
     label: "تذكرة دعم",
     transitions: {
-      open: ["in_progress", "closed"],
-      in_progress: ["resolved", "escalated", "closed"],
-      escalated: ["in_progress", "resolved", "closed"],
-      resolved: ["closed", "open"],
-      closed: ["open"],
+      open: ["in_progress", "pending_customer", "field_visit", "resolved", "closed"],
+      in_progress: ["pending_customer", "field_visit", "resolved", "closed", "open"],
+      pending_customer: ["in_progress", "field_visit", "resolved", "closed"],
+      field_visit: ["in_progress", "resolved", "closed"],
+      resolved: ["closed", "in_progress"],
+      closed: [],
     },
   },
   {

@@ -4,6 +4,14 @@ import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const SUPPORT_ROUTE = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/support.ts"), "utf8");
+// SUP-016 — the ticket transition graph is now defined once, in the
+// lifecycleEngine support_tickets state machine; support.ts derives its
+// inline guard from it.
+const LIFECYCLE_SRC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/lifecycleEngine.ts"), "utf8");
+const TICKET_SM = LIFECYCLE_SRC.slice(
+  LIFECYCLE_SRC.indexOf('entity: "support_tickets"'),
+  LIFECYCLE_SRC.indexOf('entity: "support_tickets"') + 600,
+);
 
 // ─── Support Golden Path Tests ──────────────────────────────────────────────
 // P4.1 of the unification plan. Lock in the support ticket lifecycle
@@ -52,14 +60,13 @@ describe("Support route structure", () => {
 });
 
 describe("Support ticket state machine", () => {
-  it("defines TICKET_TRANSITIONS constant", () => {
+  it("derives TICKET_TRANSITIONS from the lifecycle state machine", () => {
     expect(SUPPORT_ROUTE).toContain("TICKET_TRANSITIONS");
+    expect(SUPPORT_ROUTE).toContain('STATE_MACHINES.find((sm) => sm.entity === "support_tickets")');
   });
 
   it("open transitions to: in_progress, pending_customer, field_visit, resolved, closed", () => {
-    const idx = SUPPORT_ROUTE.indexOf("TICKET_TRANSITIONS");
-    const block = SUPPORT_ROUTE.slice(idx, idx + 600);
-    const openLine = block.slice(block.indexOf("open:"), block.indexOf("\n", block.indexOf("open:")));
+    const openLine = TICKET_SM.slice(TICKET_SM.indexOf("open:"), TICKET_SM.indexOf("\n", TICKET_SM.indexOf("open:")));
     expect(openLine).toContain("in_progress");
     expect(openLine).toContain("pending_customer");
     expect(openLine).toContain("field_visit");
@@ -68,17 +75,13 @@ describe("Support ticket state machine", () => {
   });
 
   it("closed is a terminal state with no transitions", () => {
-    const idx = SUPPORT_ROUTE.indexOf("TICKET_TRANSITIONS");
-    const block = SUPPORT_ROUTE.slice(idx, idx + 600);
-    expect(block).toContain("closed:            []");
+    expect(TICKET_SM).toContain("closed: [],");
   });
 
   it("resolved can reopen via in_progress", () => {
-    const idx = SUPPORT_ROUTE.indexOf("TICKET_TRANSITIONS");
-    const block = SUPPORT_ROUTE.slice(idx, idx + 600);
-    const resolvedLine = block.slice(
-      block.indexOf("resolved:"),
-      block.indexOf("\n", block.indexOf("resolved:"))
+    const resolvedLine = TICKET_SM.slice(
+      TICKET_SM.indexOf("resolved:"),
+      TICKET_SM.indexOf("\n", TICKET_SM.indexOf("resolved:"))
     );
     expect(resolvedLine).toContain("in_progress");
   });
