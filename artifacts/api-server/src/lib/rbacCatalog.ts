@@ -143,7 +143,7 @@ export const PERMISSIONS = [
   "reports:read",
   "reports:write",
 
-  // Print Engine v2 — see artifacts/api-server/migrations/172_print_engine_seed.sql
+  // Print Engine v2 — see artifacts/api-server/src/migrations/172_print_engine_seed.sql
   "print:read",
   "print:create",
   "print:reprint:create",
