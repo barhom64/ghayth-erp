@@ -309,7 +309,8 @@ export default function ClientDetail() {
               <InfoRow label="التصنيف" value={CLASSIFICATIONS[client?.classification] || client?.classification || "-"} />
               <InfoRow label="المصدر" value={client?.source || "-"} />
               {client?.code && <InfoRow label="الرمز" value={client?.code} />}
-              <InfoRow label="إجمالي الإيرادات" value={formatCurrency(Number(client?.totalRevenue) || 0)} bold />
+              <InfoRow label="إجمالي الإيرادات الفعلية" value={formatCurrency(Number(client?.totalRevenue) || 0)} bold />
+              <InfoRow label="الإيرادات المتوقعة" value={formatCurrency(Number(client?.expectedRevenue) || 0)} />
               <InfoRow label="تاريخ الإنشاء" value={client?.createdAt ? formatDateAr(client?.createdAt) : "-"} last />
             </CardContent>
           </Card>

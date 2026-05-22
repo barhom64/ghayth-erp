@@ -1,0 +1,28 @@
+-- Migration 191: split client revenue into two non-overlapping columns.
+--
+-- RCA finding CRM-013 (docs/audit/inventory/crm.md), Wave-1 blocking
+-- defect — conflict.
+--
+-- clients."totalRevenue" was incremented from two paths with two
+-- different rules:
+--   - finance-invoices.ts (invoice approval) — recognised revenue,
+--     net of VAT. This is real, invoiced revenue.
+--   - crm.ts handleDealWon (deal won) — the gross deal value, before
+--     any invoice exists.
+-- A CRM deal-won also requests an invoice, so the same money was
+-- counted twice on the client: once as the deal value, once again on
+-- invoice approval.
+--
+-- Resolution (owner decision): the two numbers mean different things,
+-- so they get their own columns. "totalRevenue" stays owned by finance
+-- (actual recognised revenue); the new "expectedRevenue" is owned by
+-- CRM (pipeline value of won deals). crm.ts is updated to write the new
+-- column.
+--
+-- Additive column with a DEFAULT — no backfill, no existing row
+-- affected, no rolling-deploy hazard. Not a policy-breaking change.
+--
+-- @rollback:
+--   ALTER TABLE clients DROP COLUMN IF EXISTS "expectedRevenue";
+
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS "expectedRevenue" numeric(15,2) DEFAULT 0;
