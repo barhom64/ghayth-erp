@@ -130,13 +130,20 @@ export async function postJournalEntry(
     const codeById = new Map(accounts.map((a) => [a.id, a.code]));
 
     const [header] = await rawQuery<{ id: number }>(
+      // C2 — createdAt is stamped with the effective accounting date (the
+      // same value as `date`), not NOW(). Financial reports range-filter on
+      // createdAt; createJournalEntry already treats createdAt as the
+      // accounting date (applyHeaderOverrides sets it from postingDate), so
+      // a back-dated FX / inventory entry posted here lands in the correct
+      // reporting period instead of the period it was physically inserted.
       `INSERT INTO journal_entries (
          "companyId", "branchId", ref, description, "createdBy",
-         date, type, status, "sourceType", "sourceId", "postedBy", "postedAt"
+         date, type, status, "sourceType", "sourceId", "postedBy", "postedAt", "createdAt"
        ) VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE),
                  COALESCE($7, 'manual'), $8, $9, $10,
                  CASE WHEN $8 = 'posted' THEN $5 ELSE NULL END,
-                 CASE WHEN $8 = 'posted' THEN NOW() ELSE NULL END)
+                 CASE WHEN $8 = 'posted' THEN NOW() ELSE NULL END,
+                 COALESCE($6::date, CURRENT_DATE))
        RETURNING id`,
       [
         ctx.companyId,
