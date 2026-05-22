@@ -933,7 +933,7 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
 
     const id = parseId(req.params.id, "id");
     const [inv] = await rawQuery<Record<string, unknown>>(
-      `SELECT id, ref, status, "paidAmount", "createdAt" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      `SELECT id, ref, status, "paidAmount", "createdAt", "clientId", total, "vatAmount" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!inv) throw new NotFoundError("الفاتورة غير موجودة");
@@ -943,6 +943,10 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
         { field: "paidAmount", fix: "قم بعكس التحصيل أولاً ثم أعد المحاولة" }
       );
     }
+    // Statuses past approval bumped clients.totalRevenue; cancelling /
+    // soft-deleting must put that revenue back.
+    const REVENUE_RECOGNIZED_STATUSES = new Set(["approved", "sent", "partial", "overdue", "paid"]);
+    const wasRecognised = REVENUE_RECOGNIZED_STATUSES.has(String(inv.status));
 
     // FIN-AUD-06 — block soft-delete in a closed period. The DELETE reverses
     // the original GL push, so allowing it in a locked period would move
@@ -986,6 +990,18 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
         `UPDATE invoices SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
+      // Reverse the revenue recognised at approval — without this the
+      // denormalised counter inflates over time as approved invoices get
+      // cancelled.
+      if (wasRecognised && inv.clientId) {
+        const net = Number(inv.total) - Number(inv.vatAmount || 0);
+        if (net > 0) {
+          await client.query(
+            `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) - $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+            [net, inv.clientId, scope.companyId]
+          );
+        }
+      }
     });
     rawExecute(
       `INSERT INTO event_logs ("companyId", "userId", action, entity, "entityId", details)
@@ -1221,6 +1237,17 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
          WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
         [creditAmount, id, scope.companyId]
       );
+
+      // Reverse the revenue recognised at invoice approval. The approval
+      // route bumped clients.totalRevenue by the invoice net; the credit
+      // memo refunds part of that revenue, so the denormalised counter
+      // must come back down by the memo's net or it inflates forever.
+      if (invoice.clientId && net > 0) {
+        await client.query(
+          `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) - $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+          [net, invoice.clientId, scope.companyId]
+        );
+      }
     });
 
     const memoJournalResult = await financialEngine.postJournalEntry({
