@@ -14,7 +14,7 @@ import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { applyTransition, LifecycleError, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { applyTransition, LifecycleError, lifecycleErrorResponse, STATE_MACHINES } from "../lib/lifecycleEngine.js";
 import type { ExtraValue } from "../lib/lifecycleEngine.js";
 
 // Local row shapes for support tables.
@@ -543,14 +543,11 @@ router.post("/tickets/:id/field-visit", authorize({ feature: "support.tickets", 
 // "لا يوجد UPDATE status مباشر" requirement from the architect,
 // implemented as an allowlist guard inline so we don't need to thread
 // applyTransition through a table with custom columns.
-const TICKET_TRANSITIONS: Record<string, readonly string[]> = {
-  open:              ["in_progress", "pending_customer", "field_visit", "resolved", "closed"],
-  in_progress:       ["pending_customer", "field_visit", "resolved", "closed", "open"],
-  pending_customer:  ["in_progress", "field_visit", "resolved", "closed"],
-  field_visit:       ["in_progress", "resolved", "closed"],
-  resolved:          ["closed", "in_progress"],   // reopen via in_progress
-  closed:            [],                           // terminal
-};
+// SUP-016 — derived from the single source of truth in lifecycleEngine, so
+// the inline pre-check and applyTransition can never disagree (they used to
+// be two separately-maintained, divergent maps).
+const TICKET_TRANSITIONS: Record<string, string[]> =
+  STATE_MACHINES.find((sm) => sm.entity === "support_tickets")?.transitions ?? {};
 
 router.patch("/tickets/:id", authorize({ feature: "support.tickets", action: "update", resource: { table: "support_tickets", idParam: "id" } }), async (req, res) => {
   try {
