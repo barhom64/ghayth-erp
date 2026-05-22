@@ -179,6 +179,26 @@ router.get("/opportunities", authorize({ feature: "crm.opportunities", action: "
   } catch (err) { handleRouteError(err, res, "CRM opportunities error:"); }
 });
 
+// CRM-003 — the opportunity-create form needs a list of employees for the
+// "assignee" picker. It used to call GET /employees, which is gated by the
+// hr.employees feature, so a CRM user without HR access got 403 and an empty
+// dropdown. This minimal list (id + name of active employees) is gated by the
+// CRM feature instead and exposes no HR-sensitive fields.
+router.get("/assignees", authorize({ feature: "crm.opportunities", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<{ id: number; name: string }>(
+      `SELECT DISTINCT e.id, e.name
+         FROM employees e
+         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
+        WHERE ea."companyId" = $1 AND e."deletedAt" IS NULL
+        ORDER BY e.name ASC`,
+      [scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "CRM assignees error:"); }
+});
+
 router.post("/opportunities", authorize({ feature: "crm.opportunities", action: "create" }), async (req, res) => {
   // Phase C domain 2 — CRM opportunity creation, mirror of the HR Step 1
   // treatment. Adds input validation the old handler lacked (title,
