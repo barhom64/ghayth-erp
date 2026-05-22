@@ -22,7 +22,7 @@ import {
   type JournalEntryLine,
 } from "../businessHelpers.js";
 import { eventBus } from "../eventBus.js";
-import { rawQuery, rawExecute } from "../rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../rawdb.js";
 import type { DomainEngine, GLPostingRequest } from "./domainEngineBase.js";
 import { logger } from "../logger.js";
 
@@ -213,24 +213,38 @@ class FinancialEngineImpl implements DomainEngine {
       throw new Error("يجب إنشاء حساب فروقات التقريب أولاً");
     }
 
-    const [je] = await rawQuery<{ id: number }>(
-      `SELECT id FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+    const [je] = await rawQuery<{ id: number; balancesApplied: boolean }>(
+      `SELECT id, "balancesApplied" FROM journal_entries WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [params.journalEntryId, params.companyId]
     );
     if (!je) {
       throw new Error("القيد اليومي غير موجود أو لا يتبع هذه الشركة");
     }
 
-    await rawExecute(
-      `INSERT INTO journal_lines ("journalId","accountCode",debit,credit,description)
-       VALUES ($1,'9999',$2,$3,$4)`,
-      [
-        params.journalEntryId,
-        diff > 0 ? diff : 0,
-        diff < 0 ? Math.abs(diff) : 0,
-        params.description ?? "فرق تقريب تلقائي",
-      ]
-    );
+    await withTransaction(async (client) => {
+      await client.query(
+        `INSERT INTO journal_lines ("journalId","accountCode",debit,credit,description)
+         VALUES ($1,'9999',$2,$3,$4)`,
+        [
+          params.journalEntryId,
+          diff > 0 ? diff : 0,
+          diff < 0 ? Math.abs(diff) : 0,
+          params.description ?? "فرق تقريب تلقائي",
+        ]
+      );
+      // H3 — keep currentBalance in step with the rounding line. If the
+      // entry's balances are already applied, account 9999 must move too
+      // or journal_lines and currentBalance diverge by `diff`. If the entry
+      // is still deferred, applyJournalEntryBalances picks the line up
+      // later — applying here would double-count.
+      if (je.balancesApplied) {
+        await client.query(
+          `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1
+           WHERE "companyId" = $2 AND code = '9999'`,
+          [diff, params.companyId]
+        );
+      }
+    });
     return { applied: diff };
   }
 
