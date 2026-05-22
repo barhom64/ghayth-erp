@@ -4353,7 +4353,6 @@ router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "up
         [id]
       );
 
-      const totalGross = lines.reduce((s: number, l: Record<string, unknown>) => s + Number(l.grossSalary ?? l.basic ?? 0), 0);
       const totalGosiEmployee = lines.reduce((s: number, l: Record<string, unknown>) => s + Number(l.gosiEmployee ?? 0), 0);
       const totalGosiEmployer = lines.reduce((s: number, l: Record<string, unknown>) => s + Number(l.gosiEmployer ?? 0), 0);
       const totalGosiPayable = totalGosiEmployee + totalGosiEmployer;
@@ -4368,14 +4367,7 @@ router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "up
       const { hrEngine } = await import("../lib/engines/index.js");
       await hrEngine.postPayrollPostGL(
         { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
-        {
-          runId: id,
-          period,
-          totalGross,
-          totalGosiEmployer,
-          totalBankPayout,
-          totalGosiPayable,
-        }
+        { runId: id, period, totalBankPayout }
       );
 
       // Register monthly GOSI submission obligation (due 14th of NEXT month)
