@@ -51,6 +51,13 @@ function RoutingRulesTab() {
   const [editChannels, setEditChannels] = useState<string[]>([]);
   const [editPriority, setEditPriority] = useState("normal");
   const [editChainId, setEditChainId] = useState<number | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [showNew, setShowNew] = useState(false);
+  const [newCategory, setNewCategory] = useState("");
+  const [newChannels, setNewChannels] = useState<string[]>(["in_app"]);
+  const [newPriority, setNewPriority] = useState("normal");
+  const [newChainId, setNewChainId] = useState<number | null>(null);
+  const [newDescription, setNewDescription] = useState("");
 
   const startEdit = (rule: Record<string, unknown>) => {
     setEditId(rule.id as number);
@@ -75,15 +82,103 @@ function RoutingRulesTab() {
     saveRuleMut.mutate({ id: editId, channels: editChannels, priority: editPriority, fallbackChainId: editChainId });
   };
 
+  const createRuleMut = useApiMutation<any, { eventCategory: string; channels: string[]; priority: string; description: string; fallbackChainId: number | null }>(
+    "/notification-engine/routing-rules",
+    "POST",
+    [["notif-routing-rules"]],
+    {
+      successMessage: "تم إنشاء القاعدة",
+      onSuccess: () => {
+        setShowNew(false);
+        setNewCategory("");
+        setNewChannels(["in_app"]);
+        setNewPriority("normal");
+        setNewChainId(null);
+        setNewDescription("");
+      },
+    }
+  );
+
+  const deleteRuleMut = useApiMutation<any, { id: number }>(
+    (body) => `/notification-engine/routing-rules/${body.id}`,
+    "DELETE",
+    [["notif-routing-rules"]],
+    { successMessage: "تم حذف القاعدة", onSuccess: () => setDeleteId(null) }
+  );
+
+  const submitNew = () => {
+    if (!newCategory.trim() || newChannels.length === 0) return;
+    createRuleMut.mutate({
+      eventCategory: newCategory.trim(),
+      channels: newChannels,
+      priority: newPriority,
+      description: newDescription.trim(),
+      fallbackChainId: newChainId,
+    });
+  };
+
   if (loadingR || loadingC) return <LoadingSpinner />;
   if (errorR || errorC) return <ErrorState />;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">قواعد توجيه الإشعارات</h3>
-        <p className="text-sm text-muted-foreground">تحديد القنوات الافتراضية لكل نوع حدث</p>
+        <div>
+          <h3 className="text-lg font-semibold">قواعد توجيه الإشعارات</h3>
+          <p className="text-sm text-muted-foreground">تحديد القنوات الافتراضية لكل نوع حدث</p>
+        </div>
+        {!showNew && (
+          <GuardedButton perm="settings:create" size="sm" onClick={() => setShowNew(true)}>
+            <Plus className="h-4 w-4 ml-1" /> قاعدة جديدة
+          </GuardedButton>
+        )}
       </div>
+
+      {showNew && (
+        <Card className="border-status-info-surface">
+          <CardContent className="p-4 space-y-3">
+            <div className="font-medium text-sm">قاعدة توجيه جديدة</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input placeholder="نوع الحدث (eventCategory)" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} />
+              <Input placeholder="وصف (اختياري)" value={newDescription} onChange={(e) => setNewDescription(e.target.value)} />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {ALL_CHANNELS.map((ch) => (
+                <label key={ch} className="flex items-center gap-1 text-sm cursor-pointer">
+                  <Checkbox checked={newChannels.includes(ch)}
+                    onCheckedChange={(v) => setNewChannels(v === true ? [...newChannels, ch] : newChannels.filter((c) => c !== ch))} />
+                  {CHANNEL_LABELS[ch]?.label ?? ch}
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={newPriority} onValueChange={setNewPriority}>
+                <SelectTrigger className="w-32 h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">منخفض</SelectItem>
+                  <SelectItem value="normal">عادي</SelectItem>
+                  <SelectItem value="high">عالي</SelectItem>
+                  <SelectItem value="urgent">عاجل</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={newChainId ? String(newChainId) : "none"} onValueChange={(v) => setNewChainId(v === "none" ? null : Number(v))}>
+                <SelectTrigger className="w-48 h-8"><SelectValue placeholder="سلسلة تصعيد" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">بدون تصعيد</SelectItem>
+                  {chains.map((c: Record<string, unknown>) => (
+                    <SelectItem key={c.id as number} value={String(c.id)}>{c.name as string}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <GuardedButton perm="settings:create" size="sm" disabled={!newCategory.trim() || newChannels.length === 0 || createRuleMut.isPending} onClick={submitNew}>
+                <Save className="h-3 w-3 ml-1" /> حفظ
+              </GuardedButton>
+              <Button size="sm" variant="outline" onClick={() => setShowNew(false)}>إلغاء</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="space-y-2">
         {rules.map((rule: Record<string, unknown>) => {
           const ruleId = rule.id as number;
@@ -152,6 +247,16 @@ function RoutingRulesTab() {
                         </Badge>
                       )}
                       <Button size="sm" variant="ghost" onClick={() => startEdit(rule)}>تعديل</Button>
+                      {!isGlobal && (deleteId === ruleId ? (
+                        <div className="flex items-center gap-1">
+                          <GuardedButton perm="settings:delete" size="sm" variant="outline" className="text-status-error-foreground" disabled={deleteRuleMut.isPending} onClick={() => deleteRuleMut.mutate({ id: ruleId })}>تأكيد</GuardedButton>
+                          <Button size="sm" variant="ghost" onClick={() => setDeleteId(null)}>إلغاء</Button>
+                        </div>
+                      ) : (
+                        <GuardedButton perm="settings:delete" size="sm" variant="ghost" className="text-status-error-foreground" onClick={() => setDeleteId(ruleId)}>
+                          <Trash2 className="h-3 w-3" />
+                        </GuardedButton>
+                      ))}
                     </div>
                   )}
                 </div>
