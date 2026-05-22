@@ -1291,12 +1291,15 @@ financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening
   try {
     const scope = req.scope!;
 
-    const { name, description, budget, startDate, endDate, branchId, ref } = zodParse(createProjectSchema.safeParse(req.body ?? {}));
+    const { name, description, budget, startDate, endDate, ref } = zodParse(createProjectSchema.safeParse(req.body ?? {}));
+    // PRJ-003: the `projects` table has no `ref` or `branchId` column — the
+    // old INSERT referenced both and aborted with SQLSTATE 42703. Insert only
+    // the columns that exist; projectRef is kept for the audit/event details.
     const projectRef = ref ?? `PRJ-${Date.now()}`;
     const { insertId } = await rawExecute(
-      `INSERT INTO projects ("companyId","branchId",ref,name,description,budget,"startDate","endDate","managerId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, branchId ?? scope.branchId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
+      `INSERT INTO projects ("companyId",name,description,budget,"startDate","endDate","managerId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [scope.companyId, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
     );
     assertInsert(insertId, "projects");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
