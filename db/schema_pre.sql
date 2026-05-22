@@ -9057,6 +9057,7 @@ CREATE TABLE public.journal_entries (
     date date DEFAULT CURRENT_DATE NOT NULL,
     type character varying(30) DEFAULT 'manual'::character varying NOT NULL,
     status character varying(20) DEFAULT 'draft'::character varying NOT NULL,
+    "balancesApplied" boolean DEFAULT true NOT NULL,
     "sourceType" character varying(50),
     "sourceId" integer,
     "postedBy" integer,

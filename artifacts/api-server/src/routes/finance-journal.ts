@@ -819,7 +819,11 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
       return;
     }
 
-    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, sourceType: "voucher", sourceId: 0, sourceKey: `finance:voucher:${idempotencyToken}`, lines: journalLines });
+    // FIN-007 — the voucher is recorded as a draft entry that does NOT move
+    // account balances; balances are applied only when the voucher is
+    // approved (PATCH /vouchers/:id/approve). A rejected voucher therefore
+    // never touches the ledger.
+    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, sourceType: "voucher", sourceId: 0, sourceKey: `finance:voucher:${idempotencyToken}`, lines: journalLines, deferBalances: true });
     markIdempotencyReplay(req, res, alreadyExists);
 
     await rawExecute(

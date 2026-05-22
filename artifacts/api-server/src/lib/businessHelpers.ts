@@ -1,3 +1,4 @@
+import type pg from "pg";
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { eventBus } from "./eventBus.js";
 import { ValidationError } from "./errorHandler.js";
@@ -423,6 +424,9 @@ export async function createJournalEntry(params: {
   operationType?: string;
   lines: JournalEntryLine[];
   skipPeriodCheck?: boolean;
+  // FIN-007 — record the entry without moving chart_of_accounts.currentBalance.
+  // applyJournalEntryBalances applies them later (on voucher approval).
+  deferBalances?: boolean;
 }) {
   // Financial period guard: prevent posting to closed periods
   if (!params.skipPeriodCheck) {
@@ -522,12 +526,12 @@ export async function createJournalEntry(params: {
 
   const journalId = await withTransaction(async (client) => {
     const headerResult = await client.query(
-      `INSERT INTO journal_entries ("companyId","branchId","createdBy",ref,description,type,"sourceType","sourceId","sourceKey")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      `INSERT INTO journal_entries ("companyId","branchId","createdBy",ref,description,type,"sourceType","sourceId","sourceKey","balancesApplied")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
       [
         params.companyId, params.branchId, params.createdBy, params.ref, params.description,
         params.type ?? "manual", params.sourceType ?? null, params.sourceId ?? null,
-        idempotencyKey,
+        idempotencyKey, !params.deferBalances,
       ]
     );
     const jId = headerResult.rows[0].id as number;
@@ -558,18 +562,23 @@ export async function createJournalEntry(params: {
       );
     }
 
-    const balanceChanges = new Map<string, number>();
-    for (const line of params.lines) {
-      if (!line.accountCode) continue;
-      const delta = Number(line.debit) - Number(line.credit);
-      balanceChanges.set(line.accountCode, (balanceChanges.get(line.accountCode) || 0) + delta);
-    }
-    for (const [accountCode, delta] of balanceChanges) {
-      if (Math.abs(delta) < 0.001) continue;
-      await client.query(
-        `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1 WHERE "companyId" = $2 AND code = $3`,
-        [delta, params.companyId, accountCode]
-      );
+    // FIN-007 — a deferred entry (e.g. an unapproved voucher) records its
+    // lines but does not touch account balances; applyJournalEntryBalances
+    // applies them when the document is approved.
+    if (!params.deferBalances) {
+      const balanceChanges = new Map<string, number>();
+      for (const line of params.lines) {
+        if (!line.accountCode) continue;
+        const delta = Number(line.debit) - Number(line.credit);
+        balanceChanges.set(line.accountCode, (balanceChanges.get(line.accountCode) || 0) + delta);
+      }
+      for (const [accountCode, delta] of balanceChanges) {
+        if (Math.abs(delta) < 0.001) continue;
+        await client.query(
+          `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1 WHERE "companyId" = $2 AND code = $3`,
+          [delta, params.companyId, accountCode]
+        );
+      }
     }
 
     return jId;
@@ -668,6 +677,51 @@ export async function reverseAccountBalances(
       [delta, companyId, accountCode]
     );
   }
+}
+
+/**
+ * FIN-007 — applies the account-balance movement for a journal entry that was
+ * created with `deferBalances: true` (e.g. an unapproved voucher). Runs inside
+ * the caller's transaction (pass the lifecycle `onApply` client) so the
+ * balance movement and the approval status change commit atomically.
+ */
+export async function applyJournalEntryBalances(
+  client: pg.PoolClient,
+  companyId: number,
+  journalId: number
+): Promise<void> {
+  // Idempotency + rolling-deploy safety: only a deferred entry that has not
+  // yet had its balances applied is processed. Entries that predate FIN-007
+  // were created with balancesApplied = true and are skipped here.
+  const { rows: jeRows } = await client.query(
+    `SELECT "balancesApplied" FROM journal_entries WHERE id = $1 AND "companyId" = $2`,
+    [journalId, companyId]
+  );
+  if (!jeRows[0] || jeRows[0].balancesApplied) return;
+
+  const { rows: lines } = await client.query(
+    `SELECT jl."accountCode", jl.debit, jl.credit
+       FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId"
+      WHERE jl."journalId" = $1 AND je."companyId" = $2`,
+    [journalId, companyId]
+  );
+  const balanceChanges = new Map<string, number>();
+  for (const line of lines) {
+    if (!line.accountCode) continue;
+    const delta = Number(line.debit) - Number(line.credit);
+    balanceChanges.set(line.accountCode, (balanceChanges.get(line.accountCode) || 0) + delta);
+  }
+  for (const [accountCode, delta] of balanceChanges) {
+    if (Math.abs(delta) < 0.001) continue;
+    await client.query(
+      `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1 WHERE "companyId" = $2 AND code = $3`,
+      [delta, companyId, accountCode]
+    );
+  }
+  await client.query(
+    `UPDATE journal_entries SET "balancesApplied" = true WHERE id = $1 AND "companyId" = $2`,
+    [journalId, companyId]
+  );
 }
 
 export async function softDeleteJournalEntry(

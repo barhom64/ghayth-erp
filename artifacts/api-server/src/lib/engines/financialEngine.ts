@@ -117,6 +117,7 @@ class FinancialEngineImpl implements DomainEngine {
       sourceKey: request.sourceKey,
       lines: request.lines,
       skipPeriodCheck: true,
+      deferBalances: request.deferBalances,
     };
 
     const journalId = request.guardTable && request.guardId
