@@ -12,6 +12,7 @@ const TICKET_SM = LIFECYCLE_SRC.slice(
   LIFECYCLE_SRC.indexOf('entity: "support_tickets"'),
   LIFECYCLE_SRC.indexOf('entity: "support_tickets"') + 600,
 );
+const SLA_MODULE = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/supportSlaEscalation.ts"), "utf8");
 
 // ─── Support Golden Path Tests ──────────────────────────────────────────────
 // P4.1 of the unification plan. Lock in the support ticket lifecycle
@@ -157,24 +158,28 @@ describe("Support ticket resolution side-effects", () => {
 });
 
 describe("Support SLA enforcement", () => {
-  it("check-sla scans for breached tickets", () => {
-    expect(SUPPORT_ROUTE).toContain('"slaDeadline" < NOW()');
+  it("the route escalates through the shared SLA module", () => {
+    expect(SUPPORT_ROUTE).toContain("escalateSla");
+  });
+
+  it("escalation gates on the SLA deadline", () => {
+    expect(SLA_MODULE).toContain('"slaDeadline" < NOW()');
   });
 
   it("escalates breached tickets to critical priority", () => {
-    expect(SUPPORT_ROUTE).toContain("priority='critical'");
-    expect(SUPPORT_ROUTE).toContain('"slaBreached"=true');
+    expect(SLA_MODULE).toContain("priority = 'critical'");
+    expect(SLA_MODULE).toContain('"slaBreached" = true');
   });
 
   it("creates SLA breach notification", () => {
-    expect(SUPPORT_ROUTE).toContain("SLA خرق");
+    expect(SLA_MODULE).toContain("SLA خرق");
   });
 
   it("reply handler also checks SLA on each response", () => {
     const replyIdx = SUPPORT_ROUTE.indexOf('router.post("/tickets/:id/replies"');
     const replySection = SUPPORT_ROUTE.slice(replyIdx, replyIdx + 2000);
     expect(replySection).toContain("slaDeadline");
-    expect(replySection).toContain("slaBreached");
+    expect(replySection).toContain("escalateSla");
   });
 
   it("tracks first response time", () => {

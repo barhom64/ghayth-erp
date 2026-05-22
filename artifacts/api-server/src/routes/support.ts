@@ -16,6 +16,7 @@ import { createNotification, createAuditLog, emitEvent, generateTimeRef } from "
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, LifecycleError, lifecycleErrorResponse, STATE_MACHINES } from "../lib/lifecycleEngine.js";
 import type { ExtraValue } from "../lib/lifecycleEngine.js";
+import { escalateSla } from "../lib/supportSlaEscalation.js";
 
 // Local row shapes for support tables.
 
@@ -355,48 +356,23 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
 router.post("/tickets/check-sla", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const breached = await rawQuery<SupportTicketRow & { clientName?: string | null }>(
-      `SELECT t.*, cl.name AS "clientName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."deletedAt" IS NULL WHERE t."companyId"=$1 AND t.status IN ('open','in_progress','field_visit') AND t."slaDeadline" < NOW() AND t."deletedAt" IS NULL`,
-      [scope.companyId]
-    );
-    for (const ticket of breached) {
-      logger.info({ ticketRef: ticket.ref }, "SLA breach — escalating to critical priority");
-      try {
-        await rawExecute(
-          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND priority != 'critical' AND "deletedAt" IS NULL`,
-          [ticket.id, scope.companyId]
-        );
-        let notifAssignmentId = scope.activeAssignmentId;
-        if (ticket.assigneeId) {
-          const [asgn] = await rawQuery<AssignmentRow>(
-            `SELECT id FROM employee_assignments WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active' LIMIT 1`,
-            [ticket.assigneeId, scope.companyId]
-          );
-          if (asgn) notifAssignmentId = asgn.id;
-        }
-        await createNotification({
-          companyId: scope.companyId,
-          assignmentId: notifAssignmentId,
-          type: "alert",
-          title: `SLA خرق: ${ticket.ref}`,
-          body: `التذكرة "${ticket.title}" تجاوزت SLA — تم تصعيد الأولوية إلى حرجة`,
-          priority: "high",
-          refType: "support_tickets",
-          refId: ticket.id,
-        });
-      } catch (e) { logger.error(e, "SLA breach notification error:"); }
+    // SUP-015: escalation goes through the one shared rule in
+    // supportSlaEscalation — no longer a route-local UPDATE.
+    const escalated = await escalateSla(scope.companyId);
+    for (const ticket of escalated) {
+      logger.info({ ticketRef: ticket.ref }, "SLA breach — escalated to critical priority");
     }
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "support.sla.checked", entity: "support_tickets", entityId: 0,
-      details: JSON.stringify({ breachedCount: breached.length }),
+      details: JSON.stringify({ breachedCount: escalated.length }),
     }).catch((e) => logger.error(e, "support background task failed"));
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "preview", entity: "support_tickets", entityId: 0,
-      after: { breachedCount: breached.length },
+      after: { breachedCount: escalated.length },
     }).catch((e) => logger.error(e, "support background task failed"));
-    res.json({ breached: breached.length, tickets: breached });
+    res.json({ breached: escalated.length, tickets: escalated });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
@@ -441,29 +417,14 @@ router.post("/tickets/:id/replies", authorize({ feature: "support.tickets", acti
       if (!b.isInternal && !ticket.firstResponseAt) {
         await client.query(`UPDATE support_tickets SET "firstResponseAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [ticketId, scope.companyId]);
       }
-      if (ticket.slaDeadline && new Date() > new Date(ticket.slaDeadline)) {
-        await client.query(
-          `UPDATE support_tickets SET priority='critical', "slaBreached"=true, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND priority != 'critical' AND "deletedAt" IS NULL`,
-          [ticketId, scope.companyId]
-        );
-      }
     });
 
+    // SUP-015: a reply arriving after the SLA deadline escalates the
+    // ticket through the one shared rule, same as the cron/endpoint.
     if (ticket.slaDeadline && new Date() > new Date(ticket.slaDeadline)) {
-      try {
-        await createNotification({
-          companyId: scope.companyId,
-          assignmentId: scope.activeAssignmentId,
-          type: "alert",
-          title: `SLA خرق: تذكرة ${ticket.ref}`,
-          body: `التذكرة "${ticket.title}" تجاوزت وقت SLA المحدد وتحتاج تصعيداً فورياً`,
-          priority: "high",
-          refType: "support_tickets",
-          refId: Number(ticketId),
-        });
+      const escalated = await escalateSla(scope.companyId, Number(ticketId));
+      if (escalated.length > 0) {
         logger.info({ ticketRef: ticket.ref }, "SLA escalation — priority escalated to critical, notification created");
-      } catch (slaErr) {
-        logger.error(slaErr, "Failed to handle SLA breach:");
       }
     }
 
