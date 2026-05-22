@@ -237,10 +237,13 @@ router.post("/preferences", authorize({ feature: "notifications", action: "updat
     const body = zodParse(preferencesSchema.safeParse(req.body));
     const scope = req.scope!;
     const { channel, category, enabled } = body;
+    // COM-016 — the only unique constraint on notification_preferences is
+    // ("userId", channel, category); the previous four-column ON CONFLICT
+    // matched no constraint, so every preference save failed outright.
     const { insertId } = await rawExecute(
       `INSERT INTO notification_preferences ("userId","companyId",channel,category,enabled)
        VALUES ($1,$2,$3,$4,$5)
-       ON CONFLICT ("userId", "companyId", channel, category) DO UPDATE SET enabled = $5, "updatedAt" = NOW()
+       ON CONFLICT ("userId", channel, category) DO UPDATE SET enabled = $5, "updatedAt" = NOW()
        RETURNING id`,
       [scope.userId, scope.companyId, channel || 'in_app', category || 'general', enabled !== false]
     );
