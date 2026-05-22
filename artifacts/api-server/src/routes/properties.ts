@@ -1951,7 +1951,7 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
                 status       = CASE WHEN "paidAmount" + $1 >= amount THEN 'paid' ELSE 'partial' END,
                 notes        = COALESCE(notes || E'\n', '') || 'JE#' || COALESCE($4::text, '-'),
                 "updatedAt"  = NOW()
-          WHERE id = $5 AND "deletedAt" IS NULL`,
+          WHERE id = $5`,
         [paidAmount, b.paidDate || todayISO(), b.method || 'bank_transfer', journalEntryId, Number(id)]
       );
 
@@ -2057,15 +2057,18 @@ router.post("/late-rent/escalate", authorize({ feature: "properties.payments", a
         // H11 fix: use proper 2-decimal financial rounding.
         const penaltyResult = await withTransaction(async (client) => {
           const lockRes = await client.query(
-            `SELECT id, amount FROM rent_payments WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
-            [payment.id, scope.companyId]
+            // rent_payments has no companyId/deletedAt column (migration 071);
+            // payment.id is already company-scoped — it comes from the overdue
+            // query above that joins rental_contracts on c."companyId".
+            `SELECT id, amount FROM rent_payments WHERE id = $1 FOR UPDATE`,
+            [payment.id]
           );
           const locked = lockRes.rows[0];
           if (!locked) throw new NotFoundError("القسط غير موجود");
           const lateFee = roundTo2(Number(locked.amount) * 0.02);
           await client.query(
-            `UPDATE rent_payments SET amount=amount+$1, notes=CONCAT(COALESCE(notes,''), ' | غرامة تأخير 2%: ',$2::text) WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
-            [lateFee, lateFee.toFixed(2), locked.id, scope.companyId]
+            `UPDATE rent_payments SET amount=amount+$1, notes=CONCAT(COALESCE(notes,''), ' | غرامة تأخير 2%: ',$2::text) WHERE id=$3`,
+            [lateFee, lateFee.toFixed(2), locked.id]
           );
           return { lateFee, newAmount: Number(locked.amount) + lateFee };
         });
