@@ -138,11 +138,21 @@ export default function ContractDetailPage() {
   };
 
   const handleTerminate = async () => {
+    // PROP-001: contract termination goes through the dedicated /terminate
+    // endpoint — the server rejects a terminal status set via raw PATCH with
+    // 409. /terminate runs the audited applyTransition (frees the unit,
+    // settles early-termination fees) and requires a non-empty reason.
+    const reason = window.prompt("سبب إنهاء العقد:");
+    if (reason === null) return; // user dismissed the prompt
+    if (!reason.trim()) {
+      toast({ variant: "destructive", title: "سبب الإنهاء مطلوب" });
+      return;
+    }
     try {
-      await apiFetch(`/properties/contracts/${id}`, {
-        method: "PATCH",
+      await apiFetch(`/properties/contracts/${id}/terminate`, {
+        method: "POST",
         body: JSON.stringify({
-          status: "terminated",
+          reason: reason.trim(),
           terminationDate: todayLocal(),
         }),
       });
