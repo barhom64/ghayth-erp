@@ -23,6 +23,7 @@ import {
   reverseAccountBalances,
   computeVat,
   extractBaseFromGross,
+  getCompanyVatRate,
   roundTo2,
   todayISO,
   currentPeriod,
@@ -165,7 +166,11 @@ invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance.in
     const scope = req.scope!;
     const b = zodParse(impactPreviewSchema.safeParse(req.body ?? {}));
     // as-any-reason: justified-pragmatic - destructuring on zodParse inferred type whose property names are not directly indexable at the call site
-    const { clientId, lines = [], taxRate = 15, dueInDays = 30 } = b as any;
+    const raw = b as any;
+    const clientId = raw.clientId;
+    const lines = raw.lines ?? [];
+    const dueInDays = raw.dueInDays ?? 30;
+    const taxRate = raw.taxRate ?? await getCompanyVatRate(scope.companyId);
 
     let clientName = "";
     if (clientId) {
@@ -311,10 +316,11 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
     const parsed = zodParse(createInvoiceSchema.safeParse(req.body));
     const {
       clientId, description, subtotal, total: rawTotal, lines: lineItems,
-      vatRate = 15, dueDate, date: invoiceBodyDate, paymentTermsDays, branchId, companyId: bodyCompanyId, notes,
+      vatRate: rawVatRate, dueDate, date: invoiceBodyDate, paymentTermsDays, branchId, companyId: bodyCompanyId, notes,
       isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason,
       // as-any-reason: justified-pragmatic - destructuring on zodParse inferred type whose property names are not directly indexable at the call site
     } = parsed as any;
+    const vatRate = rawVatRate ?? await getCompanyVatRate(bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId);
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
     if (!clientId) {
@@ -1083,7 +1089,8 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action:
     const [inputVat] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM(jl.debit), 0) AS total FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je.status = 'posted' WHERE je."companyId" = $1 AND jl."accountCode" = '1400' AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod]);
     const outputTotal = Number(outputVat?.total ?? 0);
     const inputTotal = Number(inputVat?.total ?? 0);
-    res.json({ period: targetPeriod, outputVat: outputTotal, inputVat: inputTotal, netVat: outputTotal - inputTotal, vatRate: 15, status: outputTotal - inputTotal > 0 ? "payable" : "refundable" });
+    const vatRate = await getCompanyVatRate(scope.companyId);
+    res.json({ period: targetPeriod, outputVat: outputTotal, inputVat: inputTotal, netVat: outputTotal - inputTotal, vatRate, status: outputTotal - inputTotal > 0 ? "payable" : "refundable" });
   } catch (err) {
     handleRouteError(err, res, "Tax summary error:");
   }
@@ -1147,7 +1154,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
         throw new ValidationError(`المبلغ (${creditAmount}) يتجاوز الرصيد المفتوح (${openBalance})`);
       }
 
-      const vatRate = Number(invoice.vatRate ?? 15);
+      const vatRate = Number(invoice.vatRate ?? await getCompanyVatRate(scope.companyId));
       net = vatIncluded
         ? extractBaseFromGross(creditAmount, vatRate)
         : creditAmount;
@@ -1268,7 +1275,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
       throw new ConflictError(`لا يمكن إصدار إشعار مدين في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
 
-    const vatRate = Number(invoice.vatRate ?? 15);
+    const vatRate = Number(invoice.vatRate ?? await getCompanyVatRate(scope.companyId));
     const net = vatIncluded
       ? extractBaseFromGross(chargeAmount, vatRate)
       : chargeAmount;
