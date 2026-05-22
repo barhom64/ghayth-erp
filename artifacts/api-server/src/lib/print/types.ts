@@ -1,6 +1,6 @@
 /**
  * Print Engine v2 — shared types
- * See artifacts/api-server/migrations/080_print_engine_foundations.sql
+ * See artifacts/api-server/src/migrations/171_print_engine_foundations.sql
  */
 
 export type PrintFormat = "a4" | "thermal_80" | "thermal_58" | "label" | "excel";
