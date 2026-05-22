@@ -1470,6 +1470,50 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", authorize({ feature: "
         ]
       : undefined;
 
+    // FIN-001: on a successful three-way match, clear the GRNI suspense
+    // account into Accounts Payable. The GRN booked DR Inventory(+VAT) /
+    // CR GRNI; matching the supplier invoice recognises the payable —
+    // DR GRNI / CR AP — for exactly the amount this PO's goods receipts
+    // credited to GRNI, so GRNI fully clears. Invoice-vs-receipt deltas
+    // inside the 5% tolerance are settled later via credit/debit memos
+    // (owner decision, option A). A mismatch posts nothing — the invoice
+    // is disputed and GRNI stays open. The entry posts before the status
+    // transition so a GL failure leaves the PO un-transitioned.
+    if (isMatched) {
+      const { financialEngine } = await import("../lib/engines/index.js");
+      const [matchGrniCode, matchApCode] = await Promise.all([
+        financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "debit", "2115"),
+        financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2100"),
+      ]);
+      const [grniRow] = await rawQuery<{ grni: string }>(
+        `SELECT COALESCE(SUM(jl.credit), 0) AS grni
+           FROM goods_receipts gr
+           JOIN journal_lines jl ON jl."journalId" = gr."journalId"
+           JOIN chart_of_accounts coa ON coa.id = jl."accountId"
+          WHERE gr."poId" = $1 AND gr."companyId" = $2 AND gr."deletedAt" IS NULL
+            AND coa.code = $3 AND coa."deletedAt" IS NULL AND jl.credit > 0`,
+        [id, scope.companyId, matchGrniCode]
+      );
+      const grniBalance = roundTo2(Number(grniRow?.grni ?? 0));
+      if (grniBalance > 0) {
+        const matchResult = await financialEngine.postJournalEntry({
+          companyId: scope.companyId,
+          branchId: scope.branchId,
+          createdBy: scope.activeAssignmentId,
+          ref: `MATCH-${po.ref}`,
+          description: `مطابقة فاتورة المورّد ${supplierInvoiceRef} - أمر ${po.ref}`,
+          sourceType: "purchase_invoice_match",
+          sourceId: id,
+          sourceKey: `finance:invoice_match:${id}`,
+          lines: [
+            { accountCode: matchGrniCode, debit: grniBalance, credit: 0, vendorId: po.supplierId as number | undefined },
+            { accountCode: matchApCode, debit: 0, credit: grniBalance, vendorId: po.supplierId as number | undefined },
+          ],
+        });
+        markIdempotencyReplay(req, res, matchResult.alreadyExists);
+      }
+    }
+
     await applyTransition({
       entity: "purchase_orders",
       id,
