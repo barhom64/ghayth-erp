@@ -172,6 +172,25 @@ async function runJob(def: CronJobDef): Promise<void> {
     await logCronJob(def.name, "failed", duration, "Job failed", errMsg);
     recordJobRun(def.name, "failed", duration);
     logger.error(err, `[CRON] ${def.name} failed:`);
+    // FND-008 — surface the failure operationally, not just in the log. A
+    // failed scheduled job (SLA escalation, payroll reminders, obligation
+    // scans …) affects every tenant, so raise a critical, dismissible alert
+    // for each company's admins. Alerting errors are swallowed so they
+    // never mask the original cron failure.
+    try {
+      const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+      for (const c of companies) {
+        await broadcastAlert(
+          c.id,
+          "cron_failure",
+          `فشل مهمة مجدولة: ${def.name}`,
+          `فشلت المهمة المجدولة "${def.name}" — ${errMsg}`,
+          "critical",
+        );
+      }
+    } catch (alertErr) {
+      logger.error(alertErr, `[CRON] failed to raise failure alert for ${def.name}`);
+    }
   } finally {
     clearInterval(heartbeat);
     await releaseCronLock(def.name);
