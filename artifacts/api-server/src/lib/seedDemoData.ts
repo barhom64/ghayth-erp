@@ -1,9 +1,10 @@
 import { pool } from "./rawdb.js";
 import { toDateISO, roundTo2 } from "./businessHelpers.js";
 import { logger } from "./logger.js";
+import { config } from "./config.js";
 
-const isDev = process.env.NODE_ENV === "development";
-const seedEnabled = process.env.SEED_DEMO_DATA === "true";
+const isDev = config.isDevelopment;
+const seedEnabled = config.seedDemoData;
 
 export async function seedDemoData(): Promise<void> {
   if (!isDev && !seedEnabled) {

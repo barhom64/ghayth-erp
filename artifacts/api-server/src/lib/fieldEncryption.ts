@@ -1,18 +1,19 @@
 import { createCipheriv, createDecipheriv, createHmac, createHash, randomBytes } from "node:crypto";
 import { logger } from "./logger.js";
 import { rawExecute } from "./rawdb.js";
+import { config } from "./config.js";
 
 const ALG = "aes-256-gcm";
 const IV_LEN = 12;
 const TAG_LEN = 16;
 
 function getFieldEncryptionKey(): Buffer {
-  const secret = process.env.FIELD_ENCRYPTION_KEY;
+  const secret = config.fieldEncryptionKey;
   if (!secret) {
-    if (process.env.NODE_ENV === "production") {
+    if (config.isProduction) {
       throw new Error("FIELD_ENCRYPTION_KEY is required in production — do NOT fall back to JWT_SECRET");
     }
-    const fallback = process.env.JWT_SECRET;
+    const fallback = config.jwtSecret;
     if (!fallback) throw new Error("FIELD_ENCRYPTION_KEY required");
     logger.warn("[fieldEncryption] FIELD_ENCRYPTION_KEY not set — falling back to JWT_SECRET. Set a dedicated key before production.");
     return createHash("sha256").update(fallback).digest();
@@ -21,12 +22,12 @@ function getFieldEncryptionKey(): Buffer {
 }
 
 function getHmacKey(): Buffer {
-  const secret = process.env.FIELD_ENCRYPTION_KEY;
+  const secret = config.fieldEncryptionKey;
   if (!secret) {
-    if (process.env.NODE_ENV === "production") {
+    if (config.isProduction) {
       throw new Error("FIELD_ENCRYPTION_KEY is required in production");
     }
-    const fallback = process.env.JWT_SECRET;
+    const fallback = config.jwtSecret;
     if (!fallback) throw new Error("FIELD_ENCRYPTION_KEY required");
     return createHash("sha256").update("hmac:" + fallback).digest();
   }

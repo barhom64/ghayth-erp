@@ -25,8 +25,8 @@ describe("P0-2: umrahEntitiesRouter financial guard", () => {
 // ─── P0-3: /_routes disabled in production ───────────────────────────────
 describe("P0-3: /_routes production protection", () => {
   it("blocks /_routes in production", () => {
-    expect(INDEX_TS).toContain('NODE_ENV === "production"');
-    expect(INDEX_TS).toMatch(/\/_routes.*production/s);
+    expect(INDEX_TS).toContain("config.isProduction");
+    expect(INDEX_TS).toMatch(/\/_routes[\s\S]*config\.isProduction/);
   });
 });
 

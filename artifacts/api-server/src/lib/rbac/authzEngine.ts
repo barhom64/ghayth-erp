@@ -34,6 +34,7 @@ import {
 import { evaluateConditions, type AbacConditions } from "./abacConditions.js";
 import { enforceSoD } from "./sodEnforcement.js";
 import { publishInvalidation, onInvalidation } from "./distributedCache.js";
+import { config } from "../config.js";
 
 export interface AccessSpec {
   feature: string;
@@ -507,10 +508,10 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
       // Caller IP comes from the authorize() middleware; without it,
       // the ipPrefixIn condition would silently pass.
       ipAddress: spec.ipAddress ?? null,
-      // Emergency mode is read from the env var so an ops admin can
-      // freeze sensitive operations without needing a deploy. Migration
-      // could later move this to a system_settings row.
-      emergency: process.env.RBAC_EMERGENCY_MODE === "true",
+      // Emergency mode is read from config (env RBAC_EMERGENCY_MODE) so an
+      // ops admin can freeze sensitive operations without needing a deploy.
+      // Migration could later move this to a system_settings row.
+      emergency: config.rbac.emergencyMode,
     });
     if (condResult.passed) {
       chosenGrant = grant;

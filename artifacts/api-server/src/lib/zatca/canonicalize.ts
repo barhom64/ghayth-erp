@@ -33,11 +33,13 @@
  * real library is plugged in below.
  */
 
+import { config } from "../config.js";
+
 const NOT_WIRED_MESSAGE =
   "ZATCA C14N is not yet wired to a real canonicalization library. " +
   "See artifacts/api-server/src/lib/zatca/canonicalize.ts for the plan.";
 
-const isProd = process.env.NODE_ENV === "production";
+const isProd = config.isProduction;
 
 /**
  * Strip the <ext:UBLExtensions> block from the invoice XML, then

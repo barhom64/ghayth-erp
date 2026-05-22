@@ -1,11 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { config } from "./config.js";
 
 let client: Anthropic | null = null;
 
 function getClient(): Anthropic | null {
   if (client) return client;
-  const baseURL = process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL;
-  const apiKey = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
+  const baseURL = config.ai.anthropicBaseUrl;
+  const apiKey = config.ai.anthropicApiKey;
   if (!baseURL || !apiKey) return null;
   client = new Anthropic({ apiKey, baseURL });
   return client;

@@ -12,6 +12,7 @@ import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpe
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "../lib/logger.js";
+import { config } from "../lib/config.js";
 
 const router = Router();
 
@@ -108,7 +109,7 @@ const portalKbFeedbackSchema = z.object({
   helpful: z.union([z.boolean(), z.string()]).optional(),
 });
 
-const SECRET = process.env.JWT_SECRET;
+const SECRET = config.jwtSecret;
 if (!SECRET) throw new Error("JWT_SECRET is required for client portal");
 
 const loginLimiter = rateLimit({

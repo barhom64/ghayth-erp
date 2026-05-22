@@ -2,18 +2,19 @@ import { pool } from "./rawdb.js";
 import { hashPassword } from "./auth.js";
 import { currentYear, todayISO } from "./businessHelpers.js";
 import { logger } from "./logger.js";
+import { config } from "./config.js";
 import type pg from "pg";
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@ghayth.com";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "Admin@123456";
+const ADMIN_EMAIL = config.admin.email || "admin@ghayth.com";
+const ADMIN_PASSWORD = config.admin.password || "Admin@123456";
 
 const FLEET_EMAIL = "fleet@ghayth.com";
-const FLEET_PASSWORD = process.env.FLEET_PASSWORD || "Fleet@123456";
+const FLEET_PASSWORD = config.admin.fleetPassword || "Fleet@123456";
 
-if (!process.env.ADMIN_PASSWORD) {
+if (!config.admin.password) {
   logger.warn("ADMIN_PASSWORD not set — using default credentials. Change immediately in production!");
 }
-if (!process.env.FLEET_PASSWORD) {
+if (!config.admin.fleetPassword) {
   logger.warn("FLEET_PASSWORD not set — using default credentials. Change immediately in production!");
 }
 

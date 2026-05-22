@@ -5,6 +5,7 @@ import { isKnownEvent } from "./eventCatalog.js";
 import { setGauge } from "./metrics.js";
 import { getRequestId, runWithCorrelationId } from "./requestContext.js";
 import { randomUUID } from "node:crypto";
+import { config } from "./config.js";
 
 export interface EventPayload {
   /** Envelope version — stamped by EventBus.emit (see EVENT_ENVELOPE_VERSION). */
@@ -93,8 +94,7 @@ export function stampEnvelope(
 // dispatcher; the relay that drains the outbox and the dispatch-source
 // switch land in follow-up PRs. Skipped under the test runner (no DB),
 // mirroring startDlqMaintenance.
-const OUTBOX_CAPTURE_ENABLED =
-  process.env.NODE_ENV !== "test" && !process.env.VITEST;
+const OUTBOX_CAPTURE_ENABLED = !config.isTest;
 
 function captureToOutbox(eventName: string, payload?: EventPayload): void {
   if (!OUTBOX_CAPTURE_ENABLED) return;
@@ -406,6 +406,6 @@ export function __stopDlqMaintenance(): void {
 
 // Auto-start on a real server boot. Skipped under the test runner so unit
 // tests never open a DB-querying interval.
-if (process.env.NODE_ENV !== "test" && !process.env.VITEST) {
+if (!config.isTest) {
   startDlqMaintenance();
 }

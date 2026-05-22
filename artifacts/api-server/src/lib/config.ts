@@ -72,6 +72,9 @@ const EnvSchema = z.object({
   NODE_ENV: z
     .enum(["development", "staging", "production", "test"])
     .catch("development"),
+  // Set to "true" by the Vitest runner. Folded into `config.isTest` so
+  // test-only branches do not have to probe process.env directly.
+  VITEST: boolEnv(false),
   PORT: intEnv(0), // 0 = unset/invalid sentinel; validated below
   HOSTNAME: optStr(),
   LOG_LEVEL: z
@@ -156,6 +159,11 @@ const EnvSchema = z.object({
   // -- idempotency ---------------------------------------------------------
   IDEMPOTENCY_TTL_HOURS: intEnv(24),
 
+  // -- observability / tracing --------------------------------------------
+  // OpenTelemetry OTLP trace endpoint. When unset, tracing stays inert and
+  // the OTel loader hook is never registered (see otel.ts / lib/tracing.ts).
+  OTEL_EXPORTER_OTLP_ENDPOINT: optStr(),
+
   // -- operational knobs (introduced with the foundation hardening work) ---
   // Threshold above which a single DB query is logged + counted as "slow"
   // by the observability layer (lib/observability.ts).
@@ -192,6 +200,9 @@ export interface AppConfig {
 
   /** Normalised, de-duplicated CORS allowlist (no trailing slashes). */
   readonly corsOrigins: readonly string[];
+
+  /** Raw REPLIT_DEV_DOMAIN — used to whitelist Replit preview subdomains in dev. */
+  readonly replitDevDomain: string | undefined;
 
   readonly redis: {
     readonly url: string | undefined;
@@ -272,6 +283,9 @@ export interface AppConfig {
 
   readonly idempotencyTtlHours: number;
 
+  /** OpenTelemetry OTLP trace endpoint — tracing is inert when undefined. */
+  readonly otelExporterEndpoint: string | undefined;
+
   /** Operational knobs consumed by the health + observability layers. */
   readonly ops: {
     readonly slowQueryMs: number;
@@ -310,7 +324,8 @@ function buildConfig(env: RawEnv): AppConfig {
     isProduction: nodeEnv === "production",
     isDevelopment: nodeEnv === "development",
     isStaging: nodeEnv === "staging",
-    isTest: nodeEnv === "test",
+    // True under NODE_ENV=test or when run by the Vitest runner.
+    isTest: nodeEnv === "test" || env.VITEST,
 
     port: env.PORT,
     hostname: env.HOSTNAME ?? "api-server",
@@ -324,6 +339,7 @@ function buildConfig(env: RawEnv): AppConfig {
     secretsEncryptionKey: env.SECRETS_ENCRYPTION_KEY,
 
     corsOrigins,
+    replitDevDomain: env.REPLIT_DEV_DOMAIN,
 
     redis: {
       url: env.REDIS_URL,
@@ -399,6 +415,8 @@ function buildConfig(env: RawEnv): AppConfig {
     },
 
     idempotencyTtlHours: env.IDEMPOTENCY_TTL_HOURS,
+
+    otelExporterEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT,
 
     ops: {
       slowQueryMs: env.SLOW_QUERY_MS,

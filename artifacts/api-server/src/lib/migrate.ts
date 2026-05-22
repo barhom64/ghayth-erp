@@ -3,10 +3,11 @@ import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { pool } from "./rawdb.js";
 import { logger } from "./logger.js";
+import { config } from "./config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const isDev = process.env.NODE_ENV === "development";
+const isDev = config.isDevelopment;
 
 /**
  * Other PostgreSQL statements that cannot run inside a transaction block.

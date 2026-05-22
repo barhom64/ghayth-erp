@@ -45,6 +45,7 @@ import { submitWorkflow } from "../lib/workflowEngine.js";
 import { ensureInquiryMemoForViolation } from "../lib/disciplineEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
+import { config } from "../lib/config.js";
 import { HR_ROLES, MGR_ROLES, HR_APPROVAL_ROLES , PR_APPROVAL_ROLES, PAYROLL_ROLES, OPS_CLOSE_ROLES, BRANCH_GM_ROLES} from "../lib/rbacCatalog.js";
 
 // ── Zod request-body schemas ──
@@ -5647,7 +5648,7 @@ router.post("/evaluation-cycles/:id/upward-review", authorize({ feature: "hr.per
     // We store a one-way hash (HMAC) that uniquely identifies this reviewer-cycle-manager
     // pair without revealing the reviewer's identity
     const crypto = await import("node:crypto");
-    const secret = process.env.JWT_SECRET;
+    const secret = config.jwtSecret;
     if (!secret) {
       throw new IntegrationError("خطأ في إعداد النظام: JWT_SECRET غير مضبوط", {
         meta: { integration: "auth", secret: "JWT_SECRET" },
