@@ -425,9 +425,11 @@ router.post("/pbx/status", async (req, res): Promise<void> => {
 router.get("/log", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { channel, direction, limit: lim, offset: off } = req.query as Record<string, string | undefined>;
+    const { channel, direction, limit: lim, offset: off, page } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
-    const pageOffset = Number(off) || 0;
+    // COM-011 — the log tabs page with ?page=N; accept it (and still accept
+    // an explicit ?offset=) so paging past the first page actually works.
+    const pageOffset = off != null ? (Number(off) || 0) : (Math.max(1, Number(page) || 1) - 1) * pageLimit;
     const conditions = [`"companyId" = $1`, `"deletedAt" IS NULL`];
     const params: unknown[] = [scope.companyId];
     if (channel) { params.push(channel); conditions.push(`channel = $${params.length}`); }
@@ -482,9 +484,11 @@ router.post("/send", authorize({ feature: "communications", action: "create" }),
 router.get("/whatsapp", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { status, limit: lim, offset: off } = req.query as Record<string, string | undefined>;
+    const { status, limit: lim, offset: off, page } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
-    const pageOffset = Number(off) || 0;
+    // COM-011 — the log tabs page with ?page=N; accept it (and still accept
+    // an explicit ?offset=) so paging past the first page actually works.
+    const pageOffset = off != null ? (Number(off) || 0) : (Math.max(1, Number(page) || 1) - 1) * pageLimit;
     const conditions = [`"companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
@@ -499,9 +503,11 @@ router.get("/whatsapp", authorize({ feature: "communications", action: "list" })
 router.get("/sms", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { status, limit: lim, offset: off } = req.query as Record<string, string | undefined>;
+    const { status, limit: lim, offset: off, page } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
-    const pageOffset = Number(off) || 0;
+    // COM-011 — the log tabs page with ?page=N; accept it (and still accept
+    // an explicit ?offset=) so paging past the first page actually works.
+    const pageOffset = off != null ? (Number(off) || 0) : (Math.max(1, Number(page) || 1) - 1) * pageLimit;
     const conditions = [`"companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
@@ -516,9 +522,11 @@ router.get("/sms", authorize({ feature: "communications", action: "list" }), asy
 router.get("/pbx", authorize({ feature: "communications", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { limit: lim, offset: off } = req.query as Record<string, string | undefined>;
+    const { limit: lim, offset: off, page } = req.query as Record<string, string | undefined>;
     const pageLimit = Math.min(Number(lim) || 50, 200);
-    const pageOffset = Number(off) || 0;
+    // COM-011 — the log tabs page with ?page=N; accept it (and still accept
+    // an explicit ?offset=) so paging past the first page actually works.
+    const pageOffset = off != null ? (Number(off) || 0) : (Math.max(1, Number(page) || 1) - 1) * pageLimit;
     const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM pbx_calls WHERE "companyId"=$1`, [scope.companyId]);
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM pbx_calls WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT $2 OFFSET $3`, [scope.companyId, pageLimit, pageOffset]);
     res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset }));
