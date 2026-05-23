@@ -1411,8 +1411,16 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
       );
       invoiceRow = insRes.rows[0];
       if (penaltiesTotal > 0) {
+        // The SUM that produced `penaltiesTotal` (line 1382) excludes
+        // soft-deleted penalties. This UPDATE must match the same set,
+        // otherwise a soft-deleted pending penalty would get stamped
+        // `status='invoiced'` and `invoiceId=...` even though its
+        // amount was never billed — leaving a phantom row that claims
+        // to be on the invoice and breaks any later audit reconciliation.
         await client.query(
-          `UPDATE umrah_penalties SET status='invoiced', "invoiceId"=$1 WHERE "agentId"=$2 AND "seasonId"=$3 AND "companyId"=$4 AND status='pending'`,
+          `UPDATE umrah_penalties SET status='invoiced', "invoiceId"=$1
+            WHERE "agentId"=$2 AND "seasonId"=$3 AND "companyId"=$4
+              AND status='pending' AND "deletedAt" IS NULL`,
           [invoiceRow.id, agentId, seasonId, scope.companyId]
         );
       }
