@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";

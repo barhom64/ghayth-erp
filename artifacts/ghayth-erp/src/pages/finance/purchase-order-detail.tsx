@@ -11,7 +11,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ShoppingCart, User, Phone, Mail, Calendar, Package, Copy } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout } from "@workspace/entity-kit";
 import { resolveStatus } from "@workspace/ui-core";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 

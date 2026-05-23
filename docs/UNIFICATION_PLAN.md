@@ -139,17 +139,17 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 | --- | --- | --- |
 **ui-core**:
 | `page-shell-from-legacy-path` | 2 | نشط |
-| `form-shell-from-legacy-path` | 53 | نشط |
+| `form-shell-from-legacy-path` | 51 | نشط |
 | `data-table-from-legacy-path` | 4 | نشط |
 | `page-status-badge-from-legacy-path` | 10 | نشط |
-| `create-page-layout-from-legacy-path` | 81 | نشط |
+| `create-page-layout-from-legacy-path` | 11 | نشط |
 | `advanced-filters-from-legacy-path` | 5 | نشط |
 | `data-table-presets-from-legacy-path` | 1 | نشط |
 | `data-table-wrapper-from-legacy-path` | 2 | نشط |
 | `page-header-from-legacy-path` | 3 | نشط |
 
 **entity-kit**:
-| `detail-page-layout-from-legacy-path` | 9 | نشط |
+| `detail-page-layout-from-legacy-path` | 2 | نشط |
 | `entity-timeline-from-legacy-path` | 2 | نشط |
 | `entity-comments-from-legacy-path` | **hard rule** ✅ | ratchet → hardened |
 | `entity-documents-from-legacy-path` | **hard rule** ✅ | ratchet → hardened |
@@ -158,10 +158,10 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 | `approval-actions-from-legacy-path` | 5 | نشط |
 
 **report-kit**:
-| `print-layout-from-legacy-path` | 12 | نشط |
+| `print-layout-from-legacy-path` | 10 | نشط |
 
-**الإجمالي**: **189 موضع** legacy import مغطّى بـ ratchet (هبط من 906
-الأولي — هبوط 717 إجمالًا = 79%). اثنتان من القواعد ترقّت إلى hard
+**الإجمالي**: **108 موضع** legacy import مغطّى بـ ratchet (هبط من 906
+الأولي — هبوط 798 إجمالًا = **88%**). اثنتان من القواعد ترقّت إلى hard
 rules. كل واحد لا يمكنه الزيادة. كل migration يخفض العدد بمقدار 1
 ويستوجب تحديث baseline في نفس الـ PR.
 

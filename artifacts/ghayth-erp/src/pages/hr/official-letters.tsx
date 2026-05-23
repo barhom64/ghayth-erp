@@ -11,7 +11,7 @@ import { PageShell } from "@workspace/ui-core";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { Plus, FileText, FileSignature, Send, Eye } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { PrintPreviewModal } from "@/components/print-layout";
+import { PrintPreviewModal } from "@workspace/report-kit";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
 import { DataTable, DataTableColumn } from "@/components/ui/data-table";

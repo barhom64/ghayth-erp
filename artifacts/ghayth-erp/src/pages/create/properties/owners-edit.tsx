@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Crown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { CreatePageLayout } from "@/components/create-page-layout";
+import { CreatePageLayout } from "@workspace/ui-core";
 import {
   FormShell,
   FormTextField,

@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
-import { FormShell, FormTextField, FormGrid } from "@/components/form-shell";
+import { FormShell, FormTextField, FormGrid } from "@workspace/ui-core";
 
 // Replaces the old `if (!form.name.trim())` toast guard. Schema also
 // trims so leading/trailing whitespace can't slip through.

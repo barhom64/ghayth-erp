@@ -219,7 +219,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/form-shell.tsx"),
     regex: /from\s+["']@\/components\/form-shell["']/,
-    countBaseline: 53,
+    countBaseline: 51,
     message: `FormShell imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -253,7 +253,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/create-page-layout.tsx"),
     regex: /from\s+["']@\/components\/create-page-layout["']/,
-    countBaseline: 81,
+    countBaseline: 11,
     message: `CreatePageLayout imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -264,7 +264,7 @@ const RULES = [
       file.endsWith("/components/shared/detail-page-layout.tsx") ||
       file.endsWith("/components/shared/entity-detail-page.tsx"),
     regex: /from\s+["']@\/components\/shared\/detail-page-layout["']/,
-    countBaseline: 9,
+    countBaseline: 2,
     message: `DetailPageLayout imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
   },
 
@@ -360,7 +360,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/print-layout.tsx"),
     regex: /from\s+["']@\/components\/print-layout["']/,
-    countBaseline: 12,
+    countBaseline: 10,
     message: `PrintActions / PrintDocument / LetterheadHeader imported from the legacy path. ${kitRatchetHint("report-kit")}`,
   },
 ];

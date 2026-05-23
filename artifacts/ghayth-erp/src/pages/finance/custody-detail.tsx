@@ -15,7 +15,7 @@ import {
   User,
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { ProcessStages, type StageStep } from "@workspace/entity-kit";
 
