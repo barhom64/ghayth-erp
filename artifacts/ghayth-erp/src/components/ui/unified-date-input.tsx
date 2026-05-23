@@ -18,6 +18,7 @@ import * as React from "react";
 import { CalendarIcon, RefreshCw, AlertCircle } from "lucide-react";
 import { DayPicker } from "react-day-picker";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -188,7 +189,7 @@ export function UnifiedDateInput({
   value,
   onChange,
   mode = "date",
-  defaultCalendar = "gregory",
+  defaultCalendar,
   showDualCalendar = true,
   showPresets = true,
   allowManualInput = true,
@@ -206,8 +207,30 @@ export function UnifiedDateInput({
   noFuture,
   noPast,
 }: UnifiedDateInputProps) {
+  // أولوية الـcalendar: explicit prop ← تفضيل المستخدم من /auth/me
+  //   ← "gregory" كـlast-resort. هذا يَضمن أن أي حقل تاريخ في الـapp
+  // (مئات الـcallsites) يَتبع تفضيل المستخدم تلقائيًا بدون تَعديل
+  // كل callsite على حِدة.
+  const auth = useAuth();
+  const userCalendar: CalendarType | undefined =
+    auth.user?.preferredCalendar === "hijri" ? "hijri"
+      : auth.user?.preferredCalendar === "gregorian" ? "gregory"
+      : undefined;
+  const resolvedDefaultCalendar: CalendarType =
+    defaultCalendar ?? userCalendar ?? "gregory";
+
   const [open, setOpen] = React.useState(false);
-  const [calendar, setCalendar] = React.useState<CalendarType>(defaultCalendar);
+  const [calendar, setCalendar] = React.useState<CalendarType>(resolvedDefaultCalendar);
+
+  // عندما يُغيّر المستخدم تفضيله من بطاقة "تفضيلاتي" بينما حقل التاريخ
+  // مَفتوح/مَركَّب، نُحدّث الـcalendar state ليَنعكس فورًا — بشرط ألا
+  // يَكون الـcaller قد مرّر `defaultCalendar` صراحة (في هذه الحالة
+  // الـcaller هو المُتحكِّم).
+  React.useEffect(() => {
+    if (defaultCalendar === undefined && userCalendar) {
+      setCalendar(userCalendar);
+    }
+  }, [defaultCalendar, userCalendar]);
   const [textValue, setTextValue] = React.useState(""); // للكتابة اليدوية
   const [touched, setTouched] = React.useState(false);
 

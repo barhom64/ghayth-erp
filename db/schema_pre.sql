@@ -4283,7 +4283,13 @@ CREATE TABLE public.cost_centers (
     "usedAmount" numeric(15,2) DEFAULT 0,
     status character varying(20) DEFAULT 'active'::character varying,
     "createdAt" timestamp with time zone DEFAULT now(),
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "linkedEntityType" character varying(40),
+    "linkedEntityId" integer,
+    "isActive" boolean DEFAULT true,
+    "deletedAt" timestamp with time zone,
+    "autoCreatedBy" integer,
+    "autoCreatedReason" text
 );
 
 
@@ -7463,7 +7469,27 @@ CREATE TABLE public.goods_receipt_items (
     "receivedQty" numeric(18,4) DEFAULT 0 NOT NULL,
     "unitPrice" numeric(18,4) DEFAULT 0 NOT NULL,
     "lineTotal" numeric(18,4) DEFAULT 0 NOT NULL,
-    notes text
+    notes text,
+    "accountId" integer,
+    "accountCode" character varying(20),
+    "costCenterId" integer,
+    "lineTreatment" character varying(30),
+    "activityType" character varying(50),
+    "projectId" integer,
+    "vehicleId" integer,
+    "propertyId" integer,
+    "unitId" integer,
+    "assetId" integer,
+    "employeeId" integer,
+    "driverId" integer,
+    "contractId" integer,
+    "productId" integer,
+    "taxCode" character varying(20),
+    "allocationRuleId" integer,
+    "allocationStatus" character varying(20) DEFAULT 'unmapped'::character varying,
+    "dimensionJson" jsonb,
+    "manualOverrideReason" text,
+    CONSTRAINT goods_receipt_items_line_treatment_check CHECK (("lineTreatment" IS NULL OR ("lineTreatment")::text = ANY (ARRAY['inventory'::text,'expense'::text,'fixed_asset'::text,'project_cost'::text,'vehicle_cost'::text,'property_maintenance'::text,'custody'::text,'prepayment'::text,'service'::text])))
 );
 
 
@@ -11447,6 +11473,69 @@ CREATE TABLE public.products (
     "unitPrice" numeric(18,2),
     unit character varying(20),
     "isActive" boolean DEFAULT true,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "itemType" character varying(30) DEFAULT 'product'::character varying,
+    "defaultRevenueAccountId" integer,
+    "defaultExpenseAccountId" integer,
+    "defaultInventoryAccountId" integer,
+    "defaultAssetAccountId" integer,
+    "defaultTaxCode" character varying(20),
+    "defaultActivityType" character varying(50),
+    "requiresVehicle" boolean DEFAULT false,
+    "requiresProperty" boolean DEFAULT false,
+    "requiresProject" boolean DEFAULT false,
+    "requiresContract" boolean DEFAULT false,
+    "requiresUmrahAgent" boolean DEFAULT false,
+    "requiresUmrahSeason" boolean DEFAULT false,
+    "defaultCostCenterStrategy" character varying(40),
+    "allowedDocumentTypes" jsonb,
+    CONSTRAINT products_item_type_check CHECK (("itemType" IS NULL OR ("itemType")::text = ANY (ARRAY['product'::text,'service'::text,'asset'::text,'consumable'::text,'digital'::text])))
+);
+
+CREATE TABLE public.accounting_allocation_rules (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    name character varying(200) NOT NULL,
+    "documentType" character varying(40) NOT NULL,
+    "lineType" character varying(40),
+    "activityType" character varying(50),
+    "entityType" character varying(40),
+    "conditionsJson" jsonb,
+    "debitAccountId" integer,
+    "creditAccountId" integer,
+    "revenueAccountId" integer,
+    "expenseAccountId" integer,
+    "assetAccountId" integer,
+    "inventoryAccountId" integer,
+    "vatAccountId" integer,
+    "costCenterStrategy" character varying(40),
+    "dimensionStrategyJson" jsonb,
+    "autoCreateMissing" boolean DEFAULT false,
+    "requiresEntityLink" boolean DEFAULT false,
+    priority integer DEFAULT 100,
+    "isActive" boolean DEFAULT true,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone
+);
+
+CREATE TABLE public.accounting_allocation_results (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "sourceTable" character varying(64) NOT NULL,
+    "sourceLineId" integer NOT NULL,
+    "documentType" character varying(40),
+    "resolvedAccountId" integer,
+    "resolvedAccountCode" character varying(20),
+    "costCenterId" integer,
+    "dimensionsJson" jsonb,
+    "ruleId" integer,
+    "resolutionStatus" character varying(20) DEFAULT 'resolved'::character varying,
+    "warningsJson" jsonb,
+    "resolvedBy" integer,
+    "resolvedAt" timestamp with time zone DEFAULT now(),
+    "manualOverrideBy" integer,
+    "manualOverrideReason" text,
     "createdAt" timestamp with time zone DEFAULT now()
 );
 
@@ -12163,7 +12252,27 @@ CREATE TABLE public.purchase_order_items (
     "lineTotal" numeric DEFAULT 0 NOT NULL,
     "receivedQty" numeric DEFAULT 0 NOT NULL,
     "invoicedQty" numeric DEFAULT 0 NOT NULL,
-    "createdAt" timestamp without time zone DEFAULT now() NOT NULL
+    "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
+    "accountId" integer,
+    "accountCode" character varying(20),
+    "costCenterId" integer,
+    "lineTreatment" character varying(30),
+    "activityType" character varying(50),
+    "projectId" integer,
+    "vehicleId" integer,
+    "propertyId" integer,
+    "unitId" integer,
+    "assetId" integer,
+    "employeeId" integer,
+    "driverId" integer,
+    "contractId" integer,
+    "productId" integer,
+    "taxCode" character varying(20),
+    "allocationRuleId" integer,
+    "allocationStatus" character varying(20) DEFAULT 'unmapped'::character varying,
+    "dimensionJson" jsonb,
+    "manualOverrideReason" text,
+    CONSTRAINT purchase_order_items_line_treatment_check CHECK (("lineTreatment" IS NULL OR ("lineTreatment")::text = ANY (ARRAY['inventory'::text,'expense'::text,'fixed_asset'::text,'project_cost'::text,'vehicle_cost'::text,'property_maintenance'::text,'custody'::text,'prepayment'::text,'service'::text])))
 );
 
 
@@ -12288,7 +12397,26 @@ CREATE TABLE public.purchase_request_items (
     "estimatedPrice" numeric(15,2) DEFAULT 0 NOT NULL,
     "actualPrice" numeric(15,2),
     notes text,
-    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "accountId" integer,
+    "accountCode" character varying(20),
+    "costCenterId" integer,
+    "lineTreatment" character varying(30),
+    "activityType" character varying(50),
+    "vehicleId" integer,
+    "propertyId" integer,
+    "unitId" integer,
+    "assetId" integer,
+    "employeeId" integer,
+    "driverId" integer,
+    "contractId" integer,
+    "projectId" integer,
+    "taxCode" character varying(20),
+    "allocationRuleId" integer,
+    "allocationStatus" character varying(20) DEFAULT 'unmapped'::character varying,
+    "dimensionJson" jsonb,
+    "manualOverrideReason" text,
+    CONSTRAINT purchase_request_items_line_treatment_check CHECK (("lineTreatment" IS NULL OR ("lineTreatment")::text = ANY (ARRAY['inventory'::text,'expense'::text,'fixed_asset'::text,'project_cost'::text,'vehicle_cost'::text,'property_maintenance'::text,'custody'::text,'prepayment'::text,'service'::text])))
 );
 
 

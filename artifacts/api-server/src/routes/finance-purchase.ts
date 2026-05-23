@@ -37,13 +37,43 @@ import { z } from "zod";
 export const purchaseRouter = Router();
 purchaseRouter.use(authMiddleware);
 
+// Phase 4 P1 — purchase lines carry the same dimensional + allocation
+// payload as invoice_lines (migration 202). `lineTreatment` decides
+// which expense/asset/inventory bucket the GRN posting routes the
+// line into; the other fields populate the dimensions that flow
+// through to journal_lines for analytical reports.
+const PURCHASE_LINE_TREATMENTS = [
+  "inventory", "expense", "fixed_asset", "project_cost", "vehicle_cost",
+  "property_maintenance", "custody", "prepayment", "service",
+] as const;
+
+const purchaseLineDimsSchema = {
+  accountId: z.coerce.number().optional(),
+  accountCode: z.string().optional(),
+  costCenterId: z.coerce.number().optional(),
+  lineTreatment: z.enum(PURCHASE_LINE_TREATMENTS).optional(),
+  activityType: z.string().optional(),
+  projectId: z.coerce.number().optional(),
+  vehicleId: z.coerce.number().optional(),
+  propertyId: z.coerce.number().optional(),
+  unitId: z.coerce.number().optional(),
+  assetId: z.coerce.number().optional(),
+  employeeId: z.coerce.number().optional(),
+  driverId: z.coerce.number().optional(),
+  contractId: z.coerce.number().optional(),
+  taxCode: z.string().optional(),
+  allocationRuleId: z.coerce.number().optional(),
+  dimensionJson: z.record(z.any()).optional(),
+  manualOverrideReason: z.string().optional(),
+};
+
 const createPurchaseRequestSchema = z.object({
   items: z.array(z.object({
     description: z.string().optional(),
     quantity: z.coerce.number().optional(),
     unitPrice: z.coerce.number().optional(),
-    accountCode: z.string().optional(),
     productId: z.coerce.number().optional(),
+    ...purchaseLineDimsSchema,
   })).min(1, "يجب إضافة بند واحد على الأقل"),
   supplierId: z.coerce.number().optional(),
   notes: z.string().optional(),
@@ -305,27 +335,59 @@ purchaseRouter.post("/purchase-requests", authorize({ feature: "finance.purchase
     assertInsert(insertId, "purchase_requests");
 
     if (Array.isArray(items) && items.length > 0) {
+      // Phase 4 P1 — carry the full dimensional + lineTreatment payload
+      // so the eventual GRN posting can route each line to the right
+      // expense/asset bucket. 23 columns including the 17 new fields
+      // from migration 202. Lines without lineTreatment land
+      // allocationStatus='unmapped' and need operator action before
+      // GRN approval (Phase 4.2).
+      const COLS_PER_ROW = 23;
       const valuesSql: string[] = [];
       const params: unknown[] = [];
       for (const item of items) {
         const base = params.length;
-        valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6})`);
+        valuesSql.push(
+          `(${Array.from({ length: COLS_PER_ROW }, (_, i) => `$${base + i + 1}`).join(",")})`
+        );
         const resolvedName =
           item.itemName ||
           item.description ||
           (item.productId ? productNameById.get(Number(item.productId)) : undefined) ||
           "بند";
+        const hasAllocation = item.accountCode || item.accountId || item.lineTreatment;
         params.push(
           insertId,
           resolvedName,
           Number(item.quantity ?? 1),
           Number(item.unitPrice ?? 0),
           Number(item.quantity ?? 1) * Number(item.unitPrice ?? 0),
-          item.notes ?? null
+          item.notes ?? null,
+          item.productId ?? null,
+          item.accountId ?? null,
+          item.accountCode ?? null,
+          item.costCenterId ?? null,
+          item.lineTreatment ?? null,
+          item.activityType ?? null,
+          item.projectId ?? null,
+          item.vehicleId ?? null,
+          item.propertyId ?? null,
+          item.unitId ?? null,
+          item.assetId ?? null,
+          item.employeeId ?? null,
+          item.driverId ?? null,
+          item.contractId ?? null,
+          item.taxCode ?? null,
+          item.allocationRuleId ?? null,
+          hasAllocation ? "resolved" : "unmapped",
         );
       }
       await rawExecute(
-        `INSERT INTO purchase_request_items ("requestId",name,quantity,"unitPrice","totalPrice",notes)
+        `INSERT INTO purchase_request_items (
+           "requestId",name,quantity,"unitPrice","totalPrice",notes,
+           "productId","accountId","accountCode","costCenterId","lineTreatment","activityType",
+           "projectId","vehicleId","propertyId","unitId","assetId",
+           "employeeId","driverId","contractId","taxCode","allocationRuleId","allocationStatus"
+         )
          VALUES ${valuesSql.join(",")}`,
         params
       );
@@ -490,15 +552,47 @@ purchaseRouter.post("/purchase-requests/:id/convert", authorize({ feature: "fina
         poId = poRes.rows[0].id;
 
         if (Array.isArray(items) && items.length > 0) {
+          // Phase 4 P1 — carry the full allocation payload from PR to PO.
+          // Without this, every dimension + lineTreatment the operator
+          // set at PR time gets silently dropped when the PR is
+          // converted, leaving the PO blank again and forcing rework
+          // at GRN time.
+          const COLS_PER_ROW = 22;
           const valuesSql: string[] = [];
           const params: unknown[] = [];
           for (const item of items) {
             const base = params.length;
-            valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`);
-            params.push(poId, item.name, item.quantity, item.unitPrice, item.totalPrice);
+            valuesSql.push(
+              `(${Array.from({ length: COLS_PER_ROW }, (_, i) => `$${base + i + 1}`).join(",")})`
+            );
+            params.push(
+              poId, item.name, item.quantity, item.unitPrice, item.totalPrice,
+              item.productId ?? null,
+              item.accountId ?? null,
+              item.accountCode ?? null,
+              item.costCenterId ?? null,
+              item.lineTreatment ?? null,
+              item.activityType ?? null,
+              item.projectId ?? null,
+              item.vehicleId ?? null,
+              item.propertyId ?? null,
+              item.unitId ?? null,
+              item.assetId ?? null,
+              item.employeeId ?? null,
+              item.driverId ?? null,
+              item.contractId ?? null,
+              item.taxCode ?? null,
+              item.allocationRuleId ?? null,
+              item.allocationStatus ?? "unmapped",
+            );
           }
           await client.query(
-            `INSERT INTO purchase_order_items ("orderId","itemName",quantity,"unitPrice","lineTotal")
+            `INSERT INTO purchase_order_items (
+               "orderId","itemName",quantity,"unitPrice","lineTotal",
+               "productId","accountId","accountCode","costCenterId","lineTreatment","activityType",
+               "projectId","vehicleId","propertyId","unitId","assetId",
+               "employeeId","driverId","contractId","taxCode","allocationRuleId","allocationStatus"
+             )
              VALUES ${valuesSql.join(",")}`,
             params
           );
@@ -601,15 +695,49 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
     assertInsert(insertId, "purchase_orders");
 
     if (Array.isArray(items) && items.length > 0) {
+      // Phase 4 P1 — direct PO creation (no PR upstream) also carries
+      // the dimensional + lineTreatment payload. Keeps the line shape
+      // identical regardless of whether the PO came from a converted
+      // PR or was created directly.
+      const COLS_PER_ROW = 22;
       const valuesSql: string[] = [];
       const params: unknown[] = [];
       for (const item of items) {
         const base = params.length;
-        valuesSql.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`);
-        params.push(insertId, item.itemName || "بند", Number(item.quantity ?? 1), Number(item.unitPrice ?? 0), Number(item.lineTotal ?? 0));
+        valuesSql.push(
+          `(${Array.from({ length: COLS_PER_ROW }, (_, i) => `$${base + i + 1}`).join(",")})`
+        );
+        const hasAllocation = item.accountCode || item.accountId || item.lineTreatment;
+        params.push(
+          insertId, item.itemName || "بند",
+          Number(item.quantity ?? 1), Number(item.unitPrice ?? 0), Number(item.lineTotal ?? 0),
+          item.productId ?? null,
+          item.accountId ?? null,
+          item.accountCode ?? null,
+          item.costCenterId ?? null,
+          item.lineTreatment ?? null,
+          item.activityType ?? null,
+          item.projectId ?? null,
+          item.vehicleId ?? null,
+          item.propertyId ?? null,
+          item.unitId ?? null,
+          item.assetId ?? null,
+          item.employeeId ?? null,
+          item.driverId ?? null,
+          item.contractId ?? null,
+          item.taxCode ?? null,
+          item.allocationRuleId ?? null,
+          hasAllocation ? "resolved" : "unmapped",
+        );
       }
       await rawExecute(
-        `INSERT INTO purchase_order_items ("orderId","itemName",quantity,"unitPrice","lineTotal") VALUES ${valuesSql.join(",")}`,
+        `INSERT INTO purchase_order_items (
+           "orderId","itemName",quantity,"unitPrice","lineTotal",
+           "productId","accountId","accountCode","costCenterId","lineTreatment","activityType",
+           "projectId","vehicleId","propertyId","unitId","assetId",
+           "employeeId","driverId","contractId","taxCode","allocationRuleId","allocationStatus"
+         )
+         VALUES ${valuesSql.join(",")}`,
         params
       ).catch((e) => logger.error(e, "finance-purchase background task failed"));
     }
@@ -711,7 +839,10 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     const poItems = await rawQuery<Record<string, unknown>>(
       `SELECT id, "itemName", quantity, "unitPrice", "lineTotal",
               COALESCE("receivedQty",0) AS "receivedQty",
-              COALESCE("invoicedQty",0) AS "invoicedQty"
+              COALESCE("invoicedQty",0) AS "invoicedQty",
+              "productId","accountId","accountCode","costCenterId","lineTreatment","activityType",
+              "projectId","vehicleId","propertyId","unitId","assetId",
+              "employeeId","driverId","contractId","taxCode","allocationRuleId","allocationStatus"
        FROM purchase_order_items WHERE "orderId" = $1`,
       [id]
     );
@@ -790,10 +921,46 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
           for (const l of inputLines) {
             const item = poItemMap.get(l.poItemId)!;
             const lineTotal = roundTo2(l.receivedQty * Number(item.unitPrice));
+            // Phase 4 P1 — propagate the dimensional + lineTreatment
+            // payload from the PO item to the GRN item so the GRN-time
+            // posting (Phase 4.2) can switch on lineTreatment without
+            // joining back. allocationStatus comes from the PO; if the
+            // operator updated it after PR conversion, the GRN reflects
+            // the latest mapping.
             await client.query(
-              `INSERT INTO goods_receipt_items ("grnId","poItemId","itemName","receivedQty","unitPrice","lineTotal",notes)
-               VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-              [newGrnId, l.poItemId, item.itemName, l.receivedQty, Number(item.unitPrice), lineTotal, l.notes ?? null]
+              `INSERT INTO goods_receipt_items (
+                 "grnId","poItemId","itemName","receivedQty","unitPrice","lineTotal",notes,
+                 "productId","accountId","accountCode","costCenterId","lineTreatment","activityType",
+                 "projectId","vehicleId","propertyId","unitId","assetId",
+                 "employeeId","driverId","contractId","taxCode","allocationRuleId","allocationStatus"
+               )
+               VALUES (
+                 $1,$2,$3,$4,$5,$6,$7,
+                 $8,$9,$10,$11,$12,$13,
+                 $14,$15,$16,$17,$18,
+                 $19,$20,$21,$22,$23,$24
+               )`,
+              [
+                newGrnId, l.poItemId, item.itemName, l.receivedQty,
+                Number(item.unitPrice), lineTotal, l.notes ?? null,
+                item.productId ?? null,
+                item.accountId ?? null,
+                item.accountCode ?? null,
+                item.costCenterId ?? null,
+                item.lineTreatment ?? null,
+                item.activityType ?? null,
+                item.projectId ?? null,
+                item.vehicleId ?? null,
+                item.propertyId ?? null,
+                item.unitId ?? null,
+                item.assetId ?? null,
+                item.employeeId ?? null,
+                item.driverId ?? null,
+                item.contractId ?? null,
+                item.taxCode ?? null,
+                item.allocationRuleId ?? null,
+                item.allocationStatus ?? "unmapped",
+              ]
             );
             await client.query(
               `UPDATE purchase_order_items SET "receivedQty" = COALESCE("receivedQty",0) + $1 WHERE id = $2`,
@@ -819,13 +986,175 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       throw new Error("تعذّر توليد رقم إيصال فريد بعد عدة محاولات");
     }
 
-    // Post GRN journal: DR inventory (ex-VAT) + DR VAT receivable, CR GRNI
+    // Post GRN journal.
+    //
+    // Phase 4.2 — per-line DR routing by `lineTreatment`. The legacy
+    // posting collapsed every receipt onto a single DR inventory_receipt
+    // line, hiding the fact that some lines should land on fuel /
+    // vehicle / property / project / custody / prepayment / asset /
+    // service accounts instead. The new flow groups received lines
+    // by (treatment-derived account + dimension signature) and emits
+    // one DR per bucket. The VAT debit + GRNI credit stay header-level.
     const { financialEngine } = await import("../lib/engines/index.js");
-    const [invAccount, vatAccount, grniAccount] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "inventory_receipt", "debit", "1250"),
+    const [vatAccount, grniAccount] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grn_vat", "debit", "1180"),
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "credit", "2115"),
     ]);
+
+    // Resolve a default account code per lineTreatment. Tenants that
+    // haven't mapped these purposes yet inherit the seed defaults
+    // (1250 inventory etc) — same fallback shape as
+    // resolveAccountCode uses elsewhere.
+    const TREATMENT_PURPOSE: Record<string, { purpose: string; side: "debit"; defaultCode: string }> = {
+      inventory:            { purpose: "inventory_receipt",            side: "debit", defaultCode: "1250" },
+      expense:              { purpose: "general_expense",              side: "debit", defaultCode: "6900" },
+      fixed_asset:          { purpose: "fixed_asset_purchase",         side: "debit", defaultCode: "1500" },
+      project_cost:         { purpose: "project_cost",                 side: "debit", defaultCode: "6800" },
+      vehicle_cost:         { purpose: "vehicle_expense",              side: "debit", defaultCode: "6500" },
+      property_maintenance: { purpose: "property_maintenance_expense", side: "debit", defaultCode: "6600" },
+      custody:              { purpose: "employee_custody",             side: "debit", defaultCode: "1130" },
+      prepayment:           { purpose: "supplier_prepayment",          side: "debit", defaultCode: "1340" },
+      service:              { purpose: "service_expense",              side: "debit", defaultCode: "6920" },
+    };
+
+    // Read the dimensional payload from the receipt lines we just
+    // inserted. `unitPrice` × `receivedQty` per line is the per-line
+    // subtotal; sum to verify against the header `subtotal` for
+    // rounding-difference handling.
+    const receiptLineRows = await rawQuery<{
+      id: number;
+      lineTotal: string;
+      accountCode: string | null;
+      lineTreatment: string | null;
+      costCenterId: number | null;
+      activityType: string | null;
+      projectId: number | null;
+      vehicleId: number | null;
+      propertyId: number | null;
+      unitId: number | null;
+      assetId: number | null;
+      employeeId: number | null;
+      driverId: number | null;
+      contractId: number | null;
+      productId: number | null;
+    }>(
+      `SELECT id, "lineTotal"::text AS "lineTotal",
+              "accountCode", "lineTreatment", "costCenterId", "activityType",
+              "projectId", "vehicleId", "propertyId", "unitId", "assetId",
+              "employeeId", "driverId", "contractId", "productId"
+         FROM goods_receipt_items
+        WHERE "grnId" = $1
+        ORDER BY id`,
+      [grnId]
+    );
+
+    // Default account for any line whose lineTreatment is NULL or
+    // unrecognized — keeps the legacy «one inventory DR» behaviour as
+    // a safety net so unclassified receipts still post somewhere
+    // sensible until Phase 6 forces every line to carry a treatment.
+    const defaultInvAccount = await financialEngine.resolveAccountCode(
+      scope.companyId, "inventory_receipt", "debit", "1250"
+    );
+
+    type DrBucket = {
+      accountCode: string;
+      amount: number;
+      vendorId: number | undefined;
+      costCenter: string | null;
+      activityType: string | null;
+      projectId: number | null;
+      vehicleId: number | null;
+      propertyId: number | null;
+      employeeId: number | null;
+      driverId: number | null;
+      contractId: number | null;
+      productId: number | null;
+      assetId: number | null;
+    };
+    const buckets = new Map<string, DrBucket>();
+    let postedNet = 0;
+    for (const ln of receiptLineRows) {
+      let acct = ln.accountCode;
+      if (!acct) {
+        const map = ln.lineTreatment ? TREATMENT_PURPOSE[ln.lineTreatment] : null;
+        if (map) {
+          acct = await financialEngine.resolveAccountCode(
+            scope.companyId, map.purpose, map.side, map.defaultCode
+          );
+        }
+      }
+      if (!acct) acct = defaultInvAccount;
+      const key = [
+        acct,
+        ln.costCenterId ?? "",
+        ln.activityType ?? "",
+        ln.projectId ?? "",
+        ln.vehicleId ?? "",
+        ln.propertyId ?? "",
+        ln.employeeId ?? "",
+        ln.driverId ?? "",
+        ln.contractId ?? "",
+        ln.productId ?? "",
+        ln.assetId ?? "",
+      ].join("|");
+      const amt = roundTo2(Number(ln.lineTotal));
+      postedNet += amt;
+      const prev = buckets.get(key);
+      if (prev) {
+        prev.amount = roundTo2(prev.amount + amt);
+      } else {
+        buckets.set(key, {
+          accountCode: acct,
+          amount: amt,
+          vendorId: po.supplierId as number | undefined,
+          costCenter: ln.costCenterId != null ? String(ln.costCenterId) : null,
+          activityType: ln.activityType,
+          projectId: ln.projectId,
+          vehicleId: ln.vehicleId,
+          propertyId: ln.propertyId,
+          employeeId: ln.employeeId,
+          driverId: ln.driverId,
+          contractId: ln.contractId,
+          productId: ln.productId,
+          assetId: ln.assetId,
+        });
+      }
+    }
+
+    // Rounding-difference correction lands on the default inventory
+    // account so the entry always balances against the GRNI credit.
+    const diff = roundTo2(subtotal - postedNet);
+    if (Math.abs(diff) >= 0.005) {
+      const fallbackKey = `${defaultInvAccount}|||||||||||`;
+      const prev = buckets.get(fallbackKey);
+      if (prev) prev.amount = roundTo2(prev.amount + diff);
+      else buckets.set(fallbackKey, {
+        accountCode: defaultInvAccount, amount: diff,
+        vendorId: po.supplierId as number | undefined,
+        costCenter: null, activityType: null, projectId: null,
+        vehicleId: null, propertyId: null, employeeId: null,
+        driverId: null, contractId: null, productId: null, assetId: null,
+      });
+    }
+
+    const drLines = Array.from(buckets.values())
+      .filter((b) => Math.abs(b.amount) >= 0.005)
+      .map((b) => ({
+        accountCode: b.accountCode,
+        debit: b.amount,
+        credit: 0,
+        vendorId: b.vendorId,
+        costCenter: b.costCenter ?? undefined,
+        activityType: b.activityType ?? undefined,
+        projectId: b.projectId ?? undefined,
+        vehicleId: b.vehicleId ?? undefined,
+        propertyId: b.propertyId ?? undefined,
+        employeeId: b.employeeId ?? undefined,
+        driverId: b.driverId ?? undefined,
+        contractId: b.contractId ?? undefined,
+        productId: b.productId ?? undefined,
+        assetId: b.assetId ?? undefined,
+      }));
 
     let journalId: number | null = null;
     const grnJournalResult = await financialEngine.postJournalEntry({
@@ -838,7 +1167,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       sourceId: grnId,
       sourceKey: `finance:grn:${grnId}`,
       lines: [
-        { accountCode: invAccount, debit: subtotal, credit: 0, vendorId: po.supplierId as number | undefined },
+        ...drLines,
         ...(vatAmount > 0 ? [{ accountCode: vatAccount, debit: vatAmount, credit: 0, vendorId: po.supplierId as number | undefined }] : []),
         { accountCode: grniAccount, debit: 0, credit: grnTotal, vendorId: po.supplierId as number | undefined },
       ],
@@ -892,13 +1221,16 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       });
     } catch (obErr) { logger.error(obErr, "GRN invoice-match obligation failed:"); }
 
-    // Consume budget on receipt so reports reflect committed spend. We
-    // consume against the inventory account that was just debited so the
-    // budgeted line matches the GL line.
+    // Consume budget on receipt so reports reflect committed spend.
+    // Phase 4.2: budget is consumed against the default inventory
+    // account when the receipt is mixed-treatment, since that's the
+    // only single-account aggregate we have. A more precise per-line
+    // budget consumption can come in a follow-up once budgets are
+    // dimensional too.
     if (subtotal > 0) {
       updateBudgetUsed({
         companyId: scope.companyId,
-        accountCode: invAccount,
+        accountCode: defaultInvAccount,
         amount: subtotal,
       }).catch((e) => logger.error(e, "finance-purchase background task failed"));
     }
