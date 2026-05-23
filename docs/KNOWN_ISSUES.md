@@ -255,6 +255,16 @@ The first audit flagged 12 structural gaps. Current completion status:
 
 ---
 
+## Reference baselines
+
+Audit baselines that should be the **first stop** before opening a new remediation wave. Don't reopen findings listed in these reports without fresh evidence (a new bug report, a new test failure, a new threat-model finding):
+
+- [`audit/SESSION_AUDIT_2026-05-23.md`](audit/SESSION_AUDIT_2026-05-23.md) — autonomous 11-round audit. 27 fixes merged, ~14 false positives rejected (with rationale), 25+ areas verified clean. Closes 3 HIGH-severity security gaps (PBX HMAC, outbound SSRF, refresh-token reuse) and 2 data-integrity races (discipline memo, GRN ref). Findings are NOT considered closed until merge + runtime verification + production parity + regression confirmation. See § 7 for residual risk and § 8 for hardening roadmap.
+- [`audit/EXECUTIVE_INVENTORY_REPORT.md`](audit/EXECUTIVE_INVENTORY_REPORT.md) — earlier executive inventory.
+- [`audit/RESCAN_2026-05-22-v3.md`](audit/RESCAN_2026-05-22-v3.md) — pre-session rescan baseline.
+
+---
+
 ## Architecture summary (for external reviewers)
 
 | Aspect | Status |
