@@ -2,16 +2,21 @@ import { useState } from "react";
 import { useRoute } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
-import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
-import { PageStatusBadge } from "@/components/page-status-badge";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { Button } from "@/components/ui/button";
-import { GuardedButton } from "@/components/shared/permission-gate";
+
+// Existing-page kit adoption (UNIFICATION_PLAN §P8 Phase 3). The four
+// primitives below moved from @/components/... to @workspace/* imports
+// — same components via the re-export shim, just routed through the
+// public kit surface so any later physical move stays transparent.
 import {
-  Undo2,
-} from "lucide-react";
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
+import { DetailPageLayout, ProcessStages, type StageStep } from "@workspace/entity-kit";
+
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { Undo2, Send, CheckCircle2, XCircle, Upload } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,12 +79,20 @@ export default function JournalManualDetailPage() {
   const { extraTabs, hideTabs } = useRegistryTabs("journal_entry", id);
   const [reversalOpen, setReversalOpen] = useState(false);
   const [reversalReason, setReversalReason] = useState("");
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectNotes, setRejectNotes] = useState("");
 
   const { data: journal, isLoading, isError, refetch } = useApiQuery<any>(
     ["journal-manual-detail", id],
     id ? `/finance/journal-manual/${id}` : null,
     !!id,
   );
+
+  const invalidateKeys = [
+    ["journal-manual-detail", id],
+    ["journal-manual"],
+    ["journal"],
+  ];
 
   const reverseMut = useApiMutation<void, { reason: string }>(
     () => `/finance/journal/${id}/reverse`,
@@ -95,6 +108,55 @@ export default function JournalManualDetailPage() {
         setReversalReason("");
         refetch();
       },
+    },
+  );
+
+  // FIN-013 — lifecycle action mutations (draft → pending_review →
+  // approved → posted). All use PATCH; the server's applyTransition gate
+  // is the source of truth for which transition is legal at any given
+  // status, so the buttons below show/hide on the current status but the
+  // server still enforces the rule.
+  const submitMut = useApiMutation<{ approvalStatus: string }, Record<string, never>>(
+    () => `/finance/journal-manual/${id}/submit`,
+    "PATCH",
+    invalidateKeys,
+    {
+      successMessage: "تم إرسال القيد للمراجعة",
+      onSuccess: () => refetch(),
+    },
+  );
+
+  const approveMut = useApiMutation<{ approvalStatus: string }, { approved: boolean }>(
+    () => `/finance/journal-manual/${id}/review`,
+    "PATCH",
+    invalidateKeys,
+    {
+      successMessage: "تم اعتماد القيد",
+      onSuccess: () => refetch(),
+    },
+  );
+
+  const rejectMut = useApiMutation<{ approvalStatus: string }, { approved: boolean; notes: string }>(
+    () => `/finance/journal-manual/${id}/review`,
+    "PATCH",
+    invalidateKeys,
+    {
+      onSuccess: () => {
+        setRejectOpen(false);
+        setRejectNotes("");
+        toast({ title: "تم رفض القيد" });
+        refetch();
+      },
+    },
+  );
+
+  const postMut = useApiMutation<{ approvalStatus: string; status: string }, Record<string, never>>(
+    () => `/finance/journal-manual/${id}/post`,
+    "PATCH",
+    invalidateKeys,
+    {
+      successMessage: "تم ترحيل القيد بنجاح",
+      onSuccess: () => refetch(),
     },
   );
 
@@ -185,11 +247,77 @@ export default function JournalManualDetailPage() {
     </>
   );
 
+  // FIN-013 — lifecycle action buttons. The set surfaces the legal next
+  // transition for the current approvalStatus; the server is still the
+  // authority (applyTransition fromStates check + creator-can't-review-own
+  // rule), so a wrong click surfaces as a typed FORBIDDEN/CONFLICT toast
+  // rather than corrupt state. Reverse stays available only on posted +
+  // not-already-reversed entries.
+  const canShowLifecycle = journal && !journal.reversedById && !journal.reversalOfId;
   const actions = (
     <div className="flex items-center gap-1.5">
       {journal?.reversedById && <PageStatusBadge status="reversed" domain="shared" />}
       {journal?.reversalOfId && <PageStatusBadge status="active">قيد عاكس</PageStatusBadge>}
-      {journal && !journal.reversedById && !journal.reversalOfId && (
+
+      {canShowLifecycle && approvalStatus === "draft" && (
+        <GuardedButton
+          perm="finance:create"
+          variant="default"
+          size="sm"
+          className="gap-1"
+          disabled={submitMut.isPending}
+          onClick={() => submitMut.mutate({})}
+        >
+          <Send className="h-4 w-4" />
+          {submitMut.isPending ? "جارٍ الإرسال…" : "إرسال للمراجعة"}
+        </GuardedButton>
+      )}
+
+      {canShowLifecycle && approvalStatus === "pending_review" && (
+        <>
+          <GuardedButton
+            perm="finance:approve"
+            variant="default"
+            size="sm"
+            className="gap-1 bg-emerald-600 hover:bg-emerald-700"
+            disabled={approveMut.isPending || rejectMut.isPending}
+            onClick={() => approveMut.mutate({ approved: true })}
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            {approveMut.isPending ? "جارٍ الاعتماد…" : "اعتماد"}
+          </GuardedButton>
+          <GuardedButton
+            perm="finance:approve"
+            variant="outline"
+            size="sm"
+            className="gap-1 border-status-error-surface text-status-error-foreground"
+            disabled={approveMut.isPending || rejectMut.isPending}
+            onClick={() => setRejectOpen(true)}
+          >
+            <XCircle className="h-4 w-4" />
+            رفض
+          </GuardedButton>
+        </>
+      )}
+
+      {canShowLifecycle && approvalStatus === "approved" && (
+        <GuardedButton
+          perm="finance:approve"
+          variant="default"
+          size="sm"
+          className="gap-1"
+          disabled={postMut.isPending}
+          onClick={() => postMut.mutate({})}
+        >
+          <Upload className="h-4 w-4" />
+          {postMut.isPending ? "جارٍ الترحيل…" : "ترحيل"}
+        </GuardedButton>
+      )}
+
+      {/* Reverse stays available on any non-reversed non-reversal entry —
+          backend rule: original.reversedById IS NULL AND reversalOfId IS NULL.
+          Status is intentionally NOT gated here to preserve existing behaviour. */}
+      {canShowLifecycle && (
         <GuardedButton perm="finance:delete" variant="outline" size="sm" className="gap-1" onClick={() => setReversalOpen(true)}>
           <Undo2 className="h-4 w-4" />
           عكس القيد
@@ -220,6 +348,53 @@ export default function JournalManualDetailPage() {
         hideTabs={hideTabs}
         actions={actions}
       />
+
+      {/* FIN-013 — reject dialog (peer reviewer rejects with required notes) */}
+      <AlertDialog
+        open={rejectOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectOpen(false);
+            setRejectNotes("");
+          }
+        }}
+      >
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader className="text-right">
+            <AlertDialogTitle>رفض القيد {journal?.ref}</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيُحوَّل القيد إلى حالة "مرفوض" وسيرى المُنشئ سبب الرفض. لا يمكن
+              للمُنشئ مراجعة قيده الخاص — الزر متاح فقط لمحاسب آخر.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <label className="text-sm font-medium mb-1 block">سبب الرفض *</label>
+            <Textarea
+              value={rejectNotes}
+              onChange={(e) => setRejectNotes(e.target.value)}
+              placeholder="اكتب سبب رفض القيد لإفادة المنشئ..."
+              rows={3}
+            />
+          </div>
+          <AlertDialogFooter className="flex-row justify-start gap-2">
+            <AlertDialogAction
+              className="bg-status-error-foreground hover:opacity-90"
+              onClick={(e) => {
+                e.preventDefault();
+                if (!rejectNotes.trim()) {
+                  toast({ variant: "destructive", title: "سبب الرفض مطلوب" });
+                  return;
+                }
+                rejectMut.mutate({ approved: false, notes: rejectNotes });
+              }}
+              disabled={rejectMut.isPending}
+            >
+              {rejectMut.isPending ? "جارٍ الرفض…" : "تأكيد الرفض"}
+            </AlertDialogAction>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={reversalOpen}
