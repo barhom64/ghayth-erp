@@ -273,8 +273,18 @@ router.delete("/programs/:id", authorize({ feature: "hr.training", action: "dele
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<{ id: number }>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<{ id: number; status: string | null }>(`SELECT id, status FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("البرنامج التدريبي غير موجود");
+
+    // NF-AUD-01 — only soft-delete drafts / cancelled programs. Once a
+    // program is active, enrollments and attendance start referencing it;
+    // deleting it orphans those rows and breaks the certificate trail.
+    if (existing.status && !["draft", "cancelled"].includes(existing.status)) {
+      throw new ConflictError(
+        `لا يمكن حذف برنامج تدريبي بحالة "${existing.status}"`,
+        { field: "status", fix: "ألغِ البرنامج (cancelled) قبل الحذف" }
+      );
+    }
     await rawExecute(`UPDATE training_programs SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
