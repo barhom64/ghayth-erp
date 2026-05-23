@@ -51,6 +51,16 @@ const LIB_DIR = join(REPO_ROOT, "artifacts/api-server/src/lib");
 const MIDDLEWARES_DIR = join(REPO_ROOT, "artifacts/api-server/src/middlewares");
 const ERP_PAGES_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/pages");
 const ERP_COMPONENTS_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/components");
+const ERP_HOOKS_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/hooks");
+
+// Shared kit-adoption ratchet message — appended to every UI-kit
+// counted rule below. Centralised so the wording stays consistent.
+const KIT_RATCHET_HINT =
+  "Migrate to `import { ... } from \"@workspace/ui-core\";` (UNIFICATION_PLAN " +
+  "§P8). The baseline below is a ratchet — it never goes up. When you migrate " +
+  "a page off the legacy path, drop the corresponding `countBaseline` in " +
+  "scripts/src/lint-patterns.mjs by the same number; the rule then prevents " +
+  "future regression to the new lower count.";
 
 /** @type {Array<{ id: string, scan: string[], skip?: (file: string) => boolean, regex: RegExp, message: string }>} */
 const RULES = [
@@ -170,6 +180,88 @@ const RULES = [
       "`AppConfig` shape, and read it through the typed `config` object. This " +
       "keeps validation, defaults and the startup fail-fast gate in one place.",
   },
+
+  // ─── UI-kit adoption ratchet (UNIFICATION_PLAN §P8) ──────────────────
+  //
+  // The six rules below count how many files still import a UI kit
+  // primitive from its legacy `@/components/...` location instead of
+  // `@workspace/ui-core`. Each carries a `countBaseline`: the runner
+  // FAILS when the live count exceeds that number, but accepts equal
+  // or lower counts silently. This is the ratchet — the legacy path
+  // shrinks over time, never grows. Migrations of existing pages should
+  // include a baseline drop in the same PR.
+  //
+  // When the count for any rule reaches zero, convert it to a plain
+  // (uncounted) rule — every match becomes a hard failure.
+
+  {
+    id: "page-shell-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    // The component definition itself is exempt — that's where the
+    // primitive lives. The @workspace/ui-core re-export shim also
+    // points there until the Phase 3 physical move.
+    skip: (file) =>
+      file.endsWith("/components/page-shell.tsx") ||
+      file.endsWith("/components/create-page-layout.tsx"),
+    regex: /from\s+["']@\/components\/page-shell["']/,
+    countBaseline: 179,
+    message: `PageShell imported from the legacy path. ${KIT_RATCHET_HINT}`,
+  },
+  {
+    id: "form-shell-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/form-shell.tsx"),
+    regex: /from\s+["']@\/components\/form-shell["']/,
+    countBaseline: 55,
+    message: `FormShell imported from the legacy path. ${KIT_RATCHET_HINT}`,
+  },
+  {
+    id: "data-table-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) =>
+      file.endsWith("/components/ui/data-table.tsx") ||
+      file.endsWith("/components/data-table-wrapper.tsx") ||
+      file.endsWith("/components/data-table-presets.tsx") ||
+      file.endsWith("/components/list-page.tsx"),
+    regex: /from\s+["']@\/components\/ui\/data-table["']/,
+    countBaseline: 193,
+    message: `DataTable imported from the legacy path. ${KIT_RATCHET_HINT}`,
+  },
+  {
+    id: "page-status-badge-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) =>
+      file.endsWith("/components/page-status-badge.tsx") ||
+      file.endsWith("/components/data-table-presets.tsx") ||
+      file.endsWith("/components/shared/detail-page-layout.tsx"),
+    regex: /from\s+["']@\/components\/page-status-badge["']/,
+    countBaseline: 121,
+    message: `PageStatusBadge imported from the legacy path. ${KIT_RATCHET_HINT}`,
+  },
+  {
+    id: "create-page-layout-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/create-page-layout.tsx"),
+    regex: /from\s+["']@\/components\/create-page-layout["']/,
+    countBaseline: 81,
+    message: `CreatePageLayout imported from the legacy path. ${KIT_RATCHET_HINT}`,
+  },
+  {
+    id: "detail-page-layout-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) =>
+      file.endsWith("/components/shared/detail-page-layout.tsx") ||
+      file.endsWith("/components/shared/entity-detail-page.tsx"),
+    regex: /from\s+["']@\/components\/shared\/detail-page-layout["']/,
+    countBaseline: 79,
+    message: `DetailPageLayout imported from the legacy path. ${KIT_RATCHET_HINT}`,
+  },
 ];
 
 /** Recursively yield every file under a directory matching the given extensions. */
@@ -192,16 +284,16 @@ async function* walk(dir, extensions = [".ts"]) {
 }
 
 const failures = [];
+const countedRuleHits = new Map(); // rule.id → [{file, line, snippet}]
+const ratchetWarnings = []; // baseline-can-be-lowered hints
 
 for (const rule of RULES) {
   for (const root of rule.scan) {
     for await (const file of walk(root, rule.extensions ?? [".ts"])) {
       if (rule.skip && rule.skip(file)) continue;
       const source = await readFile(file, "utf8");
+      const isCounted = typeof rule.countBaseline === "number";
       if (rule.multiline) {
-        // Whole-file scan: walk every regex match and report it at the
-        // 1-based line number where the match begins. Catches multi-line
-        // JSX declarations that a per-line scan would miss.
         const re = rule.regex.global
           ? rule.regex
           : new RegExp(rule.regex.source, rule.regex.flags + "g");
@@ -209,31 +301,83 @@ for (const rule of RULES) {
         while ((m = re.exec(source)) !== null) {
           const lineNumber = source.slice(0, m.index).split("\n").length;
           const snippet = m[0].split("\n")[0].trim();
-          failures.push({
+          const hit = {
             rule: rule.id,
             file: relative(REPO_ROOT, file),
             line: lineNumber,
             snippet:
               snippet.length > 200 ? snippet.slice(0, 200) + "…" : snippet,
             message: rule.message,
-          });
-          if (re.lastIndex === m.index) re.lastIndex++; // safety against zero-width
+          };
+          if (isCounted) {
+            if (!countedRuleHits.has(rule.id)) countedRuleHits.set(rule.id, []);
+            countedRuleHits.get(rule.id).push(hit);
+          } else {
+            failures.push(hit);
+          }
+          if (re.lastIndex === m.index) re.lastIndex++;
         }
       } else {
         source.split("\n").forEach((line, index) => {
           if (rule.regex.test(line)) {
-            failures.push({
+            const hit = {
               rule: rule.id,
               file: relative(REPO_ROOT, file),
               line: index + 1,
               snippet: line.trim(),
               message: rule.message,
-            });
+            };
+            if (isCounted) {
+              if (!countedRuleHits.has(rule.id)) countedRuleHits.set(rule.id, []);
+              countedRuleHits.get(rule.id).push(hit);
+            } else {
+              failures.push(hit);
+            }
           }
         });
       }
     }
   }
+
+  // Apply ratchet check after each counted rule's full sweep.
+  if (typeof rule.countBaseline === "number") {
+    const hits = countedRuleHits.get(rule.id) ?? [];
+    const baseline = rule.countBaseline;
+    if (hits.length > baseline) {
+      // Regression: new violations beyond the baseline. Convert all hits
+      // to hard failures so the diff is visible.
+      const overage = hits.length - baseline;
+      for (const h of hits) {
+        failures.push({
+          ...h,
+          message:
+            `Ratchet exceeded: count is ${hits.length}, baseline is ${baseline} ` +
+            `(+${overage} new violation${overage === 1 ? "" : "s"}). ${rule.message}`,
+        });
+      }
+    } else if (hits.length < baseline) {
+      // Progress: baseline can be lowered. Emit a non-blocking warning.
+      ratchetWarnings.push({
+        rule: rule.id,
+        liveCount: hits.length,
+        baseline,
+      });
+    }
+  }
+}
+
+// Emit ratchet progress hints before any failures so contributors see
+// them on green runs too.
+if (ratchetWarnings.length > 0) {
+  console.log("");
+  console.log("ℹ ratchet progress — baselines can be lowered:");
+  for (const w of ratchetWarnings) {
+    console.log(
+      `   • ${w.rule}: live count ${w.liveCount} < baseline ${w.baseline} ` +
+      `(drop countBaseline to ${w.liveCount} in scripts/src/lint-patterns.mjs)`,
+    );
+  }
+  console.log("");
 }
 
 if (failures.length === 0) {

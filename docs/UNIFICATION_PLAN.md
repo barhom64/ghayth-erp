@@ -123,18 +123,49 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 
 ---
 
-## P5 — Lint guards (مخطط)
+## P5 — Lint guards (Phase 1 منجَز · 2026-05-23)
 
-لا يجوز إضافة هذه القواعد إلى `scripts/src/lint-patterns.mjs` إلا
-بعد أن يصل عدد المخالفات إلى صفر (راجع نمط `raw-403-in-route` المؤجَّل
-بنفس الصفحة سطر 26-33).
+### الـ ratchet pattern
 
-| القاعدة | الفجوة الحالية | جاهز للإضافة؟ |
+`scripts/src/lint-patterns.mjs` يدعم الآن **counted rules** بـ
+`countBaseline`. النمط: لا تُحظَر الـ legacy imports كليًا (سيكسر 700+
+استيراد قائم)، بل يُثبَّت العدد الحالي كـ ceiling. أي PR يضيف import
+قديم جديد → CI يفشل فورًا. أي PR يهاجِر صفحة → العدد ينخفض، تطبع
+الأداة تنبيهًا "يمكن خفض الـ baseline لـ N".
+
+### القواعد النشطة
+
+| Rule | Baseline | الحالة |
 | --- | --- | --- |
-| `raw-table-in-page` (يمنع `<table>` خارج `lib/ui-kit/`) | 18 صفحة | لا — يحتاج migration sweep أولًا |
-| `useState-in-create-edit-page` (يمنع `useState` خام في صفحات create/edit، اعتمد `FormShell` بدلًا) | ≈196 صفحة (251 page معها `useState` - 55 تستخدم `FormShell`) | لا — يحتاج P4 sweep أوسع |
-| `bare-page-without-PageShell` (يفرض `<PageShell>` على pages/) | 250 صفحة | لا — يحتاج وصول ≥80% تبنّي |
-| `unscoped-status-badge` (يمنع `<Badge>` خام لقيم status) | غير مُقاس | لا |
+| `page-shell-from-legacy-path` | 179 | نشط |
+| `form-shell-from-legacy-path` | 55 | نشط |
+| `data-table-from-legacy-path` | 193 | نشط |
+| `page-status-badge-from-legacy-path` | 121 | نشط |
+| `create-page-layout-from-legacy-path` | 81 | نشط |
+| `detail-page-layout-from-legacy-path` | 79 | نشط |
+
+**الإجمالي**: 708 موضع legacy import مغطّى بـ ratchet. كل واحد لا يمكنه
+الزيادة. كل migration يخفض العدد بمقدار 1 ويستوجب تحديث baseline في
+نفس الـ PR.
+
+### آلية العمل (للمساهمين)
+
+1. **PR يضيف import قديم** → CI fails. الرسالة: "Ratchet exceeded:
+   count is 180, baseline is 179 (+1 new violation)".
+2. **PR يهاجِر صفحة من القديم** → CI يطبع ℹ بالـ baseline الجديد. على
+   المُساهم خفض `countBaseline` في `scripts/src/lint-patterns.mjs`
+   بنفس المقدار. لا يكسر CI لو نسي (التراجع لا يفشل)، لكن CI
+   التالي يظل ينبّه حتى يتوافق العدد.
+3. **عند وصول baseline لصفر** → القاعدة تتحوّل لـ hard rule (نزع
+   `countBaseline`)؛ أي مخالفة جديدة تفشل مباشرة.
+
+### قواعد مستقبلية (لم تُضَف بعد)
+
+| القاعدة | الفجوة | جاهز؟ |
+| --- | --- | --- |
+| `raw-table-in-page` (يمنع `<table>` خارج DataTable) | 18 صفحة | يحتاج migration sweep أولًا |
+| `useState-in-create-edit-page` (يفرض FormShell) | ~196 صفحة | لا — حجم كبير |
+| `unscoped-status-badge` (`<Badge>` خام لـ status) | غير مُقاس | لا — يحتاج جرد أولًا |
 
 ---
 
