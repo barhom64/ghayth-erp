@@ -8634,7 +8634,8 @@ CREATE TABLE public.inventory_count_items (
     "physicalCount" numeric(12,3) NOT NULL,
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
-    variance numeric(12,3) DEFAULT 0
+    variance numeric(12,3) DEFAULT 0,
+    CONSTRAINT inventory_count_items_count_product_unique UNIQUE ("countId", "productId")
 );
 
 

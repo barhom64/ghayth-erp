@@ -309,6 +309,20 @@ router.patch("/contracts/:id", authorize({ feature: "legal.contracts", action: "
       [id, scope.companyId]
     );
     if (!existing) throw new NotFoundError("العقد غير موجود");
+
+    // NF-LEGAL-01 — once a contract is terminated / renewed / expired the
+    // PATCH path is frozen. The status guard further down only fires if
+    // the body tries to *change* status; without this check an operator
+    // could keep status="terminated" while editing party names, amounts
+    // or effective dates — effectively rewriting a closed contract with
+    // no audit signal.
+    if (["terminated", "renewed", "expired"].includes(String(existing.status))) {
+      throw new ConflictError(
+        `لا يمكن تعديل عقد بحالة "${existing.status}"`,
+        { field: "status", fix: "أنشئ عقدًا جديدًا أو استخدم /renew" }
+      );
+    }
+
     const b = zodParse(updateContractSchema.safeParse(req.body));
 
     // State machine: PATCH cannot drive lifecycle transitions (use /renew,

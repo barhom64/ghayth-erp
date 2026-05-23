@@ -595,6 +595,20 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
           } catch (e) { logger.warn(e, "workflow: failed to resolve fallback assignee for next step"); }
         }
 
+        // If primary role + the HR/GM/owner fallback both came up empty,
+        // refuse to advance. Previously the UPDATE proceeded with
+        // `currentAssignee = NULL`: the workflow was no longer in anyone's
+        // inbox, the SLA cron couldn't escalate (no assignee to notify),
+        // and the only recovery was manual SQL. Throwing here keeps the
+        // current step in place and surfaces an actionable error so the
+        // admin can seed the role before retrying.
+        if (!newAssignee) {
+          throw new ValidationError(
+            `لا يوجد موظّف بدور "${nextStep.requiredRole}" أو دور بديل (hr_manager/general_manager/owner) لاستلام المرحلة التالية`,
+            { field: "approvalChain", fix: `أضف موظّفًا بأحد هذه الأدوار في الشركة أو راجع سلسلة الموافقات` },
+          );
+        }
+
         const [sla] = await rawQuery<Record<string, unknown>>(
           `SELECT * FROM sla_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
           [companyId, instance.requestType]
