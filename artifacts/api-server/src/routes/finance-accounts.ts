@@ -632,3 +632,275 @@ accountsRouter.get("/summary", authorize({ feature: "finance.accounts", action: 
     handleRouteError(err, res, "خطأ غير متوقع");
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACCOUNTING ALLOCATION RULES — Finance Line-Level Allocation Phase 6.
+//
+// REST CRUD over accounting_allocation_rules (migration 203). Drives the
+// resolver (lib/accountingAllocation.ts) — a row written here turns into
+// per-line account selection on the next invoice / GRN approval.
+//
+// Scoped to feature 'finance.accounts' since rule authoring is the
+// chart-of-accounts admin's concern (same RBAC role).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ALLOCATION_DOCUMENT_TYPES = [
+  "invoice", "credit_memo", "debit_memo",
+  "purchase_order", "purchase_request", "grn", "supplier_invoice",
+  "expense", "payment", "receipt", "journal_entry",
+] as const;
+
+const ALLOCATION_COST_CENTRE_STRATEGIES = [
+  "from_vehicle", "from_property", "from_unit", "from_project",
+  "from_employee", "from_contract", "from_umrah_agent", "from_umrah_season",
+  "explicit", "none",
+] as const;
+
+const upsertRuleSchema = z.object({
+  name: z.string().min(1, "اسم القاعدة مطلوب"),
+  documentType: z.enum(ALLOCATION_DOCUMENT_TYPES, {
+    errorMap: () => ({ message: "نوع المستند غير صالح" }),
+  }),
+  lineType: z.string().optional().nullable(),
+  activityType: z.string().optional().nullable(),
+  entityType: z.string().optional().nullable(),
+  conditionsJson: z.record(z.any()).optional().nullable(),
+  debitAccountId: z.coerce.number().optional().nullable(),
+  creditAccountId: z.coerce.number().optional().nullable(),
+  revenueAccountId: z.coerce.number().optional().nullable(),
+  expenseAccountId: z.coerce.number().optional().nullable(),
+  assetAccountId: z.coerce.number().optional().nullable(),
+  inventoryAccountId: z.coerce.number().optional().nullable(),
+  vatAccountId: z.coerce.number().optional().nullable(),
+  costCenterStrategy: z.enum(ALLOCATION_COST_CENTRE_STRATEGIES).optional().nullable(),
+  dimensionStrategyJson: z.record(z.any()).optional().nullable(),
+  autoCreateMissing: z.coerce.boolean().optional().default(false),
+  requiresEntityLink: z.coerce.boolean().optional().default(false),
+  priority: z.coerce.number().int().optional().default(100),
+  isActive: z.coerce.boolean().optional().default(true),
+});
+
+// GET /finance/allocation-rules?documentType=invoice&isActive=true
+accountsRouter.get("/allocation-rules", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { documentType, isActive } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let where = `"companyId" = $1 AND "deletedAt" IS NULL`;
+    if (documentType) {
+      params.push(documentType);
+      where += ` AND "documentType" = $${params.length}`;
+    }
+    if (isActive === "true" || isActive === "false") {
+      params.push(isActive === "true");
+      where += ` AND "isActive" = $${params.length}`;
+    }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM accounting_allocation_rules
+        WHERE ${where}
+        ORDER BY "documentType", priority ASC, id ASC
+        LIMIT 500`,
+      params
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "List allocation rules error:");
+  }
+});
+
+// GET /finance/allocation-rules/:id
+accountsRouter.get("/allocation-rules/:id", authorize({ feature: "finance.accounts", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM accounting_allocation_rules
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("قاعدة التوجيه غير موجودة");
+    res.json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Get allocation rule error:");
+  }
+});
+
+// POST /finance/allocation-rules
+accountsRouter.post("/allocation-rules", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const p = zodParse(upsertRuleSchema.safeParse(req.body));
+
+    const insRes = await rawExecute(
+      `INSERT INTO accounting_allocation_rules (
+         "companyId", name, "documentType", "lineType", "activityType", "entityType",
+         "conditionsJson",
+         "debitAccountId", "creditAccountId",
+         "revenueAccountId", "expenseAccountId", "assetAccountId", "inventoryAccountId", "vatAccountId",
+         "costCenterStrategy", "dimensionStrategyJson",
+         "autoCreateMissing", "requiresEntityLink",
+         priority, "isActive"
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6,
+         $7,
+         $8, $9,
+         $10, $11, $12, $13, $14,
+         $15, $16,
+         $17, $18,
+         $19, $20
+       )`,
+      [
+        scope.companyId, p.name, p.documentType, p.lineType ?? null, p.activityType ?? null, p.entityType ?? null,
+        p.conditionsJson ? JSON.stringify(p.conditionsJson) : null,
+        p.debitAccountId ?? null, p.creditAccountId ?? null,
+        p.revenueAccountId ?? null, p.expenseAccountId ?? null, p.assetAccountId ?? null,
+        p.inventoryAccountId ?? null, p.vatAccountId ?? null,
+        p.costCenterStrategy ?? null,
+        p.dimensionStrategyJson ? JSON.stringify(p.dimensionStrategyJson) : null,
+        p.autoCreateMissing ?? false, p.requiresEntityLink ?? false,
+        p.priority ?? 100, p.isActive ?? true,
+      ]
+    );
+    const newId = insRes.insertId;
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM accounting_allocation_rules WHERE id = $1`, [newId]
+    );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "accounting_allocation_rules", entityId: Number(newId),
+      after: { name: p.name, documentType: p.documentType, priority: p.priority },
+    }).catch((e) => logger.error(e, "allocation rule audit failed"));
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "finance.allocation_rule.created",
+      entity: "accounting_allocation_rules", entityId: Number(newId),
+      details: JSON.stringify({ name: p.name, documentType: p.documentType }),
+    }).catch((e) => pushToDLQ("event", { action: "finance.allocation_rule.created", entityId: Number(newId) }, e, scope.companyId));
+
+    res.status(201).json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Create allocation rule error:");
+  }
+});
+
+// PATCH /finance/allocation-rules/:id
+accountsRouter.patch("/allocation-rules/:id", authorize({ feature: "finance.accounts", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const p = zodParse(upsertRuleSchema.partial().safeParse(req.body));
+
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    const push = (col: string, val: unknown) => {
+      values.push(val);
+      fields.push(`"${col}" = $${values.length}`);
+    };
+    if (p.name !== undefined) push("name", p.name);
+    if (p.documentType !== undefined) push("documentType", p.documentType);
+    if (p.lineType !== undefined) push("lineType", p.lineType ?? null);
+    if (p.activityType !== undefined) push("activityType", p.activityType ?? null);
+    if (p.entityType !== undefined) push("entityType", p.entityType ?? null);
+    if (p.conditionsJson !== undefined) push("conditionsJson", p.conditionsJson ? JSON.stringify(p.conditionsJson) : null);
+    if (p.debitAccountId !== undefined) push("debitAccountId", p.debitAccountId ?? null);
+    if (p.creditAccountId !== undefined) push("creditAccountId", p.creditAccountId ?? null);
+    if (p.revenueAccountId !== undefined) push("revenueAccountId", p.revenueAccountId ?? null);
+    if (p.expenseAccountId !== undefined) push("expenseAccountId", p.expenseAccountId ?? null);
+    if (p.assetAccountId !== undefined) push("assetAccountId", p.assetAccountId ?? null);
+    if (p.inventoryAccountId !== undefined) push("inventoryAccountId", p.inventoryAccountId ?? null);
+    if (p.vatAccountId !== undefined) push("vatAccountId", p.vatAccountId ?? null);
+    if (p.costCenterStrategy !== undefined) push("costCenterStrategy", p.costCenterStrategy ?? null);
+    if (p.dimensionStrategyJson !== undefined) push("dimensionStrategyJson", p.dimensionStrategyJson ? JSON.stringify(p.dimensionStrategyJson) : null);
+    if (p.autoCreateMissing !== undefined) push("autoCreateMissing", p.autoCreateMissing);
+    if (p.requiresEntityLink !== undefined) push("requiresEntityLink", p.requiresEntityLink);
+    if (p.priority !== undefined) push("priority", p.priority);
+    if (p.isActive !== undefined) push("isActive", p.isActive);
+
+    if (fields.length === 0) throw new ValidationError("لا تغييرات لتطبيقها");
+    fields.push(`"updatedAt" = NOW()`);
+
+    values.push(id, scope.companyId);
+    const updRes = await rawExecute(
+      `UPDATE accounting_allocation_rules
+          SET ${fields.join(", ")}
+        WHERE id = $${values.length - 1}
+          AND "companyId" = $${values.length}
+          AND "deletedAt" IS NULL`,
+      values
+    );
+    if (updRes.affectedRows === 0) throw new NotFoundError("قاعدة التوجيه غير موجودة");
+
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM accounting_allocation_rules WHERE id = $1`, [id]
+    );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "accounting_allocation_rules", entityId: id,
+      after: row,
+    }).catch((e) => logger.error(e, "allocation rule audit failed"));
+
+    res.json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Update allocation rule error:");
+  }
+});
+
+// DELETE /finance/allocation-rules/:id  (soft delete)
+accountsRouter.delete("/allocation-rules/:id", authorize({ feature: "finance.accounts", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const updRes = await rawExecute(
+      `UPDATE accounting_allocation_rules
+          SET "deletedAt" = NOW(), "isActive" = false
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (updRes.affectedRows === 0) throw new NotFoundError("قاعدة التوجيه غير موجودة");
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "accounting_allocation_rules", entityId: id,
+    }).catch((e) => logger.error(e, "allocation rule audit failed"));
+
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "Delete allocation rule error:");
+  }
+});
+
+// GET /finance/allocation-results — drilldown into past resolutions.
+// Useful for the «show me which rule moved this line» operator query.
+accountsRouter.get("/allocation-results", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { sourceTable, status, ruleId } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let where = `"companyId" = $1`;
+    if (sourceTable) {
+      params.push(sourceTable);
+      where += ` AND "sourceTable" = $${params.length}`;
+    }
+    if (status) {
+      params.push(status);
+      where += ` AND "resolutionStatus" = $${params.length}`;
+    }
+    if (ruleId) {
+      params.push(Number(ruleId));
+      where += ` AND "ruleId" = $${params.length}`;
+    }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM accounting_allocation_results
+        WHERE ${where}
+        ORDER BY "resolvedAt" DESC
+        LIMIT 500`,
+      params
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "List allocation results error:");
+  }
+});
