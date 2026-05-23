@@ -232,7 +232,7 @@ const RULES = [
       file.endsWith("/components/data-table-presets.tsx") ||
       file.endsWith("/components/list-page.tsx"),
     regex: /from\s+["']@\/components\/ui\/data-table["']/,
-    countBaseline: 158,
+    countBaseline: 155,
     message: `DataTable imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -244,7 +244,7 @@ const RULES = [
       file.endsWith("/components/data-table-presets.tsx") ||
       file.endsWith("/components/shared/detail-page-layout.tsx"),
     regex: /from\s+["']@\/components\/page-status-badge["']/,
-    countBaseline: 96,
+    countBaseline: 93,
     message: `PageStatusBadge imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -264,7 +264,7 @@ const RULES = [
       file.endsWith("/components/shared/detail-page-layout.tsx") ||
       file.endsWith("/components/shared/entity-detail-page.tsx"),
     regex: /from\s+["']@\/components\/shared\/detail-page-layout["']/,
-    countBaseline: 69,
+    countBaseline: 63,
     message: `DetailPageLayout imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
   },
 
@@ -359,7 +359,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/print-layout.tsx"),
     regex: /from\s+["']@\/components\/print-layout["']/,
-    countBaseline: 13,
+    countBaseline: 12,
     message: `PrintActions / PrintDocument / LetterheadHeader imported from the legacy path. ${kitRatchetHint("report-kit")}`,
   },
 ];

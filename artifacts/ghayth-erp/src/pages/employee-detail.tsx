@@ -6,9 +6,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import {
   User, Phone, Mail, Briefcase, Calendar, Building, CreditCard,
   ListTodo, Clock, BookOpen, DollarSign, AlertTriangle, Printer,
@@ -24,10 +24,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateAr, formatTimeAr, formatCurrency } from "@/lib/formatters";
-import { PrintPreviewModal } from "@/components/print-layout";
+import { PrintPreviewModal } from "@workspace/report-kit";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { EmployeeDisciplineSummary } from "@/components/shared/employee-discipline-summary";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 

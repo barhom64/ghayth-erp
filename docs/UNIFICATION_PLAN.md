@@ -140,8 +140,8 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 **ui-core**:
 | `page-shell-from-legacy-path` | 143 | نشط |
 | `form-shell-from-legacy-path` | 53 | نشط |
-| `data-table-from-legacy-path` | 158 | نشط |
-| `page-status-badge-from-legacy-path` | 96 | نشط |
+| `data-table-from-legacy-path` | 155 | نشط |
+| `page-status-badge-from-legacy-path` | 93 | نشط |
 | `create-page-layout-from-legacy-path` | 81 | نشط |
 | `advanced-filters-from-legacy-path` | 64 | نشط |
 | `data-table-presets-from-legacy-path` | 1 | نشط |
@@ -149,7 +149,7 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 | `page-header-from-legacy-path` | 3 | نشط |
 
 **entity-kit**:
-| `detail-page-layout-from-legacy-path` | 69 | نشط |
+| `detail-page-layout-from-legacy-path` | 63 | نشط |
 | `entity-timeline-from-legacy-path` | 7 | نشط |
 | `entity-comments-from-legacy-path` | 52 | نشط |
 | `entity-documents-from-legacy-path` | 3 | نشط |
@@ -158,10 +158,10 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 | `approval-actions-from-legacy-path` | 30 | نشط |
 
 **report-kit**:
-| `print-layout-from-legacy-path` | 13 | نشط |
+| `print-layout-from-legacy-path` | 12 | نشط |
 
-**الإجمالي**: **775 موضع** legacy import مغطّى بـ ratchet (هبط من 906
-الأولي بعد سادس sweep). كل واحد لا يمكنه الزيادة. كل migration يخفض
+**الإجمالي**: **762 موضع** legacy import مغطّى بـ ratchet (هبط من 906
+الأولي بعد سابع sweep). كل واحد لا يمكنه الزيادة. كل migration يخفض
 العدد بمقدار 1 ويستوجب تحديث baseline في نفس الـ PR.
 
 ### آلية العمل (للمساهمين)
