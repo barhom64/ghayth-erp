@@ -711,11 +711,29 @@ export async function reverseAccountBalances(
   // moved chart_of_accounts.currentBalance, so reversing it would corrupt
   // the ledger by the negative of an entry that never posted. The flag also
   // makes a double reversal a no-op.
-  const [je] = await rawQuery<{ balancesApplied: boolean }>(
-    `SELECT "balancesApplied" FROM journal_entries WHERE id = $1 AND "companyId" = $2`,
+  const [je] = await rawQuery<{ balancesApplied: boolean; entryDate: string }>(
+    `SELECT "balancesApplied", date::text AS "entryDate"
+       FROM journal_entries WHERE id = $1 AND "companyId" = $2`,
     [journalId, companyId]
   );
   if (!je || je.balancesApplied === false) return;
+
+  // H4 (mirror of H2 on applyJournalEntryBalances) — reversing a posted
+  // entry rewinds chart_of_accounts.currentBalance by the negative of the
+  // entry's deltas. If the entry's period has since closed or locked
+  // (e.g. an invoice approved in May, rejected in July after May closed)
+  // the reversal silently rewrites historical balances with no audit
+  // signal. Refuse — the sanctioned path is to reopen the period via the
+  // audited fiscal-period reopen flow, or to post a compensating entry
+  // dated in an open period. Deferred entries are exempt above (they
+  // never moved the ledger), so a draft rejection still works.
+  const periodCheck = await checkFinancialPeriodOpen(companyId, je.entryDate);
+  if (!periodCheck.open) {
+    throw new ValidationError(
+      `الفترة المالية "${periodCheck.periodName ?? je.entryDate}" مُقفلة — لا يمكن عكس قيد بتاريخها`,
+      { field: "financialPeriod", fix: "افتح الفترة المالية أو سجِّل قيداً عاكساً بتاريخ مفتوح" }
+    );
+  }
 
   const lines = await rawQuery<{ accountCode: string; debit: number; credit: number }>(
     `SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" WHERE jl."journalId" = $1 AND je."companyId" = $2`,
