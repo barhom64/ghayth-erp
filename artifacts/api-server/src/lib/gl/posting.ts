@@ -175,8 +175,8 @@ export async function postJournalEntry(
          "sourceKey"
        ) VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE),
                  COALESCE($7, 'manual'), $8, $9, $10,
-                 CASE WHEN $8 = 'posted' THEN $5 ELSE NULL END,
-                 CASE WHEN $8 = 'posted' THEN NOW() ELSE NULL END,
+                 CASE WHEN $8 = 'posted' THEN $5::int ELSE NULL::int END,
+                 CASE WHEN $8 = 'posted' THEN NOW() ELSE NULL::timestamptz END,
                  COALESCE($6::date, CURRENT_DATE),
                  $11)
        RETURNING id`,
