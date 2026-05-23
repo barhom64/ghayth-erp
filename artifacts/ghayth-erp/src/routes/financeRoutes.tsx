@@ -31,6 +31,7 @@ const VendorDetail = lazy(() => import("@/pages/finance/vendor-detail"));
 const PurchaseOrders = lazy(() => import("@/pages/finance/purchase-orders"));
 const PurchaseOrdersCreate = lazy(() => import("@/pages/create/finance/purchase-orders-create"));
 const PurchaseOrderDetail = lazy(() => import("@/pages/finance/purchase-order-detail"));
+const PaymentRun = lazy(() => import("@/pages/finance/payment-run"));
 const FinancialReports = lazy(() => import("@/pages/finance/reports"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
@@ -101,6 +102,7 @@ export const financeRoutes = [
   { path: "/finance/vendors/:id", component: VendorDetail, subKey: "vendors" },
   { path: "/finance/purchase-orders", component: PurchaseOrders },
   { path: "/finance/purchase-orders/create", component: PurchaseOrdersCreate },
+  { path: "/finance/payment-run", component: PaymentRun },
   { path: "/finance/purchase-orders/:id", component: PurchaseOrderDetail },
   { path: "/finance/reports", component: FinancialReports },
   { path: "/finance/tax", component: TaxSystem },
