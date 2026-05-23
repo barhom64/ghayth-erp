@@ -215,7 +215,7 @@ custodiesRouter.get("/custodies", authorize({ feature: "finance.custodies", acti
               COALESCE(SUM(jl2.credit), 0) AS "settledAmount"
        FROM journal_entries je2
        JOIN journal_lines jl2 ON jl2."journalId" = je2.id
-       WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2.status = 'posted' AND je2.ref LIKE 'CUSTODY-SETTLE%' AND jl2.credit > 0
+       WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2."balancesApplied" = true AND je2.ref LIKE 'CUSTODY-SETTLE%' AND jl2.credit > 0
        GROUP BY je2.description`,
       [scope.companyId]
     );
@@ -300,7 +300,7 @@ custodiesRouter.get("/custodies/report", authorize({ feature: "finance.custodies
               COALESCE(SUM(jl2.credit), 0) AS "settledAmount"
        FROM journal_entries je2
        JOIN journal_lines jl2 ON jl2."journalId" = je2.id
-       WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2.status = 'posted' AND je2.ref LIKE 'CUSTODY-SETTLE%' AND jl2.credit > 0
+       WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2."balancesApplied" = true AND je2.ref LIKE 'CUSTODY-SETTLE%' AND jl2.credit > 0
        GROUP BY je2.description`,
       [scope.companyId]
     );
@@ -377,7 +377,7 @@ custodiesRouter.get("/custodies/summary", authorize({ feature: "finance.custodie
               COALESCE(SUM(jl.debit), 0) AS amount
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je.ref LIKE 'CUSTODY%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
        GROUP BY je.id, je.ref, je."dueDate"`,
       [scope.companyId]
     );
@@ -386,7 +386,7 @@ custodiesRouter.get("/custodies/summary", authorize({ feature: "finance.custodie
               COALESCE(SUM(jl2.credit), 0) AS "settledAmount"
        FROM journal_entries je2
        JOIN journal_lines jl2 ON jl2."journalId" = je2.id
-       WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2.status = 'posted' AND je2.ref LIKE 'CUSTODY-SETTLE%' AND jl2.credit > 0
+       WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2."balancesApplied" = true AND je2.ref LIKE 'CUSTODY-SETTLE%' AND jl2.credit > 0
        GROUP BY je2.description`,
       [scope.companyId]
     );
@@ -711,7 +711,7 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
         `SELECT jl.credit
          FROM journal_entries je
          JOIN journal_lines jl ON jl."journalId" = je.id
-         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND je.ref LIKE 'CUSTODY-SETTLE-%'
+         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je.ref LIKE 'CUSTODY-SETTLE-%'
            AND je.description = $2 AND jl."accountCode" = $3`,
         [scope.companyId, custodyRef, custodyAccountCode]
       );
@@ -856,7 +856,7 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
         `SELECT jl.credit
          FROM journal_entries je
          JOIN journal_lines jl ON jl."journalId" = je.id
-         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND je.ref LIKE 'CUSTODY-SETTLE-%'
+         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je.ref LIKE 'CUSTODY-SETTLE-%'
            AND je.description = $2 AND jl."accountCode" = $3`,
         [scope.companyId, custody.ref, custodyAccountCode]
       );

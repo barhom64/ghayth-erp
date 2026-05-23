@@ -176,6 +176,38 @@ export function extractBaseFromGross(grossAmount: number, vatRatePercent: number
   return roundTo2(grossAmount / (1 + vatRatePercent / 100));
 }
 
+// FIN-AUD-03 — single source for the active VAT rate. Reads system_settings
+// key `vat_rate` (company row, then system-wide row, then SA's 15% default).
+// Cached per-company for the process lifetime since rate changes ~yearly.
+const _vatRateCache = new Map<number, number>();
+export const FALLBACK_VAT_RATE = 15;
+export async function getCompanyVatRate(companyId: number): Promise<number> {
+  const cached = _vatRateCache.get(companyId);
+  if (cached !== undefined) return cached;
+  try {
+    const { rawQuery } = await import("./rawdb.js");
+    const rows = await rawQuery<{ value: string | null }>(
+      `SELECT value FROM system_settings
+        WHERE key = 'vat_rate'
+          AND ( "companyId" = $1 OR "companyId" IS NULL )
+        ORDER BY ("companyId" IS NULL) ASC
+        LIMIT 1`,
+      [companyId],
+    );
+    const raw = rows[0]?.value;
+    const parsed = raw == null ? NaN : Number(raw);
+    const rate = Number.isFinite(parsed) && parsed >= 0 ? parsed : FALLBACK_VAT_RATE;
+    _vatRateCache.set(companyId, rate);
+    return rate;
+  } catch {
+    return FALLBACK_VAT_RATE;
+  }
+}
+export function clearVatRateCache(companyId?: number): void {
+  if (companyId === undefined) _vatRateCache.clear();
+  else _vatRateCache.delete(companyId);
+}
+
 export async function createNotification(params: {
   companyId: number;
   assignmentId: number;
