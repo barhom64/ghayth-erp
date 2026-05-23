@@ -2133,16 +2133,18 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
           );
         }
 
-        // Balance deduction across ALL companies
-        const allCompanyIds = [...new Set(allAssignments.map((a: Record<string, unknown>) => a.companyId))];
-        for (const cId of allCompanyIds) {
-          await client.query(
-            `UPDATE hr_leave_balances
-             SET used = used + $1, reserved = GREATEST(reserved - $1, 0)
-             WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-            [request.days, cId, request.employeeId, request.leaveTypeId, year]
-          );
-        }
+        // Balance deduction must hit only the company where the leave was
+        // reserved at submission (line 1742-1747 reserves on
+        // `scope.companyId`, i.e. the request's company). Iterating over
+        // every active assignment's company would eat `used += days` from
+        // companies that never reserved, so an employee taking 5 days off
+        // in Company A would lose 5 days from Company B's balance too.
+        await client.query(
+          `UPDATE hr_leave_balances
+           SET used = used + $1, reserved = GREATEST(reserved - $1, 0)
+           WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+          [request.days, request.companyId, request.employeeId, request.leaveTypeId, year]
+        );
 
         await client.query(
           `UPDATE approval_requests SET status = 'approved', "decidedBy" = $1, "decidedAt" = NOW()
