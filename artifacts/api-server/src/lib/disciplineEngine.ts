@@ -373,29 +373,54 @@ export async function ensureInquiryMemoForViolation(params: {
 
   const memoNumber = await generateMemoNumber(params.companyId);
 
-  const { insertId } = await rawExecute(
-    `INSERT INTO hr_inquiry_memos (
-       "companyId","branchId","memoNumber","assignmentId","employeeId",
-       "regulationId","violationId","incidentType","incidentDate",
-       "incidentDurationMinutes","incidentDescription", source, status, "createdBy"
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending_employee',$13)
-     RETURNING id`,
-    [
-      params.companyId,
-      params.branchId,
-      memoNumber,
-      params.assignmentId,
-      params.employeeId,
-      params.regulationId ?? null,
-      params.violationId ?? null,
-      params.incidentType,
-      params.incidentDate,
-      params.incidentDurationMinutes ?? null,
-      params.incidentDescription,
-      params.source ?? "auto",
-      params.createdBy ?? null,
-    ]
-  );
+  // RD11-01 — the SELECT above is a best-effort cache, not a true
+  // idempotency lock; two concurrent callers (e.g. dailyDeductionCheck
+  // running back-to-back, or a manual disciplinary action overlapping
+  // the cron) both see "no existing memo" and both INSERT. The schema
+  // side adds a partial unique index `uq_hr_inquiry_memos_violation`
+  // on (companyId, violationId) WHERE deletedAt IS NULL AND
+  // violationId IS NOT NULL (migration 199); this catch handles the
+  // race by re-fetching the row the other caller won the race for.
+  let insertId: number;
+  try {
+    const inserted = await rawExecute(
+      `INSERT INTO hr_inquiry_memos (
+         "companyId","branchId","memoNumber","assignmentId","employeeId",
+         "regulationId","violationId","incidentType","incidentDate",
+         "incidentDurationMinutes","incidentDescription", source, status, "createdBy"
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending_employee',$13)
+       RETURNING id`,
+      [
+        params.companyId,
+        params.branchId,
+        memoNumber,
+        params.assignmentId,
+        params.employeeId,
+        params.regulationId ?? null,
+        params.violationId ?? null,
+        params.incidentType,
+        params.incidentDate,
+        params.incidentDurationMinutes ?? null,
+        params.incidentDescription,
+        params.source ?? "auto",
+        params.createdBy ?? null,
+      ]
+    );
+    insertId = inserted.insertId;
+  } catch (e) {
+    const code = (e as { code?: string } | null)?.code;
+    const constraint = (e as { constraint?: string } | null)?.constraint;
+    if (params.violationId && code === "23505" && (constraint === "uq_hr_inquiry_memos_violation" || !constraint)) {
+      const [winner] = await rawQuery<{ id: number }>(
+        `SELECT id FROM hr_inquiry_memos
+          WHERE "companyId" = $1 AND "violationId" = $2 AND "deletedAt" IS NULL
+          LIMIT 1`,
+        [params.companyId, params.violationId]
+      );
+      if (winner) return { memoId: winner.id, created: false };
+    }
+    throw e;
+  }
 
   // ربط المحضر بالمخالفة (إن وُجدت)
   if (params.violationId) {
