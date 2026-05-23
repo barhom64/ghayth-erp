@@ -670,13 +670,27 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
     const vsBranchIds = !isPrivVS && scope.allowedBranches.length > 0 ? scope.allowedBranches : null;
 
     // Opening balance = POs matched/received before startDate (branch-scoped)
+    // net of any payment-voucher allocations posted before startDate.
     const obPOParams: unknown[] = [supplierId, scope.companyId, from];
     const obPOBranchCond = vsBranchIds ? (() => { obPOParams.push(vsBranchIds); return ` AND "branchId" = ANY($${obPOParams.length}::int[])`; })() : "";
     const [obPORow] = await rawQuery<Record<string, unknown>>(
       `SELECT COALESCE(SUM("totalAmount"), 0) AS total FROM purchase_orders WHERE "supplierId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND status IN ('received','partially_received','invoice_matched','payment_scheduled','paid','completed') AND "createdAt" < $3${obPOBranchCond}`,
       obPOParams
     );
-    const openingBalance = Number(obPORow?.total ?? 0);
+    const [obPayRow] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(spa.amount), 0) AS total
+         FROM supplier_payment_allocations spa
+         JOIN journal_entries je ON je.id = spa."journalEntryId"
+         JOIN purchase_orders po ON po.id = spa."obligationId"
+        WHERE spa."companyId" = $2
+          AND spa."deletedAt" IS NULL
+          AND spa."obligationType" = 'purchase_order'
+          AND po."supplierId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."createdAt" < $3`,
+      [supplierId, scope.companyId, from]
+    );
+    const openingBalance = Number(obPORow?.total ?? 0) - Number(obPayRow?.total ?? 0);
 
     const vsBranchCond = vsBranchIds ? ` AND "branchId" = ANY($5::int[])` : "";
     const vsBaseParams = (extra?: unknown[]): unknown[] => [supplierId, scope.companyId, from, asOf, ...(extra || [])];
@@ -693,22 +707,58 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
       vsBaseParams(vsBranchIds || undefined)
     );
 
+    // C4 — payment vouchers allocated to this supplier's POs show up as
+    // debit movements (reducing what we owe). Pulled from
+    // supplier_payment_allocations joined to the source PO so we only
+    // include vouchers that actually pay one of this supplier's orders.
+    const payRows = await rawQuery<Record<string, unknown>>(
+      `SELECT je.id, je.ref, je."createdAt" AS date,
+              SUM(spa.amount) AS debit, 0 AS credit,
+              NULL AS "dueDate", je.status,
+              'voucher_payment' AS "movementType",
+              CONCAT('سند صرف ', je.ref) AS description
+         FROM supplier_payment_allocations spa
+         JOIN journal_entries je ON je.id = spa."journalEntryId"
+         JOIN purchase_orders po ON po.id = spa."obligationId"
+        WHERE spa."companyId" = $2
+          AND spa."deletedAt" IS NULL
+          AND spa."obligationType" = 'purchase_order'
+          AND po."supplierId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."createdAt" >= $3 AND je."createdAt" <= $4
+        GROUP BY je.id, je.ref, je."createdAt", je.status
+        ORDER BY je."createdAt"`,
+      [supplierId, scope.companyId, from, asOf]
+    );
+
+    const combined = [...pos, ...payRows].sort((a: any, b: any) => {
+      const ad = new Date(a.date as string | Date).getTime();
+      const bd = new Date(b.date as string | Date).getTime();
+      return ad - bd;
+    });
+
     let running = openingBalance;
-    const movements = pos.map((m: any) => {
+    const movements = combined.map((m: any) => {
       running += Number(m.debit) - Number(m.credit);
       return { ...m, runningBalance: roundTo2(running) };
     });
 
-    // Aging of open POs
+    // Aging of open POs, net of allocations against each PO.
     const agingPOParams: unknown[] = [supplierId, scope.companyId, asOf];
     const agingPOBranchCond = vsBranchIds ? (() => { agingPOParams.push(vsBranchIds); return ` AND "branchId" = ANY($${agingPOParams.length}::int[])`; })() : "";
     const openPos = await rawQuery<Record<string, unknown>>(
-      `SELECT id, ref, "createdAt", "expectedDelivery", "totalAmount"
-         FROM purchase_orders
-        WHERE "supplierId"=$1 AND "companyId"=$2
-          AND "deletedAt" IS NULL
-          AND status NOT IN ('paid','completed','cancelled','rejected')
-          AND "createdAt" < ($3::date + 1)${agingPOBranchCond}`,
+      `SELECT po.id, po.ref, po."createdAt", po."expectedDelivery", po."totalAmount",
+              COALESCE((SELECT SUM(spa.amount)
+                          FROM supplier_payment_allocations spa
+                         WHERE spa."companyId" = po."companyId"
+                           AND spa."obligationType" = 'purchase_order'
+                           AND spa."obligationId" = po.id
+                           AND spa."deletedAt" IS NULL), 0) AS "paidAmount"
+         FROM purchase_orders po
+        WHERE po."supplierId"=$1 AND po."companyId"=$2
+          AND po."deletedAt" IS NULL
+          AND po.status NOT IN ('paid','completed','cancelled','rejected')
+          AND po."createdAt" < ($3::date + 1)${agingPOBranchCond}`,
       agingPOParams
     );
     const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0 };
@@ -717,7 +767,8 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
       const due = po.expectedDelivery ? new Date(po.expectedDelivery as string | Date).getTime()
         : new Date(po.createdAt as string | Date).getTime() + 30 * 86400000;
       const daysOverdue = Math.floor((asOfMs - due) / 86400000);
-      const amt = Number(po.totalAmount);
+      const amt = Math.max(0, Number(po.totalAmount) - Number(po.paidAmount ?? 0));
+      if (amt === 0) continue;
       if (daysOverdue <= 0) buckets.current += amt;
       else if (daysOverdue <= 30) buckets.d30 += amt;
       else if (daysOverdue <= 60) buckets.d60 += amt;

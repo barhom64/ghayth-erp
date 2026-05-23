@@ -25,7 +25,25 @@ async function getActiveIntegration(companyId: number, channel: string): Promise
     `SELECT * FROM integrations WHERE "companyId"=$1 AND type=$2 AND status='active' LIMIT 1`,
     [companyId, channel]
   );
-  return row || null;
+  if (!row) return null;
+  // RD3-04 — config rows now store sensitive fields (password, apiKey,
+  // accessToken, …) under `enc-v1:…` envelopes. Decrypt them before
+  // handing the object to nodemailer / fetch so legacy plaintext rows
+  // (returned unchanged by decryptSecret) keep working.
+  const { decryptSecret } = await import("./secrets.js");
+  const SECRET_KEYS = new Set([
+    "password", "apiKey", "accessToken", "secret", "authToken",
+    "token", "webhookSecret", "appSecret", "clientSecret", "privateKey",
+    "smtpPassword", "smsAuthToken", "key",
+  ]);
+  const raw = (row as unknown as { config: Record<string, unknown> | string }).config;
+  const parsed = typeof raw === "string" ? JSON.parse(raw) : (raw ?? {});
+  const decrypted: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(parsed)) {
+    decrypted[k] = SECRET_KEYS.has(k) && typeof v === "string" ? decryptSecret(v) : v;
+  }
+  (row as unknown as { config: Record<string, unknown> }).config = decrypted;
+  return row;
 }
 
 async function logIntegrationAttempt(

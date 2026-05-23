@@ -938,6 +938,13 @@ async function hourlyApprovalEscalation(): Promise<string> {
         // logic, otherwise an auto-approved request leaves the domain record
         // stuck in its original state forever.
         if (result.status === "approved") {
+          // RD3-02 + RD3-03 — defense-in-depth: the refId comes from a
+          // tenant-scoped approval_requests row, so under normal flow
+          // the id IS company-bound. But auto-approval is a privileged
+          // path with no human review, so we add an explicit companyId
+          // predicate so a misconfigured request (or a future code bug
+          // that lets a refId leak across tenants) can't mutate another
+          // company's record.
           const entityUpdateMap: Record<string, { table: string; column: string }> = {
             purchase_order: { table: "purchase_orders", column: "status" },
             official_letter: { table: "official_letters", column: "status" },
@@ -945,15 +952,15 @@ async function hourlyApprovalEscalation(): Promise<string> {
           const target = entityUpdateMap[req.refType as string];
           if (target) {
             await rawExecute(
-              `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1`,
-              [req.refId]
+              `UPDATE ${target.table} SET ${target.column} = 'approved' WHERE id = $1 AND "companyId" = $2`,
+              [req.refId, req.companyId]
             ).catch((e) => logger.error(e, "[hourly_escalation] domain update failed:"));
           }
           const journalRefTypes = ["expense", "salary_advance", "custody"];
           if (journalRefTypes.includes(req.refType as string)) {
             await rawExecute(
-              `UPDATE journal_entries SET status = 'posted' WHERE id = $1 AND status = 'pending_approval'`,
-              [req.refId]
+              `UPDATE journal_entries SET status = 'posted' WHERE id = $1 AND "companyId" = $2 AND status = 'pending_approval'`,
+              [req.refId, req.companyId]
             ).catch((e) => logger.error(e, "[hourly_escalation] journal update failed:"));
           }
           // Audit + event so the auto-approval is visible in reports.
