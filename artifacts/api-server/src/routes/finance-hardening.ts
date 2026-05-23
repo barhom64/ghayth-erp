@@ -1,3 +1,13 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// finance-hardening.ts — canonical fiscal-period record + close workflow.
+//
+// FIN-015 — this file is the SINGLE writer for `financial_periods`. The
+// /finance/fiscal-periods endpoint in finance-budget.ts is a derived
+// 12-month stats view only; all period mutations (create, close,
+// reopen) belong here under /finance/fiscal-periods-v2/*. The legacy
+// POST /finance/fiscal-periods/:period/close was removed and now
+// returns 410 Gone with a pointer to v2.
+// ─────────────────────────────────────────────────────────────────────────────
 import {
   handleRouteError,
   ValidationError,
