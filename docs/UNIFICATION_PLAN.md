@@ -138,10 +138,10 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 | Rule | Baseline | الحالة |
 | --- | --- | --- |
 **ui-core**:
-| `page-shell-from-legacy-path` | 152 | نشط |
+| `page-shell-from-legacy-path` | 143 | نشط |
 | `form-shell-from-legacy-path` | 53 | نشط |
-| `data-table-from-legacy-path` | 169 | نشط |
-| `page-status-badge-from-legacy-path` | 103 | نشط |
+| `data-table-from-legacy-path` | 164 | نشط |
+| `page-status-badge-from-legacy-path` | 100 | نشط |
 | `create-page-layout-from-legacy-path` | 81 | نشط |
 | `advanced-filters-from-legacy-path` | 64 | نشط |
 | `data-table-presets-from-legacy-path` | 1 | نشط |
@@ -160,8 +160,8 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 **report-kit**:
 | `print-layout-from-legacy-path` | 13 | نشط |
 
-**الإجمالي**: **822 موضع** legacy import مغطّى بـ ratchet (هبط من 906
-الأولي بعد رابع sweep). كل واحد لا يمكنه الزيادة. كل migration يخفض
+**الإجمالي**: **805 موضع** legacy import مغطّى بـ ratchet (هبط من 906
+الأولي بعد خامس sweep). كل واحد لا يمكنه الزيادة. كل migration يخفض
 العدد بمقدار 1 ويستوجب تحديث baseline في نفس الـ PR.
 
 ### آلية العمل (للمساهمين)

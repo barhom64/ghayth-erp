@@ -210,7 +210,7 @@ const RULES = [
       file.endsWith("/components/page-shell.tsx") ||
       file.endsWith("/components/create-page-layout.tsx"),
     regex: /from\s+["']@\/components\/page-shell["']/,
-    countBaseline: 152,
+    countBaseline: 143,
     message: `PageShell imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -232,7 +232,7 @@ const RULES = [
       file.endsWith("/components/data-table-presets.tsx") ||
       file.endsWith("/components/list-page.tsx"),
     regex: /from\s+["']@\/components\/ui\/data-table["']/,
-    countBaseline: 169,
+    countBaseline: 164,
     message: `DataTable imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -244,7 +244,7 @@ const RULES = [
       file.endsWith("/components/data-table-presets.tsx") ||
       file.endsWith("/components/shared/detail-page-layout.tsx"),
     regex: /from\s+["']@\/components\/page-status-badge["']/,
-    countBaseline: 103,
+    countBaseline: 100,
     message: `PageStatusBadge imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {

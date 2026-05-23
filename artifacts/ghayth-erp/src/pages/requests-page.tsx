@@ -2,7 +2,12 @@ import { useState, useMemo } from "react";
 import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { PageShell } from "@/components/page-shell";
+import {
+  PageShell,
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +15,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   FormShell, FormTextField, FormTextareaField, FormSelectField, FormGrid,
@@ -56,7 +60,6 @@ import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { GuardedButton } from "@/components/shared/permission-gate";
 
 const iconMap: Record<string, any> = {
