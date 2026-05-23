@@ -277,10 +277,16 @@ export async function postMudadSalaryJournal(
     const payload = buildEntry(buildInput);
     const entryDate = (row.acknowledgedAt ?? row.submittedAt).slice(0, 10);
 
+    // PD-6 — stable economic-event key. A retried Mudad salary post (scheduler
+    // re-fire, network blip, manual retry) for the same settlement returns the
+    // existing entry instead of double-posting. (settlementId, period) is the
+    // unique pair: one salary booking per settlement per period.
+    const ref = `MUDAD-SAL-${opts.settlementId}-${period}`;
     const ctx: EntryContext = {
       companyId: opts.companyId,
       createdBy: opts.postedBy,
-      ref: `MUDAD-SAL-${opts.settlementId}-${period}`,
+      ref,
+      sourceKey: ref,
       type: "mudad_salary_booking",
       sourceType: "mudad_settlements",
       sourceId: opts.settlementId,
