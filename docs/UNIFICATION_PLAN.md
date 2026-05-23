@@ -137,16 +137,16 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 
 | Rule | Baseline | الحالة |
 | --- | --- | --- |
-| `page-shell-from-legacy-path` | 179 | نشط |
+| `page-shell-from-legacy-path` | 173 | نشط |
 | `form-shell-from-legacy-path` | 55 | نشط |
-| `data-table-from-legacy-path` | 193 | نشط |
-| `page-status-badge-from-legacy-path` | 121 | نشط |
+| `data-table-from-legacy-path` | 190 | نشط |
+| `page-status-badge-from-legacy-path` | 119 | نشط |
 | `create-page-layout-from-legacy-path` | 81 | نشط |
 | `detail-page-layout-from-legacy-path` | 79 | نشط |
 
-**الإجمالي**: 708 موضع legacy import مغطّى بـ ratchet. كل واحد لا يمكنه
-الزيادة. كل migration يخفض العدد بمقدار 1 ويستوجب تحديث baseline في
-نفس الـ PR.
+**الإجمالي**: 697 موضع legacy import مغطّى بـ ratchet (هبط من 708 الأصلي
+بعد أول migration sweep في 6 صفحات). كل واحد لا يمكنه الزيادة. كل
+migration يخفض العدد بمقدار 1 ويستوجب تحديث baseline في نفس الـ PR.
 
 ### آلية العمل (للمساهمين)
 

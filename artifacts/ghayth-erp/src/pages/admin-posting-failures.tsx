@@ -1,11 +1,10 @@
-import { PageShell } from "@/components/page-shell";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatDateAr } from "@/lib/formatters";
 import { useMemo, useState } from "react";
 import {
