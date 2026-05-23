@@ -933,8 +933,14 @@ router.post("/:id/tasks", authorize({ feature: "projects.tasks", action: "create
         }
 
         const placeholders = b.dependsOn.map((_: any, i: number) => `$${i + 1}`).join(',');
+        // Exclude soft-deleted dependencies: a deleted task no longer
+        // gates anything. Without this filter a stale `dependsOn` entry
+        // pointing at a deleted task whose last status was anything but
+        // 'done' would falsely mark the new task `blocked`, with no
+        // active task that can ever transition to 'done' to unblock it.
         const blockedRes = await client.query(
-          `SELECT pt.status FROM project_tasks pt WHERE pt.id IN (${placeholders})`,
+          `SELECT pt.status FROM project_tasks pt
+            WHERE pt.id IN (${placeholders}) AND pt."deletedAt" IS NULL`,
           b.dependsOn
         );
         const allDepsDone = blockedRes.rows.every((d: any) => d.status === 'done');
@@ -1073,7 +1079,7 @@ router.patch("/tasks/:taskId", authorize({ feature: "projects.tasks", action: "u
                   COUNT(*) FILTER (WHERE pt2.status != 'done') AS "pendingDeps"
            FROM project_task_dependencies ptd
            JOIN project_task_dependencies all_deps ON all_deps."taskId" = ptd."taskId"
-           JOIN project_tasks pt2 ON pt2.id = all_deps."dependsOnId"
+           JOIN project_tasks pt2 ON pt2.id = all_deps."dependsOnId" AND pt2."deletedAt" IS NULL
            WHERE ptd."dependsOnId" = $1
            GROUP BY ptd."taskId"
            HAVING COUNT(*) FILTER (WHERE pt2.status != 'done') = 0`,
