@@ -83,7 +83,13 @@ export function buildEntry(input: BuildEntryInput): JournalEntryPayload {
   totalDebit = round2dp(totalDebit);
   totalCredit = round2dp(totalCredit);
 
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
+  // Aligned with `createJournalEntry` (businessHelpers.ts:529): a journal
+  // entry must balance to the cent. The previous `> 0.01` threshold let a
+  // 1-cent imbalance through silently (because rounded values jump in 0.01
+  // steps, `> 0.01` only catches ≥ 2 cents). After #888 removed the
+  // auto-plug, this slack was the last remaining "silent imbalance" path
+  // for revaluation / realized-FX / inventory-variance posts.
+  if (Math.abs(totalDebit - totalCredit) >= 0.005) {
     throw new Error(
       `Journal entry not balanced: debit=${totalDebit} credit=${totalCredit} ` +
         `(diff=${(totalDebit - totalCredit).toFixed(2)})`,

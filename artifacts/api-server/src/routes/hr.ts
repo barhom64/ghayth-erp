@@ -2589,7 +2589,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     }
 
     const gosiSettings = await rawQuery<{ key: string; value: string }>(
-      `SELECT key, value FROM system_settings WHERE "companyId" = $1 AND key IN ('gosiEmployeeRate','gosiEmployerRate')`,
+      `SELECT key, value FROM system_settings WHERE "companyId" = $1 AND key IN ('gosiEmployeeRate','gosiEmployerRate','gosiCeiling')`,
       [scope.companyId]
     );
     const gosiSettingsMap = new Map(gosiSettings.map((r) => [r.key, r.value]));
@@ -2598,6 +2598,11 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       ? Number(gosiComponent.value) / 100
       : Number(gosiSettingsMap.get("gosiEmployeeRate") ?? "9.75") / 100;
     const GOSI_EMPLOYER_RATE = Number(gosiSettingsMap.get("gosiEmployerRate") ?? "11.75") / 100;
+    // Saudi GOSI caps the contribution wage at SAR 45,000/month. A
+    // company can override via system_settings.gosiCeiling (e.g. set
+    // to a huge number to effectively disable, or to a different
+    // ceiling if the regulator changes it).
+    const GOSI_CEILING = Number(gosiSettingsMap.get("gosiCeiling") ?? "45000");
 
     const earningComponents = salaryComponents.filter((c) => c.type === 'earning' && !c.isGosi);
 
@@ -2735,8 +2740,9 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       const absenceDeduction = roundTo2(absentDays * (basic / 30));
       const violationDeduction = (penaltyMap.get(aId) ?? 0) + (violationMap.get(aId) ?? 0);
       const loanDeduction = loanMap.get(aId) ?? 0;
-      const gosiEmployee = roundTo2(basic * GOSI_EMPLOYEE_RATE);
-      const gosiEmployer = roundTo2(basic * GOSI_EMPLOYER_RATE);
+      const gosiBase = Math.min(basic, GOSI_CEILING);
+      const gosiEmployee = roundTo2(gosiBase * GOSI_EMPLOYEE_RATE);
+      const gosiEmployer = roundTo2(gosiBase * GOSI_EMPLOYER_RATE);
       totalGosiEmployer += gosiEmployer;
       const overtimeMinutes = overtimeMap.get(aId) ?? 0;
       const overtimeHours = roundTo2(overtimeMinutes / 60);
