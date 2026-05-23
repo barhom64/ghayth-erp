@@ -27,6 +27,7 @@ import {
   emitEvent,
   todayISO,
   checkFinancialPeriodOpen,
+  reverseAccountBalances,
 } from "../lib/businessHelpers.js";
 import { requestIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib/requestIdempotency.js";
 
@@ -1174,7 +1175,17 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
         lines: toLines,
       });
     } catch (err) {
-      // Compensating reversal outside any transaction so it actually persists
+      // Compensating reversal: the from-side post already moved
+      // chart_of_accounts.currentBalance (postJournalEntry with status
+      // 'posted' applies balances). A bare soft-delete leaves those GL
+      // movements in place — the from-company's AR + Revenue stay
+      // inflated by `amount` with no auditable JE explaining them.
+      //
+      // reverseAccountBalances unwinds the per-account currentBalance
+      // updates and flips balancesApplied → false; the soft-delete then
+      // hides the row from reports. Order matters: reverse first, then
+      // soft-delete (reverseAccountBalances reads the JE row by id).
+      await reverseAccountBalances(scope.companyId, fromResult.journalId);
       await rawExecute(
         `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
         [fromResult.journalId, scope.companyId]
