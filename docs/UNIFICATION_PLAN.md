@@ -163,7 +163,7 @@ guards في P5.
 
 ---
 
-## P8 — Ghaith UI Standard Kit (Phase 1 منجَز · 2026-05-23)
+## P8 — Ghaith UI Standard Kit (Phase 2 منجَز · 2026-05-23)
 
 ### الخلاصة
 
@@ -191,8 +191,8 @@ guards في P5.
 
 | Phase | المخرج |
 | --- | --- |
-| **Phase 2** | `artifacts/ghayth-erp/package.json` يضيف الحزم الأربع كـ `workspace:*` deps. أول صفحة جديدة (مثل FIN-014) تستهلك من `@workspace/ui-core` كإثبات. |
-| **Phase 3** | نقل الملفات فعليًا من `artifacts/ghayth-erp/src/components/...` إلى `lib/<pkg>/src/...`. مكان قديم يصبح re-export shim عكسي. صفحات تُهاجَر تدريجيًا. |
+| **Phase 2** ✅ | `artifacts/ghayth-erp/package.json` يضيف الحزم الأربع كـ `workspace:*` deps (مكتمل 2026-05-23). الحزم مرتبطة في `artifacts/ghayth-erp/node_modules/@workspace/`. typecheck + build خضراء. |
+| **Phase 3** | أول صفحة (مثل FIN-014 أو صفحة قائمة موجودة) تستهلك من `@workspace/ui-core` كإثبات end-to-end. نقل الملفات فعليًا من `artifacts/ghayth-erp/src/components/...` إلى `lib/<pkg>/src/...`؛ المكان القديم يصبح re-export shim عكسي. صفحات تُهاجَر تدريجيًا. |
 | **Phase 4** | حذف الـ re-exports القديمة من `artifacts/ghayth-erp/src/components/`. كل page تستورد من `@workspace/...` فقط. |
 | **Phase 5** | lint rule في `scripts/src/lint-patterns.mjs` يمنع import المُمكِّنات من `@/components/` بدل `@workspace/ui-core`. |
 

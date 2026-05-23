@@ -619,6 +619,18 @@ importers:
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../../lib/api-client-react
+      '@workspace/entity-kit':
+        specifier: workspace:*
+        version: link:../../lib/entity-kit
+      '@workspace/report-kit':
+        specifier: workspace:*
+        version: link:../../lib/report-kit
+      '@workspace/ui-core':
+        specifier: workspace:*
+        version: link:../../lib/ui-core
+      '@workspace/workflow-kit':
+        specifier: workspace:*
+        version: link:../../lib/workflow-kit
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
