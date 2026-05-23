@@ -63,7 +63,13 @@ describe("documents-page.tsx — folders + templates forms on FormShell + zod", 
   const SRC = read("documents-page.tsx");
 
   it("imports the FormShell stack", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    // Accept either the legacy `@/components/form-shell` path or the
+    // canonical `@workspace/ui-core` re-export. Either resolves to the
+    // same FormShell module via the kit shim (UNIFICATION_PLAN §P8).
+    const hasFormShellImport =
+      SRC.includes('from "@/components/form-shell"') ||
+      SRC.includes('from "@workspace/ui-core"');
+    expect(hasFormShellImport).toBe(true);
     expect(SRC).toContain("FormShell");
   });
 

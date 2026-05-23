@@ -210,7 +210,7 @@ const RULES = [
       file.endsWith("/components/page-shell.tsx") ||
       file.endsWith("/components/create-page-layout.tsx"),
     regex: /from\s+["']@\/components\/page-shell["']/,
-    countBaseline: 173,
+    countBaseline: 165,
     message: `PageShell imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -219,7 +219,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/form-shell.tsx"),
     regex: /from\s+["']@\/components\/form-shell["']/,
-    countBaseline: 55,
+    countBaseline: 54,
     message: `FormShell imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -232,7 +232,7 @@ const RULES = [
       file.endsWith("/components/data-table-presets.tsx") ||
       file.endsWith("/components/list-page.tsx"),
     regex: /from\s+["']@\/components\/ui\/data-table["']/,
-    countBaseline: 190,
+    countBaseline: 182,
     message: `DataTable imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -244,7 +244,7 @@ const RULES = [
       file.endsWith("/components/data-table-presets.tsx") ||
       file.endsWith("/components/shared/detail-page-layout.tsx"),
     regex: /from\s+["']@\/components\/page-status-badge["']/,
-    countBaseline: 119,
+    countBaseline: 111,
     message: `PageStatusBadge imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -276,7 +276,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/shared/advanced-filters.tsx"),
     regex: /from\s+["']@\/components\/shared\/advanced-filters["']/,
-    countBaseline: 81,
+    countBaseline: 75,
     message: `AdvancedFilters / useFilters / applyFilters imported from the legacy path. ${kitRatchetHint("ui-core")}`,
   },
   {
@@ -287,7 +287,7 @@ const RULES = [
       file.endsWith("/components/data-table-presets.tsx") ||
       file.endsWith("/components/list-page.tsx"),
     regex: /from\s+["']@\/components\/data-table-presets["']/,
-    countBaseline: 3,
+    countBaseline: 2,
     message: `DataTable column presets imported from the legacy path. ${kitRatchetHint("ui-core")}`,
   },
   {
@@ -326,7 +326,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/shared/entity-comments.tsx"),
     regex: /from\s+["']@\/components\/shared\/entity-comments["']/,
-    countBaseline: 56,
+    countBaseline: 54,
     message: `EntityComments imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
   },
   {

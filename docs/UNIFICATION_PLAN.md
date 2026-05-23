@@ -138,20 +138,20 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 | Rule | Baseline | الحالة |
 | --- | --- | --- |
 **ui-core**:
-| `page-shell-from-legacy-path` | 173 | نشط |
-| `form-shell-from-legacy-path` | 55 | نشط |
-| `data-table-from-legacy-path` | 190 | نشط |
-| `page-status-badge-from-legacy-path` | 119 | نشط |
+| `page-shell-from-legacy-path` | 165 | نشط |
+| `form-shell-from-legacy-path` | 54 | نشط |
+| `data-table-from-legacy-path` | 182 | نشط |
+| `page-status-badge-from-legacy-path` | 111 | نشط |
 | `create-page-layout-from-legacy-path` | 81 | نشط |
-| `advanced-filters-from-legacy-path` | 81 | نشط |
-| `data-table-presets-from-legacy-path` | 3 | نشط |
+| `advanced-filters-from-legacy-path` | 75 | نشط |
+| `data-table-presets-from-legacy-path` | 2 | نشط |
 | `data-table-wrapper-from-legacy-path` | 2 | نشط |
 | `page-header-from-legacy-path` | 3 | نشط |
 
 **entity-kit**:
 | `detail-page-layout-from-legacy-path` | 79 | نشط |
 | `entity-timeline-from-legacy-path` | 12 | نشط |
-| `entity-comments-from-legacy-path` | 56 | نشط |
+| `entity-comments-from-legacy-path` | 54 | نشط |
 | `entity-documents-from-legacy-path` | 3 | نشط |
 
 **workflow-kit**:
@@ -160,10 +160,9 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 **report-kit**:
 | `print-layout-from-legacy-path` | 13 | نشط |
 
-**الإجمالي**: **906 موضع** legacy import مغطّى بـ ratchet (708 أصلي
-+ 198 إضافي من توسعة 9 قواعد جديدة، بعد sweep أوّل خفّض 11). كل واحد
-لا يمكنه الزيادة. كل migration يخفض العدد بمقدار 1 ويستوجب تحديث
-baseline في نفس الـ PR.
+**الإجمالي**: **872 موضع** legacy import مغطّى بـ ratchet (هبط من 906
+الأولي بعد ثاني sweep). كل واحد لا يمكنه الزيادة. كل migration يخفض
+العدد بمقدار 1 ويستوجب تحديث baseline في نفس الـ PR.
 
 ### آلية العمل (للمساهمين)
 

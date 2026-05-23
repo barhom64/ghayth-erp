@@ -2,13 +2,24 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 // P4.1 primitives — Support domain sweep.
 // Page header, status chips and the ticket status column now come
-// from the shared P1 primitives instead of per-page custom JSX.
-import { PageShell } from "@/components/page-shell";
-import { PageStatusBadge } from "@/components/page-status-badge";
-import { textColumn, statusColumn, actionsColumn } from "@/components/data-table-presets";
+// from the shared P1 primitives instead of per-page custom JSX —
+// imported via @workspace/ui-core / entity-kit (UNIFICATION_PLAN §P8 Phase 3).
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+  PageStatusBadge,
+  textColumn,
+  statusColumn,
+  actionsColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  exportToCSV,
+} from "@workspace/ui-core";
+import { EntityComments } from "@workspace/entity-kit";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { z } from "zod";
@@ -24,9 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
-import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { formatDateAr } from "@/lib/formatters";
