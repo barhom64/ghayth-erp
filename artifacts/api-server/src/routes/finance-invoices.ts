@@ -749,26 +749,73 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       // adopted per-line mapping yet. The AR debit + VAT credit stay
       // header-level since they are not per-line concepts.
       const dimLines = await client.query<{
+        id: number;
         accountCode: string | null;
+        accountId: number | null;
         lineTotal: string;
         costCenterId: number | null;
         activityType: string | null;
         projectId: number | null;
         vehicleId: number | null;
         propertyId: number | null;
+        unitId: number | null;
+        assetId: number | null;
         employeeId: number | null;
         driverId: number | null;
         contractId: number | null;
         productId: number | null;
+        umrahSeasonId: number | null;
+        umrahAgentId: number | null;
+        taxCode: string | null;
       }>(
-        `SELECT "accountCode", "lineTotal"::text AS "lineTotal",
+        `SELECT id, "accountCode", "accountId", "lineTotal"::text AS "lineTotal",
                 "costCenterId", "activityType",
-                "projectId", "vehicleId", "propertyId",
-                "employeeId", "driverId", "contractId", "productId"
+                "projectId", "vehicleId", "propertyId", "unitId", "assetId",
+                "employeeId", "driverId", "contractId", "productId",
+                "umrahSeasonId", "umrahAgentId", "taxCode"
            FROM invoice_lines
           WHERE "invoiceId" = $1
           ORDER BY id`,
         [id]
+      );
+
+      // Phase 5.3 — run the allocation resolver. For each line that
+      // doesn't already carry an accountCode, the resolver consults
+      // accounting_allocation_rules (#972) to pick the right revenue
+      // account + cost-centre + required dimensions. Lines with
+      // pre-set accountCode return status='manual_override' so the
+      // operator's pin always wins. Lines with no rule match fall
+      // through to the generic invoice_revenue account (legacy
+      // backwards-compat).
+      const { resolveLineAllocation, writeAllocationResult } = await import("../lib/accountingAllocation.js");
+      const lineResolutions = await Promise.all(
+        dimLines.rows.map((ln) =>
+          resolveLineAllocation({
+            companyId: scope.companyId,
+            documentType: "invoice",
+            lineType: "product",
+            accountCode: ln.accountCode,
+            accountId: ln.accountId,
+            costCenterId: ln.costCenterId,
+            taxCode: ln.taxCode,
+            dimensions: {
+              vehicleId: ln.vehicleId,
+              propertyId: ln.propertyId,
+              unitId: ln.unitId,
+              assetId: ln.assetId,
+              projectId: ln.projectId,
+              employeeId: ln.employeeId,
+              driverId: ln.driverId,
+              contractId: ln.contractId,
+              umrahSeasonId: ln.umrahSeasonId,
+              umrahAgentId: ln.umrahAgentId,
+              productId: ln.productId,
+              clientId: invoice.clientId as number | null,
+            },
+            sourceTable: "invoice_lines",
+            sourceLineId: ln.id,
+          })
+        )
       );
 
       const totalNet = Number(invoice.total) - Number(invoice.vatAmount || 0);
@@ -792,19 +839,29 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           productId: number | null;
         }>();
         let postedNet = 0;
-        for (const ln of dimLines.rows) {
-          const acct = ln.accountCode || invRevenueCode;
+        for (let i = 0; i < dimLines.rows.length; i++) {
+          const ln = dimLines.rows[i];
+          const res = lineResolutions[i];
+          // Resolver picked an account (rule match or manual override);
+          // unmapped lines fall back to the generic invoice_revenue
+          // mapping so the entry still posts. The dimensions used in
+          // the bucket key come from the RESOLVER OUTPUT — for an
+          // 'explicit' or 'from_vehicle' strategy that may differ
+          // from the raw line.
+          const acct = res.resolvedAccountCode || invRevenueCode;
+          const dims = res.dimensions;
+          const cc = res.costCenterId;
           const key = [
             acct,
-            ln.costCenterId ?? "",
+            cc ?? "",
             ln.activityType ?? "",
-            ln.projectId ?? "",
-            ln.vehicleId ?? "",
-            ln.propertyId ?? "",
-            ln.employeeId ?? "",
-            ln.driverId ?? "",
-            ln.contractId ?? "",
-            ln.productId ?? "",
+            dims.projectId ?? "",
+            dims.vehicleId ?? "",
+            dims.propertyId ?? "",
+            dims.employeeId ?? "",
+            dims.driverId ?? "",
+            dims.contractId ?? "",
+            dims.productId ?? "",
           ].join("|");
           const amt = roundTo2(Number(ln.lineTotal));
           postedNet += amt;
@@ -815,15 +872,15 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
             buckets.set(key, {
               accountCode: acct,
               amount: amt,
-              costCenter: ln.costCenterId != null ? String(ln.costCenterId) : null,
+              costCenter: cc != null ? String(cc) : null,
               activityType: ln.activityType,
-              projectId: ln.projectId,
-              vehicleId: ln.vehicleId,
-              propertyId: ln.propertyId,
-              employeeId: ln.employeeId,
-              driverId: ln.driverId,
-              contractId: ln.contractId,
-              productId: ln.productId,
+              projectId: dims.projectId,
+              vehicleId: dims.vehicleId,
+              propertyId: dims.propertyId,
+              employeeId: dims.employeeId,
+              driverId: dims.driverId,
+              contractId: dims.contractId,
+              productId: dims.productId,
             });
           }
         }
@@ -895,6 +952,29 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       });
       journalId = result.journalId;
       alreadyExists = result.alreadyExists;
+
+      // Phase 5.3 — persist the allocation resolution per line so the
+      // accounting_allocation_results table reflects which rule moved
+      // each line to which account. Runs after the JE posts so a
+      // failed post doesn't leave orphan resolution rows. UPSERTs on
+      // (sourceTable, sourceLineId, companyId) so re-approving an
+      // invoice (after correction) overwrites the previous result.
+      if (!alreadyExists) {
+        for (let i = 0; i < dimLines.rows.length; i++) {
+          const ln = dimLines.rows[i];
+          const res = lineResolutions[i];
+          await writeAllocationResult(
+            {
+              companyId: scope.companyId,
+              documentType: "invoice",
+              sourceTable: "invoice_lines",
+              sourceLineId: ln.id,
+            },
+            res,
+            scope.activeAssignmentId,
+          );
+        }
+      }
 
       // Update client totalRevenue upon approval (revenue recognition).
       if (invoice.clientId) {
