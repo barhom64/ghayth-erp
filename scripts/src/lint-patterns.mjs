@@ -205,12 +205,15 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     // The component definition itself is exempt — that's where the
     // primitive lives. The @workspace/ui-core re-export shim also
-    // points there until the Phase 3 physical move.
+    // points there until the Phase 3 physical move. The other two
+    // composites (CreatePageLayout, ListPage) build on PageShell —
+    // those internal imports are part of the kit's own plumbing.
     skip: (file) =>
       file.endsWith("/components/page-shell.tsx") ||
-      file.endsWith("/components/create-page-layout.tsx"),
+      file.endsWith("/components/create-page-layout.tsx") ||
+      file.endsWith("/components/list-page.tsx"),
     regex: /from\s+["']@\/components\/page-shell["']/,
-    countBaseline: 2,
+    // Hardened from ratchet → hard rule (baseline reached 0 in sweep 13).
     message: `PageShell imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -219,7 +222,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/form-shell.tsx"),
     regex: /from\s+["']@\/components\/form-shell["']/,
-    countBaseline: 51,
+    countBaseline: 50,
     message: `FormShell imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -232,7 +235,7 @@ const RULES = [
       file.endsWith("/components/data-table-presets.tsx") ||
       file.endsWith("/components/list-page.tsx"),
     regex: /from\s+["']@\/components\/ui\/data-table["']/,
-    countBaseline: 4,
+    // Hardened from ratchet → hard rule (baseline reached 0 in sweep 13).
     message: `DataTable imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {

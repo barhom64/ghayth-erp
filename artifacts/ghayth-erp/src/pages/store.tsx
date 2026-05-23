@@ -15,7 +15,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
 import { StoreTabsNav } from "@/components/shared/store-tabs-nav";
-import { FormShell, FormTextField, FormNumberField, FormGrid } from "@/components/form-shell";
+import { FormShell, FormTextField, FormNumberField, FormGrid } from "@workspace/ui-core";
 
 // Coerced numeric fields — the old form tracked them as strings and
 // Number()-coerced at submit. zod handles both checks (numeric + non-

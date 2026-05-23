@@ -14,7 +14,7 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { PrintPreviewModal } from "@workspace/report-kit";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
-import { DataTable, DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
 import { ApprovalActions } from "@workspace/workflow-kit";
 import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
