@@ -83,13 +83,19 @@ d("Wave-2 H2: applyJournalEntryBalances refuses to post into a closed period", (
     );
     await rawExecute(`DELETE FROM journal_entries WHERE "companyId"=$1`, [companyId]);
     await rawExecute(`DELETE FROM financial_periods WHERE "companyId"=$1`, [companyId]);
-    // Ensure the two accounts our journal lines touch exist with a known
-    // balance. ON CONFLICT keeps the seeder idempotent across runs.
+    // chart_of_accounts has no UNIQUE constraint on ("companyId", code) in
+    // the live schema, so the seeding INSERT below cannot rely on ON
+    // CONFLICT to be idempotent. Wipe the seed rows first so each test
+    // gets a clean balance state and we never accumulate duplicates.
+    await rawExecute(`DELETE FROM chart_of_accounts WHERE "companyId"=$1`, [companyId]);
+    // Re-seed the two accounts our journal lines touch with a known
+    // balance. We just DELETEd above, so a plain INSERT is sufficient
+    // (no ON CONFLICT needed — and there's no UNIQUE constraint to back
+    // one anyway).
     await rawExecute(
-      `INSERT INTO chart_of_accounts ("companyId", code, "nameAr", "nameEn", type, "currentBalance")
+      `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "currentBalance")
        VALUES ($1, '1101', 'بنك اختبار', 'Test Bank', 'asset', 0),
-              ($1, '4101', 'إيراد اختبار', 'Test Revenue', 'revenue', 0)
-       ON CONFLICT ("companyId", code) DO UPDATE SET "currentBalance" = 0`,
+              ($1, '4101', 'إيراد اختبار', 'Test Revenue', 'revenue', 0)`,
       [companyId]
     );
   });
@@ -266,6 +272,11 @@ d("Wave-2 #888: createJournalEntry rejects imbalanced entries instead of silent 
     );
     await rawExecute(`DELETE FROM journal_entries WHERE "companyId"=$1`, [companyId]);
     await rawExecute(`DELETE FROM financial_periods WHERE "companyId"=$1`, [companyId]);
+    // chart_of_accounts has no UNIQUE constraint on ("companyId", code) in
+    // the live schema, so the seeding INSERT below cannot rely on ON
+    // CONFLICT to be idempotent. Wipe the seed rows first so each test
+    // gets a clean balance state and we never accumulate duplicates.
+    await rawExecute(`DELETE FROM chart_of_accounts WHERE "companyId"=$1`, [companyId]);
     // Open period that covers today so the upstream period guard never
     // gets in the way of the imbalance test.
     await rawExecute(
@@ -274,11 +285,10 @@ d("Wave-2 #888: createJournalEntry rejects imbalanced entries instead of silent 
       [companyId]
     );
     await rawExecute(
-      `INSERT INTO chart_of_accounts ("companyId", code, "nameAr", "nameEn", type, "currentBalance")
+      `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "currentBalance")
        VALUES ($1, '1101', 'بنك اختبار', 'Test Bank', 'asset', 0),
               ($1, '4101', 'إيراد اختبار', 'Test Revenue', 'revenue', 0),
-              ($1, '9999', 'فروقات التقريب', 'Rounding', 'expense', 0)
-       ON CONFLICT ("companyId", code) DO UPDATE SET "currentBalance" = 0`,
+              ($1, '9999', 'فروقات التقريب', 'Rounding', 'expense', 0)`,
       [companyId]
     );
   });
@@ -375,10 +385,13 @@ d("Wave-2 H3: appendRoundingAdjustment moves chart_of_accounts.currentBalance fo
       [companyId]
     );
     await rawExecute(`DELETE FROM journal_entries WHERE "companyId"=$1`, [companyId]);
+    // See note in earlier beforeEach hooks — chart_of_accounts has no
+    // UNIQUE(companyId, code) constraint, so we wipe and re-seed rather
+    // than relying on ON CONFLICT.
+    await rawExecute(`DELETE FROM chart_of_accounts WHERE "companyId"=$1`, [companyId]);
     await rawExecute(
-      `INSERT INTO chart_of_accounts ("companyId", code, "nameAr", "nameEn", type, "currentBalance")
-       VALUES ($1, '9999', 'فروقات التقريب', 'Rounding', 'expense', 0)
-       ON CONFLICT ("companyId", code) DO UPDATE SET "currentBalance" = 0`,
+      `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "currentBalance")
+       VALUES ($1, '9999', 'فروقات التقريب', 'Rounding', 'expense', 0)`,
       [companyId]
     );
   });
