@@ -15,6 +15,19 @@ export { PageHeader } from "../../../artifacts/ghayth-erp/src/components/page-he
 
 export { PageErrorBoundary } from "../../../artifacts/ghayth-erp/src/components/page-error-boundary";
 
+// ─── ListPage composite (UNIFICATION_PLAN §P7) ───────────────────────
+// First non-shim export in the kit: a real composition built on top of
+// PageShell + DataTable + AdvancedFilters. Consumers pass a queryKey +
+// endpoint + columns; ListPage owns the React Query call, the filter
+// state, the stats grid and the loading/empty/error fallbacks.
+export { ListPage } from "../../../artifacts/ghayth-erp/src/components/list-page";
+export type {
+  ListPageProps,
+  ListPageStat,
+  ListPagePrimaryAction,
+  StatTone,
+} from "../../../artifacts/ghayth-erp/src/components/list-page";
+
 // ─── Tables ───────────────────────────────────────────────────────────
 export { DataTable } from "../../../artifacts/ghayth-erp/src/components/ui/data-table";
 export type {

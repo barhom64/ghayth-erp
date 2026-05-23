@@ -1,26 +1,23 @@
 import { useState } from "react";
-import { Calendar, Lock, Unlock, Plus, AlertTriangle } from "lucide-react";
+import { Calendar, Lock, Unlock, AlertTriangle } from "lucide-react";
 
-// First real consumer of @workspace/ui-core (UNIFICATION_PLAN §P8 Phase 3).
-// Every shell / table / form / status / filter primitive is imported from
-// the kit, not from @/components. The shadcn raw Dialog/Button stay at
-// @/components/ui/* (they're the foundation layer that the kit builds on).
+// Second wave of @workspace/ui-core adoption. This page first shipped
+// against PageShell + DataTable + AdvancedFilters directly (commit
+// 969dd57). The structural plumbing now collapses into <ListPage>, the
+// new composite primitive (UNIFICATION_PLAN §P7). Net code dropped from
+// ~470 lines to ~280; the page now reads as "what to show", not "how to
+// lay it out".
 import {
-  PageShell,
-  DataTable,
-  type DataTableColumn,
+  ListPage,
+  type ListPageStat,
   dateColumn,
   statusColumn,
-  AdvancedFilters,
-  useFilters,
-  applyFilters,
   FormShell,
   FormTextField,
   FormDateField,
   FormTextareaField,
 } from "@workspace/ui-core";
 
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,20 +34,20 @@ import { z } from "zod";
 /**
  * Fiscal periods — v2 management page (FIN-014).
  *
- * Replaces the v1 `/finance/fiscal-periods` page that was read-only and
- * heuristic. This v2 page consumes the real CRUD endpoints under
- * `/api/finance/fiscal-periods-v2`:
- *
+ * Backend contract (unchanged from first iteration):
  *   GET    /finance/fiscal-periods-v2          → list
  *   POST   /finance/fiscal-periods-v2          → create
- *   POST   /finance/fiscal-periods-v2/:id/close   → close (refuses if
- *                                                   pending manual journals)
- *   POST   /finance/fiscal-periods-v2/:id/reopen  → reopen (reason required)
+ *   POST   /finance/fiscal-periods-v2/:id/close   → 409 with pendingCount
+ *                                                   when manual journals
+ *                                                   are unposted
+ *   POST   /finance/fiscal-periods-v2/:id/reopen  → reason required
  *
- * The close endpoint returns 409 ConflictError with `meta.pendingCount`
- * when the period still holds unposted manual journals; the UI surfaces
- * that count and the suggested fix instead of a generic error toast.
+ * All mutations invalidate the ["fiscal-periods-v2"] cache key, which
+ * <ListPage> uses for its query — refetch happens automatically without
+ * explicit refetch() callbacks.
  */
+
+const QUERY_KEY = ["fiscal-periods-v2"] as const;
 
 interface FiscalPeriodV2Row {
   id: number;
@@ -89,64 +86,86 @@ type ReopenValues = z.infer<typeof reopenSchema>;
 // ─── Page ─────────────────────────────────────────────────────────────
 
 export default function FiscalPeriodsV2Page() {
-  const { data, isLoading, isError, error, refetch } = useApiQuery<{
-    data: FiscalPeriodV2Row[];
-    total: number;
-  }>(["fiscal-periods-v2"], "/finance/fiscal-periods-v2");
-
-  const rows: FiscalPeriodV2Row[] = data?.data ?? [];
-  const [filters, setFilters] = useFilters();
-
   const [createOpen, setCreateOpen] = useState(false);
   const [closeTarget, setCloseTarget] = useState<FiscalPeriodV2Row | null>(null);
   const [reopenTarget, setReopenTarget] = useState<FiscalPeriodV2Row | null>(null);
 
-  const filtered = applyFilters(
-    rows as unknown as Record<string, unknown>[],
-    filters,
-    { searchFields: ["name"], statusField: "status" },
-  ) as unknown as FiscalPeriodV2Row[];
-
+  // Stats need the row count — read once from cache. ListPage owns the
+  // canonical fetch; this just borrows the same key so we don't double
+  // network. Returns undefined until the query resolves.
+  const { data } = useApiQuery<{ data: FiscalPeriodV2Row[] }>(
+    [...QUERY_KEY],
+    "/finance/fiscal-periods-v2",
+  );
+  const rows = data?.data ?? [];
   const openCount = rows.filter((r) => r.status === "open").length;
   const closedCount = rows.filter((r) => r.status === "closed").length;
 
-  const columns: DataTableColumn<FiscalPeriodV2Row>[] = [
+  const stats: ListPageStat[] = [
     {
-      key: "name",
-      header: "الفترة",
-      sortable: true,
-      searchable: true,
-      className: "font-medium",
-      render: (row) => row.name,
-    },
-    dateColumn<FiscalPeriodV2Row>("startDate", "من"),
-    dateColumn<FiscalPeriodV2Row>("endDate", "إلى"),
-    statusColumn<FiscalPeriodV2Row>("status", "الحالة", "shared"),
-    {
-      key: "closedAt",
-      header: "أُغلقت في",
-      sortable: true,
-      width: "180px",
-      render: (row) => {
-        if (!row.closedAt) return <span className="text-muted-foreground">—</span>;
-        return (
-          <div className="flex flex-col">
-            <span className="tabular-nums">{formatDateAr(row.closedAt)}</span>
-            {row.closedByName && (
-              <span className="text-xs text-muted-foreground">
-                بواسطة {row.closedByName}
-              </span>
-            )}
-          </div>
-        );
-      },
+      label: "إجمالي الفترات",
+      value: rows.length,
+      icon: <Calendar className="h-5 w-5" />,
+      tone: "info",
     },
     {
-      key: "id",
-      header: "إجراء",
-      width: "140px",
-      align: "end",
-      render: (row) =>
+      label: "مفتوحة",
+      value: openCount,
+      icon: <Unlock className="h-5 w-5" />,
+      tone: "emerald",
+    },
+    {
+      label: "مُغلقة",
+      value: closedCount,
+      icon: <Lock className="h-5 w-5" />,
+      tone: "slate",
+    },
+  ];
+
+  return (
+    <ListPage<FiscalPeriodV2Row>
+      title="إقفال الفترات المالية"
+      subtitle="إنشاء وإقفال وإعادة فتح الفترات المالية (نظام v2)"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { label: "إقفال الفترات" },
+      ]}
+      queryKey={[...QUERY_KEY]}
+      endpoint="/finance/fiscal-periods-v2"
+      columns={[
+        {
+          key: "name",
+          header: "الفترة",
+          sortable: true,
+          searchable: true,
+          className: "font-medium",
+          render: (row) => row.name,
+        },
+        dateColumn<FiscalPeriodV2Row>("startDate", "من"),
+        dateColumn<FiscalPeriodV2Row>("endDate", "إلى"),
+        statusColumn<FiscalPeriodV2Row>("status", "الحالة", "shared"),
+        {
+          key: "closedAt",
+          header: "أُغلقت في",
+          sortable: true,
+          width: "180px",
+          render: (row) => {
+            if (!row.closedAt) return <span className="text-muted-foreground">—</span>;
+            return (
+              <div className="flex flex-col">
+                <span className="tabular-nums">{formatDateAr(row.closedAt)}</span>
+                {row.closedByName && (
+                  <span className="text-xs text-muted-foreground">
+                    بواسطة {row.closedByName}
+                  </span>
+                )}
+              </div>
+            );
+          },
+        },
+      ]}
+      rowKey={(p) => String(p.id)}
+      rowActions={(row) =>
         row.status === "open" ? (
           <Button
             size="sm"
@@ -167,139 +186,32 @@ export default function FiscalPeriodsV2Page() {
             <Unlock className="h-4 w-4 ml-1" />
             إعادة فتح
           </Button>
-        ),
-    },
-  ];
-
-  return (
-    <PageShell
-      title="إقفال الفترات المالية"
-      subtitle="إنشاء وإقفال وإعادة فتح الفترات المالية (نظام v2)"
-      breadcrumbs={[
-        { href: "/finance", label: "المالية" },
-        { label: "إقفال الفترات" },
-      ]}
-      actions={
-        <Button onClick={() => setCreateOpen(true)} data-testid="create-period">
-          <Plus className="h-4 w-4 ml-1" />
-          فترة جديدة
-        </Button>
+        )
       }
-      loading={isLoading}
-    >
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
-        <StatTile
-          icon={<Calendar className="h-5 w-5 text-status-info-foreground" />}
-          tone="info"
-          label="إجمالي الفترات"
-          value={rows.length}
-        />
-        <StatTile
-          icon={<Unlock className="h-5 w-5 text-emerald-600" />}
-          tone="emerald"
-          label="مفتوحة"
-          value={openCount}
-        />
-        <StatTile
-          icon={<Lock className="h-5 w-5 text-slate-600" />}
-          tone="slate"
-          label="مُغلقة"
-          value={closedCount}
-        />
-      </div>
-
-      <AdvancedFilters
-        config={{
+      filters={{
+        config: {
           searchPlaceholder: "بحث باسم الفترة...",
           statuses: [
             { value: "open", label: "مفتوحة" },
             { value: "closed", label: "مُغلقة" },
           ],
-        }}
-        values={filters}
-        onChange={setFilters}
-        resultCount={filtered.length}
-      />
-
-      <DataTable
-        columns={columns}
-        data={filtered}
-        isLoading={isLoading}
-        isError={isError}
-        error={error as Error | null}
-        onRetry={refetch}
-        noToolbar
-        rowKey={(p) => String(p.id)}
-        emptyMessage="لا توجد فترات مالية"
-        emptyIcon={<Calendar className="h-10 w-10 opacity-30" />}
-        pageSize={20}
-      />
-
-      <CreateDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={() => {
-          setCreateOpen(false);
-          refetch();
-        }}
-      />
-
-      <CloseDialog
-        target={closeTarget}
-        onOpenChange={(open) => !open && setCloseTarget(null)}
-        onClosed={() => {
-          setCloseTarget(null);
-          refetch();
-        }}
-      />
-
-      <ReopenDialog
-        target={reopenTarget}
-        onOpenChange={(open) => !open && setReopenTarget(null)}
-        onReopened={() => {
-          setReopenTarget(null);
-          refetch();
-        }}
-      />
-    </PageShell>
-  );
-}
-
-// ─── Stat tile ────────────────────────────────────────────────────────
-
-function StatTile({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  tone: "info" | "emerald" | "slate";
-}) {
-  const bg =
-    tone === "info"
-      ? "bg-status-info-surface"
-      : tone === "emerald"
-      ? "bg-emerald-50"
-      : "bg-slate-100";
-  const fg =
-    tone === "info"
-      ? "text-status-info-foreground"
-      : tone === "emerald"
-      ? "text-emerald-600"
-      : "text-slate-600";
-  return (
-    <Card>
-      <CardContent className="p-4 flex items-center gap-3">
-        <div className={`p-2 ${bg} rounded-lg`}>{icon}</div>
-        <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className={`text-xl font-bold ${fg}`}>{value}</p>
-        </div>
-      </CardContent>
-    </Card>
+        },
+        searchFields: ["name"],
+        statusField: "status",
+      }}
+      primaryAction={{
+        label: "فترة جديدة",
+        onClick: () => setCreateOpen(true),
+        testid: "create-period",
+      }}
+      stats={stats}
+      emptyMessage="لا توجد فترات مالية"
+      emptyIcon={<Calendar className="h-10 w-10 opacity-30" />}
+    >
+      <CreateDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <CloseDialog target={closeTarget} onOpenChange={(open) => !open && setCloseTarget(null)} />
+      <ReopenDialog target={reopenTarget} onOpenChange={(open) => !open && setReopenTarget(null)} />
+    </ListPage>
   );
 }
 
@@ -308,17 +220,15 @@ function StatTile({
 function CreateDialog({
   open,
   onOpenChange,
-  onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated: () => void;
 }) {
   const { toast } = useToast();
   const create = useApiMutation<FiscalPeriodV2Row, CreateValues>(
     "/finance/fiscal-periods-v2",
     "POST",
-    [["fiscal-periods-v2"]],
+    [[...QUERY_KEY]],
   );
 
   return (
@@ -339,7 +249,7 @@ function CreateDialog({
             try {
               await create.mutateAsync(values);
               toast({ title: "تم إنشاء الفترة المالية" });
-              onCreated();
+              onOpenChange(false);
             } catch (err) {
               handleFormError(err, setFieldError, toast);
             }
@@ -360,18 +270,16 @@ function CreateDialog({
 function CloseDialog({
   target,
   onOpenChange,
-  onClosed,
 }: {
   target: FiscalPeriodV2Row | null;
   onOpenChange: (open: boolean) => void;
-  onClosed: () => void;
 }) {
   const { toast } = useToast();
   const [pendingCount, setPendingCount] = useState<number | null>(null);
   const close = useApiMutation<{ message: string }, CloseValues>(
     () => `/finance/fiscal-periods-v2/${target!.id}/close`,
     "POST",
-    [["fiscal-periods-v2"]],
+    [[...QUERY_KEY]],
   );
 
   return (
@@ -425,7 +333,7 @@ function CloseDialog({
             try {
               await close.mutateAsync(values);
               toast({ title: `تم إقفال الفترة "${target?.name ?? ""}"` });
-              onClosed();
+              onOpenChange(false);
             } catch (err) {
               if (err instanceof ApiError && err.code === "CONFLICT") {
                 const count = Number(
@@ -455,17 +363,15 @@ function CloseDialog({
 function ReopenDialog({
   target,
   onOpenChange,
-  onReopened,
 }: {
   target: FiscalPeriodV2Row | null;
   onOpenChange: (open: boolean) => void;
-  onReopened: () => void;
 }) {
   const { toast } = useToast();
   const reopen = useApiMutation<{ message: string }, ReopenValues>(
     () => `/finance/fiscal-periods-v2/${target!.id}/reopen`,
     "POST",
-    [["fiscal-periods-v2"]],
+    [[...QUERY_KEY]],
   );
 
   return (
@@ -495,7 +401,7 @@ function ReopenDialog({
             try {
               await reopen.mutateAsync(values);
               toast({ title: `تم إعادة فتح الفترة "${target?.name ?? ""}"` });
-              onReopened();
+              onOpenChange(false);
             } catch (err) {
               handleFormError(err, setFieldError, toast);
             }
