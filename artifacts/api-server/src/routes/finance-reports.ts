@@ -100,7 +100,7 @@ reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance.report
        LEFT JOIN (
          SELECT jl."accountCode", jl.debit, jl.credit
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}${branchFilter}
+         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}${branchFilter}
        ) fl ON fl."accountCode" = coa.code
        WHERE coa."companyId" = $1 AND coa."deletedAt" IS NULL
        GROUP BY coa.id, coa.code, coa.name, coa.type, coa."parentId", coa.level, coa."allowPosting"
@@ -132,8 +132,8 @@ reportsRouter.get("/reports/income-statement", authorize({ feature: "finance.rep
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     const branchFilter = getBranchCondition(scope, undefined, params);
-    const revenues = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}${branchFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
-    const expenses = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.debit) - SUM(fl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}${branchFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
+    const revenues = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}${branchFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
+    const expenses = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.debit) - SUM(fl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}${branchFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
     const totalRevenue = revenues.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
     const totalExpenses = expenses.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
     res.json(maskFields(req, { revenues, expenses, summary: { totalRevenue, totalExpenses, netIncome: totalRevenue - totalExpenses } }));
@@ -158,7 +158,7 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.report
        LEFT JOIN (
          SELECT jl."accountCode", jl.debit, jl.credit
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}${branchFilter}
+         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}${branchFilter}
        ) fl ON fl."accountCode" = coa.code
        WHERE coa."companyId" = $1 AND coa.type IN ('asset','liability','equity') AND coa."deletedAt" IS NULL
        GROUP BY coa.code, coa.name, coa.type ORDER BY coa.type, coa.code`,
@@ -221,7 +221,7 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
       `SELECT COALESCE(SUM(jl.debit - jl.credit), 0) AS balance
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId"
-        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true
+        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
           AND je."createdAt" < $2
           AND jl."accountCode" = ANY($3)${openingBranchCond}`,
       openingParams
@@ -241,7 +241,7 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
               jl_cash.debit AS "cashDebit", jl_cash.credit AS "cashCredit"
          FROM journal_entries je
          JOIN journal_lines jl_cash ON jl_cash."journalId" = je.id
-        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true
+        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
           AND je."createdAt" >= $2 AND je."createdAt" < ($3::date + 1)
           AND jl_cash."accountCode" = ANY($4)
           AND (jl_cash.debit > 0 OR jl_cash.credit > 0)${jesBranchCond}
@@ -984,7 +984,7 @@ reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.re
               COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS amount,
               COUNT(DISTINCT je.id) AS "entryCount"
        FROM journal_lines jl
-       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}
        JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'expense'
        LEFT JOIN branches b ON b.id = je."branchId"
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
@@ -1019,7 +1019,7 @@ reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance.rep
               COALESCE(SUM(jl.credit) - SUM(jl.debit), 0) AS amount,
               COUNT(DISTINCT je.id) AS "entryCount"
        FROM journal_lines jl
-       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}
        JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'revenue'
        WHERE jl."deletedAt" IS NULL
        GROUP BY coa.code, coa.name
@@ -1113,7 +1113,7 @@ reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance.
               jl.debit, jl.credit, je."createdAt" AS date,
               b.name AS "branchName"
        FROM journal_lines jl
-       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}
        LEFT JOIN branches b ON b.id = je."branchId"
        WHERE jl."accountCode" = $2 AND jl."deletedAt" IS NULL
        ORDER BY je."createdAt" ASC
