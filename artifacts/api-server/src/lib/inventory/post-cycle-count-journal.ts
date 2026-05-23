@@ -261,10 +261,15 @@ export async function postCycleCountVarianceJournal(
 
     const payload = buildEntry(buildInput);
 
+    // PD-6 — stable economic-event key. A retried cycle-count post (network
+    // blip, manual retry) for the same cycle-count run returns the existing
+    // entry instead of double-posting. Tied to the cycle-count row id.
+    const ref = `CC-${opts.cycleCountId}-${header.scheduledDate}`;
     const ctx: EntryContext = {
       companyId: opts.companyId,
       createdBy: opts.postedBy,
-      ref: `CC-${opts.cycleCountId}-${header.scheduledDate}`,
+      ref,
+      sourceKey: `CC-${opts.cycleCountId}`,
       type: "cycle_count_variance",
       sourceType: "warehouse_cycle_counts",
       sourceId: opts.cycleCountId,

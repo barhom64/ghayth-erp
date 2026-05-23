@@ -43,6 +43,13 @@ export interface EntryContext {
    *  these too on each line if the payload set them. */
   sourceType?: string;
   sourceId?: number;
+  /** Stable idempotency key for the economic event being posted (PD-6).
+   *  When provided, a retried post with the same (companyId, sourceKey)
+   *  returns the existing entry instead of double-posting. Backed by the
+   *  partial UNIQUE index on journal_entries (companyId, sourceKey) WHERE
+   *  sourceKey IS NOT NULL — so even a racy missed pre-check is rejected
+   *  by the database. */
+  sourceKey?: string;
   /** Whether to mark the entry posted immediately (default) or
    *  leave it as a draft for operator review. */
   status?: JournalEntryStatus;
@@ -51,6 +58,9 @@ export interface EntryContext {
 export interface PostedEntry {
   journalEntryId: number;
   status: JournalEntryStatus;
+  /** True when an idempotent retry hit an existing entry (sourceKey
+   *  matched) and no new row was inserted. */
+  alreadyExists?: boolean;
 }
 
 /**
@@ -83,6 +93,29 @@ export async function postJournalEntry(
   }
 
   const status: JournalEntryStatus = ctx.status ?? "posted";
+
+  // PD-6 — sourceKey idempotency. A retried post (scheduler re-fire, network
+  // blip, manual retry) with the same (companyId, sourceKey) returns the
+  // existing entry instead of double-posting. The check here is best-effort
+  // — the partial UNIQUE index on journal_entries (companyId, sourceKey)
+  // WHERE sourceKey IS NOT NULL is the authoritative backstop, so even a
+  // racy missed pre-check is rejected by the database with a unique
+  // violation rather than silently double-counting.
+  if (ctx.sourceKey) {
+    const existing = await rawQuery<{ id: number; status: JournalEntryStatus }>(
+      `SELECT id, status FROM journal_entries
+       WHERE "companyId" = $1 AND "sourceKey" = $2 AND "deletedAt" IS NULL
+       LIMIT 1`,
+      [ctx.companyId, ctx.sourceKey],
+    );
+    if (existing.length > 0) {
+      return {
+        journalEntryId: existing[0].id,
+        status: existing[0].status,
+        alreadyExists: true,
+      };
+    }
+  }
 
   // Financial-period-close gate. A *posted* entry must never land in a
   // closed financial period. Drafts are exempt — the gate is enforced
@@ -138,12 +171,14 @@ export async function postJournalEntry(
       // reporting period instead of the period it was physically inserted.
       `INSERT INTO journal_entries (
          "companyId", "branchId", ref, description, "createdBy",
-         date, type, status, "sourceType", "sourceId", "postedBy", "postedAt", "createdAt"
+         date, type, status, "sourceType", "sourceId", "postedBy", "postedAt", "createdAt",
+         "sourceKey"
        ) VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE),
                  COALESCE($7, 'manual'), $8, $9, $10,
                  CASE WHEN $8 = 'posted' THEN $5 ELSE NULL END,
                  CASE WHEN $8 = 'posted' THEN NOW() ELSE NULL END,
-                 COALESCE($6::date, CURRENT_DATE))
+                 COALESCE($6::date, CURRENT_DATE),
+                 $11)
        RETURNING id`,
       [
         ctx.companyId,
@@ -156,6 +191,7 @@ export async function postJournalEntry(
         status,
         ctx.sourceType ?? null,
         ctx.sourceId ?? null,
+        ctx.sourceKey ?? null,
       ],
     );
     const journalEntryId = header.id;
