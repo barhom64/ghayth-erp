@@ -608,7 +608,7 @@ budgetRouter.get("/budget/variance", authorize({ feature: "finance.budget", acti
                 JOIN journal_entries je ON je.id = jl."journalId"
                 WHERE je."companyId" = b."companyId"
                   AND je."deletedAt" IS NULL
-                  AND je.status = 'posted'
+                  AND je."balancesApplied" = true
                   AND jl."accountCode" = b."accountCode"
                   AND je."createdAt"::date BETWEEN $2::date AND $3::date
               ), 0) AS "actualAmount"
@@ -691,7 +691,7 @@ budgetRouter.get("/fiscal-periods", authorize({ feature: "finance.budget", actio
               COALESCE(SUM(jl.debit), 0) AS "totalDebit"
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl."journalId" = je.id
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted'
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true
          AND je."createdAt" >= make_date($2, 1, 1) AND je."createdAt" < make_date($2 + 1, 1, 1)
        GROUP BY to_char(je."createdAt", 'YYYY-MM')`,
       [scope.companyId, thisYear]
