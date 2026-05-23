@@ -158,48 +158,59 @@ FIN-014/FIN-016/HR-010 على `<ListPage>`/`<CreateEditPage>` الجديدين
 
 ## Track B — UI Standardization Layer
 
-### المشكلة (أكبر دين تقني مرئي حاليًا)
+### الحالة الفعلية بعد الجرد (مُحدَّث 2026-05-23)
 
-429 صفحة · لا قواعد مفروضة على:
+المُمكِّنات (primitives) **موجودة بالفعل** كجزء من خطة توحيد قائمة موثَّقة
+في `docs/UNIFICATION_PLAN.md` (تمت استعادتها). الخطة عبر phases مرقّمة
+P0..P7؛ كل مُمكِّن مُعلَّم برقم phase في docstring الكود (`grep "P[0-9]\.[0-9]" artifacts/`).
 
-- الجداول: 499 استخدام `DataTable` لكن 18 صفحة لا تزال raw `<table>`.
-- النماذج: 282 استخدام `FormShell` مقابل 251 صفحة تحمل `useState` —
-  ≈58% من الصفحات لم تهاجَر إلى `react-hook-form + zod` الموحّد
-  (راجع `docs/REMAINING_ROADMAP.md` §3).
-- Filters / Drawers / Actions / Statuses / Audit views: كل دومين
-  أعاد اختراعها بنكهة مختلفة (راجع `components/shared/` — هناك
-  `crm-tabs-nav`, `hr-tabs-nav`, `fleet-tabs-nav`, `finance-tabs-nav`
-  بدلًا من واحد generic).
+**الموجود** (P0-P1، مكتمل):
 
-### المخرج
+| المُمكِّن | الموقع | تبنّي |
+| --- | --- | --- |
+| `PageShell` (P1.1) | `components/page-shell.tsx` | 179/429 (41.7%) |
+| `FormShell` (P1.2) | `components/form-shell.tsx` | 55/429 (12.8%) |
+| `ApiError` + typed pipeline (P1.3) | `lib/api.ts` | عالمي |
+| DataTable presets (P1.4) | `components/data-table-presets.tsx` | اختياري |
+| `useLifecycleAction` (P1.5) | `hooks/use-lifecycle-action.tsx` | عالمي |
+| `PageStatusBadge` + STATUS_MAP (P1.6) | `components/page-status-badge.tsx` | تدريجي |
+| `DetailPageLayout` | `components/shared/detail-page-layout.tsx` | 79/429 (18.4%) |
 
-1. **`@ghayth/ui-kit`** ضمن `lib/` — مكتبة داخلية تُصدّر:
-   - `<ListPage>` = filters + table + bulk actions + pagination + empty/error states.
-   - `<DetailPage>` = header + status badge + timeline + tabs + actions.
-   - `<CreateEditPage>` = `FormShell` معياري + validation + dirty-guard + autosave.
-   - `<EntityDrawer>` للـ inline edits.
-   - `<StatusPill>` بقاموس واحد للحالات عبر الدومينات.
-   - `<AuditTrail>` يقرأ من `auditLogs` API ويعرض diff موحّد.
-2. **Page generator** = `scripts/scaffold-page.mjs` يولّد ListPage جديدة
-   متوافقة من spec بسيط (entity, columns, actions).
-3. **ESLint rule محلية** تمنع import مباشر لـ raw `<table>` أو
-   `<form>` خارج `lib/ui-kit/`.
+**الفجوة الحقيقية** (لم تكن واضحة في الـ roadmap السابق):
 
-### Phases
+1. ≈12 صفحة جديدة على وشك البناء (RESCAN-v3 backlog) — لو لم نفرض
+   قاعدة P6 (راجع `UNIFICATION_PLAN.md`) عليها سترفع عدد الصفحات
+   غير المُهاجَرة.
+2. لا `<ListPage>` ولا `<CreateEditPage>` composites — كل صفحة list
+   تُكوّن `PageShell + DataTable + Pagination` يدويًا (107 صفحة).
+3. لا lint guards — `scripts/src/lint-patterns.mjs` فيه 8 قواعد لكن
+   لا واحدة على UI patterns (`<table>` خام، `useState` في create
+   pages، إلخ).
+4. 18 صفحة raw `<table>` · 196 صفحة create/edit بـ `useState` بلا
+   `FormShell` · 250 صفحة بلا `PageShell`.
 
-| Phase | المخرج | ملفات | معيار النجاح |
-| --- | --- | --- | --- |
-| B1 | استخراج 4 abstractions الأساسية إلى `lib/ui-kit/` | `lib/ui-kit/src/list-page.tsx`, `detail-page.tsx`, `create-edit-page.tsx`, `status-pill.tsx` | finance + hr يستوردان منه دون أي UI regression |
-| B2 | تهجير 18 صفحة raw `<table>` (المُعدّ سلفًا في metric أعلاه) إلى `<ListPage>` | يحدّدها `grep -rln "<table" artifacts/ghayth-erp/src/pages` | 0 raw `<table>` خارج `lib/ui-kit/` |
-| B3 | Forms migration sweep أولى: 80 صفحة finance + HR من `useState` إلى `<CreateEditPage>` | حسب `docs/forms-migration-report.md` | عدّاد `useState in pages` ينخفض من 251 → ≤170 |
-| B4 | توحيد التبويبات: حذف `*-tabs-nav.tsx` المتفرّقة لصالح `<DomainTabs>` واحد | `components/shared/*-tabs-nav.tsx` | حذف 4 ملفات؛ كل دومين يستهلك tabs config |
-| B5 | ESLint guard + scaffold script | `eslint-plugin-ghayth/rules/no-raw-table.js`, `scripts/scaffold-page.mjs` | CI يرفض raw `<table>` جديد |
+### المخرج (مُحدَّث)
+
+النقطة لم تعد «استخراج abstractions» — هي موجودة. النقطة الآن:
+**رفع التبنّي + إكمال composites + lint guards**.
+
+### Phases (مُحدَّثة)
+
+| Phase | المخرج | الحالة |
+| --- | --- | --- |
+| B1 | استعادة `docs/UNIFICATION_PLAN.md` كمرجع حيّ + توثيق التبنّي الحالي | ✅ هذا الـ PR |
+| B2 | فرض قاعدة P6 على RESCAN-v3 backlog: كل صفحة جديدة (FIN-013/014/015/016, HR-010, COM-001/002, CRM-004, UMR-005/016, FLT-006) تستخدم `<PageShell>`/`<FormShell>`/`<DetailPageLayout>`/`<PageStatusBadge>` | يدويًا في PR review حتى B5 |
+| B3 | بناء `<ListPage>` composite (P7) — يستهلك PageShell + DataTable + presets؛ يصبح القاعدة لصفحات list الجديدة | غير منجَز |
+| B4 | بناء `<CreateEditPage>` composite (P7) — PageShell + FormShell + dirty-guard | غير منجَز |
+| B5 | إضافة أوّل lint rule في `scripts/src/lint-patterns.mjs`: `raw-table-in-page` (يفترض إكمال migration لـ 18 صفحة قائمة أولًا، أو bootstrap بـ skip-list) | غير منجَز |
+| B6 | sweep تدريجي للـ 250 صفحة الخالية من `<PageShell>` (دومين بدومين، نفس نمط P4.1-P4.9) | تدريجي طويل المدى |
+| B7 | sweep `useState` → `FormShell` للـ 196 صفحة create/edit | تدريجي طويل المدى |
 
 ### ملاحظة scope
 
-تهجير الـ 280+ صفحة الكاملة (`REMAINING_ROADMAP.md §3`) خارج نطاق هذه
-الخطة — هنا نضع الأساس فقط، ثم التهجير يجري incremental وفق نفس
-الأولوية المقترحة (20-30 صفحة/سبرنت).
+تهجير الـ 280+ صفحة الكاملة (`REMAINING_ROADMAP.md §3`) لا يزال خارج
+نطاق هذا الـ track — يحدث عبر P4 sweeps في `UNIFICATION_PLAN.md`. هنا
+نضع الأساس (B1) + الحراس (B2-B5) فقط.
 
 ---
 
@@ -314,25 +325,23 @@ D1 ─> D2 (يعتمد على A3 — workflow يستخدم relay)
 D3 ─> D4 (مستقل)
 ```
 
-**الترتيب الموصى به** (مُحدَّث بعد رصد حملات FND + Wave-2 + RESCAN v3):
+**الترتيب الموصى به** (مُحدَّث 2026-05-23 بعد جرد UNIFICATION_PLAN):
 
-1. **P0 الفوري — قبل أي شيء آخر**: **B1** (استخراج abstractions إلى
-   `lib/ui-kit/`). السبب: ≈12 صفحة جديدة في طريقها (FIN-014, FIN-016,
-   HR-010, COM-001/002, CRM-004, UMR-005/016, FLT-006) — كل صفحة
-   تُبنى على النمط القديم تضاعف دين B3 لاحقًا.
-2. **P0 بالتوازي مع B1**: **C1+C2** (scenario harness + التقاط 9 fix
-   الأخيرة C1-C3/H1-H4/#878/#888 كأول سيناريوهات). هذا يقفل قفل
-   regression على الإصلاحات الطازجة قبل أن تختفي من الذاكرة.
-3. **P1 — بعد B1**: **A1+A2** (worker process + نقل cron). يستفيد من
+1. **✅ منجَز في هذا الـ PR**: B1 (استعادة `docs/UNIFICATION_PLAN.md`
+   كمرجع حيّ + تصحيح Track B في الـ roadmap).
+2. **P0 الفوري التالي**: **B2** (فرض قاعدة P6 على RESCAN-v3 backlog
+   عبر PR review) + **C1+C2** بالتوازي (scenario harness + التقاط 9 fix
+   الأخيرة C1-C3/H1-H4/#878/#888 كأول سيناريوهات).
+3. **P1**: **A1+A2** (worker process + نقل cron). يستفيد من
    FND-003 (env via config) و FND-008 (cron alerts) المُنجَزَين.
-4. **P1 بالتوازي**: B2 (تهجير 18 raw `<table>`) + توجيه تطبيق الـ
-   ui-kit في صفحات RESCAN v3 الجديدة.
+4. **P1 بالتوازي**: B3+B4 (composites `<ListPage>` + `<CreateEditPage>`)
+   ثم B5 (أوّل lint rule).
 5. **P2**: A3+A4 (transactional outbox الحقيقي) — يبني فوق DLQ في
    #878، يحتاج FND-006 لتغطية كاملة.
 6. **P2**: C3-C6 (إكمال finance regression) — لزم قبل أي تغيير
    هيكلي في GL. C5 (period close) يتطلّب FIN-014 + FIN-015 جاهزَين.
 7. **P3**: D1-D2 (workflow engine، يحتاج A3 + يستلهم `lib/supportSlaEscalation.ts`)،
-   D3-D4 (print engine)، B3-B5 (forms sweep).
+   D3-D4 (print engine)، B6-B7 (sweep تدريجي عبر P4 phases).
 
 ## تقدير حجم العمل
 
