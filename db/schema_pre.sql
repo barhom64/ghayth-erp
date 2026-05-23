@@ -6414,9 +6414,9 @@ CREATE TABLE public.event_outbox (
 
 CREATE TABLE public.supplier_payment_allocations (
     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    "companyId" integer NOT NULL REFERENCES public.companies(id),
+    "companyId" integer NOT NULL,
     "branchId" integer,
-    "journalEntryId" integer NOT NULL REFERENCES public.journal_entries(id),
+    "journalEntryId" integer NOT NULL,
     "obligationType" character varying(30) NOT NULL
         CHECK ("obligationType" IN ('purchase_order','nusk_invoice','expense','manual')),
     "obligationId" integer NOT NULL,
