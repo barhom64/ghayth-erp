@@ -17,7 +17,7 @@ import {
   FormTextField,
   FormTextareaField,
   FormSelectField,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const DRAFT_KEY = "hr_evaluation_360_create";
 const DRAFT_STORAGE = `erp_draft_${DRAFT_KEY}`;

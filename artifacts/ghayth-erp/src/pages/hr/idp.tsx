@@ -19,7 +19,7 @@ import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { IDP_STATUS } from "@/lib/hr-type-maps";
 import {
   FormShell, FormTextField, FormTextareaField, FormSelectField, FormDateField, FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const idpSchema = z.object({
   employeeId: z.string().min(1, "الموظف مطلوب"),

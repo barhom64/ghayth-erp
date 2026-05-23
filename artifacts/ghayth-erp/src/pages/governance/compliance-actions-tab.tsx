@@ -23,7 +23,7 @@ import {
   FormDateField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const complianceActionSchema = z.object({
   title: z.string().trim().min(1, "العنوان مطلوب"),

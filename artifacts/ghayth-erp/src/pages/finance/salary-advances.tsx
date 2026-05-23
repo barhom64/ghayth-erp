@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   FormShell, FormTextField, FormNumberField, FormSelectField, FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 import { Banknote, DollarSign, Plus, X, Clock, CheckCircle } from "lucide-react";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";

@@ -17,7 +17,7 @@ import {
   FormPhoneField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const letterheadSchema = z.object({
   name: z.string().trim().min(1, "اسم الفرع مطلوب"),

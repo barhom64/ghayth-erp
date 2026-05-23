@@ -12,7 +12,7 @@ import {
   FormTextareaField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

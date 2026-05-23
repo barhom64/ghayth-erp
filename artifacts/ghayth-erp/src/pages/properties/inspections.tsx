@@ -28,7 +28,7 @@ import {
   FormDateField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const TYPES: Record<string, string> = {
   move_in: "دخول مستأجر",

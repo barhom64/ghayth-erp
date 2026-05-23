@@ -22,7 +22,7 @@ import {
   FormTextareaField,
   FormDateField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // New: validation now lives in zod (was: bare `if (!newForm.finding) return`).
 // status enum is closed — typo in the option list fails typecheck.

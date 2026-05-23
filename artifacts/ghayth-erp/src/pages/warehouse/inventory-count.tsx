@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   FormShell, FormTextField, FormDateField, FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 import { todayLocal } from "@/lib/formatters";
 
 // New count session — schema enforces countDate required (was no

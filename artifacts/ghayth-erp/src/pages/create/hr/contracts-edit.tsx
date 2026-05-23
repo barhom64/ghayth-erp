@@ -14,7 +14,7 @@ import {
   FormDateField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const TYPE_OPTIONS = [
   { value: "full_time", label: "دوام كامل" },

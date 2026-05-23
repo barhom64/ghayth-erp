@@ -15,7 +15,7 @@ import {
   FormTextareaField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 import {
   FileDropZone,
   type Attachment,

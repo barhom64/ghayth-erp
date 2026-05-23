@@ -14,7 +14,7 @@ import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import {
   FormShell, FormSelectField, FormDateField, FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // All three IDs required — the original form tracked `assignmentId`
 // in state but had NO UI input for it, so every submit sent

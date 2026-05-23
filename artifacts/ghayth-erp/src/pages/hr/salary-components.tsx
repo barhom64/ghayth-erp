@@ -21,7 +21,7 @@ import {
   FormNumberField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // Zod schema enforces what the old `disabled={!form.name || ...}` guard
 // only half-checked. value is coerced from the <input type="number">

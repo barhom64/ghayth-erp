@@ -15,7 +15,7 @@ import {
   FormShell,
   FormTextField,
   FormSelectField,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const uploadSchema = z.object({
   title: z.string().trim().min(1, "العنوان مطلوب"),

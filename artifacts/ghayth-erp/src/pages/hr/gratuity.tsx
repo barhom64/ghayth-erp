@@ -10,7 +10,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { formatCurrency, todayLocal } from "@/lib/formatters";
 import {
   FormShell, FormSelectField, FormDateField, FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // Calculation form (no POST) — submit builds the query URL the
 // gratuity endpoint reads. employeeId required; the rest have safe

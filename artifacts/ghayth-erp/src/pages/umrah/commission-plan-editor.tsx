@@ -22,7 +22,7 @@ import {
   FormSelectField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // Simulator schema. Its FormShell is independent because the
 // simulate inputs aren't persisted on the plan row — they're

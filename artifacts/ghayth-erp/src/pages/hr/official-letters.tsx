@@ -26,7 +26,7 @@ import {
   FormTextareaField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // Old: subject was guarded only by `disabled={!form.subject}`. Schema
 // makes it required at validation time + trims whitespace.

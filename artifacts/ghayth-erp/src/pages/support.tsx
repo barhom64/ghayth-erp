@@ -29,7 +29,7 @@ import {
   FormTextareaField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Star, ThumbsUp, CheckCircle, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";

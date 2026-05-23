@@ -222,7 +222,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/form-shell.tsx"),
     regex: /from\s+["']@\/components\/form-shell["']/,
-    countBaseline: 50,
+    // Hardened from ratchet → hard rule (baseline reached 0 in sweep 14).
     message: `FormShell imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {

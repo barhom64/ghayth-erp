@@ -13,7 +13,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@workspace/ui-core";
 import {
   FormShell, FormNumberField, FormTextareaField, FormDateField, FormSelectField, FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // projectId stays a string until the submit handler casts to number.
 // amount uses z.coerce.number().positive() — was tracked as string

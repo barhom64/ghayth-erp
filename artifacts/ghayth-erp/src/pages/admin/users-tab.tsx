@@ -20,7 +20,7 @@ import {
   FormTextField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // Schema enforces email validity client-side (the old `!form.email`
 // guard accepted "x" as valid). employeeId stays a string until the

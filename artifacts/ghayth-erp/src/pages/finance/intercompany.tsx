@@ -14,7 +14,7 @@ import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   FormShell, FormNumberField, FormTextareaField, FormDateField, FormSelectField, FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // toCompanyId is a string in the form; the submit handler converts
 // to number for the API. amount coerced via z.coerce.

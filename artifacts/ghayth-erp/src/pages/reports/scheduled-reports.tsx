@@ -20,7 +20,7 @@ import {
   FormTextField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const scheduleSchema = z.object({
   reportType: z.string().min(1, "نوع التقرير مطلوب"),

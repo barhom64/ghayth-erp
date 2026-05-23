@@ -139,7 +139,7 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 | --- | --- | --- |
 **ui-core**:
 | `page-shell-from-legacy-path` | **hard rule** ✅ | ratchet → hardened |
-| `form-shell-from-legacy-path` | 50 | نشط |
+| `form-shell-from-legacy-path` | **hard rule** ✅ | ratchet → hardened |
 | `data-table-from-legacy-path` | **hard rule** ✅ | ratchet → hardened |
 | `page-status-badge-from-legacy-path` | 10 | نشط |
 | `create-page-layout-from-legacy-path` | 11 | نشط |
@@ -160,11 +160,11 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 **report-kit**:
 | `print-layout-from-legacy-path` | 10 | نشط |
 
-**الإجمالي**: **101 موضع** legacy import مغطّى بـ ratchet (هبط من 906
-الأولي — هبوط 805 إجمالًا = **89%**). **أربع** من القواعد ترقّت إلى
-hard rules (page-shell, data-table, entity-comments, entity-documents).
-كل واحد لا يمكنه الزيادة. كل migration يخفض العدد بمقدار 1 ويستوجب
-تحديث baseline في نفس الـ PR.
+**الإجمالي**: **51 موضع** legacy import مغطّى بـ ratchet (هبط من 906
+الأولي — هبوط 855 إجمالًا = **94%**). **خمس** من القواعد ترقّت إلى
+hard rules (page-shell, form-shell, data-table, entity-comments,
+entity-documents). كل واحد لا يمكنه الزيادة. كل migration يخفض العدد
+بمقدار 1 ويستوجب تحديث baseline في نفس الـ PR.
 
 ### آلية العمل (للمساهمين)
 

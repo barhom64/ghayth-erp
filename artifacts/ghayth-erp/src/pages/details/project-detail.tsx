@@ -15,7 +15,7 @@ import {
   FormSelectField,
   FormDateField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // Schemas for the three create sub-forms below. The edit-project
 // form (name / status / budget) is intentionally left on useState

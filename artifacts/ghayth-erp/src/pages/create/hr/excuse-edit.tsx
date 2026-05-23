@@ -15,7 +15,7 @@ import {
   FormDateField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const TYPE_OPTIONS = [
   { value: "early_leave", label: "انصراف مبكر" },

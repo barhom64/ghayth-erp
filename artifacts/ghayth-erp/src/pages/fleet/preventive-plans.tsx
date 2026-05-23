@@ -17,7 +17,7 @@ import {
   FormSelectField,
   FormDateField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const SERVICE_TYPES: Record<string, string> = {
   oil_change: "تغيير زيت",

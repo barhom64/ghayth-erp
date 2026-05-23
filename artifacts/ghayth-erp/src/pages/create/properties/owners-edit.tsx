@@ -18,7 +18,7 @@ import {
   FormDateField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // Phone is normalised to digits + leading + only — schema rejects
 // anything under 9 digits. Email uses zod's built-in `.email()`.

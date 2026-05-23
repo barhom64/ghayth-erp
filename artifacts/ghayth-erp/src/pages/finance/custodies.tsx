@@ -13,7 +13,7 @@ import {
   FormSelectField,
   FormDateField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 import {
   KeyRound,
   DollarSign,

@@ -23,7 +23,7 @@ import {
   FormDateField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const assetSchema = z.object({
   name: z.string().trim().min(1, "اسم الأصل مطلوب"),

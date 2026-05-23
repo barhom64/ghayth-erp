@@ -21,7 +21,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { TRANSFER_STATUS } from "@/lib/hr-type-maps";
 import {
   FormShell, FormTextField, FormSelectField, FormDateField, FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // employeeId + toBranchId required (was `if (!form.employeeId || !form.toBranchId)`
 // toast guard — now caught at schema validation before any network call).

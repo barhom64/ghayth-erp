@@ -14,7 +14,7 @@ import {
   FormSelectField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const STATUS_OPTIONS = [
   { value: "present", label: "حاضر" },

@@ -16,7 +16,7 @@ import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   FormShell, FormTextField, FormNumberField, FormSelectField, FormDateField, FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 import { todayLocal } from "@/lib/formatters";
 
 // driverId stays a string so the "—" no-driver option works cleanly.

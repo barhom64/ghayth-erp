@@ -17,7 +17,7 @@ import {
   FormNumberField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const workflowStepSchema = z.object({
   stepName: z.string().trim().min(1, "اسم الخطوة مطلوب"),

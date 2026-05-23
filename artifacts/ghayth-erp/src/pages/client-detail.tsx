@@ -26,7 +26,7 @@ import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { z } from "zod";
 import {
   FormShell, FormEmailField, FormTextField, FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Activity },

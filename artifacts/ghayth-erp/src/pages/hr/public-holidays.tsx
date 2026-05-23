@@ -13,7 +13,7 @@ import { HOLIDAY_TYPES, HOLIDAY_COLORS, MONTHS_AR } from "@/lib/hr-type-maps";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import {
   FormShell, FormTextField, FormSelectField, FormDateField, FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // HOLIDAY_TYPES has a fixed set of keys — `national`, `religious`,
 // `company`, etc. Use them as the closed enum source. type stays a

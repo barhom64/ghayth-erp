@@ -15,7 +15,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import {
   FormShell, FormTextField, FormDateField, FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 import {
   Gavel, Calendar, FileText, AlertTriangle, Clock,
   CheckCircle2, User, MapPin, TrendingUp, Activity,

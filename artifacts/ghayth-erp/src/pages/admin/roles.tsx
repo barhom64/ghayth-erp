@@ -19,7 +19,7 @@ import {
   FormTextField,
   FormNumberField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // The `modules` field is a string[] of MODULE_LABELS keys. Schema
 // enforces the closed-set; the picker lives below as a small

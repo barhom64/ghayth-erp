@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   FormShell, FormEmailField, FormTextField, FormSelectField, FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // Same schema as users-tab.tsx (#301) — both pages create users with
 // the same payload shape. Email is validated client-side now;

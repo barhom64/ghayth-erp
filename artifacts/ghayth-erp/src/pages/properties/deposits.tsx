@@ -26,7 +26,7 @@ import {
   FormSelectField,
   FormDateField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const depositSchema = z.object({
   contractId: z.string().min(1, "العقد مطلوب"),

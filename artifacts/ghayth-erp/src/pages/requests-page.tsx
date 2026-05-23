@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   FormShell, FormTextField, FormTextareaField, FormSelectField, FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const requestSchema = z.object({
   title: z.string().trim().min(1, "العنوان مطلوب"),

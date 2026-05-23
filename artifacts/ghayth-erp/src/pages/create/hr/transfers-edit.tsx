@@ -14,7 +14,7 @@ import {
   FormDateField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // Only non-structural proposal fields are editable here. Branch/department
 // changes are intentionally excluded — they re-trigger the destination-branch
