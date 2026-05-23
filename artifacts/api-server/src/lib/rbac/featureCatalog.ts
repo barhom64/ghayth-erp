@@ -442,6 +442,23 @@ export const FEATURE_INDEX: ReadonlyMap<string, FeatureDefinition> = new Map(
   FEATURE_CATALOG.map((f) => [f.key, f])
 );
 
+/**
+ * Every `<featureKey>:<action>` permission string the feature catalog
+ * declares — derived deterministically from FEATURE_CATALOG so adding a
+ * new feature here automatically extends the permission surface. This is
+ * the FND-010 "single source" piece: callers checking
+ * isKnownPermission() against a featureCatalog-style permission no
+ * longer need a separate entry in lib/rbacCatalog.ts. The legacy
+ * rbacCatalog PERMISSIONS list (using the older `module:action` and
+ * `module:sub:action` shapes) stays available for back-compat — both
+ * are accepted by isKnownPermission().
+ */
+export const FEATURE_PERMISSIONS: ReadonlyArray<string> = Object.freeze(
+  FEATURE_CATALOG.flatMap((f) => f.availableActions.map((a) => `${f.key}:${a}`))
+);
+
+export const FEATURE_PERMISSION_SET: ReadonlySet<string> = new Set(FEATURE_PERMISSIONS);
+
 export function getFeature(key: string): FeatureDefinition | undefined {
   return FEATURE_INDEX.get(key);
 }

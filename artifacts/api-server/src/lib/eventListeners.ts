@@ -60,7 +60,17 @@ async function logAudit(event: string, payload: EventPayload) {
   }
 }
 
+// M1 — guard against duplicate registration. A second call (test setup,
+// hot-reload, blue/green) would otherwise double every audit/log/GL
+// listener; the payroll-commission reclass at line ~820 would attempt to
+// post the same journal entry twice (sourceKey dedupe still saves the
+// books, but the second attempt logs "duplicate" errors and burns
+// connections).
+let _registered = false;
+
 export function registerEventListeners() {
+  if (_registered) return;
+  _registered = true;
   eventBus.on("employee.created", async (payload) => {
     await logEvent("employee.created", payload);
     await logAudit("employee.created", { ...payload, action: "create" });

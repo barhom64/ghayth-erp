@@ -94,9 +94,35 @@ export function assertInsert(insertId: number, entity: string): number {
   return insertId;
 }
 
+let savepointSeq = 0;
+
 export async function withTransaction<T>(
   fn: (client: pg.PoolClient) => Promise<T>
 ): Promise<T> {
+  // Reentrant: when already inside a transaction, join it via a SAVEPOINT
+  // instead of opening a second connection. Nested withTransaction calls
+  // (e.g. createJournalEntry invoked inside a route's own transaction) are
+  // then part of ONE atomic unit — the whole thing commits or rolls back
+  // together — while a caught nested failure still rolls back only its own
+  // savepoint, leaving the outer transaction usable.
+  const ambient = txStore.getStore();
+  if (ambient) {
+    const sp = `sp_${++savepointSeq}`;
+    await ambient.query(`SAVEPOINT ${sp}`);
+    try {
+      const result = await fn(ambient);
+      await ambient.query(`RELEASE SAVEPOINT ${sp}`);
+      return result;
+    } catch (err) {
+      try {
+        await ambient.query(`ROLLBACK TO SAVEPOINT ${sp}`);
+      } catch (rbErr) {
+        logger.error(rbErr, "[withTransaction] ROLLBACK TO SAVEPOINT failed");
+      }
+      throw err;
+    }
+  }
+
   const client = await pool.connect();
   await client.query("BEGIN");
   try {

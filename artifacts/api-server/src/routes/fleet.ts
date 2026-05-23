@@ -1620,30 +1620,61 @@ router.post("/maintenance/:id/cancel", authorize({ feature: "fleet.maintenance",
   } catch (err) { handleRouteError(err, res, "Cancel maintenance error:"); }
 });
 
+// FLT-006 — fleet_alerts reconciliation.
+//
+// Alerts are derived from many source tables (insurance, licenses,
+// maintenance, gps, fuel, driver ratings). Before fleet_alerts existed,
+// `GET /alerts` recomputed them every call and never persisted, so an
+// operator couldn't acknowledge a known alert and a one-off speeding
+// incident kept reappearing in the list. The endpoint now:
+//
+//   1. Computes the fresh, ground-truth alert set from the source
+//      queries (unchanged business rules).
+//   2. UPSERTs each fresh alert into fleet_alerts keyed by
+//      (companyId, type, relatedType, relatedId). Severity / message /
+//      daysLeft are refreshed; status stays 'acknowledged' if the
+//      operator already silenced it, and bounces 'resolved' → 'active'
+//      when a condition re-appears.
+//   3. Marks active rows that are no longer in the fresh set as
+//      'resolved' (the underlying condition cleared — insurance
+//      renewed, driver fixed, etc.).
+//   4. Returns the persisted active+acknowledged rows joined with the
+//      related vehicle / driver names so the UI keeps showing the same
+//      vehicle/driver columns.
+//
+// The natural key collapses speed-violation incidents to one row per
+// vehicle (a recurring summary), an explicit trade-off documented in
+// the audit plan.
+type ComputedAlert = {
+  type: string;
+  severity: string;
+  title: string;
+  message: string;
+  relatedType: string | null;
+  relatedId: number | null;
+  daysLeft: number | null;
+};
+
 router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const alerts: any[] = [];
+    const bid = scope.branchId ?? null;
     const today = new Date();
     const todayStr = toDateISO(today);
-
-    const in7Days = new Date(today); in7Days.setDate(today.getDate() + 7);
-    const in14Days = new Date(today); in14Days.setDate(today.getDate() + 14);
-    const in30Days = new Date(today); in30Days.setDate(today.getDate() + 30);
     const in90Days = new Date(today); in90Days.setDate(today.getDate() + 90);
-
     const in90Str = toDateISO(in90Days);
+
     const [allInsurance, expiringLicenses, speedAlerts, abnormalFuel, frequentBreakdowns, lowRatingDrivers, oilDue] = await Promise.all([
       rawQuery<Record<string, unknown>>(
-        `SELECT v."plateNumber", i."endDate", i.type AS "insuranceType",
+        `SELECT v.id AS "vehicleId", v."plateNumber", i."endDate", i.type AS "insuranceType",
                 (i."endDate"::date - CURRENT_DATE) AS "daysLeft"
          FROM fleet_insurance i JOIN fleet_vehicles v ON v.id=i."vehicleId" AND v."deletedAt" IS NULL
          WHERE i."companyId"=$1 AND i."deletedAt" IS NULL AND i."endDate" BETWEEN $2 AND $3`,
         [cid, todayStr, in90Str]
       ),
       rawQuery<Record<string, unknown>>(
-        `SELECT d.name, d."licenseExpiry", d."licenseNumber",
+        `SELECT d.id AS "driverId", d.name, d."licenseExpiry", d."licenseNumber",
                 (d."licenseExpiry"::date - CURRENT_DATE) AS "daysLeft"
          FROM fleet_drivers d
          WHERE d."companyId"=$1 AND d."licenseExpiry" IS NOT NULL
@@ -1653,7 +1684,7 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
       ),
       rawQuery<Record<string, unknown>>(
         `SELECT g.speed, g.latitude, g.longitude, g."recordedAt",
-                v."plateNumber", d.name AS "driverName"
+                v.id AS "vehicleId", v."plateNumber", d.name AS "driverName"
          FROM fleet_gps_tracking g
          LEFT JOIN fleet_vehicles v ON v.id=g."vehicleId" AND v."companyId"=$1 AND v."deletedAt" IS NULL
          LEFT JOIN fleet_drivers d ON d.id=g."driverId" AND d."companyId"=$1 AND d."deletedAt" IS NULL
@@ -1684,74 +1715,189 @@ router.get("/alerts", authorize({ feature: "fleet.vehicles", action: "list" }), 
         [cid]
       ),
       rawQuery<Record<string, unknown>>(
-        `SELECT d.name, d.rating, d.id FROM fleet_drivers d
+        `SELECT d.name, d.rating, d.id AS "driverId" FROM fleet_drivers d
          WHERE d."companyId"=$1 AND d.rating IS NOT NULL AND d.rating < 3 AND d."deletedAt" IS NULL
          LIMIT 500`,
         [cid]
       ),
       rawQuery<Record<string, unknown>>(
-        `SELECT v."plateNumber", v."currentMileage", m."mileageAtService" FROM fleet_vehicles v LEFT JOIN fleet_maintenance m ON m.id=(SELECT id FROM fleet_maintenance WHERE "vehicleId"=v.id AND type='oil_change' ORDER BY "mileageAtService" DESC LIMIT 1) WHERE v."companyId"=$1 AND v."deletedAt" IS NULL AND (v."currentMileage" - COALESCE(m."mileageAtService",0)) >= 5000`,
+        `SELECT v.id AS "vehicleId", v."plateNumber", v."currentMileage", m."mileageAtService" FROM fleet_vehicles v LEFT JOIN fleet_maintenance m ON m.id=(SELECT id FROM fleet_maintenance WHERE "vehicleId"=v.id AND type='oil_change' ORDER BY "mileageAtService" DESC LIMIT 1) WHERE v."companyId"=$1 AND v."deletedAt" IS NULL AND (v."currentMileage" - COALESCE(m."mileageAtService",0)) >= 5000`,
         [cid]
       ),
     ]);
+
+    const computed: ComputedAlert[] = [];
     for (const r of allInsurance) {
       const daysLeft = Number(r.daysLeft);
-      let severity: string;
-      if (daysLeft <= 0) severity = 'blocked';
-      else if (daysLeft <= 7) severity = 'critical';
-      else if (daysLeft <= 14) severity = 'high';
-      else if (daysLeft <= 30) severity = 'medium';
-      else severity = 'low';
-      alerts.push({
-        type: 'insurance_expiry', severity, vehicle: r.plateNumber,
-        daysLeft, date: r.endDate,
+      const severity = daysLeft <= 0 ? 'blocked' : daysLeft <= 7 ? 'critical' : daysLeft <= 14 ? 'high' : daysLeft <= 30 ? 'medium' : 'low';
+      computed.push({
+        type: 'insurance_expiry', severity,
+        title: 'انتهاء تأمين مركبة',
         message: daysLeft <= 0
           ? `تأمين المركبة ${r.plateNumber} منتهٍ — يجب حظر الاستخدام`
           : `تأمين المركبة ${r.plateNumber} ينتهي خلال ${daysLeft} يوم`,
+        relatedType: 'vehicle', relatedId: Number(r.vehicleId) || null,
+        daysLeft,
       });
     }
     for (const d of expiringLicenses) {
       const daysLeft = Number(d.daysLeft);
-      let severity = daysLeft <= 7 ? 'critical' : daysLeft <= 14 ? 'high' : daysLeft <= 30 ? 'medium' : 'low';
-      alerts.push({
-        type: 'driver_license_expiry', severity, driver: d.name,
-        daysLeft, date: d.licenseExpiry,
+      const severity = daysLeft <= 7 ? 'critical' : daysLeft <= 14 ? 'high' : daysLeft <= 30 ? 'medium' : 'low';
+      computed.push({
+        type: 'driver_license_expiry', severity,
+        title: 'انتهاء رخصة سائق',
         message: `رخصة السائق ${d.name} تنتهي خلال ${daysLeft} يوم`,
+        relatedType: 'driver', relatedId: Number(d.driverId) || null,
+        daysLeft,
       });
     }
     for (const s of speedAlerts) {
-      alerts.push({
+      computed.push({
         type: 'speed_violation', severity: 'high',
-        vehicle: s.plateNumber, driver: s.driverName,
-        speed: s.speed, recordedAt: s.recordedAt,
+        title: 'تجاوز سرعة',
         message: `تجاوز سرعة: ${s.driverName || 'غير معروف'} — ${s.speed} كم/س (المركبة ${s.plateNumber || 'غير محدد'})`,
+        relatedType: 'vehicle', relatedId: Number(s.vehicleId) || null,
+        daysLeft: null,
       });
     }
     for (const r of abnormalFuel) {
-      alerts.push({
-        type: 'abnormal_fuel', severity: 'medium', vehicle: r.plateNumber,
-        avgLiters: Number(r.avgLiters).toFixed(1), maxLiters: Number(r.maxLiters).toFixed(1),
+      computed.push({
+        type: 'abnormal_fuel', severity: 'medium',
+        title: 'استهلاك وقود شاذ',
         message: `وقود غير طبيعي: المركبة ${r.plateNumber} — أقصى ${Number(r.maxLiters).toFixed(1)} لتر (المتوسط ${Number(r.avgLiters).toFixed(1)}) تجاوز 120%`,
+        relatedType: 'vehicle', relatedId: Number(r.vehicleId) || null,
+        daysLeft: null,
       });
     }
     for (const r of frequentBreakdowns) {
-      alerts.push({
-        type: 'frequent_breakdowns', severity: 'high', vehicle: r.plateNumber,
-        count: Number(r.breakdownCount),
+      computed.push({
+        type: 'frequent_breakdowns', severity: 'high',
+        title: 'أعطال متكرّرة',
         message: `المركبة ${r.plateNumber} تعطلت ${r.breakdownCount} مرات خلال الشهر — يُنصح بالاستبعاد`,
+        relatedType: 'vehicle', relatedId: Number(r.vehicleId) || null,
+        daysLeft: null,
       });
     }
     for (const d of lowRatingDrivers) {
-      alerts.push({
-        type: 'low_driver_rating', severity: 'medium', driver: d.name,
-        rating: Number(d.rating).toFixed(1),
+      computed.push({
+        type: 'low_driver_rating', severity: 'medium',
+        title: 'تقييم سائق منخفض',
         message: `تقييم السائق ${d.name} منخفض: ${Number(d.rating).toFixed(1)}/5 — يحتاج مراجعة`,
+        relatedType: 'driver', relatedId: Number(d.driverId) || null,
+        daysLeft: null,
       });
     }
-    oilDue.forEach((r: Record<string, unknown>) => alerts.push({ type: 'oil_change_due', severity: 'medium', vehicle: r.plateNumber, message: `تغيير زيت المركبة ${r.plateNumber} مستحق (الكيلومتراج: ${r.currentMileage})` }));
+    for (const r of oilDue) {
+      computed.push({
+        type: 'oil_change_due', severity: 'medium',
+        title: 'تغيير زيت مستحق',
+        message: `تغيير زيت المركبة ${r.plateNumber} مستحق (الكيلومتراج: ${r.currentMileage})`,
+        relatedType: 'vehicle', relatedId: Number(r.vehicleId) || null,
+        daysLeft: null,
+      });
+    }
 
-    res.json(maskFields(req, { data: alerts, total: alerts.length, page: 1, pageSize: alerts.length }));
+    // Reconcile into fleet_alerts. Done in best-effort mode — a DB error
+    // here must not blank the operator's alert list, so we log and fall
+    // through to the read.
+    try {
+      if (computed.length > 0) {
+        const placeholders: string[] = [];
+        const params: unknown[] = [];
+        for (const c of computed) {
+          if (c.relatedId == null) continue; // skip unkeyed alerts (can't dedup)
+          const base = params.length;
+          placeholders.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9})`);
+          params.push(cid, bid, c.type, c.severity, c.title, c.message, c.relatedType, c.relatedId, c.daysLeft);
+        }
+        if (placeholders.length > 0) {
+          await rawExecute(
+            `INSERT INTO fleet_alerts ("companyId","branchId",type,severity,title,message,"relatedType","relatedId","daysLeft")
+             VALUES ${placeholders.join(",")}
+             ON CONFLICT ("companyId", type, "relatedType", "relatedId") DO UPDATE SET
+               severity = EXCLUDED.severity,
+               title = EXCLUDED.title,
+               message = EXCLUDED.message,
+               "daysLeft" = EXCLUDED."daysLeft",
+               status = CASE WHEN fleet_alerts.status = 'resolved' THEN 'active' ELSE fleet_alerts.status END,
+               "updatedAt" = NOW()`,
+            params,
+          );
+        }
+      }
+      // Mark stale active rows as resolved. Build a key set from the
+      // live computed alerts; anything active in the DB that's not in
+      // the live set means the underlying condition cleared.
+      const liveKeys = new Set<string>();
+      for (const c of computed) {
+        if (c.relatedId != null) liveKeys.add(`${c.type}|${c.relatedType ?? ''}|${c.relatedId}`);
+      }
+      const dbActive = await rawQuery<{ id: number; type: string; relatedType: string | null; relatedId: number | null }>(
+        `SELECT id, type, "relatedType", "relatedId" FROM fleet_alerts WHERE "companyId" = $1 AND status = 'active'`,
+        [cid],
+      );
+      const staleIds = dbActive
+        .filter((r) => !liveKeys.has(`${r.type}|${r.relatedType ?? ''}|${r.relatedId ?? ''}`))
+        .map((r) => r.id);
+      if (staleIds.length > 0) {
+        await rawExecute(
+          `UPDATE fleet_alerts SET status = 'resolved', "updatedAt" = NOW() WHERE id = ANY($1)`,
+          [staleIds],
+        );
+      }
+    } catch (e) {
+      logger.warn(e, "[fleet-alerts] reconciliation failed — returning live computation");
+    }
+
+    // Read back persisted alerts (active + acknowledged) joined to
+    // vehicle/driver so the UI's vehicle/driver columns still work.
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT a.*,
+              CASE WHEN a."relatedType" = 'vehicle' THEN v."plateNumber" END AS vehicle,
+              CASE WHEN a."relatedType" = 'driver' THEN d.name END AS driver
+         FROM fleet_alerts a
+         LEFT JOIN fleet_vehicles v ON a."relatedType" = 'vehicle' AND v.id = a."relatedId" AND v."deletedAt" IS NULL
+         LEFT JOIN fleet_drivers d ON a."relatedType" = 'driver' AND d.id = a."relatedId" AND d."deletedAt" IS NULL
+        WHERE a."companyId" = $1 AND a.status IN ('active','acknowledged')
+        ORDER BY
+          CASE a.severity WHEN 'blocked' THEN 0 WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
+          a."updatedAt" DESC
+        LIMIT 500`,
+      [cid],
+    );
+
+    res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Fleet alerts error:"); }
+});
+
+router.post("/alerts/:id/acknowledge", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `UPDATE fleet_alerts SET status = 'acknowledged', "acknowledgedBy" = $1, "acknowledgedAt" = NOW(), "updatedAt" = NOW()
+        WHERE id = $2 AND "companyId" = $3 AND status IN ('active','acknowledged') RETURNING *`,
+      [scope.userId, id, scope.companyId],
+    );
+    if (!row) throw new NotFoundError("التنبيه غير موجود");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "acknowledge", entity: "fleet_alerts", entityId: id }).catch((e) => logger.error(e, "fleet bg"));
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Acknowledge fleet alert"); }
+});
+
+router.post("/alerts/:id/dismiss", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `UPDATE fleet_alerts SET status = 'dismissed', "dismissedAt" = NOW(), "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2 RETURNING *`,
+      [id, scope.companyId],
+    );
+    if (!row) throw new NotFoundError("التنبيه غير موجود");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "dismiss", entity: "fleet_alerts", entityId: id }).catch((e) => logger.error(e, "fleet bg"));
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Dismiss fleet alert"); }
 });
 
 router.get("/fuel-logs", authorize({ feature: "fleet.trips", action: "list" }), async (req, res) => {

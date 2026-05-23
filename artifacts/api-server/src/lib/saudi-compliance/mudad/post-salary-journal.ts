@@ -78,21 +78,27 @@ export function buildSalaryEntryInput(opts: {
   employeeId: number;
   period: string;
 }): BuildEntryInput {
-  const gross = computeGross(opts.components);
   const net = round2dp(opts.components.amount);
   const deductions = round2dp(opts.components.deductions);
+  // The salary-expense debit (gross) is DERIVED as the exact sum of the
+  // credit legs so the entry balances to the cent — computing gross
+  // independently from components and rounding it separately drifted it
+  // from net + deductions by a halala.
+  const gross = round2dp(net + deductions);
 
   if (gross === 0 && net === 0 && deductions === 0) {
     return { description: opts.description, lines: [] };
   }
 
-  // Defence-in-depth: payroll calc upstream must satisfy
-  //   gross == net + deductions   (within 1¢)
-  // Anything more drifts a journal entry that won't balance.
-  const drift = Math.abs(gross - (net + deductions));
+  // Defence-in-depth: the independently-computed component gross must still
+  // agree with net + deductions. A mismatch is a real upstream payroll-calc
+  // bug — surface it loudly rather than booking a silently-adjusted gross.
+  const componentGross = computeGross(opts.components);
+  const drift = Math.abs(componentGross - gross);
   if (drift > 0.01) {
     throw new Error(
-      `buildSalaryEntryInput: payroll component mismatch — gross=${gross}, ` +
+      `buildSalaryEntryInput: payroll component mismatch — ` +
+        `gross(components)=${componentGross}, net+deductions=${gross}, ` +
         `net=${net}, deductions=${deductions}, drift=${drift}. ` +
         `Fix the upstream payroll calc before booking.`,
     );

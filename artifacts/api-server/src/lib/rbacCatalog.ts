@@ -1,26 +1,29 @@
 /**
- * rbacCatalog — single source of truth for every permission string the API
- * understands and for the default bindings to built-in roles.
+ * rbacCatalog — legacy role-permission catalog + role-group constants.
  *
- * Before this file, permissions were discovered by grepping routes for
- * `requirePermission("...")` calls, and the role-permission seeds were
- * scattered across three migrations (026, 027, 066). That made it easy to
- * drift: an endpoint could require `documents:read` that no role was ever
- * granted, and a seed could grant a permission that no route ever checked.
- *
- * This module fixes both sides:
- *   - `PERMISSIONS` is the flat set of all valid permission strings. Use it
- *     for run-time validation and for the linter (`scripts/lintPermissions.mjs`).
- *   - `ROLE_PERMISSIONS` is the default role → permission map, consumed by
- *     migration `068_rbac_catalog_seed.sql` so role_permissions stays in sync.
- *   - `isKnownPermission(p)` is the tiny helper the middleware and linter use.
+ * FND-010 — relationship to `lib/rbac/featureCatalog.ts`:
+ *   - `featureCatalog` is the *modern* source of truth for which
+ *     authorisable surfaces exist (the feature tree, actions, scopes,
+ *     and `<feature.key>:<action>` permission strings — see
+ *     `FEATURE_PERMISSIONS`). It is what `authzEngine` reads at request
+ *     time. New permission strings should be added to featureCatalog,
+ *     NOT to the `PERMISSIONS` list below.
+ *   - This file owns two things featureCatalog does not model:
+ *       (a) the role-group constants (`HR_ROLES`, `MGR_ROLES`,
+ *           `FINANCE_ROLES`, …) that 30+ routes use for
+ *           `assertRole`-style checks, and
+ *       (b) `ROLE_PERMISSIONS` — the default role → permission seed
+ *           consumed by migration `068_rbac_catalog_seed.sql`.
+ *   - `PERMISSIONS` below is the legacy curated list of permission
+ *     strings (older `module:action` and `module:sub:action` shapes).
+ *     `isKnownPermission()` now accepts EITHER this set OR
+ *     featureCatalog's derived `FEATURE_PERMISSIONS`, so adding a new
+ *     feature to featureCatalog automatically extends the permission
+ *     surface without a duplicate entry here.
  *
  * Wildcards:
  *   - `"*"` — every permission (owner / GM)
  *   - `"<module>:*"` — every permission inside `<module>` (e.g. `hr:*`)
- *
- * Any new permission MUST be added here first; the linter will fail CI for
- * routes that reference an unknown permission.
  */
 
 export const PERMISSIONS = [
@@ -189,9 +192,18 @@ export type Permission = (typeof PERMISSIONS)[number];
 
 const PERMISSION_SET: Set<string> = new Set(PERMISSIONS);
 
+// FND-010 — featureCatalog is the single source of truth for the modern
+// `<feature.key>:<action>` permission shape. Importing the derived set
+// here lets `isKnownPermission` accept either shape: legacy callers that
+// pass "hr:write" / "hr:discipline:approve" keep validating, AND new
+// callers using "hr.attendance:update" / "hr.leaves:approve" validate
+// without needing a duplicate entry in this list. Adding a feature in
+// featureCatalog therefore extends the permission surface automatically.
+import { FEATURE_PERMISSION_SET } from "./rbac/featureCatalog.js";
+
 /** Returns true when `perm` is a known permission string (wildcards included). */
 export function isKnownPermission(perm: string): boolean {
-  return PERMISSION_SET.has(perm);
+  return PERMISSION_SET.has(perm) || FEATURE_PERMISSION_SET.has(perm);
 }
 
 /**

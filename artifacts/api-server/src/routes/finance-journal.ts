@@ -25,6 +25,7 @@ import {
   generateRef,
   toDateISO,
   roundTo2,
+  applyJournalEntryBalances,
 } from "../lib/businessHelpers.js";
 import {
   requestIdempotencyToken,
@@ -501,31 +502,45 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat });
     if (subAccountCode && subAccountCode !== accountCode) { journalLines[0].accountCode = subAccountCode; }
 
-    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, type: "expense", sourceType: operationType || "expense", sourceId: 0, sourceKey: `finance:expense:${idempotencyToken}`, lines: journalLines });
-    markIdempotencyReplay(req, res, alreadyExists);
+    // C3 — the journal entry, its header metadata and the approval chain are
+    // created in ONE transaction. A failure anywhere (or a crash) rolls the
+    // whole thing back, so there is never a posted expense entry without its
+    // approval request, nor an approval chain pointing at a missing entry.
+    // postJournalEntry's own withTransaction joins this one via savepoint;
+    // rawExecute joins via the transaction async-context.
+    const { journalId, alreadyExists, approvalResult } = await withTransaction(async () => {
+      const posted = await financialEngine.postJournalEntry({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, type: "expense", sourceType: operationType || "expense", sourceId: 0, sourceKey: `finance:expense:${idempotencyToken}`, lines: journalLines });
 
-    await rawExecute(
-      `UPDATE journal_entries SET "costCenter" = $1, "departmentId" = $2, "relatedEntityType" = $3, "relatedEntityId" = $4, "paymentMethod" = $5, reference = $6, "isPaid" = $7, "attachmentUrl" = $8, "attachmentType" = $9, "expenseType" = $10, "operationType" = $11, "projectId" = $12, "taxCategory" = $13, "govSyncEnabled" = $14, "govIntegrationId" = $15, "govEntityType" = $16, "govEntityId" = $17 WHERE id = $18 AND "companyId" = $19 AND "deletedAt" IS NULL`,
-      [costCenter ?? null, departmentId ?? null, relatedEntityType ?? null, relatedEntityId ?? null, paymentMethod ?? "cash", reference ?? null, isPaid != null ? !!isPaid : true, attachmentUrl ?? null, attachmentType ?? null, expenseType ?? null, operationType ?? "expense", projectId ?? null, taxCategory ?? null, govSyncEnabled ? true : false, govIntegrationId ? Number(govIntegrationId) : null, govEntityType ?? null, govEntityId ? Number(govEntityId) : null, journalId, effectiveCompanyId]
-    ).catch((err) => logger.error(err, "Failed to update expense metadata:"));
-
-    if (govSyncEnabled && govIntegrationId && govEntityType && govEntityId) {
-      const [validIntegration] = await rawQuery<Record<string, unknown>>(
-        `SELECT id FROM gov_integrations WHERE id = $1 AND "companyId" = $2`,
-        [Number(govIntegrationId), effectiveCompanyId]
+      await rawExecute(
+        `UPDATE journal_entries SET "costCenter" = $1, "departmentId" = $2, "relatedEntityType" = $3, "relatedEntityId" = $4, "paymentMethod" = $5, reference = $6, "isPaid" = $7, "attachmentUrl" = $8, "attachmentType" = $9, "expenseType" = $10, "operationType" = $11, "projectId" = $12, "taxCategory" = $13, "govSyncEnabled" = $14, "govIntegrationId" = $15, "govEntityType" = $16, "govEntityId" = $17 WHERE id = $18 AND "companyId" = $19 AND "deletedAt" IS NULL`,
+        [costCenter ?? null, departmentId ?? null, relatedEntityType ?? null, relatedEntityId ?? null, paymentMethod ?? "cash", reference ?? null, isPaid != null ? !!isPaid : true, attachmentUrl ?? null, attachmentType ?? null, expenseType ?? null, operationType ?? "expense", projectId ?? null, taxCategory ?? null, govSyncEnabled ? true : false, govIntegrationId ? Number(govIntegrationId) : null, govEntityType ?? null, govEntityId ? Number(govEntityId) : null, posted.journalId, effectiveCompanyId]
       );
-      if (validIntegration) {
-        await rawExecute(
-          `INSERT INTO gov_integration_links ("companyId", "integrationId", "entityType", "entityId", "externalRef", enabled, "syncStatus")
-           VALUES ($1, $2, $3, $4, $5, true, 'pending')
-           ON CONFLICT ("companyId", "integrationId", "entityType", "entityId") DO NOTHING`,
-          [effectiveCompanyId, Number(govIntegrationId), govEntityType, Number(govEntityId), ref]
-        ).catch((e) => logger.error(e, "finance-journal background task failed"));
-      }
-    }
 
-    const approvalResult = await initiateApprovalChain({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, chainType: "expenses", refType: "expense", refId: journalId, amount: Number(amount ?? 0) });
-    if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`, [journalId, effectiveCompanyId]); }
+      if (govSyncEnabled && govIntegrationId && govEntityType && govEntityId) {
+        const [validIntegration] = await rawQuery<Record<string, unknown>>(
+          `SELECT id FROM gov_integrations WHERE id = $1 AND "companyId" = $2`,
+          [Number(govIntegrationId), effectiveCompanyId]
+        );
+        if (validIntegration) {
+          // Best-effort — isolated in its own savepoint so a failed link
+          // insert rolls back alone and never poisons the expense txn.
+          await withTransaction(async () => {
+            await rawExecute(
+              `INSERT INTO gov_integration_links ("companyId", "integrationId", "entityType", "entityId", "externalRef", enabled, "syncStatus")
+               VALUES ($1, $2, $3, $4, $5, true, 'pending')
+               ON CONFLICT ("companyId", "integrationId", "entityType", "entityId") DO NOTHING`,
+              [effectiveCompanyId, Number(govIntegrationId), govEntityType, Number(govEntityId), ref]
+            );
+          }).catch((e) => logger.error(e, "finance-journal background task failed"));
+        }
+      }
+
+      const approval = await initiateApprovalChain({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId, chainType: "expenses", refType: "expense", refId: posted.journalId, amount: Number(amount ?? 0) });
+      if (approval.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`, [posted.journalId, effectiveCompanyId]); }
+
+      return { journalId: posted.journalId, alreadyExists: posted.alreadyExists, approvalResult: approval };
+    });
+    markIdempotencyReplay(req, res, alreadyExists);
 
     emitEvent({ companyId: effectiveCompanyId, userId: scope.userId, action: "expense.created", entity: "expenses", entityId: journalId, details: JSON.stringify({ ref, accountCode, amount: baseAmount, vatAmount: computedVat, totalWithVat, sourceAccountCode: sourceAcct, approvalRequired: approvalResult.requiresApproval, operationType, expenseType, relatedEntityType, relatedEntityId }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
@@ -1085,6 +1100,12 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     const ref = generateRef("JE", seqRow.seq, 5);
     const idempotencyToken = requestIdempotencyToken(req);
 
+    // FIN-013 — manual journals now follow a draft → approved → posted
+    // workflow instead of posting directly. `deferBalances: true` keeps
+    // the JE off the GL until the `/journal/:id/post` step runs
+    // `applyJournalEntryBalances` against it. This matches the voucher
+    // and salary-advance lifecycle and gives finance teams an approval
+    // gate before money moves.
     const { financialEngine } = await import("../lib/engines/index.js");
     const { journalId: insertId, alreadyExists } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
@@ -1097,7 +1118,8 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
       sourceId: 0,
       sourceKey: `finance:manual_je:${ref}:${idempotencyToken}`,
       lines: engineLines,
-      status: "posted",
+      status: "draft",
+      deferBalances: true,
       postingDate,
     });
     markIdempotencyReplay(req, res, alreadyExists);
@@ -1161,6 +1183,80 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
     }));
   } catch (err) {
     handleRouteError(err, res, "Get journal error:");
+  }
+});
+
+// FIN-013 — approve a draft manual journal. Pure status transition; no GL
+// movement yet. The companion `/post` endpoint runs the balance push.
+journalRouter.post("/journal/:id/approve", authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    try {
+      const updated = await applyTransition<Record<string, unknown>>({
+        entity: "journal_entries",
+        id,
+        scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+        action: "manual_journal.approved",
+        fromStates: ["draft", "pending_approval", "returned"],
+        toState: "approved",
+        extraWhere: `"deletedAt" IS NULL AND "sourceType" = 'manual_journal'`,
+        setExtras: {
+          "approvedBy": scope.userId,
+          "approvedAt": new Date(),
+        },
+      });
+      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "approve", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "finance.journal.approved", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      res.json(updated);
+    } catch (err) {
+      const lifecycle = lifecycleErrorResponse(err);
+      if (lifecycle) { res.status(lifecycle.status).json(lifecycle.body); return; }
+      throw err;
+    }
+  } catch (err) {
+    handleRouteError(err, res, "Approve manual journal error:");
+  }
+});
+
+// FIN-013 — post (transition approved → posted AND push GL balances). Runs
+// inside one transaction so the status change and ledger movement commit
+// together; if balancesApply fails (e.g. period reclosed in the interim)
+// the status reverts.
+journalRouter.post("/journal/:id/post", authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    try {
+      const updated = await applyTransition<Record<string, unknown>>({
+        entity: "journal_entries",
+        id,
+        scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+        action: "manual_journal.posted",
+        fromStates: ["approved"],
+        toState: "posted",
+        extraWhere: `"deletedAt" IS NULL AND "sourceType" = 'manual_journal'`,
+        setExtras: {
+          "postedBy": scope.userId,
+          "postedAt": new Date(),
+        },
+        onApply: async (_row, client) => {
+          // Push the deferred balances. Throws if the journal's period
+          // has since closed — the transaction rolls back and the
+          // status stays at 'approved'.
+          await applyJournalEntryBalances(client, scope.companyId, id);
+        },
+      });
+      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "post", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "finance.journal.posted", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      res.json(updated);
+    } catch (err) {
+      const lifecycle = lifecycleErrorResponse(err);
+      if (lifecycle) { res.status(lifecycle.status).json(lifecycle.body); return; }
+      throw err;
+    }
+  } catch (err) {
+    handleRouteError(err, res, "Post manual journal error:");
   }
 });
 

@@ -176,6 +176,38 @@ export function extractBaseFromGross(grossAmount: number, vatRatePercent: number
   return roundTo2(grossAmount / (1 + vatRatePercent / 100));
 }
 
+// FIN-AUD-03 — single source for the active VAT rate. Reads system_settings
+// key `vat_rate` (company row, then system-wide row, then SA's 15% default).
+// Cached per-company for the process lifetime since rate changes ~yearly.
+const _vatRateCache = new Map<number, number>();
+export const FALLBACK_VAT_RATE = 15;
+export async function getCompanyVatRate(companyId: number): Promise<number> {
+  const cached = _vatRateCache.get(companyId);
+  if (cached !== undefined) return cached;
+  try {
+    const { rawQuery } = await import("./rawdb.js");
+    const rows = await rawQuery<{ value: string | null }>(
+      `SELECT value FROM system_settings
+        WHERE key = 'vat_rate'
+          AND ( "companyId" = $1 OR "companyId" IS NULL )
+        ORDER BY ("companyId" IS NULL) ASC
+        LIMIT 1`,
+      [companyId],
+    );
+    const raw = rows[0]?.value;
+    const parsed = raw == null ? NaN : Number(raw);
+    const rate = Number.isFinite(parsed) && parsed >= 0 ? parsed : FALLBACK_VAT_RATE;
+    _vatRateCache.set(companyId, rate);
+    return rate;
+  } catch {
+    return FALLBACK_VAT_RATE;
+  }
+}
+export function clearVatRateCache(companyId?: number): void {
+  if (companyId === undefined) _vatRateCache.clear();
+  else _vatRateCache.delete(companyId);
+}
+
 export async function createNotification(params: {
   companyId: number;
   assignmentId: number;
@@ -487,39 +519,14 @@ export async function createJournalEntry(params: {
   const totalDebit = roundTo2(params.lines.reduce((s, l) => s + l.debit, 0));
   const totalCredit = roundTo2(params.lines.reduce((s, l) => s + l.credit, 0));
   const imbalance = roundTo4(totalDebit - totalCredit);
-  if (Math.abs(imbalance) > 0.001 && Math.abs(imbalance) <= 0.05) {
-    let [roundingAcc] = await rawQuery<Record<string, unknown>>(
-      `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' LIMIT 1`,
-      [params.companyId]
-    );
-    if (!roundingAcc) {
-      await rawExecute(
-        `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, level, "allowPosting")
-         VALUES ($1, '9999', 'فروقات التقريب', 'Rounding Differences', 'expense', 2, true)
-         ON CONFLICT DO NOTHING`,
-        [params.companyId]
-      );
-      [roundingAcc] = await rawQuery<Record<string, unknown>>(
-        `SELECT code FROM chart_of_accounts WHERE "companyId"=$1 AND code='9999' LIMIT 1`,
-        [params.companyId]
-      );
-    }
-    if (roundingAcc) {
-      params.lines.push({
-        accountCode: "9999",
-        debit: imbalance < 0 ? Math.abs(imbalance) : 0,
-        credit: imbalance > 0 ? imbalance : 0,
-        description: "فرق تقريب تلقائي",
-      });
-      rawExecute(
-        `INSERT INTO audit_logs ("companyId","userId",action,entity,"entityId","after")
-         VALUES ($1,$2,'rounding_adjustment','journal_entry',0,$3)`,
-        [params.companyId, params.createdBy, JSON.stringify({
-          ref: params.ref, imbalance, totalDebit, totalCredit,
-        })]
-      ).catch((e) => logger.error(e, "[businessHelpers] background task failed"));
-    }
-  } else if (Math.abs(imbalance) > 0.05) {
+  // A correctly-built journal entry MUST balance to the cent. debit/credit
+  // amounts are 2-decimal, so any non-zero gap here is a real arithmetic
+  // bug in the caller that built the lines — it must derive the balancing
+  // line as `total − Σ(other lines)`, never compute both sides by
+  // independent rounding. Reject it loudly. The previous behaviour silently
+  // plugged a 0.001–0.05 gap into a "9999 rounding differences" expense,
+  // which hid the calculation bug and let that account drift without bound.
+  if (Math.abs(imbalance) >= 0.005) {
     throw new ValidationError(
       `قيد غير متوازن: مدين=${totalDebit.toFixed(2)} ≠ دائن=${totalCredit.toFixed(2)} (${params.ref})`
     );
