@@ -658,6 +658,37 @@ journalRouter.patch("/expenses/:id/approve", authorize({ feature: "finance.journ
         // rawQuery/rawExecute join this transaction via the async context.
         if (newStatus === "rejected" || newStatus === "returned") {
           await reverseAccountBalances(scope.companyId, expenseId);
+          // Also unwind the budget reservation. The creation path
+          // (lines 437-480 in this file) bumped `budgets.used` by the
+          // expense's debit amount when (companyId, accountCode, period)
+          // matched a budget row. Without this matching decrement on
+          // rejection/return the row stayed inflated forever — every
+          // future expense on the same code saw inflated utilization and
+          // hit the 80/100/110% gates against a phantom balance.
+          //
+          // GREATEST() floors at zero so any prior manual edit can't push
+          // `used` negative even if the linked budget row was already
+          // adjusted.
+          await client.query(
+            `UPDATE budgets b
+                SET used = GREATEST(0, b.used - sub.total)
+               FROM (
+                 SELECT jl."accountCode",
+                        to_char(je."createdAt", 'YYYY-MM') AS period,
+                        SUM(jl.debit) AS total
+                   FROM journal_lines jl
+                   JOIN journal_entries je ON je.id = jl."journalId"
+                  WHERE jl."journalId" = $1
+                    AND jl.debit > 0
+                    AND jl."deletedAt" IS NULL
+                  GROUP BY jl."accountCode", to_char(je."createdAt", 'YYYY-MM')
+               ) sub
+              WHERE b."companyId" = $2
+                AND b."accountCode" = sub."accountCode"
+                AND b.period = sub.period
+                AND b."deletedAt" IS NULL`,
+            [expenseId, scope.companyId]
+          );
         }
       },
       after: { ref: exp.ref, decision: newStatus, notes: notes ?? null },
