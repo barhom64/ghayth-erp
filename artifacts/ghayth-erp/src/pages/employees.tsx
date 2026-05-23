@@ -6,7 +6,21 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+// Phase A.1 — HR reference domain. This page is the pattern every other
+// HR list page will follow — now consumed through @workspace/ui-core /
+// entity-kit (UNIFICATION_PLAN §P8 Phase 3).
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+  PageStatusBadge,
+  AdvancedFilters,
+  useFilters,
+  exportToCSV,
+  textColumn,
+  actionsColumn,
+} from "@workspace/ui-core";
+import { EntityComments } from "@workspace/entity-kit";
 import {
   Plus,
   Eye,
@@ -29,26 +43,12 @@ import {
   InlineEditForm,
   InlineDeleteConfirm,
 } from "@/components/inline-actions";
-import {
-  AdvancedFilters,
-  useFilters,
-  exportToCSV,
-} from "@/components/shared/advanced-filters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
-// Phase A.1 — HR reference domain. This page is the pattern every other
-// HR list page will follow: PageShell wraps the body, PageStatusBadge
-// replaces the legacy StatusBadge, column presets handle the obvious
-// columns, and actions live in a flex row with no nested interactive
-// elements (fixes the "<button> inside <button>" DOM warning).
-import { PageShell } from "@/components/page-shell";
-import { PageStatusBadge } from "@/components/page-status-badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
-import { textColumn, actionsColumn } from "@/components/data-table-presets";
 
 type OperationalStatus = {
   status: string;
