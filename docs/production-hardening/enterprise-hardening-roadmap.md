@@ -26,6 +26,78 @@
 
 ---
 
+## التنسيق مع الحملات الجارية (لا تعارض)
+
+هناك ثلاث حملات نشطة على `main` تتقاطع مع هذا الـ roadmap. كل Track
+هنا مُصمَّم ليبني فوقها لا أن يعيد عملها:
+
+### 1. حملة FND (Foundation defects) — `docs/audit/inventory/foundation.md`
+
+| ID | الحالة | علاقتها بـ tracks |
+| --- | --- | --- |
+| FND-001 (dead migrations dir) | ✅ #848 | — |
+| FND-003 (env → config + lint guard) | ✅ #874 | **مُمكِّن لـ A1** — worker الجديد سيستهلك `config` مباشرة |
+| FND-004 (router mount guards) | ✅ #866 (جزئي) | — |
+| FND-008 (cron failure alerts) | ✅ #867 | **مُمكِّن لـ A2** — alerting موجود قبل النقل |
+| FND-010 (RBAC catalog unification) | ✅ #900 | — |
+| FND-002, FND-005, FND-006, FND-007, FND-012, FND-013 | قيد العمل | يجب أن تكتمل قبل أو بالتوازي مع Tracks، لا داخلها |
+
+**القاعدة**: لا يجوز لأي PR من هذا الـ roadmap أن يفتح FND جديدًا أو
+يقترب من نطاق FND قائم بلا تنسيق صريح.
+
+### 2. موجة Finance Hardening — Wave 2 (PRs #878-#888 + C/H series)
+
+الأسبوع الأخير شهد:
+- C1 reconcile financial statements (#879)
+- C2 stamp gl/posting with accounting date (#886)
+- C3 atomic expense entry + approval chain (#885)
+- H1 reverse rejected-entry balances in lifecycle txn (#881)
+- H2 closed-period guard on deferred balances (#882)
+- H3 rounding line balance movement (#884)
+- H4 stable idempotency key on POST mutations (#887)
+- #878 dead-letter from async event listeners
+- #888 journal entries balance to cent (drop auto-plug)
+
+**نتائج التنسيق**:
+- **Track C يجب أن يلتقط هذه الـ 9 إصلاحات كأول 9 golden scenarios**
+  (C2 من الـ roadmap = «20 scenario أولى»). أي regression
+  مستقبلي على نفس السطح يجب أن يكسر سيناريو واحد منها على الأقل.
+- **#878 يخفّض حِمل Track A.3** — DLQ للـ async listener failures
+  أصبح موجودًا؛ A.3 (relay daemon) يبني فوقه لا يستبدله.
+
+### 3. قائمة عمل RESCAN v3 — صفحات UI جديدة
+
+من `docs/audit/RESCAN_2026-05-22-v3.md` §2، هذه الصفحات ستُبنى قريبًا:
+
+- FIN-013 (journal-manual approval buttons)
+- FIN-014 (period close UI)
+- FIN-015 (unify fiscal-periods v1/v2)
+- FIN-016 (GRN/match/pay UI)
+- CRM-004 (opportunity activities)
+- COM-001, COM-002 (communications log + routing rules)
+- UMR-005, UMR-016 (umrah invoice pages)
+- HR-010 (attendance policy / accruals / delegations)
+- FLT-006 (fleet alerts)
+
+**خطر التعارض الأكبر**: لو بُنيَت هذه الصفحات قبل **B1** (UI kit
+abstractions)، سنضيف ≈12 صفحة جديدة بأنماط متفرّقة — والديون التي
+يحاربها Track B تتضاعف.
+
+**القرار الموصى به**: **B1 يصبح P0 فوق Track A**، حتى تُبنى صفحات
+FIN-014/FIN-016/HR-010 على `<ListPage>`/`<CreateEditPage>` الجديدين
+مباشرة. هذا أيضًا يلغي حاجة تهجيرها لاحقًا في B3.
+
+### 4. Track dependencies على عيوب FND/FIN قائمة
+
+| Track | يتطلّب اكتمال |
+| --- | --- |
+| A.4 (transactional outbox) | FND-006 (auditMiddleware coverage) — وإلا أحداث legal/store/governance لن تُكتب outbox |
+| C.5 (period closing suite) | FIN-014 + FIN-015 — لا يصحّ كتابة tests لنظامَي فترات متوازيين |
+| C.4 (ledger replay) | FND-007 (PERSIST_ALL_EVENTS) — replay يحتاج completeness في `event_logs` |
+| D.2 (workflow engine adoption) | يستفيد من نمط `lib/supportSlaEscalation.ts` (SUP-015 #869) — لا تعيد بناءه، عمّمه |
+
+---
+
 ## Track A — Runtime Separation (worker + outbox relay)
 
 ### المشكلة
@@ -242,19 +314,25 @@ D1 ─> D2 (يعتمد على A3 — workflow يستخدم relay)
 D3 ─> D4 (مستقل)
 ```
 
-**الترتيب الموصى به**:
+**الترتيب الموصى به** (مُحدَّث بعد رصد حملات FND + Wave-2 + RESCAN v3):
 
-1. **P0 — يبدأ فورًا**: A1+A2 (worker process) و C1+C2 (harness +
-   أول سيناريوهات) بالتوازي. A يحمي runtime، C يحمي من regression
-   مالي خلال بقية العمل.
-2. **P1 — بعد A2**: A3+A4 (transactional outbox الحقيقي) — هذا يحرّر
-   D1 لاحقًا.
-3. **P1 — بالتوازي**: B1+B2 (UI foundation) — قليل المخاطر، يستفيد منه
-   كل تطوير لاحق.
-4. **P2**: C3-C6 (إكمال الـ regression suite) — لزم قبل أي تغيير
-   هيكلي في GL.
-5. **P2**: D1-D2 (workflow engine) — يحتاج A3 جاهزًا.
-6. **P3**: B3-B5 و D3-D4 — تحسينات طويلة المدى.
+1. **P0 الفوري — قبل أي شيء آخر**: **B1** (استخراج abstractions إلى
+   `lib/ui-kit/`). السبب: ≈12 صفحة جديدة في طريقها (FIN-014, FIN-016,
+   HR-010, COM-001/002, CRM-004, UMR-005/016, FLT-006) — كل صفحة
+   تُبنى على النمط القديم تضاعف دين B3 لاحقًا.
+2. **P0 بالتوازي مع B1**: **C1+C2** (scenario harness + التقاط 9 fix
+   الأخيرة C1-C3/H1-H4/#878/#888 كأول سيناريوهات). هذا يقفل قفل
+   regression على الإصلاحات الطازجة قبل أن تختفي من الذاكرة.
+3. **P1 — بعد B1**: **A1+A2** (worker process + نقل cron). يستفيد من
+   FND-003 (env via config) و FND-008 (cron alerts) المُنجَزَين.
+4. **P1 بالتوازي**: B2 (تهجير 18 raw `<table>`) + توجيه تطبيق الـ
+   ui-kit في صفحات RESCAN v3 الجديدة.
+5. **P2**: A3+A4 (transactional outbox الحقيقي) — يبني فوق DLQ في
+   #878، يحتاج FND-006 لتغطية كاملة.
+6. **P2**: C3-C6 (إكمال finance regression) — لزم قبل أي تغيير
+   هيكلي في GL. C5 (period close) يتطلّب FIN-014 + FIN-015 جاهزَين.
+7. **P3**: D1-D2 (workflow engine، يحتاج A3 + يستلهم `lib/supportSlaEscalation.ts`)،
+   D3-D4 (print engine)، B3-B5 (forms sweep).
 
 ## تقدير حجم العمل
 
@@ -303,3 +381,6 @@ hardening:
 - `docs/production-hardening/phase-0-env-validation.md` — أساس الـ hardening
 - `docs/ARCHITECTURE.md` — البنية الحالية
 - `docs/MONITORING.md` — observability stack
+- `docs/audit/inventory/foundation.md` — سجل FND النشط
+- `docs/audit/RESCAN_2026-05-22-v3.md` — حالة موجة الإصلاحات الثانية
+- `docs/audit/inventory/finance.md` — سجل FIN النشط
