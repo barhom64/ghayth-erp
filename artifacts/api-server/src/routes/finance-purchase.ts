@@ -986,13 +986,175 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       throw new Error("تعذّر توليد رقم إيصال فريد بعد عدة محاولات");
     }
 
-    // Post GRN journal: DR inventory (ex-VAT) + DR VAT receivable, CR GRNI
+    // Post GRN journal.
+    //
+    // Phase 4.2 — per-line DR routing by `lineTreatment`. The legacy
+    // posting collapsed every receipt onto a single DR inventory_receipt
+    // line, hiding the fact that some lines should land on fuel /
+    // vehicle / property / project / custody / prepayment / asset /
+    // service accounts instead. The new flow groups received lines
+    // by (treatment-derived account + dimension signature) and emits
+    // one DR per bucket. The VAT debit + GRNI credit stay header-level.
     const { financialEngine } = await import("../lib/engines/index.js");
-    const [invAccount, vatAccount, grniAccount] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "inventory_receipt", "debit", "1250"),
+    const [vatAccount, grniAccount] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grn_vat", "debit", "1180"),
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "credit", "2115"),
     ]);
+
+    // Resolve a default account code per lineTreatment. Tenants that
+    // haven't mapped these purposes yet inherit the seed defaults
+    // (1250 inventory etc) — same fallback shape as
+    // resolveAccountCode uses elsewhere.
+    const TREATMENT_PURPOSE: Record<string, { purpose: string; side: "debit"; defaultCode: string }> = {
+      inventory:            { purpose: "inventory_receipt",            side: "debit", defaultCode: "1250" },
+      expense:              { purpose: "general_expense",              side: "debit", defaultCode: "6900" },
+      fixed_asset:          { purpose: "fixed_asset_purchase",         side: "debit", defaultCode: "1500" },
+      project_cost:         { purpose: "project_cost",                 side: "debit", defaultCode: "6800" },
+      vehicle_cost:         { purpose: "vehicle_expense",              side: "debit", defaultCode: "6500" },
+      property_maintenance: { purpose: "property_maintenance_expense", side: "debit", defaultCode: "6600" },
+      custody:              { purpose: "employee_custody",             side: "debit", defaultCode: "1130" },
+      prepayment:           { purpose: "supplier_prepayment",          side: "debit", defaultCode: "1340" },
+      service:              { purpose: "service_expense",              side: "debit", defaultCode: "6920" },
+    };
+
+    // Read the dimensional payload from the receipt lines we just
+    // inserted. `unitPrice` × `receivedQty` per line is the per-line
+    // subtotal; sum to verify against the header `subtotal` for
+    // rounding-difference handling.
+    const receiptLineRows = await rawQuery<{
+      id: number;
+      lineTotal: string;
+      accountCode: string | null;
+      lineTreatment: string | null;
+      costCenterId: number | null;
+      activityType: string | null;
+      projectId: number | null;
+      vehicleId: number | null;
+      propertyId: number | null;
+      unitId: number | null;
+      assetId: number | null;
+      employeeId: number | null;
+      driverId: number | null;
+      contractId: number | null;
+      productId: number | null;
+    }>(
+      `SELECT id, "lineTotal"::text AS "lineTotal",
+              "accountCode", "lineTreatment", "costCenterId", "activityType",
+              "projectId", "vehicleId", "propertyId", "unitId", "assetId",
+              "employeeId", "driverId", "contractId", "productId"
+         FROM goods_receipt_items
+        WHERE "grnId" = $1
+        ORDER BY id`,
+      [grnId]
+    );
+
+    // Default account for any line whose lineTreatment is NULL or
+    // unrecognized — keeps the legacy «one inventory DR» behaviour as
+    // a safety net so unclassified receipts still post somewhere
+    // sensible until Phase 6 forces every line to carry a treatment.
+    const defaultInvAccount = await financialEngine.resolveAccountCode(
+      scope.companyId, "inventory_receipt", "debit", "1250"
+    );
+
+    type DrBucket = {
+      accountCode: string;
+      amount: number;
+      vendorId: number | undefined;
+      costCenter: string | null;
+      activityType: string | null;
+      projectId: number | null;
+      vehicleId: number | null;
+      propertyId: number | null;
+      employeeId: number | null;
+      driverId: number | null;
+      contractId: number | null;
+      productId: number | null;
+      assetId: number | null;
+    };
+    const buckets = new Map<string, DrBucket>();
+    let postedNet = 0;
+    for (const ln of receiptLineRows) {
+      let acct = ln.accountCode;
+      if (!acct) {
+        const map = ln.lineTreatment ? TREATMENT_PURPOSE[ln.lineTreatment] : null;
+        if (map) {
+          acct = await financialEngine.resolveAccountCode(
+            scope.companyId, map.purpose, map.side, map.defaultCode
+          );
+        }
+      }
+      if (!acct) acct = defaultInvAccount;
+      const key = [
+        acct,
+        ln.costCenterId ?? "",
+        ln.activityType ?? "",
+        ln.projectId ?? "",
+        ln.vehicleId ?? "",
+        ln.propertyId ?? "",
+        ln.employeeId ?? "",
+        ln.driverId ?? "",
+        ln.contractId ?? "",
+        ln.productId ?? "",
+        ln.assetId ?? "",
+      ].join("|");
+      const amt = roundTo2(Number(ln.lineTotal));
+      postedNet += amt;
+      const prev = buckets.get(key);
+      if (prev) {
+        prev.amount = roundTo2(prev.amount + amt);
+      } else {
+        buckets.set(key, {
+          accountCode: acct,
+          amount: amt,
+          vendorId: po.supplierId as number | undefined,
+          costCenter: ln.costCenterId != null ? String(ln.costCenterId) : null,
+          activityType: ln.activityType,
+          projectId: ln.projectId,
+          vehicleId: ln.vehicleId,
+          propertyId: ln.propertyId,
+          employeeId: ln.employeeId,
+          driverId: ln.driverId,
+          contractId: ln.contractId,
+          productId: ln.productId,
+          assetId: ln.assetId,
+        });
+      }
+    }
+
+    // Rounding-difference correction lands on the default inventory
+    // account so the entry always balances against the GRNI credit.
+    const diff = roundTo2(subtotal - postedNet);
+    if (Math.abs(diff) >= 0.005) {
+      const fallbackKey = `${defaultInvAccount}|||||||||||`;
+      const prev = buckets.get(fallbackKey);
+      if (prev) prev.amount = roundTo2(prev.amount + diff);
+      else buckets.set(fallbackKey, {
+        accountCode: defaultInvAccount, amount: diff,
+        vendorId: po.supplierId as number | undefined,
+        costCenter: null, activityType: null, projectId: null,
+        vehicleId: null, propertyId: null, employeeId: null,
+        driverId: null, contractId: null, productId: null, assetId: null,
+      });
+    }
+
+    const drLines = Array.from(buckets.values())
+      .filter((b) => Math.abs(b.amount) >= 0.005)
+      .map((b) => ({
+        accountCode: b.accountCode,
+        debit: b.amount,
+        credit: 0,
+        vendorId: b.vendorId,
+        costCenter: b.costCenter ?? undefined,
+        activityType: b.activityType ?? undefined,
+        projectId: b.projectId ?? undefined,
+        vehicleId: b.vehicleId ?? undefined,
+        propertyId: b.propertyId ?? undefined,
+        employeeId: b.employeeId ?? undefined,
+        driverId: b.driverId ?? undefined,
+        contractId: b.contractId ?? undefined,
+        productId: b.productId ?? undefined,
+        assetId: b.assetId ?? undefined,
+      }));
 
     let journalId: number | null = null;
     const grnJournalResult = await financialEngine.postJournalEntry({
@@ -1005,7 +1167,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       sourceId: grnId,
       sourceKey: `finance:grn:${grnId}`,
       lines: [
-        { accountCode: invAccount, debit: subtotal, credit: 0, vendorId: po.supplierId as number | undefined },
+        ...drLines,
         ...(vatAmount > 0 ? [{ accountCode: vatAccount, debit: vatAmount, credit: 0, vendorId: po.supplierId as number | undefined }] : []),
         { accountCode: grniAccount, debit: 0, credit: grnTotal, vendorId: po.supplierId as number | undefined },
       ],
@@ -1059,13 +1221,16 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       });
     } catch (obErr) { logger.error(obErr, "GRN invoice-match obligation failed:"); }
 
-    // Consume budget on receipt so reports reflect committed spend. We
-    // consume against the inventory account that was just debited so the
-    // budgeted line matches the GL line.
+    // Consume budget on receipt so reports reflect committed spend.
+    // Phase 4.2: budget is consumed against the default inventory
+    // account when the receipt is mixed-treatment, since that's the
+    // only single-account aggregate we have. A more precise per-line
+    // budget consumption can come in a follow-up once budgets are
+    // dimensional too.
     if (subtotal > 0) {
       updateBudgetUsed({
         companyId: scope.companyId,
-        accountCode: invAccount,
+        accountCode: defaultInvAccount,
         amount: subtotal,
       }).catch((e) => logger.error(e, "finance-purchase background task failed"));
     }

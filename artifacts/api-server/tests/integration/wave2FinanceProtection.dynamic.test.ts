@@ -200,6 +200,169 @@ d("Wave-2 H2: applyJournalEntryBalances refuses to post into a closed period", (
 });
 
 // ─────────────────────────────────────────────────────────────────────
+// H4 — guard the closed period when reversing posted balances. Mirrors
+// H2 (apply) on the opposite leg: reverseAccountBalances must refuse to
+// move chart_of_accounts.currentBalance when the entry's date sits in a
+// closed / locked period. Without this, rejecting an invoice approved
+// in a since-closed period silently rewrites that period's totals.
+// ─────────────────────────────────────────────────────────────────────
+
+d("Wave-2 H4: reverseAccountBalances refuses to move balances when the entry's period is closed", () => {
+  let rawExecute: typeof import("../../src/lib/rawdb.js").rawExecute;
+  let rawQuery: typeof import("../../src/lib/rawdb.js").rawQuery;
+  let reverseAccountBalances: typeof import("../../src/lib/businessHelpers.js").reverseAccountBalances;
+  let ValidationError: typeof import("../../src/lib/errorHandler.js").ValidationError;
+
+  let companyId: number;
+  let branchId: number;
+  let assignmentId: number;
+
+  beforeAll(async () => {
+    const rawdb = await import("../../src/lib/rawdb.js");
+    rawExecute = rawdb.rawExecute;
+    rawQuery = rawdb.rawQuery;
+    const helpers = await import("../../src/lib/businessHelpers.js");
+    reverseAccountBalances = helpers.reverseAccountBalances;
+    const errorHandler = await import("../../src/lib/errorHandler.js");
+    ValidationError = errorHandler.ValidationError;
+
+    const { setupTwoCompanyFixture } = await import("./_fixtures/twoCompanies.js");
+    const fx = await setupTwoCompanyFixture();
+    companyId = fx.companyA.id;
+    branchId = fx.companyA.branchId;
+    assignmentId = fx.companyA.assignmentId;
+  });
+
+  beforeEach(async () => {
+    await rawExecute(
+      `DELETE FROM journal_lines WHERE "journalId" IN
+         (SELECT id FROM journal_entries WHERE "companyId"=$1)`,
+      [companyId]
+    );
+    await rawExecute(`DELETE FROM journal_entries WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(`DELETE FROM financial_periods WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(`DELETE FROM chart_of_accounts WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(
+      `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "currentBalance")
+       VALUES ($1, '1101', 'بنك اختبار', 'Test Bank', 'asset', 100),
+              ($1, '4101', 'إيراد اختبار', 'Test Revenue', 'revenue', -100)`,
+      [companyId]
+    );
+  });
+
+  // Helper: insert a POSTED (balancesApplied=true) journal entry dated on
+  // the given day so the period-close gate evaluates against the entry's
+  // own ledger date — not its insertion time.
+  async function insertPostedEntry(opts: { ref: string; date: string }): Promise<number> {
+    const { insertId } = await rawExecute(
+      `INSERT INTO journal_entries (
+         "companyId", "branchId", "createdBy", ref, description, type,
+         "balancesApplied", "createdAt", date
+       ) VALUES ($1, $2, $3, $4, 'wave2-h4-test', 'manual', true, NOW(), $5::date)`,
+      [companyId, branchId, assignmentId, opts.ref, opts.date]
+    );
+    await rawExecute(
+      `INSERT INTO journal_lines ("journalId", "accountCode", debit, credit)
+       VALUES ($1, '1101', 100, 0), ($1, '4101', 0, 100)`,
+      [insertId]
+    );
+    return insertId;
+  }
+
+  it("reverses cleanly when the entry's period is open", async () => {
+    await rawExecute(
+      `INSERT INTO financial_periods ("companyId", name, "startDate", "endDate", status)
+       VALUES ($1, 'يونيو 2025', '2025-06-01', '2025-06-30', 'open')`,
+      [companyId]
+    );
+    const journalId = await insertPostedEntry({ ref: "JE-H4-OPEN", date: "2025-06-15" });
+
+    await reverseAccountBalances(companyId, journalId);
+
+    // Post-condition: balancesApplied flipped to false + COA rolled back.
+    const [je] = await rawQuery<{ balancesApplied: boolean }>(
+      `SELECT "balancesApplied" FROM journal_entries WHERE id = $1`,
+      [journalId]
+    );
+    expect(je.balancesApplied).toBe(false);
+
+    const [acc1101] = await rawQuery<{ currentBalance: string }>(
+      `SELECT "currentBalance" FROM chart_of_accounts WHERE "companyId"=$1 AND code='1101'`,
+      [companyId]
+    );
+    expect(Number(acc1101.currentBalance)).toBe(0);
+    const [acc4101] = await rawQuery<{ currentBalance: string }>(
+      `SELECT "currentBalance" FROM chart_of_accounts WHERE "companyId"=$1 AND code='4101'`,
+      [companyId]
+    );
+    expect(Number(acc4101.currentBalance)).toBe(0);
+  });
+
+  it("refuses with ValidationError(financialPeriod) when the entry's period is closed (the H4 fix)", async () => {
+    await rawExecute(
+      `INSERT INTO financial_periods ("companyId", name, "startDate", "endDate", status)
+       VALUES ($1, 'مايو 2025', '2025-05-01', '2025-05-31', 'closed')`,
+      [companyId]
+    );
+    const journalId = await insertPostedEntry({ ref: "JE-H4-CLOSED", date: "2025-05-20" });
+
+    let caught: unknown = null;
+    await expect(
+      reverseAccountBalances(companyId, journalId).catch((err) => {
+        caught = err;
+        throw err;
+      })
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    expect(caught).toBeInstanceOf(ValidationError);
+    expect((caught as InstanceType<typeof ValidationError>).field).toBe("financialPeriod");
+
+    // Post-condition: balancesApplied untouched + COA untouched. This is
+    // the whole point of H4 — a rejection of a closed-period entry must
+    // not silently rewind that period's totals.
+    const [je] = await rawQuery<{ balancesApplied: boolean }>(
+      `SELECT "balancesApplied" FROM journal_entries WHERE id = $1`,
+      [journalId]
+    );
+    expect(je.balancesApplied).toBe(true);
+
+    const [acc1101] = await rawQuery<{ currentBalance: string }>(
+      `SELECT "currentBalance" FROM chart_of_accounts WHERE "companyId"=$1 AND code='1101'`,
+      [companyId]
+    );
+    expect(Number(acc1101.currentBalance)).toBe(100);
+  });
+
+  it("no-ops on a deferred entry even in a closed period (drafts never moved the ledger)", async () => {
+    // A deferred (draft) entry has balancesApplied=false — reversing it is
+    // a no-op by design (FIN-007 follow-up), and the H4 gate must run
+    // AFTER the balancesApplied short-circuit so a draft rejection still
+    // works when its period is closed.
+    await rawExecute(
+      `INSERT INTO financial_periods ("companyId", name, "startDate", "endDate", status)
+       VALUES ($1, 'مايو 2025', '2025-05-01', '2025-05-31', 'closed')`,
+      [companyId]
+    );
+    const { insertId: journalId } = await rawExecute(
+      `INSERT INTO journal_entries (
+         "companyId", "branchId", "createdBy", ref, description, type,
+         "balancesApplied", "createdAt", date
+       ) VALUES ($1, $2, $3, 'JE-H4-DRAFT', 'wave2-h4-draft', 'manual', false, NOW(), '2025-05-20'::date)`,
+      [companyId, branchId, assignmentId]
+    );
+
+    await expect(reverseAccountBalances(companyId, journalId)).resolves.toBeUndefined();
+
+    // Nothing changed: balancesApplied still false, COA untouched.
+    const [je] = await rawQuery<{ balancesApplied: boolean }>(
+      `SELECT "balancesApplied" FROM journal_entries WHERE id = $1`,
+      [journalId]
+    );
+    expect(je.balancesApplied).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
 // Placeholders for the remaining Wave-2 fixes — each `it.todo` becomes
 // an `it()` as the scenario is written. Keeping them visible in the
 // test output makes the coverage gap explicit instead of invisible.
