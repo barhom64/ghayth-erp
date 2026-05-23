@@ -3,7 +3,7 @@ import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
+import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@workspace/report-kit";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ShoppingCart, User, Phone, Calendar, Package } from "lucide-react";

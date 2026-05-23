@@ -6,7 +6,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
+import { ApprovalActions, ActionHistory, NotesDisplay } from "@workspace/workflow-kit";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { EntityComments } from "@workspace/entity-kit";

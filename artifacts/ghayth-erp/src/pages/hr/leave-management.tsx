@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, CheckCircle, XCircle, Clock, FileText } from "lucide-react";
-import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
+import { ApprovalActions, ActionHistory, NotesDisplay } from "@workspace/workflow-kit";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";

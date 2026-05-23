@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
+import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@workspace/report-kit";
 import { PrintButton } from "@/components/shared/print-button";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
 import {
@@ -27,14 +27,14 @@ import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ProcessStages, type StageStep } from "@workspace/entity-kit";
 import { EntityObligations } from "@/components/shared/entity-obligations";
-import { DetailPageLayout, type DetailStatus } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout, type DetailStatus } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import {
   useDetailEditDelete,
   DetailActionButtons,
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
-import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
+import { PageStatusBadge, resolveStatus } from "@workspace/ui-core";
 
 /**
  * Invoice detail page — migrated to DetailPageLayout which provides

@@ -10,7 +10,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
+import { PageStatusBadge, resolveStatus } from "@workspace/ui-core";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import {

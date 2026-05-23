@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Receipt, DollarSign, FileText, Plus, X, Trash2 } from "lucide-react";
-import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters } from "@workspace/ui-core";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 

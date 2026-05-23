@@ -11,7 +11,7 @@ import { PageShell } from "@workspace/ui-core";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { Plus, Receipt, DollarSign, AlertTriangle, CheckCircle, Eye, ExternalLink, ChevronDown, ChevronUp, Copy, Zap } from "lucide-react";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
-import { CollectionStages } from "@/components/shared/entity-timeline";
+import { CollectionStages } from "@workspace/entity-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";

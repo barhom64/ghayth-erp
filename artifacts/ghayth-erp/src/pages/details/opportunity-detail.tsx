@@ -10,7 +10,7 @@ import { PageStatusBadge } from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
+import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@workspace/report-kit";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
 import type { LucideIcon } from "lucide-react";

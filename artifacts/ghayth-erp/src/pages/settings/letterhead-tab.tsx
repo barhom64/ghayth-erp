@@ -8,8 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Printer, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { LetterheadHeader } from "@/components/print-layout";
-import type { BranchLetterhead } from "@/components/print-layout";
+import { LetterheadHeader } from "@workspace/report-kit";
+import type { BranchLetterhead } from "@workspace/report-kit";
 import {
   FormShell,
   FormTextField,

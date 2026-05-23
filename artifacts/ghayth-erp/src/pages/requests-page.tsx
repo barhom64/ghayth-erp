@@ -50,7 +50,7 @@ import {
   Clock, CheckCircle, XCircle, ChevronDown, ChevronUp, Paperclip,
   Search, Filter, ArrowLeft, Send, ArrowRightLeft, CheckCircle2,
 } from "lucide-react";
-import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
+import { ApprovalActions, ActionHistory, NotesDisplay } from "@workspace/workflow-kit";
 import { cn } from "@/lib/utils";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { useToast } from "@/hooks/use-toast";

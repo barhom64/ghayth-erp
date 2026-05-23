@@ -11,7 +11,7 @@ import { Plus, Wallet, TrendingDown, PieChart, Calendar, ChevronDown, ChevronUp,
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV, useAdvancedFilters } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV, useAdvancedFilters } from "@workspace/ui-core";
 import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";

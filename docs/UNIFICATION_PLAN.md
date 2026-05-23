@@ -137,34 +137,39 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 
 | Rule | Baseline | الحالة |
 | --- | --- | --- |
-**ui-core**:
-| `page-shell-from-legacy-path` | **hard rule** ✅ | ratchet → hardened |
-| `form-shell-from-legacy-path` | **hard rule** ✅ | ratchet → hardened |
-| `data-table-from-legacy-path` | **hard rule** ✅ | ratchet → hardened |
-| `page-status-badge-from-legacy-path` | 10 | نشط |
-| `create-page-layout-from-legacy-path` | 11 | نشط |
-| `advanced-filters-from-legacy-path` | 5 | نشط |
-| `data-table-presets-from-legacy-path` | 1 | نشط |
-| `data-table-wrapper-from-legacy-path` | 2 | نشط |
-| `page-header-from-legacy-path` | 3 | نشط |
+**كل القواعد الـ 15 hardened — ratchet اكتمل** ✅
 
-**entity-kit**:
-| `detail-page-layout-from-legacy-path` | 2 | نشط |
-| `entity-timeline-from-legacy-path` | 2 | نشط |
-| `entity-comments-from-legacy-path` | **hard rule** ✅ | ratchet → hardened |
-| `entity-documents-from-legacy-path` | **hard rule** ✅ | ratchet → hardened |
+**ui-core** (9 rules):
+| `page-shell-from-legacy-path` | **hard rule** ✅ |
+| `form-shell-from-legacy-path` | **hard rule** ✅ |
+| `data-table-from-legacy-path` | **hard rule** ✅ |
+| `page-status-badge-from-legacy-path` | **hard rule** ✅ |
+| `create-page-layout-from-legacy-path` | **hard rule** ✅ |
+| `advanced-filters-from-legacy-path` | **hard rule** ✅ |
+| `data-table-presets-from-legacy-path` | **hard rule** ✅ |
+| `data-table-wrapper-from-legacy-path` | **hard rule** ✅ |
+| `page-header-from-legacy-path` | **hard rule** ✅ |
 
-**workflow-kit**:
-| `approval-actions-from-legacy-path` | 5 | نشط |
+**entity-kit** (4 rules):
+| `detail-page-layout-from-legacy-path` | **hard rule** ✅ |
+| `entity-timeline-from-legacy-path` | **hard rule** ✅ |
+| `entity-comments-from-legacy-path` | **hard rule** ✅ |
+| `entity-documents-from-legacy-path` | **hard rule** ✅ |
 
-**report-kit**:
-| `print-layout-from-legacy-path` | 10 | نشط |
+**workflow-kit** (1 rule):
+| `approval-actions-from-legacy-path` | **hard rule** ✅ |
 
-**الإجمالي**: **51 موضع** legacy import مغطّى بـ ratchet (هبط من 906
-الأولي — هبوط 855 إجمالًا = **94%**). **خمس** من القواعد ترقّت إلى
-hard rules (page-shell, form-shell, data-table, entity-comments,
-entity-documents). كل واحد لا يمكنه الزيادة. كل migration يخفض العدد
-بمقدار 1 ويستوجب تحديث baseline في نفس الـ PR.
+**report-kit** (1 rule):
+| `print-layout-from-legacy-path` | **hard rule** ✅ |
+
+**النتيجة النهائية**: 906 → 0 legacy import نشط على المسار القديم
+(-100%). كل القواعد الـ 15 لا تحتاج baseline — أي legacy import جديد
+يكسر CI فورًا.
+
+الـ skip lists تستثني المُمكِّنات الداخلية التي تستهلك بعضها (مثل
+DetailPageLayout يستخدم PageStatusBadge داخليًا، list-page composite
+يستخدم AdvancedFilters داخليًا، إلخ). هذه استثناءات بنيوية، ليست
+deferred migrations.
 
 ### آلية العمل (للمساهمين)
 

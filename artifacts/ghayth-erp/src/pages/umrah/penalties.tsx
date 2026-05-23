@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { AlertTriangle, DollarSign, Clock, Zap, XCircle, MinusCircle } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters } from "@workspace/ui-core";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";

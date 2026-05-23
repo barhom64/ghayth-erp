@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   CreatePageLayout,
   CreationDateField,
-} from "@/components/create-page-layout";
+} from "@workspace/ui-core";
 import {
   FormShell,
   FormTextField,

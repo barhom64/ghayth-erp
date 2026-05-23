@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Target, Plus, BookOpen, TrendingUp, CheckCircle } from "lucide-react";
 import { PageShell } from "@workspace/ui-core";
-import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
+import { PageStatusBadge, resolveStatus } from "@workspace/ui-core";
 
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";

@@ -245,9 +245,13 @@ const RULES = [
     skip: (file) =>
       file.endsWith("/components/page-status-badge.tsx") ||
       file.endsWith("/components/data-table-presets.tsx") ||
-      file.endsWith("/components/shared/detail-page-layout.tsx"),
+      file.endsWith("/components/shared/detail-page-layout.tsx") ||
+      file.endsWith("/components/shared/entity-detail-page.tsx") ||
+      file.endsWith("/components/shared/linked-tasks.tsx") ||
+      file.endsWith("/components/shared/quick-preview-dialog.tsx") ||
+      file.endsWith("/components/shared/employee-discipline-summary.tsx"),
     regex: /from\s+["']@\/components\/page-status-badge["']/,
-    countBaseline: 10,
+    // Hardened from ratchet → hard rule.
     message: `PageStatusBadge imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -256,7 +260,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/create-page-layout.tsx"),
     regex: /from\s+["']@\/components\/create-page-layout["']/,
-    countBaseline: 11,
+    // Hardened from ratchet → hard rule.
     message: `CreatePageLayout imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -265,9 +269,10 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) =>
       file.endsWith("/components/shared/detail-page-layout.tsx") ||
-      file.endsWith("/components/shared/entity-detail-page.tsx"),
+      file.endsWith("/components/shared/entity-detail-page.tsx") ||
+      file.endsWith("/hooks/use-registry-tabs.tsx"),
     regex: /from\s+["']@\/components\/shared\/detail-page-layout["']/,
-    countBaseline: 2,
+    // Hardened from ratchet → hard rule.
     message: `DetailPageLayout imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
   },
 
@@ -277,9 +282,12 @@ const RULES = [
     id: "advanced-filters-from-legacy-path",
     scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
     extensions: [".tsx", ".ts"],
-    skip: (file) => file.endsWith("/components/shared/advanced-filters.tsx"),
+    skip: (file) =>
+      file.endsWith("/components/shared/advanced-filters.tsx") ||
+      file.endsWith("/components/shared/bulk-actions.tsx") ||
+      file.endsWith("/components/list-page.tsx"),
     regex: /from\s+["']@\/components\/shared\/advanced-filters["']/,
-    countBaseline: 5,
+    // Hardened from ratchet → hard rule.
     message: `AdvancedFilters / useFilters / applyFilters imported from the legacy path. ${kitRatchetHint("ui-core")}`,
   },
   {
@@ -290,16 +298,18 @@ const RULES = [
       file.endsWith("/components/data-table-presets.tsx") ||
       file.endsWith("/components/list-page.tsx"),
     regex: /from\s+["']@\/components\/data-table-presets["']/,
-    countBaseline: 1,
+    // Hardened from ratchet → hard rule.
     message: `DataTable column presets imported from the legacy path. ${kitRatchetHint("ui-core")}`,
   },
   {
     id: "data-table-wrapper-from-legacy-path",
     scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
     extensions: [".tsx", ".ts"],
-    skip: (file) => file.endsWith("/components/data-table-wrapper.tsx"),
+    skip: (file) =>
+      file.endsWith("/components/data-table-wrapper.tsx") ||
+      file.endsWith("/components/ui/data-table.tsx"),
     regex: /from\s+["']@\/components\/data-table-wrapper["']/,
-    countBaseline: 2,
+    // Hardened from ratchet → hard rule.
     message: `DataTableWrapper / PaginationBar imported from the legacy path. ${kitRatchetHint("ui-core")}`,
   },
   {
@@ -308,7 +318,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/page-header.tsx"),
     regex: /from\s+["']@\/components\/page-header["']/,
-    countBaseline: 3,
+    // Hardened from ratchet → hard rule.
     message: `PageHeader imported from the legacy path. ${kitRatchetHint("ui-core")}`,
   },
 
@@ -320,7 +330,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/shared/entity-timeline.tsx"),
     regex: /from\s+["']@\/components\/shared\/entity-timeline["']/,
-    countBaseline: 2,
+    // Hardened from ratchet → hard rule.
     message: `EntityTimeline / ProcessStages / WorkflowTimeline imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
   },
   {
@@ -351,7 +361,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/approval-actions.tsx"),
     regex: /from\s+["']@\/components\/approval-actions["']/,
-    countBaseline: 5,
+    // Hardened from ratchet → hard rule.
     message: `ApprovalActions / ActionHistory imported from the legacy path. ${kitRatchetHint("workflow-kit")}`,
   },
 
@@ -361,9 +371,13 @@ const RULES = [
     id: "print-layout-from-legacy-path",
     scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
     extensions: [".tsx", ".ts"],
-    skip: (file) => file.endsWith("/components/print-layout.tsx"),
+    skip: (file) =>
+      file.endsWith("/components/print-layout.tsx") ||
+      file.endsWith("/components/shared/entity-print.tsx") ||
+      file.endsWith("/hooks/use-branch-letterhead.ts") ||
+      file.endsWith("/lib/branch-utils.ts"),
     regex: /from\s+["']@\/components\/print-layout["']/,
-    countBaseline: 10,
+    // Hardened from ratchet → hard rule.
     message: `PrintActions / PrintDocument / LetterheadHeader imported from the legacy path. ${kitRatchetHint("report-kit")}`,
   },
 ];
