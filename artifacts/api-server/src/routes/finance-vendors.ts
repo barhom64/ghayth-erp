@@ -331,7 +331,10 @@ vendorsRouter.get("/payables", authorize({ feature: "finance.vendors", action: "
       treasuryName: string | null;
     }
 
-    const rows = await rawQuery<PayableRow>(
+    interface PayableRowDb extends PayableRow {
+      paidAmount: number | string;
+    }
+    const rows = (await rawQuery<PayableRowDb>(
       `SELECT
          ni.id,
          'umrah_nusk' AS source,
@@ -339,7 +342,21 @@ vendorsRouter.get("/payables", authorize({ feature: "finance.vendors", action: "
          ni."issueDate", ni."expiryDate",
          ni."mutamerCount",
          ni."totalAmount", ni."refundAmount", ni."netCost",
-         (COALESCE(ni."totalAmount",0) - COALESCE(ni."refundAmount",0)) AS "outstandingAmount",
+         COALESCE((SELECT SUM(spa.amount)
+                     FROM supplier_payment_allocations spa
+                    WHERE spa."companyId" = ni."companyId"
+                      AND spa."obligationType" = 'nusk_invoice'
+                      AND spa."obligationId" = ni.id
+                      AND spa."deletedAt" IS NULL), 0) AS "paidAmount",
+         (COALESCE(ni."totalAmount",0)
+            - COALESCE(ni."refundAmount",0)
+            - COALESCE((SELECT SUM(spa.amount)
+                          FROM supplier_payment_allocations spa
+                         WHERE spa."companyId" = ni."companyId"
+                           AND spa."obligationType" = 'nusk_invoice'
+                           AND spa."obligationId" = ni.id
+                           AND spa."deletedAt" IS NULL), 0)
+         ) AS "outstandingAmount",
          ni."nuskStatus",
          ni."agentId",
          a.name AS "agentName",
@@ -359,7 +376,7 @@ vendorsRouter.get("/payables", authorize({ feature: "finance.vendors", action: "
        ORDER BY ni."issueDate" DESC NULLS LAST, ni.id DESC
        LIMIT 200`,
       params
-    );
+    )) as PayableRow[];
 
     const summary = rows.reduce(
       (acc, r) => {
