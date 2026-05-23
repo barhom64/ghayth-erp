@@ -1,6 +1,7 @@
-import { useApiQuery } from "@/lib/api";
+import { useState } from "react";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Calendar, CheckCircle, Lock } from "lucide-react";
+import { Calendar, CheckCircle, Lock, Unlock } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import {
   DataTable,
@@ -12,6 +13,8 @@ import {
   PageStatusBadge,
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { Button } from "@/components/ui/button";
 
 /**
  * Fiscal periods list — migrated in R.2 iter 2 to the unified template
@@ -37,13 +40,57 @@ interface FiscalPeriodV1Row {
   status: "active" | "closed" | "future";
 }
 
+interface FiscalPeriodV2Row {
+  id: number;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: "open" | "closed";
+  notes: string | null;
+  closedByName: string | null;
+}
+
 export default function FiscalPeriodsPage() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<{ data: FiscalPeriodV1Row[] }>(
     ["fiscal-periods"],
     "/finance/fiscal-periods",
   );
+  // FIN-014 — the v1 endpoint above produces stats (entries, totals,
+  // active/closed/future status), but doesn't expose an id usable for
+  // close. v2 owns the canonical close/reopen workflow keyed by `id`.
+  // We join on YYYY-MM so each v1 row can render close/reopen buttons
+  // against the matching v2 record.
+  const { data: v2Data, refetch: refetchV2 } = useApiQuery<{ data: FiscalPeriodV2Row[] }>(
+    ["fiscal-periods-v2"],
+    "/finance/fiscal-periods-v2",
+  );
+  const v2List = asList<FiscalPeriodV2Row>(v2Data?.data || v2Data);
+  const v2ByPeriod = new Map<string, FiscalPeriodV2Row>();
+  for (const r of v2List) {
+    if (r.startDate) v2ByPeriod.set(r.startDate.slice(0, 7), r);
+  }
   const items: FiscalPeriodV1Row[] = data?.data || [];
   const [filters, setFilters] = useFilters();
+  const [confirming, setConfirming] = useState<{ id: number; action: "close" | "reopen" } | null>(null);
+
+  const closeMut = useApiMutation<unknown, { id: number; notes?: string }>(
+    (body) => `/finance/fiscal-periods-v2/${body.id}/close`,
+    "POST",
+    [["fiscal-periods"], ["fiscal-periods-v2"]],
+    {
+      successMessage: "تم إقفال الفترة",
+      onSuccess: () => { setConfirming(null); refetch(); refetchV2(); },
+    },
+  );
+  const reopenMut = useApiMutation<unknown, { id: number; reason?: string }>(
+    (body) => `/finance/fiscal-periods-v2/${body.id}/reopen`,
+    "POST",
+    [["fiscal-periods"], ["fiscal-periods-v2"]],
+    {
+      successMessage: "تم إعادة فتح الفترة",
+      onSuccess: () => { setConfirming(null); refetch(); refetchV2(); },
+    },
+  );
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -89,6 +136,38 @@ export default function FiscalPeriodsPage() {
       header: "الحالة",
       sortable: true,
       render: (p) => <PageStatusBadge status={p.status} domain="shared" />,
+    },
+    {
+      key: "actions",
+      header: "إجراء",
+      render: (p) => {
+        const v2 = v2ByPeriod.get(p.period);
+        if (!v2) return <span className="text-xs text-muted-foreground">—</span>;
+        const isConfirming = confirming?.id === v2.id;
+        if (isConfirming) {
+          const mut = confirming.action === "close" ? closeMut : reopenMut;
+          return (
+            <div className="inline-flex items-center gap-1">
+              <Button size="sm" variant={confirming.action === "close" ? "destructive" : "default"} className="h-7 px-2 text-[11px]" disabled={mut.isPending} onClick={() => mut.mutate({ id: v2.id })}>
+                {mut.isPending ? "..." : "تأكيد"}
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setConfirming(null)}>إلغاء</Button>
+            </div>
+          );
+        }
+        if (v2.status === "open") {
+          return (
+            <GuardedButton perm="finance.hardening:create" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setConfirming({ id: v2.id, action: "close" })}>
+              <Lock className="h-3 w-3 ml-1" /> إقفال
+            </GuardedButton>
+          );
+        }
+        return (
+          <GuardedButton perm="finance.hardening:create" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setConfirming({ id: v2.id, action: "reopen" })}>
+            <Unlock className="h-3 w-3 ml-1" /> إعادة فتح
+          </GuardedButton>
+        );
+      },
     },
   ];
 

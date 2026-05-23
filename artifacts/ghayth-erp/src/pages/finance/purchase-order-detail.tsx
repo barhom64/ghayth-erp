@@ -17,6 +17,7 @@ import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { PurchaseOrderReceiveSection } from "@/components/finance/purchase-order-receive-section";
 
 export default function PurchaseOrderDetailPage() {
   const [, params] = useRoute("/finance/purchase-orders/:id");
@@ -101,6 +102,10 @@ export default function PurchaseOrderDetailPage() {
             />
           </CardContent>
         </Card>
+      )}
+
+      {po && (po.status === "approved" || po.status === "partially_received" || po.status === "received" || po.status === "invoiced") && (
+        <PurchaseOrderReceiveSection poId={id || po.id} poStatus={po.status} />
       )}
 
       <Card>

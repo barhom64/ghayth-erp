@@ -194,6 +194,7 @@ const allNavSections: NavSection[] = [
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
         { label: "طلبات الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },
         { label: "الموردين", path: "/finance/vendors", icon: Users },
+        { label: "دفعة الدفع", path: "/finance/payment-run", icon: Banknote },
       ]},
       { label: "النقد والذمم", path: "/finance/treasury", icon: Building, module: "finance", children: [
         { label: "الخزينة", path: "/finance/treasury", icon: Wallet },

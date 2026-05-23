@@ -16,7 +16,7 @@ import { DetailPageLayout, ProcessStages, type StageStep } from "@workspace/enti
 
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Undo2, Send, CheckCircle2, XCircle, Upload } from "lucide-react";
+import { Undo2, Send, CheckCircle, CheckCircle2, XCircle, Upload } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -122,10 +122,12 @@ export default function JournalManualDetailPage() {
   );
 
   // FIN-013 — lifecycle action mutations (draft → pending_review →
-  // approved → posted). All use PATCH; the server's applyTransition gate
-  // is the source of truth for which transition is legal at any given
-  // status, so the buttons below show/hide on the current status but the
-  // server still enforces the rule.
+  // approved → posted). All use PATCH against the finance-hardening
+  // endpoints; the server's applyTransition gate is the source of truth
+  // for which transition is legal at any given status, so the buttons
+  // below show/hide on the current status but the server still enforces
+  // the rule. The simpler POST /journal/:id/approve|post endpoints on
+  // finance-journal.ts remain as a fallback path but are not wired here.
   const submitMut = useApiMutation<{ approvalStatus: string }, Record<string, never>>(
     () => `/finance/journal-manual/${id}/submit`,
     "PATCH",
@@ -262,8 +264,10 @@ export default function JournalManualDetailPage() {
   // authority (applyTransition fromStates check + creator-can't-review-own
   // rule), so a wrong click surfaces as a typed FORBIDDEN/CONFLICT toast
   // rather than corrupt state. Reverse stays available only on posted +
-  // not-already-reversed entries.
+  // not-already-reversed entries — gated on `status` (the posting status)
+  // rather than `approvalStatus` since a draft can never be reversed.
   const canShowLifecycle = journal && !journal.reversedById && !journal.reversalOfId;
+  const status = journal?.status as string | undefined;
   const actions = (
     <div className="flex items-center gap-1.5">
       {journal?.reversedById && <PageStatusBadge status="reversed" domain="shared" />}
@@ -277,6 +281,7 @@ export default function JournalManualDetailPage() {
           className="gap-1"
           disabled={submitMut.isPending}
           onClick={() => submitMut.mutate({})}
+          rateLimitAware
         >
           <Send className="h-4 w-4" />
           {submitMut.isPending ? "جارٍ الإرسال…" : "إرسال للمراجعة"}
@@ -303,6 +308,7 @@ export default function JournalManualDetailPage() {
               deniedTooltip={creatorTooltip}
               onClick={() => approveMut.mutate({ approved: true })}
               title={creatorTooltip}
+              rateLimitAware
             >
               <CheckCircle2 className="h-4 w-4" />
               {approveMut.isPending ? "جارٍ الاعتماد…" : "اعتماد"}
@@ -316,6 +322,7 @@ export default function JournalManualDetailPage() {
               deniedTooltip={creatorTooltip}
               onClick={() => setRejectOpen(true)}
               title={creatorTooltip}
+              rateLimitAware
             >
               <XCircle className="h-4 w-4" />
               رفض
@@ -332,16 +339,17 @@ export default function JournalManualDetailPage() {
           className="gap-1"
           disabled={postMut.isPending}
           onClick={() => postMut.mutate({})}
+          rateLimitAware
         >
           <Upload className="h-4 w-4" />
           {postMut.isPending ? "جارٍ الترحيل…" : "ترحيل"}
         </GuardedButton>
       )}
 
-      {/* Reverse stays available on any non-reversed non-reversal entry —
-          backend rule: original.reversedById IS NULL AND reversalOfId IS NULL.
-          Status is intentionally NOT gated here to preserve existing behaviour. */}
-      {canShowLifecycle && (
+      {/* Reverse only on posted, non-already-reversed entries — gated on
+          `status` (posting status) since a draft can never be reversed.
+          Backend rule: original.reversedById IS NULL AND reversalOfId IS NULL. */}
+      {canShowLifecycle && status === "posted" && (
         <GuardedButton perm="finance:delete" variant="outline" size="sm" className="gap-1" onClick={() => setReversalOpen(true)}>
           <Undo2 className="h-4 w-4" />
           عكس القيد

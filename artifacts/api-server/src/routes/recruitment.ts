@@ -73,7 +73,10 @@ const createApplicationSchema = z.object({
   resumeUrl: z.string().optional().nullable(),
   status: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
-  rating: z.coerce.number().optional().nullable(),
+  // NF-REC-APP-01 — rating is shown on a 1-5 scale in the UI; the
+  // backend had no bounds so a misconfigured client could store 999
+  // or -1 and skew "rating >= 4" filters used by shortlist reports.
+  rating: z.coerce.number().min(1, "التقييم يجب أن يكون بين 1 و5").max(5, "التقييم يجب أن يكون بين 1 و5").optional().nullable(),
   source: z.string().optional().nullable(),
   experience: z.string().optional().nullable(),
   education: z.string().optional().nullable(),
@@ -97,7 +100,7 @@ const updatePostingSchema = z.object({
 const updateApplicationSchema = z.object({
   status: z.string().optional(),
   notes: z.string().optional().nullable(),
-  rating: z.coerce.number().optional().nullable(),
+  rating: z.coerce.number().min(1, "التقييم يجب أن يكون بين 1 و5").max(5, "التقييم يجب أن يكون بين 1 و5").optional().nullable(),
   interviewDate: z.string().optional().nullable(),
 });
 

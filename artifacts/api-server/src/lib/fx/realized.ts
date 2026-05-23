@@ -87,6 +87,10 @@ export interface RecordRealizedFxOpts {
   companyId: number;
   /** Rate at which the payment was settled (foreign → functional). */
   settlementRate: number;
+  /** Foreign-currency amount paid in this settlement. Defaults to the
+   *  full invoice.total — pass it explicitly for partial payments
+   *  (C3 — using invoice.total overstates the gain on partial pays). */
+  paymentAmount?: number;
   paymentDate: string; // YYYY-MM-DD
   ranBy?: number;
 }
@@ -135,7 +139,9 @@ export async function recordRealizedFx(opts: RecordRealizedFxOpts): Promise<Real
     }
 
     const result = computeRealizedFx({
-      originalAmount: Number(inv.total),
+      // C3 — settled FC amount, not the whole invoice. Falls back to
+      // invoice.total only when the caller has not threaded paymentAmount.
+      originalAmount: opts.paymentAmount != null ? Number(opts.paymentAmount) : Number(inv.total),
       bookedRate: Number(inv.bookedRate),
       settlementRate: opts.settlementRate,
       side: "asset",

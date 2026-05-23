@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -11,11 +11,13 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
-import { Plus, Users, AlertTriangle, Plane, UserPlus } from "lucide-react";
+import { Plus, Users, AlertTriangle, Plane, UserPlus, X } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { BulkCheckbox } from "@/components/shared/bulk-actions";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function UmrahPilgrims() {
   const [, navigate] = useLocation();
@@ -29,6 +31,51 @@ export default function UmrahPilgrims() {
   const items = resp?.data || [];
   const total = resp?.total || 0;
 
+  // UMR-BULK — POST /umrah/assign-bulk takes {pilgrimIds, agentId} and
+  // sets the agent on every selected pilgrim. The endpoint had no UI;
+  // wired here as a multi-select + agent picker that appears once at
+  // least one row is selected.
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkAgentId, setBulkAgentId] = useState<string>("");
+  const { data: agentsResp } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
+  const agents = asList(agentsResp?.data || agentsResp);
+  const bulkAssignMut = useApiMutation<unknown, { pilgrimIds: number[]; agentId: number }>(
+    "/umrah/assign-bulk",
+    "POST",
+    [["umrah-pilgrims"]],
+    {
+      successMessage: "تم إسناد المعتمرين للوكيل",
+      onSuccess: () => {
+        setSelectedIds(new Set());
+        setBulkAgentId("");
+        refetch();
+      },
+    },
+  );
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    const pageIds = (items as Array<{ id: number }>).map((p) => p.id);
+    if (pageIds.every((id) => selectedIds.has(id))) {
+      const next = new Set(selectedIds);
+      for (const id of pageIds) next.delete(id);
+      setSelectedIds(next);
+    } else {
+      const next = new Set(selectedIds);
+      for (const id of pageIds) next.add(id);
+      setSelectedIds(next);
+    }
+  };
+  const submitBulk = () => {
+    if (!bulkAgentId || selectedIds.size === 0) return;
+    bulkAssignMut.mutate({ pilgrimIds: Array.from(selectedIds), agentId: Number(bulkAgentId) });
+  };
+
   const kpiCards = [
     { label: "إجمالي المعتمرين", value: total, icon: Users, color: "text-status-info-foreground bg-status-info-surface" },
     { label: "داخل المملكة", value: (items ?? []).filter((p: any) => ["arrived", "active"].includes(p.status)).length, icon: Plane, color: "text-status-success-foreground bg-status-success-surface" },
@@ -39,7 +86,19 @@ export default function UmrahPilgrims() {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
+  const pageIds = (items as Array<{ id: number }>).map((p) => p.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
   const columns: DataTableColumn<any>[] = [
+    {
+      key: "_select",
+      header: "",
+      width: "32px",
+      render: (p) => (
+        <span onClick={(e) => e.stopPropagation()}>
+          <BulkCheckbox checked={selectedIds.has(p.id)} onChange={() => toggleSelect(p.id)} />
+        </span>
+      ),
+    },
     {
       key: "fullName",
       header: "الاسم",
@@ -128,6 +187,45 @@ export default function UmrahPilgrims() {
         ], "المعتمرين")}
         resultCount={total}
       />
+
+      {selectedIds.size > 0 && (
+        <Card className="border-status-info-surface bg-status-info-surface/30">
+          <CardContent className="p-3 flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="font-semibold">{selectedIds.size}</span>
+              <span className="text-muted-foreground">معتمر محدّد للإسناد</span>
+            </div>
+            <Select value={bulkAgentId} onValueChange={setBulkAgentId}>
+              <SelectTrigger className="w-56 h-8 text-xs"><SelectValue placeholder="اختر الوكيل" /></SelectTrigger>
+              <SelectContent>
+                {agents.map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <GuardedButton
+              perm="umrah:create"
+              size="sm"
+              disabled={!bulkAgentId || bulkAssignMut.isPending}
+              onClick={submitBulk}
+              rateLimitAware
+              className="gap-1"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              {bulkAssignMut.isPending ? "جاري الإسناد..." : "إسناد دفعة"}
+            </GuardedButton>
+            <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => setSelectedIds(new Set())}>
+              <X className="h-3 w-3" /> إلغاء التحديد
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {pageIds.length > 0 && (
+        <div className="flex justify-start -mb-3">
+          <Button variant="ghost" size="sm" className="text-xs" onClick={toggleSelectAll}>
+            {allPageSelected ? "إلغاء تحديد هذه الصفحة" : "تحديد كل هذه الصفحة"}
+          </Button>
+        </div>
+      )}
 
       <DataTable
         columns={columns}

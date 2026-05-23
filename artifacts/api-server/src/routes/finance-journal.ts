@@ -25,6 +25,7 @@ import {
   generateRef,
   toDateISO,
   roundTo2,
+  applyJournalEntryBalances,
 } from "../lib/businessHelpers.js";
 import {
   requestIdempotencyToken,
@@ -100,6 +101,13 @@ const approvalSchema = z.object({
   notes: z.string().optional(),
 });
 
+const voucherAllocationSchema = z.object({
+  obligationType: z.enum(["purchase_order", "nusk_invoice", "expense", "manual"]),
+  obligationId: z.coerce.number().int().positive(),
+  amount: z.coerce.number().positive().finite(),
+  notes: z.string().optional(),
+});
+
 const createVoucherSchema = z.object({
   type: z.string().optional(),
   amount: z.any().optional(),
@@ -127,6 +135,7 @@ const createVoucherSchema = z.object({
   operationType: z.string().optional(),
   date: z.string().optional(),
   costCenter: z.string().optional(),
+  allocations: z.array(voucherAllocationSchema).optional(),
 });
 
 const createSalaryAdvanceSchema = z.object({
@@ -649,6 +658,37 @@ journalRouter.patch("/expenses/:id/approve", authorize({ feature: "finance.journ
         // rawQuery/rawExecute join this transaction via the async context.
         if (newStatus === "rejected" || newStatus === "returned") {
           await reverseAccountBalances(scope.companyId, expenseId);
+          // Also unwind the budget reservation. The creation path
+          // (lines 437-480 in this file) bumped `budgets.used` by the
+          // expense's debit amount when (companyId, accountCode, period)
+          // matched a budget row. Without this matching decrement on
+          // rejection/return the row stayed inflated forever — every
+          // future expense on the same code saw inflated utilization and
+          // hit the 80/100/110% gates against a phantom balance.
+          //
+          // GREATEST() floors at zero so any prior manual edit can't push
+          // `used` negative even if the linked budget row was already
+          // adjusted.
+          await client.query(
+            `UPDATE budgets b
+                SET used = GREATEST(0, b.used - sub.total)
+               FROM (
+                 SELECT jl."accountCode",
+                        to_char(je."createdAt", 'YYYY-MM') AS period,
+                        SUM(jl.debit) AS total
+                   FROM journal_lines jl
+                   JOIN journal_entries je ON je.id = jl."journalId"
+                  WHERE jl."journalId" = $1
+                    AND jl.debit > 0
+                    AND jl."deletedAt" IS NULL
+                  GROUP BY jl."accountCode", to_char(je."createdAt", 'YYYY-MM')
+               ) sub
+              WHERE b."companyId" = $2
+                AND b."accountCode" = sub."accountCode"
+                AND b.period = sub.period
+                AND b."deletedAt" IS NULL`,
+            [expenseId, scope.companyId]
+          );
         }
       },
       after: { ref: exp.ref, decision: newStatus, notes: notes ?? null },
@@ -727,8 +767,19 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
       contractId, invoiceId, reference, attachmentUrl, attachmentType,
       vatRate: rawVatRate, vatAmount: rawVatAmount,
       beneficiaryType, entitlementType, branchId, departmentId,
-      autoDescription, operationType,
+      autoDescription, operationType, allocations,
     } = b;
+
+    // C4 + C5 — allocations tie this voucher to specific AP obligations
+    // (purchase_orders, umrah_nusk_invoices, …). Σ allocations must not
+    // exceed the voucher amount and only PV (payment) vouchers carry them.
+    // Σ-vs-amount is re-checked once baseAmount is resolved below.
+    if (allocations && allocations.length > 0 && type !== "payment") {
+      throw new ValidationError("التخصيصات مدعومة لسندات الصرف فقط", {
+        field: "allocations",
+        fix: "احذف التخصيصات أو غيّر نوع السند إلى صرف",
+      });
+    }
 
     if (!type) {
       throw new ValidationError("نوع السند مطلوب", { field: "type", fix: "اختر receipt (قبض) أو payment (صرف)" });
@@ -741,6 +792,15 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     }
     if (!branchId && !scope.branchId) {
       throw new ValidationError("الفرع مطلوب لإنشاء السند", { field: "branchId", fix: "حدد الفرع الذي ينتمي إليه هذا السند" });
+    }
+    // BR-3: a branch-scoped user must not be able to stamp a voucher onto a
+    // branch they are not assigned to — mirrors the same membership guard
+    // the /expenses route applies above. Owners / general managers bypass
+    // branch scope, as everywhere.
+    if (branchId != null &&
+        !scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
+        scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(Number(branchId))) {
+      throw new ForbiddenError("لا تملك صلاحية إنشاء سند في هذا الفرع", { field: "branchId" });
     }
     if (!accountCode) {
       throw new ValidationError("الحساب المحاسبي مطلوب", { field: "accountCode", fix: "حدد الحساب المحاسبي الرئيسي للسند" });
@@ -780,6 +840,17 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
 
     const baseAmount = roundTo2(Number(amount) || 0);
     if (!baseAmount || isNaN(baseAmount)) throw new ValidationError("المبلغ غير صالح", { field: "amount" });
+
+    if (allocations && allocations.length > 0) {
+      const allocTotal = roundTo2(allocations.reduce((s, a) => s + Number(a.amount), 0));
+      if (allocTotal > baseAmount + 0.005) {
+        throw new ValidationError(
+          `مجموع التخصيصات (${allocTotal}) يتجاوز مبلغ السند (${baseAmount})`,
+          { field: "allocations", fix: "خفّض مبالغ التخصيصات أو ارفع مبلغ السند" }
+        );
+      }
+    }
+
     const vatRateVal = rawVatRate != null ? (Number(rawVatRate) || 0) : 0;
     const computedVat = roundTo2(rawVatAmount != null ? (Number(rawVatAmount) || 0) : computeVat(baseAmount, vatRateVal));
     const totalWithVat = roundTo2(baseAmount + computedVat);
@@ -839,6 +910,74 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
       `UPDATE journal_entries SET "paymentMethod" = $1, reference = $2, "attachmentUrl" = $3, "attachmentType" = $4, "relatedEntityType" = $5, "relatedEntityId" = $6, "operationType" = $7, "departmentId" = $8 WHERE id = $9 AND "companyId" = $10 AND "deletedAt" IS NULL`,
       [method ?? "cash", reference ?? null, attachmentUrl ?? null, attachmentType ?? null, relatedEntityType ?? null, relatedEntityId ?? null, operationType ?? type, departmentId ?? null, journalId, scope.companyId]
     ).catch((err) => logger.error(err, "Failed to update voucher metadata:"));
+
+    // C4 + C5 — link the voucher to the AP obligation(s) it pays. Skip on
+    // idempotent replay (rows already exist from the original insert).
+    if (allocations && allocations.length > 0 && !alreadyExists) {
+      for (const a of allocations) {
+        const allocAmt = roundTo2(Number(a.amount));
+
+        // #901 cap: Σ existing allocations to this obligation + the new
+        // amount must not exceed the obligation's total. Without this
+        // check, two vouchers each ≤ their own amount can still
+        // over-allocate a PO/Nusk invoice (e.g. PO=50K → V1 allocates
+        // 40K, V2 allocates 30K → vendor shows -20K outstanding).
+        let obligationCap: number | null = null;
+        if (a.obligationType === "purchase_order") {
+          const [po] = await rawQuery<{ totalAmount: string | number }>(
+            `SELECT "totalAmount" FROM purchase_orders
+              WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+            [a.obligationId, scope.companyId]
+          );
+          if (po) obligationCap = Number(po.totalAmount);
+        } else if (a.obligationType === "nusk_invoice") {
+          const [ni] = await rawQuery<{ totalAmount: string | number; refundAmount: string | number }>(
+            `SELECT "totalAmount", "refundAmount" FROM umrah_nusk_invoices
+              WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+            [a.obligationId, scope.companyId]
+          );
+          if (ni) obligationCap = Number(ni.totalAmount) - Number(ni.refundAmount ?? 0);
+        }
+        if (obligationCap !== null) {
+          const [{ already }] = await rawQuery<{ already: string | number }>(
+            `SELECT COALESCE(SUM(amount), 0) AS already
+               FROM supplier_payment_allocations
+              WHERE "companyId" = $1
+                AND "obligationType" = $2
+                AND "obligationId" = $3
+                AND "deletedAt" IS NULL`,
+            [scope.companyId, a.obligationType, a.obligationId]
+          );
+          const alreadyAllocated = Number(already);
+          if (alreadyAllocated + allocAmt > roundTo2(obligationCap) + 0.005) {
+            throw new ValidationError(
+              `إجمالي التخصيصات (${roundTo2(alreadyAllocated + allocAmt)}) يتجاوز قيمة الالتزام (${roundTo2(obligationCap)})`,
+              {
+                field: "allocations",
+                fix: `الالتزام (${a.obligationType} #${a.obligationId}) قُيِّد له ${roundTo2(alreadyAllocated)} سابقًا. خفّض المبلغ.`,
+              }
+            );
+          }
+        }
+
+        await rawExecute(
+          `INSERT INTO supplier_payment_allocations
+             ("companyId", "branchId", "journalEntryId",
+              "obligationType", "obligationId", amount, notes, "createdBy")
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            scope.companyId,
+            branchId ?? scope.branchId ?? null,
+            journalId,
+            a.obligationType,
+            a.obligationId,
+            allocAmt,
+            a.notes ?? null,
+            scope.activeAssignmentId ?? null,
+          ]
+        );
+      }
+    }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `voucher.${type}`, entity: "vouchers", entityId: journalId, details: JSON.stringify({ ref, type, amount: baseAmount, vatAmount: computedVat, totalWithVat, accountCode, payee, method }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
@@ -1068,9 +1207,33 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     if (!description) throw new ValidationError("وصف القيد مطلوب", { field: "description" });
     if (!Array.isArray(lines) || lines.length < 2) throw new ValidationError("القيد يجب أن يحتوي على بندين على الأقل", { field: "lines" });
     for (const l of lines) { l.debit = roundTo2(Number(l.debit) || 0); l.credit = roundTo2(Number(l.credit) || 0); }
+    // Reject negative amounts up front. Without this guard a user passing
+    // `{debit:-100, credit:0}` produces a "negative debit" that survives
+    // the imbalance check (sums match if mirrored on the credit side) and
+    // then reverses the chart_of_accounts movement at apply time —
+    // posting a balanced-but-inverted entry on the GL. The accounting
+    // convention is non-negative amounts in the proper column, period.
+    for (const l of lines) {
+      if (l.debit < 0 || l.credit < 0) {
+        throw new ValidationError("لا يُسمح بمبالغ سالبة في بنود القيد", {
+          field: "lines",
+          fix: "استعمل الجانب المقابل (مدين/دائن) لعكس الإشارة بدل الرقم السالب",
+        });
+      }
+      if (l.debit > 0 && l.credit > 0) {
+        throw new ValidationError("لا يُسمح بمدين ودائن في نفس البند", {
+          field: "lines",
+          fix: "اقسم البند إلى بندين منفصلين",
+        });
+      }
+    }
     const totalDebit = roundTo2(lines.reduce((s: number, l) => s + l.debit, 0));
     const totalCredit = roundTo2(lines.reduce((s: number, l) => s + l.credit, 0));
-    if (Math.abs(totalDebit - totalCredit) > 0.01) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
+    // Aligned with createJournalEntry (businessHelpers.ts:529) which rejects
+    // at `>= 0.005`. The previous `> 0.01` route-level threshold let a
+    // 1-cent imbalance through into the engine where it failed with a less
+    // helpful error — same correctness, worse UX.
+    if (Math.abs(totalDebit - totalCredit) >= 0.005) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
 
     const postingDate = date ? toDateISO(date) : currentDateInTz("Asia/Riyadh");
     const engineLines = lines.map((l) => ({
@@ -1099,6 +1262,12 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     const ref = generateRef("JE", seqRow.seq, 5);
     const idempotencyToken = requestIdempotencyToken(req);
 
+    // FIN-013 — manual journals now follow a draft → approved → posted
+    // workflow instead of posting directly. `deferBalances: true` keeps
+    // the JE off the GL until the `/journal/:id/post` step runs
+    // `applyJournalEntryBalances` against it. This matches the voucher
+    // and salary-advance lifecycle and gives finance teams an approval
+    // gate before money moves.
     const { financialEngine } = await import("../lib/engines/index.js");
     const { journalId: insertId, alreadyExists } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
@@ -1111,7 +1280,8 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
       sourceId: 0,
       sourceKey: `finance:manual_je:${ref}:${idempotencyToken}`,
       lines: engineLines,
-      status: "posted",
+      status: "draft",
+      deferBalances: true,
       postingDate,
     });
     markIdempotencyReplay(req, res, alreadyExists);
@@ -1178,6 +1348,80 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
   }
 });
 
+// FIN-013 — approve a draft manual journal. Pure status transition; no GL
+// movement yet. The companion `/post` endpoint runs the balance push.
+journalRouter.post("/journal/:id/approve", authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    try {
+      const updated = await applyTransition<Record<string, unknown>>({
+        entity: "journal_entries",
+        id,
+        scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+        action: "manual_journal.approved",
+        fromStates: ["draft", "pending_approval", "returned"],
+        toState: "approved",
+        extraWhere: `"deletedAt" IS NULL AND "sourceType" = 'manual_journal'`,
+        setExtras: {
+          "approvedBy": scope.userId,
+          "approvedAt": new Date(),
+        },
+      });
+      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "approve", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "finance.journal.approved", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      res.json(updated);
+    } catch (err) {
+      const lifecycle = lifecycleErrorResponse(err);
+      if (lifecycle) { res.status(lifecycle.status).json(lifecycle.body); return; }
+      throw err;
+    }
+  } catch (err) {
+    handleRouteError(err, res, "Approve manual journal error:");
+  }
+});
+
+// FIN-013 — post (transition approved → posted AND push GL balances). Runs
+// inside one transaction so the status change and ledger movement commit
+// together; if balancesApply fails (e.g. period reclosed in the interim)
+// the status reverts.
+journalRouter.post("/journal/:id/post", authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    try {
+      const updated = await applyTransition<Record<string, unknown>>({
+        entity: "journal_entries",
+        id,
+        scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+        action: "manual_journal.posted",
+        fromStates: ["approved"],
+        toState: "posted",
+        extraWhere: `"deletedAt" IS NULL AND "sourceType" = 'manual_journal'`,
+        setExtras: {
+          "postedBy": scope.userId,
+          "postedAt": new Date(),
+        },
+        onApply: async (_row, client) => {
+          // Push the deferred balances. Throws if the journal's period
+          // has since closed — the transaction rolls back and the
+          // status stays at 'approved'.
+          await applyJournalEntryBalances(client, scope.companyId, id);
+        },
+      });
+      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "post", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "finance.journal.posted", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      res.json(updated);
+    } catch (err) {
+      const lifecycle = lifecycleErrorResponse(err);
+      if (lifecycle) { res.status(lifecycle.status).json(lifecycle.body); return; }
+      throw err;
+    }
+  } catch (err) {
+    handleRouteError(err, res, "Post manual journal error:");
+  }
+});
+
 journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1196,66 +1440,73 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
       { enforceBranchScope: true },
       2,
     );
-    const [original] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM journal_entries WHERE id = $1 AND ${revScopeWhere} AND "deletedAt" IS NULL LIMIT 1`,
-      [id, ...revScopeParams]
-    );
-    if (!original) throw new NotFoundError("القيد الأصلي غير موجود");
-    if (original.reversedById) {
-      throw new ValidationError(`هذا القيد معكوس مسبقاً بالقيد #${original.reversedById}`);
-    }
-    if (original.reversalOfId) {
-      throw new ValidationError("لا يمكن عكس قيد هو أصلاً قيد عاكس");
-    }
-
-    const originalLines = await rawQuery<Record<string, unknown>>(
-      `SELECT "accountCode", debit, credit, description, "costCenter", "departmentId", "projectId", "employeeId"
-       FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL ORDER BY id ASC`,
-      [id]
-    );
-    if (originalLines.length === 0) {
-      throw new ValidationError("القيد الأصلي لا يحتوي على بنود");
-    }
-
-    const reversedLines = originalLines.map((l) => ({
-      accountCode: l.accountCode as string,
-      debit: Number(l.credit || 0),
-      credit: Number(l.debit || 0),
-      description: l.description as string | undefined,
-      costCenter: l.costCenter as string | undefined,
-      departmentId: l.departmentId as number | undefined,
-      projectId: l.projectId as number | undefined,
-      employeeId: l.employeeId as number | undefined,
-    }));
-
-    const newRef = `REV-${original.ref}`;
-    const newDescription = `عكس قيد: ${original.description ?? ""} — ${reason}`.trim();
-
     const { financialEngine } = await import("../lib/engines/index.js");
-    const { journalId: newJournalId } = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: (original.branchId as number | null) ?? scope.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: newRef,
-      description: newDescription,
-      type: "reversal",
-      sourceType: "journal_reversal",
-      sourceId: id,
-      sourceKey: `finance:reversal:${id}`,
-      // Stamp the reversal on its requested date so the period-close check
-      // validates the entry's true ledger date, not today. Defaults to today
-      // when the caller gives no reverseDate.
-      postingDate: reverseDate ? toDateISO(reverseDate) : currentDateInTz("Asia/Riyadh"),
-      lines: reversedLines,
-    });
 
-    await withTransaction(async (client: any) => {
+    // Wrap the whole flow in a single transaction with FOR UPDATE on the
+    // original row so two concurrent /reverse requests can't both pass
+    // the "already reversed?" check and produce two reversal entries.
+    // `postJournalEntry` inside is reentrant via SAVEPOINT (#885).
+    const { newJournalId, newRef, originalRef } = await withTransaction(async (client: any) => {
+      const { rows: [original] } = await client.query(
+        `SELECT * FROM journal_entries
+         WHERE id = $1 AND ${revScopeWhere} AND "deletedAt" IS NULL
+         FOR UPDATE`,
+        [id, ...revScopeParams]
+      );
+      if (!original) throw new NotFoundError("القيد الأصلي غير موجود");
+      if (original.reversedById) {
+        throw new ValidationError(`هذا القيد معكوس مسبقاً بالقيد #${original.reversedById}`);
+      }
+      if (original.reversalOfId) {
+        throw new ValidationError("لا يمكن عكس قيد هو أصلاً قيد عاكس");
+      }
+
+      const { rows: originalLines } = await client.query(
+        `SELECT "accountCode", debit, credit, description, "costCenter", "departmentId", "projectId", "employeeId"
+         FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL ORDER BY id ASC`,
+        [id]
+      );
+      if (originalLines.length === 0) {
+        throw new ValidationError("القيد الأصلي لا يحتوي على بنود");
+      }
+
+      const reversedLines = originalLines.map((l: Record<string, unknown>) => ({
+        accountCode: l.accountCode as string,
+        debit: Number(l.credit || 0),
+        credit: Number(l.debit || 0),
+        description: l.description as string | undefined,
+        costCenter: l.costCenter as string | undefined,
+        departmentId: l.departmentId as number | undefined,
+        projectId: l.projectId as number | undefined,
+        employeeId: l.employeeId as number | undefined,
+      }));
+
+      const newRef = `REV-${original.ref}`;
+      const newDescription = `عكس قيد: ${original.description ?? ""} — ${reason}`.trim();
+
+      const { journalId: newId } = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: (original.branchId as number | null) ?? scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: newRef,
+        description: newDescription,
+        type: "reversal",
+        sourceType: "journal_reversal",
+        sourceId: id,
+        sourceKey: `finance:reversal:${id}`,
+        // Stamp the reversal on its requested date so the period-close check
+        // validates the entry's true ledger date, not today. Defaults to today
+        // when the caller gives no reverseDate.
+        postingDate: reverseDate ? toDateISO(reverseDate) : currentDateInTz("Asia/Riyadh"),
+        lines: reversedLines,
+      });
+
       await client.query(
         `UPDATE journal_entries
            SET "reversalOfId" = $1,
                "reversalReason" = $2
          WHERE id = $3 AND "companyId" = $4`,
-        [id, reason, newJournalId, scope.companyId]
+        [id, reason, newId, scope.companyId]
       );
       await client.query(
         `UPDATE journal_entries
@@ -1264,8 +1515,27 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
                "reversalReason" = $2,
                status = 'reversed'
          WHERE id = $3 AND "companyId" = $4`,
-        [newJournalId, reason, id, scope.companyId]
+        [newId, reason, id, scope.companyId]
       );
+
+      // C4 + C5 follow-up (#901) — a payment voucher reversed via
+      // /journal/:id/reverse must also retire its supplier_payment_allocations
+      // rows. Without this soft-delete, the vendor statement keeps counting
+      // the reversed voucher as a payment against the obligation, so the
+      // PO/Nusk-invoice outstanding stays artificially low and aging
+      // double-counts the next legitimate payment. Soft-delete keeps the
+      // row for audit while the partial index in migration 198 already
+      // excludes `deletedAt IS NOT NULL` from the obligation lookup.
+      await client.query(
+        `UPDATE supplier_payment_allocations
+            SET "deletedAt" = NOW()
+          WHERE "journalEntryId" = $1
+            AND "companyId" = $2
+            AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      );
+
+      return { newJournalId: newId, newRef, originalRef: original.ref as string };
     });
 
     await createAuditLog({
@@ -1295,7 +1565,7 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
        GROUP BY je.id`,
       [newJournalId, scope.companyId]
     );
-    res.status(201).json({ ...(createdReversal || { id: newJournalId }), originalId: id, originalRef: original.ref, reason });
+    res.status(201).json({ ...(createdReversal || { id: newJournalId }), originalId: id, originalRef, reason });
   } catch (err) {
     handleRouteError(err, res, "Reverse journal error:");
   }
@@ -1608,10 +1878,21 @@ async function createOpeningBalanceEntry(params: {
 
   // Soft-delete prior OB if force
   if (force) {
-    await rawExecute(
-      `UPDATE journal_entries SET "deletedAt" = NOW() WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
+    // A2 (silent ledger corruption): reverse each prior OB's GL deltas
+    // alongside soft-deleting it. Without this reverse, the replacement OB
+    // posted below adds its deltas on top of the un-reversed prior-OB
+    // deltas and currentBalance silently double-counts the opening balance.
+    // Mirrors the soft-delete + reverseAccountBalances pattern already used
+    // for /expenses/:id and /vouchers/:id in this file.
+    const priorObs = await rawQuery<{ id: number }>(
+      `UPDATE journal_entries SET "deletedAt" = NOW()
+       WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL
+       RETURNING id`,
       [scope.companyId, ref]
     );
+    for (const prior of priorObs) {
+      await reverseAccountBalances(scope.companyId, prior.id);
+    }
   }
 
   const description = `أرصدة افتتاحية ${periodStart}`;

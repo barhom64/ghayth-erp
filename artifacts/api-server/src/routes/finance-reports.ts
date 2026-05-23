@@ -85,7 +85,7 @@ reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance.report
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
-    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     const branchFilter = getBranchCondition(scope, undefined, params);
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT coa.id, coa.code, coa.name, coa.type, coa."parentId", coa.level, coa."allowPosting",
@@ -100,7 +100,7 @@ reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance.report
        LEFT JOIN (
          SELECT jl."accountCode", jl.debit, jl.credit
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}${branchFilter}
+         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}${branchFilter}
        ) fl ON fl."accountCode" = coa.code
        WHERE coa."companyId" = $1 AND coa."deletedAt" IS NULL
        GROUP BY coa.id, coa.code, coa.name, coa.type, coa."parentId", coa.level, coa."allowPosting"
@@ -130,10 +130,10 @@ reportsRouter.get("/reports/income-statement", authorize({ feature: "finance.rep
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
-    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     const branchFilter = getBranchCondition(scope, undefined, params);
-    const revenues = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}${branchFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
-    const expenses = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.debit) - SUM(fl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}${branchFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
+    const revenues = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}${branchFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
+    const expenses = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.debit) - SUM(fl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}${branchFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
     const totalRevenue = revenues.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
     const totalExpenses = expenses.reduce((s: number, r: Record<string, unknown>) => s + Number(r.amount), 0);
     res.json(maskFields(req, { revenues, expenses, summary: { totalRevenue, totalExpenses, netIncome: totalRevenue - totalExpenses } }));
@@ -148,29 +148,81 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.report
     const { asOfDate } = req.query as Record<string, string | undefined>;
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
-    if (asOfDate) { params.push(asOfDate); dateFilter = ` AND je."createdAt" <= $${params.length}`; }
+    if (asOfDate) { params.push(asOfDate); dateFilter = ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     const branchFilter = getBranchCondition(scope, undefined, params);
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT coa.code, coa.name, coa.type,
-              CASE WHEN coa.type IN ('asset','expense') THEN COALESCE(SUM(fl.debit) - SUM(fl.credit), 0)
+              CASE WHEN coa.type = 'asset' THEN COALESCE(SUM(fl.debit) - SUM(fl.credit), 0)
                    ELSE COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) END AS balance
        FROM chart_of_accounts coa
        LEFT JOIN (
          SELECT jl."accountCode", jl.debit, jl.credit
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}${branchFilter}
+         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}${branchFilter}
        ) fl ON fl."accountCode" = coa.code
        WHERE coa."companyId" = $1 AND coa.type IN ('asset','liability','equity') AND coa."deletedAt" IS NULL
        GROUP BY coa.code, coa.name, coa.type ORDER BY coa.type, coa.code`,
       params
     );
+
+    // YTD net income (current-year earnings) must roll into equity for any
+    // balance sheet whose asOf date sits inside an open fiscal year. The
+    // year-end close handler posts retained earnings via JE
+    // (finance-journal.ts buildYearEndClosingLines), so after closing this
+    // aggregate is already inside an equity account and we'd double-count.
+    // To avoid that, the YTD window starts after the most recently closed
+    // fiscal year (i.e. only counts movement that hasn't been closed to
+    // retained earnings yet). If no year has been closed, anchor on Jan 1
+    // of the asOf year — the system uses a calendar fiscal year.
+    const asOfStr = asOfDate ?? todayISO();
+    const [lastClosed] = await rawQuery<{ endDate: string | null }>(
+      `SELECT MAX("endDate")::text AS "endDate"
+         FROM financial_periods
+        WHERE "companyId" = $1
+          AND "yearEndClosed" = true
+          AND "endDate" < $2`,
+      [scope.companyId, asOfStr]
+    );
+    const ytdStart = lastClosed?.endDate
+      ? new Date(new Date(lastClosed.endDate).getTime() + 86400000).toISOString().slice(0, 10)
+      : `${asOfStr.slice(0, 4)}-01-01`;
+    const ytdParams: unknown[] = [scope.companyId, ytdStart, asOfStr];
+    const ytdBranchFilter = getBranchCondition(scope, undefined, ytdParams);
+    const [ytd] = await rawQuery<Record<string, unknown>>(
+      `SELECT
+         COALESCE(SUM(CASE WHEN coa.type = 'revenue' THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+         COALESCE(SUM(CASE WHEN coa.type = 'expense' THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL
+          AND je."createdAt" >= $2
+          AND je."createdAt" < ($3::date + 1)
+          ${ytdBranchFilter}
+         JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type IN ('revenue','expense') AND coa."companyId" = $1
+        WHERE jl."deletedAt" IS NULL`,
+      ytdParams
+    );
+    const currentYearEarnings = roundTo2(Number(ytd?.revenue ?? 0) - Number(ytd?.expense ?? 0));
+
     const assets = rows.filter((r: Record<string, unknown>) => r.type === "asset");
     const liabilities = rows.filter((r: Record<string, unknown>) => r.type === "liability");
     const equity = rows.filter((r: Record<string, unknown>) => r.type === "equity");
+    if (Math.abs(currentYearEarnings) > 0.005) {
+      equity.push({
+        code: "_current_year_earnings",
+        name: "أرباح/خسائر السنة الحالية",
+        type: "equity",
+        balance: currentYearEarnings,
+        synthetic: true,
+      });
+    }
     const totalAssets = assets.reduce((s: number, r: Record<string, unknown>) => s + Number(r.balance), 0);
     const totalLiabilities = liabilities.reduce((s: number, r: Record<string, unknown>) => s + Number(r.balance), 0);
     const totalEquity = equity.reduce((s: number, r: Record<string, unknown>) => s + Number(r.balance), 0);
-    res.json(maskFields(req, { assets, liabilities, equity, summary: { totalAssets, totalLiabilities, totalEquity, isBalanced: Math.abs(totalAssets - totalLiabilities - totalEquity) < 0.01 } }));
+    res.json(maskFields(req, { assets, liabilities, equity, summary: { totalAssets, totalLiabilities, totalEquity, currentYearEarnings, isBalanced: Math.abs(totalAssets - totalLiabilities - totalEquity) < 0.01 } }));
   } catch (err) {
     handleRouteError(err, res, "Balance sheet error:");
   }
@@ -221,7 +273,7 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
       `SELECT COALESCE(SUM(jl.debit - jl.credit), 0) AS balance
          FROM journal_lines jl
          JOIN journal_entries je ON je.id = jl."journalId"
-        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true
+        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
           AND je."createdAt" < $2
           AND jl."accountCode" = ANY($3)${openingBranchCond}`,
       openingParams
@@ -241,8 +293,8 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
               jl_cash.debit AS "cashDebit", jl_cash.credit AS "cashCredit"
          FROM journal_entries je
          JOIN journal_lines jl_cash ON jl_cash."journalId" = je.id
-        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true
-          AND je."createdAt" >= $2 AND je."createdAt" <= $3
+        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
+          AND je."createdAt" >= $2 AND je."createdAt" < ($3::date + 1)
           AND jl_cash."accountCode" = ANY($4)
           AND (jl_cash.debit > 0 OR jl_cash.credit > 0)${jesBranchCond}
         ORDER BY je."createdAt"`,
@@ -392,7 +444,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
       let filter = "";
       let idx = fixedCount + 1;
       if (sd) { extraParams.push(sd); filter += ` AND "createdAt" >= $${idx++}`; }
-      if (ed) { extraParams.push(ed); filter += ` AND "createdAt" <= $${idx++}`; }
+      if (ed) { extraParams.push(ed); filter += ` AND "createdAt" < ($${idx++}::date + 1)`; }
       return { filter, extraParams };
     }
 
@@ -530,10 +582,21 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
       `SELECT COALESCE(SUM(total), 0) AS total FROM invoices WHERE "clientId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND "createdAt" < $3${obInvBranchCond}`,
       obInvParams
     );
-    // invoice_payments has no branchId column — scoped by companyId only
+    // invoice_payments has no branchId column — derive the payment's branch
+    // from the linked invoice so a per-branch statement only deducts the
+    // payments that hit invoices on the user's branch(es). Without this
+    // join, a payment that settled a Branch B invoice would show up as a
+    // deduction on Branch A's opening balance for the same customer.
+    const obPayParams: unknown[] = [clientId, scope.companyId, from];
+    const obPayBranchCond = csBranchIds
+      ? (() => { obPayParams.push(csBranchIds); return ` AND i."branchId" = ANY($${obPayParams.length}::int[])`; })()
+      : "";
     const [obPayRow] = await rawQuery<Record<string, unknown>>(
-      `SELECT COALESCE(SUM(amount), 0) AS total FROM invoice_payments WHERE "clientId"=$1 AND "companyId"=$2 AND "paidAt" < $3`,
-      [clientId, scope.companyId, from]
+      `SELECT COALESCE(SUM(ip.amount), 0) AS total
+         FROM invoice_payments ip
+         JOIN invoices i ON i.id = ip."invoiceId" AND i."deletedAt" IS NULL
+        WHERE ip."clientId" = $1 AND ip."companyId" = $2 AND ip."paidAt" < $3${obPayBranchCond}`,
+      obPayParams
     );
     const openingBalance = Number(obInvRow?.total ?? 0) - Number(obPayRow?.total ?? 0);
 
@@ -547,21 +610,28 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
               CONCAT('فاتورة ', ref) AS description
          FROM invoices
         WHERE "clientId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL
-          AND "createdAt" >= $3 AND "createdAt" <= $4${csBranchCond}
+          AND "createdAt" >= $3 AND "createdAt" < ($4::date + 1)${csBranchCond}
         ORDER BY "createdAt"`,
       csBaseParams(csBranchIds || undefined)
     );
-    // In-period payments (invoice_payments may not have branchId — scope via companyId only)
+    // In-period payments — JOINed on invoices to derive the payment's
+    // branch (invoice_payments has no branchId of its own). Same scoping
+    // logic as the opening balance above keeps the statement consistent.
+    const payParams: unknown[] = [clientId, scope.companyId, from, asOf];
+    const payBranchCond = csBranchIds
+      ? (() => { payParams.push(csBranchIds); return ` AND i."branchId" = ANY($${payParams.length}::int[])`; })()
+      : "";
     const payments = await rawQuery<Record<string, unknown>>(
       `SELECT ip.id, COALESCE(ip."transactionRef", CONCAT('PAY-', ip.id)) AS ref,
               ip."paidAt" AS date, 0 AS debit, ip.amount AS credit,
               NULL AS "dueDate", 'paid' AS status, 'payment' AS "movementType",
               CONCAT('دفعة (', COALESCE(ip.method,'manual'), ')') AS description
          FROM invoice_payments ip
-        WHERE ip."clientId"=$1 AND ip."companyId"=$2
-          AND ip."paidAt" >= $3 AND ip."paidAt" <= $4
+         JOIN invoices i ON i.id = ip."invoiceId" AND i."deletedAt" IS NULL
+        WHERE ip."clientId" = $1 AND ip."companyId" = $2
+          AND ip."paidAt" >= $3 AND ip."paidAt" <= $4${payBranchCond}
         ORDER BY ip."paidAt"`,
-      [clientId, scope.companyId, from, asOf]
+      payParams
     );
 
     const all = [...invoices, ...payments].sort(
@@ -581,7 +651,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
               (total - COALESCE("paidAmount",0)) AS outstanding
          FROM invoices
         WHERE "clientId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL
-          AND "createdAt" <= $3
+          AND "createdAt" < ($3::date + 1)
           AND (total - COALESCE("paidAmount",0)) > 0.01${agingBranchCond}`,
       agingParams
     );
@@ -652,13 +722,29 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
     const vsBranchIds = !isPrivVS && scope.allowedBranches.length > 0 ? scope.allowedBranches : null;
 
     // Opening balance = POs matched/received before startDate (branch-scoped)
+    // net of any payment-voucher allocations posted before startDate.
     const obPOParams: unknown[] = [supplierId, scope.companyId, from];
     const obPOBranchCond = vsBranchIds ? (() => { obPOParams.push(vsBranchIds); return ` AND "branchId" = ANY($${obPOParams.length}::int[])`; })() : "";
     const [obPORow] = await rawQuery<Record<string, unknown>>(
       `SELECT COALESCE(SUM("totalAmount"), 0) AS total FROM purchase_orders WHERE "supplierId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL AND status IN ('received','partially_received','invoice_matched','payment_scheduled','paid','completed') AND "createdAt" < $3${obPOBranchCond}`,
       obPOParams
     );
-    const openingBalance = Number(obPORow?.total ?? 0);
+    const [obPayRow] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(spa.amount), 0) AS total
+         FROM supplier_payment_allocations spa
+         JOIN journal_entries je ON je.id = spa."journalEntryId"
+         JOIN purchase_orders po ON po.id = spa."obligationId"
+        WHERE spa."companyId" = $2
+          AND spa."deletedAt" IS NULL
+          AND spa."obligationType" = 'purchase_order'
+          AND po."supplierId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL
+          AND je."createdAt" < $3`,
+      [supplierId, scope.companyId, from]
+    );
+    const openingBalance = Number(obPORow?.total ?? 0) - Number(obPayRow?.total ?? 0);
 
     const vsBranchCond = vsBranchIds ? ` AND "branchId" = ANY($5::int[])` : "";
     const vsBaseParams = (extra?: unknown[]): unknown[] => [supplierId, scope.companyId, from, asOf, ...(extra || [])];
@@ -670,27 +756,69 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
          FROM purchase_orders
         WHERE "supplierId"=$1 AND "companyId"=$2
           AND "deletedAt" IS NULL
-          AND "createdAt" >= $3 AND "createdAt" <= $4${vsBranchCond}
+          AND "createdAt" >= $3 AND "createdAt" < ($4::date + 1)${vsBranchCond}
         ORDER BY "createdAt"`,
       vsBaseParams(vsBranchIds || undefined)
     );
 
+    // C4 — payment vouchers allocated to this supplier's POs show up as
+    // debit movements (reducing what we owe). Pulled from
+    // supplier_payment_allocations joined to the source PO so we only
+    // include vouchers that actually pay one of this supplier's orders.
+    const payRows = await rawQuery<Record<string, unknown>>(
+      `SELECT je.id, je.ref, je."createdAt" AS date,
+              SUM(spa.amount) AS debit, 0 AS credit,
+              NULL AS "dueDate", je.status,
+              'voucher_payment' AS "movementType",
+              CONCAT('سند صرف ', je.ref) AS description
+         FROM supplier_payment_allocations spa
+         JOIN journal_entries je ON je.id = spa."journalEntryId"
+         JOIN purchase_orders po ON po.id = spa."obligationId"
+        WHERE spa."companyId" = $2
+          AND spa."deletedAt" IS NULL
+          AND spa."obligationType" = 'purchase_order'
+          AND po."supplierId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL
+          AND je."createdAt" >= $3 AND je."createdAt" <= $4
+        GROUP BY je.id, je.ref, je."createdAt", je.status
+        ORDER BY je."createdAt"`,
+      [supplierId, scope.companyId, from, asOf]
+    );
+
+    const combined = [...pos, ...payRows].sort((a: any, b: any) => {
+      const ad = new Date(a.date as string | Date).getTime();
+      const bd = new Date(b.date as string | Date).getTime();
+      return ad - bd;
+    });
+
     let running = openingBalance;
-    const movements = pos.map((m: any) => {
+    const movements = combined.map((m: any) => {
       running += Number(m.debit) - Number(m.credit);
       return { ...m, runningBalance: roundTo2(running) };
     });
 
-    // Aging of open POs
+    // Aging of open POs, net of allocations against each PO.
     const agingPOParams: unknown[] = [supplierId, scope.companyId, asOf];
     const agingPOBranchCond = vsBranchIds ? (() => { agingPOParams.push(vsBranchIds); return ` AND "branchId" = ANY($${agingPOParams.length}::int[])`; })() : "";
     const openPos = await rawQuery<Record<string, unknown>>(
-      `SELECT id, ref, "createdAt", "expectedDelivery", "totalAmount"
-         FROM purchase_orders
-        WHERE "supplierId"=$1 AND "companyId"=$2
-          AND "deletedAt" IS NULL
-          AND status NOT IN ('paid','completed','cancelled','rejected')
-          AND "createdAt" <= $3${agingPOBranchCond}`,
+      `SELECT po.id, po.ref, po."createdAt", po."expectedDelivery", po."totalAmount",
+              COALESCE((SELECT SUM(spa.amount)
+                          FROM supplier_payment_allocations spa
+                          JOIN journal_entries je ON je.id = spa."journalEntryId"
+                         WHERE spa."companyId" = po."companyId"
+                           AND spa."obligationType" = 'purchase_order'
+                           AND spa."obligationId" = po.id
+                           AND spa."deletedAt" IS NULL
+                           AND je."deletedAt" IS NULL
+                           AND je."balancesApplied" = true
+                           AND je."reversedById" IS NULL), 0) AS "paidAmount"
+         FROM purchase_orders po
+        WHERE po."supplierId"=$1 AND po."companyId"=$2
+          AND po."deletedAt" IS NULL
+          AND po.status NOT IN ('paid','completed','cancelled','rejected')
+          AND po."createdAt" < ($3::date + 1)${agingPOBranchCond}`,
       agingPOParams
     );
     const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0 };
@@ -699,7 +827,8 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
       const due = po.expectedDelivery ? new Date(po.expectedDelivery as string | Date).getTime()
         : new Date(po.createdAt as string | Date).getTime() + 30 * 86400000;
       const daysOverdue = Math.floor((asOfMs - due) / 86400000);
-      const amt = Number(po.totalAmount);
+      const amt = Math.max(0, Number(po.totalAmount) - Number(po.paidAmount ?? 0));
+      if (amt === 0) continue;
       if (daysOverdue <= 0) buckets.current += amt;
       else if (daysOverdue <= 30) buckets.d30 += amt;
       else if (daysOverdue <= 60) buckets.d60 += amt;
@@ -765,7 +894,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
         const qParams: any[] = [aid, scope.companyId];
         let dateFilter = "";
         if (startDate) { qParams.push(startDate); dateFilter += ` AND pr."createdAt" >= $${qParams.length}`; }
-        if (endDate) { qParams.push(endDate); dateFilter += ` AND pr."createdAt" <= $${qParams.length}`; }
+        if (endDate) { qParams.push(endDate); dateFilter += ` AND pr."createdAt" < ($${qParams.length}::date + 1)`; }
         rows = await rawQuery<Record<string, unknown>>(
           `SELECT pr.period AS ref, CONCAT('راتب ', pr.period) AS description,
                   pr."grossSalary" AS debit, pr.deductions AS credit,
@@ -782,7 +911,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
       const qParams: any[] = [(Number(entityId) || 0), scope.companyId];
       let dateFilter = "";
       if (startDate) { qParams.push(startDate); dateFilter += ` AND i."createdAt" >= $${qParams.length}`; }
-      if (endDate) { qParams.push(endDate); dateFilter += ` AND i."createdAt" <= $${qParams.length}`; }
+      if (endDate) { qParams.push(endDate); dateFilter += ` AND i."createdAt" < ($${qParams.length}::date + 1)`; }
       if (esBranchIds) { qParams.push(esBranchIds); dateFilter += ` AND i."branchId" = ANY($${qParams.length}::int[])`; }
       rows = await rawQuery<Record<string, unknown>>(
         `SELECT i.ref, COALESCE(i.description, i.ref) AS description,
@@ -799,7 +928,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
       const qParams: any[] = [(Number(entityId) || 0), scope.companyId];
       let dateFilter = "";
       if (startDate) { qParams.push(startDate); dateFilter += ` AND po."createdAt" >= $${qParams.length}`; }
-      if (endDate) { qParams.push(endDate); dateFilter += ` AND po."createdAt" <= $${qParams.length}`; }
+      if (endDate) { qParams.push(endDate); dateFilter += ` AND po."createdAt" < ($${qParams.length}::date + 1)`; }
       if (esBranchIds) { qParams.push(esBranchIds); dateFilter += ` AND po."branchId" = ANY($${qParams.length}::int[])`; }
       rows = await rawQuery<Record<string, unknown>>(
         `SELECT po.ref, CONCAT('أمر شراء: ', po.ref) AS description,
@@ -829,7 +958,7 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
-    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     dateFilter += getBranchCondition(scope, branchId, params);
 
     const custodies = await rawQuery<Record<string, unknown>>(
@@ -888,7 +1017,7 @@ reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.re
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
-    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     dateFilter += getBranchCondition(scope, branchId, params);
     if (projectId) { params.push(projectId); dateFilter += ` AND je."projectId" = $${params.length}`; }
 
@@ -907,7 +1036,7 @@ reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.re
               COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS amount,
               COUNT(DISTINCT je.id) AS "entryCount"
        FROM journal_lines jl
-       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}
        JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'expense'
        LEFT JOIN branches b ON b.id = je."branchId"
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
@@ -934,7 +1063,7 @@ reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance.rep
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
-    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     dateFilter += getBranchCondition(scope, branchId, params);
 
     const byAccount = await rawQuery<Record<string, unknown>>(
@@ -942,7 +1071,7 @@ reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance.rep
               COALESCE(SUM(jl.credit) - SUM(jl.debit), 0) AS amount,
               COUNT(DISTINCT je.id) AS "entryCount"
        FROM journal_lines jl
-       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}
        JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'revenue'
        WHERE jl."deletedAt" IS NULL
        GROUP BY coa.code, coa.name
@@ -1023,7 +1152,7 @@ reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance.
     let dateFilter = "";
     const params: unknown[] = [scope.companyId, accountCode];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
-    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     dateFilter += getBranchCondition(scope, branchId, params);
 
     const [accountInfo] = await rawQuery<Record<string, unknown>>(
@@ -1036,7 +1165,7 @@ reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance.
               jl.debit, jl.credit, je."createdAt" AS date,
               b.name AS "branchName"
        FROM journal_lines jl
-       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}
        LEFT JOIN branches b ON b.id = je."branchId"
        WHERE jl."accountCode" = $2 AND jl."deletedAt" IS NULL
        ORDER BY je."createdAt" ASC

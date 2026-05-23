@@ -1,4 +1,4 @@
-import { rawQuery, rawExecute } from "./rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { createNotification, getAssignmentIdByRole, createAuditLog, emitEvent, toDateISO, currentPeriod } from "./businessHelpers.js";
 import { NotFoundError, ValidationError, ForbiddenError } from "./errorHandler.js";
 import { logger } from "./logger.js";
@@ -595,6 +595,20 @@ async function processAction(params: ActionParams & { action: WorkflowAction }) 
           } catch (e) { logger.warn(e, "workflow: failed to resolve fallback assignee for next step"); }
         }
 
+        // If primary role + the HR/GM/owner fallback both came up empty,
+        // refuse to advance. Previously the UPDATE proceeded with
+        // `currentAssignee = NULL`: the workflow was no longer in anyone's
+        // inbox, the SLA cron couldn't escalate (no assignee to notify),
+        // and the only recovery was manual SQL. Throwing here keeps the
+        // current step in place and surfaces an actionable error so the
+        // admin can seed the role before retrying.
+        if (!newAssignee) {
+          throw new ValidationError(
+            `لا يوجد موظّف بدور "${nextStep.requiredRole}" أو دور بديل (hr_manager/general_manager/owner) لاستلام المرحلة التالية`,
+            { field: "approvalChain", fix: `أضف موظّفًا بأحد هذه الأدوار في الشركة أو راجع سلسلة الموافقات` },
+          );
+        }
+
         const [sla] = await rawQuery<Record<string, unknown>>(
           `SELECT * FROM sla_definitions WHERE "companyId" = $1 AND "requestType" = $2 AND "isActive" = true`,
           [companyId, instance.requestType]
@@ -892,28 +906,53 @@ export async function checkSlaStatus(companyId: number) {
 
     if (hoursSince >= escalationH && inst.slaStatus !== "escalated") {
       if (inst.autoApproveOnTimeout) {
-        await rawExecute(
-          `UPDATE workflow_instances SET status = 'approved', "completedAt" = NOW(),
-           "slaStatus" = 'auto_approved', "updatedAt" = NOW() WHERE id = $1 AND status IN ('pending','in_review','escalated')`,
-          [inst.id]
-        );
-        await rawExecute(
-          `INSERT INTO workflow_step_actions ("instanceId", "stepOrder", "stepName", action, "actionBy", notes)
-           VALUES ($1, $2, 'موافقة تلقائية', 'approve', 0, 'تمت الموافقة تلقائياً بسبب تجاوز المهلة')`,
-          [inst.id, inst.currentStepOrder]
-        );
-        if (inst.submittedBy) {
-          createNotification({
-            companyId, assignmentId: inst.submittedBy as number,
-            type: "workflow_auto_approved",
-            title: "موافقة تلقائية على طلبك",
-            body: `${inst.requestTypeLabel}: ${inst.title} - تمت الموافقة تلقائياً بعد تجاوز المهلة`,
-            priority: "normal",
-            refType: (inst.refTable as string | null) ?? (inst.requestType as string),
-            refId: (inst.refId as number | null) ?? (inst.id as number),
-          }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
+        // Auto-approval must propagate to the domain record (leave request,
+        // loan, expense, …) BEFORE the workflow flips to approved — otherwise
+        // the workflow looks approved while the domain row is still pending,
+        // leave days aren't deducted, loans aren't disbursed, expenses aren't
+        // posted. `propagateDomainStatus` is documented to throw on handler
+        // failure (line 187), so wrap everything in one transaction: any
+        // failure rolls back and the workflow stays pending for the next SLA
+        // tick to retry. Previously the UPDATE + INSERT also ran as two
+        // independent rawExecute statements, leaving room for an approved
+        // workflow with no step_action row on a transient INSERT failure.
+        try {
+          await withTransaction(async (client) => {
+            await propagateDomainStatus(
+              inst.refTable as string | null,
+              inst.refId as number | null,
+              "approved",
+              companyId,
+            );
+            await client.query(
+              `UPDATE workflow_instances SET status = 'approved', "completedAt" = NOW(),
+               "slaStatus" = 'auto_approved', "updatedAt" = NOW() WHERE id = $1 AND status IN ('pending','in_review','escalated')`,
+              [inst.id]
+            );
+            await client.query(
+              `INSERT INTO workflow_step_actions ("instanceId", "stepOrder", "stepName", action, "actionBy", notes)
+               VALUES ($1, $2, 'موافقة تلقائية', 'approve', 0, 'تمت الموافقة تلقائياً بسبب تجاوز المهلة')`,
+              [inst.id, inst.currentStepOrder]
+            );
+          });
+          if (inst.submittedBy) {
+            createNotification({
+              companyId, assignmentId: inst.submittedBy as number,
+              type: "workflow_auto_approved",
+              title: "موافقة تلقائية على طلبك",
+              body: `${inst.requestTypeLabel}: ${inst.title} - تمت الموافقة تلقائياً بعد تجاوز المهلة`,
+              priority: "normal",
+              refType: (inst.refTable as string | null) ?? (inst.requestType as string),
+              refId: (inst.refId as number | null) ?? (inst.id as number),
+            }).catch((e) => logger.error(e, "[workflowEngine] background task failed"));
+          }
+          autoApprovals++;
+        } catch (e) {
+          logger.error(
+            { err: e, instanceId: inst.id, refTable: inst.refTable, refId: inst.refId },
+            "[workflowEngine] auto-approve aborted; workflow stays pending and will be retried on the next SLA tick",
+          );
         }
-        autoApprovals++;
       } else {
         const escalateRole = (inst.escalateTo as string | null) ?? "hr_manager";
         let escalateAssignee: number | null = null;

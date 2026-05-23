@@ -273,8 +273,18 @@ router.delete("/programs/:id", authorize({ feature: "hr.training", action: "dele
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [existing] = await rawQuery<{ id: number }>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    const [existing] = await rawQuery<{ id: number; status: string | null }>(`SELECT id, status FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!existing) throw new NotFoundError("البرنامج التدريبي غير موجود");
+
+    // NF-AUD-01 — only soft-delete drafts / cancelled programs. Once a
+    // program is active, enrollments and attendance start referencing it;
+    // deleting it orphans those rows and breaks the certificate trail.
+    if (existing.status && !["draft", "cancelled"].includes(existing.status)) {
+      throw new ConflictError(
+        `لا يمكن حذف برنامج تدريبي بحالة "${existing.status}"`,
+        { field: "status", fix: "ألغِ البرنامج (cancelled) قبل الحذف" }
+      );
+    }
     await rawExecute(`UPDATE training_programs SET "deletedAt" = NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -317,6 +327,27 @@ router.post("/enrollments", authorize({ feature: "hr.training", action: "create"
     }
     const [prog] = await rawQuery<{ id: number }>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [programId, scope.companyId]);
     if (!prog) throw new NotFoundError("البرنامج التدريبي غير موجود");
+
+    // NF-TRAIN-ENROLL-01 — refuse re-enrolling the same employee in the
+    // same program. Without this check, certificate counts and
+    // attendance reports double-count a single learner; there's no
+    // database-level UNIQUE constraint backing the (programId,
+    // employeeId) pair so the only line of defence is here.
+    if (employeeId) {
+      const dup = await rawQuery<{ id: number }>(
+        `SELECT id FROM training_enrollments
+          WHERE "programId" = $1 AND "employeeId" = $2 AND "deletedAt" IS NULL
+          LIMIT 1`,
+        [Number(programId), Number(employeeId)],
+      );
+      if (dup.length > 0) {
+        throw new ConflictError(
+          "الموظف مسجَّل سابقاً في هذا البرنامج",
+          { field: "employeeId", fix: "افتح التسجيل الحالي بدلاً من إنشاء واحد جديد" },
+        );
+      }
+    }
+
     if (employeeId) {
       const [emp] = await rawQuery<{ id: number }>(
         `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,

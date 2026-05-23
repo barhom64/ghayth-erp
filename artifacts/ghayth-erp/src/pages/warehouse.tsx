@@ -3,6 +3,10 @@ import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import {
   DataTable,
   type DataTableColumn,
@@ -13,7 +17,7 @@ import {
   exportToCSV,
 } from "@workspace/ui-core";
 // P4.9 — Warehouse sweep: shared header + status chips.
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Package, ArrowLeftRight, Layers, Truck, Plus, AlertTriangle, DollarSign, Activity } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -245,6 +249,7 @@ function MovementsTab() {
             resultCount={filtered.length}
           />
         </div>
+        <TransferDialog onCreated={refetch} />
         <Link href="/warehouse/movements/create"><GuardedButton perm="warehouse:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة حركة</GuardedButton></Link>
       </div>
       <Card>
@@ -396,5 +401,127 @@ function SuppliersTab() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// WH-TRANSFER — wires POST /warehouse/transfers (the dual transfer_in/
+// transfer_out movement). The endpoint had no UI; products could only
+// move via single "add movement" entries which don't enforce the
+// dual-leg invariant. Dialog form: product picker, quantity, from
+// warehouse (string or id — backend accepts either), to warehouse,
+// notes.
+function TransferDialog({ onCreated }: { onCreated: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [productId, setProductId] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [fromLocation, setFromLocation] = useState("");
+  const [toLocation, setToLocation] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const { data: productsResp } = useApiQuery<any>(
+    open ? ["warehouse-products-all"] : [""],
+    open ? "/warehouse/products?limit=500" : "",
+  );
+  const products: Array<{ id: number; name: string; currentStock?: number }> = asList(productsResp);
+  const selectedProduct = products.find((p) => String(p.id) === productId);
+
+  const transferMut = useApiMutation<unknown, { productId: number; quantity: number; fromLocation?: string; toLocation?: string; notes?: string }>(
+    "/warehouse/transfers",
+    "POST",
+    [["warehouse-movements"], ["warehouse-products-all"]],
+    {
+      successMessage: "تم تسجيل التحويل",
+      onSuccess: () => {
+        setOpen(false);
+        setProductId("");
+        setQuantity("");
+        setFromLocation("");
+        setToLocation("");
+        setNotes("");
+        onCreated();
+      },
+    },
+  );
+
+  const submit = () => {
+    const qty = Number(quantity);
+    if (!productId || !qty || qty <= 0) return;
+    transferMut.mutate({
+      productId: Number(productId),
+      quantity: qty,
+      fromLocation: fromLocation.trim() || undefined,
+      toLocation: toLocation.trim() || undefined,
+      notes: notes.trim() || undefined,
+    });
+  };
+
+  const overdraw = !!selectedProduct && Number(selectedProduct.currentStock ?? 0) < Number(quantity || 0);
+
+  return (
+    <>
+      <GuardedButton perm="warehouse.transfers:create" variant="outline" className="gap-2" onClick={() => setOpen(true)}>
+        <ArrowLeftRight className="h-4 w-4" /> تحويل بين المستودعات
+      </GuardedButton>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تحويل مخزون بين موقعين</DialogTitle>
+            <DialogDescription>
+              يُنشئ النظام حركتي إخراج وإدخال مرتبطتين تلقائيًا بنفس المرجع
+              (`TRANSFER-…`).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">المنتج *</Label>
+              <Select value={productId} onValueChange={setProductId}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="اختر منتجًا" /></SelectTrigger>
+                <SelectContent>
+                  {products.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.name} {p.currentStock !== undefined && <span className="text-muted-foreground text-xs">(الرصيد: {p.currentStock})</span>}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">الكمية *</Label>
+              <Input type="number" min={0} dir="ltr" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="mt-1" />
+              {overdraw && (
+                <p className="text-xs text-status-warning-foreground mt-1">
+                  ⚠ الكمية المطلوبة تتجاوز الرصيد الحالي ({selectedProduct?.currentStock})
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">من موقع</Label>
+                <Input value={fromLocation} onChange={(e) => setFromLocation(e.target.value)} placeholder="المستودع المصدر" className="mt-1" />
+              </div>
+              <div>
+                <Label className="text-xs">إلى موقع</Label>
+                <Input value={toLocation} onChange={(e) => setToLocation(e.target.value)} placeholder="المستودع الهدف" className="mt-1" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">ملاحظات</Label>
+              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="اختياري" className="mt-1" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)}>إلغاء</Button>
+            <GuardedButton
+              perm="warehouse.transfers:create"
+              disabled={transferMut.isPending || !productId || !Number(quantity) || Number(quantity) <= 0}
+              onClick={submit}
+              rateLimitAware
+            >
+              {transferMut.isPending ? "جاري التحويل..." : "تأكيد التحويل"}
+            </GuardedButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

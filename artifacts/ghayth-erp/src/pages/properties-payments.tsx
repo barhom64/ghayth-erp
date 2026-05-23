@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,7 @@ import {
   applyFilters,
   exportToCSV,
 } from "@workspace/ui-core";
-import { Banknote, CheckCircle } from "lucide-react";
+import { Banknote, CheckCircle, AlertTriangle } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
@@ -28,6 +28,21 @@ export default function PropertiesPayments() {
   );
   const payments = asList(paymentsResp);
   const [filters, setFilters] = useFilters();
+
+  // PROP-LATE-RENT — manual trigger for the rent-escalation engine.
+  // The endpoint walks every overdue rent_payment and creates the right
+  // late_rent_action (alert/notification/field_visit/escalation/penalty/
+  // legal_transfer) per its days-late bracket. Returns a summary the
+  // page surfaces in a toast.
+  const escalateMut = useApiMutation<{ escalated?: number; results?: unknown[] }, Record<string, never>>(
+    "/properties/late-rent/escalate",
+    "POST",
+    [["rent-payments"]],
+    {
+      successMessage: "تمت معالجة الإيجارات المتأخّرة",
+      onSuccess: () => refetch(),
+    },
+  );
   const filtered = applyFilters(payments, filters, {
     searchFields: ["tenantName", "unitNumber"] as any,
     statusField: "status" as any,
@@ -67,11 +82,24 @@ export default function PropertiesPayments() {
       subtitle="متابعة وتسجيل مدفوعات الإيجار"
       breadcrumbs={[{ href: "/properties", label: "إدارة الأملاك" }]}
       actions={canManage && (
-        <Link href="/properties/payments/new/pay">
-          <GuardedButton perm="property:create" className="gap-2">
-            <Banknote className="h-4 w-4" /> تسجيل دفعة
+        <div className="flex items-center gap-2">
+          <GuardedButton
+            perm="properties.payments:create"
+            variant="outline"
+            disabled={escalateMut.isPending}
+            onClick={() => escalateMut.mutate({})}
+            className="gap-2"
+            rateLimitAware
+          >
+            <AlertTriangle className="h-4 w-4" />
+            {escalateMut.isPending ? "جاري التصعيد..." : "تصعيد المتأخّرات"}
           </GuardedButton>
-        </Link>
+          <Link href="/properties/payments/new/pay">
+            <GuardedButton perm="property:create" className="gap-2">
+              <Banknote className="h-4 w-4" /> تسجيل دفعة
+            </GuardedButton>
+          </Link>
+        </div>
       )}
     >
 

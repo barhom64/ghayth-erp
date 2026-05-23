@@ -23,6 +23,7 @@ import {
   reverseAccountBalances,
   computeVat,
   extractBaseFromGross,
+  getCompanyVatRate,
   roundTo2,
   todayISO,
   currentPeriod,
@@ -165,7 +166,11 @@ invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance.in
     const scope = req.scope!;
     const b = zodParse(impactPreviewSchema.safeParse(req.body ?? {}));
     // as-any-reason: justified-pragmatic - destructuring on zodParse inferred type whose property names are not directly indexable at the call site
-    const { clientId, lines = [], taxRate = 15, dueInDays = 30 } = b as any;
+    const raw = b as any;
+    const clientId = raw.clientId;
+    const lines = raw.lines ?? [];
+    const dueInDays = raw.dueInDays ?? 30;
+    const taxRate = raw.taxRate ?? await getCompanyVatRate(scope.companyId);
 
     let clientName = "";
     if (clientId) {
@@ -311,10 +316,11 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
     const parsed = zodParse(createInvoiceSchema.safeParse(req.body));
     const {
       clientId, description, subtotal, total: rawTotal, lines: lineItems,
-      vatRate = 15, dueDate, date: invoiceBodyDate, paymentTermsDays, branchId, companyId: bodyCompanyId, notes,
+      vatRate: rawVatRate, dueDate, date: invoiceBodyDate, paymentTermsDays, branchId, companyId: bodyCompanyId, notes,
       isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason,
       // as-any-reason: justified-pragmatic - destructuring on zodParse inferred type whose property names are not directly indexable at the call site
     } = parsed as any;
+    const vatRate = rawVatRate ?? await getCompanyVatRate(bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId);
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
     if (!clientId) {
@@ -584,69 +590,91 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
-    await applyTransition({
-      entity: "invoices",
-      id,
-      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
-      action: "invoice.approved",
-      // Issue #663 #1: dropped "sent" — once an invoice has been sent
-      // to the customer it is a financial commitment, not a draft
-      // pending approval. The engine's invoices state machine reflects
-      // this: `sent: ["partial","paid","overdue","cancelled"]` has no
-      // `approved` target, so the previous `["draft","sent","returned"]`
-      // whitelist threw `LifecycleError` at runtime for any sent-state
-      // invoice. The UI (finance/invoice-detail.tsx:316) only exposes
-      // the approve action when `status === "draft"`, so the
-      // unreachable `sent` entry was latent drift, not an exercised
-      // path — but the route is now in agreement with engine + UI.
-      fromStates: ["draft", "returned"],
-      toState: "approved",
-      setExtras: { approvedBy: scope.userId, approvedAt: { raw: "NOW()" } },
-      extraWhere: `"deletedAt" IS NULL`,
-      after: { ref: invoice.ref, total: invoice.total },
-    });
-
-    // GL entry created ONLY upon approval — BLOCKING (financial integrity guard)
+    // GL accounts resolved up-front (reads, no transaction needed).
     const { financialEngine } = await import("../lib/engines/index.js");
     const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1200"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
     ]);
-    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId || 0,
-      createdBy: scope.activeAssignmentId,
-      ref: `JE-${invoice.ref}`,
-      description: `فاتورة ${invoice.ref}${invoice.description ? ` – ${invoice.description}` : ""}`,
-      type: "invoice",
-      sourceType: "invoice",
-      sourceId: id,
-      sourceKey: `finance:invoice_approval:${id}`,
-      lines: [
-        { accountCode: invArCode, debit: Number(invoice.total), credit: 0 },
-        { accountCode: invRevenueCode, debit: 0, credit: Number(invoice.total) - Number(invoice.vatAmount || 0) },
-        { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
-      ],
-      guardTable: "invoices",
-      guardId: id,
+
+    // Atomic approval: status flip + GL post + denormalised counters
+    // either all commit or all roll back. Without this wrapping, a DB
+    // hiccup between applyTransition and the totalRevenue UPDATE would
+    // leave the invoice `approved`, the JE on the books, but the
+    // client's totalRevenue counter unchanged — a phantom-revenue
+    // condition that no compensating path catches. withTransaction is
+    // reentrant via SAVEPOINT (PR #885) so the engine's internal
+    // transaction nests cleanly when we pass the same client through.
+    let journalId: number;
+    let alreadyExists = false;
+    await withTransaction(async (client) => {
+      await applyTransition({
+        entity: "invoices",
+        id,
+        scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+        action: "invoice.approved",
+        // Issue #663 #1: dropped "sent" — once an invoice has been sent
+        // to the customer it is a financial commitment, not a draft
+        // pending approval. The engine's invoices state machine reflects
+        // this: `sent: ["partial","paid","overdue","cancelled"]` has no
+        // `approved` target, so the previous `["draft","sent","returned"]`
+        // whitelist threw `LifecycleError` at runtime for any sent-state
+        // invoice. The UI (finance/invoice-detail.tsx:316) only exposes
+        // the approve action when `status === "draft"`, so the
+        // unreachable `sent` entry was latent drift, not an exercised
+        // path — but the route is now in agreement with engine + UI.
+        fromStates: ["draft", "returned"],
+        toState: "approved",
+        setExtras: { approvedBy: scope.userId, approvedAt: { raw: "NOW()" } },
+        extraWhere: `"deletedAt" IS NULL`,
+        after: { ref: invoice.ref, total: invoice.total },
+        client,
+      });
+
+      // GL entry created ONLY upon approval — BLOCKING (financial integrity guard)
+      const result = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId || 0,
+        createdBy: scope.activeAssignmentId,
+        ref: `JE-${invoice.ref}`,
+        description: `فاتورة ${invoice.ref}${invoice.description ? ` – ${invoice.description}` : ""}`,
+        type: "invoice",
+        sourceType: "invoice",
+        sourceId: id,
+        sourceKey: `finance:invoice_approval:${id}`,
+        lines: [
+          { accountCode: invArCode, debit: Number(invoice.total), credit: 0 },
+          { accountCode: invRevenueCode, debit: 0, credit: Number(invoice.total) - Number(invoice.vatAmount || 0) },
+          { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
+        ],
+        guardTable: "invoices",
+        guardId: id,
+      });
+      journalId = result.journalId;
+      alreadyExists = result.alreadyExists;
+
+      // Update client totalRevenue upon approval (revenue recognition).
+      if (invoice.clientId) {
+        await client.query(
+          `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+          [Number(invoice.total) - Number(invoice.vatAmount || 0), invoice.clientId, scope.companyId]
+        );
+      }
+
+      // Budget consumption at approval (not at draft creation). No row
+      // for the (account, period) pair → no-op, which is the right
+      // behaviour when a company hasn't seeded a budget. A genuine
+      // error here (e.g. column missing) now rolls back the approval
+      // instead of being silently swallowed — at-fault data still
+      // surfaces, but the books and the counter never disagree.
+      const baseAmount = Number(invoice.total) - Number(invoice.vatAmount || 0);
+      await client.query(
+        `UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+        [baseAmount, scope.companyId, invRevenueCode, currentPeriod()]
+      );
     });
     markIdempotencyReplay(req, res, alreadyExists);
-
-    // Update client totalRevenue upon approval (revenue recognition)
-    if (invoice.clientId) {
-      await rawQuery<Record<string, unknown>>(
-        `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
-        [Number(invoice.total) - Number(invoice.vatAmount || 0), invoice.clientId, scope.companyId]
-      );
-    }
-
-    // Budget consumption at approval (not at draft creation)
-    const baseAmount = Number(invoice.total) - Number(invoice.vatAmount || 0);
-    await rawExecute(
-      `UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
-      [baseAmount, scope.companyId, invRevenueCode, currentPeriod()]
-    ).catch((e) => logger.error(e, "Budget update on approval failed"));
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
@@ -776,6 +804,16 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     // payments of the same magnitude on the same invoice each produce a
     // unique-but-stable key (paid amount is strictly monotonic per payment),
     // and a duplicated request is idempotent against the same journal.
+    //
+    // B1 (silent → visible) — the business UPDATE above committed in its own
+    // transaction; the GL post here is outside it, and a GL failure (closed
+    // period, bad account mapping, balance mismatch) would otherwise leave
+    // the invoice paid with no corresponding cash/AR entry — silent AR
+    // overstatement. Routing through createGuardedJournalEntry via
+    // guardTable + guardId records the failure into financial_posting_failures
+    // so the reconciliation queue can replay it instead of the inconsistency
+    // staying invisible. Full atomicity would require threading a client
+    // through the engine — out of scope for this small guarded fix.
     const paymentAmount = Number(amount);
     const paidScaled = Math.round(newPaid * 100);
     const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
@@ -792,6 +830,8 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
         { accountCode: cashAccountCode, debit: paymentAmount, credit: 0 },
         { accountCode: arAccountCode, debit: 0, credit: paymentAmount },
       ],
+      guardTable: "invoices",
+      guardId: id,
     });
     markIdempotencyReplay(req, res, alreadyExists);
 
@@ -927,7 +967,7 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
 
     const id = parseId(req.params.id, "id");
     const [inv] = await rawQuery<Record<string, unknown>>(
-      `SELECT id, ref, status, "paidAmount" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      `SELECT id, ref, status, "paidAmount", "createdAt", "clientId", total, "vatAmount" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!inv) throw new NotFoundError("الفاتورة غير موجودة");
@@ -937,27 +977,55 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
         { field: "paidAmount", fix: "قم بعكس التحصيل أولاً ثم أعد المحاولة" }
       );
     }
+    // Statuses past approval bumped clients.totalRevenue; cancelling /
+    // soft-deleting must put that revenue back.
+    const REVENUE_RECOGNIZED_STATUSES = new Set(["approved", "sent", "partial", "overdue", "paid"]);
+    const wasRecognised = REVENUE_RECOGNIZED_STATUSES.has(String(inv.status));
+
+    // FIN-AUD-06 — block soft-delete in a closed period. The DELETE reverses
+    // the original GL push, so allowing it in a locked period would move
+    // GL balances inside that period after close. CREATE / PATCH already
+    // call checkFinancialPeriodOpen; deletion was the lone gap.
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, toDateISO(inv.createdAt as string | Date));
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن حذف فاتورة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "createdAt", meta: { periodName: periodCheck.periodName } },
+      );
+    }
 
     // Reverse the GL balances that were pushed at creation time so AR /
     // Revenue / VAT payable drop back. The journal_entries row is located via
     // its ref (JE-<invoice ref>) since invoices don't store a journalId column.
+    // `createdAt` is needed to derive the period that the approval-time
+    // budgets.used bump targeted (currentPeriod() at approval = JE createdAt
+    // period), so the decrement hits the same bucket.
     const [je] = await rawQuery<Record<string, unknown>>(
-      `SELECT id FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
+      `SELECT id, status, "createdAt" FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
       [scope.companyId, `JE-${inv.ref}`]
     );
     await withTransaction(async (client: any) => {
       if (je) {
-        const { rows: lines } = await client.query(
-          `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL`,
-          [Number(je.id)]
-        );
-        for (const line of lines) {
-          const delta = -(Number(line.debit) - Number(line.credit));
-          if (Math.abs(delta) < 0.001) continue;
-          await client.query(
-            `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1 WHERE "companyId" = $2 AND code = $3`,
-            [delta, scope.companyId, line.accountCode]
+        // A4 (silent ledger corruption) — only reverse the GL deltas if the JE
+        // has not already been cancelled. A reject/return leaves the JE with
+        // status='cancelled' but deletedAt=NULL, so without this guard deleting
+        // a previously-rejected invoice would reverse currentBalance a second
+        // time, overshooting by the invoice amount. The reject/return path
+        // applies the symmetric `status !== 'cancelled'` guard at its own
+        // reversal site (see invoiceApprovalAction).
+        if (je.status !== "cancelled") {
+          const { rows: lines } = await client.query(
+            `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL`,
+            [Number(je.id)]
           );
+          for (const line of lines) {
+            const delta = -(Number(line.debit) - Number(line.credit));
+            if (Math.abs(delta) < 0.001) continue;
+            await client.query(
+              `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1 WHERE "companyId" = $2 AND code = $3`,
+              [delta, scope.companyId, line.accountCode]
+            );
+          }
         }
         await client.query(
           `UPDATE journal_entries SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -968,6 +1036,40 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
         `UPDATE invoices SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
+      // Reverse the revenue recognised at approval — without this the
+      // denormalised counter inflates over time as approved invoices get
+      // cancelled.
+      if (wasRecognised && inv.clientId) {
+        const net = Number(inv.total) - Number(inv.vatAmount || 0);
+        if (net > 0) {
+          await client.query(
+            `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) - $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+            [net, inv.clientId, scope.companyId]
+          );
+        }
+      }
+
+      // Reverse the budgets.used bump that approval applied. Same gate
+      // (revenue-recognized status + JE exists) so the decrement only
+      // fires when the bump actually happened. Period is the JE's
+      // createdAt month — the same value `currentPeriod()` had at
+      // approval time — so the decrement lands in the bucket that was
+      // inflated.
+      if (wasRecognised && je && je.createdAt) {
+        const net = Number(inv.total) - Number(inv.vatAmount || 0);
+        if (net > 0) {
+          const { financialEngine } = await import("../lib/engines/index.js");
+          const invRevenueCode = await financialEngine.resolveAccountCode(
+            scope.companyId, "invoice_revenue", "credit", "4000"
+          );
+          const approvalPeriod = String(je.createdAt).slice(0, 7);
+          await client.query(
+            `UPDATE budgets SET used = GREATEST(used - $1, 0)
+             WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+            [net, scope.companyId, invRevenueCode, approvalPeriod]
+          );
+        }
+      }
     });
     rawExecute(
       `INSERT INTO event_logs ("companyId", "userId", action, entity, "entityId", details)
@@ -1023,7 +1125,7 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
       onApply: async (inv, client) => {
         if (newStatus === "rejected" || newStatus === "returned") {
           const jeRes = await client.query(
-            `SELECT id, status FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
+            `SELECT id, status, "createdAt" FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
             [scope.companyId, `JE-${inv.ref}`]
           );
           const je = jeRes.rows[0];
@@ -1034,6 +1136,36 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
                 `UPDATE journal_entries SET status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND status IN ('posted', 'approved') AND "deletedAt" IS NULL`,
                 [Number(je.id), scope.companyId]
               );
+
+              // C2 follow-up — approval bumped clients.totalRevenue and
+              // budgets.used by the invoice net amount. Reject/return on a
+              // previously-approved invoice must reverse those same
+              // counters or downstream dashboards inflate forever (PR #892
+              // closed this for credit_memo + DELETE; this is the third
+              // exit point: approved → rejected/returned).
+              const net = Number(inv.total) - Number(inv.vatAmount || 0);
+              if (inv.clientId && net > 0) {
+                await client.query(
+                  `UPDATE clients SET "totalRevenue" = GREATEST(COALESCE("totalRevenue",0) - $1, 0)
+                   WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+                  [net, inv.clientId, scope.companyId]
+                );
+              }
+              // Budget decrement targets the period that the approval
+              // bumped (= the JE's createdAt month, not currentPeriod()
+              // which may be a different calendar month).
+              if (net > 0) {
+                const { financialEngine } = await import("../lib/engines/index.js");
+                const invRevenueCode = await financialEngine.resolveAccountCode(
+                  scope.companyId, "invoice_revenue", "credit", "4000"
+                );
+                const approvalPeriod = String(je.createdAt).slice(0, 7); // YYYY-MM
+                await client.query(
+                  `UPDATE budgets SET used = GREATEST(used - $1, 0)
+                   WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+                  [net, scope.companyId, invRevenueCode, approvalPeriod]
+                );
+              }
             } catch (e) { logger.error(e, "Failed to reverse invoice GL on rejection:"); }
           }
         }
@@ -1079,11 +1211,70 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action:
     const scope = req.scope!;
     const { period } = req.query as Record<string, string | undefined>;
     const targetPeriod = period ?? currentPeriod();
-    const [outputVat] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("vatAmount"), 0) AS total FROM invoices WHERE "companyId" = $1 AND to_char("createdAt", 'YYYY-MM') = $2 AND "deletedAt" IS NULL`, [scope.companyId, targetPeriod]);
-    const [inputVat] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM(jl.debit), 0) AS total FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je.status = 'posted' WHERE je."companyId" = $1 AND jl."accountCode" = '1400' AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod]);
-    const outputTotal = Number(outputVat?.total ?? 0);
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const inputVatCode = await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180");
+    // Output VAT for the period:
+    //   + invoice VAT (customer charged)
+    //   - credit-memo VAT (customer credited — output VAT reverses)
+    //   + debit-memo VAT (customer additionally charged — extra output VAT)
+    //
+    // Each source must be filtered by its journal entry being on the books
+    // (`balancesApplied = true`) and not reversed (`reversedById IS NULL`),
+    // matching the input-VAT query semantics. Otherwise draft and reversed
+    // entries inflate the VAT return.
+    const [outputVatInvoices] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(i."vatAmount"), 0) AS total
+         FROM invoices i
+         JOIN journal_entries je ON je.id = i."journalEntryId"
+        WHERE i."companyId" = $1
+          AND to_char(i."createdAt", 'YYYY-MM') = $2
+          AND i."deletedAt" IS NULL
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL`,
+      [scope.companyId, targetPeriod]
+    );
+    const [outputVatCreditMemos] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(cm."vatAmount"), 0) AS total
+         FROM credit_memos cm
+         JOIN journal_entries je ON je.id = cm."journalId"
+        WHERE cm."companyId" = $1
+          AND to_char(cm."memoDate", 'YYYY-MM') = $2
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL`,
+      [scope.companyId, targetPeriod]
+    );
+    const [outputVatDebitMemos] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(dm."vatAmount"), 0) AS total
+         FROM debit_memos dm
+         JOIN journal_entries je ON je.id = dm."journalId"
+        WHERE dm."companyId" = $1
+          AND to_char(dm."memoDate", 'YYYY-MM') = $2
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL`,
+      [scope.companyId, targetPeriod]
+    );
+    const [inputVat] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(jl.debit), 0) AS total
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL
+        WHERE je."companyId" = $1
+          AND jl."accountCode" = $3
+          AND to_char(je."createdAt", 'YYYY-MM') = $2`,
+      [scope.companyId, targetPeriod, inputVatCode]
+    );
+    const outputTotal =
+      Number(outputVatInvoices?.total ?? 0)
+      - Number(outputVatCreditMemos?.total ?? 0)
+      + Number(outputVatDebitMemos?.total ?? 0);
     const inputTotal = Number(inputVat?.total ?? 0);
-    res.json({ period: targetPeriod, outputVat: outputTotal, inputVat: inputTotal, netVat: outputTotal - inputTotal, vatRate: 15, status: outputTotal - inputTotal > 0 ? "payable" : "refundable" });
+    const vatRate = await getCompanyVatRate(scope.companyId);
+    res.json({ period: targetPeriod, outputVat: outputTotal, inputVat: inputTotal, netVat: outputTotal - inputTotal, vatRate, status: outputTotal - inputTotal > 0 ? "payable" : "refundable" });
   } catch (err) {
     handleRouteError(err, res, "Tax summary error:");
   }
@@ -1147,7 +1338,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
         throw new ValidationError(`المبلغ (${creditAmount}) يتجاوز الرصيد المفتوح (${openBalance})`);
       }
 
-      const vatRate = Number(invoice.vatRate ?? 15);
+      const vatRate = Number(invoice.vatRate ?? await getCompanyVatRate(scope.companyId));
       net = vatIncluded
         ? extractBaseFromGross(creditAmount, vatRate)
         : creditAmount;
@@ -1202,6 +1393,43 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
          WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
         [creditAmount, id, scope.companyId]
       );
+
+      // Reverse the revenue recognised at invoice approval. The approval
+      // route bumped clients.totalRevenue by the invoice net; the credit
+      // memo refunds part of that revenue, so the denormalised counter
+      // must come back down by the memo's net or it inflates forever.
+      if (invoice.clientId && net > 0) {
+        await client.query(
+          `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) - $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+          [net, invoice.clientId, scope.companyId]
+        );
+      }
+
+      // Reverse the budgets.used bump proportional to the memo's net. The
+      // approval bumped the revenue budget by the full invoice net for the
+      // JE's createdAt month; a credit memo refunds part of that revenue,
+      // so the same bucket is decremented by the memo's net.
+      if (net > 0) {
+        const origJeRes = await client.query(
+          `SELECT "createdAt" FROM journal_entries
+            WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL
+            LIMIT 1`,
+          [scope.companyId, `JE-${invoice.ref}`]
+        );
+        const origJe = origJeRes.rows[0];
+        if (origJe && origJe.createdAt) {
+          const { financialEngine } = await import("../lib/engines/index.js");
+          const invRevenueCode = await financialEngine.resolveAccountCode(
+            scope.companyId, "invoice_revenue", "credit", "4000"
+          );
+          const approvalPeriod = String(origJe.createdAt).slice(0, 7);
+          await client.query(
+            `UPDATE budgets SET used = GREATEST(used - $1, 0)
+             WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+            [net, scope.companyId, invRevenueCode, approvalPeriod]
+          );
+        }
+      }
     });
 
     const memoJournalResult = await financialEngine.postJournalEntry({
@@ -1224,7 +1452,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     let journalId: number | null = memoJournalResult.journalId;
     markIdempotencyReplay(req, res, memoJournalResult.alreadyExists);
     if (journalId && memoId) {
-      await rawExecute(`UPDATE credit_memos SET "journalEntryId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
+      await rawExecute(`UPDATE credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
     }
 
     emitEvent({
@@ -1268,7 +1496,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
       throw new ConflictError(`لا يمكن إصدار إشعار مدين في فترة مُقفلة: ${periodCheck.periodName ?? ""}`);
     }
 
-    const vatRate = Number(invoice.vatRate ?? 15);
+    const vatRate = Number(invoice.vatRate ?? await getCompanyVatRate(scope.companyId));
     const net = vatIncluded
       ? extractBaseFromGross(chargeAmount, vatRate)
       : chargeAmount;
@@ -1320,11 +1548,35 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
         }
       }
 
-      // Increase invoice total to reflect additional charge
+      // Increase invoice subtotal + VAT + total to reflect the additional
+      // charge. Missing subtotal here broke the `subtotal = total - vatAmount`
+      // invariant and made any report that read `subtotal` for "net revenue"
+      // under-report by the debit-memo net.
       await client.query(
-        `UPDATE invoices SET total = total + $1, "vatAmount" = "vatAmount" + $2 WHERE id = $3 AND "companyId" = $4 AND "deletedAt" IS NULL`,
-        [chargeAmount, vat, id, scope.companyId]
+        `UPDATE invoices SET subtotal = subtotal + $1, "vatAmount" = "vatAmount" + $2, total = total + $3 WHERE id = $4 AND "companyId" = $5 AND "deletedAt" IS NULL`,
+        [net, vat, chargeAmount, id, scope.companyId]
       );
+
+      // Mirror invoice-approval's revenue-recognition bump: a debit memo
+      // is supplementary revenue (DR AR / CR Revenue at line 1500), so
+      // `clients.totalRevenue` and `budgets.used` must rise by the
+      // memo's net. Credit memos already decrement these (#892, #905);
+      // debit memos previously never incremented them, leaving the
+      // denormalised counters lagging reality by every memo's net.
+      if (invoice.clientId && net > 0) {
+        await client.query(
+          `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1
+            WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+          [net, invoice.clientId, scope.companyId]
+        );
+      }
+      if (net > 0) {
+        await client.query(
+          `UPDATE budgets SET used = used + $1
+            WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+          [net, scope.companyId, revenueCode, currentPeriod()]
+        );
+      }
     });
 
     const debitMemoResult = await financialEngine.postJournalEntry({
@@ -1347,7 +1599,12 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
     let journalId: number | null = debitMemoResult.journalId;
     markIdempotencyReplay(req, res, debitMemoResult.alreadyExists);
     if (journalId && memoId) {
-      await rawExecute(`UPDATE debit_memos SET "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [memoId, scope.companyId]);
+      // Link memo → JE for the audit trail. Previous code only stamped
+      // updatedAt; debit_memos."journalId" stayed NULL forever.
+      await rawExecute(
+        `UPDATE debit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+        [journalId, memoId, scope.companyId]
+      );
     }
 
     emitEvent({
@@ -2056,6 +2313,13 @@ invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", ac
   try {
     const scope = req.scope!;
     const thisYear = currentYear();
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const inputVatCode = await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180");
+    // Per-month output VAT (invoices), credit-memo VAT (refunds), input VAT
+    // (from the resolved input-VAT account). The old route hardcoded
+    // inputVat=0 and never subtracted credit memos, so the VAT figure
+    // declared to ZATCA was overstated by every refund's VAT plus the
+    // entire input VAT eligible for offset.
     const vatRows = await rawQuery<Record<string, unknown>>(
       `SELECT to_char("createdAt", 'YYYY-MM') AS period,
               COALESCE(SUM("vatAmount"), 0) AS "outputVat",
@@ -2066,12 +2330,36 @@ invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", ac
        GROUP BY to_char("createdAt", 'YYYY-MM')`,
       [scope.companyId, thisYear]
     );
+    const memoRows = await rawQuery<{ period: string; total: string | number }>(
+      `SELECT to_char("memoDate", 'YYYY-MM') AS period,
+              COALESCE(SUM("vatAmount"), 0) AS total
+       FROM credit_memos
+       WHERE "companyId" = $1
+         AND "memoDate" >= make_date($2, 1, 1) AND "memoDate" < make_date($2 + 1, 1, 1)
+       GROUP BY to_char("memoDate", 'YYYY-MM')`,
+      [scope.companyId, thisYear]
+    );
+    const inputRows = await rawQuery<{ period: string; total: string | number }>(
+      `SELECT to_char(je."createdAt", 'YYYY-MM') AS period,
+              COALESCE(SUM(jl.debit), 0) AS total
+       FROM journal_lines jl
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je."balancesApplied" = true
+       WHERE je."companyId" = $1 AND jl."accountCode" = $3
+         AND je."createdAt" >= make_date($2, 1, 1) AND je."createdAt" < make_date($2 + 1, 1, 1)
+       GROUP BY to_char(je."createdAt", 'YYYY-MM')`,
+      [scope.companyId, thisYear, inputVatCode]
+    );
+    const memoByPeriod = new Map<string, number>(memoRows.map((r) => [r.period, Number(r.total)]));
+    const inputByPeriod = new Map<string, number>(inputRows.map((r) => [r.period, Number(r.total)]));
     const currentMonth = Number(currentMonthPadded());
     const declarations = vatRows
       .filter((r) => Number(r.invoiceCount ?? 0) > 0)
       .map((r) => {
-        const m = Number((r.period as string).split("-")[1]);
-        return { period: r.period as string, outputVat: Number(r.outputVat), inputVat: 0, netVat: Number(r.outputVat), invoiceCount: Number(r.invoiceCount), status: m < currentMonth ? "submitted" : "pending" };
+        const period = r.period as string;
+        const m = Number(period.split("-")[1]);
+        const outputVat = Number(r.outputVat) - (memoByPeriod.get(period) ?? 0);
+        const inputVat = inputByPeriod.get(period) ?? 0;
+        return { period, outputVat, inputVat, netVat: outputVat - inputVat, invoiceCount: Number(r.invoiceCount), status: m < currentMonth ? "submitted" : "pending" };
       });
     res.json({ data: declarations });
   } catch (err) {

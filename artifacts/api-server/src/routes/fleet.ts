@@ -9,6 +9,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
+import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
 import { logger } from "../lib/logger.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm } from "../lib/algorithms.js";
@@ -237,6 +238,52 @@ const createTrafficViolationSchema = z.object({
 });
 
 const router = Router();
+
+// FLT-CONST-01 — single source for tunable trip-cost constants. Reads
+// per-company overrides from system_settings keys with a `fleet.*`
+// prefix; falls back to SA-defaults when unset. Cached for the process
+// lifetime since rates rarely change mid-day.
+interface FleetCostSettings {
+  fuelPricePerLiter: number;
+  fuelEfficiencyKmPerLiter: number;
+  driverFarePerKm: number;
+  depreciationPerKm: number;
+}
+const _fleetSettingsCache = new Map<number, FleetCostSettings>();
+const FLEET_COST_DEFAULTS: FleetCostSettings = {
+  fuelPricePerLiter: 2.5,
+  fuelEfficiencyKmPerLiter: 10,
+  driverFarePerKm: 0.5,
+  depreciationPerKm: 0.15,
+};
+async function getFleetCostSettings(companyId: number): Promise<FleetCostSettings> {
+  const cached = _fleetSettingsCache.get(companyId);
+  if (cached) return cached;
+  try {
+    const rows = await rawQuery<{ key: string; value: string | null }>(
+      `SELECT key, value FROM system_settings
+        WHERE key IN ('fleet.fuel_price_per_liter','fleet.fuel_efficiency_km_per_liter','fleet.driver_fare_per_km','fleet.depreciation_per_km')
+          AND ( "companyId" = $1 OR "companyId" IS NULL )
+        ORDER BY ("companyId" IS NULL) ASC`,
+      [companyId],
+    );
+    const pick = (key: string, fallback: number) => {
+      const row = rows.find((r) => r.key === key);
+      const n = row?.value == null ? NaN : Number(row.value);
+      return Number.isFinite(n) && n > 0 ? n : fallback;
+    };
+    const settings: FleetCostSettings = {
+      fuelPricePerLiter: pick("fleet.fuel_price_per_liter", FLEET_COST_DEFAULTS.fuelPricePerLiter),
+      fuelEfficiencyKmPerLiter: pick("fleet.fuel_efficiency_km_per_liter", FLEET_COST_DEFAULTS.fuelEfficiencyKmPerLiter),
+      driverFarePerKm: pick("fleet.driver_fare_per_km", FLEET_COST_DEFAULTS.driverFarePerKm),
+      depreciationPerKm: pick("fleet.depreciation_per_km", FLEET_COST_DEFAULTS.depreciationPerKm),
+    };
+    _fleetSettingsCache.set(companyId, settings);
+    return settings;
+  } catch {
+    return FLEET_COST_DEFAULTS;
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STATE MACHINES — Phase C.3 Fleet audit
@@ -960,6 +1007,27 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
     let selectedVehicleId = b.vehicleId || null;
     let selectedDriverId = b.driverId || null;
 
+    // NF-FLEET-01 — when the operator picks a driver explicitly, the
+    // auto-pick branch below is skipped, so we'd otherwise dispatch a
+    // trip to a driver that is `on_leave`, `inactive`, or off-duty. The
+    // auto-pick branch already filters `status='available'`; mirror that
+    // check on the manual path.
+    if (b.driverId) {
+      const [drv] = await rawQuery<{ id: number; status: string | null }>(
+        `SELECT id, status FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [Number(b.driverId), scope.companyId]
+      );
+      if (!drv) {
+        throw new ValidationError("السائق غير موجود", { field: "driverId" });
+      }
+      if (drv.status !== "available") {
+        throw new ConflictError(
+          `لا يمكن تعيين السائق — الحالة الحالية "${drv.status ?? "غير محددة"}"`,
+          { field: "driverId", fix: "اختر سائقاً بحالة available" }
+        );
+      }
+    }
+
     if (!selectedVehicleId) {
       const vehicles = await rawQuery<Record<string, unknown>>(
         `SELECT v.*,
@@ -1064,19 +1132,65 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
       if (!cl) throw new ValidationError("العميل غير موجود", { field: "clientId", fix: "اختر عميلاً من قائمة العملاء." });
     }
 
-    const fuelPricePerLiter = b.fuelPricePerLiter || 2.5;
-    const fuelEfficiency = 10;
+    // FLT-CONST-01 — trip cost estimates used to bake in hardcoded fuel
+    // efficiency (10 km/L), driver fare rate (0.5/km) and depreciation
+    // rate (0.15/km). The estimate is stored on the trip row and feeds
+    // fleet cost reports, so tenants in non-SA jurisdictions or with
+    // different fleets had no way to tune them. Read from system_settings
+    // with sensible fallbacks; explicit per-trip overrides still win.
+    const fleetSettings = await getFleetCostSettings(scope.companyId);
+    const fuelPricePerLiter = b.fuelPricePerLiter || fleetSettings.fuelPricePerLiter;
+    const fuelEfficiency = fleetSettings.fuelEfficiencyKmPerLiter;
     const estimatedFuelCost = (estimatedDistanceKm / fuelEfficiency) * fuelPricePerLiter;
-    const driverFare = b.driverFare || estimatedDistanceKm * 0.5;
-    const depreciation = estimatedDistanceKm * 0.15;
+    const driverFare = b.driverFare || estimatedDistanceKm * fleetSettings.driverFarePerKm;
+    const depreciation = estimatedDistanceKm * fleetSettings.depreciationPerKm;
     const totalEstimatedCost = estimatedFuelCost + driverFare + depreciation;
 
+    // Idempotency — a double-click on the «Create Trip» button used to
+    // create two rows. The driver/vehicle status guard caught duplicates
+    // only when the user explicitly passed the same ids; in auto-select
+    // mode click #2 picked a DIFFERENT available driver/vehicle, both
+    // INSERTs succeeded, and the operator ended up with two trips. The
+    // partial-unique index on (companyId, sourceKey) — migration 196 —
+    // collapses retried POSTs onto the same row at the DB level.
+    const idempotencyToken = requestIdempotencyToken(req);
+    const sourceKey = `fleet:trip:${idempotencyToken}`;
+    const [preExisting] = await rawQuery<{ id: number }>(
+      `SELECT id FROM fleet_trips WHERE "companyId" = $1 AND "sourceKey" = $2 LIMIT 1`,
+      [scope.companyId, sourceKey]
+    );
+    if (preExisting) {
+      markIdempotencyReplay(req, res, true);
+      const [row] = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM fleet_trips WHERE id = $1 AND "companyId" = $2`,
+        [preExisting.id, scope.companyId]
+      );
+      res.status(200).json({ ...row, idempotentReplay: true });
+      return;
+    }
+
+    let alreadyExists = false;
     const insertId = await withTransaction(async (client) => {
       const tripResult = await client.query(
-        `INSERT INTO fleet_trips ("companyId","vehicleId","driverId","clientId","fromLocation","toLocation","fromLat","fromLng","toLat","toLng","distance","cost","startTime",status,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
-        [scope.companyId, selectedVehicleId, selectedDriverId, b.clientId, b.fromLocation, b.toLocation, fromLat || null, fromLng || null, toLat || null, toLng || null, estimatedDistanceKm, totalEstimatedCost, b.startTime || new Date().toISOString(), 'in_progress', b.notes]
+        `INSERT INTO fleet_trips ("companyId","vehicleId","driverId","clientId","fromLocation","toLocation","fromLat","fromLng","toLat","toLng","distance","cost","startTime",status,notes,"sourceKey")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+         ON CONFLICT ("companyId", "sourceKey") WHERE "sourceKey" IS NOT NULL DO NOTHING
+         RETURNING id`,
+        [scope.companyId, selectedVehicleId, selectedDriverId, b.clientId, b.fromLocation, b.toLocation, fromLat || null, fromLng || null, toLat || null, toLng || null, estimatedDistanceKm, totalEstimatedCost, b.startTime || new Date().toISOString(), 'in_progress', b.notes, sourceKey]
       );
-      const tripId = tripResult.rows[0]?.id;
+      let tripId = tripResult.rows[0]?.id;
+      if (!tripId) {
+        // Race: a concurrent POST with the same key won the INSERT.
+        // Fetch the existing row and short-circuit — the driver/vehicle
+        // UPDATEs already ran on the winning side.
+        const { rows: existingRows } = await client.query(
+          `SELECT id FROM fleet_trips WHERE "companyId" = $1 AND "sourceKey" = $2 LIMIT 1`,
+          [scope.companyId, sourceKey]
+        );
+        tripId = existingRows[0]?.id;
+        alreadyExists = true;
+        return tripId;
+      }
 
       if (selectedVehicleId) {
         const vResult = await client.query(`UPDATE fleet_vehicles SET status='in_use', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='available' AND "deletedAt" IS NULL`, [selectedVehicleId, scope.companyId]);
@@ -1089,6 +1203,7 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
 
       return tripId;
     });
+    markIdempotencyReplay(req, res, alreadyExists);
 
     if (selectedDriverId) {
       try {
@@ -1158,11 +1273,16 @@ router.post("/trips/:id/complete", authorize({ feature: "fleet.trips", action: "
     const endMileage = b.endMileage || 0;
     const startMileage = b.startMileage || 0;
     const actualDistanceKm = endMileage > startMileage ? endMileage - startMileage : (Number(trip.distance) || 0);
-    const fuelPricePerLiter = b.fuelPricePerLiter || 2.5;
-    const fuelEfficiency = 10;
+    // FLT-CONST-01 — same per-company tunable constants used by the
+    // /trips POST estimate. Tying both paths to the same helper means
+    // the estimate-vs-actual delta on cost reports reflects real
+    // variance, not a rate mismatch between create and complete.
+    const completeSettings = await getFleetCostSettings(scope.companyId);
+    const fuelPricePerLiter = b.fuelPricePerLiter || completeSettings.fuelPricePerLiter;
+    const fuelEfficiency = completeSettings.fuelEfficiencyKmPerLiter;
     const actualFuelCost = (actualDistanceKm / fuelEfficiency) * fuelPricePerLiter;
-    const driverFare = b.driverFare || actualDistanceKm * 0.5;
-    const depreciation = actualDistanceKm * 0.15;
+    const driverFare = b.driverFare || actualDistanceKm * completeSettings.driverFarePerKm;
+    const depreciation = actualDistanceKm * completeSettings.depreciationPerKm;
     const totalCost = actualFuelCost + driverFare + depreciation;
 
     await applyTransition({
@@ -2802,7 +2922,27 @@ router.patch("/preventive-plans/:id", authorize({ feature: "fleet.maintenance", 
     if (b.lastServiceDate !== undefined) { params.push(b.lastServiceDate); sets.push(`"lastServiceDate"=$${params.length}`); }
     if (b.lastServiceMileage !== undefined) { params.push(b.lastServiceMileage); sets.push(`"lastServiceMileage"=$${params.length}`); }
     if (b.estimatedCost !== undefined) { params.push(b.estimatedCost); sets.push(`"estimatedCost"=$${params.length}`); }
-    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    // NF-FLEET-PREF-01 — preventive plans previously accepted any status
+    // value here, so a plan could leap from `pending` to `completed`
+    // (or even backwards) without a maintenance record being filed.
+    // Restrict to the documented forward path; completed/cancelled are
+    // terminal.
+    if (b.status !== undefined && b.status !== existing.status) {
+      const allowedNext: Record<string, string[]> = {
+        pending: ["in_progress", "cancelled"],
+        in_progress: ["completed", "cancelled"],
+        completed: [],
+        cancelled: ["pending"],
+      };
+      const allowed = allowedNext[String(existing.status)] ?? [];
+      if (!allowed.includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن نقل الخطة الوقائية من "${existing.status}" إلى "${b.status}"`,
+          { field: "status", fix: `الحالات المسموحة: ${allowed.join(", ") || "(لا شيء)"}` }
+        );
+      }
+      params.push(b.status); sets.push(`status=$${params.length}`);
+    }
 
     // When last service date/mileage is updated and no explicit next values, recompute from intervals
     const effectiveLastDate = b.lastServiceDate ?? existing.lastServiceDate;

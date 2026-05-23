@@ -176,6 +176,38 @@ export function extractBaseFromGross(grossAmount: number, vatRatePercent: number
   return roundTo2(grossAmount / (1 + vatRatePercent / 100));
 }
 
+// FIN-AUD-03 — single source for the active VAT rate. Reads system_settings
+// key `vat_rate` (company row, then system-wide row, then SA's 15% default).
+// Cached per-company for the process lifetime since rate changes ~yearly.
+const _vatRateCache = new Map<number, number>();
+export const FALLBACK_VAT_RATE = 15;
+export async function getCompanyVatRate(companyId: number): Promise<number> {
+  const cached = _vatRateCache.get(companyId);
+  if (cached !== undefined) return cached;
+  try {
+    const { rawQuery } = await import("./rawdb.js");
+    const rows = await rawQuery<{ value: string | null }>(
+      `SELECT value FROM system_settings
+        WHERE key = 'vat_rate'
+          AND ( "companyId" = $1 OR "companyId" IS NULL )
+        ORDER BY ("companyId" IS NULL) ASC
+        LIMIT 1`,
+      [companyId],
+    );
+    const raw = rows[0]?.value;
+    const parsed = raw == null ? NaN : Number(raw);
+    const rate = Number.isFinite(parsed) && parsed >= 0 ? parsed : FALLBACK_VAT_RATE;
+    _vatRateCache.set(companyId, rate);
+    return rate;
+  } catch {
+    return FALLBACK_VAT_RATE;
+  }
+}
+export function clearVatRateCache(companyId?: number): void {
+  if (companyId === undefined) _vatRateCache.clear();
+  else _vatRateCache.delete(companyId);
+}
+
 export async function createNotification(params: {
   companyId: number;
   assignmentId: number;
@@ -691,8 +723,19 @@ export async function applyJournalEntryBalances(
   // 2025-06-01 00:00:05 has date='2025-05-31' and createdAt='2025-06-01' —
   // the May period is the right gate, not June. The /post endpoint
   // (finance-hardening.ts:732) already uses `date` for the same reason.
+  //
+  // `FOR UPDATE` serialises two concurrent apply calls on the same journal
+  // entry. Without the lock, the second caller could read `balancesApplied =
+  // false` while the first is mid-apply, then both proceed and bump
+  // `chart_of_accounts.currentBalance` twice. The flag UPDATE at the bottom
+  // happens inside the caller's transaction, so the row stays locked until
+  // the apply commits — the second waiter then sees `balancesApplied = true`
+  // and exits cleanly.
   const { rows: jeRows } = await client.query(
-    `SELECT "balancesApplied", date::text AS "entryDate" FROM journal_entries WHERE id = $1 AND "companyId" = $2`,
+    `SELECT "balancesApplied", date::text AS "entryDate"
+       FROM journal_entries
+      WHERE id = $1 AND "companyId" = $2
+      FOR UPDATE`,
     [journalId, companyId]
   );
   if (!jeRows[0] || jeRows[0].balancesApplied) return;

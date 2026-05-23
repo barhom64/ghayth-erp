@@ -1952,7 +1952,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
           }
           await client.query(
             `UPDATE hr_leave_balances
-             SET reserved = reserved - $1
+             SET reserved = GREATEST(reserved - $1, 0)
              WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
             [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
           );
@@ -1996,8 +1996,8 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
         onApply: async (_row, client) => {
           if (currentStage) {
             await client.query(
-              `UPDATE leave_approval_stages SET status = 'returned', decision = $1, "decidedBy" = $2, "decidedAt" = NOW() WHERE id = $3 AND status = 'pending' AND "leaveId" IN (SELECT id FROM leaves WHERE "companyId"=$4)`,
-              [reason, scope.activeAssignmentId, currentStage.id, scope.companyId]
+              `UPDATE leave_approval_stages SET status = 'returned', decision = $1, "decidedBy" = $2, "decidedAt" = NOW() WHERE id = $3 AND status = 'pending'`,
+              [reason, scope.activeAssignmentId, currentStage.id]
             );
           }
           await client.query(
@@ -2589,7 +2589,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     }
 
     const gosiSettings = await rawQuery<{ key: string; value: string }>(
-      `SELECT key, value FROM system_settings WHERE "companyId" = $1 AND key IN ('gosiEmployeeRate','gosiEmployerRate')`,
+      `SELECT key, value FROM system_settings WHERE "companyId" = $1 AND key IN ('gosiEmployeeRate','gosiEmployerRate','gosiCeiling')`,
       [scope.companyId]
     );
     const gosiSettingsMap = new Map(gosiSettings.map((r) => [r.key, r.value]));
@@ -2598,6 +2598,11 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       ? Number(gosiComponent.value) / 100
       : Number(gosiSettingsMap.get("gosiEmployeeRate") ?? "9.75") / 100;
     const GOSI_EMPLOYER_RATE = Number(gosiSettingsMap.get("gosiEmployerRate") ?? "11.75") / 100;
+    // Saudi GOSI caps the contribution wage at SAR 45,000/month. A
+    // company can override via system_settings.gosiCeiling (e.g. set
+    // to a huge number to effectively disable, or to a different
+    // ceiling if the regulator changes it).
+    const GOSI_CEILING = Number(gosiSettingsMap.get("gosiCeiling") ?? "45000");
 
     const earningComponents = salaryComponents.filter((c) => c.type === 'earning' && !c.isGosi);
 
@@ -2638,7 +2643,13 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
         [scope.companyId, targetPeriod]
       ),
       rawQuery<Record<string, unknown>>(
-        `SELECT la."assignmentId", COALESCE(SUM(la."monthlyInstallment"), 0) AS "installment"
+        // Cap each loan's installment at its remainingAmount so the final
+        // month never deducts more than is actually owed. Without the cap
+        // an employee whose monthlyInstallment exceeds the remaining loan
+        // balance loses the full installment from net pay even though the
+        // DB clamps remainingAmount to zero via GREATEST() at write time.
+        `SELECT la."assignmentId",
+                COALESCE(SUM(LEAST(la."monthlyInstallment", la."remainingAmount")), 0) AS "installment"
          FROM loan_accounts la
          WHERE la."companyId" = $1 AND la.status = 'active' AND la."remainingAmount" > 0
          GROUP BY la."assignmentId"`,
@@ -2735,8 +2746,9 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       const absenceDeduction = roundTo2(absentDays * (basic / 30));
       const violationDeduction = (penaltyMap.get(aId) ?? 0) + (violationMap.get(aId) ?? 0);
       const loanDeduction = loanMap.get(aId) ?? 0;
-      const gosiEmployee = roundTo2(basic * GOSI_EMPLOYEE_RATE);
-      const gosiEmployer = roundTo2(basic * GOSI_EMPLOYER_RATE);
+      const gosiBase = Math.min(basic, GOSI_CEILING);
+      const gosiEmployee = roundTo2(gosiBase * GOSI_EMPLOYEE_RATE);
+      const gosiEmployer = roundTo2(gosiBase * GOSI_EMPLOYER_RATE);
       totalGosiEmployer += gosiEmployer;
       const overtimeMinutes = overtimeMap.get(aId) ?? 0;
       const overtimeHours = roundTo2(overtimeMinutes / 60);
@@ -2804,10 +2816,15 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
 
       if (loanRows.length > 0) {
         const assignmentIdsWithLoans = loanRows.map((r: Record<string, unknown>) => Number(r.assignmentId));
+        // Use LEAST(monthlyInstallment, remainingAmount) so the deduction
+        // matches what was taken from the payroll line (capped above).
+        // The earlier GREATEST() was already preventing negative balances,
+        // but pairing the capped subtrahend keeps net-pay deduction +
+        // remainingAmount decrement aligned.
         await client.query(
           `UPDATE loan_accounts
-           SET "remainingAmount" = GREATEST(0, "remainingAmount" - "monthlyInstallment"),
-               status = CASE WHEN "remainingAmount" - "monthlyInstallment" <= 0 THEN 'settled' ELSE status END
+           SET "remainingAmount" = "remainingAmount" - LEAST("monthlyInstallment", "remainingAmount"),
+               status = CASE WHEN "remainingAmount" - LEAST("monthlyInstallment", "remainingAmount") <= 0 THEN 'settled' ELSE status END
            WHERE "companyId" = $1 AND status = 'active' AND "assignmentId" = ANY($2::int[])`,
           [scope.companyId, assignmentIdsWithLoans]
         );
