@@ -1,3 +1,20 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// finance-budget.ts — budget + (deprecated) legacy fiscal-period STATS.
+//
+// FIN-015 — period-system ownership:
+//   - GET /finance/fiscal-periods (this file) is a STATS VIEW: a
+//     12-month grid derived live from journal_entries (entries +
+//     totalDebit per month), used by the fiscal-periods.tsx page for
+//     read-only display.
+//   - The canonical period RECORD (status, dates, closedBy, audit
+//     trail) lives in `financial_periods` and is owned by
+//     finance-hardening.ts via /finance/fiscal-periods-v2.
+//   - Mutations (create / close / reopen) MUST go through v2.
+//
+// Adding a new period mutation here would re-introduce the bug
+// FIN-015 fixed: a stub close that returns success without persisting
+// anything.
+// ─────────────────────────────────────────────────────────────────────────────
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
@@ -591,7 +608,7 @@ budgetRouter.get("/budget/variance", authorize({ feature: "finance.budget", acti
                 JOIN journal_entries je ON je.id = jl."journalId"
                 WHERE je."companyId" = b."companyId"
                   AND je."deletedAt" IS NULL
-                  AND je.status = 'posted'
+                  AND je."balancesApplied" = true
                   AND jl."accountCode" = b."accountCode"
                   AND je."createdAt"::date BETWEEN $2::date AND $3::date
               ), 0) AS "actualAmount"
@@ -674,7 +691,7 @@ budgetRouter.get("/fiscal-periods", authorize({ feature: "finance.budget", actio
               COALESCE(SUM(jl.debit), 0) AS "totalDebit"
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl."journalId" = je.id
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted'
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
          AND je."createdAt" >= make_date($2, 1, 1) AND je."createdAt" < make_date($2 + 1, 1, 1)
        GROUP BY to_char(je."createdAt", 'YYYY-MM')`,
       [scope.companyId, thisYear]
@@ -700,59 +717,21 @@ budgetRouter.get("/fiscal-periods", authorize({ feature: "finance.budget", actio
   }
 });
 
-budgetRouter.post("/fiscal-periods/:period/close", authorize({ feature: "finance.budget", action: "create" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-
-    const period = String(req.params.period);
-
-    if (!/^\d{4}-\d{2}$/.test(period)) {
-      throw new ValidationError("صيغة الفترة غير صحيحة", {
-        field: "period",
-        fix: "استخدم الصيغة YYYY-MM مثل 2025-01",
-      });
-    }
-
-    const pendingJournals = await rawQuery<{ id: number; ref?: string | null; description?: string | null }>(
-      `SELECT je.id, je.ref, je.description
-       FROM journal_entries je
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND to_char(je."createdAt", 'YYYY-MM') = $2
-         AND je.status = 'draft'
-       LIMIT 10`,
-      [scope.companyId, period]
-    );
-
-    if (pendingJournals.length > 0) {
-      throw new ValidationError(
-        `لا يمكن إقفال الفترة ${period}: يوجد ${pendingJournals.length} قيد معلق بحالة مسودة`,
-        {
-          field: "journalEntries",
-          fix: "راجع القيود المعلقة واعتمدها أو احذفها قبل إقفال الفترة المالية",
-        },
-      );
-    }
-
-    const [debitSum] = await rawQuery<{ totalDebit: string | number; totalCredit: string | number }>(
-      `SELECT COALESCE(SUM(jl.debit), 0) AS "totalDebit", COALESCE(SUM(jl.credit), 0) AS "totalCredit"
-       FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.status = 'posted' AND to_char(je."createdAt", 'YYYY-MM') = $2`,
-      [scope.companyId, period]
-    );
-    const totalDebit = Number(debitSum?.totalDebit ?? 0);
-    const totalCredit = Number(debitSum?.totalCredit ?? 0);
-    if (Math.abs(totalDebit - totalCredit) > 0.01) {
-      throw new ValidationError(
-        `لا يمكن إقفال الفترة: القيود غير متوازنة (مدين: ${totalDebit.toFixed(2)}، دائن: ${totalCredit.toFixed(2)})`,
-        {
-          field: "balance",
-          fix: "تأكد من توازن جميع القيود المحاسبية قبل الإقفال",
-        },
-      );
-    }
-
-    res.json({ message: `تم إقفال الفترة المالية ${period} بنجاح`, period, totalDebit, totalCredit });
-  } catch (err) {
-    handleRouteError(err, res, "Close fiscal period error:");
-  }
+// FIN-015 — REMOVED legacy stub.
+//
+// The previous POST /finance/fiscal-periods/:period/close validated
+// (no draft entries, debits=credits) but never persisted a closure —
+// the response said "تم إقفال" while no `financial_periods` row was
+// updated, no `closedAt` set, no audit log written. Callers thought
+// they closed a period when nothing had changed.
+//
+// The canonical close lives at POST /finance/fiscal-periods-v2/:id/close
+// in finance-hardening.ts. The route below now returns 410 Gone with a
+// pointer so any straggler caller fails loudly instead of silently.
+budgetRouter.post("/fiscal-periods/:period/close", authorize({ feature: "finance.budget", action: "create" }), async (_req, res) => {
+  res.status(410).json({
+    error: "endpoint_removed",
+    message: "تم استبدال هذا المسار. استخدم POST /finance/fiscal-periods-v2/:id/close",
+    fix: "افتح /finance/fiscal-periods من الواجهة واضغط زر «إقفال» (يستدعي v2).",
+  });
 });
