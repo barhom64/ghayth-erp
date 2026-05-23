@@ -25,6 +25,7 @@ import {
   generateRef,
   toDateISO,
   roundTo2,
+  applyJournalEntryBalances,
 } from "../lib/businessHelpers.js";
 import {
   requestIdempotencyToken,
@@ -1099,6 +1100,12 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     const ref = generateRef("JE", seqRow.seq, 5);
     const idempotencyToken = requestIdempotencyToken(req);
 
+    // FIN-013 — manual journals now follow a draft → approved → posted
+    // workflow instead of posting directly. `deferBalances: true` keeps
+    // the JE off the GL until the `/journal/:id/post` step runs
+    // `applyJournalEntryBalances` against it. This matches the voucher
+    // and salary-advance lifecycle and gives finance teams an approval
+    // gate before money moves.
     const { financialEngine } = await import("../lib/engines/index.js");
     const { journalId: insertId, alreadyExists } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
@@ -1111,7 +1118,8 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
       sourceId: 0,
       sourceKey: `finance:manual_je:${ref}:${idempotencyToken}`,
       lines: engineLines,
-      status: "posted",
+      status: "draft",
+      deferBalances: true,
       postingDate,
     });
     markIdempotencyReplay(req, res, alreadyExists);
@@ -1175,6 +1183,80 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
     }));
   } catch (err) {
     handleRouteError(err, res, "Get journal error:");
+  }
+});
+
+// FIN-013 — approve a draft manual journal. Pure status transition; no GL
+// movement yet. The companion `/post` endpoint runs the balance push.
+journalRouter.post("/journal/:id/approve", authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    try {
+      const updated = await applyTransition<Record<string, unknown>>({
+        entity: "journal_entries",
+        id,
+        scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+        action: "manual_journal.approved",
+        fromStates: ["draft", "pending_approval", "returned"],
+        toState: "approved",
+        extraWhere: `"deletedAt" IS NULL AND "sourceType" = 'manual_journal'`,
+        setExtras: {
+          "approvedBy": scope.userId,
+          "approvedAt": new Date(),
+        },
+      });
+      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "approve", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "finance.journal.approved", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      res.json(updated);
+    } catch (err) {
+      const lifecycle = lifecycleErrorResponse(err);
+      if (lifecycle) { res.status(lifecycle.status).json(lifecycle.body); return; }
+      throw err;
+    }
+  } catch (err) {
+    handleRouteError(err, res, "Approve manual journal error:");
+  }
+});
+
+// FIN-013 — post (transition approved → posted AND push GL balances). Runs
+// inside one transaction so the status change and ledger movement commit
+// together; if balancesApply fails (e.g. period reclosed in the interim)
+// the status reverts.
+journalRouter.post("/journal/:id/post", authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    try {
+      const updated = await applyTransition<Record<string, unknown>>({
+        entity: "journal_entries",
+        id,
+        scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+        action: "manual_journal.posted",
+        fromStates: ["approved"],
+        toState: "posted",
+        extraWhere: `"deletedAt" IS NULL AND "sourceType" = 'manual_journal'`,
+        setExtras: {
+          "postedBy": scope.userId,
+          "postedAt": new Date(),
+        },
+        onApply: async (_row, client) => {
+          // Push the deferred balances. Throws if the journal's period
+          // has since closed — the transaction rolls back and the
+          // status stays at 'approved'.
+          await applyJournalEntryBalances(client, scope.companyId, id);
+        },
+      });
+      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "post", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "finance.journal.posted", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      res.json(updated);
+    } catch (err) {
+      const lifecycle = lifecycleErrorResponse(err);
+      if (lifecycle) { res.status(lifecycle.status).json(lifecycle.body); return; }
+      throw err;
+    }
+  } catch (err) {
+    handleRouteError(err, res, "Post manual journal error:");
   }
 });
 
