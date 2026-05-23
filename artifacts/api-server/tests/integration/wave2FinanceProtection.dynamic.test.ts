@@ -390,11 +390,182 @@ d("Wave-2 C3: expense entry + approval chain are atomic (#885)", () => {
 });
 
 d("Wave-2 H1: reversal runs inside the rejection lifecycle txn (#881)", () => {
-  it.todo(
+  let rawExecute: typeof import("../../src/lib/rawdb.js").rawExecute;
+  let rawQuery: typeof import("../../src/lib/rawdb.js").rawQuery;
+  let applyTransition: typeof import("../../src/lib/lifecycleEngine.js").applyTransition;
+  let reverseAccountBalances: typeof import("../../src/lib/businessHelpers.js").reverseAccountBalances;
+  let ValidationError: typeof import("../../src/lib/errorHandler.js").ValidationError;
+
+  let companyId: number;
+  let branchId: number;
+  let assignmentId: number;
+  let userId: number;
+
+  beforeAll(async () => {
+    const rawdb = await import("../../src/lib/rawdb.js");
+    rawExecute = rawdb.rawExecute;
+    rawQuery = rawdb.rawQuery;
+    const lifecycle = await import("../../src/lib/lifecycleEngine.js");
+    applyTransition = lifecycle.applyTransition;
+    const helpers = await import("../../src/lib/businessHelpers.js");
+    reverseAccountBalances = helpers.reverseAccountBalances;
+    const errorHandler = await import("../../src/lib/errorHandler.js");
+    ValidationError = errorHandler.ValidationError;
+
+    const { setupTwoCompanyFixture } = await import("./_fixtures/twoCompanies.js");
+    const fx = await setupTwoCompanyFixture();
+    companyId = fx.companyA.id;
+    branchId = fx.companyA.branchId;
+    assignmentId = fx.companyA.assignmentId;
+    userId = fx.companyA.userId;
+  });
+
+  beforeEach(async () => {
+    await rawExecute(
+      `DELETE FROM journal_lines WHERE "journalId" IN
+         (SELECT id FROM journal_entries WHERE "companyId"=$1)`,
+      [companyId]
+    );
+    await rawExecute(`DELETE FROM journal_entries WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(`DELETE FROM financial_periods WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(`DELETE FROM chart_of_accounts WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(
+      `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "currentBalance")
+       VALUES ($1, '1101', 'بنك اختبار', 'Test Bank', 'asset', 100),
+              ($1, '4101', 'إيراد اختبار', 'Test Revenue', 'revenue', -100)`,
+      [companyId]
+    );
+  });
+
+  it(
     "a forced failure inside reverseAccountBalances during expense rejection " +
-      "rolls the status flip back — entry stays approved, balances stay applied, " +
-      "no overstated books with status='rejected'",
+      "rolls the status flip back — entry stays approved, balances stay applied",
+    async () => {
+      // Setup: an approved expense JE (ref EXP%, status='approved',
+      // balancesApplied=true) dated in a now-closed period. The reject
+      // route's onApply calls reverseAccountBalances; H4 makes that throw
+      // for closed periods. H1 is the atomicity invariant: that throw must
+      // roll the status flip back, so the expense stays in 'approved' and
+      // balancesApplied stays true.
+      await rawExecute(
+        `INSERT INTO financial_periods ("companyId", name, "startDate", "endDate", status)
+         VALUES ($1, 'مايو 2025', '2025-05-01', '2025-05-31', 'closed')`,
+        [companyId]
+      );
+      const { insertId: expenseId } = await rawExecute(
+        `INSERT INTO journal_entries (
+           "companyId", "branchId", "createdBy", ref, description, type, status,
+           "balancesApplied", "createdAt", date
+         ) VALUES ($1, $2, $3, 'EXP-H1-CLOSED', 'wave2-h1-test', 'manual', 'approved', true, NOW(), '2025-05-20'::date)`,
+        [companyId, branchId, assignmentId]
+      );
+      await rawExecute(
+        `INSERT INTO journal_lines ("journalId", "accountCode", debit, credit)
+         VALUES ($1, '1101', 100, 0), ($1, '4101', 0, 100)`,
+        [expenseId]
+      );
+
+      // Drive the exact same shape the /expenses/:id/approve reject branch
+      // uses (finance-journal.ts:638): applyTransition + onApply →
+      // reverseAccountBalances. The H4 throw inside onApply must roll the
+      // whole transition back.
+      let caught: unknown = null;
+      await expect(
+        applyTransition({
+          entity: "journal_entries",
+          id: expenseId,
+          scope: { companyId, branchId, userId },
+          action: "expense.rejected",
+          fromStates: ["approved"],
+          toState: "rejected",
+          reason: "wave2-h1 forced rejection",
+          extraWhere: `"deletedAt" IS NULL AND ref LIKE 'EXP%'`,
+          onApply: async (_row, _client) => {
+            await reverseAccountBalances(companyId, expenseId);
+          },
+        }).catch((err) => {
+          caught = err;
+          throw err;
+        })
+      ).rejects.toBeInstanceOf(ValidationError);
+
+      expect(caught).toBeInstanceOf(ValidationError);
+      expect((caught as InstanceType<typeof ValidationError>).field).toBe("financialPeriod");
+
+      // Post-conditions — H1 atomicity invariant:
+      //   1. status stays 'approved' (the rollback undid the flip to 'rejected')
+      //   2. balancesApplied stays true (the rollback undid the reversal flag flip)
+      //   3. chart_of_accounts.currentBalance untouched (no partial reversal)
+      const [je] = await rawQuery<{ status: string; balancesApplied: boolean }>(
+        `SELECT status, "balancesApplied" FROM journal_entries WHERE id = $1`,
+        [expenseId]
+      );
+      expect(je.status).toBe("approved");
+      expect(je.balancesApplied).toBe(true);
+
+      const [acc1101] = await rawQuery<{ currentBalance: string }>(
+        `SELECT "currentBalance" FROM chart_of_accounts WHERE "companyId"=$1 AND code='1101'`,
+        [companyId]
+      );
+      expect(Number(acc1101.currentBalance)).toBe(100);
+      const [acc4101] = await rawQuery<{ currentBalance: string }>(
+        `SELECT "currentBalance" FROM chart_of_accounts WHERE "companyId"=$1 AND code='4101'`,
+        [companyId]
+      );
+      expect(Number(acc4101.currentBalance)).toBe(-100);
+    }
   );
+
+  it("succeeds end-to-end when the period is open — status flips, balances reverse, all in one txn", async () => {
+    // Positive control: with an open period, the same applyTransition +
+    // reverseAccountBalances path commits cleanly. Guards against a future
+    // change that silently turns the onApply into a no-op (e.g. wrapping
+    // it in try/catch{}), which would make the H1-failure test above
+    // pass for the wrong reason.
+    await rawExecute(
+      `INSERT INTO financial_periods ("companyId", name, "startDate", "endDate", status)
+       VALUES ($1, 'يونيو 2025', '2025-06-01', '2025-06-30', 'open')`,
+      [companyId]
+    );
+    const { insertId: expenseId } = await rawExecute(
+      `INSERT INTO journal_entries (
+         "companyId", "branchId", "createdBy", ref, description, type, status,
+         "balancesApplied", "createdAt", date
+       ) VALUES ($1, $2, $3, 'EXP-H1-OPEN', 'wave2-h1-test-open', 'manual', 'approved', true, NOW(), '2025-06-15'::date)`,
+      [companyId, branchId, assignmentId]
+    );
+    await rawExecute(
+      `INSERT INTO journal_lines ("journalId", "accountCode", debit, credit)
+       VALUES ($1, '1101', 100, 0), ($1, '4101', 0, 100)`,
+      [expenseId]
+    );
+
+    await applyTransition({
+      entity: "journal_entries",
+      id: expenseId,
+      scope: { companyId, branchId, userId },
+      action: "expense.rejected",
+      fromStates: ["approved"],
+      toState: "rejected",
+      reason: "wave2-h1 positive control",
+      extraWhere: `"deletedAt" IS NULL AND ref LIKE 'EXP%'`,
+      onApply: async (_row, _client) => {
+        await reverseAccountBalances(companyId, expenseId);
+      },
+    });
+
+    const [je] = await rawQuery<{ status: string; balancesApplied: boolean }>(
+      `SELECT status, "balancesApplied" FROM journal_entries WHERE id = $1`,
+      [expenseId]
+    );
+    expect(je.status).toBe("rejected");
+    expect(je.balancesApplied).toBe(false);
+    const [acc1101] = await rawQuery<{ currentBalance: string }>(
+      `SELECT "currentBalance" FROM chart_of_accounts WHERE "companyId"=$1 AND code='1101'`,
+      [companyId]
+    );
+    expect(Number(acc1101.currentBalance)).toBe(0);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────
