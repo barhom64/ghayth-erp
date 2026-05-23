@@ -152,7 +152,7 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.report
     const branchFilter = getBranchCondition(scope, undefined, params);
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT coa.code, coa.name, coa.type,
-              CASE WHEN coa.type IN ('asset','expense') THEN COALESCE(SUM(fl.debit) - SUM(fl.credit), 0)
+              CASE WHEN coa.type = 'asset' THEN COALESCE(SUM(fl.debit) - SUM(fl.credit), 0)
                    ELSE COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) END AS balance
        FROM chart_of_accounts coa
        LEFT JOIN (
@@ -164,13 +164,65 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.report
        GROUP BY coa.code, coa.name, coa.type ORDER BY coa.type, coa.code`,
       params
     );
+
+    // YTD net income (current-year earnings) must roll into equity for any
+    // balance sheet whose asOf date sits inside an open fiscal year. The
+    // year-end close handler posts retained earnings via JE
+    // (finance-journal.ts buildYearEndClosingLines), so after closing this
+    // aggregate is already inside an equity account and we'd double-count.
+    // To avoid that, the YTD window starts after the most recently closed
+    // fiscal year (i.e. only counts movement that hasn't been closed to
+    // retained earnings yet). If no year has been closed, anchor on Jan 1
+    // of the asOf year — the system uses a calendar fiscal year.
+    const asOfStr = asOfDate ?? todayISO();
+    const [lastClosed] = await rawQuery<{ endDate: string | null }>(
+      `SELECT MAX("endDate")::text AS "endDate"
+         FROM financial_periods
+        WHERE "companyId" = $1
+          AND "yearEndClosed" = true
+          AND "endDate" < $2`,
+      [scope.companyId, asOfStr]
+    );
+    const ytdStart = lastClosed?.endDate
+      ? new Date(new Date(lastClosed.endDate).getTime() + 86400000).toISOString().slice(0, 10)
+      : `${asOfStr.slice(0, 4)}-01-01`;
+    const ytdParams: unknown[] = [scope.companyId, ytdStart, asOfStr];
+    const ytdBranchFilter = getBranchCondition(scope, undefined, ytdParams);
+    const [ytd] = await rawQuery<Record<string, unknown>>(
+      `SELECT
+         COALESCE(SUM(CASE WHEN coa.type = 'revenue' THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+         COALESCE(SUM(CASE WHEN coa.type = 'expense' THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL
+          AND je."createdAt" >= $2
+          AND je."createdAt" < ($3::date + 1)
+          ${ytdBranchFilter}
+         JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type IN ('revenue','expense') AND coa."companyId" = $1
+        WHERE jl."deletedAt" IS NULL`,
+      ytdParams
+    );
+    const currentYearEarnings = roundTo2(Number(ytd?.revenue ?? 0) - Number(ytd?.expense ?? 0));
+
     const assets = rows.filter((r: Record<string, unknown>) => r.type === "asset");
     const liabilities = rows.filter((r: Record<string, unknown>) => r.type === "liability");
     const equity = rows.filter((r: Record<string, unknown>) => r.type === "equity");
+    if (Math.abs(currentYearEarnings) > 0.005) {
+      equity.push({
+        code: "_current_year_earnings",
+        name: "أرباح/خسائر السنة الحالية",
+        type: "equity",
+        balance: currentYearEarnings,
+        synthetic: true,
+      });
+    }
     const totalAssets = assets.reduce((s: number, r: Record<string, unknown>) => s + Number(r.balance), 0);
     const totalLiabilities = liabilities.reduce((s: number, r: Record<string, unknown>) => s + Number(r.balance), 0);
     const totalEquity = equity.reduce((s: number, r: Record<string, unknown>) => s + Number(r.balance), 0);
-    res.json(maskFields(req, { assets, liabilities, equity, summary: { totalAssets, totalLiabilities, totalEquity, isBalanced: Math.abs(totalAssets - totalLiabilities - totalEquity) < 0.01 } }));
+    res.json(maskFields(req, { assets, liabilities, equity, summary: { totalAssets, totalLiabilities, totalEquity, currentYearEarnings, isBalanced: Math.abs(totalAssets - totalLiabilities - totalEquity) < 0.01 } }));
   } catch (err) {
     handleRouteError(err, res, "Balance sheet error:");
   }
