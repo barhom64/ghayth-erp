@@ -741,6 +741,8 @@ importers:
         specifier: ^0.31.9
         version: 0.31.9
 
+  lib/entity-kit: {}
+
   lib/object-storage-web:
     dependencies:
       '@uppy/aws-s3':
@@ -759,6 +761,12 @@ importers:
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.14
+
+  lib/report-kit: {}
+
+  lib/ui-core: {}
+
+  lib/workflow-kit: {}
 
   scripts:
     dependencies:

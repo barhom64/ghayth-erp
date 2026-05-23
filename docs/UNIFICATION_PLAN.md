@@ -163,6 +163,48 @@ guards في P5.
 
 ---
 
+## P8 — Ghaith UI Standard Kit (Phase 1 منجَز · 2026-05-23)
+
+### الخلاصة
+
+نُشئت 4 حزم workspace كـ **contract packages** (re-export shims) تحت
+`lib/`:
+
+| الحزمة | الموقع | الغرض |
+| --- | --- | --- |
+| `@workspace/ui-core` | `lib/ui-core/` | Page layout, tables, forms, status, filters |
+| `@workspace/entity-kit` | `lib/entity-kit/` | DetailPage, EntityTimeline, EntityComments, EntityDocuments, inline edit |
+| `@workspace/workflow-kit` | `lib/workflow-kit/` | ApprovalActions, ApprovalTimeline, useLifecycleAction |
+| `@workspace/report-kit` | `lib/report-kit/` | Print, export, letterhead |
+
+### الـ invariant في Phase 1
+
+- الحزم **re-export shims** فقط — الكود الفعلي لا يزال في
+  `artifacts/ghayth-erp/src/components/...`.
+- `src/index.ts` يستخدم deep-relative imports للوصول إليه.
+- **لم يُضَف أي dependency** على هذه الحزم في `artifacts/ghayth-erp/package.json`
+  (لا consumer نشط حتى Phase 2).
+- لا تكسر هذه الحزم أي import قائم. `pnpm typecheck` و`pnpm build` لا
+  يتأثران.
+
+### المراحل التالية
+
+| Phase | المخرج |
+| --- | --- |
+| **Phase 2** | `artifacts/ghayth-erp/package.json` يضيف الحزم الأربع كـ `workspace:*` deps. أول صفحة جديدة (مثل FIN-014) تستهلك من `@workspace/ui-core` كإثبات. |
+| **Phase 3** | نقل الملفات فعليًا من `artifacts/ghayth-erp/src/components/...` إلى `lib/<pkg>/src/...`. مكان قديم يصبح re-export shim عكسي. صفحات تُهاجَر تدريجيًا. |
+| **Phase 4** | حذف الـ re-exports القديمة من `artifacts/ghayth-erp/src/components/`. كل page تستورد من `@workspace/...` فقط. |
+| **Phase 5** | lint rule في `scripts/src/lint-patterns.mjs` يمنع import المُمكِّنات من `@/components/` بدل `@workspace/ui-core`. |
+
+### قاعدة الحوكمة
+
+- كل export جديد يُضاف إلى `lib/<pkg>/src/index.ts` + يُذكر في README الحزمة.
+- لا ينتقل ملف فعليًا حتى يكتمل Phase 2 (وجود consumer واحد على الأقل).
+- مكوّنات shadcn الخام (`components/ui/button.tsx`, إلخ) تبقى داخل ERP
+  app كطبقة أساس (لا تنتقل لحزمة منفصلة).
+
+---
+
 ## P7 — `<ListPage>` و `<CreateEditPage>` composites (مخطط)
 
 الفجوة المتبقّية في الـ primitives:
