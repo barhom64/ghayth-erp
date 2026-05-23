@@ -49,6 +49,13 @@ export interface PostRealizedFxOpts {
   settlementRate: number;
   /** YYYY-MM-DD — payment date the journal entry should carry. */
   paymentDate: string;
+  /** Foreign-currency amount the customer paid in THIS settlement. The
+   *  realised gain/loss is `paymentAmount × (settlementRate − bookedRate)`;
+   *  using the full `invoice.total` overstates the gain on every partial
+   *  payment and double-posts across multiple partial payments. Defaults
+   *  to `invoice.total` for backward compat with full-payment callers —
+   *  pass it explicitly whenever the payment may be partial. */
+  paymentAmount?: number;
   /** Operator who triggered the posting (audit trail). */
   postedBy?: number;
   /** Override the description on the journal-entries row. */
@@ -197,7 +204,9 @@ export async function postRealizedFxJournal(opts: PostRealizedFxOpts): Promise<P
     }
 
     const computed = computeRealizedFx({
-      originalAmount: Number(invoice.total),
+      // C3 — settled FC amount, not the whole invoice. Falls back to
+      // invoice.total only when the caller has not threaded paymentAmount.
+      originalAmount: opts.paymentAmount != null ? Number(opts.paymentAmount) : Number(invoice.total),
       bookedRate: Number(invoice.bookedRate),
       settlementRate: opts.settlementRate,
       side: "asset", // AR invoice — see note below for AP path
