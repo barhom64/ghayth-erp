@@ -258,7 +258,7 @@ reversals تفوق طاقة الـ test suite الحالي:
 
 | Phase | المخرج | ملفات | معيار النجاح |
 | --- | --- | --- | --- |
-| C1 | Scenario harness (loader + runner + snapshot comparator) | `tests/finance-regression/harness/` | سيناريو واحد yaml يمر |
+| C1 🟡 | **Phase 1 منجَز**: نقطة بداية الـ regression suite عبر vitest المعتاد بدل YAML harness. ملف واحد ينظّم Wave-2 fixes كـ `describe` blocks، يعمل من تلقاء نفسه على الـ test DB، يُخطى عند غيابه. (Phase 2 — YAML harness عام — يأتي لاحقًا عند الحاجة.) | `artifacts/api-server/tests/integration/wave2FinanceProtection.dynamic.test.ts` | H2 يمر مع DB · 5 it.todo تنتظر |
 | C2 | 20 golden scenarios أولى (AR/AP/Payroll/Umrah-package) | `tests/finance-regression/scenarios/*.yaml` | كل سيناريو ينتج snapshot ثابت |
 | C3 | Reconciliation invariant suite | `tests/finance-regression/invariants.test.ts` | property-based: 1000 transaction، Σ debits = Σ credits |
 | C4 | Ledger replay | `tests/finance-regression/replay.test.ts` | event_logs لشهر يُعاد تطبيقها → نفس الأرصدة |
