@@ -344,18 +344,26 @@ vendorsRouter.get("/payables", authorize({ feature: "finance.vendors", action: "
          ni."totalAmount", ni."refundAmount", ni."netCost",
          COALESCE((SELECT SUM(spa.amount)
                      FROM supplier_payment_allocations spa
+                     JOIN journal_entries je ON je.id = spa."journalEntryId"
                     WHERE spa."companyId" = ni."companyId"
                       AND spa."obligationType" = 'nusk_invoice'
                       AND spa."obligationId" = ni.id
-                      AND spa."deletedAt" IS NULL), 0) AS "paidAmount",
+                      AND spa."deletedAt" IS NULL
+                      AND je."deletedAt" IS NULL
+                      AND je."balancesApplied" = true
+                      AND je."reversedById" IS NULL), 0) AS "paidAmount",
          (COALESCE(ni."totalAmount",0)
             - COALESCE(ni."refundAmount",0)
             - COALESCE((SELECT SUM(spa.amount)
                           FROM supplier_payment_allocations spa
+                          JOIN journal_entries je ON je.id = spa."journalEntryId"
                          WHERE spa."companyId" = ni."companyId"
                            AND spa."obligationType" = 'nusk_invoice'
                            AND spa."obligationId" = ni.id
-                           AND spa."deletedAt" IS NULL), 0)
+                           AND spa."deletedAt" IS NULL
+                           AND je."deletedAt" IS NULL
+                           AND je."balancesApplied" = true
+                           AND je."reversedById" IS NULL), 0)
          ) AS "outstandingAmount",
          ni."nuskStatus",
          ni."agentId",
