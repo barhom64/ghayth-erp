@@ -55,12 +55,17 @@ const ERP_HOOKS_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/hooks");
 
 // Shared kit-adoption ratchet message — appended to every UI-kit
 // counted rule below. Centralised so the wording stays consistent.
-const KIT_RATCHET_HINT =
-  "Migrate to `import { ... } from \"@workspace/ui-core\";` (UNIFICATION_PLAN " +
+// Caller passes the @workspace/* target package, since the kit fans out
+// across ui-core / entity-kit / workflow-kit / report-kit.
+const kitRatchetHint = (pkg) =>
+  `Migrate to \`import { ... } from "@workspace/${pkg}";\` (UNIFICATION_PLAN ` +
   "§P8). The baseline below is a ratchet — it never goes up. When you migrate " +
   "a page off the legacy path, drop the corresponding `countBaseline` in " +
   "scripts/src/lint-patterns.mjs by the same number; the rule then prevents " +
   "future regression to the new lower count.";
+
+// Backwards-compat constant for the original six ui-core rules.
+const KIT_RATCHET_HINT = kitRatchetHint("ui-core");
 
 /** @type {Array<{ id: string, scan: string[], skip?: (file: string) => boolean, regex: RegExp, message: string }>} */
 const RULES = [
@@ -260,7 +265,102 @@ const RULES = [
       file.endsWith("/components/shared/entity-detail-page.tsx"),
     regex: /from\s+["']@\/components\/shared\/detail-page-layout["']/,
     countBaseline: 79,
-    message: `DetailPageLayout imported from the legacy path. ${KIT_RATCHET_HINT}`,
+    message: `DetailPageLayout imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
+  },
+
+  // ─── Wider ui-core surface (advanced-filters, presets, wrappers) ─────
+
+  {
+    id: "advanced-filters-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/shared/advanced-filters.tsx"),
+    regex: /from\s+["']@\/components\/shared\/advanced-filters["']/,
+    countBaseline: 81,
+    message: `AdvancedFilters / useFilters / applyFilters imported from the legacy path. ${kitRatchetHint("ui-core")}`,
+  },
+  {
+    id: "data-table-presets-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) =>
+      file.endsWith("/components/data-table-presets.tsx") ||
+      file.endsWith("/components/list-page.tsx"),
+    regex: /from\s+["']@\/components\/data-table-presets["']/,
+    countBaseline: 3,
+    message: `DataTable column presets imported from the legacy path. ${kitRatchetHint("ui-core")}`,
+  },
+  {
+    id: "data-table-wrapper-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/data-table-wrapper.tsx"),
+    regex: /from\s+["']@\/components\/data-table-wrapper["']/,
+    countBaseline: 2,
+    message: `DataTableWrapper / PaginationBar imported from the legacy path. ${kitRatchetHint("ui-core")}`,
+  },
+  {
+    id: "page-header-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/page-header.tsx"),
+    regex: /from\s+["']@\/components\/page-header["']/,
+    countBaseline: 3,
+    message: `PageHeader imported from the legacy path. ${kitRatchetHint("ui-core")}`,
+  },
+
+  // ─── entity-kit surface ──────────────────────────────────────────────
+
+  {
+    id: "entity-timeline-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/shared/entity-timeline.tsx"),
+    regex: /from\s+["']@\/components\/shared\/entity-timeline["']/,
+    countBaseline: 12,
+    message: `EntityTimeline / ProcessStages / WorkflowTimeline imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
+  },
+  {
+    id: "entity-comments-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/shared/entity-comments.tsx"),
+    regex: /from\s+["']@\/components\/shared\/entity-comments["']/,
+    countBaseline: 56,
+    message: `EntityComments imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
+  },
+  {
+    id: "entity-documents-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/shared/entity-documents.tsx"),
+    regex: /from\s+["']@\/components\/shared\/entity-documents["']/,
+    countBaseline: 3,
+    message: `EntityDocuments imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
+  },
+
+  // ─── workflow-kit surface ────────────────────────────────────────────
+
+  {
+    id: "approval-actions-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/approval-actions.tsx"),
+    regex: /from\s+["']@\/components\/approval-actions["']/,
+    countBaseline: 36,
+    message: `ApprovalActions / ActionHistory imported from the legacy path. ${kitRatchetHint("workflow-kit")}`,
+  },
+
+  // ─── report-kit surface ──────────────────────────────────────────────
+
+  {
+    id: "print-layout-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/print-layout.tsx"),
+    regex: /from\s+["']@\/components\/print-layout["']/,
+    countBaseline: 13,
+    message: `PrintActions / PrintDocument / LetterheadHeader imported from the legacy path. ${kitRatchetHint("report-kit")}`,
   },
 ];
 
