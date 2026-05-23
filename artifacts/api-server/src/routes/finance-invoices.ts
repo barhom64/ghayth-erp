@@ -989,22 +989,31 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
     // budgets.used bump targeted (currentPeriod() at approval = JE createdAt
     // period), so the decrement hits the same bucket.
     const [je] = await rawQuery<Record<string, unknown>>(
-      `SELECT id, "createdAt" FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
+      `SELECT id, status, "createdAt" FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
       [scope.companyId, `JE-${inv.ref}`]
     );
     await withTransaction(async (client: any) => {
       if (je) {
-        const { rows: lines } = await client.query(
-          `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL`,
-          [Number(je.id)]
-        );
-        for (const line of lines) {
-          const delta = -(Number(line.debit) - Number(line.credit));
-          if (Math.abs(delta) < 0.001) continue;
-          await client.query(
-            `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1 WHERE "companyId" = $2 AND code = $3`,
-            [delta, scope.companyId, line.accountCode]
+        // A4 (silent ledger corruption) — only reverse the GL deltas if the JE
+        // has not already been cancelled. A reject/return leaves the JE with
+        // status='cancelled' but deletedAt=NULL, so without this guard deleting
+        // a previously-rejected invoice would reverse currentBalance a second
+        // time, overshooting by the invoice amount. The reject/return path
+        // applies the symmetric `status !== 'cancelled'` guard at its own
+        // reversal site (see invoiceApprovalAction).
+        if (je.status !== "cancelled") {
+          const { rows: lines } = await client.query(
+            `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL`,
+            [Number(je.id)]
           );
+          for (const line of lines) {
+            const delta = -(Number(line.debit) - Number(line.credit));
+            if (Math.abs(delta) < 0.001) continue;
+            await client.query(
+              `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1 WHERE "companyId" = $2 AND code = $3`,
+              [delta, scope.companyId, line.accountCode]
+            );
+          }
         }
         await client.query(
           `UPDATE journal_entries SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
