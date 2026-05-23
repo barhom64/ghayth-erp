@@ -320,19 +320,23 @@ DataTable.
 **أول consumer**: `pages/finance/fiscal-periods-v2.tsx` (FIN-014) —
 هاجَر من ~470 سطر إلى 441، الـ structural plumbing زال.
 
+### `<CreatePageLayout>` ✅ موجود سلفًا · أُضيف للـ kit 2026-05-23
+
+`CreatePageLayout` (في `components/create-page-layout.tsx`) كان يلفّ
+PageShell + يضيف back-button + isDirty guard + unsaved-changes dialog
+منذ مدة. أُضيف للـ kit عبر re-export في `@workspace/ui-core` (بدون
+إعادة اختراع). الـ ~80 صفحة create لها الآن مسار واحد للاستيراد.
+
+أول consumer مُهاجَر: `pages/create/finance/vendors-create.tsx`
+تستهلك `CreatePageLayout` و`CreationDateField` من `@workspace/ui-core`
+بدل `@/components/create-page-layout`.
+
 ### `<CreateEditPage>` — مخطط (لم يُبنَ بعد)
 
-اليوم صفحة create تكتب:
-```tsx
-<PageShell title="..." breadcrumbs={...}>
-  <FormShell schema={schema} ...>
-    <Fields />
-  </FormShell>
-</PageShell>
-```
-
-`<CreateEditPage>` المخطط يجمعها + يضيف dirty-guard + cancel handler
-موحَّد. يُبنى عند الحاجة الحقيقية الأولى (لا قبلها).
+composite أعلى من CreatePageLayout يجمع: CreatePageLayout +
+FormShell + auto-wired `isDirty` (يقرأ من `useFormContext().formState.isDirty`)
++ defaults للـ submitLabel + standard Cancel button. يُبنى عند 3+
+صفحات تطلب نفس النمط — لا قبلها (مبدأ: لا abstractions speculative).
 
 ### قواعد composites
 

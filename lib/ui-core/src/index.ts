@@ -15,6 +15,16 @@ export { PageHeader } from "../../../artifacts/ghayth-erp/src/components/page-he
 
 export { PageErrorBoundary } from "../../../artifacts/ghayth-erp/src/components/page-error-boundary";
 
+// CreatePageLayout — the create/edit page wrapper. Already mature
+// (delegates to PageShell internally, adds back-button + isDirty guard
+// + unsaved-changes confirmation dialog). Promoted into the kit so the
+// ~80 create pages have a canonical import path.
+export {
+  CreatePageLayout,
+  AutoField,
+  CreationDateField,
+} from "../../../artifacts/ghayth-erp/src/components/create-page-layout";
+
 // ─── ListPage composite (UNIFICATION_PLAN §P7) ───────────────────────
 // First non-shim export in the kit: a real composition built on top of
 // PageShell + DataTable + AdvancedFilters. Consumers pass a queryKey +
