@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { z } from "zod";
 import { useParams } from "wouter";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
-import type { ExtraTab } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
