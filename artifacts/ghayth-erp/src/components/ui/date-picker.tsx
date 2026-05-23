@@ -9,6 +9,7 @@
 // ============================================================================
 
 import { UnifiedDateInput } from "./unified-date-input";
+import { useAuth } from "@/lib/auth";
 
 export interface DatePickerProps {
   value?: string;
@@ -34,10 +35,15 @@ export function DatePicker({
   maxDate,
   minDate,
 }: DatePickerProps) {
-  // اقرأ الإعداد العام إذا لم يُحدَّد
+  // قراءة تفضيل المستخدم: الأولوية للـprop المُمرَّر، ثم تفضيل
+  // الحساب من /auth/me (يُحدَّث في server بـPATCH /auth/me/preferences
+  // ويَتبع المستخدم عبر الأجهزة)، ثم localStorage كـlegacy fallback.
+  const auth = useAuth();
   const resolveDefault = (): "hijri" | "gregory" => {
     if (calendarMode === "hijri") return "hijri";
     if (calendarMode === "gregorian" || calendarMode === "both") return "gregory";
+    if (auth.user?.preferredCalendar === "hijri") return "hijri";
+    if (auth.user?.preferredCalendar === "gregorian") return "gregory";
     try {
       const stored = localStorage.getItem("calendarMode");
       if (stored === "hijri") return "hijri";
