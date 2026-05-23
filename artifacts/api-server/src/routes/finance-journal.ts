@@ -1407,66 +1407,73 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
       { enforceBranchScope: true },
       2,
     );
-    const [original] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM journal_entries WHERE id = $1 AND ${revScopeWhere} AND "deletedAt" IS NULL LIMIT 1`,
-      [id, ...revScopeParams]
-    );
-    if (!original) throw new NotFoundError("القيد الأصلي غير موجود");
-    if (original.reversedById) {
-      throw new ValidationError(`هذا القيد معكوس مسبقاً بالقيد #${original.reversedById}`);
-    }
-    if (original.reversalOfId) {
-      throw new ValidationError("لا يمكن عكس قيد هو أصلاً قيد عاكس");
-    }
-
-    const originalLines = await rawQuery<Record<string, unknown>>(
-      `SELECT "accountCode", debit, credit, description, "costCenter", "departmentId", "projectId", "employeeId"
-       FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL ORDER BY id ASC`,
-      [id]
-    );
-    if (originalLines.length === 0) {
-      throw new ValidationError("القيد الأصلي لا يحتوي على بنود");
-    }
-
-    const reversedLines = originalLines.map((l) => ({
-      accountCode: l.accountCode as string,
-      debit: Number(l.credit || 0),
-      credit: Number(l.debit || 0),
-      description: l.description as string | undefined,
-      costCenter: l.costCenter as string | undefined,
-      departmentId: l.departmentId as number | undefined,
-      projectId: l.projectId as number | undefined,
-      employeeId: l.employeeId as number | undefined,
-    }));
-
-    const newRef = `REV-${original.ref}`;
-    const newDescription = `عكس قيد: ${original.description ?? ""} — ${reason}`.trim();
-
     const { financialEngine } = await import("../lib/engines/index.js");
-    const { journalId: newJournalId } = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: (original.branchId as number | null) ?? scope.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: newRef,
-      description: newDescription,
-      type: "reversal",
-      sourceType: "journal_reversal",
-      sourceId: id,
-      sourceKey: `finance:reversal:${id}`,
-      // Stamp the reversal on its requested date so the period-close check
-      // validates the entry's true ledger date, not today. Defaults to today
-      // when the caller gives no reverseDate.
-      postingDate: reverseDate ? toDateISO(reverseDate) : currentDateInTz("Asia/Riyadh"),
-      lines: reversedLines,
-    });
 
-    await withTransaction(async (client: any) => {
+    // Wrap the whole flow in a single transaction with FOR UPDATE on the
+    // original row so two concurrent /reverse requests can't both pass
+    // the "already reversed?" check and produce two reversal entries.
+    // `postJournalEntry` inside is reentrant via SAVEPOINT (#885).
+    const { newJournalId, newRef, originalRef } = await withTransaction(async (client: any) => {
+      const { rows: [original] } = await client.query(
+        `SELECT * FROM journal_entries
+         WHERE id = $1 AND ${revScopeWhere} AND "deletedAt" IS NULL
+         FOR UPDATE`,
+        [id, ...revScopeParams]
+      );
+      if (!original) throw new NotFoundError("القيد الأصلي غير موجود");
+      if (original.reversedById) {
+        throw new ValidationError(`هذا القيد معكوس مسبقاً بالقيد #${original.reversedById}`);
+      }
+      if (original.reversalOfId) {
+        throw new ValidationError("لا يمكن عكس قيد هو أصلاً قيد عاكس");
+      }
+
+      const { rows: originalLines } = await client.query(
+        `SELECT "accountCode", debit, credit, description, "costCenter", "departmentId", "projectId", "employeeId"
+         FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL ORDER BY id ASC`,
+        [id]
+      );
+      if (originalLines.length === 0) {
+        throw new ValidationError("القيد الأصلي لا يحتوي على بنود");
+      }
+
+      const reversedLines = originalLines.map((l: Record<string, unknown>) => ({
+        accountCode: l.accountCode as string,
+        debit: Number(l.credit || 0),
+        credit: Number(l.debit || 0),
+        description: l.description as string | undefined,
+        costCenter: l.costCenter as string | undefined,
+        departmentId: l.departmentId as number | undefined,
+        projectId: l.projectId as number | undefined,
+        employeeId: l.employeeId as number | undefined,
+      }));
+
+      const newRef = `REV-${original.ref}`;
+      const newDescription = `عكس قيد: ${original.description ?? ""} — ${reason}`.trim();
+
+      const { journalId: newId } = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: (original.branchId as number | null) ?? scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: newRef,
+        description: newDescription,
+        type: "reversal",
+        sourceType: "journal_reversal",
+        sourceId: id,
+        sourceKey: `finance:reversal:${id}`,
+        // Stamp the reversal on its requested date so the period-close check
+        // validates the entry's true ledger date, not today. Defaults to today
+        // when the caller gives no reverseDate.
+        postingDate: reverseDate ? toDateISO(reverseDate) : currentDateInTz("Asia/Riyadh"),
+        lines: reversedLines,
+      });
+
       await client.query(
         `UPDATE journal_entries
            SET "reversalOfId" = $1,
                "reversalReason" = $2
          WHERE id = $3 AND "companyId" = $4`,
-        [id, reason, newJournalId, scope.companyId]
+        [id, reason, newId, scope.companyId]
       );
       await client.query(
         `UPDATE journal_entries
@@ -1475,7 +1482,7 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
                "reversalReason" = $2,
                status = 'reversed'
          WHERE id = $3 AND "companyId" = $4`,
-        [newJournalId, reason, id, scope.companyId]
+        [newId, reason, id, scope.companyId]
       );
 
       // C4 + C5 follow-up (#901) — a payment voucher reversed via
@@ -1494,6 +1501,8 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
             AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
+
+      return { newJournalId: newId, newRef, originalRef: original.ref as string };
     });
 
     await createAuditLog({
@@ -1523,7 +1532,7 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
        GROUP BY je.id`,
       [newJournalId, scope.companyId]
     );
-    res.status(201).json({ ...(createdReversal || { id: newJournalId }), originalId: id, originalRef: original.ref, reason });
+    res.status(201).json({ ...(createdReversal || { id: newJournalId }), originalId: id, originalRef, reason });
   } catch (err) {
     handleRouteError(err, res, "Reverse journal error:");
   }
