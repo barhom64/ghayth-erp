@@ -9361,7 +9361,8 @@ CREATE TABLE public.journal_lines (
     "umrahAgentId" integer,
     "sourceLineTable" character varying(64),
     "sourceLineId" integer,
-    "dimensionJson" jsonb
+    "dimensionJson" jsonb,
+    "deletedAt" timestamp with time zone
 );
 
 
