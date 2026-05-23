@@ -1,5 +1,5 @@
 import { useApiQuery } from "@/lib/api";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Car } from "lucide-react";
 import { formatNumber } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";

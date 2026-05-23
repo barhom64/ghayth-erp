@@ -9,8 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarClock, Users, Plus, Sun, Moon, Clock } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { PageShell } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import {
   FormShell, FormSelectField, FormDateField, FormGrid,

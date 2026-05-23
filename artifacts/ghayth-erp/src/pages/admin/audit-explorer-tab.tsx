@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { PaginationBar } from "@/components/data-table-wrapper";
 import { ACTION_LABELS } from "./shared";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 export function AuditExplorerTab() {
   const [page, setPage] = useState(1);

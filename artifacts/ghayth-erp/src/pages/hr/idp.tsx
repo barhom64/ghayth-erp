@@ -11,11 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Target, Plus, BookOpen, TrendingUp, CheckCircle } from "lucide-react";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { IDP_STATUS } from "@/lib/hr-type-maps";
 import {
   FormShell, FormTextField, FormTextareaField, FormSelectField, FormDateField, FormGrid,

@@ -10,7 +10,7 @@ import { PageStatusBadge } from "@workspace/ui-core";
 import { formatCurrency, todayLocal } from "@/lib/formatters";
 import { Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import {
   FormShell, FormNumberField, FormTextareaField, FormDateField, FormSelectField, FormGrid,
 } from "@/components/form-shell";

@@ -9,10 +9,10 @@ import { PageStatusBadge } from "@workspace/ui-core";
 import { Plus, FileText, ArrowDownCircle, ArrowUpCircle, Wallet, ChevronDown, ChevronUp, ExternalLink, Paperclip, Calendar } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
 import { PAYMENT_METHODS, VOUCHER_OPERATIONS } from "@/lib/finance-type-maps";

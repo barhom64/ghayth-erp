@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
 import { LayoutDashboard, Plus } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";

@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import {
   Building, FileText, Banknote, Wrench, Users, DollarSign,
   AlertTriangle, XCircle, Info, Pencil,
@@ -24,7 +24,7 @@ import { DetailPageLayout } from "@workspace/entity-kit";
 import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Building },

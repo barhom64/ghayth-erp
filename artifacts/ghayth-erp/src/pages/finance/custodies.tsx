@@ -29,10 +29,10 @@ import {
 } from "lucide-react";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 

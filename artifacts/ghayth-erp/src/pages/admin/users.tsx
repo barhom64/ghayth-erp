@@ -44,7 +44,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { roleKeyColors } from "@/contexts/app-context";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "مالك النظام" },

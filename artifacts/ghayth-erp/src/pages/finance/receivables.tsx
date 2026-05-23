@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { ArrowDownCircle, AlertTriangle, Clock, DollarSign, Eye } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 

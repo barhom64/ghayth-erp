@@ -210,7 +210,7 @@ const RULES = [
       file.endsWith("/components/page-shell.tsx") ||
       file.endsWith("/components/create-page-layout.tsx"),
     regex: /from\s+["']@\/components\/page-shell["']/,
-    countBaseline: 143,
+    countBaseline: 2,
     message: `PageShell imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -232,7 +232,7 @@ const RULES = [
       file.endsWith("/components/data-table-presets.tsx") ||
       file.endsWith("/components/list-page.tsx"),
     regex: /from\s+["']@\/components\/ui\/data-table["']/,
-    countBaseline: 155,
+    countBaseline: 4,
     message: `DataTable imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -244,7 +244,7 @@ const RULES = [
       file.endsWith("/components/data-table-presets.tsx") ||
       file.endsWith("/components/shared/detail-page-layout.tsx"),
     regex: /from\s+["']@\/components\/page-status-badge["']/,
-    countBaseline: 20,
+    countBaseline: 10,
     message: `PageStatusBadge imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -276,7 +276,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/shared/advanced-filters.tsx"),
     regex: /from\s+["']@\/components\/shared\/advanced-filters["']/,
-    countBaseline: 64,
+    countBaseline: 5,
     message: `AdvancedFilters / useFilters / applyFilters imported from the legacy path. ${kitRatchetHint("ui-core")}`,
   },
   {
@@ -326,7 +326,8 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/shared/entity-comments.tsx"),
     regex: /from\s+["']@\/components\/shared\/entity-comments["']/,
-    countBaseline: 0,
+    // Hardened from ratchet → hard rule (baseline reached 0 in sweep 10).
+    // Any future legacy import fails immediately.
     message: `EntityComments imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
   },
   {
@@ -335,7 +336,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/shared/entity-documents.tsx"),
     regex: /from\s+["']@\/components\/shared\/entity-documents["']/,
-    countBaseline: 0,
+    // Hardened from ratchet → hard rule (baseline reached 0 in sweep 10).
     message: `EntityDocuments imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
   },
 

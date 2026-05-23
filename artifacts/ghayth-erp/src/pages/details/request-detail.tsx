@@ -12,7 +12,7 @@ import { AttachmentPreview, type PreviewableAttachment } from "@/components/shar
 import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { Edit, Paperclip, Eye } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useState } from "react";

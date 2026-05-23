@@ -9,9 +9,9 @@ import { PageStatusBadge } from "@workspace/ui-core";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertTriangle, Scale, DollarSign, Shield, TrendingUp } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
+import { PageShell } from "@workspace/ui-core";
 import { SEVERITY_LEVELS } from "@/lib/hr-type-maps";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 

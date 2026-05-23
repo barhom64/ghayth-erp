@@ -7,7 +7,7 @@ import { PageStatusBadge } from "@workspace/ui-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { BarChart2, Flag, CheckCircle2, Clock, AlertCircle } from "lucide-react";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { ProjectsTabsNav } from "@/components/shared/projects-tabs-nav";
 

@@ -7,16 +7,16 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Plus, Calendar, Clock, CheckCircle, XCircle, ChevronDown, ChevronUp, Timer, Copy, Download } from "lucide-react";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
 import { ProcessStages, EntityTimeline } from "@/components/shared/entity-timeline";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
 // P3 pilot — switch the page header, status chip, and selected columns
 // to the new unified primitives (P1.1 / P1.4 / P1.6).  Approval actions,
 // expanded-row stage rendering, and the KPI cards stay as-is for this
 // pilot pass; they'll move in P3 follow-ups.
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { textColumn, dateColumn, statusColumn, actionsColumn } from "@/components/data-table-presets";

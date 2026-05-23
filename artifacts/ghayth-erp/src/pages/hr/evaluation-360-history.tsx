@@ -6,8 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { PageShell } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 function ScoreDot({ score }: { score: number | null | undefined }) {
   if (score == null) return <span className="text-muted-foreground">-</span>;

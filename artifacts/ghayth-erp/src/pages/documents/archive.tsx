@@ -5,7 +5,7 @@ import { PageStatusBadge } from "@workspace/ui-core";
 import { Archive, FileText, Calendar, FolderArchive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, asList } from "@/lib/api";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 const columns: DataTableColumn<any>[] = [
   {

@@ -9,7 +9,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { DataTable, DataTableColumn } from "@/components/ui/data-table";
 import { Download, AlertTriangle, Clock, Users } from "lucide-react";
 import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 
 function csvEscape(val: string): string {
   if (val.includes(",") || val.includes('"') || val.includes("\n")) {

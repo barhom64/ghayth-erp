@@ -4,13 +4,13 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   Landmark, Banknote, Building2, ArrowDownCircle, ArrowUpCircle,
   TrendingUp, TrendingDown, KeyRound, Eye, Wallet,
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 

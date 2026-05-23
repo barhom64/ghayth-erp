@@ -5,7 +5,7 @@ import { DetailPageLayout } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ActionHistory } from "@workspace/workflow-kit";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Wallet, Users } from "lucide-react";

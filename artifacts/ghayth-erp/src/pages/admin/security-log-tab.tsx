@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 const REASON_LABELS: Record<string, string> = {

@@ -3,9 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { Phone, Calendar, CheckCircle2, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, asList } from "@/lib/api";
-import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { PageShell } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { ACTIVITY_TYPES, ACTIVITY_STATUS } from "@/lib/crm-type-maps";
 

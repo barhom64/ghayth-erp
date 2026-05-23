@@ -6,12 +6,12 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { Plus, Target, TrendingUp, Award, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "in_progress", label: "جارٍ التقييم" },

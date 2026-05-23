@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { resolveStatus, type StatusTone } from "@/components/page-status-badge";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   DollarSign,

@@ -11,9 +11,9 @@ import {
   FileText, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { PageShell } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { ApprovalActions } from "@workspace/workflow-kit";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";

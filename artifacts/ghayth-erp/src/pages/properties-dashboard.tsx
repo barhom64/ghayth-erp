@@ -11,8 +11,8 @@ import {
 import { formatCurrency } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { PageShell } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { ErrorState } from "@/components/shared/loading-error-states";

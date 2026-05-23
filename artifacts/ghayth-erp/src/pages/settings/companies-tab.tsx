@@ -8,7 +8,7 @@ import { Building2, Plus, X, Pencil, Trash2, CheckCircle, Zap } from "lucide-rea
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { FormShell, FormTextField, FormGrid } from "@/components/form-shell";
 

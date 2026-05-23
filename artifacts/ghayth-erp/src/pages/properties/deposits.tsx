@@ -8,7 +8,7 @@ import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { Plus, RotateCcw } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { z } from "zod";

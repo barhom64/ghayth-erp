@@ -6,14 +6,14 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@workspace/ui-core";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShoppingCart, Package, Plus, X, DollarSign, Eye } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
 import { StoreTabsNav } from "@/components/shared/store-tabs-nav";
 import { FormShell, FormTextField, FormNumberField, FormGrid } from "@/components/form-shell";
 

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Save, User, Calendar, AlertTriangle } from "lucide-react";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";

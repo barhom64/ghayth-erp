@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { Switch } from "@/components/ui/switch";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Cog, Play, Clock, Search, Zap, Activity, Bot, TrendingUp } from "lucide-react";

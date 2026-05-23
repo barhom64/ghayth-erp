@@ -2,7 +2,7 @@ import { useRoute, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
 import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 import { EntityDocuments } from "@workspace/entity-kit";

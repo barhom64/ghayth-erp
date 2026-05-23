@@ -5,14 +5,14 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import {
   Plus, Clock, CheckCircle, XCircle, DollarSign,
   AlertTriangle, UserMinus, FileText, LogOut, Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { KpiGrid } from "@/components/shared/kpi-card";

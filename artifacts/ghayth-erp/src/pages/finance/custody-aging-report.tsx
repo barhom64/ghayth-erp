@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRight, AlertTriangle, DollarSign, Users, KeyRound, ChevronDown, ChevronRight } from "lucide-react";
 import { formatCurrency, formatNumber , formatDateAr } from "@/lib/formatters";
-import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { PageShell } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 export default function CustodyAgingReportPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["custody-aging-report"], "/finance/custodies/report");

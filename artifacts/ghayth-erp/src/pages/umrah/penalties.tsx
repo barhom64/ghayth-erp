@@ -4,7 +4,7 @@ import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@workspace/ui-core";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

@@ -5,11 +5,11 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 // P4.8 — Finance expenses: shared header + status chips from P1.
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { Plus, Wallet, TrendingDown, PieChart, Calendar, ChevronDown, ChevronUp, Paperclip, ExternalLink, Link2 } from "lucide-react";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { AdvancedFilters, useFilters, applyFilters, exportToCSV, useAdvancedFilters } from "@/components/shared/advanced-filters";
 import { EntityComments } from "@workspace/entity-kit";

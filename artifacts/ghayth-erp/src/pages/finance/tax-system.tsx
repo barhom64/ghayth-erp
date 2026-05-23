@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Receipt, TrendingUp, TrendingDown, DollarSign, Calendar, Zap, CheckCircle, XCircle, Clock, AlertTriangle, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { PageShell } from "@workspace/ui-core";
 
 export default function TaxSystemPage() {
   const currentPeriod = todayLocal().slice(0, 7);

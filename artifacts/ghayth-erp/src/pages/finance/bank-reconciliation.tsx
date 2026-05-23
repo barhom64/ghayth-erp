@@ -8,11 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Upload, CheckCircle, XCircle, RefreshCw, Landmark, Link2 } from "lucide-react";
 import { Link } from "wouter";
 import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function BankReconciliationPage() {

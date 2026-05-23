@@ -17,10 +17,10 @@ import {
 } from "lucide-react";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { ActionHistory, NotesDisplay, ApprovalActions } from "@/components/approval-actions";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";

@@ -4,7 +4,7 @@ import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calculator, DollarSign, Calendar, User } from "lucide-react";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { TERMINATION_TYPES } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, todayLocal } from "@/lib/formatters";

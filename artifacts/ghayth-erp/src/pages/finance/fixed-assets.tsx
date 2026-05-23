@@ -9,11 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Building2, Plus, X, TrendingDown, Calculator, CheckCircle, DollarSign, PackageCheck } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { formatCurrency, formatDateAr, formatNumber, todayLocal } from "@/lib/formatters";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   FormShell,

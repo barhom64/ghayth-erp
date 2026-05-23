@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { Plus, Route, Navigation, CheckCircle, MapPin } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 export default function TripsPage() {

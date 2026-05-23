@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { GraduationCap, Users, Award, BarChart3, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { PageShell } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 export default function TrainingAdvancedPage() {

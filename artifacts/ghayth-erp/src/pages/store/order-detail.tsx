@@ -8,7 +8,7 @@ import { extractBranchFromResponse } from "@/lib/branch-utils";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ShoppingCart, User, Phone, Calendar, Package } from "lucide-react";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 export default function StoreOrderDetailPage() {

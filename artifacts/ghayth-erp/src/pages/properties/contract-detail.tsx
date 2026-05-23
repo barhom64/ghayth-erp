@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { EntityObligations } from "@/components/shared/entity-obligations";

@@ -66,9 +66,9 @@ import { EntityFinancialProfile } from "@/components/shared/entity-financial-pro
 import { cn } from "@/lib/utils";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { DatePicker } from "@/components/ui/date-picker";
 
 const PROJECT_TABS = [

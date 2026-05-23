@@ -5,9 +5,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { ClipboardCheck, Clock, CheckCircle, DollarSign } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { PageShell } from "@/components/page-shell";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
+import { PageShell } from "@workspace/ui-core";
 
 export default function FinancialRequestsPage() {
   const [, navigate] = useLocation();

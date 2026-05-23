@@ -21,7 +21,7 @@ import {
   Zap,
   Send,
 } from "lucide-react";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";

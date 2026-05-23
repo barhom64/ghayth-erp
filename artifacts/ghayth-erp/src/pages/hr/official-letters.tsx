@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 // Phase A — HR official letters on unified primitives.
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { Plus, FileText, FileSignature, Send, Eye } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -17,7 +17,7 @@ import { useAuth } from "@/lib/auth";
 import { DataTable, DataTableColumn } from "@/components/ui/data-table";
 import { useAppContext } from "@/contexts/app-context";
 import { ApprovalActions } from "@workspace/workflow-kit";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { LETTER_TYPES } from "@/lib/hr-type-maps";
 import {

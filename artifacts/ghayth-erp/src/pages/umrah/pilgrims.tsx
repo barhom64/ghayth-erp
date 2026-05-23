@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Plus, Users, AlertTriangle, Plane, UserPlus } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Link, useLocation } from "wouter";
-import { AdvancedFilters, useFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { AdvancedFilters, useFilters, exportToCSV } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 

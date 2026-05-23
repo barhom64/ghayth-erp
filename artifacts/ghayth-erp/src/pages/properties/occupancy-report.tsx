@@ -4,10 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/formatters";
 import { Building2, Home, Wrench, TrendingUp, DollarSign } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   rented: { label: "مؤجرة", color: "text-status-success-foreground", bg: "bg-status-success-surface" },

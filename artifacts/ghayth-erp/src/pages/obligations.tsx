@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Clock, AlertTriangle, CheckCircle2, ShieldAlert, Search, RefreshCw, X } from "lucide-react";

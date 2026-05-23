@@ -8,9 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@workspace/ui-core";
 import { formatCurrency, formatDateAr as formatDate, todayLocal } from "@/lib/formatters";
 import { ArrowLeftRight, Layers } from "lucide-react";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Link } from "wouter";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   FormShell, FormNumberField, FormTextareaField, FormDateField, FormSelectField, FormGrid,

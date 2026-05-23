@@ -8,11 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, GitBranch, TrendingUp, TrendingDown, Layers, BookOpen, ChevronDown, ChevronRight, CheckCircle, Search, Edit2, Trash2, Printer } from "lucide-react";
 import { formatCurrency, formatNumber, formatDateAr } from "@/lib/formatters";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 // R.2 iter 2 — PageShell for the unified layout, ConfirmDeleteDialog
 // for the centralised delete flow with Phase C.7b blockers surfacing.
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
