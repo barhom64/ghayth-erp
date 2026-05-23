@@ -430,8 +430,38 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
 
     const newRefreshToken = signRefreshToken();
     const newExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+    // RD4-01 — refresh-token rotation MUST be atomic, and a second use of
+    // an already-rotated token MUST burn the session. Previously we ran:
+    //   SELECT … (returns valid)
+    //   UPDATE … WHERE revokedAt IS NULL   ← idempotent, returns "ok" even on a no-op
+    //   INSERT new token
+    // Two refresh requests arriving with the same valid token both passed
+    // the SELECT, and both INSERTs succeeded — i.e. one leaked refresh
+    // token could be parlayed into two parallel sessions. The fix is the
+    // standard OAuth "refresh-token reuse detection" pattern: revoke
+    // atomically with RETURNING, and if the revoke is a no-op (someone
+    // else rotated this token already) treat it as theft → revoke every
+    // outstanding refresh token for that user.
     await withTransaction(async (client) => {
-      await client.query(`UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE id = $1 AND "revokedAt" IS NULL`, [rt.id]);
+      const { rows: revoked } = await client.query(
+        `UPDATE refresh_tokens SET "revokedAt" = NOW()
+           WHERE id = $1 AND "revokedAt" IS NULL
+         RETURNING id`,
+        [rt.id]
+      );
+      if (revoked.length === 0) {
+        // Reuse detected — the token's already been rotated. Kill every
+        // session for this user; the legitimate browser will be forced to
+        // log in again, but that's the price of containing a stolen
+        // token. Also log it so it's auditable.
+        await client.query(
+          `UPDATE refresh_tokens SET "revokedAt" = NOW()
+             WHERE "userId" = $1 AND "revokedAt" IS NULL`,
+          [rt.userId]
+        );
+        logger.warn({ userId: rt.userId, tokenId: rt.id }, "[auth] refresh-token reuse detected — revoking all sessions");
+        throw new ForbiddenError("رمز التحديث ملغي");
+      }
       await client.query(
         `INSERT INTO refresh_tokens (token, "userId", "expiresAt", "userAgent", "ipAddress") VALUES ($1, $2, $3, $4, $5)`,
         [newRefreshToken, rt.userId, newExpiresAt.toISOString(), req.headers["user-agent"] ?? null, req.ip ?? null]
