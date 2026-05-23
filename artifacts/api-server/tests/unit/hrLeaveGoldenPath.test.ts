@@ -229,9 +229,14 @@ describe("HR Leave balance integrity", () => {
     expect(HR_ROUTE).toContain("entitled - used - reserved");
   });
 
-  it("deducts across all companies for multi-assignment employees", () => {
-    expect(HR_ROUTE).toContain("allCompanyIds");
-    expect(HR_ROUTE).toContain("for (const cId of allCompanyIds)");
+  it("deducts only on the request's own company (single-company scope)", () => {
+    // PR #921 — the previous multi-company loop (`for (const cId of allCompanyIds)`)
+    // over-deducted from sister companies that never reserved the days at
+    // submission time. The fix uses a single UPDATE scoped to
+    // `scope.companyId`, matching the reservation side. Lock that here so
+    // the multi-company loop can't quietly come back.
+    expect(HR_ROUTE).not.toContain("for (const cId of allCompanyIds)");
+    expect(HR_ROUTE).toContain('"companyId" = $2 AND "employeeId" = $3');
   });
 
   it("updates approval_requests on final approval", () => {

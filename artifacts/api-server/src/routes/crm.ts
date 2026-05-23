@@ -717,10 +717,22 @@ async function handleDealWon(scope: RequestScope, opp: CrmOpportunityRow, dealVa
 
     if (!clientId && opp.contactName?.trim()) {
       const contactNameTrimmed = opp.contactName.trim();
+      // Normalize the incoming phone the same way `communications.ts` (line
+      // 93) normalizes the stored side: strip '+' and '-' so a number
+      // entered as "+966-50 …" matches one entered as "966 50 …". Without
+      // this, `phone = $3` exact-matches against a stored format that
+      // looks identical to the operator but differs in punctuation, and
+      // `handleDealWon` silently creates a duplicate client row.
+      const phoneNorm = (opp.contactPhone || '').replace(/[+\-\s]/g, '');
       await withTransaction(async (txClient: pg.PoolClient) => {
         const { rows: existing } = await txClient.query(
-          `SELECT id FROM clients WHERE "companyId"=$1 AND "deletedAt" IS NULL AND (name=$2 OR phone=$3 OR email=$4) LIMIT 1 FOR UPDATE`,
-          [scope.companyId, contactNameTrimmed, opp.contactPhone || '', opp.contactEmail || '']
+          `SELECT id FROM clients
+            WHERE "companyId"=$1 AND "deletedAt" IS NULL
+              AND ( name = $2
+                 OR ($3 <> '' AND REPLACE(REPLACE(REPLACE(phone,'+',''),'-',''),' ','') = $3)
+                 OR ($4 <> '' AND LOWER(email) = LOWER($4)) )
+            LIMIT 1 FOR UPDATE`,
+          [scope.companyId, contactNameTrimmed, phoneNorm, opp.contactEmail || '']
         );
         if (existing.length > 0) {
           clientId = existing[0].id;
