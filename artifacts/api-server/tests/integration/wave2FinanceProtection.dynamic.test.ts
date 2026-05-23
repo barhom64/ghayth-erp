@@ -376,10 +376,159 @@ d("Wave-2 C1: financial statements filter by balancesApplied, not status='posted
 });
 
 d("Wave-2 C2: gl/posting stamps createdAt with the accounting date, not NOW() (#886)", () => {
-  it.todo(
+  let rawExecute: typeof import("../../src/lib/rawdb.js").rawExecute;
+  let rawQuery: typeof import("../../src/lib/rawdb.js").rawQuery;
+  let postJournalEntry: typeof import("../../src/lib/gl/posting.js").postJournalEntry;
+  let buildEntry: typeof import("../../src/lib/gl/journal-poster.js").buildEntry;
+
+  let companyId: number;
+  let branchId: number;
+  let assignmentId: number;
+
+  beforeAll(async () => {
+    const rawdb = await import("../../src/lib/rawdb.js");
+    rawExecute = rawdb.rawExecute;
+    rawQuery = rawdb.rawQuery;
+    const posting = await import("../../src/lib/gl/posting.js");
+    postJournalEntry = posting.postJournalEntry;
+    const poster = await import("../../src/lib/gl/journal-poster.js");
+    buildEntry = poster.buildEntry;
+
+    const { setupTwoCompanyFixture } = await import("./_fixtures/twoCompanies.js");
+    const fx = await setupTwoCompanyFixture();
+    companyId = fx.companyA.id;
+    branchId = fx.companyA.branchId;
+    assignmentId = fx.companyA.assignmentId;
+  });
+
+  beforeEach(async () => {
+    await rawExecute(
+      `DELETE FROM journal_lines WHERE "journalId" IN
+         (SELECT id FROM journal_entries WHERE "companyId"=$1)`,
+      [companyId]
+    );
+    await rawExecute(`DELETE FROM journal_entries WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(`DELETE FROM financial_periods WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(`DELETE FROM chart_of_accounts WHERE "companyId"=$1`, [companyId]);
+    // Open period that covers both today and the back-dated 2025-06-15
+    // so the period gate never blocks the C2 dates we want to verify.
+    await rawExecute(
+      `INSERT INTO financial_periods ("companyId", name, "startDate", "endDate", status)
+       VALUES ($1, 'فترة مفتوحة', '2020-01-01', '2099-12-31', 'open')`,
+      [companyId]
+    );
+    await rawExecute(
+      `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "currentBalance", "allowPosting", "isActive")
+       VALUES ($1, '1101', 'بنك اختبار', 'Test Bank', 'asset', 0, true, true),
+              ($1, '4101', 'إيراد اختبار', 'Test Revenue', 'revenue', 0, true, true)`,
+      [companyId]
+    );
+  });
+
+  it(
     "an entry posted today with a 2025-06-15 accounting date carries createdAt=2025-06-15, " +
       "so range-filtered reports include it in June not in the current month",
+    async () => {
+      // Build a balanced entry and post it through Path-B with an explicit
+      // back-dated accounting date. The C2 fix stamps `createdAt` from
+      // `ctx.date` (not NOW()) so finance reports range-filtering on
+      // createdAt land it in June, not whatever month the row was
+      // physically inserted in.
+      const accounts = await rawQuery<{ id: number; code: string }>(
+        `SELECT id, code FROM chart_of_accounts
+           WHERE "companyId" = $1 AND code IN ('1101', '4101')
+           ORDER BY code`,
+        [companyId]
+      );
+      const acc1101 = accounts.find((a) => a.code === "1101")!;
+      const acc4101 = accounts.find((a) => a.code === "4101")!;
+
+      const payload = buildEntry({
+        description: "wave2-c2 back-dated entry",
+        lines: [
+          { accountId: acc1101.id, amount: 100, description: "DR test bank" },
+          { accountId: acc4101.id, amount: -100, description: "CR test revenue" },
+        ],
+      });
+
+      const { journalEntryId } = await postJournalEntry(payload, {
+        companyId,
+        branchId,
+        createdBy: assignmentId,
+        ref: "JE-C2-BACKDATED",
+        date: "2025-06-15",
+        type: "fx_revaluation",
+        status: "posted",
+      });
+
+      // The bug we're guarding against: createdAt drifted to NOW(), so a
+      // report filtering "WHERE createdAt BETWEEN '2025-06-01' AND
+      // '2025-06-30'" silently dropped this entry. After the C2 fix
+      // createdAt MUST equal the accounting date.
+      const [row] = await rawQuery<{
+        entryDate: string;
+        createdAtDate: string;
+      }>(
+        `SELECT date::text AS "entryDate",
+                "createdAt"::date::text AS "createdAtDate"
+           FROM journal_entries WHERE id = $1`,
+        [journalEntryId]
+      );
+      expect(row.entryDate).toBe("2025-06-15");
+      // The critical C2 assertion: createdAt's date == accounting date,
+      // NOT today's date. A future regression that reverts to NOW()
+      // would set createdAtDate to today, breaking this equality.
+      expect(row.createdAtDate).toBe("2025-06-15");
+      expect(row.createdAtDate).toBe(row.entryDate);
+    }
   );
+
+  it("falls back to CURRENT_DATE when ctx.date is omitted (no back-date)", async () => {
+    // Negative control: when the caller doesn't pass a date, both `date`
+    // and `createdAt` should default to CURRENT_DATE (today). Guards
+    // against a future refactor that hard-codes a constant or breaks
+    // the COALESCE($6::date, CURRENT_DATE) pattern.
+    const accounts = await rawQuery<{ id: number; code: string }>(
+      `SELECT id, code FROM chart_of_accounts
+         WHERE "companyId" = $1 AND code IN ('1101', '4101')
+         ORDER BY code`,
+      [companyId]
+    );
+    const acc1101 = accounts.find((a) => a.code === "1101")!;
+    const acc4101 = accounts.find((a) => a.code === "4101")!;
+
+    const payload = buildEntry({
+      description: "wave2-c2 dateless entry",
+      lines: [
+        { accountId: acc1101.id, amount: 50, description: "DR" },
+        { accountId: acc4101.id, amount: -50, description: "CR" },
+      ],
+    });
+
+    const { journalEntryId } = await postJournalEntry(payload, {
+      companyId,
+      branchId,
+      createdBy: assignmentId,
+      ref: "JE-C2-NODATE",
+      type: "manual",
+      status: "posted",
+    });
+
+    const [row] = await rawQuery<{
+      entryDate: string;
+      createdAtDate: string;
+      todayDate: string;
+    }>(
+      `SELECT date::text AS "entryDate",
+              "createdAt"::date::text AS "createdAtDate",
+              CURRENT_DATE::text AS "todayDate"
+         FROM journal_entries WHERE id = $1`,
+      [journalEntryId]
+    );
+    expect(row.entryDate).toBe(row.todayDate);
+    expect(row.createdAtDate).toBe(row.todayDate);
+    expect(row.createdAtDate).toBe(row.entryDate);
+  });
 });
 
 d("Wave-2 C3: expense entry + approval chain are atomic (#885)", () => {

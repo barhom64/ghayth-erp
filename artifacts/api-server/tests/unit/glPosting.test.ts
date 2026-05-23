@@ -293,13 +293,14 @@ describe("postJournalEntry — sourceKey idempotency (PD-6)", () => {
     expect(r.journalEntryId).toBe(4242);
     expect(r.alreadyExists).toBeUndefined();
 
-    // The INSERT receives the sourceKey as the 11th positional param.
+    // The INSERT receives the sourceKey as the 13th positional param
+    // (status='posted' splits postedBy/postedAt into their own slots).
     const headerCall = mockRawQuery.mock.calls.find((c) =>
       String(c[0]).includes("INSERT INTO journal_entries"),
     );
     expect(headerCall).toBeDefined();
     const params = headerCall?.[1] as any[];
-    expect(params[10]).toBe("CC-99");
+    expect(params[12]).toBe("CC-99");
   });
 
   it("skips the sourceKey lookup entirely when ctx.sourceKey is undefined", async () => {
