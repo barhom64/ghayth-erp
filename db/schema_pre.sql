@@ -6756,6 +6756,39 @@ ALTER SEQUENCE public.fixed_assets_id_seq OWNED BY public.fixed_assets.id;
 -- Name: fleet_drivers; Type: TABLE; Schema: public; Owner: -
 --
 
+CREATE TABLE public.fleet_alerts (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    type character varying(40) NOT NULL,
+    severity character varying(20) NOT NULL,
+    title text NOT NULL,
+    message text NOT NULL,
+    "relatedType" character varying(40),
+    "relatedId" integer,
+    "daysLeft" integer,
+    status character varying(20) DEFAULT 'active'::character varying NOT NULL,
+    "acknowledgedBy" integer,
+    "acknowledgedAt" timestamp with time zone,
+    "dismissedAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT fleet_alerts_status_check CHECK ((((status)::text = ANY ((ARRAY['active'::character varying, 'acknowledged'::character varying, 'resolved'::character varying, 'dismissed'::character varying])::text[]))))
+);
+
+
+CREATE SEQUENCE public.fleet_alerts_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.fleet_alerts_id_seq OWNED BY public.fleet_alerts.id;
+
+
 CREATE TABLE public.fleet_drivers (
     id integer NOT NULL,
     "companyId" integer NOT NULL,
