@@ -327,6 +327,27 @@ router.post("/enrollments", authorize({ feature: "hr.training", action: "create"
     }
     const [prog] = await rawQuery<{ id: number }>(`SELECT id FROM training_programs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [programId, scope.companyId]);
     if (!prog) throw new NotFoundError("البرنامج التدريبي غير موجود");
+
+    // NF-TRAIN-ENROLL-01 — refuse re-enrolling the same employee in the
+    // same program. Without this check, certificate counts and
+    // attendance reports double-count a single learner; there's no
+    // database-level UNIQUE constraint backing the (programId,
+    // employeeId) pair so the only line of defence is here.
+    if (employeeId) {
+      const dup = await rawQuery<{ id: number }>(
+        `SELECT id FROM training_enrollments
+          WHERE "programId" = $1 AND "employeeId" = $2 AND "deletedAt" IS NULL
+          LIMIT 1`,
+        [Number(programId), Number(employeeId)],
+      );
+      if (dup.length > 0) {
+        throw new ConflictError(
+          "الموظف مسجَّل سابقاً في هذا البرنامج",
+          { field: "employeeId", fix: "افتح التسجيل الحالي بدلاً من إنشاء واحد جديد" },
+        );
+      }
+    }
+
     if (employeeId) {
       const [emp] = await rawQuery<{ id: number }>(
         `SELECT e.id FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL AND ea.status = 'active' LIMIT 1`,
