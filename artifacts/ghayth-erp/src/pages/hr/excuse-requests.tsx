@@ -4,12 +4,17 @@ import { formatDateAr } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Plus, Clock, CheckCircle, XCircle, LogOut } from "lucide-react";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { ApprovalActions } from "@/components/approval-actions";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import {
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  PageShell,
+  PageStatusBadge,
+} from "@workspace/ui-core";
+import { ApprovalActions } from "@workspace/workflow-kit";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
-import { PageShell } from "@/components/page-shell";
-import { PageStatusBadge } from "@/components/page-status-badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { useAppContext } from "@/contexts/app-context";

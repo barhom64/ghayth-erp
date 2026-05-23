@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+} from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Card, CardContent } from "@/components/ui/card";
-import { PageShell } from "@/components/page-shell";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";

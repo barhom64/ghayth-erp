@@ -29,7 +29,10 @@ function stripComments(src: string): string {
 
 describe("create/properties/owners-edit — full-page edit form on FormShell + zod", () => {
   it("imports the FormShell stack + useFormContext", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormEmailField");
     expect(SRC).toContain("FormPhoneField");

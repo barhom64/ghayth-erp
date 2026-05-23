@@ -6,8 +6,8 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { CreatePageLayout } from "@/components/create-page-layout";
 import {
+  CreatePageLayout,
   FormShell,
   FormTextField,
   FormNumberField,
@@ -15,7 +15,7 @@ import {
   FormDateField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const TYPE_OPTIONS = [
   { value: "early_leave", label: "انصراف مبكر" },

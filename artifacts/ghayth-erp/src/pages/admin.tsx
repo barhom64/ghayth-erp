@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, KeyRound, ScrollText, UserCog, Lock, FileSearch, ShieldAlert,
   Shield, Layers, GitBranch, AlertTriangle, Scale, Cog, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { UsersTab } from "./admin/users-tab";
 import { RoleAssignmentTab } from "./admin/role-assignment-tab";
 import { RolesTab } from "./admin/roles-tab";

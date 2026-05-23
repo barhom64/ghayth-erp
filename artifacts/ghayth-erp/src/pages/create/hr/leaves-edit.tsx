@@ -6,8 +6,11 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { CreatePageLayout } from "@/components/create-page-layout";
-import { FormShell, FormTextareaField } from "@/components/form-shell";
+import {
+  CreatePageLayout,
+  FormShell,
+  FormTextareaField,
+} from "@workspace/ui-core";
 import { formatDateAr } from "@/lib/formatters";
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {

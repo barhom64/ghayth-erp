@@ -45,6 +45,7 @@ const Custodies = lazy(() => import("@/pages/finance/custodies"));
 const CustodyDetail = lazy(() => import("@/pages/finance/custody-detail"));
 const CustodyAgingReport = lazy(() => import("@/pages/finance/custody-aging-report"));
 const FiscalPeriods = lazy(() => import("@/pages/finance/fiscal-periods"));
+const FiscalPeriodsV2 = lazy(() => import("@/pages/finance/fiscal-periods-v2"));
 const SalaryAdvances = lazy(() => import("@/pages/finance/salary-advances"));
 const SalaryAdvanceDetail = lazy(() => import("@/pages/details/salary-advance-detail"));
 const Ledger = lazy(() => import("@/pages/finance/ledger"));
@@ -117,6 +118,7 @@ export const financeRoutes = [
   { path: "/finance/custodies/report", component: CustodyAgingReport },
   { path: "/finance/custodies/:id", component: CustodyDetail },
   { path: "/finance/fiscal-periods", component: FiscalPeriods },
+  { path: "/finance/fiscal-periods-v2", component: FiscalPeriodsV2 },
   { path: "/finance/salary-advances", component: SalaryAdvances },
   { path: "/finance/salary-advances/:id", component: SalaryAdvanceDetail },
   { path: "/finance/ledger/:code", component: Ledger },

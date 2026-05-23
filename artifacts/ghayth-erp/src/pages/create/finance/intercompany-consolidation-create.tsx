@@ -1,7 +1,7 @@
 import { useApiQuery } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { formatCurrency, roundMoney } from "@/lib/formatters";
-import { CreatePageLayout } from "@/components/create-page-layout";
+import { CreatePageLayout } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";

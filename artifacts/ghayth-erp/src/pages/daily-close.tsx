@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { todayLocal } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";

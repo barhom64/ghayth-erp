@@ -8,14 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import {
   CreatePageLayout,
   CreationDateField,
-} from "@/components/create-page-layout";
-import {
   FormShell,
   FormTextField,
   FormTextareaField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 import { AlertTriangle, Clock, UserX, HelpCircle, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/formatters";

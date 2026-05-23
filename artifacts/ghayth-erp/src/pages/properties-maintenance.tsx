@@ -2,11 +2,17 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { PageStatusBadge } from "@/components/page-status-badge";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { PageShell } from "@/components/page-shell";
-import { ApprovalActions } from "@/components/approval-actions";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+  PageStatusBadge,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  exportToCSV,
+} from "@workspace/ui-core";
+import { ApprovalActions } from "@workspace/workflow-kit";
 import { Wrench, Plus } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useAppContext } from "@/contexts/app-context";

@@ -26,7 +26,10 @@ function stripComments(src: string): string {
 
 describe("admin/roles — newRole form on FormShell + zod (multi-select)", () => {
   it("imports the FormShell stack + react-hook-form's useFormContext", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormTextField");
     expect(SRC).toContain("FormNumberField");

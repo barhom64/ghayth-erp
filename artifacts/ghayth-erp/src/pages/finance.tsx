@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 
 export default function Finance() {
   const [, setLocation] = useLocation();

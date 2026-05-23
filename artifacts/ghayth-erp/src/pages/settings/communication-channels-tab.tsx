@@ -10,7 +10,7 @@ import {
   FormShell,
   FormTextField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // Secret-token UX: server returns "__configured__" as a placeholder
 // for a stored token. We DON'T surface that value in the form; we

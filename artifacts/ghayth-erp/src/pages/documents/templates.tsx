@@ -12,7 +12,7 @@ import { FileText, Copy, Search, Layout, Plus, Eye, Edit, Trash2, X, Save, Print
 import { cn } from "@/lib/utils";
 import { useApiQuery, useApiMutation, asList, apiFetch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { PrintPreviewModal } from "@/components/print-layout";
+import { PrintPreviewModal } from "@workspace/report-kit";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
 import { GuardedButton } from "@/components/shared/permission-gate";

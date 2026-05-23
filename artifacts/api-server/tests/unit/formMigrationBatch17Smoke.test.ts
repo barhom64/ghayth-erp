@@ -17,7 +17,10 @@ function stripComments(src: string): string {
 
 describe("warehouse/inventory-count — create-session form on FormShell + zod", () => {
   it("imports the FormShell stack with FormDateField", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormDateField");
   });

@@ -4,7 +4,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
 import { TrendingUp, TrendingDown, DollarSign, Calendar, AlertCircle } from "lucide-react";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 
 function ForecastCard({ label, days, data }: { label: string; days: string; data: any }) {
   const net = data?.net ?? 0;

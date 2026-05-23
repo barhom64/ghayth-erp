@@ -51,6 +51,27 @@ const LIB_DIR = join(REPO_ROOT, "artifacts/api-server/src/lib");
 const MIDDLEWARES_DIR = join(REPO_ROOT, "artifacts/api-server/src/middlewares");
 const ERP_PAGES_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/pages");
 const ERP_COMPONENTS_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/components");
+const ERP_HOOKS_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/hooks");
+// lib/ is included in the kit ratchet scan to close an evasion path:
+// a re-export like `export { PageShell } from "@/components/page-shell"`
+// living in artifacts/ghayth-erp/src/lib/some-shell.ts would otherwise
+// satisfy the @/components import contract without tripping any of the
+// kit-adoption rules below. Scanning lib/ ensures the rule sees those.
+const ERP_LIB_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/lib");
+
+// Shared kit-adoption ratchet message — appended to every UI-kit
+// counted rule below. Centralised so the wording stays consistent.
+// Caller passes the @workspace/* target package, since the kit fans out
+// across ui-core / entity-kit / workflow-kit / report-kit.
+const kitRatchetHint = (pkg) =>
+  `Migrate to \`import { ... } from "@workspace/${pkg}";\` (UNIFICATION_PLAN ` +
+  "§P8). The baseline below is a ratchet — it never goes up. When you migrate " +
+  "a page off the legacy path, drop the corresponding `countBaseline` in " +
+  "scripts/src/lint-patterns.mjs by the same number; the rule then prevents " +
+  "future regression to the new lower count.";
+
+// Backwards-compat constant for the original six ui-core rules.
+const KIT_RATCHET_HINT = kitRatchetHint("ui-core");
 
 /** @type {Array<{ id: string, scan: string[], skip?: (file: string) => boolean, regex: RegExp, message: string }>} */
 const RULES = [
@@ -170,7 +191,240 @@ const RULES = [
       "`AppConfig` shape, and read it through the typed `config` object. This " +
       "keeps validation, defaults and the startup fail-fast gate in one place.",
   },
+
+  // ─── UI-kit adoption ratchet (UNIFICATION_PLAN §P8) ──────────────────
+  //
+  // The six rules below count how many files still import a UI kit
+  // primitive from its legacy `@/components/...` location instead of
+  // `@workspace/ui-core`. Each carries a `countBaseline`: the runner
+  // FAILS when the live count exceeds that number, but accepts equal
+  // or lower counts silently. This is the ratchet — the legacy path
+  // shrinks over time, never grows. Migrations of existing pages should
+  // include a baseline drop in the same PR.
+  //
+  // When the count for any rule reaches zero, convert it to a plain
+  // (uncounted) rule — every match becomes a hard failure.
+
+  {
+    id: "page-shell-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    // The component definition itself is exempt — that's where the
+    // primitive lives. The @workspace/ui-core re-export shim also
+    // points there until the Phase 3 physical move. The other two
+    // composites (CreatePageLayout, ListPage) build on PageShell —
+    // those internal imports are part of the kit's own plumbing.
+    skip: (file) =>
+      file.endsWith("/components/page-shell.tsx") ||
+      file.endsWith("/components/create-page-layout.tsx") ||
+      file.endsWith("/components/list-page.tsx"),
+    regex: /from\s+["']@\/components\/page-shell["']/,
+    // Hardened from ratchet → hard rule (baseline reached 0 in sweep 13).
+    message: `PageShell imported from the legacy path. ${KIT_RATCHET_HINT}`,
+  },
+  {
+    id: "form-shell-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/form-shell.tsx"),
+    regex: /from\s+["']@\/components\/form-shell["']/,
+    // Hardened from ratchet → hard rule (baseline reached 0 in sweep 14).
+    message: `FormShell imported from the legacy path. ${KIT_RATCHET_HINT}`,
+  },
+  {
+    id: "data-table-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) =>
+      file.endsWith("/components/ui/data-table.tsx") ||
+      file.endsWith("/components/data-table-wrapper.tsx") ||
+      file.endsWith("/components/data-table-presets.tsx") ||
+      file.endsWith("/components/list-page.tsx"),
+    regex: /from\s+["']@\/components\/ui\/data-table["']/,
+    // Hardened from ratchet → hard rule (baseline reached 0 in sweep 13).
+    message: `DataTable imported from the legacy path. ${KIT_RATCHET_HINT}`,
+  },
+  {
+    id: "page-status-badge-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) =>
+      file.endsWith("/components/page-status-badge.tsx") ||
+      file.endsWith("/components/data-table-presets.tsx") ||
+      file.endsWith("/components/shared/detail-page-layout.tsx") ||
+      file.endsWith("/components/shared/entity-detail-page.tsx") ||
+      file.endsWith("/components/shared/linked-tasks.tsx") ||
+      file.endsWith("/components/shared/quick-preview-dialog.tsx") ||
+      file.endsWith("/components/shared/employee-discipline-summary.tsx"),
+    regex: /from\s+["']@\/components\/page-status-badge["']/,
+    // Hardened from ratchet → hard rule.
+    message: `PageStatusBadge imported from the legacy path. ${KIT_RATCHET_HINT}`,
+  },
+  {
+    id: "create-page-layout-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/create-page-layout.tsx"),
+    regex: /from\s+["']@\/components\/create-page-layout["']/,
+    // Hardened from ratchet → hard rule.
+    message: `CreatePageLayout imported from the legacy path. ${KIT_RATCHET_HINT}`,
+  },
+  {
+    id: "detail-page-layout-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) =>
+      file.endsWith("/components/shared/detail-page-layout.tsx") ||
+      file.endsWith("/components/shared/entity-detail-page.tsx") ||
+      file.endsWith("/hooks/use-registry-tabs.tsx"),
+    regex: /from\s+["']@\/components\/shared\/detail-page-layout["']/,
+    // Hardened from ratchet → hard rule.
+    message: `DetailPageLayout imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
+  },
+
+  // ─── Wider ui-core surface (advanced-filters, presets, wrappers) ─────
+
+  {
+    id: "advanced-filters-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) =>
+      file.endsWith("/components/shared/advanced-filters.tsx") ||
+      file.endsWith("/components/shared/bulk-actions.tsx") ||
+      file.endsWith("/components/list-page.tsx"),
+    regex: /from\s+["']@\/components\/shared\/advanced-filters["']/,
+    // Hardened from ratchet → hard rule.
+    message: `AdvancedFilters / useFilters / applyFilters imported from the legacy path. ${kitRatchetHint("ui-core")}`,
+  },
+  {
+    id: "data-table-presets-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) =>
+      file.endsWith("/components/data-table-presets.tsx") ||
+      file.endsWith("/components/list-page.tsx"),
+    regex: /from\s+["']@\/components\/data-table-presets["']/,
+    // Hardened from ratchet → hard rule.
+    message: `DataTable column presets imported from the legacy path. ${kitRatchetHint("ui-core")}`,
+  },
+  {
+    id: "data-table-wrapper-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) =>
+      file.endsWith("/components/data-table-wrapper.tsx") ||
+      file.endsWith("/components/ui/data-table.tsx"),
+    regex: /from\s+["']@\/components\/data-table-wrapper["']/,
+    // Hardened from ratchet → hard rule.
+    message: `DataTableWrapper / PaginationBar imported from the legacy path. ${kitRatchetHint("ui-core")}`,
+  },
+  {
+    id: "page-header-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/page-header.tsx"),
+    regex: /from\s+["']@\/components\/page-header["']/,
+    // Hardened from ratchet → hard rule.
+    message: `PageHeader imported from the legacy path. ${kitRatchetHint("ui-core")}`,
+  },
+
+  // ─── entity-kit surface ──────────────────────────────────────────────
+
+  {
+    id: "entity-timeline-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/shared/entity-timeline.tsx"),
+    regex: /from\s+["']@\/components\/shared\/entity-timeline["']/,
+    // Hardened from ratchet → hard rule.
+    message: `EntityTimeline / ProcessStages / WorkflowTimeline imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
+  },
+  {
+    id: "entity-comments-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/shared/entity-comments.tsx"),
+    regex: /from\s+["']@\/components\/shared\/entity-comments["']/,
+    // Hardened from ratchet → hard rule (baseline reached 0 in sweep 10).
+    // Any future legacy import fails immediately.
+    message: `EntityComments imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
+  },
+  {
+    id: "entity-documents-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/shared/entity-documents.tsx"),
+    regex: /from\s+["']@\/components\/shared\/entity-documents["']/,
+    // Hardened from ratchet → hard rule (baseline reached 0 in sweep 10).
+    message: `EntityDocuments imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
+  },
+
+  // ─── workflow-kit surface ────────────────────────────────────────────
+
+  {
+    id: "approval-actions-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) => file.endsWith("/components/approval-actions.tsx"),
+    regex: /from\s+["']@\/components\/approval-actions["']/,
+    // Hardened from ratchet → hard rule.
+    message: `ApprovalActions / ActionHistory imported from the legacy path. ${kitRatchetHint("workflow-kit")}`,
+  },
+
+  // ─── report-kit surface ──────────────────────────────────────────────
+
+  {
+    id: "print-layout-from-legacy-path",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) =>
+      file.endsWith("/components/print-layout.tsx") ||
+      file.endsWith("/components/shared/entity-print.tsx") ||
+      file.endsWith("/hooks/use-branch-letterhead.ts") ||
+      file.endsWith("/lib/branch-utils.ts"),
+    regex: /from\s+["']@\/components\/print-layout["']/,
+    // Hardened from ratchet → hard rule.
+    message: `PrintActions / PrintDocument / LetterheadHeader imported from the legacy path. ${kitRatchetHint("report-kit")}`,
+  },
 ];
+
+// ─── Pure matchers (exported for self-tests) ─────────────────────────────
+//
+// `matchSourceAgainstRule(rule, source)` returns the list of hits a single
+// rule produces against a single in-memory source string. No filesystem,
+// no scan list, no `skip()` evaluation — the caller has already decided
+// the file qualifies. Mirrors the matching logic used inside main(), so a
+// test fixing the matcher fixes both runtime and test surface.
+//
+/** @returns {Array<{ line: number, snippet: string }>} */
+export function matchSourceAgainstRule(rule, source) {
+  const hits = [];
+  if (rule.multiline) {
+    const re = rule.regex.global
+      ? rule.regex
+      : new RegExp(rule.regex.source, rule.regex.flags + "g");
+    let m;
+    while ((m = re.exec(source)) !== null) {
+      const lineNumber = source.slice(0, m.index).split("\n").length;
+      const snippet = m[0].split("\n")[0].trim();
+      hits.push({
+        line: lineNumber,
+        snippet:
+          snippet.length > 200 ? snippet.slice(0, 200) + "…" : snippet,
+      });
+      if (re.lastIndex === m.index) re.lastIndex++;
+    }
+  } else {
+    source.split("\n").forEach((line, index) => {
+      if (rule.regex.test(line)) {
+        hits.push({ line: index + 1, snippet: line.trim() });
+      }
+    });
+  }
+  return hits;
+}
+
+export { RULES };
 
 /** Recursively yield every file under a directory matching the given extensions. */
 async function* walk(dir, extensions = [".ts"]) {
@@ -191,71 +445,106 @@ async function* walk(dir, extensions = [".ts"]) {
   }
 }
 
-const failures = [];
+async function main() {
+  const failures = [];
+  const countedRuleHits = new Map(); // rule.id → [{file, line, snippet}]
+  const ratchetWarnings = []; // baseline-can-be-lowered hints
 
-for (const rule of RULES) {
-  for (const root of rule.scan) {
-    for await (const file of walk(root, rule.extensions ?? [".ts"])) {
-      if (rule.skip && rule.skip(file)) continue;
-      const source = await readFile(file, "utf8");
-      if (rule.multiline) {
-        // Whole-file scan: walk every regex match and report it at the
-        // 1-based line number where the match begins. Catches multi-line
-        // JSX declarations that a per-line scan would miss.
-        const re = rule.regex.global
-          ? rule.regex
-          : new RegExp(rule.regex.source, rule.regex.flags + "g");
-        let m;
-        while ((m = re.exec(source)) !== null) {
-          const lineNumber = source.slice(0, m.index).split("\n").length;
-          const snippet = m[0].split("\n")[0].trim();
-          failures.push({
+  for (const rule of RULES) {
+    for (const root of rule.scan) {
+      for await (const file of walk(root, rule.extensions ?? [".ts"])) {
+        if (rule.skip && rule.skip(file)) continue;
+        const source = await readFile(file, "utf8");
+        const isCounted = typeof rule.countBaseline === "number";
+        for (const raw of matchSourceAgainstRule(rule, source)) {
+          const hit = {
             rule: rule.id,
             file: relative(REPO_ROOT, file),
-            line: lineNumber,
-            snippet:
-              snippet.length > 200 ? snippet.slice(0, 200) + "…" : snippet,
+            line: raw.line,
+            snippet: raw.snippet,
             message: rule.message,
-          });
-          if (re.lastIndex === m.index) re.lastIndex++; // safety against zero-width
-        }
-      } else {
-        source.split("\n").forEach((line, index) => {
-          if (rule.regex.test(line)) {
-            failures.push({
-              rule: rule.id,
-              file: relative(REPO_ROOT, file),
-              line: index + 1,
-              snippet: line.trim(),
-              message: rule.message,
-            });
+          };
+          if (isCounted) {
+            if (!countedRuleHits.has(rule.id)) countedRuleHits.set(rule.id, []);
+            countedRuleHits.get(rule.id).push(hit);
+          } else {
+            failures.push(hit);
           }
+        }
+      }
+    }
+
+    // Apply ratchet check after each counted rule's full sweep.
+    if (typeof rule.countBaseline === "number") {
+      const hits = countedRuleHits.get(rule.id) ?? [];
+      const baseline = rule.countBaseline;
+      if (hits.length > baseline) {
+        // Regression: new violations beyond the baseline. Convert all hits
+        // to hard failures so the diff is visible.
+        const overage = hits.length - baseline;
+        for (const h of hits) {
+          failures.push({
+            ...h,
+            message:
+              `Ratchet exceeded: count is ${hits.length}, baseline is ${baseline} ` +
+              `(+${overage} new violation${overage === 1 ? "" : "s"}). ${rule.message}`,
+          });
+        }
+      } else if (hits.length < baseline) {
+        // Progress: baseline can be lowered. Emit a non-blocking warning.
+        ratchetWarnings.push({
+          rule: rule.id,
+          liveCount: hits.length,
+          baseline,
         });
       }
     }
   }
-}
 
-if (failures.length === 0) {
-  console.log("✓ lint-patterns: clean — no forbidden legacy patterns found.");
-  process.exit(0);
-}
-
-console.error(
-  `✗ lint-patterns: ${failures.length} violation(s) of forbidden patterns:\n`,
-);
-const grouped = new Map();
-for (const f of failures) {
-  if (!grouped.has(f.rule)) grouped.set(f.rule, []);
-  grouped.get(f.rule).push(f);
-}
-for (const [rule, hits] of grouped) {
-  const head = hits[0];
-  console.error(`── ${rule} (${hits.length}) ──`);
-  console.error(`   ${head.message}`);
-  for (const h of hits) {
-    console.error(`   • ${h.file}:${h.line}  ${h.snippet}`);
+  // Emit ratchet progress hints before any failures so contributors see
+  // them on green runs too.
+  if (ratchetWarnings.length > 0) {
+    console.log("");
+    console.log("ℹ ratchet progress — baselines can be lowered:");
+    for (const w of ratchetWarnings) {
+      console.log(
+        `   • ${w.rule}: live count ${w.liveCount} < baseline ${w.baseline} ` +
+        `(drop countBaseline to ${w.liveCount} in scripts/src/lint-patterns.mjs)`,
+      );
+    }
+    console.log("");
   }
-  console.error("");
+
+  if (failures.length === 0) {
+    console.log("✓ lint-patterns: clean — no forbidden legacy patterns found.");
+    process.exit(0);
+  }
+
+  console.error(
+    `✗ lint-patterns: ${failures.length} violation(s) of forbidden patterns:\n`,
+  );
+  const grouped = new Map();
+  for (const f of failures) {
+    if (!grouped.has(f.rule)) grouped.set(f.rule, []);
+    grouped.get(f.rule).push(f);
+  }
+  for (const [rule, hits] of grouped) {
+    const head = hits[0];
+    console.error(`── ${rule} (${hits.length}) ──`);
+    console.error(`   ${head.message}`);
+    for (const h of hits) {
+      console.error(`   • ${h.file}:${h.line}  ${h.snippet}`);
+    }
+    console.error("");
+  }
+  process.exit(1);
 }
-process.exit(1);
+
+// Run only when executed directly — importing this module from
+// lint-patterns.test.mjs must not trigger the full scan.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((err) => {
+    console.error("[lint-patterns] crashed:", err);
+    process.exit(1);
+  });
+}

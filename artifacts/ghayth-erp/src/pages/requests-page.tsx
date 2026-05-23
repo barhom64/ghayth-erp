@@ -2,7 +2,16 @@ import { useState, useMemo } from "react";
 import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { PageShell } from "@/components/page-shell";
+import {
+  PageShell,
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+  FormShell,
+  FormTextField,
+  FormSelectField,
+  FormGrid,
+} from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,11 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  FormShell, FormTextField, FormTextareaField, FormSelectField, FormGrid,
-} from "@/components/form-shell";
 
 const requestSchema = z.object({
   title: z.string().trim().min(1, "العنوان مطلوب"),
@@ -46,17 +51,16 @@ import {
   Clock, CheckCircle, XCircle, ChevronDown, ChevronUp, Paperclip,
   Search, Filter, ArrowLeft, Send, ArrowRightLeft, CheckCircle2,
 } from "lucide-react";
-import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
+import { ApprovalActions, ActionHistory, NotesDisplay } from "@workspace/workflow-kit";
 import { cn } from "@/lib/utils";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { useToast } from "@/hooks/use-toast";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useLocation } from "wouter";
-import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { GuardedButton } from "@/components/shared/permission-gate";
 
 const iconMap: Record<string, any> = {

@@ -13,7 +13,15 @@ import {
   FormSelectField,
   FormDateField,
   FormGrid,
-} from "@/components/form-shell";
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  exportToCSV,
+  PageShell,
+  PageStatusBadge,
+} from "@workspace/ui-core";
 import {
   KeyRound,
   DollarSign,
@@ -27,13 +35,9 @@ import {
   Eye,
   BarChart3,
 } from "lucide-react";
-import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
-import { PageShell } from "@/components/page-shell";
-import { PageStatusBadge } from "@/components/page-status-badge";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 /**

@@ -1,0 +1,395 @@
+# Enterprise Hardening Roadmap
+
+> **تاريخ**: 2026-05-22  
+> **الفرع**: `claude/enterprise-hardening-roadmap-AOfO7`  
+> **المرحلة**: ما بعد Phase 0 (Environment Validation). يحدّد هذا المستند ما
+> يلزم لتحويل النظام من *“ناضج وظيفيًا”* إلى *Enterprise-ready* بمعناه
+> الصارم: تشغيلي، قابل للتدقيق، قابل للتوسّع، وموحّد.
+
+## الحالة الحالية — ملخص واقعي
+
+النظام تجاوز مرحلة MVP و Demo ERP. التقييم الفعلي:
+
+| المحور | الحالة | الدليل |
+| --- | --- | --- |
+| Schema + Domain logic | ناضج | 85 lib module · 85 route file · 1131/1131 endpoint على `authorize()` (`docs/REMAINING_ROADMAP.md`) |
+| RBAC v2 | ✅ مكتمل | `docs/RBAC_V2.md` §11 |
+| Env validation | ✅ Phase 0 | `docs/production-hardening/phase-0-env-validation.md` |
+| Event bus + Outbox capture | جزئي | `event_outbox` يلتقط فقط — لا relay. راجع §2 |
+| DLQ | موجود + مفهرس | `migrations/110_event_dlq_table.sql` |
+| Cron + listeners | داخل HTTP process | `index.ts:129-144` يبدأ السيرفر ثم cron داخل نفس العملية |
+| Finance regression suite | متفرّق | golden path test واحد + 14 ملف finance منفصل، بلا scenario harness موحّد |
+| UI standardization | منخفض | 429 page · 282 استدعاء FormShell · 499 استدعاء DataTable · 18 صفحة لا تزال تستخدم `<table>` خام · 251 صفحة فيها `useState` (forms غير مهاجَرة) |
+
+النظام دخل مرحلة **Enterprise Hardening**؛ هذا المستند يقسّمها إلى أربع
+حُزم متوازية، كل واحدة لها مالك وقابلة للتقطيع إلى PRs.
+
+---
+
+## التنسيق مع الحملات الجارية (لا تعارض)
+
+هناك ثلاث حملات نشطة على `main` تتقاطع مع هذا الـ roadmap. كل Track
+هنا مُصمَّم ليبني فوقها لا أن يعيد عملها:
+
+### 1. حملة FND (Foundation defects) — `docs/audit/inventory/foundation.md`
+
+| ID | الحالة | علاقتها بـ tracks |
+| --- | --- | --- |
+| FND-001 (dead migrations dir) | ✅ #848 | — |
+| FND-003 (env → config + lint guard) | ✅ #874 | **مُمكِّن لـ A1** — worker الجديد سيستهلك `config` مباشرة |
+| FND-004 (router mount guards) | ✅ #866 (جزئي) | — |
+| FND-008 (cron failure alerts) | ✅ #867 | **مُمكِّن لـ A2** — alerting موجود قبل النقل |
+| FND-010 (RBAC catalog unification) | ✅ #900 | — |
+| FND-002, FND-005, FND-006, FND-007, FND-012, FND-013 | قيد العمل | يجب أن تكتمل قبل أو بالتوازي مع Tracks، لا داخلها |
+
+**القاعدة**: لا يجوز لأي PR من هذا الـ roadmap أن يفتح FND جديدًا أو
+يقترب من نطاق FND قائم بلا تنسيق صريح.
+
+### 2. موجة Finance Hardening — Wave 2 (PRs #878-#888 + C/H series)
+
+الأسبوع الأخير شهد:
+- C1 reconcile financial statements (#879)
+- C2 stamp gl/posting with accounting date (#886)
+- C3 atomic expense entry + approval chain (#885)
+- H1 reverse rejected-entry balances in lifecycle txn (#881)
+- H2 closed-period guard on deferred balances (#882)
+- H3 rounding line balance movement (#884)
+- H4 stable idempotency key on POST mutations (#887)
+- #878 dead-letter from async event listeners
+- #888 journal entries balance to cent (drop auto-plug)
+
+**نتائج التنسيق**:
+- **Track C يجب أن يلتقط هذه الـ 9 إصلاحات كأول 9 golden scenarios**
+  (C2 من الـ roadmap = «20 scenario أولى»). أي regression
+  مستقبلي على نفس السطح يجب أن يكسر سيناريو واحد منها على الأقل.
+- **#878 يخفّض حِمل Track A.3** — DLQ للـ async listener failures
+  أصبح موجودًا؛ A.3 (relay daemon) يبني فوقه لا يستبدله.
+
+### 3. قائمة عمل RESCAN v3 — صفحات UI جديدة
+
+من `docs/audit/RESCAN_2026-05-22-v3.md` §2، هذه الصفحات ستُبنى قريبًا:
+
+- FIN-013 (journal-manual approval buttons)
+- FIN-014 (period close UI)
+- FIN-015 (unify fiscal-periods v1/v2)
+- FIN-016 (GRN/match/pay UI)
+- CRM-004 (opportunity activities)
+- COM-001, COM-002 (communications log + routing rules)
+- UMR-005, UMR-016 (umrah invoice pages)
+- HR-010 (attendance policy / accruals / delegations)
+- FLT-006 (fleet alerts)
+
+**خطر التعارض الأكبر**: لو بُنيَت هذه الصفحات قبل **B1** (UI kit
+abstractions)، سنضيف ≈12 صفحة جديدة بأنماط متفرّقة — والديون التي
+يحاربها Track B تتضاعف.
+
+**القرار الموصى به**: **B1 يصبح P0 فوق Track A**، حتى تُبنى صفحات
+FIN-014/FIN-016/HR-010 على `<ListPage>`/`<CreateEditPage>` الجديدين
+مباشرة. هذا أيضًا يلغي حاجة تهجيرها لاحقًا في B3.
+
+### 4. Track dependencies على عيوب FND/FIN قائمة
+
+| Track | يتطلّب اكتمال |
+| --- | --- |
+| A.4 (transactional outbox) | FND-006 (auditMiddleware coverage) — وإلا أحداث legal/store/governance لن تُكتب outbox |
+| C.5 (period closing suite) | FIN-014 + FIN-015 — لا يصحّ كتابة tests لنظامَي فترات متوازيين |
+| C.4 (ledger replay) | FND-007 (PERSIST_ALL_EVENTS) — replay يحتاج completeness في `event_logs` |
+| D.2 (workflow engine adoption) | يستفيد من نمط `lib/supportSlaEscalation.ts` (SUP-015 #869) — لا تعيد بناءه، عمّمه |
+
+---
+
+## Track A — Runtime Separation (worker + outbox relay)
+
+### المشكلة
+
+كل ما يلي يعمل داخل عملية `api-server` نفسها:
+
+- `startCronScheduler()` (`index.ts:133`) — يسجّل ≈ كل cron jobs النظام
+  داخل HTTP process.
+- `registerEventListeners()` + `registerRulesEngineListener()`
+  (`index.ts:105-106`) — listeners تتنفّذ في نفس event loop الذي يخدم
+  الطلبات.
+- `event_outbox` يلتقط الأحداث (`lib/eventBus.ts:captureToOutbox`) لكن
+  الـ **relay الذي يصرّفها لا يوجد** — الملاحظة موثّقة داخل التعليق نفسه
+  («Phase 1 captures only — the dispatcher … is unchanged»، راجع
+  `migrations/187_event_outbox.sql:6-8`).
+- DLQ replay يعتمد على endpoints يدوية داخل `admin.ts` بدل consumer
+  مستقل.
+
+النتيجة: deploy للـ API = إعادة تشغيل cron + listeners + relay. أي
+قمة طلبات تنافس الأحداث الخلفية على نفس event loop. ضمانات التسليم
+الفعلية ضعيفة لأن capture بدون relay = اعتماد على in-process dispatch
+الذي يفنى مع العملية.
+
+### النتائج المرجوّة
+
+1. **`worker` process مستقل** يُبنى من نفس monorepo، يستورد نفس
+   `lib/`، يبدأ مع علم `WORKER_ROLE=cron|relay|listener` ولا يفتح HTTP
+   port (إلا `/healthz` فقط للـ liveness).
+2. **Outbox relay daemon** — حلقة تختار batch من `event_outbox` حيث
+   `status='pending'`، تنفّذ الـ listener المعنيّ، تحدّث الحالة atomically،
+   وعند الفشل ترفع `attempts` ثم تنقل للـ DLQ بعد `MAX_ATTEMPTS`.
+3. **Dispatch source switch** — `eventBus.emit` يكتب outbox أولًا داخل
+   نفس الـ DB transaction للـ command (حقيقي transactional outbox)،
+   ثم relay وحده يطلق listeners. في فترة الانتقال: feature flag
+   `OUTBOX_DISPATCH_ENABLED` يسمح بالعودة للسلوك القديم.
+4. **HTTP process يصبح stateless تمامًا** — لا cron، لا proactive
+   listeners، لا startup work غير الـ migrations + RBAC sync.
+
+### Phases
+
+| Phase | المخرج | ملفات متأثرة | معيار النجاح |
+| --- | --- | --- | --- |
+| A1 | `artifacts/worker/` workspace جديد + Dockerfile.worker + ecosystem entry | `artifacts/worker/src/index.ts`, `Dockerfile.worker`, `ecosystem.config.cjs`, `pnpm-workspace.yaml` | `pnpm --filter worker dev` يبدأ ويتصل بـ DB |
+| A2 | نقل `startCronScheduler` خلف `WORKER_ROLE=cron` فقط؛ HTTP process يتخطّاه | `artifacts/api-server/src/index.ts:129-144`, `artifacts/worker/src/cron.ts` | api-server boot بدون cron logs؛ worker يطبع نفس الـ jobs |
+| A3 | Outbox relay daemon | `artifacts/worker/src/relay.ts`, `lib/eventBus.ts` (إضافة `dispatchFromOutbox`) | metric `outbox.pending` يبقى < threshold تحت حِمل |
+| A4 | Transactional outbox: emit يكتب outbox داخل نفس transaction الـ command | `lib/eventBus.ts`, مواقع `emit` الحرجة (finance posting, journal entries) | اختبار: kill الـ relay، أعد التشغيل، الحدث يُسلَّم بالضبط مرة واحدة |
+| A5 | Listeners ينتقلون من in-process إلى relay-driven | `lib/eventListeners.ts`, `lib/rulesEngine.ts`, `lib/proactiveEngine.ts` | api-server لا يحتوي أي listener registration بعد A5 |
+
+### Acceptance gate
+
+- `grep -n "startCronScheduler\|registerEventListeners\|registerRulesEngineListener" artifacts/api-server/src/index.ts` → ينتج 0 hits.
+- `WORKER_ROLE=cron` و `WORKER_ROLE=relay` و `WORKER_ROLE=listener` لكل
+  منها container مستقل و health check خاص.
+- chaos test: kill `-9` على api-server أثناء إصدار فاتورة → relay يلتقط
+  ويصدر event عند إعادة التشغيل دون فقدان.
+
+---
+
+## Track B — UI Standardization Layer
+
+### الحالة الفعلية بعد الجرد (مُحدَّث 2026-05-23)
+
+المُمكِّنات (primitives) **موجودة بالفعل** كجزء من خطة توحيد قائمة موثَّقة
+في `docs/UNIFICATION_PLAN.md` (تمت استعادتها). الخطة عبر phases مرقّمة
+P0..P7؛ كل مُمكِّن مُعلَّم برقم phase في docstring الكود (`grep "P[0-9]\.[0-9]" artifacts/`).
+
+**الموجود** (P0-P1، مكتمل):
+
+| المُمكِّن | الموقع | تبنّي |
+| --- | --- | --- |
+| `PageShell` (P1.1) | `components/page-shell.tsx` | 179/429 (41.7%) |
+| `FormShell` (P1.2) | `components/form-shell.tsx` | 55/429 (12.8%) |
+| `ApiError` + typed pipeline (P1.3) | `lib/api.ts` | عالمي |
+| DataTable presets (P1.4) | `components/data-table-presets.tsx` | اختياري |
+| `useLifecycleAction` (P1.5) | `hooks/use-lifecycle-action.tsx` | عالمي |
+| `PageStatusBadge` + STATUS_MAP (P1.6) | `components/page-status-badge.tsx` | تدريجي |
+| `DetailPageLayout` | `components/shared/detail-page-layout.tsx` | 79/429 (18.4%) |
+
+**الفجوة الحقيقية** (لم تكن واضحة في الـ roadmap السابق):
+
+1. ≈12 صفحة جديدة على وشك البناء (RESCAN-v3 backlog) — لو لم نفرض
+   قاعدة P6 (راجع `UNIFICATION_PLAN.md`) عليها سترفع عدد الصفحات
+   غير المُهاجَرة.
+2. لا `<ListPage>` ولا `<CreateEditPage>` composites — كل صفحة list
+   تُكوّن `PageShell + DataTable + Pagination` يدويًا (107 صفحة).
+3. لا lint guards — `scripts/src/lint-patterns.mjs` فيه 8 قواعد لكن
+   لا واحدة على UI patterns (`<table>` خام، `useState` في create
+   pages، إلخ).
+4. 18 صفحة raw `<table>` · 196 صفحة create/edit بـ `useState` بلا
+   `FormShell` · 250 صفحة بلا `PageShell`.
+
+### المخرج (مُحدَّث)
+
+النقطة لم تعد «استخراج abstractions» — هي موجودة. النقطة الآن:
+**رفع التبنّي + إكمال composites + lint guards**.
+
+### Phases (مُحدَّثة)
+
+| Phase | المخرج | الحالة |
+| --- | --- | --- |
+| B1 | استعادة `docs/UNIFICATION_PLAN.md` كمرجع حيّ + توثيق التبنّي الحالي | ✅ هذا الـ PR |
+| B2 | فرض قاعدة P6 على RESCAN-v3 backlog: كل صفحة جديدة (FIN-013/014/015/016, HR-010, COM-001/002, CRM-004, UMR-005/016, FLT-006) تستخدم `<PageShell>`/`<FormShell>`/`<DetailPageLayout>`/`<PageStatusBadge>` | يدويًا في PR review حتى B5 |
+| B3 | بناء `<ListPage>` composite (P7) — يستهلك PageShell + DataTable + presets؛ يصبح القاعدة لصفحات list الجديدة | غير منجَز |
+| B4 | بناء `<CreateEditPage>` composite (P7) — PageShell + FormShell + dirty-guard | غير منجَز |
+| B5 | إضافة أوّل lint rule في `scripts/src/lint-patterns.mjs`: `raw-table-in-page` (يفترض إكمال migration لـ 18 صفحة قائمة أولًا، أو bootstrap بـ skip-list) | غير منجَز |
+| B6 | sweep تدريجي للـ 250 صفحة الخالية من `<PageShell>` (دومين بدومين، نفس نمط P4.1-P4.9) | تدريجي طويل المدى |
+| B7 | sweep `useState` → `FormShell` للـ 196 صفحة create/edit | تدريجي طويل المدى |
+
+### ملاحظة scope
+
+تهجير الـ 280+ صفحة الكاملة (`REMAINING_ROADMAP.md §3`) لا يزال خارج
+نطاق هذا الـ track — يحدث عبر P4 sweeps في `UNIFICATION_PLAN.md`. هنا
+نضع الأساس (B1) + الحراس (B2-B5) فقط.
+
+---
+
+## Track C — Finance Stabilization Phase
+
+### المشكلة
+
+كثافة التعديلات على invoices · journals · budgets · VAT · reports ·
+reversals تفوق طاقة الـ test suite الحالي:
+
+- `financeGoldenPath.test.ts` غطّى السيناريوهات الأساسية فقط.
+- لا يوجد **scenario harness** يشغّل دورة كاملة (PO → GRN → invoice →
+  payment → reversal → period close) ويتحقق من ledger النهائي.
+- لا **ledger replay** — لا نستطيع إعادة بناء أرصدة من event_logs
+  والمقارنة مع snapshots.
+- VAT verification متناثر داخل `umrahMarginVatSmoke.test.ts` فقط.
+- Period closing بلا snapshot tests.
+- Reversal integrity يعتمد على code review.
+
+هذا الـ gap هو الأخطر تشغيليًا حاليًا — تغيير صغير في GL posting قد
+يفسد أرصدة بصمت ولن يكتشفه أي test موجود.
+
+### المخرج
+
+`artifacts/api-server/tests/finance-regression/` كحقيبة مستقلة:
+
+1. **Golden scenarios** — YAML/JSON ملفات تصف سيناريو كامل (الفاتورة،
+   البنود، الضرائب، الدفعة، التسوية). Harness يقرأها ويشغّلها على DB
+   مؤقت ثم يقارن الـ ledger النهائي.
+2. **Snapshot accounting tests** — كل سيناريو يحفظ snapshot للأرصدة
+   لكل GL account؛ تغيير غير مقصود → diff واضح في PR.
+3. **Reconciliation suite** — يولّد transactions عشوائية ضمن قيود مالية،
+   ثم يتحقق أن المعادلة المحاسبية محفوظة (Σ debits = Σ credits لكل
+   فترة، لكل company، لكل branch).
+4. **Ledger replay tests** — يأخذ event_logs لفترة، يعيد تطبيقها على DB
+   نظيف، يقارن النتيجة بـ snapshot.
+5. **VAT verification suite** — يولّد سلال فواتير متنوعة (standard,
+   zero, exempt, mixed) ويتحقق من VAT return الناتج مقابل قيم متوقعة.
+6. **Period closing suite** — يفتح/يغلق فترات، يحاول posting إلى فترة
+   مغلقة، يتأكد من رفع الخطأ + audit trail.
+7. **Reversal integrity suite** — كل reversal يجب أن يولّد journal
+   معاكس بالضبط؛ test يمسح المسار للجولة الكاملة.
+
+### Phases
+
+| Phase | المخرج | ملفات | معيار النجاح |
+| --- | --- | --- | --- |
+| C1 🟡 | **Phase 1 منجَز**: نقطة بداية الـ regression suite عبر vitest المعتاد بدل YAML harness. ملف واحد ينظّم Wave-2 fixes كـ `describe` blocks، يعمل من تلقاء نفسه على الـ test DB، يُخطى عند غيابه. (Phase 2 — YAML harness عام — يأتي لاحقًا عند الحاجة.) | `artifacts/api-server/tests/integration/wave2FinanceProtection.dynamic.test.ts` | H2 يمر مع DB · 5 it.todo تنتظر |
+| C2 | 20 golden scenarios أولى (AR/AP/Payroll/Umrah-package) | `tests/finance-regression/scenarios/*.yaml` | كل سيناريو ينتج snapshot ثابت |
+| C3 | Reconciliation invariant suite | `tests/finance-regression/invariants.test.ts` | property-based: 1000 transaction، Σ debits = Σ credits |
+| C4 | Ledger replay | `tests/finance-regression/replay.test.ts` | event_logs لشهر يُعاد تطبيقها → نفس الأرصدة |
+| C5 | VAT + period close + reversal suites | `tests/finance-regression/vat.test.ts` + `period-close.test.ts` + `reversals.test.ts` | كل سيناريو يولّد VAT return صحيح |
+| C6 | CI gate: PR يلمس `finance-*.ts` أو `gl/*` أو `engines/accounting*` يجب أن يمرّر `finance-regression` كاملة | `.github/workflows/finance-regression.yml` | required check قبل merge |
+
+### Acceptance gate
+
+- `pnpm --filter api-server test:finance-regression` يكتمل في < 5 دقائق.
+- coverage لـ `lib/gl/*` + `lib/engines/accounting*` ≥ 90% line coverage.
+- تغيير عشوائي في `glJournalPoster` يكسر ≥ 3 سيناريوهات (regression
+  caught early).
+
+---
+
+## Track D — Workflow + Document/Print Standardization
+
+### Workflow Engine
+
+حاليًا approvals مبعثرة عبر `approvalActions.ts` + `hr-loans.ts` +
+`finance-purchase.ts` + `hr-exit.ts` + `hr-discipline.ts` + … (راجع
+نتائج `grep -rln "approvalActions"` أعلاه). كل دومين أعاد بناء:
+escalation timers، delegation، SLA tracking.
+
+**المخرج**: `lib/workflow/` engine موحّد:
+- `defineWorkflow({ steps, slas, escalations, delegations })`.
+- جدول `workflow_instances` + `workflow_steps` + `workflow_events`.
+- listeners تربط الـ engine بـ outbox relay (Track A).
+- SLA breach يولّد escalation event بدل cron مخصص.
+
+### Document/Print Engine
+
+21 ملف يلمس print/PDF، لكن template engine غير موحد. الفاتورة، عرض
+السعر، contract، payslip — كل واحد له render path مستقل.
+
+**المخرج**: `lib/print/`:
+- `<DocumentTemplate>` API يأخذ template id + variables + locale.
+- محرّك variables موحّد (`{{company.name}}`, `{{invoice.total | currency}}`).
+- renderer واحد (Puppeteer أو @react-pdf) خلف interface — السلوك ثابت
+  بغض النظر عن الـ implementation.
+- جدول `document_templates` يخزّن النسخ (versioning للقوالب).
+
+### Phases
+
+| Phase | المخرج | معيار النجاح |
+| --- | --- | --- |
+| D1 | `lib/workflow/` engine + 3 جداول + adapter من approvalActions الحالي | كل approval موجود يعمل بدون تغيير سلوكي |
+| D2 | تهجير hr-loans + hr-exit + hr-discipline إلى الـ engine الجديد | حذف escalation cron-jobs المخصصة |
+| D3 | `lib/print/` + 3 templates أوّليّة (invoice, quote, payslip) | PDF متطابق byte-for-byte عبر runs |
+| D4 | Templates UI لـ admin لإدارة النسخ + متغيرات الشركة | غير-مطوّر يستطيع تعديل header الفاتورة دون deploy |
+
+---
+
+## التسلسل المقترح بين الـ Tracks
+
+```
+A1 ─┬─> A2 ─> A3 ─> A4 ─> A5            (Runtime separation, مسار حرج)
+    │
+C1 ─┴─> C2 ─> C3 ─> C4 ─> C5 ─> C6     (Finance suite، ابدأ بالتوازي)
+                                          (يحمي من regression خلال D1-D2)
+B1 ─> B2 ─> B3 ─> B4 ─> B5              (UI، مسار طويل، أقل خطورة)
+
+D1 ─> D2 (يعتمد على A3 — workflow يستخدم relay)
+D3 ─> D4 (مستقل)
+```
+
+**الترتيب الموصى به** (مُحدَّث 2026-05-23 بعد جرد UNIFICATION_PLAN):
+
+1. **✅ منجَز في هذا الـ PR**: B1 (استعادة `docs/UNIFICATION_PLAN.md`
+   كمرجع حيّ + تصحيح Track B في الـ roadmap).
+2. **P0 الفوري التالي**: **B2** (فرض قاعدة P6 على RESCAN-v3 backlog
+   عبر PR review) + **C1+C2** بالتوازي (scenario harness + التقاط 9 fix
+   الأخيرة C1-C3/H1-H4/#878/#888 كأول سيناريوهات).
+3. **P1**: **A1+A2** (worker process + نقل cron). يستفيد من
+   FND-003 (env via config) و FND-008 (cron alerts) المُنجَزَين.
+4. **P1 بالتوازي**: B3+B4 (composites `<ListPage>` + `<CreateEditPage>`)
+   ثم B5 (أوّل lint rule).
+5. **P2**: A3+A4 (transactional outbox الحقيقي) — يبني فوق DLQ في
+   #878، يحتاج FND-006 لتغطية كاملة.
+6. **P2**: C3-C6 (إكمال finance regression) — لزم قبل أي تغيير
+   هيكلي في GL. C5 (period close) يتطلّب FIN-014 + FIN-015 جاهزَين.
+7. **P3**: D1-D2 (workflow engine، يحتاج A3 + يستلهم `lib/supportSlaEscalation.ts`)،
+   D3-D4 (print engine)، B6-B7 (sweep تدريجي عبر P4 phases).
+
+## تقدير حجم العمل
+
+| Track | الجهد | فريق |
+| --- | --- | --- |
+| A — Runtime separation | 4-6 أسابيع | 1 backend + 1 DevOps |
+| B — UI standardization (foundation فقط) | 6-8 أسابيع | 2 frontend |
+| C — Finance regression suite | 5-7 أسابيع | 1 backend + finance SME |
+| D — Workflow + print | 6-8 أسابيع | 1 backend + 1 frontend |
+
+الإجمالي مع التوازي: **~3-4 شهور** بفريق 4-5 مطوّرين.
+
+## ما هو **خارج** هذا الـ Roadmap (لا تخلطه)
+
+البنود التالية موثّقة في `docs/REMAINING_ROADMAP.md` ولا تتداخل مع
+hardening:
+
+- ZATCA Phase 2
+- Multi-currency في GL
+- i18n الكامل
+- Inventory advanced (lots/serials)
+- Saudi labor compliance (WPS/Mudad)
+- as any cleanup
+- WCAG audit
+- CSRF explicit
+
+هذه **مزايا أعمال أو compliance** — مسار مختلف عن hardening
+التشغيلي/المعماري الموصوف هنا.
+
+## معايير "Enterprise-ready" النهائية
+
+النظام يُعتبر Enterprise-ready عند تحقّق كل ما يلي مجتمعًا:
+
+- [ ] api-server stateless (لا cron، لا listeners) — Track A
+- [ ] Outbox relay يضمن exactly-once delivery — Track A
+- [ ] Finance regression suite gates كل PR يلمس GL — Track C
+- [ ] UI kit موحّد + ESLint guard — Track B
+- [ ] Workflow + print engines موحّدين — Track D
+- [ ] Phase 0 env validation ✅ (مكتمل سلفًا)
+- [ ] RBAC v2 على 100% endpoints ✅ (مكتمل سلفًا)
+
+---
+
+**هذا المستند مرافق لـ**:
+- `docs/REMAINING_ROADMAP.md` — مزايا الأعمال المتبقية
+- `docs/production-hardening/phase-0-env-validation.md` — أساس الـ hardening
+- `docs/ARCHITECTURE.md` — البنية الحالية
+- `docs/MONITORING.md` — observability stack
+- `docs/audit/inventory/foundation.md` — سجل FND النشط
+- `docs/audit/RESCAN_2026-05-22-v3.md` — حالة موجة الإصلاحات الثانية
+- `docs/audit/inventory/finance.md` — سجل FIN النشط

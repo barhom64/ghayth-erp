@@ -32,7 +32,10 @@ describe("hr/transfers — transfer-request form on FormShell + zod (CONTRIBUTIN
   const SRC = read("hr/transfers.tsx");
 
   it("imports the FormShell stack with FormDateField", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormDateField");
     expect(SRC).toContain("FormSelectField");

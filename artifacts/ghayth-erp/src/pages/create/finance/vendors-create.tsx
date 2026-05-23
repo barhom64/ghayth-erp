@@ -5,7 +5,12 @@ import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+
+// Third existing-page migration to @workspace/ui-core (after
+// fiscal-periods-v2 and journal-manual-detail). First form-shape
+// adoption — proves the kit covers create pages, not just list/detail.
+import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
+
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";

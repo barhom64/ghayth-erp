@@ -1,17 +1,20 @@
 import { useParams, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
-import type { DetailStatus } from "@/components/shared/detail-page-layout";
+import {
+  DetailPageLayout,
+  type DetailStatus,
+  ProcessStages,
+  type StageStep,
+} from "@workspace/entity-kit";
+import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Timer, DollarSign, Clock, User } from "lucide-react";
-import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { OVERTIME_STATUS } from "@/lib/hr-type-maps";
 
 const OVERTIME_LIFECYCLE = [

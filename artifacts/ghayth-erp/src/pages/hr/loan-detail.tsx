@@ -1,16 +1,23 @@
 import { useParams } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DetailPageLayout, type DetailStatus } from "@/components/shared/detail-page-layout";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
+import {
+  DetailPageLayout,
+  type DetailStatus,
+  ProcessStages,
+  type StageStep,
+} from "@workspace/entity-kit";
+import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Wallet, Calendar, DollarSign, CheckCircle } from "lucide-react";
-import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { cn } from "@/lib/utils";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { LOAN_STATUS, INSTALLMENT_STATUS, LOAN_TYPES } from "@/lib/hr-type-maps";
 
 const STATUS_TONE_MAP: Record<string, DetailStatus["tone"]> = {

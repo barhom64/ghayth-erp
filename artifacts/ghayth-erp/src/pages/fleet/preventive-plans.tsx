@@ -6,18 +6,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Wrench, Plus, AlertCircle, Clock } from "lucide-react";
-import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
+  PageShell,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
   FormShell,
   FormTextField,
   FormNumberField,
   FormSelectField,
   FormDateField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const SERVICE_TYPES: Record<string, string> = {
   oil_change: "تغيير زيت",

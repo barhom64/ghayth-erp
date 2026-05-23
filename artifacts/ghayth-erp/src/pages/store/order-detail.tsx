@@ -3,12 +3,12 @@ import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
+import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@workspace/report-kit";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ShoppingCart, User, Phone, Calendar, Package } from "lucide-react";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DetailPageLayout } from "@workspace/entity-kit";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 export default function StoreOrderDetailPage() {

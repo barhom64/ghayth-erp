@@ -7,15 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout } from "@/components/create-page-layout";
-import { useToast } from "@/hooks/use-toast";
-import { X, Upload, FileUp, Plus } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
+  CreatePageLayout,
   FormShell,
   FormTextField,
   FormSelectField,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
+import { useToast } from "@/hooks/use-toast";
+import { X, Upload, FileUp, Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const uploadSchema = z.object({
   title: z.string().trim().min(1, "العنوان مطلوب"),

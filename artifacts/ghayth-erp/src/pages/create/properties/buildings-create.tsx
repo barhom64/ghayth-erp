@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function BuildingsCreate() {

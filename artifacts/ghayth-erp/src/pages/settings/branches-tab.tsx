@@ -8,9 +8,15 @@ import { Building, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  FormShell,
+  FormTextField,
+  FormSelectField,
+  FormGrid,
+} from "@workspace/ui-core";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
-import { FormShell, FormTextField, FormSelectField, FormGrid } from "@/components/form-shell";
 
 const branchFormSchema = z.object({
   name: z.string().trim().min(1, "اسم الفرع مطلوب"),

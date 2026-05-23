@@ -5,15 +5,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
+import {
+  DetailPageLayout,
+  ProcessStages,
+  type StageStep,
+} from "@workspace/entity-kit";
+import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import {
   GraduationCap, Users, MapPin, User, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
-import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 const TRAINING_LIFECYCLE = [

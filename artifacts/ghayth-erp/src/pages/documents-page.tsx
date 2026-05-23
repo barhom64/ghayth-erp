@@ -1,7 +1,15 @@
 import { useState } from "react";
 import { z } from "zod";
 import { Link } from "wouter";
-import { PageShell } from "@/components/page-shell";
+import {
+  PageShell,
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+  FormShell,
+  FormTextField,
+  FormGrid,
+} from "@workspace/ui-core";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,7 +17,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { FormShell, FormTextField, FormGrid } from "@/components/form-shell";
 
 const folderSchema = z.object({
   name: z.string().trim().min(1, "الاسم مطلوب"),
@@ -23,7 +30,6 @@ const templateSchema = z.object({
   category: z.string().trim(),
 });
 type TemplateForm = z.infer<typeof templateSchema>;
-import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,7 +40,6 @@ import {
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
 

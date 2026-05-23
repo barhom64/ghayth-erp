@@ -32,7 +32,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Check, X, AlertTriangle, Repeat } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
+import { PageHeader } from "@workspace/ui-core";
 
 interface ReprintRequest {
   id: number;

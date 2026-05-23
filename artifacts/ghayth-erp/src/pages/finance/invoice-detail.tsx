@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@/components/print-layout";
+import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@workspace/report-kit";
 import { PrintButton } from "@/components/shared/print-button";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
 import {
@@ -21,20 +21,28 @@ import {
   Zap,
   Send,
 } from "lucide-react";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageStatusBadge,
+  resolveStatus,
+} from "@workspace/ui-core";
 import { ExportButton } from "@/components/shared/export-buttons";
-import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
+import {
+  ProcessStages,
+  type StageStep,
+  DetailPageLayout,
+  type DetailStatus,
+} from "@workspace/entity-kit";
 import { EntityObligations } from "@/components/shared/entity-obligations";
-import { DetailPageLayout, type DetailStatus } from "@/components/shared/detail-page-layout";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import {
   useDetailEditDelete,
   DetailActionButtons,
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
-import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
 
 /**
  * Invoice detail page — migrated to DetailPageLayout which provides

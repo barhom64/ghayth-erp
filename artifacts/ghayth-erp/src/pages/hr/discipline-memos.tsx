@@ -6,7 +6,7 @@
  */
 import { useEffect } from "react";
 import { useLocation } from "wouter";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 

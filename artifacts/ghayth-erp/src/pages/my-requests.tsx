@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { PageShell } from "@/components/page-shell";
+import {
+  PageShell,
+  PageStatusBadge,
+} from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { PageStatusBadge } from "@/components/page-status-badge";
 import {
   Clock, Calendar, DollarSign, FileSignature,
   CheckCircle2, XCircle, AlertCircle, ChevronLeft,

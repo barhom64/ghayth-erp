@@ -29,7 +29,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Save, Eye, Trash2, Pencil, FileText, Receipt, Tag, Layers } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
+import { PageHeader } from "@workspace/ui-core";
 
 const PRINTABLE_ENTITIES = [
   { id: "invoice", label: "فاتورة" },

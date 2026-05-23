@@ -1,6 +1,6 @@
 import { useApiQuery } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 const logColumns: DataTableColumn<any>[] = [
   {

@@ -12,14 +12,15 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { roleKeyColors } from "@/contexts/app-context";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { MODULE_LABELS } from "@/lib/module-labels";
 import {
+  DataTable,
+  type DataTableColumn,
   FormShell,
   FormTextField,
   FormNumberField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
+import { MODULE_LABELS } from "@/lib/module-labels";
 
 // The `modules` field is a string[] of MODULE_LABELS keys. Schema
 // enforces the closed-set; the picker lives below as a small

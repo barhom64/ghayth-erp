@@ -28,7 +28,10 @@ describe("requests-page — request create + types create on FormShell + zod", (
   const SRC = read("requests-page.tsx");
 
   it("imports the FormShell stack", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormSelectField");
   });
@@ -72,7 +75,10 @@ describe("admin/users — create-user form on FormShell + zod", () => {
   const SRC = read("admin/users.tsx");
 
   it("imports the FormShell stack with FormEmailField", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormEmailField");
   });
 

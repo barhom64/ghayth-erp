@@ -9,7 +9,7 @@ import {
   CheckCircle, Clock, Star, AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 function ScoreCircle({ score, label, color = "blue" }: { score: number | null; label: string; color?: string }) {

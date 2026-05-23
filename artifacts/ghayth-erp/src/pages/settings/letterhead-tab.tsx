@@ -8,8 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Printer, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { LetterheadHeader } from "@/components/print-layout";
-import type { BranchLetterhead } from "@/components/print-layout";
+import {
+  LetterheadHeader,
+  BranchLetterhead,
+} from "@workspace/report-kit";
 import {
   FormShell,
   FormTextField,
@@ -17,7 +19,7 @@ import {
   FormPhoneField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const letterheadSchema = z.object({
   name: z.string().trim().min(1, "اسم الفرع مطلوب"),

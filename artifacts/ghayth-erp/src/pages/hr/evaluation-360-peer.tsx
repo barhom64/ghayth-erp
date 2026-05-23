@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { ArrowRight, Users, Target, CheckCircle, Clock, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 
 const EVAL_CRITERIA = [
   { key: "technical_skills", label: "المهارات التقنية والمهنية" },

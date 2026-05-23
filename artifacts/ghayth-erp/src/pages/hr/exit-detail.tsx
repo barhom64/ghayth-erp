@@ -1,7 +1,13 @@
 import { useParams, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  DetailPageLayout,
+  ProcessStages,
+  type StageStep,
+} from "@workspace/entity-kit";
+import { ActionHistory } from "@workspace/workflow-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +18,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 import { useQueryClient } from "@tanstack/react-query";
 
 const EXIT_LIFECYCLE = [
@@ -34,9 +39,6 @@ function buildExitSteps(status: string | undefined): StageStep[] {
     return { label: step.label, status: "pending" };
   });
 }
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { ActionHistory } from "@/components/approval-actions";
-
 import { EXIT_TYPES, EXIT_REQUEST_STATUS, CLEARANCE_STATUS } from "@/lib/hr-type-maps";
 
 const STATUS_TONE_MAP: Record<string, "default" | "success" | "warning" | "destructive" | "info" | "muted"> = {

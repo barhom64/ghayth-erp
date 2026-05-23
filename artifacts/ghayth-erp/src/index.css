@@ -255,6 +255,25 @@
 }
 
 @layer base {
+  /*
+   * Typography knob (UNIFICATION_PLAN §P9). The single root font-size
+   * controls the apparent scale of the entire UI: every Tailwind text-*,
+   * spacing, and padding utility is rem-based, so all 4500+ existing
+   * usages scale proportionally from this one value.
+   *
+   * Default browser size is 16px. We use 18px (+12%) because the
+   * dominant text size in the codebase is text-xs (12px → 13.5px at
+   * this scale) and text-sm (14px → 15.75px), which read too small at
+   * 16px base.
+   *
+   * To rescale the whole UI, change ONLY this value. Do NOT introduce
+   * per-page font-size overrides; if a region needs a different scale,
+   * add a semantic token to the typography contract instead.
+   */
+  html {
+    font-size: 18px;
+  }
+
   * {
     @apply border-border;
   }

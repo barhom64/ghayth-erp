@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Archive, TrendingUp, TrendingDown, Calculator, CheckCircle } from "lucide-react";
 import {
   AlertDialog,

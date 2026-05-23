@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, ClipboardList, ChevronLeft, CheckCircle2 } from "lucide-react";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { cn } from "@/lib/utils";
 import { formatTimeAgo, requestTypeLabels } from "./shared";
 

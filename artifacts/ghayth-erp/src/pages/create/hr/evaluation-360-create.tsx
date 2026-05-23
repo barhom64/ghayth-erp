@@ -9,15 +9,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Star, Plus, X, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
-import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import {
+  CreatePageLayout,
+  CreationDateField,
   FormShell,
   FormTextField,
   FormTextareaField,
   FormSelectField,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 
 const DRAFT_KEY = "hr_evaluation_360_create";
 const DRAFT_STORAGE = `erp_draft_${DRAFT_KEY}`;

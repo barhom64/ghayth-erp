@@ -15,7 +15,9 @@ import {
   FormSelectField,
   FormDateField,
   FormGrid,
-} from "@/components/form-shell";
+  PageStatusBadge,
+  DataTable,
+} from "@workspace/ui-core";
 
 // Schemas for the three create sub-forms below. The edit-project
 // form (name / status / budget) is intentionally left on useState
@@ -60,15 +62,15 @@ import {
 } from "lucide-react";
 import { formatDateAr, getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { EntityObligations } from "@/components/shared/entity-obligations";
-import { EntityComments } from "@/components/shared/entity-comments";
+import {
+  EntityComments,
+  DetailPageLayout,
+} from "@workspace/entity-kit";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { cn } from "@/lib/utils";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import { PageStatusBadge } from "@/components/page-status-badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DatePicker } from "@/components/ui/date-picker";
 
 const PROJECT_TABS = [

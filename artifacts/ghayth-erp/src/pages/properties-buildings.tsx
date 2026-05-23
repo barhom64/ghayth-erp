@@ -2,9 +2,14 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
+import {
+  PageShell,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+} from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { ErrorState } from "@/components/shared/loading-error-states";
 import { Building2, Home, Plus, Eye, Pencil, TrendingUp, CheckCircle } from "lucide-react";

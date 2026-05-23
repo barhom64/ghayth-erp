@@ -1,8 +1,7 @@
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@/components/page-shell";
+import { PageShell, PageStatusBadge } from "@workspace/ui-core";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { PageStatusBadge } from "@/components/page-status-badge";
 import { Target, Star, TrendingUp, CheckCircle2, Clock, BarChart3 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";

@@ -32,7 +32,10 @@ describe("settings/approval-workflows-tab — FormShell + zod with cross-field r
   const SRC = read("settings/approval-workflows-tab.tsx");
 
   it("imports the FormShell stack", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormSelectField");
     expect(SRC).toContain("FormNumberField");
@@ -63,7 +66,10 @@ describe("governance/capa-tab — FormShell + zod with closed status enum", () =
   const SRC = read("governance/capa-tab.tsx");
 
   it("imports the FormShell stack", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormDateField");
   });
@@ -90,7 +96,10 @@ describe("governance/compliance-actions-tab — FormShell + zod with closed stat
   const SRC = read("governance/compliance-actions-tab.tsx");
 
   it("imports the FormShell stack", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormSelectField");
   });
@@ -119,7 +128,10 @@ describe("hr/official-letters — FormShell + zod (removes disabled={!form.subje
   const SRC = read("hr/official-letters.tsx");
 
   it("imports the FormShell stack", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormTextareaField");
   });

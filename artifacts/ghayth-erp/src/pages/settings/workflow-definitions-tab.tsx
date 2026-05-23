@@ -9,15 +9,16 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Workflow, Clock, AlertTriangle, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import {
+  DataTable,
+  type DataTableColumn,
   FormShell,
   FormTextField,
   FormNumberField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 
 const workflowStepSchema = z.object({
   stepName: z.string().trim().min(1, "اسم الخطوة مطلوب"),

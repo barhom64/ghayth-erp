@@ -7,9 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { PageStatusBadge } from "@/components/page-status-badge";
-import { PageShell } from "@/components/page-shell";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageStatusBadge,
+  PageShell,
+} from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Calendar } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";

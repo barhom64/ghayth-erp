@@ -619,6 +619,18 @@ importers:
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../../lib/api-client-react
+      '@workspace/entity-kit':
+        specifier: workspace:*
+        version: link:../../lib/entity-kit
+      '@workspace/report-kit':
+        specifier: workspace:*
+        version: link:../../lib/report-kit
+      '@workspace/ui-core':
+        specifier: workspace:*
+        version: link:../../lib/ui-core
+      '@workspace/workflow-kit':
+        specifier: workspace:*
+        version: link:../../lib/workflow-kit
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -741,6 +753,8 @@ importers:
         specifier: ^0.31.9
         version: 0.31.9
 
+  lib/entity-kit: {}
+
   lib/object-storage-web:
     dependencies:
       '@uppy/aws-s3':
@@ -759,6 +773,12 @@ importers:
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.14
+
+  lib/report-kit: {}
+
+  lib/ui-core: {}
+
+  lib/workflow-kit: {}
 
   scripts:
     dependencies:

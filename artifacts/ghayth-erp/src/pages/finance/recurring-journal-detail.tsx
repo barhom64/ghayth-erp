@@ -2,9 +2,12 @@ import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@/components/page-status-badge";
-import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
+import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   ListChecks, History,

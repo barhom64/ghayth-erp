@@ -10,9 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollText, Search, ChevronDown, ChevronUp, FileSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
-import { PaginationBar } from "@/components/data-table-wrapper";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { ACTION_LABELS } from "./shared";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 
 export function AuditExplorerTab() {
   const [page, setPage] = useState(1);
