@@ -317,8 +317,14 @@ DataTable.
 كـ children). الـ cache invalidation عبر `useApiMutation`'s `invalidateKeys`
 على نفس الـ queryKey — تلقائي.
 
-**أول consumer**: `pages/finance/fiscal-periods-v2.tsx` (FIN-014) —
-هاجَر من ~470 سطر إلى 441، الـ structural plumbing زال.
+**Consumers**:
+- `pages/finance/fiscal-periods-v2.tsx` (FIN-014) — list مع dialogs،
+  هاجَر من ~470 سطر إلى 441.
+- `pages/finance/journal-manual.tsx` — proof أن ListPage يحتمل التعقيد:
+  server-side filtering، pill-style filter bar، per-row actions
+  بـ permission gates، row click navigation، modal للإجراءات. التوسعتان
+  المضافتان للـ composite (`customFilterBar` + `onRowClick`) جاءتا
+  استجابةً لاحتياج هذه الصفحة (مبدأ "نمو reactive لا speculative").
 
 ### `<CreatePageLayout>` ✅ موجود سلفًا · أُضيف للـ kit 2026-05-23
 

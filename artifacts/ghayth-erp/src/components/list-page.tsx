@@ -139,12 +139,34 @@ export interface ListPageProps<T> {
    * The default applyFilters() runs against the row array — pass
    * `searchFields` and `statusField` to control which fields the filter
    * matches.
+   *
+   * Mutually exclusive with `customFilterBar` — set one or the other.
    */
   filters?: {
     config: FilterConfig;
     searchFields?: readonly (keyof T & string)[];
     statusField?: keyof T & string;
   };
+
+  /**
+   * Custom filter bar rendered in place of the default AdvancedFilters.
+   * Use when the page needs server-side filtering, pill-style status
+   * tabs, or any non-config filter UI. When this is set:
+   *   - The default AdvancedFilters + useFilters wiring is skipped
+   *   - `applyFilters` is NOT run; ListPage trusts the consumer's
+   *     endpoint/queryKey to return the right rows
+   *   - The consumer owns its own filter state and bakes the active
+   *     values into `endpoint` + `queryKey` so React Query refetches
+   *     when they change
+   */
+  customFilterBar?: ReactNode;
+
+  // ─── Row click navigation ───────────────────────────────────────────
+  /**
+   * Optional row click handler — typically navigates to the detail page.
+   * Forwarded to DataTable.onRowClick.
+   */
+  onRowClick?: (row: T) => void;
 
   // ─── Primary action (top-right) ────────────────────────────────────
   primaryAction?: ListPagePrimaryAction;
@@ -188,6 +210,8 @@ export function ListPage<T>(props: ListPageProps<T>) {
     emptyIcon,
     rowClassName,
     filters,
+    customFilterBar,
+    onRowClick,
     primaryAction,
     stats,
     children,
@@ -202,19 +226,24 @@ export function ListPage<T>(props: ListPageProps<T>) {
     ? selector(data)
     : ((data as { data?: T[] })?.data ?? []);
 
+  // When `customFilterBar` is set, the consumer owns filter state and
+  // bakes it into endpoint/queryKey — so rows already come pre-filtered
+  // from the server. Skip both useFilters and applyFilters in that case.
   const [filterValues, setFilterValues] = useFilters();
-  const filtered: T[] = filters
-    ? (applyFilters(
-        rows as unknown as Record<string, unknown>[],
-        filterValues,
-        {
-          searchFields: filters.searchFields
-            ? ([...filters.searchFields] as string[])
-            : undefined,
-          statusField: filters.statusField as string | undefined,
-        },
-      ) as unknown as T[])
-    : rows;
+  const filtered: T[] = customFilterBar
+    ? rows
+    : filters
+      ? (applyFilters(
+          rows as unknown as Record<string, unknown>[],
+          filterValues,
+          {
+            searchFields: filters.searchFields
+              ? ([...filters.searchFields] as string[])
+              : undefined,
+            statusField: filters.statusField as string | undefined,
+          },
+        ) as unknown as T[])
+      : rows;
 
   const tableColumns: DataTableColumn<T>[] = rowActions
     ? [
@@ -252,14 +281,16 @@ export function ListPage<T>(props: ListPageProps<T>) {
         </div>
       )}
 
-      {filters && (
-        <AdvancedFilters
-          config={filters.config}
-          values={filterValues}
-          onChange={setFilterValues}
-          resultCount={filtered.length}
-        />
-      )}
+      {customFilterBar
+        ? customFilterBar
+        : filters && (
+            <AdvancedFilters
+              config={filters.config}
+              values={filterValues}
+              onChange={setFilterValues}
+              resultCount={filtered.length}
+            />
+          )}
 
       <DataTable
         columns={tableColumns}
@@ -271,6 +302,7 @@ export function ListPage<T>(props: ListPageProps<T>) {
         noToolbar
         rowKey={rowKey}
         rowClassName={rowClassName}
+        onRowClick={onRowClick}
         emptyMessage={emptyMessage}
         emptyIcon={emptyIcon}
         pageSize={pageSize}
