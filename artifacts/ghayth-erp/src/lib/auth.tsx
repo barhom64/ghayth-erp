@@ -11,6 +11,9 @@ interface UserRole {
   level: number;
 }
 
+export type PreferredCalendar = "hijri" | "gregorian";
+export type PreferredLocale = "ar" | "en";
+
 interface UserInfo {
   id: number;
   name: string;
@@ -26,6 +29,8 @@ interface UserInfo {
   companyName?: string;
   branchName?: string;
   userRoles?: UserRole[];
+  preferredCalendar: PreferredCalendar;
+  preferredLocale: PreferredLocale;
 }
 
 interface Assignment {
@@ -49,6 +54,15 @@ interface AuthContextType {
   logout: () => void;
   refreshUser: () => Promise<void>;
   notifyTokenRefreshed: () => void;
+  /**
+   * Persist a UI preference change. Hits PATCH /auth/me/preferences and
+   * updates the local UserInfo so consumers re-render immediately.
+   * Either field is optional — pass only what changed.
+   */
+  setPreferences: (prefs: {
+    preferredCalendar?: PreferredCalendar;
+    preferredLocale?: PreferredLocale;
+  }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -83,6 +97,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         companyName: data.companyName,
         branchName: data.branchName,
         userRoles: data.userRoles || [],
+        // User-controlled UI prefs from /auth/me. Defaults — hijri + ar —
+        // are enforced server-side, so falling back here is belt-and-
+        // braces for old API responses during deploy windows.
+        preferredCalendar: (data.preferredCalendar as PreferredCalendar) ?? "hijri",
+        preferredLocale: (data.preferredLocale as PreferredLocale) ?? "ar",
       });
       // Tie subsequent observability captures to this user. Once a real
       // backend (Sentry / Datadog / …) is wired in, every error after
@@ -138,8 +157,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetchUser();
   };
 
+  const setPreferences = async (prefs: {
+    preferredCalendar?: PreferredCalendar;
+    preferredLocale?: PreferredLocale;
+  }) => {
+    // Optimistic update for snappy UX — if the PATCH fails we re-fetch
+    // and restore the truth.
+    setUser((prev) => (prev ? { ...prev, ...prefs } : prev));
+    try {
+      await apiFetch("/auth/me/preferences", {
+        method: "PATCH",
+        body: JSON.stringify(prefs),
+      });
+    } catch {
+      await fetchUser();
+      throw new Error("تعذّر حفظ التفضيلات");
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated: !!user, user, assignments, loading, login, logout, refreshUser, notifyTokenRefreshed }}>
+    <AuthContext.Provider value={{ isAuthenticated: !!user, user, assignments, loading, login, logout, refreshUser, notifyTokenRefreshed, setPreferences }}>
       {children}
     </AuthContext.Provider>
   );
