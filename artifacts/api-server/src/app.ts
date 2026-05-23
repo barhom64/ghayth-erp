@@ -118,6 +118,20 @@ app.use(cookieParser());
 app.use("/api/umrah/import", express.json({ limit: "50mb" }));
 app.use("/api/umrah/assign-bulk", express.json({ limit: "10mb" }));
 app.use("/api/storage", express.json({ limit: "10mb" }));
+// NF-COMM-01 / RD3-01 — capture raw body for inbound webhooks (WhatsApp +
+// PBX) so we can verify HMAC against the unmodified payload. Express
+// normally reparses on every retry; storing the buffer at parse time
+// avoids the need for a separate raw-body parser.
+const captureRawBody = express.json({
+  limit: "2mb",
+  verify: (req, _res, buf) => {
+    (req as unknown as { rawBody?: Buffer }).rawBody = Buffer.from(buf);
+  },
+});
+app.use("/api/communications/whatsapp/webhook", captureRawBody);
+app.use("/api/communications/pbx/incoming", captureRawBody);
+app.use("/api/communications/pbx/completed", captureRawBody);
+app.use("/api/communications/pbx/status", captureRawBody);
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 

@@ -239,6 +239,52 @@ const createTrafficViolationSchema = z.object({
 
 const router = Router();
 
+// FLT-CONST-01 — single source for tunable trip-cost constants. Reads
+// per-company overrides from system_settings keys with a `fleet.*`
+// prefix; falls back to SA-defaults when unset. Cached for the process
+// lifetime since rates rarely change mid-day.
+interface FleetCostSettings {
+  fuelPricePerLiter: number;
+  fuelEfficiencyKmPerLiter: number;
+  driverFarePerKm: number;
+  depreciationPerKm: number;
+}
+const _fleetSettingsCache = new Map<number, FleetCostSettings>();
+const FLEET_COST_DEFAULTS: FleetCostSettings = {
+  fuelPricePerLiter: 2.5,
+  fuelEfficiencyKmPerLiter: 10,
+  driverFarePerKm: 0.5,
+  depreciationPerKm: 0.15,
+};
+async function getFleetCostSettings(companyId: number): Promise<FleetCostSettings> {
+  const cached = _fleetSettingsCache.get(companyId);
+  if (cached) return cached;
+  try {
+    const rows = await rawQuery<{ key: string; value: string | null }>(
+      `SELECT key, value FROM system_settings
+        WHERE key IN ('fleet.fuel_price_per_liter','fleet.fuel_efficiency_km_per_liter','fleet.driver_fare_per_km','fleet.depreciation_per_km')
+          AND ( "companyId" = $1 OR "companyId" IS NULL )
+        ORDER BY ("companyId" IS NULL) ASC`,
+      [companyId],
+    );
+    const pick = (key: string, fallback: number) => {
+      const row = rows.find((r) => r.key === key);
+      const n = row?.value == null ? NaN : Number(row.value);
+      return Number.isFinite(n) && n > 0 ? n : fallback;
+    };
+    const settings: FleetCostSettings = {
+      fuelPricePerLiter: pick("fleet.fuel_price_per_liter", FLEET_COST_DEFAULTS.fuelPricePerLiter),
+      fuelEfficiencyKmPerLiter: pick("fleet.fuel_efficiency_km_per_liter", FLEET_COST_DEFAULTS.fuelEfficiencyKmPerLiter),
+      driverFarePerKm: pick("fleet.driver_fare_per_km", FLEET_COST_DEFAULTS.driverFarePerKm),
+      depreciationPerKm: pick("fleet.depreciation_per_km", FLEET_COST_DEFAULTS.depreciationPerKm),
+    };
+    _fleetSettingsCache.set(companyId, settings);
+    return settings;
+  } catch {
+    return FLEET_COST_DEFAULTS;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STATE MACHINES — Phase C.3 Fleet audit
 //
@@ -961,6 +1007,27 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
     let selectedVehicleId = b.vehicleId || null;
     let selectedDriverId = b.driverId || null;
 
+    // NF-FLEET-01 — when the operator picks a driver explicitly, the
+    // auto-pick branch below is skipped, so we'd otherwise dispatch a
+    // trip to a driver that is `on_leave`, `inactive`, or off-duty. The
+    // auto-pick branch already filters `status='available'`; mirror that
+    // check on the manual path.
+    if (b.driverId) {
+      const [drv] = await rawQuery<{ id: number; status: string | null }>(
+        `SELECT id, status FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [Number(b.driverId), scope.companyId]
+      );
+      if (!drv) {
+        throw new ValidationError("السائق غير موجود", { field: "driverId" });
+      }
+      if (drv.status !== "available") {
+        throw new ConflictError(
+          `لا يمكن تعيين السائق — الحالة الحالية "${drv.status ?? "غير محددة"}"`,
+          { field: "driverId", fix: "اختر سائقاً بحالة available" }
+        );
+      }
+    }
+
     if (!selectedVehicleId) {
       const vehicles = await rawQuery<Record<string, unknown>>(
         `SELECT v.*,
@@ -1065,11 +1132,18 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
       if (!cl) throw new ValidationError("العميل غير موجود", { field: "clientId", fix: "اختر عميلاً من قائمة العملاء." });
     }
 
-    const fuelPricePerLiter = b.fuelPricePerLiter || 2.5;
-    const fuelEfficiency = 10;
+    // FLT-CONST-01 — trip cost estimates used to bake in hardcoded fuel
+    // efficiency (10 km/L), driver fare rate (0.5/km) and depreciation
+    // rate (0.15/km). The estimate is stored on the trip row and feeds
+    // fleet cost reports, so tenants in non-SA jurisdictions or with
+    // different fleets had no way to tune them. Read from system_settings
+    // with sensible fallbacks; explicit per-trip overrides still win.
+    const fleetSettings = await getFleetCostSettings(scope.companyId);
+    const fuelPricePerLiter = b.fuelPricePerLiter || fleetSettings.fuelPricePerLiter;
+    const fuelEfficiency = fleetSettings.fuelEfficiencyKmPerLiter;
     const estimatedFuelCost = (estimatedDistanceKm / fuelEfficiency) * fuelPricePerLiter;
-    const driverFare = b.driverFare || estimatedDistanceKm * 0.5;
-    const depreciation = estimatedDistanceKm * 0.15;
+    const driverFare = b.driverFare || estimatedDistanceKm * fleetSettings.driverFarePerKm;
+    const depreciation = estimatedDistanceKm * fleetSettings.depreciationPerKm;
     const totalEstimatedCost = estimatedFuelCost + driverFare + depreciation;
 
     // Idempotency — a double-click on the «Create Trip» button used to
@@ -1199,11 +1273,16 @@ router.post("/trips/:id/complete", authorize({ feature: "fleet.trips", action: "
     const endMileage = b.endMileage || 0;
     const startMileage = b.startMileage || 0;
     const actualDistanceKm = endMileage > startMileage ? endMileage - startMileage : (Number(trip.distance) || 0);
-    const fuelPricePerLiter = b.fuelPricePerLiter || 2.5;
-    const fuelEfficiency = 10;
+    // FLT-CONST-01 — same per-company tunable constants used by the
+    // /trips POST estimate. Tying both paths to the same helper means
+    // the estimate-vs-actual delta on cost reports reflects real
+    // variance, not a rate mismatch between create and complete.
+    const completeSettings = await getFleetCostSettings(scope.companyId);
+    const fuelPricePerLiter = b.fuelPricePerLiter || completeSettings.fuelPricePerLiter;
+    const fuelEfficiency = completeSettings.fuelEfficiencyKmPerLiter;
     const actualFuelCost = (actualDistanceKm / fuelEfficiency) * fuelPricePerLiter;
-    const driverFare = b.driverFare || actualDistanceKm * 0.5;
-    const depreciation = actualDistanceKm * 0.15;
+    const driverFare = b.driverFare || actualDistanceKm * completeSettings.driverFarePerKm;
+    const depreciation = actualDistanceKm * completeSettings.depreciationPerKm;
     const totalCost = actualFuelCost + driverFare + depreciation;
 
     await applyTransition({
@@ -2843,7 +2922,27 @@ router.patch("/preventive-plans/:id", authorize({ feature: "fleet.maintenance", 
     if (b.lastServiceDate !== undefined) { params.push(b.lastServiceDate); sets.push(`"lastServiceDate"=$${params.length}`); }
     if (b.lastServiceMileage !== undefined) { params.push(b.lastServiceMileage); sets.push(`"lastServiceMileage"=$${params.length}`); }
     if (b.estimatedCost !== undefined) { params.push(b.estimatedCost); sets.push(`"estimatedCost"=$${params.length}`); }
-    if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
+    // NF-FLEET-PREF-01 — preventive plans previously accepted any status
+    // value here, so a plan could leap from `pending` to `completed`
+    // (or even backwards) without a maintenance record being filed.
+    // Restrict to the documented forward path; completed/cancelled are
+    // terminal.
+    if (b.status !== undefined && b.status !== existing.status) {
+      const allowedNext: Record<string, string[]> = {
+        pending: ["in_progress", "cancelled"],
+        in_progress: ["completed", "cancelled"],
+        completed: [],
+        cancelled: ["pending"],
+      };
+      const allowed = allowedNext[String(existing.status)] ?? [];
+      if (!allowed.includes(b.status)) {
+        throw new ConflictError(
+          `لا يمكن نقل الخطة الوقائية من "${existing.status}" إلى "${b.status}"`,
+          { field: "status", fix: `الحالات المسموحة: ${allowed.join(", ") || "(لا شيء)"}` }
+        );
+      }
+      params.push(b.status); sets.push(`status=$${params.length}`);
+    }
 
     // When last service date/mileage is updated and no explicit next values, recompute from intervals
     const effectiveLastDate = b.lastServiceDate ?? existing.lastServiceDate;
