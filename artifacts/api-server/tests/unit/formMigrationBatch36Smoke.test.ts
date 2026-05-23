@@ -28,7 +28,10 @@ function stripComments(src: string): string {
 
 describe("settings/communication-channels-tab — 3 FormShells on the same tab", () => {
   it("imports the FormShell stack + useFormContext + useWatch", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormTextField");
     expect(SRC).toContain("useFormContext, useWatch");

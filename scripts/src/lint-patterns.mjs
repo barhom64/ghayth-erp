@@ -210,7 +210,7 @@ const RULES = [
       file.endsWith("/components/page-shell.tsx") ||
       file.endsWith("/components/create-page-layout.tsx"),
     regex: /from\s+["']@\/components\/page-shell["']/,
-    countBaseline: 159,
+    countBaseline: 152,
     message: `PageShell imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -219,7 +219,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/form-shell.tsx"),
     regex: /from\s+["']@\/components\/form-shell["']/,
-    countBaseline: 54,
+    countBaseline: 53,
     message: `FormShell imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -232,7 +232,7 @@ const RULES = [
       file.endsWith("/components/data-table-presets.tsx") ||
       file.endsWith("/components/list-page.tsx"),
     regex: /from\s+["']@\/components\/ui\/data-table["']/,
-    countBaseline: 176,
+    countBaseline: 169,
     message: `DataTable imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -244,7 +244,7 @@ const RULES = [
       file.endsWith("/components/data-table-presets.tsx") ||
       file.endsWith("/components/shared/detail-page-layout.tsx"),
     regex: /from\s+["']@\/components\/page-status-badge["']/,
-    countBaseline: 105,
+    countBaseline: 103,
     message: `PageStatusBadge imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -276,7 +276,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/shared/advanced-filters.tsx"),
     regex: /from\s+["']@\/components\/shared\/advanced-filters["']/,
-    countBaseline: 69,
+    countBaseline: 64,
     message: `AdvancedFilters / useFilters / applyFilters imported from the legacy path. ${kitRatchetHint("ui-core")}`,
   },
   {

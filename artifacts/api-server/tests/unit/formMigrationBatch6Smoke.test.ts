@@ -24,7 +24,10 @@ describe("store.tsx — products + orders forms on FormShell + zod", () => {
   const SRC = read("store.tsx");
 
   it("imports the FormShell stack", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormNumberField");
   });

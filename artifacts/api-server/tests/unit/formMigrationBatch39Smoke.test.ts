@@ -26,7 +26,10 @@ function stripComments(src: string): string {
 
 describe("settings/workflow-definitions-tab — SLA form on FormShell + zod", () => {
   it("imports the FormShell stack + useFormContext + useWatch", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormNumberField");
     expect(SRC).toContain("FormSelectField");
