@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   Undo2,
+  CheckCircle,
+  Send,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -96,6 +98,22 @@ export default function JournalManualDetailPage() {
         refetch();
       },
     },
+  );
+
+  // FIN-013 — manual journals now flow draft → approved → posted. The
+  // two mutations below wire the missing buttons that the status timeline
+  // already promised; the backend transitions live in finance-journal.ts.
+  const approveMut = useApiMutation<void, Record<string, never>>(
+    () => `/finance/journal/${id}/approve`,
+    "POST",
+    [["journal-manual-detail", id], ["journal"]],
+    { successMessage: "تم اعتماد القيد", onSuccess: () => refetch() },
+  );
+  const postMut = useApiMutation<void, Record<string, never>>(
+    () => `/finance/journal/${id}/post`,
+    "POST",
+    [["journal-manual-detail", id], ["journal"]],
+    { successMessage: "تم ترحيل القيد", onSuccess: () => refetch() },
   );
 
   const lines: any[] = (journal?.lines ?? []).filter((l: any) => l);
@@ -185,11 +203,25 @@ export default function JournalManualDetailPage() {
     </>
   );
 
+  const status = journal?.status as string | undefined;
+  const isTerminalReversal = Boolean(journal?.reversedById) || Boolean(journal?.reversalOfId);
   const actions = (
     <div className="flex items-center gap-1.5">
       {journal?.reversedById && <PageStatusBadge status="reversed" domain="shared" />}
       {journal?.reversalOfId && <PageStatusBadge status="active">قيد عاكس</PageStatusBadge>}
-      {journal && !journal.reversedById && !journal.reversalOfId && (
+      {journal && !isTerminalReversal && (status === "draft" || status === "pending_review" || status === "pending_approval" || status === "returned") && (
+        <GuardedButton perm="finance:update" variant="default" size="sm" className="gap-1" disabled={approveMut.isPending} onClick={() => approveMut.mutate({})} rateLimitAware>
+          <CheckCircle className="h-4 w-4" />
+          {approveMut.isPending ? "..." : "اعتماد"}
+        </GuardedButton>
+      )}
+      {journal && !isTerminalReversal && status === "approved" && (
+        <GuardedButton perm="finance:update" variant="default" size="sm" className="gap-1 bg-emerald-600 hover:bg-emerald-700" disabled={postMut.isPending} onClick={() => postMut.mutate({})} rateLimitAware>
+          <Send className="h-4 w-4" />
+          {postMut.isPending ? "..." : "ترحيل"}
+        </GuardedButton>
+      )}
+      {journal && !isTerminalReversal && status === "posted" && (
         <GuardedButton perm="finance:delete" variant="outline" size="sm" className="gap-1" onClick={() => setReversalOpen(true)}>
           <Undo2 className="h-4 w-4" />
           عكس القيد
