@@ -89,7 +89,12 @@ describe("CRM deal won side-effects", () => {
   it("creates or resolves client on deal won", () => {
     const idx = CRM_ROUTE.indexOf("function handleDealWon");
     expect(idx).toBeGreaterThan(-1);
-    const section = CRM_ROUTE.slice(idx, idx + 1000);
+    // PR #928 — handleDealWon now does a normalized-phone lookup before
+    // inserting, so the body is longer and the INSERT lives past the
+    // 1000-char window. Widen the slice + also pin the lookup-first
+    // SELECT to lock the de-dup behaviour.
+    const section = CRM_ROUTE.slice(idx, idx + 2500);
+    expect(section).toContain("SELECT id FROM clients");
     expect(section).toContain("INSERT INTO clients");
   });
 
