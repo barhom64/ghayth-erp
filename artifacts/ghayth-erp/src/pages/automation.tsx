@@ -3,7 +3,7 @@ import { PageShell } from "@/components/page-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { Switch } from "@/components/ui/switch";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";

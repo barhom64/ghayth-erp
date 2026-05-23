@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApiQuery, asList, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatCurrency , todayLocal } from "@/lib/formatters";

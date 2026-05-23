@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { MessageSquare, Clock, CheckCircle2, User, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 // Phase A — HR training on unified primitives.
 import { PageShell } from "@/components/page-shell";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, GraduationCap, Users, BookOpen, Award } from "lucide-react";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";

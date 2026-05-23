@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 // Phase A — HR payroll list on unified primitives.
 import { PageShell } from "@/components/page-shell";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, DollarSign, Users, TrendingUp, FileText, Eye } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";

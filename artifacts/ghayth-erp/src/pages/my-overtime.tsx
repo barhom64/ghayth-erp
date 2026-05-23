@@ -4,7 +4,7 @@ import { PageShell } from "@/components/page-shell";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   Timer, Clock, CheckCircle2,

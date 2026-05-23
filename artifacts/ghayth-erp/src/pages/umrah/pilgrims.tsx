@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
 import { Plus, Users, AlertTriangle, Plane, UserPlus } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";

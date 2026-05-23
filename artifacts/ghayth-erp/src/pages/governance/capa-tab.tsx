@@ -4,7 +4,7 @@ import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { DataTable } from "@/components/ui/data-table";
 import { CheckCircle2, Plus, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";

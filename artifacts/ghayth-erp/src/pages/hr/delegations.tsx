@@ -9,7 +9,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { formatDateAr } from "@/lib/formatters";
 import { Plus, X } from "lucide-react";
 

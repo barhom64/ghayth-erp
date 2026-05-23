@@ -3,7 +3,7 @@ import { useApiQuery } from "@/lib/api";
 import { formatNumber } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { Plus, Route, Navigation, CheckCircle, MapPin } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";

@@ -4,7 +4,7 @@ import { useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import {
   Clock, Calendar, DollarSign, FileSignature,
   CheckCircle2, XCircle, AlertCircle, ChevronLeft,

@@ -6,7 +6,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Card, CardContent } from "@/components/ui/card";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { formatCurrency, todayLocal } from "@/lib/formatters";
 import { Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";

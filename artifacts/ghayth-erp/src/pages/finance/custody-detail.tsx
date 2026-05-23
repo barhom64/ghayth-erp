@@ -17,7 +17,7 @@ import {
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
+import { ProcessStages, type StageStep } from "@workspace/entity-kit";
 
 const timelineIcons: Record<string, any> = {
   created: KeyRound,

@@ -18,7 +18,7 @@ import { useAppContext } from "@/contexts/app-context";
 // pilot pass; they'll move in P3 follow-ups.
 import { PageShell } from "@/components/page-shell";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { textColumn, dateColumn, statusColumn, actionsColumn } from "@/components/data-table-presets";
 import { LEAVE_TYPES, APPROVAL_ROLES } from "@/lib/hr-type-maps";
 import { KpiGrid } from "@/components/shared/kpi-card";

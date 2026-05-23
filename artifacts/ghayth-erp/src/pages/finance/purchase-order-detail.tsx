@@ -10,7 +10,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ShoppingCart, User, Phone, Mail, Calendar, Package, Copy } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
-import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { resolveStatus } from "@/components/page-status-badge";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";

@@ -5,7 +5,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { formatCurrency, formatDateAr as formatDate, todayLocal } from "@/lib/formatters";
 import { ArrowLeftRight, Layers } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";

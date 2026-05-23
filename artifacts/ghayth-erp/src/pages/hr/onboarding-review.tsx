@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { UserPlus, CheckCircle, Clock, ClipboardCheck } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { PageShell } from "@/components/page-shell";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { KpiGrid } from "@/components/shared/kpi-card";

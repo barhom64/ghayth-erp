@@ -7,7 +7,7 @@ import { AvatarInitial } from "@/components/shared/avatar-initial";
 // Phase A — HR performance on unified primitives.
 import { PageShell } from "@/components/page-shell";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { Plus, Star, Target, TrendingUp, Users, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";

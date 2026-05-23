@@ -3,7 +3,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Mail } from "lucide-react";
 import { useLocation } from "wouter";
 import { PageShell } from "@/components/page-shell";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
 interface LegalCase {

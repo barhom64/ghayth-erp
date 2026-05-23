@@ -10,7 +10,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { EntityObligations } from "@/components/shared/entity-obligations";
-import { EntityDocuments } from "@/components/shared/entity-documents";
+import { EntityDocuments } from "@workspace/entity-kit";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";

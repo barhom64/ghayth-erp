@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@/components/page-shell";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import {
   Plus, Banknote, Clock, CheckCircle, XCircle, DollarSign,
   AlertTriangle, TrendingUp, Wallet, FileText,

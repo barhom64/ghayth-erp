@@ -23,9 +23,9 @@ import {
 } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ExportButton } from "@/components/shared/export-buttons";
-import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
+import { ProcessStages, type StageStep } from "@workspace/entity-kit";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { DetailPageLayout, type DetailStatus } from "@/components/shared/detail-page-layout";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";

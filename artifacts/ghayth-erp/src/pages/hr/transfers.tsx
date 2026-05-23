@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { PageShell } from "@/components/page-shell";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-import { ApprovalActions } from "@/components/approval-actions";
+import { ApprovalActions } from "@workspace/workflow-kit";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";

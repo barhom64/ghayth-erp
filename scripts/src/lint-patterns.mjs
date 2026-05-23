@@ -244,7 +244,7 @@ const RULES = [
       file.endsWith("/components/data-table-presets.tsx") ||
       file.endsWith("/components/shared/detail-page-layout.tsx"),
     regex: /from\s+["']@\/components\/page-status-badge["']/,
-    countBaseline: 93,
+    countBaseline: 20,
     message: `PageStatusBadge imported from the legacy path. ${KIT_RATCHET_HINT}`,
   },
   {
@@ -317,7 +317,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/shared/entity-timeline.tsx"),
     regex: /from\s+["']@\/components\/shared\/entity-timeline["']/,
-    countBaseline: 5,
+    countBaseline: 2,
     message: `EntityTimeline / ProcessStages / WorkflowTimeline imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
   },
   {
@@ -326,7 +326,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/shared/entity-comments.tsx"),
     regex: /from\s+["']@\/components\/shared\/entity-comments["']/,
-    countBaseline: 4,
+    countBaseline: 0,
     message: `EntityComments imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
   },
   {
@@ -335,7 +335,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/shared/entity-documents.tsx"),
     regex: /from\s+["']@\/components\/shared\/entity-documents["']/,
-    countBaseline: 2,
+    countBaseline: 0,
     message: `EntityDocuments imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
   },
 
@@ -347,7 +347,7 @@ const RULES = [
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/approval-actions.tsx"),
     regex: /from\s+["']@\/components\/approval-actions["']/,
-    countBaseline: 14,
+    countBaseline: 5,
     message: `ApprovalActions / ActionHistory imported from the legacy path. ${kitRatchetHint("workflow-kit")}`,
   },
 

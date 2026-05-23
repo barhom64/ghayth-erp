@@ -13,7 +13,7 @@ import {
   FormSelectField,
   FormGrid,
 } from "@/components/form-shell";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";

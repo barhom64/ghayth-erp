@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { PageShell } from "@/components/page-shell";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Calendar } from "lucide-react";
