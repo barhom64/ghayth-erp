@@ -1192,14 +1192,65 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action:
     const targetPeriod = period ?? currentPeriod();
     const { financialEngine } = await import("../lib/engines/index.js");
     const inputVatCode = await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180");
-    // Output VAT for the period = invoice VAT MINUS credit-memo VAT. Skipping
-    // the credit-memo deduction was overstating the VAT payable to ZATCA.
-    // Input VAT is read from the resolved input-VAT account, not a hardcoded
-    // '1400' code that does not exist in the seed (seed uses '1180').
-    const [outputVatInvoices] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("vatAmount"), 0) AS total FROM invoices WHERE "companyId" = $1 AND to_char("createdAt", 'YYYY-MM') = $2 AND "deletedAt" IS NULL`, [scope.companyId, targetPeriod]);
-    const [outputVatMemos] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("vatAmount"), 0) AS total FROM credit_memos WHERE "companyId" = $1 AND to_char("memoDate", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod]);
-    const [inputVat] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM(jl.debit), 0) AS total FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je."balancesApplied" = true WHERE je."companyId" = $1 AND jl."accountCode" = $3 AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod, inputVatCode]);
-    const outputTotal = Number(outputVatInvoices?.total ?? 0) - Number(outputVatMemos?.total ?? 0);
+    // Output VAT for the period:
+    //   + invoice VAT (customer charged)
+    //   - credit-memo VAT (customer credited — output VAT reverses)
+    //   + debit-memo VAT (customer additionally charged — extra output VAT)
+    //
+    // Each source must be filtered by its journal entry being on the books
+    // (`balancesApplied = true`) and not reversed (`reversedById IS NULL`),
+    // matching the input-VAT query semantics. Otherwise draft and reversed
+    // entries inflate the VAT return.
+    const [outputVatInvoices] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(i."vatAmount"), 0) AS total
+         FROM invoices i
+         JOIN journal_entries je ON je.id = i."journalEntryId"
+        WHERE i."companyId" = $1
+          AND to_char(i."createdAt", 'YYYY-MM') = $2
+          AND i."deletedAt" IS NULL
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL`,
+      [scope.companyId, targetPeriod]
+    );
+    const [outputVatCreditMemos] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(cm."vatAmount"), 0) AS total
+         FROM credit_memos cm
+         JOIN journal_entries je ON je.id = cm."journalId"
+        WHERE cm."companyId" = $1
+          AND to_char(cm."memoDate", 'YYYY-MM') = $2
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL`,
+      [scope.companyId, targetPeriod]
+    );
+    const [outputVatDebitMemos] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(dm."vatAmount"), 0) AS total
+         FROM debit_memos dm
+         JOIN journal_entries je ON je.id = dm."journalId"
+        WHERE dm."companyId" = $1
+          AND to_char(dm."memoDate", 'YYYY-MM') = $2
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL`,
+      [scope.companyId, targetPeriod]
+    );
+    const [inputVat] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(jl.debit), 0) AS total
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL
+        WHERE je."companyId" = $1
+          AND jl."accountCode" = $3
+          AND to_char(je."createdAt", 'YYYY-MM') = $2`,
+      [scope.companyId, targetPeriod, inputVatCode]
+    );
+    const outputTotal =
+      Number(outputVatInvoices?.total ?? 0)
+      - Number(outputVatCreditMemos?.total ?? 0)
+      + Number(outputVatDebitMemos?.total ?? 0);
     const inputTotal = Number(inputVat?.total ?? 0);
     const vatRate = await getCompanyVatRate(scope.companyId);
     res.json({ period: targetPeriod, outputVat: outputTotal, inputVat: inputTotal, netVat: outputTotal - inputTotal, vatRate, status: outputTotal - inputTotal > 0 ? "payable" : "refundable" });
