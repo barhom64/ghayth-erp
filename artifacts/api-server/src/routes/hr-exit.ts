@@ -71,6 +71,8 @@ import {
   processApprovalStep,
   getManagerAssignmentId,
   roundTo2,
+  toDateISO,
+  currentDateInTz,
 } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
@@ -274,9 +276,27 @@ router.post("/exit", authorize({ feature: "hr.exit", action: "create" }), async 
     if (!emp) throw new NotFoundError("الموظف غير موجود");
 
     // حساب مكافأة نهاية الخدمة — نظام العمل السعودي المادة 84 و 85
-    const hireDate = emp.hireDate ? new Date(emp.hireDate) : new Date();
-    const now = new Date();
-    const yearsOfService = (now.getTime() - hireDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+    //
+    // Compute years of service on calendar-date terms in Asia/Riyadh, NOT
+    // on raw timestamps. `new Date("2020-03-15")` parses as UTC midnight;
+    // `new Date()` returns the server's current instant. A worker hired
+    // at "2020-03-15" who resigns on "2025-03-15" in Riyadh wall-clock
+    // would compute as 4.99... years on a UTC server because the start
+    // is 03:00 KSA and the end is 23:00 UTC of the prior day in KSA. The
+    // gratuity tier flips at exactly 5 years, so a sub-day TZ skew can
+    // move the worker between Article-85 reduction tiers and change the
+    // payout by thousands of riyals.
+    const hireDateStr = emp.hireDate
+      ? toDateISO(emp.hireDate as string | Date)
+      : currentDateInTz("Asia/Riyadh");
+    const todayStr = currentDateInTz("Asia/Riyadh");
+    const [hy, hm, hd] = hireDateStr.split("-").map(Number);
+    const [ny, nm, nd] = todayStr.split("-").map(Number);
+    const dayDiff = Math.max(
+      0,
+      (Date.UTC(ny, nm - 1, nd) - Date.UTC(hy, hm - 1, hd)) / 86400000,
+    );
+    const yearsOfService = dayDiff / 365.25;
     const salary = Number(emp.salary || 0);
     const first5 = Math.min(yearsOfService, 5);
     const above5 = Math.max(yearsOfService - 5, 0);
