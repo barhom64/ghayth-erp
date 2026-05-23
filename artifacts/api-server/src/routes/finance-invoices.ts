@@ -1104,7 +1104,7 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
       onApply: async (inv, client) => {
         if (newStatus === "rejected" || newStatus === "returned") {
           const jeRes = await client.query(
-            `SELECT id, status FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
+            `SELECT id, status, "createdAt" FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
             [scope.companyId, `JE-${inv.ref}`]
           );
           const je = jeRes.rows[0];
@@ -1115,6 +1115,36 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
                 `UPDATE journal_entries SET status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND status IN ('posted', 'approved') AND "deletedAt" IS NULL`,
                 [Number(je.id), scope.companyId]
               );
+
+              // C2 follow-up — approval bumped clients.totalRevenue and
+              // budgets.used by the invoice net amount. Reject/return on a
+              // previously-approved invoice must reverse those same
+              // counters or downstream dashboards inflate forever (PR #892
+              // closed this for credit_memo + DELETE; this is the third
+              // exit point: approved → rejected/returned).
+              const net = Number(inv.total) - Number(inv.vatAmount || 0);
+              if (inv.clientId && net > 0) {
+                await client.query(
+                  `UPDATE clients SET "totalRevenue" = GREATEST(COALESCE("totalRevenue",0) - $1, 0)
+                   WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+                  [net, inv.clientId, scope.companyId]
+                );
+              }
+              // Budget decrement targets the period that the approval
+              // bumped (= the JE's createdAt month, not currentPeriod()
+              // which may be a different calendar month).
+              if (net > 0) {
+                const { financialEngine } = await import("../lib/engines/index.js");
+                const invRevenueCode = await financialEngine.resolveAccountCode(
+                  scope.companyId, "invoice_revenue", "credit", "4000"
+                );
+                const approvalPeriod = String(je.createdAt).slice(0, 7); // YYYY-MM
+                await client.query(
+                  `UPDATE budgets SET used = GREATEST(used - $1, 0)
+                   WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+                  [net, scope.companyId, invRevenueCode, approvalPeriod]
+                );
+              }
             } catch (e) { logger.error(e, "Failed to reverse invoice GL on rejection:"); }
           }
         }

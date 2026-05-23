@@ -6406,6 +6406,36 @@ CREATE TABLE public.event_outbox (
 
 
 --
+-- Name: supplier_payment_allocations; Type: TABLE; Schema: public; Owner: -
+--
+-- Migration 195: ties a payment voucher (journal entry) to the specific
+-- AP obligation it pays — polymorphic over purchase_order / nusk_invoice
+-- / expense / manual.
+
+CREATE TABLE public.supplier_payment_allocations (
+    id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "journalEntryId" integer NOT NULL,
+    "obligationType" character varying(30) NOT NULL
+        CHECK ("obligationType" IN ('purchase_order','nusk_invoice','expense','manual')),
+    "obligationId" integer NOT NULL,
+    amount numeric(15,2) NOT NULL CHECK (amount > 0),
+    notes text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "createdBy" integer,
+    "deletedAt" timestamp with time zone
+);
+
+CREATE INDEX idx_spa_obligation
+    ON public.supplier_payment_allocations ("companyId", "obligationType", "obligationId")
+    WHERE "deletedAt" IS NULL;
+
+CREATE INDEX idx_spa_journal
+    ON public.supplier_payment_allocations ("journalEntryId");
+
+
+--
 -- Name: event_dlq; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -8634,7 +8664,8 @@ CREATE TABLE public.inventory_count_items (
     "physicalCount" numeric(12,3) NOT NULL,
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
-    variance numeric(12,3) DEFAULT 0
+    variance numeric(12,3) DEFAULT 0,
+    CONSTRAINT inventory_count_items_count_product_unique UNIQUE ("countId", "productId")
 );
 
 
