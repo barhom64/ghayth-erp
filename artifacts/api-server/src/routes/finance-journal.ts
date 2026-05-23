@@ -1446,6 +1446,23 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
          WHERE id = $3 AND "companyId" = $4`,
         [newJournalId, reason, id, scope.companyId]
       );
+
+      // C4 + C5 follow-up (#901) — a payment voucher reversed via
+      // /journal/:id/reverse must also retire its supplier_payment_allocations
+      // rows. Without this soft-delete, the vendor statement keeps counting
+      // the reversed voucher as a payment against the obligation, so the
+      // PO/Nusk-invoice outstanding stays artificially low and aging
+      // double-counts the next legitimate payment. Soft-delete keeps the
+      // row for audit while the partial index in migration 198 already
+      // excludes `deletedAt IS NOT NULL` from the obligation lookup.
+      await client.query(
+        `UPDATE supplier_payment_allocations
+            SET "deletedAt" = NOW()
+          WHERE "journalEntryId" = $1
+            AND "companyId" = $2
+            AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
+      );
     });
 
     await createAuditLog({
