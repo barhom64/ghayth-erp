@@ -933,7 +933,7 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
 
     const id = parseId(req.params.id, "id");
     const [inv] = await rawQuery<Record<string, unknown>>(
-      `SELECT id, ref, status, "paidAmount", "createdAt" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      `SELECT id, ref, status, "paidAmount", "createdAt", "clientId", total, "vatAmount" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!inv) throw new NotFoundError("الفاتورة غير موجودة");
@@ -943,6 +943,10 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
         { field: "paidAmount", fix: "قم بعكس التحصيل أولاً ثم أعد المحاولة" }
       );
     }
+    // Statuses past approval bumped clients.totalRevenue; cancelling /
+    // soft-deleting must put that revenue back.
+    const REVENUE_RECOGNIZED_STATUSES = new Set(["approved", "sent", "partial", "overdue", "paid"]);
+    const wasRecognised = REVENUE_RECOGNIZED_STATUSES.has(String(inv.status));
 
     // FIN-AUD-06 — block soft-delete in a closed period. The DELETE reverses
     // the original GL push, so allowing it in a locked period would move
@@ -986,6 +990,18 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
         `UPDATE invoices SET "deletedAt" = NOW(), status = 'cancelled' WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
+      // Reverse the revenue recognised at approval — without this the
+      // denormalised counter inflates over time as approved invoices get
+      // cancelled.
+      if (wasRecognised && inv.clientId) {
+        const net = Number(inv.total) - Number(inv.vatAmount || 0);
+        if (net > 0) {
+          await client.query(
+            `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) - $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+            [net, inv.clientId, scope.companyId]
+          );
+        }
+      }
     });
     rawExecute(
       `INSERT INTO event_logs ("companyId", "userId", action, entity, "entityId", details)
@@ -1097,9 +1113,16 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action:
     const scope = req.scope!;
     const { period } = req.query as Record<string, string | undefined>;
     const targetPeriod = period ?? currentPeriod();
-    const [outputVat] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("vatAmount"), 0) AS total FROM invoices WHERE "companyId" = $1 AND to_char("createdAt", 'YYYY-MM') = $2 AND "deletedAt" IS NULL`, [scope.companyId, targetPeriod]);
-    const [inputVat] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM(jl.debit), 0) AS total FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je.status = 'posted' WHERE je."companyId" = $1 AND jl."accountCode" = '1400' AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod]);
-    const outputTotal = Number(outputVat?.total ?? 0);
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const inputVatCode = await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180");
+    // Output VAT for the period = invoice VAT MINUS credit-memo VAT. Skipping
+    // the credit-memo deduction was overstating the VAT payable to ZATCA.
+    // Input VAT is read from the resolved input-VAT account, not a hardcoded
+    // '1400' code that does not exist in the seed (seed uses '1180').
+    const [outputVatInvoices] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("vatAmount"), 0) AS total FROM invoices WHERE "companyId" = $1 AND to_char("createdAt", 'YYYY-MM') = $2 AND "deletedAt" IS NULL`, [scope.companyId, targetPeriod]);
+    const [outputVatMemos] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM("vatAmount"), 0) AS total FROM credit_memos WHERE "companyId" = $1 AND to_char("memoDate", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod]);
+    const [inputVat] = await rawQuery<Record<string, unknown>>(`SELECT COALESCE(SUM(jl.debit), 0) AS total FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je."balancesApplied" = true WHERE je."companyId" = $1 AND jl."accountCode" = $3 AND to_char(je."createdAt", 'YYYY-MM') = $2`, [scope.companyId, targetPeriod, inputVatCode]);
+    const outputTotal = Number(outputVatInvoices?.total ?? 0) - Number(outputVatMemos?.total ?? 0);
     const inputTotal = Number(inputVat?.total ?? 0);
     const vatRate = await getCompanyVatRate(scope.companyId);
     res.json({ period: targetPeriod, outputVat: outputTotal, inputVat: inputTotal, netVat: outputTotal - inputTotal, vatRate, status: outputTotal - inputTotal > 0 ? "payable" : "refundable" });
@@ -1221,6 +1244,17 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
          WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
         [creditAmount, id, scope.companyId]
       );
+
+      // Reverse the revenue recognised at invoice approval. The approval
+      // route bumped clients.totalRevenue by the invoice net; the credit
+      // memo refunds part of that revenue, so the denormalised counter
+      // must come back down by the memo's net or it inflates forever.
+      if (invoice.clientId && net > 0) {
+        await client.query(
+          `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) - $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+          [net, invoice.clientId, scope.companyId]
+        );
+      }
     });
 
     const memoJournalResult = await financialEngine.postJournalEntry({
@@ -2078,6 +2112,13 @@ invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", ac
   try {
     const scope = req.scope!;
     const thisYear = currentYear();
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const inputVatCode = await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180");
+    // Per-month output VAT (invoices), credit-memo VAT (refunds), input VAT
+    // (from the resolved input-VAT account). The old route hardcoded
+    // inputVat=0 and never subtracted credit memos, so the VAT figure
+    // declared to ZATCA was overstated by every refund's VAT plus the
+    // entire input VAT eligible for offset.
     const vatRows = await rawQuery<Record<string, unknown>>(
       `SELECT to_char("createdAt", 'YYYY-MM') AS period,
               COALESCE(SUM("vatAmount"), 0) AS "outputVat",
@@ -2088,12 +2129,36 @@ invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", ac
        GROUP BY to_char("createdAt", 'YYYY-MM')`,
       [scope.companyId, thisYear]
     );
+    const memoRows = await rawQuery<{ period: string; total: string | number }>(
+      `SELECT to_char("memoDate", 'YYYY-MM') AS period,
+              COALESCE(SUM("vatAmount"), 0) AS total
+       FROM credit_memos
+       WHERE "companyId" = $1
+         AND "memoDate" >= make_date($2, 1, 1) AND "memoDate" < make_date($2 + 1, 1, 1)
+       GROUP BY to_char("memoDate", 'YYYY-MM')`,
+      [scope.companyId, thisYear]
+    );
+    const inputRows = await rawQuery<{ period: string; total: string | number }>(
+      `SELECT to_char(je."createdAt", 'YYYY-MM') AS period,
+              COALESCE(SUM(jl.debit), 0) AS total
+       FROM journal_lines jl
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je."balancesApplied" = true
+       WHERE je."companyId" = $1 AND jl."accountCode" = $3
+         AND je."createdAt" >= make_date($2, 1, 1) AND je."createdAt" < make_date($2 + 1, 1, 1)
+       GROUP BY to_char(je."createdAt", 'YYYY-MM')`,
+      [scope.companyId, thisYear, inputVatCode]
+    );
+    const memoByPeriod = new Map<string, number>(memoRows.map((r) => [r.period, Number(r.total)]));
+    const inputByPeriod = new Map<string, number>(inputRows.map((r) => [r.period, Number(r.total)]));
     const currentMonth = Number(currentMonthPadded());
     const declarations = vatRows
       .filter((r) => Number(r.invoiceCount ?? 0) > 0)
       .map((r) => {
-        const m = Number((r.period as string).split("-")[1]);
-        return { period: r.period as string, outputVat: Number(r.outputVat), inputVat: 0, netVat: Number(r.outputVat), invoiceCount: Number(r.invoiceCount), status: m < currentMonth ? "submitted" : "pending" };
+        const period = r.period as string;
+        const m = Number(period.split("-")[1]);
+        const outputVat = Number(r.outputVat) - (memoByPeriod.get(period) ?? 0);
+        const inputVat = inputByPeriod.get(period) ?? 0;
+        return { period, outputVat, inputVat, netVat: outputVat - inputVat, invoiceCount: Number(r.invoiceCount), status: m < currentMonth ? "submitted" : "pending" };
       });
     res.json({ data: declarations });
   } catch (err) {
