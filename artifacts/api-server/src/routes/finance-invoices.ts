@@ -1380,7 +1380,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     let journalId: number | null = memoJournalResult.journalId;
     markIdempotencyReplay(req, res, memoJournalResult.alreadyExists);
     if (journalId && memoId) {
-      await rawExecute(`UPDATE credit_memos SET "journalEntryId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
+      await rawExecute(`UPDATE credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
     }
 
     emitEvent({
