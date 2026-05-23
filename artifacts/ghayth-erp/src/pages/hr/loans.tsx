@@ -12,6 +12,8 @@ import {
   useFilters,
   applyFilters,
   exportToCSV,
+  PageStatusBadge,
+  STATUS_MAP,
 } from "@workspace/ui-core";
 import {
   Plus, Banknote, Clock, CheckCircle, XCircle, DollarSign,
@@ -23,12 +25,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
-import { LOAN_TYPES, LOAN_STATUS } from "@/lib/hr-type-maps";
+import { LOAN_TYPES } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { useState } from "react";
 
-const STATUS_OPTIONS = Object.entries(LOAN_STATUS).map(([value, { label }]) => ({ value, label }));
+const STATUS_OPTIONS = Object.entries(STATUS_MAP.loan).map(([value, { label }]) => ({ value, label }));
 
 export default function LoansPage() {
   const [, navigate] = useLocation();
@@ -208,14 +210,7 @@ export default function LoansPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (v) => {
-        const st = LOAN_STATUS[v.status] || { label: v.status, color: "bg-surface-subtle text-muted-foreground" };
-        return (
-          <Badge variant="outline" className={cn("text-xs", st.color)}>
-            {st.label}
-          </Badge>
-        );
-      },
+      render: (v) => <PageStatusBadge status={v.status} domain="loan" />,
     },
     {
       key: "actions",

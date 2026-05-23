@@ -108,19 +108,10 @@ export const TERMINATION_TYPES: Record<string, string> = {
 };
 
 // ── حالات السلف ─────────────────────────────────────────────────────
-export const LOAN_STATUS: Record<string, { label: string; color: string }> = {
-  pending:   { label: "بانتظار الموافقة", color: "bg-amber-100 text-status-warning-foreground border-status-warning-surface" },
-  active:    { label: "نشطة",             color: "bg-blue-100 text-status-info-foreground border-status-info-surface"    },
-  completed: { label: "مكتملة",           color: "bg-green-100 text-status-success-foreground border-status-success-surface" },
-  rejected:  { label: "مرفوضة",           color: "bg-red-100 text-status-error-foreground border-red-300"       },
-};
-
-// ── حالات أقساط السلف ──────────────────────────────────────────────
-export const INSTALLMENT_STATUS: Record<string, { label: string; color: string }> = {
-  pending: { label: "قادم",   color: "text-status-warning-foreground bg-status-warning-surface" },
-  paid:    { label: "مدفوع",  color: "text-status-success-foreground bg-status-success-surface" },
-  overdue: { label: "متأخر",  color: "text-status-error-foreground bg-status-error-surface"     },
-};
+// LOAN_STATUS and INSTALLMENT_STATUS were removed. Their labels + tones
+// live in STATUS_MAP.loan and STATUS_MAP.installment (page-status-badge.tsx).
+// Consumers now render via <PageStatusBadge status={...} domain="loan" />
+// or `STATUS_MAP.loan[status]` for filter dropdowns.
 
 // ── حالات طلبات نهاية الخدمة ────────────────────────────────────────
 export const EXIT_REQUEST_STATUS: Record<string, { label: string; color: string }> = {

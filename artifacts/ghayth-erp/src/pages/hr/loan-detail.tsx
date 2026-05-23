@@ -4,6 +4,8 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   DataTable,
   type DataTableColumn,
+  PageStatusBadge,
+  STATUS_MAP,
 } from "@workspace/ui-core";
 import {
   DetailPageLayout,
@@ -14,19 +16,14 @@ import {
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Wallet, Calendar, DollarSign, CheckCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { LOAN_STATUS, INSTALLMENT_STATUS, LOAN_TYPES } from "@/lib/hr-type-maps";
+import { LOAN_TYPES } from "@/lib/hr-type-maps";
 
-const STATUS_TONE_MAP: Record<string, DetailStatus["tone"]> = {
-  pending: "warning",
-  active: "info",
-  completed: "success",
-  rejected: "destructive",
-};
-
+// STATUS_TONE_MAP was removed: the canonical labels + tones live in
+// STATUS_MAP.loan (page-status-badge.tsx). The DetailPageLayout's
+// status prop accepts a small set of tones; map STATUS_MAP's StatusTone
+// to it inline below.
 const LOAN_LIFECYCLE = [
   { key: "pending",   label: "بانتظار الموافقة" },
   { key: "active",    label: "نشطة" },
@@ -53,10 +50,21 @@ export default function LoanDetail() {
   const loan = data?.data ?? data;
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("loan", id || "");
 
-  const st = LOAN_STATUS[loan?.status] ?? { label: loan?.status ?? "—", color: "bg-surface-subtle text-muted-foreground" };
+  const loanStatusDef = STATUS_MAP.loan[loan?.status as keyof typeof STATUS_MAP.loan];
   const statusObj: DetailStatus = {
-    label: st.label,
-    tone: STATUS_TONE_MAP[loan?.status] ?? "default",
+    label: loanStatusDef?.label ?? loan?.status ?? "—",
+    // Map the canonical StatusTone to DetailStatus's tighter set. Both
+    // come from the same status table; one rejection in mapping below
+    // means the upstream tone changed — caller would need to add a row.
+    tone: ({
+      warning: "warning",
+      info: "info",
+      success: "success",
+      danger: "destructive",
+      neutral: "default",
+      muted: "muted",
+      progress: "info",
+    } as const)[loanStatusDef?.tone ?? "neutral"],
   };
 
   const paidPct = loan?.amount > 0
@@ -160,10 +168,9 @@ export default function LoanDetail() {
                 { key: "installmentNumber", header: "#", sortable: true, render: (v) => <span className="text-muted-foreground">{v.installmentNumber}</span> },
                 { key: "period", header: "الفترة", sortable: true, render: (v) => <span className="text-status-neutral-foreground font-mono">{v.period}</span> },
                 { key: "amount", header: "المبلغ", sortable: true, render: (v) => <span className="font-medium">{formatCurrency(Number(v.amount))}</span> },
-                { key: "status", header: "الحالة", sortable: true, render: (v) => {
-                  const iSt = INSTALLMENT_STATUS[v.status] ?? { label: v.status, color: "text-muted-foreground bg-surface-subtle" };
-                  return <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", iSt.color)}>{iSt.label}</span>;
-                } },
+                { key: "status", header: "الحالة", sortable: true, render: (v) => (
+                  <PageStatusBadge status={v.status} domain="installment" />
+                ) },
               ] as DataTableColumn<any>[]}
               data={installments}
               noToolbar
@@ -211,7 +218,7 @@ export default function LoanDetail() {
       hideTabs={registryHideTabs}
       overview={overview}
       actions={
-        <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>
+        loan?.status ? <PageStatusBadge status={loan.status} domain="loan" /> : null
       }
     />
   );

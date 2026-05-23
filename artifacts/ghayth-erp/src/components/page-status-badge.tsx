@@ -379,6 +379,72 @@ export const STATUS_MAP = {
     resolved:             { label: "تمت المعالجة",    tone: "success"  },
     closed:               { label: "مُغلقة",          tone: "neutral"  },
   },
+
+  // ── HR — Loans + installments ────────────────────────────────────────
+  // The labels keep the feminine "ة" suffix the existing HR forms use
+  // ("نشطة" not "نشط") so this migration is a no-visual-change rewrite —
+  // every consumer routes through PageStatusBadge instead of carrying
+  // its own color map. Future label/tone changes propagate automatically.
+  loan: {
+    pending:              { label: "بانتظار الموافقة", tone: "warning"  },
+    active:               { label: "نشطة",             tone: "info"     },
+    completed:            { label: "مكتملة",           tone: "success"  },
+    rejected:             { label: "مرفوضة",           tone: "danger"   },
+  },
+  installment: {
+    pending:              { label: "قادم",             tone: "warning"  },
+    paid:                 { label: "مدفوع",            tone: "success"  },
+    overdue:              { label: "متأخر",            tone: "danger"   },
+  },
+
+  // ── HR — Exit requests + clearance + approval chain ──────────────────
+  exit_request: {
+    pending:              { label: "بانتظار الموافقة", tone: "warning"  },
+    approved:             { label: "معتمد",            tone: "info"     },
+    in_progress:          { label: "جاري التنفيذ",     tone: "progress" },
+    completed:            { label: "مكتمل",            tone: "success"  },
+    rejected:             { label: "مرفوض",            tone: "danger"   },
+    cancelled:            { label: "ملغي",             tone: "neutral"  },
+  },
+  clearance: {
+    pending:              { label: "قيد المعالجة",     tone: "warning"  },
+    cleared:              { label: "مُخالص",           tone: "success"  },
+    blocked:              { label: "محظور",            tone: "danger"   },
+  },
+  approval_chain: {
+    pending:              { label: "بانتظار",          tone: "warning"  },
+    approved:             { label: "معتمد",            tone: "success"  },
+    rejected:             { label: "مرفوض",            tone: "danger"   },
+    skipped:              { label: "تخطّي",            tone: "neutral"  },
+  },
+
+  // ── HR — Transfers + IDP ─────────────────────────────────────────────
+  transfer: {
+    pending:              { label: "بانتظار الموافقة", tone: "warning"  },
+    approved:             { label: "معتمد",            tone: "success"  },
+    rejected:             { label: "مرفوض",            tone: "danger"   },
+    cancelled:            { label: "ملغي",             tone: "neutral"  },
+  },
+  idp: {
+    draft:                { label: "مسودة",            tone: "muted"    },
+    active:               { label: "نشطة",             tone: "info"     },
+    completed:            { label: "مكتملة",           tone: "success"  },
+    cancelled:            { label: "ملغية",            tone: "neutral"  },
+  },
+
+  // ── HR — Overtime + violations ───────────────────────────────────────
+  overtime: {
+    pending:              { label: "بانتظار الموافقة", tone: "warning"  },
+    approved:             { label: "معتمد",            tone: "success"  },
+    rejected:             { label: "مرفوض",            tone: "danger"   },
+  },
+  violation: {
+    open:                 { label: "مفتوحة",           tone: "warning"  },
+    under_review:         { label: "قيد المراجعة",     tone: "info"     },
+    resolved:             { label: "تمت المعالجة",     tone: "success"  },
+    closed:               { label: "مُغلقة",           tone: "neutral"  },
+    appealed:             { label: "مُستأنف",          tone: "warning"  },
+  },
 } as const satisfies Record<string, Record<string, StatusDef>>;
 
 export type StatusDomain = keyof typeof STATUS_MAP;
