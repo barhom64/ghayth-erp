@@ -13,8 +13,45 @@ import { integrationService } from "../lib/integrationService.js";
 import { invalidatePermissionCache } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
+import { encryptSecret, decryptSecret } from "../lib/secrets.js";
 import crypto from "node:crypto";
 import { ADMIN_ROLES } from "../lib/rbacCatalog.js";
+
+// RD3-04 — fields inside an integration's `config` JSON that hold a
+// credential and therefore must be encrypted at rest. The values can
+// be any plaintext; once encrypted by encryptSecret() they store as
+// `enc-v1:…` payloads that survive a DB dump.
+const INTEGRATION_SECRET_KEYS = new Set([
+  "password", "apiKey", "accessToken", "secret", "authToken",
+  "token", "webhookSecret", "appSecret", "clientSecret", "privateKey",
+  "smtpPassword", "smsAuthToken", "key",
+]);
+function encryptIntegrationConfig(config: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  if (!config || typeof config !== "object") return {};
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(config)) {
+    if (INTEGRATION_SECRET_KEYS.has(k) && typeof v === "string" && v.length > 0) {
+      out[k] = encryptSecret(v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+function decryptIntegrationConfig(config: Record<string, unknown> | string | null | undefined): Record<string, unknown> {
+  if (!config) return {};
+  const parsed = typeof config === "string" ? JSON.parse(config) : config;
+  if (!parsed || typeof parsed !== "object") return {};
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(parsed)) {
+    if (INTEGRATION_SECRET_KEYS.has(k) && typeof v === "string") {
+      out[k] = decryptSecret(v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
 
 const router = Router();
 
@@ -607,10 +644,13 @@ router.post("/integrations", authorize({ feature: "admin", action: "update" }), 
     await assertAdmin(req);
     const scope = req.scope!;
     const { type, name, config, status, maxRetries } = zodParse(createIntegrationSchema.safeParse(req.body ?? {}));
+    // RD3-04 — encrypt sensitive fields inside `config` before persisting.
+    // Plaintext was readable from any DB dump or SQL-injection sink.
+    const safeConfig = encryptIntegrationConfig(config as Record<string, unknown> | undefined);
     const r = await rawExecute(
       `INSERT INTO integrations ("companyId",type,name,config,status,"maxRetries")
        VALUES ($1,$2,$3,$4,$5,$6)`,
-      [scope.companyId, type, name, JSON.stringify(config || {}), status || "inactive", maxRetries || 3]
+      [scope.companyId, type, name, JSON.stringify(safeConfig), status || "inactive", maxRetries || 3]
     );
     const [row] = await rawQuery(`SELECT id, "companyId", type, name, status, "lastSuccessAt", "lastFailureAt", "retryCount", "maxRetries", "createdAt", "updatedAt" FROM integrations WHERE id=$1 AND "companyId"=$2`, [r.insertId, scope.companyId]);
     createAuditLog({
@@ -640,7 +680,12 @@ router.patch("/integrations/:id", authorize({ feature: "admin", action: "update"
     const params: unknown[] = [];
     if (b.name !== undefined) { params.push(b.name); sets.push(`name=$${params.length}`); }
     if (b.type !== undefined) { params.push(b.type); sets.push(`type=$${params.length}`); }
-    if (b.config !== undefined) { params.push(JSON.stringify(b.config)); sets.push(`config=$${params.length}`); }
+    if (b.config !== undefined) {
+      // RD3-04 — same encryption pass as the create path.
+      const safeConfig = encryptIntegrationConfig(b.config as Record<string, unknown> | undefined);
+      params.push(JSON.stringify(safeConfig));
+      sets.push(`config=$${params.length}`);
+    }
     if (b.status !== undefined) { params.push(b.status); sets.push(`status=$${params.length}`); }
     if (b.maxRetries !== undefined) { params.push(b.maxRetries); sets.push(`"maxRetries"=$${params.length}`); }
     sets.push(`"updatedAt"=NOW()`);
