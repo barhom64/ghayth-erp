@@ -55,8 +55,13 @@ describe("finance-vendors — /payables endpoint surfaces umrah_nusk_invoices", 
     expect(ROUTE).toMatch(/extraWhere \+= ` AND ni\."nuskStatus" = \$\$\{params\.length\}`/);
   });
 
-  it("returns outstandingAmount = totalAmount − refundAmount for each row", () => {
-    expect(ROUTE).toMatch(/COALESCE\(ni\."totalAmount",0\)\s*-\s*COALESCE\(ni\."refundAmount",0\)\)\s+AS\s+"outstandingAmount"/);
+  it("returns outstandingAmount = totalAmount − refundAmount − Σ allocations for each row", () => {
+    // C4 + C5 (#901) net-of-allocations: payment vouchers tied to this
+    // Nusk invoice via `supplier_payment_allocations` are subtracted
+    // from the headline outstanding.
+    expect(ROUTE).toMatch(/COALESCE\(ni\."totalAmount",0\)[\s\S]{0,800}AS\s+"outstandingAmount"/);
+    expect(ROUTE).toMatch(/COALESCE\(ni\."refundAmount",0\)/);
+    expect(ROUTE).toMatch(/supplier_payment_allocations spa[\s\S]{1,400}spa\."obligationType"\s*=\s*'nusk_invoice'/);
   });
 
   it("aggregates a summary { totalAmount, refundAmount, outstandingAmount }", () => {
@@ -77,6 +82,6 @@ describe("finance-vendors — /payables endpoint surfaces umrah_nusk_invoices", 
   });
 
   it("masks the response via maskFields for RBAC field-level consistency", () => {
-    expect(ROUTE).toMatch(/\/payables"[\s\S]{1,3500}maskFields\(req,\s*\{\s*data:\s*rows,\s*total:\s*rows\.length,\s*summary\s*\}\)/);
+    expect(ROUTE).toMatch(/\/payables"[\s\S]{1,4500}maskFields\(req,\s*\{\s*data:\s*rows,\s*total:\s*rows\.length,\s*summary\s*\}\)/);
   });
 });
