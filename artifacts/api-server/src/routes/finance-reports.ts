@@ -687,6 +687,8 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
           AND spa."obligationType" = 'purchase_order'
           AND po."supplierId" = $1
           AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL
           AND je."createdAt" < $3`,
       [supplierId, scope.companyId, from]
     );
@@ -725,6 +727,8 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
           AND spa."obligationType" = 'purchase_order'
           AND po."supplierId" = $1
           AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL
           AND je."createdAt" >= $3 AND je."createdAt" <= $4
         GROUP BY je.id, je.ref, je."createdAt", je.status
         ORDER BY je."createdAt"`,
@@ -750,10 +754,14 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
       `SELECT po.id, po.ref, po."createdAt", po."expectedDelivery", po."totalAmount",
               COALESCE((SELECT SUM(spa.amount)
                           FROM supplier_payment_allocations spa
+                          JOIN journal_entries je ON je.id = spa."journalEntryId"
                          WHERE spa."companyId" = po."companyId"
                            AND spa."obligationType" = 'purchase_order'
                            AND spa."obligationId" = po.id
-                           AND spa."deletedAt" IS NULL), 0) AS "paidAmount"
+                           AND spa."deletedAt" IS NULL
+                           AND je."deletedAt" IS NULL
+                           AND je."balancesApplied" = true
+                           AND je."reversedById" IS NULL), 0) AS "paidAmount"
          FROM purchase_orders po
         WHERE po."supplierId"=$1 AND po."companyId"=$2
           AND po."deletedAt" IS NULL
