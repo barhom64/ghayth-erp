@@ -1,0 +1,470 @@
+
+ RUN  v4.1.4 /home/user/ghayth-erp/artifacts/api-server
+
+stdout | tests/e2e-allocation.test.ts > E2E — Finance Line-Level Allocation full scenario > walks the user's verification scenario end-to-end
+
+━━ STEP 0 — seed sanity ━━
+
+stdout | tests/e2e-allocation.test.ts > E2E — Finance Line-Level Allocation full scenario > walks the user's verification scenario end-to-end
+rules: [
+  {
+    "id": 1,
+    "name": "مبيعات نقل (عبر المركبة)",
+    "documentType": "invoice",
+    "lineType": "transport",
+    "entityType": "vehicle",
+    "revenueAccountId": 4101,
+    "expenseAccountId": null,
+    "costCenterStrategy": "from_vehicle"
+  },
+  {
+    "id": 2,
+    "name": "مبيعات إيجار عقار",
+    "documentType": "invoice",
+    "lineType": "rent",
+    "entityType": "property",
+    "revenueAccountId": 4201,
+    "expenseAccountId": null,
+    "costCenterStrategy": "from_property"
+  },
+  {
+    "id": 3,
+    "name": "مصروف ديزل",
+    "documentType": "grn",
+    "lineType": "vehicle_cost",
+    "entityType": "vehicle",
+    "revenueAccountId": null,
+    "expenseAccountId": 6501,
+    "costCenterStrategy": "from_vehicle"
+  },
+  {
+    "id": 4,
+    "name": "صيانة عقار",
+    "documentType": "grn",
+    "lineType": "property_maintenance",
+    "entityType": "property",
+    "revenueAccountId": null,
+    "expenseAccountId": 6601,
+    "costCenterStrategy": "from_property"
+  }
+]
+
+━━ STEP 1 — invoice with 3 lines → resolver ━━
+
+stdout | tests/e2e-allocation.test.ts > E2E — Finance Line-Level Allocation full scenario > walks the user's verification scenario end-to-end
+invoice resolver output: [
+  {
+    "status": "resolved",
+    "resolvedAccountCode": "4101",
+    "resolvedAccountId": 4101,
+    "costCenterId": 1001,
+    "dimensions": {
+      "vehicleId": 1,
+      "propertyId": null,
+      "unitId": null,
+      "assetId": null,
+      "projectId": null,
+      "employeeId": null,
+      "driverId": null,
+      "contractId": null,
+      "umrahSeasonId": null,
+      "umrahAgentId": null,
+      "productId": null,
+      "clientId": 1,
+      "vendorId": null
+    },
+    "taxCode": null,
+    "ruleId": 1,
+    "warnings": []
+  },
+  {
+    "status": "resolved",
+    "resolvedAccountCode": "4201",
+    "resolvedAccountId": 4201,
+    "costCenterId": 1002,
+    "dimensions": {
+      "vehicleId": null,
+      "propertyId": 1,
+      "unitId": null,
+      "assetId": null,
+      "projectId": null,
+      "employeeId": null,
+      "driverId": null,
+      "contractId": null,
+      "umrahSeasonId": null,
+      "umrahAgentId": null,
+      "productId": null,
+      "clientId": 1,
+      "vendorId": null
+    },
+    "taxCode": null,
+    "ruleId": 2,
+    "warnings": []
+  },
+  {
+    "status": "unmapped",
+    "resolvedAccountCode": null,
+    "resolvedAccountId": null,
+    "costCenterId": null,
+    "dimensions": {
+      "vehicleId": null,
+      "propertyId": null,
+      "unitId": null,
+      "assetId": null,
+      "projectId": null,
+      "employeeId": null,
+      "driverId": null,
+      "contractId": null,
+      "umrahSeasonId": null,
+      "umrahAgentId": null,
+      "productId": null,
+      "clientId": 1,
+      "vendorId": null
+    },
+    "taxCode": null,
+    "ruleId": null,
+    "warnings": [
+      {
+        "code": "no_matching_rule",
+        "message": "لم تُطابق أي قاعدة توجيه (document=invoice, line=consulting, activity=—)"
+      }
+    ]
+  }
+]
+
+━━ STEP 2 — persist allocation_results ━━
+
+stdout | tests/e2e-allocation.test.ts > E2E — Finance Line-Level Allocation full scenario > walks the user's verification scenario end-to-end
+allocation_results: [
+  {
+    "sourceLineId": 1001,
+    "resolvedAccountCode": "4101",
+    "costCenterId": 1001,
+    "ruleId": 1,
+    "resolutionStatus": "resolved",
+    "dimensionsJson": {
+      "unitId": null,
+      "assetId": null,
+      "clientId": 1,
+      "driverId": null,
+      "vendorId": null,
+      "productId": null,
+      "projectId": null,
+      "vehicleId": 1,
+      "contractId": null,
+      "employeeId": null,
+      "propertyId": null,
+      "umrahAgentId": null,
+      "umrahSeasonId": null
+    }
+  },
+  {
+    "sourceLineId": 1002,
+    "resolvedAccountCode": "4201",
+    "costCenterId": 1002,
+    "ruleId": 2,
+    "resolutionStatus": "resolved",
+    "dimensionsJson": {
+      "unitId": null,
+      "assetId": null,
+      "clientId": 1,
+      "driverId": null,
+      "vendorId": null,
+      "productId": null,
+      "projectId": null,
+      "vehicleId": null,
+      "contractId": null,
+      "employeeId": null,
+      "propertyId": 1,
+      "umrahAgentId": null,
+      "umrahSeasonId": null
+    }
+  },
+  {
+    "sourceLineId": 1003,
+    "resolvedAccountCode": null,
+    "costCenterId": null,
+    "ruleId": null,
+    "resolutionStatus": "unmapped",
+    "dimensionsJson": {
+      "unitId": null,
+      "assetId": null,
+      "clientId": 1,
+      "driverId": null,
+      "vendorId": null,
+      "productId": null,
+      "projectId": null,
+      "vehicleId": null,
+      "contractId": null,
+      "employeeId": null,
+      "propertyId": null,
+      "umrahAgentId": null,
+      "umrahSeasonId": null
+    }
+  }
+]
+
+━━ STEP 3 — GRN 3 treatments → resolver ━━
+
+stdout | tests/e2e-allocation.test.ts > E2E — Finance Line-Level Allocation full scenario > walks the user's verification scenario end-to-end
+GRN resolver output: [
+  {
+    "status": "unmapped",
+    "resolvedAccountCode": null,
+    "resolvedAccountId": null,
+    "costCenterId": null,
+    "dimensions": {
+      "vehicleId": null,
+      "propertyId": null,
+      "unitId": null,
+      "assetId": null,
+      "projectId": null,
+      "employeeId": null,
+      "driverId": null,
+      "contractId": null,
+      "umrahSeasonId": null,
+      "umrahAgentId": null,
+      "productId": 1,
+      "clientId": null,
+      "vendorId": 1
+    },
+    "taxCode": null,
+    "ruleId": null,
+    "warnings": [
+      {
+        "code": "no_matching_rule",
+        "message": "لم تُطابق أي قاعدة توجيه (document=grn, line=inventory, activity=—)"
+      }
+    ]
+  },
+  {
+    "status": "resolved",
+    "resolvedAccountCode": "6501",
+    "resolvedAccountId": 6501,
+    "costCenterId": 1001,
+    "dimensions": {
+      "vehicleId": 1,
+      "propertyId": null,
+      "unitId": null,
+      "assetId": null,
+      "projectId": null,
+      "employeeId": null,
+      "driverId": null,
+      "contractId": null,
+      "umrahSeasonId": null,
+      "umrahAgentId": null,
+      "productId": null,
+      "clientId": null,
+      "vendorId": 1
+    },
+    "taxCode": null,
+    "ruleId": 3,
+    "warnings": []
+  },
+  {
+    "status": "resolved",
+    "resolvedAccountCode": "6601",
+    "resolvedAccountId": 6601,
+    "costCenterId": 1002,
+    "dimensions": {
+      "vehicleId": null,
+      "propertyId": 1,
+      "unitId": null,
+      "assetId": null,
+      "projectId": null,
+      "employeeId": null,
+      "driverId": null,
+      "contractId": null,
+      "umrahSeasonId": null,
+      "umrahAgentId": null,
+      "productId": null,
+      "clientId": null,
+      "vendorId": 1
+    },
+    "taxCode": null,
+    "ruleId": 4,
+    "warnings": []
+  }
+]
+
+stdout | tests/e2e-allocation.test.ts > E2E — Finance Line-Level Allocation full scenario > walks the user's verification scenario end-to-end
+
+━━ STEP 4 — simulate JE posting ━━
+
+stdout | tests/e2e-allocation.test.ts > E2E — Finance Line-Level Allocation full scenario > walks the user's verification scenario end-to-end
+
+━━ STEP 5 — journal_lines dimensional verification ━━
+
+stdout | tests/e2e-allocation.test.ts > E2E — Finance Line-Level Allocation full scenario > walks the user's verification scenario end-to-end
+journal_lines: [
+  {
+    "ref": "JE-INV-DEMO",
+    "accountCode": "1200",
+    "debit": "1000.00",
+    "credit": "0.00",
+    "costCenterId": null,
+    "vehicleId": null,
+    "propertyId": null,
+    "sourceLineTable": null,
+    "sourceLineId": null,
+    "dimensionJson": null
+  },
+  {
+    "ref": "JE-INV-DEMO",
+    "accountCode": "4101",
+    "debit": "0.00",
+    "credit": "600.00",
+    "costCenterId": 1001,
+    "vehicleId": 1,
+    "propertyId": null,
+    "sourceLineTable": "invoice_lines_demo",
+    "sourceLineId": 1001,
+    "dimensionJson": {
+      "resolvedBy": "rule:1"
+    }
+  },
+  {
+    "ref": "JE-INV-DEMO",
+    "accountCode": "4201",
+    "debit": "0.00",
+    "credit": "300.00",
+    "costCenterId": 1002,
+    "vehicleId": null,
+    "propertyId": 1,
+    "sourceLineTable": "invoice_lines_demo",
+    "sourceLineId": 1002,
+    "dimensionJson": {
+      "resolvedBy": "rule:2"
+    }
+  },
+  {
+    "ref": "JE-INV-DEMO",
+    "accountCode": "4000",
+    "debit": "0.00",
+    "credit": "100.00",
+    "costCenterId": null,
+    "vehicleId": null,
+    "propertyId": null,
+    "sourceLineTable": "invoice_lines_demo",
+    "sourceLineId": 1003,
+    "dimensionJson": null
+  },
+  {
+    "ref": "JE-GRN-DEMO",
+    "accountCode": "1250",
+    "debit": "500.00",
+    "credit": "0.00",
+    "costCenterId": null,
+    "vehicleId": null,
+    "propertyId": null,
+    "sourceLineTable": "goods_receipt_items_demo",
+    "sourceLineId": 2001,
+    "dimensionJson": null
+  },
+  {
+    "ref": "JE-GRN-DEMO",
+    "accountCode": "6501",
+    "debit": "800.00",
+    "credit": "0.00",
+    "costCenterId": 1001,
+    "vehicleId": 1,
+    "propertyId": null,
+    "sourceLineTable": "goods_receipt_items_demo",
+    "sourceLineId": 2002,
+    "dimensionJson": {
+      "resolvedBy": "rule:3"
+    }
+  },
+  {
+    "ref": "JE-GRN-DEMO",
+    "accountCode": "6601",
+    "debit": "200.00",
+    "credit": "0.00",
+    "costCenterId": 1002,
+    "vehicleId": null,
+    "propertyId": 1,
+    "sourceLineTable": "goods_receipt_items_demo",
+    "sourceLineId": 2003,
+    "dimensionJson": {
+      "resolvedBy": "rule:4"
+    }
+  },
+  {
+    "ref": "JE-GRN-DEMO",
+    "accountCode": "2115",
+    "debit": "0.00",
+    "credit": "1500.00",
+    "costCenterId": null,
+    "vehicleId": null,
+    "propertyId": null,
+    "sourceLineTable": null,
+    "sourceLineId": null,
+    "dimensionJson": null
+  }
+]
+
+━━ STEP 6 — Vehicle V-12 profitability ━━
+
+stdout | tests/e2e-allocation.test.ts > E2E — Finance Line-Level Allocation full scenario > walks the user's verification scenario end-to-end
+vehicle V-12 profitability: [
+  {
+    "code": "6501",
+    "name": "مصروف وقود",
+    "type": "expense",
+    "revenue": "0",
+    "expense": "800.00"
+  },
+  {
+    "code": "4101",
+    "name": "إيرادات نقل",
+    "type": "revenue",
+    "revenue": "600.00",
+    "expense": "0"
+  }
+]
+Vehicle V-12: revenue=600 expense=800 net=-200
+
+━━ STEP 7 — Property P-1 profitability ━━
+
+stdout | tests/e2e-allocation.test.ts > E2E — Finance Line-Level Allocation full scenario > walks the user's verification scenario end-to-end
+property P-1 profitability: [
+  {
+    "code": "6601",
+    "name": "مصروف صيانة عقارات",
+    "type": "expense",
+    "revenue": "0",
+    "expense": "200.00"
+  },
+  {
+    "code": "4201",
+    "name": "إيرادات إيجار عقار",
+    "type": "revenue",
+    "revenue": "300.00",
+    "expense": "0"
+  }
+]
+Property P-1: revenue=300 expense=200 net=100
+
+━━ STEP 8 — final allocation_results ━━
+
+stdout | tests/e2e-allocation.test.ts > E2E — Finance Line-Level Allocation full scenario > walks the user's verification scenario end-to-end
+final results count: [
+  {
+    "sourceTable": "goods_receipt_items_demo",
+    "cnt": "3"
+  },
+  {
+    "sourceTable": "invoice_lines_demo",
+    "cnt": "3"
+  }
+]
+
+✅ E2E COMPLETED
+
+ ✓ tests/e2e-allocation.test.ts > E2E — Finance Line-Level Allocation full scenario > walks the user's verification scenario end-to-end 63ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  23:48:53
+   Duration  451ms (transform 143ms, setup 0ms, import 234ms, tests 65ms, environment 0ms)
+
