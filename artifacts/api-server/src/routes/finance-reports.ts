@@ -1192,3 +1192,310 @@ reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance.
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DIMENSIONAL PROFITABILITY REPORTS — Finance Line-Level Allocation Phase 7.
+//
+// All seven reports read DIRECTLY from journal_lines using the
+// dimensional columns landed in migration 201
+// (vehicleId, propertyId, projectId, contractId, employeeId,
+// umrahSeasonId, umrahAgentId, costCenterId, …). The point of the
+// whole Line-Level Allocation campaign is that analytical reports
+// stop having to join back to source documents to recompute the
+// dimension — the GL is the source of truth.
+//
+// Each report applies the standard filters that the trial-balance,
+// income-statement and balance-sheet reports already use:
+//
+//   je."deletedAt" IS NULL
+//   je."balancesApplied" = true
+//   je."reversedById" IS NULL
+//
+// so drafts and reversed entries don't pollute the totals.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 1. ربحية المركبة — GET /reports/profitability/vehicle/:vehicleId
+reportsRouter.get("/reports/profitability/vehicle/:vehicleId", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const vehicleId = parseId(req.params.vehicleId, "vehicleId");
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId, vehicleId];
+    let dateFilter = "";
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT coa.code, coa.name, coa.type,
+              COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit-jl.debit ELSE 0 END),0) AS revenue,
+              COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit-jl.credit ELSE 0 END),0) AS expense
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL${dateFilter}
+         JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = $1
+        WHERE jl."vehicleId" = $2 AND jl."deletedAt" IS NULL
+        GROUP BY coa.code, coa.name, coa.type
+        ORDER BY coa.type, coa.code`,
+      params
+    );
+
+    const totalRevenue = rows.reduce((s, r) => s + Number(r.revenue), 0);
+    const totalExpense = rows.reduce((s, r) => s + Number(r.expense), 0);
+    res.json(maskFields(req, {
+      vehicleId, accounts: rows,
+      summary: { totalRevenue, totalExpense, netProfit: roundTo2(totalRevenue - totalExpense) },
+    }));
+  } catch (err) { handleRouteError(err, res, "Vehicle profitability error:"); }
+});
+
+// 2. ربحية العقار — GET /reports/profitability/property/:propertyId
+reportsRouter.get("/reports/profitability/property/:propertyId", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const propertyId = parseId(req.params.propertyId, "propertyId");
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId, propertyId];
+    let dateFilter = "";
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT coa.code, coa.name, coa.type,
+              COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit-jl.debit ELSE 0 END),0) AS revenue,
+              COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit-jl.credit ELSE 0 END),0) AS expense
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL${dateFilter}
+         JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = $1
+        WHERE jl."propertyId" = $2 AND jl."deletedAt" IS NULL
+        GROUP BY coa.code, coa.name, coa.type
+        ORDER BY coa.type, coa.code`,
+      params
+    );
+
+    const totalRevenue = rows.reduce((s, r) => s + Number(r.revenue), 0);
+    const totalExpense = rows.reduce((s, r) => s + Number(r.expense), 0);
+    res.json(maskFields(req, {
+      propertyId, accounts: rows,
+      summary: { totalRevenue, totalExpense, netProfit: roundTo2(totalRevenue - totalExpense) },
+    }));
+  } catch (err) { handleRouteError(err, res, "Property profitability error:"); }
+});
+
+// 3. ربحية المشروع — GET /reports/profitability/project/:projectId
+reportsRouter.get("/reports/profitability/project/:projectId", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = parseId(req.params.projectId, "projectId");
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId, projectId];
+    let dateFilter = "";
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT coa.code, coa.name, coa.type,
+              COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit-jl.debit ELSE 0 END),0) AS revenue,
+              COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit-jl.credit ELSE 0 END),0) AS expense
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL${dateFilter}
+         JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = $1
+        WHERE jl."projectId" = $2 AND jl."deletedAt" IS NULL
+        GROUP BY coa.code, coa.name, coa.type
+        ORDER BY coa.type, coa.code`,
+      params
+    );
+
+    const totalRevenue = rows.reduce((s, r) => s + Number(r.revenue), 0);
+    const totalExpense = rows.reduce((s, r) => s + Number(r.expense), 0);
+    res.json(maskFields(req, {
+      projectId, accounts: rows,
+      summary: { totalRevenue, totalExpense, netProfit: roundTo2(totalRevenue - totalExpense) },
+    }));
+  } catch (err) { handleRouteError(err, res, "Project profitability error:"); }
+});
+
+// 4. ربحية وكيل العمرة — GET /reports/profitability/umrah-agent/:umrahAgentId
+reportsRouter.get("/reports/profitability/umrah-agent/:umrahAgentId", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const umrahAgentId = parseId(req.params.umrahAgentId, "umrahAgentId");
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId, umrahAgentId];
+    let dateFilter = "";
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT coa.code, coa.name, coa.type,
+              COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit-jl.debit ELSE 0 END),0) AS revenue,
+              COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit-jl.credit ELSE 0 END),0) AS expense
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL${dateFilter}
+         JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = $1
+        WHERE jl."umrahAgentId" = $2 AND jl."deletedAt" IS NULL
+        GROUP BY coa.code, coa.name, coa.type
+        ORDER BY coa.type, coa.code`,
+      params
+    );
+
+    const totalRevenue = rows.reduce((s, r) => s + Number(r.revenue), 0);
+    const totalExpense = rows.reduce((s, r) => s + Number(r.expense), 0);
+    res.json(maskFields(req, {
+      umrahAgentId, accounts: rows,
+      summary: { totalRevenue, totalExpense, netProfit: roundTo2(totalRevenue - totalExpense) },
+    }));
+  } catch (err) { handleRouteError(err, res, "Umrah agent profitability error:"); }
+});
+
+// 5. الإيرادات حسب نوع النشاط — GET /reports/revenue-by-activity-type
+reportsRouter.get("/reports/revenue-by-activity-type", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let dateFilter = "";
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(jl."activityType", '— غير محدد —') AS "activityType",
+              COALESCE(SUM(jl.credit - jl.debit), 0) AS revenue,
+              COUNT(DISTINCT je.id) AS "entryCount"
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL${dateFilter}
+         JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'revenue' AND coa."companyId" = $1
+        WHERE jl."deletedAt" IS NULL
+        GROUP BY jl."activityType"
+        ORDER BY revenue DESC`,
+      params
+    );
+
+    res.json(maskFields(req, { rows, summary: { totalRevenue: rows.reduce((s, r) => s + Number(r.revenue), 0) } }));
+  } catch (err) { handleRouteError(err, res, "Revenue by activity type error:"); }
+});
+
+// 6. المصروفات حسب مركز التكلفة — GET /reports/expenses-by-cost-center
+reportsRouter.get("/reports/expenses-by-cost-center", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let dateFilter = "";
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT jl."costCenterId",
+              cc.name AS "costCenterName",
+              cc.code AS "costCenterCode",
+              cc.type AS "costCenterType",
+              COALESCE(SUM(jl.debit - jl.credit), 0) AS expense,
+              COUNT(DISTINCT je.id) AS "entryCount"
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL${dateFilter}
+         JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'expense' AND coa."companyId" = $1
+         LEFT JOIN cost_centers cc ON cc.id = jl."costCenterId" AND cc."companyId" = $1
+        WHERE jl."deletedAt" IS NULL
+        GROUP BY jl."costCenterId", cc.name, cc.code, cc.type
+        ORDER BY expense DESC`,
+      params
+    );
+
+    res.json(maskFields(req, { rows, summary: { totalExpense: rows.reduce((s, r) => s + Number(r.expense), 0) } }));
+  } catch (err) { handleRouteError(err, res, "Expenses by cost center error:"); }
+});
+
+// 7. البنود غير الموجَّهة — GET /reports/unmapped-lines
+// Cross-table view of every allocation-eligible line that has not been
+// mapped to a specific account. The single most important governance
+// report for the operator: drives the «what do I still need to
+// allocate before month-end?» workflow.
+reportsRouter.get("/reports/unmapped-lines", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { startDate, endDate, sourceTable } = req.query as Record<string, string | undefined>;
+
+    const params: unknown[] = [scope.companyId];
+    let dateFilter = "";
+    if (startDate) { params.push(startDate); dateFilter += ` AND s."createdAt" >= $${params.length}`; }
+    if (endDate)   { params.push(endDate);   dateFilter += ` AND s."createdAt" < ($${params.length}::date + 1)`; }
+
+    const tableFilter = (table: string) => !sourceTable || sourceTable === table;
+
+    const sections: Array<{ source: string; rows: Record<string, unknown>[] }> = [];
+
+    if (tableFilter("invoice_lines")) {
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT il.id, il."invoiceId", il.description, il."lineTotal", i.ref AS "invoiceRef", i.status,
+                il."allocationStatus", i."createdAt"
+           FROM invoice_lines il
+           JOIN invoices i ON i.id = il."invoiceId"
+          WHERE i."companyId" = $1
+            AND i."deletedAt" IS NULL
+            AND il."allocationStatus" = 'unmapped'${dateFilter.replace(/s\./g, "i.")}
+          ORDER BY i."createdAt" DESC
+          LIMIT 500`,
+        params
+      );
+      sections.push({ source: "invoice_lines", rows });
+    }
+
+    if (tableFilter("purchase_order_items")) {
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT poi.id, poi."orderId", poi."itemName", poi."lineTotal", po.ref AS "orderRef", po.status,
+                poi."allocationStatus", po."createdAt"
+           FROM purchase_order_items poi
+           JOIN purchase_orders po ON po.id = poi."orderId"
+          WHERE po."companyId" = $1
+            AND po."deletedAt" IS NULL
+            AND poi."allocationStatus" = 'unmapped'${dateFilter.replace(/s\./g, "po.")}
+          ORDER BY po."createdAt" DESC
+          LIMIT 500`,
+        params
+      );
+      sections.push({ source: "purchase_order_items", rows });
+    }
+
+    if (tableFilter("goods_receipt_items")) {
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT gri.id, gri."grnId", gri."itemName", gri."lineTotal", grn.ref AS "grnRef", grn.status,
+                gri."allocationStatus", grn."createdAt"
+           FROM goods_receipt_items gri
+           JOIN goods_receipts grn ON grn.id = gri."grnId"
+          WHERE grn."companyId" = $1
+            AND grn."deletedAt" IS NULL
+            AND gri."allocationStatus" = 'unmapped'${dateFilter.replace(/s\./g, "grn.")}
+          ORDER BY grn."createdAt" DESC
+          LIMIT 500`,
+        params
+      );
+      sections.push({ source: "goods_receipt_items", rows });
+    }
+
+    const totalCount = sections.reduce((s, x) => s + x.rows.length, 0);
+    res.json(maskFields(req, { sections, summary: { totalCount } }));
+  } catch (err) { handleRouteError(err, res, "Unmapped lines error:"); }
+});
+
