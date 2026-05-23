@@ -804,6 +804,16 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     // payments of the same magnitude on the same invoice each produce a
     // unique-but-stable key (paid amount is strictly monotonic per payment),
     // and a duplicated request is idempotent against the same journal.
+    //
+    // B1 (silent → visible) — the business UPDATE above committed in its own
+    // transaction; the GL post here is outside it, and a GL failure (closed
+    // period, bad account mapping, balance mismatch) would otherwise leave
+    // the invoice paid with no corresponding cash/AR entry — silent AR
+    // overstatement. Routing through createGuardedJournalEntry via
+    // guardTable + guardId records the failure into financial_posting_failures
+    // so the reconciliation queue can replay it instead of the inconsistency
+    // staying invisible. Full atomicity would require threading a client
+    // through the engine — out of scope for this small guarded fix.
     const paymentAmount = Number(amount);
     const paidScaled = Math.round(newPaid * 100);
     const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
@@ -820,6 +830,8 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
         { accountCode: cashAccountCode, debit: paymentAmount, credit: 0 },
         { accountCode: arAccountCode, debit: 0, credit: paymentAmount },
       ],
+      guardTable: "invoices",
+      guardId: id,
     });
     markIdempotencyReplay(req, res, alreadyExists);
 
