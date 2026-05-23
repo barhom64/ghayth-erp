@@ -7103,8 +7103,12 @@ CREATE TABLE public.fleet_trips (
     "createdAt" timestamp without time zone DEFAULT now(),
     "deletedAt" timestamp with time zone,
     "cancelledAt" timestamp with time zone,
-    "cancellationReason" text
+    "cancellationReason" text,
+    "sourceKey" character varying(128)
 );
+CREATE UNIQUE INDEX uniq_fleet_trips_source_key
+    ON public.fleet_trips ("companyId", "sourceKey")
+    WHERE "sourceKey" IS NOT NULL;
 
 
 --

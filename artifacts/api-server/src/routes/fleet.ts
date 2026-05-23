@@ -9,6 +9,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
+import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
 import { logger } from "../lib/logger.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm } from "../lib/algorithms.js";
@@ -1071,12 +1072,51 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
     const depreciation = estimatedDistanceKm * 0.15;
     const totalEstimatedCost = estimatedFuelCost + driverFare + depreciation;
 
+    // Idempotency — a double-click on the «Create Trip» button used to
+    // create two rows. The driver/vehicle status guard caught duplicates
+    // only when the user explicitly passed the same ids; in auto-select
+    // mode click #2 picked a DIFFERENT available driver/vehicle, both
+    // INSERTs succeeded, and the operator ended up with two trips. The
+    // partial-unique index on (companyId, sourceKey) — migration 196 —
+    // collapses retried POSTs onto the same row at the DB level.
+    const idempotencyToken = requestIdempotencyToken(req);
+    const sourceKey = `fleet:trip:${idempotencyToken}`;
+    const [preExisting] = await rawQuery<{ id: number }>(
+      `SELECT id FROM fleet_trips WHERE "companyId" = $1 AND "sourceKey" = $2 LIMIT 1`,
+      [scope.companyId, sourceKey]
+    );
+    if (preExisting) {
+      markIdempotencyReplay(req, res, true);
+      const [row] = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM fleet_trips WHERE id = $1 AND "companyId" = $2`,
+        [preExisting.id, scope.companyId]
+      );
+      res.status(200).json({ ...row, idempotentReplay: true });
+      return;
+    }
+
+    let alreadyExists = false;
     const insertId = await withTransaction(async (client) => {
       const tripResult = await client.query(
-        `INSERT INTO fleet_trips ("companyId","vehicleId","driverId","clientId","fromLocation","toLocation","fromLat","fromLng","toLat","toLng","distance","cost","startTime",status,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
-        [scope.companyId, selectedVehicleId, selectedDriverId, b.clientId, b.fromLocation, b.toLocation, fromLat || null, fromLng || null, toLat || null, toLng || null, estimatedDistanceKm, totalEstimatedCost, b.startTime || new Date().toISOString(), 'in_progress', b.notes]
+        `INSERT INTO fleet_trips ("companyId","vehicleId","driverId","clientId","fromLocation","toLocation","fromLat","fromLng","toLat","toLng","distance","cost","startTime",status,notes,"sourceKey")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+         ON CONFLICT ("companyId", "sourceKey") WHERE "sourceKey" IS NOT NULL DO NOTHING
+         RETURNING id`,
+        [scope.companyId, selectedVehicleId, selectedDriverId, b.clientId, b.fromLocation, b.toLocation, fromLat || null, fromLng || null, toLat || null, toLng || null, estimatedDistanceKm, totalEstimatedCost, b.startTime || new Date().toISOString(), 'in_progress', b.notes, sourceKey]
       );
-      const tripId = tripResult.rows[0]?.id;
+      let tripId = tripResult.rows[0]?.id;
+      if (!tripId) {
+        // Race: a concurrent POST with the same key won the INSERT.
+        // Fetch the existing row and short-circuit — the driver/vehicle
+        // UPDATEs already ran on the winning side.
+        const { rows: existingRows } = await client.query(
+          `SELECT id FROM fleet_trips WHERE "companyId" = $1 AND "sourceKey" = $2 LIMIT 1`,
+          [scope.companyId, sourceKey]
+        );
+        tripId = existingRows[0]?.id;
+        alreadyExists = true;
+        return tripId;
+      }
 
       if (selectedVehicleId) {
         const vResult = await client.query(`UPDATE fleet_vehicles SET status='in_use', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND status='available' AND "deletedAt" IS NULL`, [selectedVehicleId, scope.companyId]);
@@ -1089,6 +1129,7 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
 
       return tripId;
     });
+    markIdempotencyReplay(req, res, alreadyExists);
 
     if (selectedDriverId) {
       try {
