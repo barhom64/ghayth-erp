@@ -761,37 +761,63 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     const vatAmount = roundTo2(subtotal * vatRatio);
     const grnTotal = roundTo2(subtotal + vatAmount);
 
-    // Create GRN header + lines + update PO items atomically
-    const [grnSeq] = await rawQuery<Record<string, unknown>>(
-      `SELECT COALESCE(MAX(id),0)+1 AS seq FROM goods_receipts WHERE "companyId" = $1`,
-      [scope.companyId]
-    );
-    const grnRef = generateRef("GRN", (grnSeq?.seq as string | number | undefined) ?? Date.now(), 5);
-
-    const grnId = await withTransaction(async (client) => {
-      const grnRes = await client.query(
-        `INSERT INTO goods_receipts ("companyId","branchId","poId",ref,"receivedAt","receivedBy",notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-        [scope.companyId, scope.branchId, id, grnRef, receiptDate, scope.activeAssignmentId, qualityNotes ?? null]
+    // RD9-01 — generating `grnRef` from `SELECT MAX(id)+1` outside the
+    // transaction has a textbook two-writer race: T1 reads MAX=N, T2
+    // reads MAX=N, both compute the same ref "GRN-00(N+1)", T1 inserts
+    // OK, T2 hits the unique index uq_goods_receipts_ref(companyId, ref)
+    // and gets a 500. The user retries by hand and it works — but it's
+    // an avoidable user-visible failure on a hot path. Loop a few
+    // attempts: recompute MAX each time, catch only the unique-violation
+    // (Postgres SQLSTATE 23505) and retry. Other errors bubble.
+    let grnRef = "";
+    let grnId: number | undefined;
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const [grnSeq] = await rawQuery<Record<string, unknown>>(
+        `SELECT COALESCE(MAX(id),0)+1 AS seq FROM goods_receipts WHERE "companyId" = $1`,
+        [scope.companyId]
       );
-      const newGrnId = grnRes.rows[0].id;
+      grnRef = generateRef("GRN", (grnSeq?.seq as string | number | undefined) ?? Date.now(), 5);
+      try {
+        grnId = await withTransaction(async (client) => {
+          const grnRes = await client.query(
+            `INSERT INTO goods_receipts ("companyId","branchId","poId",ref,"receivedAt","receivedBy",notes)
+             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+            [scope.companyId, scope.branchId, id, grnRef, receiptDate, scope.activeAssignmentId, qualityNotes ?? null]
+          );
+          const newGrnId = grnRes.rows[0].id;
 
-      for (const l of inputLines) {
-        const item = poItemMap.get(l.poItemId)!;
-        const lineTotal = roundTo2(l.receivedQty * Number(item.unitPrice));
-        await client.query(
-          `INSERT INTO goods_receipt_items ("grnId","poItemId","itemName","receivedQty","unitPrice","lineTotal",notes)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [newGrnId, l.poItemId, item.itemName, l.receivedQty, Number(item.unitPrice), lineTotal, l.notes ?? null]
-        );
-        await client.query(
-          `UPDATE purchase_order_items SET "receivedQty" = COALESCE("receivedQty",0) + $1 WHERE id = $2`,
-          [l.receivedQty, l.poItemId]
-        );
+          for (const l of inputLines) {
+            const item = poItemMap.get(l.poItemId)!;
+            const lineTotal = roundTo2(l.receivedQty * Number(item.unitPrice));
+            await client.query(
+              `INSERT INTO goods_receipt_items ("grnId","poItemId","itemName","receivedQty","unitPrice","lineTotal",notes)
+               VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+              [newGrnId, l.poItemId, item.itemName, l.receivedQty, Number(item.unitPrice), lineTotal, l.notes ?? null]
+            );
+            await client.query(
+              `UPDATE purchase_order_items SET "receivedQty" = COALESCE("receivedQty",0) + $1 WHERE id = $2`,
+              [l.receivedQty, l.poItemId]
+            );
+          }
+
+          return newGrnId;
+        });
+        break;
+      } catch (e) {
+        const code = (e as { code?: string } | null)?.code;
+        const constraint = (e as { constraint?: string } | null)?.constraint;
+        if (code === "23505" && (constraint === "uq_goods_receipts_ref" || !constraint)) {
+          lastErr = e;
+          continue;
+        }
+        throw e;
       }
-
-      return newGrnId;
-    });
+    }
+    if (grnId === undefined) {
+      logger.error(lastErr, "[finance-purchase] GRN ref allocation exhausted retries");
+      throw new Error("تعذّر توليد رقم إيصال فريد بعد عدة محاولات");
+    }
 
     // Post GRN journal: DR inventory (ex-VAT) + DR VAT receivable, CR GRNI
     const { financialEngine } = await import("../lib/engines/index.js");
