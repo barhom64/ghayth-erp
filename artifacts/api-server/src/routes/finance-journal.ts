@@ -1869,10 +1869,21 @@ async function createOpeningBalanceEntry(params: {
 
   // Soft-delete prior OB if force
   if (force) {
-    await rawExecute(
-      `UPDATE journal_entries SET "deletedAt" = NOW() WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
+    // A2 (silent ledger corruption): reverse each prior OB's GL deltas
+    // alongside soft-deleting it. Without this reverse, the replacement OB
+    // posted below adds its deltas on top of the un-reversed prior-OB
+    // deltas and currentBalance silently double-counts the opening balance.
+    // Mirrors the soft-delete + reverseAccountBalances pattern already used
+    // for /expenses/:id and /vouchers/:id in this file.
+    const priorObs = await rawQuery<{ id: number }>(
+      `UPDATE journal_entries SET "deletedAt" = NOW()
+       WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL
+       RETURNING id`,
       [scope.companyId, ref]
     );
+    for (const prior of priorObs) {
+      await reverseAccountBalances(scope.companyId, prior.id);
+    }
   }
 
   const description = `أرصدة افتتاحية ${periodStart}`;
