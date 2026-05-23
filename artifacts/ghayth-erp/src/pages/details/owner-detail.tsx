@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Edit, User, Phone, Mail, MapPin, Building2, Banknote, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import {

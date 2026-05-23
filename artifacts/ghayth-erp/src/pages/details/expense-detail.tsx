@@ -8,13 +8,13 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, Paperclip, Eye, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useToast } from "@/hooks/use-toast";
-import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 
 /**

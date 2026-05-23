@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@/components/approval-actions";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
-import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PageStatusBadge } from "@/components/page-status-badge";

@@ -60,7 +60,7 @@ import {
 } from "lucide-react";
 import { formatDateAr, getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { EntityObligations } from "@/components/shared/entity-obligations";
-import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityComments } from "@workspace/entity-kit";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { cn } from "@/lib/utils";

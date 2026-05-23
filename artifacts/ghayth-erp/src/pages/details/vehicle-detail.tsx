@@ -21,7 +21,7 @@ import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare } from "lucide-react";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";

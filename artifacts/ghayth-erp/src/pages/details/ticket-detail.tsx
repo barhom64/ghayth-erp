@@ -11,9 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Headphones, User, MessageSquare, Send, Trash2, Clock } from "lucide-react";
 import { DetailPageLayout } from "@workspace/entity-kit";
-import { ApprovalActions } from "@/components/approval-actions";
+import { ApprovalActions } from "@workspace/workflow-kit";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
-import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 

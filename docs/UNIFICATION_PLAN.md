@@ -150,19 +150,19 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 
 **entity-kit**:
 | `detail-page-layout-from-legacy-path` | 9 | نشط |
-| `entity-timeline-from-legacy-path` | 7 | نشط |
-| `entity-comments-from-legacy-path` | 52 | نشط |
-| `entity-documents-from-legacy-path` | 3 | نشط |
+| `entity-timeline-from-legacy-path` | 5 | نشط |
+| `entity-comments-from-legacy-path` | 4 | نشط |
+| `entity-documents-from-legacy-path` | 2 | نشط |
 
 **workflow-kit**:
-| `approval-actions-from-legacy-path` | 30 | نشط |
+| `approval-actions-from-legacy-path` | 14 | نشط |
 
 **report-kit**:
 | `print-layout-from-legacy-path` | 12 | نشط |
 
-**الإجمالي**: **708 موضع** legacy import مغطّى بـ ratchet (هبط من 906
-الأولي بعد ثامن sweep — هبوط 54 نقطة في sweep واحد على
-DetailPageLayout). كل واحد لا يمكنه الزيادة. كل migration يخفض العدد
+**الإجمالي**: **641 موضع** legacy import مغطّى بـ ratchet (هبط من 906
+الأولي بعد تاسع sweep — هبوط 67 نقطة في sweep واحد على entity-*
++ approval-actions). كل واحد لا يمكنه الزيادة. كل migration يخفض العدد
 بمقدار 1 ويستوجب تحديث baseline في نفس الـ PR.
 
 ### آلية العمل (للمساهمين)

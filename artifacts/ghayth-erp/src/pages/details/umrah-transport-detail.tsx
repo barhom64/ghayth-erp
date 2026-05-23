@@ -13,7 +13,7 @@ import { MapPin, Truck, Users, DollarSign } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
+import { ProcessStages, type StageStep } from "@workspace/entity-kit";
 
 const STATUS_MAP: Record<string, { label: string; tone: "success" | "warning" | "destructive" | "info" | "muted" | "default" }> = {
   scheduled: { label: "مجدولة", tone: "info" },

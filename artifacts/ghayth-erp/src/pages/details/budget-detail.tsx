@@ -11,12 +11,12 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 
 import { Edit, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 

@@ -11,7 +11,7 @@ import { Edit, Banknote, Calendar, Hash, CreditCard } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useToast } from "@/hooks/use-toast";
-import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 

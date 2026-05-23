@@ -7,7 +7,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
+import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { Edit, CalendarDays } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";

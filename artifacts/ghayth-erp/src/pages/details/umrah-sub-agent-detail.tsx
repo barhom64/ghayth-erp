@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
-import { EntityComments } from "@/components/shared/entity-comments";
+import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { UserPlus, FileText, ExternalLink, Phone, Mail, MapPin } from "lucide-react";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
