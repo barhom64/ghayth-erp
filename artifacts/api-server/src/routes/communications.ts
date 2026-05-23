@@ -3,6 +3,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, Integ
   zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
 import { z } from "zod";
@@ -85,6 +86,61 @@ const router = Router();
 const WA_VERIFY_TOKEN = config.whatsapp.verifyToken ?? "ghayth_erp_verify";
 const WA_ACCESS_TOKEN = config.whatsapp.accessToken ?? "";
 const WA_PHONE_ID = config.whatsapp.phoneId ?? "";
+const WA_APP_SECRET = config.whatsapp.appSecret ?? "";
+const PBX_WEBHOOK_SECRET = config.pbx.webhookSecret ?? "";
+
+// RD3-01 — PBX webhook auth. PBX providers (3CX, Twilio, Asterisk
+// connectors, etc.) typically sign callbacks with HMAC-SHA256 over the
+// raw body. We support either a `x-pbx-signature: sha256=<hex>` header
+// (HMAC-SHA256) OR a bearer token `Authorization: Bearer <secret>` to
+// match the simpler shared-secret schemes some on-prem PBXs use.
+// Without verification, any attacker could forge a POST to /pbx/* and
+// fabricate calls / chat_messages / tasks. Fails closed when
+// PBX_WEBHOOK_SECRET is unset.
+function verifyPbxSignature(req: import("express").Request): boolean {
+  if (!PBX_WEBHOOK_SECRET) return false;
+  const auth = req.get("authorization") ?? "";
+  if (auth.startsWith("Bearer ")) {
+    const provided = auth.slice("Bearer ".length).trim();
+    if (provided.length === PBX_WEBHOOK_SECRET.length) {
+      try {
+        return timingSafeEqual(Buffer.from(provided), Buffer.from(PBX_WEBHOOK_SECRET));
+      } catch { return false; }
+    }
+    return false;
+  }
+  const header = req.get("x-pbx-signature") ?? "";
+  if (!header.startsWith("sha256=")) return false;
+  const raw = (req as unknown as { rawBody?: Buffer }).rawBody;
+  if (!raw) return false;
+  const expected = createHmac("sha256", PBX_WEBHOOK_SECRET).update(raw).digest("hex");
+  const provided = header.slice("sha256=".length);
+  if (expected.length !== provided.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(provided, "hex"));
+  } catch { return false; }
+}
+
+// NF-COMM-01 — Meta signs every inbound webhook with X-Hub-Signature-256
+// using the app secret. Without verification, anyone with our public
+// webhook URL could forge messages that hit `matchSenderToEntity` /
+// automation rules. Returns true when the signature matches the raw
+// JSON body that express captured via the `verify` callback in app.ts.
+function verifyWhatsAppSignature(req: import("express").Request): boolean {
+  if (!WA_APP_SECRET) return false;
+  const header = req.get("x-hub-signature-256") ?? "";
+  if (!header.startsWith("sha256=")) return false;
+  const raw = (req as unknown as { rawBody?: Buffer }).rawBody;
+  if (!raw) return false;
+  const expected = createHmac("sha256", WA_APP_SECRET).update(raw).digest("hex");
+  const provided = header.slice("sha256=".length);
+  if (expected.length !== provided.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(provided, "hex"));
+  } catch {
+    return false;
+  }
+}
 
 async function matchSenderToEntity(phone: string, companyId: number): Promise<{ type: "client" | "employee" | "unknown"; id: number | null; name: string }> {
   const normalizedPhone = phone.replace(/\D/g, "").slice(-9);
@@ -157,6 +213,18 @@ router.get("/whatsapp/webhook", (req, res) => {
 
 router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
   try {
+    // NF-COMM-01 — reject forged inbound payloads before any processing.
+    // Meta retries on non-2xx so we still need to respond 200 to *valid*
+    // requests; for invalid ones we 403 so an attacker can't keep
+    // flooding processing logic. When WHATSAPP_APP_SECRET is unset we
+    // fail closed (refusing every webhook) — tenants must configure the
+    // secret to enable WhatsApp ingestion.
+    if (!verifyWhatsAppSignature(req)) {
+      logger.warn("[WhatsApp] dropping webhook with bad/missing X-Hub-Signature-256");
+      res.status(403).json({ error: "invalid_signature" });
+      return;
+    }
+
     res.status(200).json({ status: "ok" });
 
     const body = req.body;
@@ -266,6 +334,12 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
 
 router.post("/pbx/incoming", async (req, res): Promise<void> => {
   try {
+    // RD3-01 — reject forged inbound payloads before any processing.
+    if (!verifyPbxSignature(req)) {
+      logger.warn("[PBX] dropping /pbx/incoming with bad/missing signature");
+      res.status(403).json({ error: "invalid_signature" });
+      return;
+    }
     const b = zodParse(pbxIncomingSchema.safeParse(req.body ?? {}));
     const callerNumber = b.callerNumber ?? b.from ?? "";
     const calledNumber = b.calledNumber ?? b.to ?? "";
@@ -346,6 +420,12 @@ router.post("/pbx/incoming", async (req, res): Promise<void> => {
 
 router.post("/pbx/completed", async (req, res): Promise<void> => {
   try {
+    // RD3-01 — same signature gate as /pbx/incoming.
+    if (!verifyPbxSignature(req)) {
+      logger.warn("[PBX] dropping /pbx/completed with bad/missing signature");
+      res.status(403).json({ error: "invalid_signature" });
+      return;
+    }
     const b = zodParse(pbxCompletedSchema.safeParse(req.body ?? {}));
     const callId = b.callId ?? b.CallSid ?? "";
     const duration = b.duration ?? b.CallDuration ?? 0;
@@ -399,6 +479,12 @@ router.post("/pbx/completed", async (req, res): Promise<void> => {
 
 router.post("/pbx/status", async (req, res): Promise<void> => {
   try {
+    // RD3-01 — same signature gate as /pbx/incoming.
+    if (!verifyPbxSignature(req)) {
+      logger.warn("[PBX] dropping /pbx/status with bad/missing signature");
+      res.status(403).json({ error: "invalid_signature" });
+      return;
+    }
     const { callId, status, answeredBy } = zodParse(pbxStatusSchema.safeParse(req.body ?? {}));
 
     const [call] = await rawQuery<Record<string, unknown>>(

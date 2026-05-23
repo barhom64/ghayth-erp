@@ -1423,23 +1423,23 @@ router.post("/inventory-counts/:id/items", authorize({ feature: "warehouse.inven
     const systemStock = Number(product.currentStock || 0);
     const variance = physicalCount - systemStock;
 
-    // Upsert count item
-    const [existing] = await rawQuery<Record<string, unknown>>(
-      `SELECT ici.id FROM inventory_count_items ici JOIN inventory_counts ic ON ic.id=ici."countId" WHERE ici."countId"=$1 AND ici."productId"=$2 AND ic."companyId"=$3`,
-      [countId, b.productId, scope.companyId]
+    // Atomic upsert via the (countId, productId) unique constraint
+    // (migration 197). The previous SELECT-then-INSERT-or-UPDATE pattern
+    // had a race: two concurrent POSTs for the same product in the same
+    // count both saw "no existing row" and both INSERTed, leaving two
+    // rows that approval then applied to stock twice. `ON CONFLICT DO
+    // UPDATE` collapses that into one statement; `systemStock` is only
+    // set on first insert so the originally-recorded basis is preserved
+    // when an edit comes in later.
+    await rawExecute(
+      `INSERT INTO inventory_count_items ("countId","productId","systemStock","physicalCount",variance,notes)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       ON CONFLICT ("countId","productId") DO UPDATE
+         SET "physicalCount" = EXCLUDED."physicalCount",
+             variance        = EXCLUDED.variance,
+             notes           = EXCLUDED.notes`,
+      [countId, b.productId, systemStock, physicalCount, variance, b.notes || null]
     );
-    if (existing) {
-      await rawExecute(
-        `UPDATE inventory_count_items SET "physicalCount"=$1, variance=$2, notes=$3 WHERE id=$4`,
-        [physicalCount, variance, b.notes || null, existing.id]
-      );
-    } else {
-      await rawExecute(
-        `INSERT INTO inventory_count_items ("countId","productId","systemStock","physicalCount",variance,notes)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [countId, b.productId, systemStock, physicalCount, variance, b.notes || null]
-      );
-    }
     emitEvent({
       companyId: scope.companyId,
       branchId: scope.branchId,
