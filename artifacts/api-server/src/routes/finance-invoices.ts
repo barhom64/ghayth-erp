@@ -1092,6 +1092,7 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
       description: string | null;
       lineTotal: string;
       accountCode: string | null;
+      accountId: number | null;
       allocationStatus: string | null;
       costCenterId: number | null;
       activityType: string | null;
@@ -1106,14 +1107,15 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
       umrahSeasonId: number | null;
       umrahAgentId: number | null;
       productId: number | null;
+      taxCode: string | null;
     }>(
       `SELECT id, description,
               "lineTotal"::text AS "lineTotal",
-              "accountCode", "allocationStatus",
+              "accountCode", "accountId", "allocationStatus",
               "costCenterId", "activityType",
               "projectId", "vehicleId", "propertyId", "unitId", "assetId",
               "employeeId", "driverId", "contractId",
-              "umrahSeasonId", "umrahAgentId", "productId"
+              "umrahSeasonId", "umrahAgentId", "productId", "taxCode"
          FROM invoice_lines
         WHERE "invoiceId" = $1
         ORDER BY id`,
@@ -1121,6 +1123,42 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
     );
 
     const totalNet = Number(invoice.total) - Number(invoice.vatAmount || 0);
+
+    // Phase 5.5 — run the same resolver the /approve handler uses so
+    // the preview reflects rule-driven account selection, not just the
+    // raw line's accountCode. A line with no accountCode but a matching
+    // rule shows as "resolved" with the rule's chosen account in the
+    // preview, matching exactly what /approve would post.
+    const { resolveLineAllocation } = await import("../lib/accountingAllocation.js");
+    const lineResolutions = await Promise.all(
+      lines.map((ln) =>
+        resolveLineAllocation({
+          companyId: scope.companyId,
+          documentType: "invoice",
+          lineType: "product",
+          accountCode: ln.accountCode,
+          accountId: ln.accountId,
+          costCenterId: ln.costCenterId,
+          taxCode: ln.taxCode,
+          dimensions: {
+            vehicleId: ln.vehicleId,
+            propertyId: ln.propertyId,
+            unitId: ln.unitId,
+            assetId: ln.assetId,
+            projectId: ln.projectId,
+            employeeId: ln.employeeId,
+            driverId: ln.driverId,
+            contractId: ln.contractId,
+            umrahSeasonId: ln.umrahSeasonId,
+            umrahAgentId: ln.umrahAgentId,
+            productId: ln.productId,
+            clientId: invoice.clientId as number | null,
+          },
+          sourceTable: "invoice_lines",
+          sourceLineId: ln.id,
+        })
+      )
+    );
 
     // Build the preview journal lines using the SAME algorithm as
     // /approve. Kept in sync deliberately — if /approve evolves the
@@ -1143,17 +1181,29 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
     });
 
     const unmappedLineIds: number[] = [];
+    // Aggregate resolver warnings so the operator sees them in the preview.
+    const resolverWarnings: Array<{ lineId: number; code: string; message: string }> = [];
     if (lines.length > 0) {
       const buckets = new Map<string, PreviewLine & { _amount: number }>();
       let postedNet = 0;
-      for (const ln of lines) {
-        const acct = ln.accountCode || invRevenueCode;
-        if (!ln.accountCode) unmappedLineIds.push(ln.id);
+      for (let i = 0; i < lines.length; i++) {
+        const ln = lines[i];
+        const res = lineResolutions[i];
+
+        // Resolver output drives the bucket — same as /approve so the
+        // preview shows exactly what would post.
+        const acct = res.resolvedAccountCode || invRevenueCode;
+        const cc = res.costCenterId;
+        const dims = res.dimensions;
+        if (res.status === "unmapped") unmappedLineIds.push(ln.id);
+        for (const w of res.warnings) {
+          resolverWarnings.push({ lineId: ln.id, code: w.code, message: w.message });
+        }
         const key = [
-          acct, ln.costCenterId ?? "", ln.activityType ?? "",
-          ln.projectId ?? "", ln.vehicleId ?? "", ln.propertyId ?? "",
-          ln.employeeId ?? "", ln.driverId ?? "", ln.contractId ?? "",
-          ln.productId ?? "",
+          acct, cc ?? "", ln.activityType ?? "",
+          dims.projectId ?? "", dims.vehicleId ?? "", dims.propertyId ?? "",
+          dims.employeeId ?? "", dims.driverId ?? "", dims.contractId ?? "",
+          dims.productId ?? "",
         ].join("|");
         const amt = roundTo2(Number(ln.lineTotal));
         postedNet += amt;
@@ -1170,19 +1220,21 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
             description: `إيرادات — ${ln.description ?? ""}`.trim(),
             dimensions: {
               clientId: invoice.clientId,
-              costCenterId: ln.costCenterId,
+              costCenterId: cc,
               activityType: ln.activityType,
-              projectId: ln.projectId,
-              vehicleId: ln.vehicleId,
-              propertyId: ln.propertyId,
-              unitId: ln.unitId,
-              assetId: ln.assetId,
-              employeeId: ln.employeeId,
-              driverId: ln.driverId,
-              contractId: ln.contractId,
-              umrahSeasonId: ln.umrahSeasonId,
-              umrahAgentId: ln.umrahAgentId,
-              productId: ln.productId,
+              projectId: dims.projectId,
+              vehicleId: dims.vehicleId,
+              propertyId: dims.propertyId,
+              unitId: dims.unitId,
+              assetId: dims.assetId,
+              employeeId: dims.employeeId,
+              driverId: dims.driverId,
+              contractId: dims.contractId,
+              umrahSeasonId: dims.umrahSeasonId,
+              umrahAgentId: dims.umrahAgentId,
+              productId: dims.productId,
+              ruleId: res.ruleId,
+              resolutionStatus: res.status,
             },
           });
         }
@@ -1257,6 +1309,11 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
       canApprove: blockers.length === 0 && isBalanced,
       blockers,
       warnings,
+      // Phase 5.5 — per-line resolver warnings (rule matched / no match
+      // / required entity missing) so the UI can pin each warning to
+      // the line it came from. Distinct from `warnings` above which
+      // are document-level (period closed / no lines / rounding diff).
+      resolverWarnings,
       journalLines: previewLines,
       totals: { debit: totalDebit, credit: totalCredit, balanced: isBalanced },
     });
