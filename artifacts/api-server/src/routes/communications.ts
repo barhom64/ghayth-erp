@@ -3,6 +3,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, Integ
   zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
 import { z } from "zod";
@@ -85,6 +86,28 @@ const router = Router();
 const WA_VERIFY_TOKEN = config.whatsapp.verifyToken ?? "ghayth_erp_verify";
 const WA_ACCESS_TOKEN = config.whatsapp.accessToken ?? "";
 const WA_PHONE_ID = config.whatsapp.phoneId ?? "";
+const WA_APP_SECRET = config.whatsapp.appSecret ?? "";
+
+// NF-COMM-01 — Meta signs every inbound webhook with X-Hub-Signature-256
+// using the app secret. Without verification, anyone with our public
+// webhook URL could forge messages that hit `matchSenderToEntity` /
+// automation rules. Returns true when the signature matches the raw
+// JSON body that express captured via the `verify` callback in app.ts.
+function verifyWhatsAppSignature(req: import("express").Request): boolean {
+  if (!WA_APP_SECRET) return false;
+  const header = req.get("x-hub-signature-256") ?? "";
+  if (!header.startsWith("sha256=")) return false;
+  const raw = (req as unknown as { rawBody?: Buffer }).rawBody;
+  if (!raw) return false;
+  const expected = createHmac("sha256", WA_APP_SECRET).update(raw).digest("hex");
+  const provided = header.slice("sha256=".length);
+  if (expected.length !== provided.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(provided, "hex"));
+  } catch {
+    return false;
+  }
+}
 
 async function matchSenderToEntity(phone: string, companyId: number): Promise<{ type: "client" | "employee" | "unknown"; id: number | null; name: string }> {
   const normalizedPhone = phone.replace(/\D/g, "").slice(-9);
@@ -157,6 +180,18 @@ router.get("/whatsapp/webhook", (req, res) => {
 
 router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
   try {
+    // NF-COMM-01 — reject forged inbound payloads before any processing.
+    // Meta retries on non-2xx so we still need to respond 200 to *valid*
+    // requests; for invalid ones we 403 so an attacker can't keep
+    // flooding processing logic. When WHATSAPP_APP_SECRET is unset we
+    // fail closed (refusing every webhook) — tenants must configure the
+    // secret to enable WhatsApp ingestion.
+    if (!verifyWhatsAppSignature(req)) {
+      logger.warn("[WhatsApp] dropping webhook with bad/missing X-Hub-Signature-256");
+      res.status(403).json({ error: "invalid_signature" });
+      return;
+    }
+
     res.status(200).json({ status: "ok" });
 
     const body = req.body;

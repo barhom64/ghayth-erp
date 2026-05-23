@@ -58,6 +58,11 @@ const baseBody = z.object({
 const realizedFxBody = baseBody.extend({
   settlementRate: z.number().positive().finite(),
   paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "paymentDate must be YYYY-MM-DD"),
+  // C3 — foreign-currency amount paid in this settlement. Optional only for
+  // backward compatibility (full-payment callers can omit it and the engine
+  // falls back to invoice.total); partial payments MUST pass it or the
+  // realised gain/loss is overstated.
+  paymentAmount: z.number().positive().finite().optional(),
 });
 
 // Audit + event helper so the 5 endpoints stay DRY.
@@ -338,6 +343,7 @@ glHelpersRouter.post(
         postedBy: scope.userId,
         settlementRate: body.settlementRate,
         paymentDate: body.paymentDate,
+        paymentAmount: body.paymentAmount,
         asDraft: body.asDraft,
         description: body.description,
       });

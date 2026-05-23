@@ -130,6 +130,7 @@ const EnvSchema = z.object({
   WHATSAPP_VERIFY_TOKEN: optStr(),
   WHATSAPP_ACCESS_TOKEN: optStr(),
   WHATSAPP_PHONE_ID: optStr(),
+  WHATSAPP_APP_SECRET: optStr(),
 
   // -- zatca / e-invoice ---------------------------------------------------
   EINVOICE_DEFAULT_PROVIDER: optStr(),
@@ -249,6 +250,7 @@ export interface AppConfig {
     readonly verifyToken: string | undefined;
     readonly accessToken: string | undefined;
     readonly phoneId: string | undefined;
+    readonly appSecret: string | undefined;
     readonly configured: boolean;
   };
 
@@ -382,6 +384,7 @@ function buildConfig(env: RawEnv): AppConfig {
       verifyToken: env.WHATSAPP_VERIFY_TOKEN,
       accessToken: env.WHATSAPP_ACCESS_TOKEN,
       phoneId: env.WHATSAPP_PHONE_ID,
+      appSecret: env.WHATSAPP_APP_SECRET,
       configured: Boolean(env.WHATSAPP_ACCESS_TOKEN && env.WHATSAPP_PHONE_ID),
     },
 

@@ -515,6 +515,17 @@ router.delete("/:id", authorize({ feature: "tasks", action: "delete", resource: 
     const [before] = await rawQuery<TaskRow>(`SELECT * FROM tasks WHERE ${beforeWhere}`, beforeParams);
     if (!before) { throw new NotFoundError("المهمة غير موجودة"); }
 
+    // NF-TASK-01 — completed / cancelled tasks are the historical record
+    // for retrospectives, KPIs and SLA reports. Allowing them to be
+    // soft-deleted erases that history; restrict delete to tasks that
+    // haven't yet recorded an outcome.
+    if (before.status && !["pending", "in_progress", "blocked"].includes(String(before.status))) {
+      throw new ConflictError(
+        `لا يمكن حذف مهمة بحالة "${before.status}"`,
+        { field: "status", fix: "أرشِف المهمة بدلاً من الحذف" }
+      );
+    }
+
     const params: unknown[] = [id, scope.companyId];
     let whereClause = `id = $1 AND "companyId" = $2`;
 
