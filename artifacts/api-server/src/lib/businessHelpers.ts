@@ -716,8 +716,19 @@ export async function applyJournalEntryBalances(
   // Idempotency + rolling-deploy safety: only a deferred entry that has not
   // yet had its balances applied is processed. Entries that predate FIN-007
   // were created with balancesApplied = true and are skipped here.
+  //
+  // `FOR UPDATE` serialises two concurrent apply calls on the same journal
+  // entry. Without the lock, the second caller could read `balancesApplied =
+  // false` while the first is mid-apply, then both proceed and bump
+  // `chart_of_accounts.currentBalance` twice. The flag UPDATE at the bottom
+  // happens inside the caller's transaction, so the row stays locked until
+  // the apply commits — the second waiter then sees `balancesApplied = true`
+  // and exits cleanly.
   const { rows: jeRows } = await client.query(
-    `SELECT "balancesApplied", "createdAt" FROM journal_entries WHERE id = $1 AND "companyId" = $2`,
+    `SELECT "balancesApplied", "createdAt"
+       FROM journal_entries
+      WHERE id = $1 AND "companyId" = $2
+      FOR UPDATE`,
     [journalId, companyId]
   );
   if (!jeRows[0] || jeRows[0].balancesApplied) return;
