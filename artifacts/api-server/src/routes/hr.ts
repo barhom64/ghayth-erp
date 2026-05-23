@@ -1952,7 +1952,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
           }
           await client.query(
             `UPDATE hr_leave_balances
-             SET reserved = reserved - $1
+             SET reserved = GREATEST(reserved - $1, 0)
              WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
             [request.days, scope.companyId, request.employeeId, request.leaveTypeId, year]
           );
@@ -1996,8 +1996,8 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
         onApply: async (_row, client) => {
           if (currentStage) {
             await client.query(
-              `UPDATE leave_approval_stages SET status = 'returned', decision = $1, "decidedBy" = $2, "decidedAt" = NOW() WHERE id = $3 AND status = 'pending' AND "leaveId" IN (SELECT id FROM leaves WHERE "companyId"=$4)`,
-              [reason, scope.activeAssignmentId, currentStage.id, scope.companyId]
+              `UPDATE leave_approval_stages SET status = 'returned', decision = $1, "decidedBy" = $2, "decidedAt" = NOW() WHERE id = $3 AND status = 'pending'`,
+              [reason, scope.activeAssignmentId, currentStage.id]
             );
           }
           await client.query(
