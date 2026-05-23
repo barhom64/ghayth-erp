@@ -163,6 +163,72 @@ guards في P5.
 
 ---
 
+## P9 — Typography Contract (Phase 1 منجَز · 2026-05-23)
+
+### المشكلة قبل P9
+
+مقاسات الخط لم تكن مركزية:
+- `text-xs` (12px): **2616** استخدام عبر pages+components ← ≈58% من النصوص
+- `text-sm` (14px): **1897** استخدام ← 26%
+- `text-base` (16px) فأعلى: ≈16% فقط
+
+النتيجة: النظام يبدو "صغيرًا" بصريًا. أي محاولة تكبير عالمي كانت تتطلب
+تعديل 4500+ موضع.
+
+### الحل
+
+**root font-size كـ knob واحد**. كل Tailwind utilities (`text-*`,
+`p-*`, `m-*`, `gap-*`, `w-*`, `h-*`) تستخدم `rem`، فهي نسبية للـ
+`html { font-size }`. تغيير هذه القيمة يكبّر/يصغّر كل شيء متناسقًا.
+
+| العنصر | الموقع | التحكم |
+| --- | --- | --- |
+| Font family | `artifacts/ghayth-erp/src/index.css` `--app-font-sans` | تغيير واحد ينقل كل النظام إلى خط آخر |
+| Font scale | `artifacts/ghayth-erp/src/index.css` `html { font-size }` | تغيير واحد يكبّر/يصغّر كل النظام |
+| Semantic tokens (`text-page-title`, `text-table-cell`, إلخ) | غير منفّذ بعد | **Phase 2 من P9** |
+
+### الحالة الفعلية بعد Phase 1
+
+- `html { font-size: 18px; }` (كان browser default 16px → +12%).
+- `text-xs` يعرض الآن ≈13.5px (بدل 12px).
+- `text-sm` يعرض الآن ≈15.75px (بدل 14px).
+- `text-base` يعرض الآن 18px (بدل 16px).
+- المسافات (padding/margin/gap) تتناسب تلقائيًا.
+
+### Phase 2 — Semantic tokens (مخطط)
+
+مقاسات Tailwind (`text-xs`/`text-sm`/إلخ) أرقام، ليست دلالات. عند الحاجة
+لتغيير "كل عناوين الجداول" أو "كل تسميات الحقول"، لا نجد ما نلمسه.
+
+**الحل المخطط**: tokens دلالية في `@theme inline`:
+
+```css
+@theme inline {
+  --text-page-title: 1.5rem;       /* h1 */
+  --text-section-title: 1.25rem;   /* h2 */
+  --text-card-title: 1.125rem;     /* h3 / card headers */
+  --text-body: 1rem;               /* body paragraphs */
+  --text-table-cell: 0.9375rem;    /* table rows */
+  --text-form-label: 0.875rem;     /* form labels */
+  --text-caption: 0.8125rem;       /* hints / meta */
+  --text-status-pill: 0.75rem;     /* badges */
+}
+```
+
+Tailwind v4 يولّد `text-page-title`, `text-section-title`, إلخ تلقائيًا من
+هذه المتغيرات. الـ migration تدريجي مع P4 sweeps.
+
+### قاعدة الحوكمة
+
+- لا تضف أي `font-size` inline في component أو page. استخدم
+  Tailwind utility فقط.
+- عند Phase 2: لا تستخدم `text-xs/sm/base` مباشرة في صفحة جديدة —
+  اختر الـ token الدلالي المناسب.
+- تغيير حجم/خط عالميًا = تعديل **سطر واحد** في `index.css`. أي PR
+  يلمس font-size في أكثر من ذلك المكان يُرفض في review.
+
+---
+
 ## P8 — Ghaith UI Standard Kit (Phase 2 منجَز · 2026-05-23)
 
 ### الخلاصة
