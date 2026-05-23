@@ -590,69 +590,91 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
-    await applyTransition({
-      entity: "invoices",
-      id,
-      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
-      action: "invoice.approved",
-      // Issue #663 #1: dropped "sent" — once an invoice has been sent
-      // to the customer it is a financial commitment, not a draft
-      // pending approval. The engine's invoices state machine reflects
-      // this: `sent: ["partial","paid","overdue","cancelled"]` has no
-      // `approved` target, so the previous `["draft","sent","returned"]`
-      // whitelist threw `LifecycleError` at runtime for any sent-state
-      // invoice. The UI (finance/invoice-detail.tsx:316) only exposes
-      // the approve action when `status === "draft"`, so the
-      // unreachable `sent` entry was latent drift, not an exercised
-      // path — but the route is now in agreement with engine + UI.
-      fromStates: ["draft", "returned"],
-      toState: "approved",
-      setExtras: { approvedBy: scope.userId, approvedAt: { raw: "NOW()" } },
-      extraWhere: `"deletedAt" IS NULL`,
-      after: { ref: invoice.ref, total: invoice.total },
-    });
-
-    // GL entry created ONLY upon approval — BLOCKING (financial integrity guard)
+    // GL accounts resolved up-front (reads, no transaction needed).
     const { financialEngine } = await import("../lib/engines/index.js");
     const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1200"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
     ]);
-    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId || 0,
-      createdBy: scope.activeAssignmentId,
-      ref: `JE-${invoice.ref}`,
-      description: `فاتورة ${invoice.ref}${invoice.description ? ` – ${invoice.description}` : ""}`,
-      type: "invoice",
-      sourceType: "invoice",
-      sourceId: id,
-      sourceKey: `finance:invoice_approval:${id}`,
-      lines: [
-        { accountCode: invArCode, debit: Number(invoice.total), credit: 0 },
-        { accountCode: invRevenueCode, debit: 0, credit: Number(invoice.total) - Number(invoice.vatAmount || 0) },
-        { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
-      ],
-      guardTable: "invoices",
-      guardId: id,
+
+    // Atomic approval: status flip + GL post + denormalised counters
+    // either all commit or all roll back. Without this wrapping, a DB
+    // hiccup between applyTransition and the totalRevenue UPDATE would
+    // leave the invoice `approved`, the JE on the books, but the
+    // client's totalRevenue counter unchanged — a phantom-revenue
+    // condition that no compensating path catches. withTransaction is
+    // reentrant via SAVEPOINT (PR #885) so the engine's internal
+    // transaction nests cleanly when we pass the same client through.
+    let journalId: number;
+    let alreadyExists = false;
+    await withTransaction(async (client) => {
+      await applyTransition({
+        entity: "invoices",
+        id,
+        scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+        action: "invoice.approved",
+        // Issue #663 #1: dropped "sent" — once an invoice has been sent
+        // to the customer it is a financial commitment, not a draft
+        // pending approval. The engine's invoices state machine reflects
+        // this: `sent: ["partial","paid","overdue","cancelled"]` has no
+        // `approved` target, so the previous `["draft","sent","returned"]`
+        // whitelist threw `LifecycleError` at runtime for any sent-state
+        // invoice. The UI (finance/invoice-detail.tsx:316) only exposes
+        // the approve action when `status === "draft"`, so the
+        // unreachable `sent` entry was latent drift, not an exercised
+        // path — but the route is now in agreement with engine + UI.
+        fromStates: ["draft", "returned"],
+        toState: "approved",
+        setExtras: { approvedBy: scope.userId, approvedAt: { raw: "NOW()" } },
+        extraWhere: `"deletedAt" IS NULL`,
+        after: { ref: invoice.ref, total: invoice.total },
+        client,
+      });
+
+      // GL entry created ONLY upon approval — BLOCKING (financial integrity guard)
+      const result = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId || 0,
+        createdBy: scope.activeAssignmentId,
+        ref: `JE-${invoice.ref}`,
+        description: `فاتورة ${invoice.ref}${invoice.description ? ` – ${invoice.description}` : ""}`,
+        type: "invoice",
+        sourceType: "invoice",
+        sourceId: id,
+        sourceKey: `finance:invoice_approval:${id}`,
+        lines: [
+          { accountCode: invArCode, debit: Number(invoice.total), credit: 0 },
+          { accountCode: invRevenueCode, debit: 0, credit: Number(invoice.total) - Number(invoice.vatAmount || 0) },
+          { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
+        ],
+        guardTable: "invoices",
+        guardId: id,
+      });
+      journalId = result.journalId;
+      alreadyExists = result.alreadyExists;
+
+      // Update client totalRevenue upon approval (revenue recognition).
+      if (invoice.clientId) {
+        await client.query(
+          `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+          [Number(invoice.total) - Number(invoice.vatAmount || 0), invoice.clientId, scope.companyId]
+        );
+      }
+
+      // Budget consumption at approval (not at draft creation). No row
+      // for the (account, period) pair → no-op, which is the right
+      // behaviour when a company hasn't seeded a budget. A genuine
+      // error here (e.g. column missing) now rolls back the approval
+      // instead of being silently swallowed — at-fault data still
+      // surfaces, but the books and the counter never disagree.
+      const baseAmount = Number(invoice.total) - Number(invoice.vatAmount || 0);
+      await client.query(
+        `UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+        [baseAmount, scope.companyId, invRevenueCode, currentPeriod()]
+      );
     });
     markIdempotencyReplay(req, res, alreadyExists);
-
-    // Update client totalRevenue upon approval (revenue recognition)
-    if (invoice.clientId) {
-      await rawQuery<Record<string, unknown>>(
-        `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
-        [Number(invoice.total) - Number(invoice.vatAmount || 0), invoice.clientId, scope.companyId]
-      );
-    }
-
-    // Budget consumption at approval (not at draft creation)
-    const baseAmount = Number(invoice.total) - Number(invoice.vatAmount || 0);
-    await rawExecute(
-      `UPDATE budgets SET used = used + $1 WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
-      [baseAmount, scope.companyId, invRevenueCode, currentPeriod()]
-    ).catch((e) => logger.error(e, "Budget update on approval failed"));
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.approved", entity: "invoices", entityId: id, details: JSON.stringify({ ref: invoice.ref, total: invoice.total }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
