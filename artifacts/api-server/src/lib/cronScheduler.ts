@@ -179,6 +179,14 @@ async function runJob(def: CronJobDef): Promise<void> {
     // scans …) affects every tenant, so raise a critical, dismissible alert
     // for each company's admins. Alerting errors are swallowed so they
     // never mask the original cron failure.
+    //
+    // IMPORTANT: do NOT include `errMsg` in the broadcast description.
+    // Postgres exceptions routinely contain row-level values (e.g.
+    // `duplicate key value violates ... (name)=(Mohamed Al-…)`), so
+    // bleeding that string into every tenant's smart_alerts row leaks one
+    // company's data into every other company's admin inbox. The full
+    // error is already captured in `cron_jobs_log.errorMessage` (line 174
+    // above) and in the server log (line 176) for ops to inspect.
     try {
       const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
       for (const c of companies) {
@@ -186,7 +194,7 @@ async function runJob(def: CronJobDef): Promise<void> {
           c.id,
           "cron_failure",
           `فشل مهمة مجدولة: ${def.name}`,
-          `فشلت المهمة المجدولة "${def.name}" — ${errMsg}`,
+          `فشلت المهمة المجدولة "${def.name}" — راجع سجلّات المهام (cron_jobs_log)`,
           "critical",
         );
       }
