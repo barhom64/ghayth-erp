@@ -23,22 +23,28 @@ async function handleLeaveApproval(refId: number, companyId: number, approvedBy?
 
   const year = new Date(request.startDate as string | Date).getFullYear();
 
+  // Balance deduction targets only the request's company — the submission
+  // (hr.ts line 1742-1747) reserved against that single company, so the
+  // approval must subtract from the same bucket. Iterating every active
+  // assignment's companyId would silently deduct from co-employer companies
+  // that never reserved, draining their balance without a corresponding
+  // request.
+  await rawExecute(
+    `UPDATE hr_leave_balances
+     SET used = used + $1, reserved = GREATEST(reserved - $1, 0)
+     WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
+    [request.days, companyId, request.employeeId, request.leaveTypeId, year]
+  );
+
+  // Attendance auto-fill still iterates every active assignment — each
+  // assignment is independently tied to a (company, branch) tuple and may
+  // need its own on_leave row.
   const allAssignments = await rawQuery<Record<string, unknown>>(
     `SELECT ea.id, ea."companyId", ea."branchId"
      FROM employee_assignments ea
      WHERE ea."employeeId" = $1 AND ea.status = 'active'`,
     [request.employeeId]
   );
-
-  const allCompanyIds = [...new Set(allAssignments.map((a: Record<string, unknown>) => a.companyId))];
-  for (const cId of allCompanyIds) {
-    await rawExecute(
-      `UPDATE hr_leave_balances
-       SET used = used + $1, reserved = GREATEST(reserved - $1, 0)
-       WHERE "companyId" = $2 AND "employeeId" = $3 AND "leaveTypeId" = $4 AND year = $5`,
-      [request.days, cId, request.employeeId, request.leaveTypeId, year]
-    );
-  }
 
   const leaveStart = new Date(request.startDate as string | Date);
   const leaveEnd = new Date(request.endDate as string | Date);
