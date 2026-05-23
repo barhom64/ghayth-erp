@@ -9327,7 +9327,15 @@ CREATE TABLE public.journal_lines (
     "originalCurrency" character(3),
     "originalDebit" numeric(18,2),
     "originalCredit" numeric(18,2),
-    "exchangeRate" numeric(18,8)
+    "exchangeRate" numeric(18,8),
+    "costCenterId" integer,
+    "unitId" integer,
+    "assetId" integer,
+    "umrahSeasonId" integer,
+    "umrahAgentId" integer,
+    "sourceLineTable" character varying(64),
+    "sourceLineId" integer,
+    "dimensionJson" jsonb
 );
 
 
