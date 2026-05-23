@@ -67,20 +67,26 @@ describe("GRN posting reads dimensional payload from goods_receipt_items", () =>
 
 describe("per-treatment bucket grouping", () => {
   it("groups by (account + dimension signature)", () => {
-    // The bucket key includes the dimension axes.
+    // The bucket key includes the dimension axes. After Phase 5.4
+    // wired the resolver, dimensions come from `dims.*` (resolver
+    // output) instead of `ln.*` (raw line). Either form proves the
+    // bucketing is dimensional.
     const sectionIdx = ROUTE.indexOf("type DrBucket");
     expect(sectionIdx).toBeGreaterThan(-1);
     const sectionEnd = ROUTE.indexOf("const grnJournalResult", sectionIdx);
     const section = ROUTE.slice(sectionIdx, sectionEnd);
-    expect(section).toContain("ln.vehicleId");
-    expect(section).toContain("ln.propertyId");
-    expect(section).toContain("ln.projectId");
-    expect(section).toContain("ln.employeeId");
-    expect(section).toContain("ln.assetId");
+    expect(section).toMatch(/(ln|dims)\.vehicleId/);
+    expect(section).toMatch(/(ln|dims)\.propertyId/);
+    expect(section).toMatch(/(ln|dims)\.projectId/);
+    expect(section).toMatch(/(ln|dims)\.employeeId/);
+    expect(section).toMatch(/(ln|dims)\.assetId/);
   });
 
   it("operator-pinned accountCode overrides treatment lookup", () => {
-    expect(ROUTE).toMatch(/let acct = ln\.accountCode;/);
+    // After Phase 5.4 wiring, the resolver runs first; manual pins
+    // come through as `res.resolvedAccountCode` with status=
+    // 'manual_override'.
+    expect(ROUTE).toMatch(/let acct = (ln\.accountCode|res\.resolvedAccountCode);/);
     expect(ROUTE).toContain("if (!acct)");
   });
 
