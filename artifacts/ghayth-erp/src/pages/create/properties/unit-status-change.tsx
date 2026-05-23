@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { cn } from "@/lib/utils";
-import { CreatePageLayout } from "@/components/create-page-layout";
+import { CreatePageLayout } from "@workspace/ui-core";
 
 const STATUS_OPTIONS = [
   { value: "available", label: "متاحة" },

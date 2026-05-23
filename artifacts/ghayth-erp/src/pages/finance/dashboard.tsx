@@ -21,8 +21,11 @@ import {
 import { useApiQuery, asList } from "@/lib/api";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { PageShell, PageSection } from "@/components/page-shell";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import {
+  PageShell,
+  PageSection,
+  PageStatusBadge,
+} from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";

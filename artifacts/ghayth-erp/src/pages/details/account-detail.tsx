@@ -5,7 +5,7 @@ import {
   DetailActionButtons,
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen } from "lucide-react";

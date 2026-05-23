@@ -3,15 +3,18 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+} from "@workspace/ui-core";
 import { Plus, Eye, Users, UserCheck, UserX, Car } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
-import { PageShell } from "@/components/page-shell";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 

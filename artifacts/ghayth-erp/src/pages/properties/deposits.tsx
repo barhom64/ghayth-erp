@@ -1,14 +1,22 @@
 import { useState } from "react";
 import { useApiQuery, asList, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import {
+  PageStatusBadge,
+  PageShell,
+  FormShell,
+  FormNumberField,
+  FormTextField,
+  FormSelectField,
+  FormDateField,
+  FormGrid,
+} from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { Plus, RotateCcw } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
-import { PageShell } from "@/components/page-shell";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { z } from "zod";
@@ -19,14 +27,6 @@ import {
   AlertDialogTitle,
   AlertDialogDescription,
 } from "@/components/ui/alert-dialog";
-import {
-  FormShell,
-  FormNumberField,
-  FormTextField,
-  FormSelectField,
-  FormDateField,
-  FormGrid,
-} from "@/components/form-shell";
 
 const depositSchema = z.object({
   contractId: z.string().min(1, "العقد مطلوب"),

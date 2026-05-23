@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";

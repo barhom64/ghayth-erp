@@ -16,7 +16,7 @@ import {
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
-  BarChart2, ShieldAlert, Flag,
+  BarChart2, ShieldAlert, Flag, Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -211,6 +211,7 @@ const allNavSections: NavSection[] = [
       { label: "الفترات والميزانية", path: "/finance/budget", icon: FileBarChart, module: "finance", children: [
         { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
         { label: "الفترات المالية", path: "/finance/fiscal-periods", icon: Calendar },
+        { label: "إقفال الفترات", path: "/finance/fiscal-periods-v2", icon: Lock },
         { label: "إقفال السنة المالية", path: "/finance/year-end-close", icon: Archive },
       ]},
       { label: "الالتزامات والضمانات", path: "/finance/commitments", icon: FileSignature, module: "finance", children: [

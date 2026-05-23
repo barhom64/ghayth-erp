@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { resolveStatus } from "@/components/page-status-badge";
+import { resolveStatus } from "@workspace/ui-core";
 
 interface SecondaryAlertsSectionProps {
   overdueItems: any[];

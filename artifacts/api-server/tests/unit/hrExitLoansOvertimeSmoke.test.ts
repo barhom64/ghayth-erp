@@ -112,7 +112,12 @@ describe("Exit request creation", () => {
 
   it("submits to workflow engine", () => {
     const idx = EXIT_ROUTE.indexOf('router.post("/exit"');
-    const section = EXIT_ROUTE.slice(idx, idx + 6000);
+    // The POST /exit handler has grown past the original 6000-char
+    // window (approval-chain init + clearance items + audit + workflow
+    // submit all live inside it). Slice to the next router. boundary
+    // so the assertion stays correct as the handler keeps evolving.
+    const nextRouter = EXIT_ROUTE.indexOf("router.", idx + 10);
+    const section = EXIT_ROUTE.slice(idx, nextRouter > idx ? nextRouter : idx + 12000);
     expect(section).toContain("submitWorkflow");
     expect(section).toContain('requestType: "exit"');
   });

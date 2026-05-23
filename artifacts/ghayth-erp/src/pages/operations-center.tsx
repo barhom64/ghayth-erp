@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { formatNumber } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import {
   Activity, AlertTriangle, ArrowUpRight, Building, Car, CheckCircle2,
   Clock, CreditCard, CloudRain, Home, RefreshCw, Shield, Timer, Users,

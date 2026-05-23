@@ -55,7 +55,10 @@ describe("properties/inspections — completion via CompleteInspectionDialog (Fo
   });
 
   it("imports the FormShell stack + AlertDialog primitives", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormNumberField");
     expect(SRC).toContain("FormTextareaField");
@@ -85,7 +88,10 @@ describe("properties/deposits — refund via RefundDepositDialog (FormShell + zo
   });
 
   it("imports the FormShell stack + AlertDialog primitives", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormNumberField");
     expect(SRC).toContain("FormTextField");

@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useQueryClient } from "@tanstack/react-query";
-import { CreatePageLayout } from "@/components/create-page-layout";
+import { CreatePageLayout } from "@workspace/ui-core";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 

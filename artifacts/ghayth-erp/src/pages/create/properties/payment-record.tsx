@@ -10,7 +10,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { CreatePageLayout } from "@/components/create-page-layout";
+import { CreatePageLayout } from "@workspace/ui-core";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function PaymentRecord() {

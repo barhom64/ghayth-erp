@@ -18,7 +18,10 @@ function stripComments(src: string): string {
 
 describe("properties/deposits — create-deposit form on FormShell + zod", () => {
   it("imports the FormShell stack with FormSelectField + FormDateField", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormSelectField");
     expect(SRC).toContain("FormDateField");

@@ -1,8 +1,14 @@
 import { useState } from "react";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout } from "@workspace/entity-kit";
+import {
+  PageStatusBadge,
+  FormShell,
+  FormEmailField,
+  FormTextField,
+  FormGrid,
+} from "@workspace/ui-core";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageStatusBadge } from "@/components/page-status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,9 +30,6 @@ import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { useToast } from "@/hooks/use-toast";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { z } from "zod";
-import {
-  FormShell, FormEmailField, FormTextField, FormGrid,
-} from "@/components/form-shell";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Activity },

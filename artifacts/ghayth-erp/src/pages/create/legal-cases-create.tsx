@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
-import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";

@@ -3,11 +3,14 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import {
+  PageStatusBadge,
+  PageShell,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { GraduationCap, Users, Award, BarChart3, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 export default function TrainingAdvancedPage() {
