@@ -927,7 +927,7 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
 
     const id = parseId(req.params.id, "id");
     const [inv] = await rawQuery<Record<string, unknown>>(
-      `SELECT id, ref, status, "paidAmount" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      `SELECT id, ref, status, "paidAmount", "createdAt" FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     if (!inv) throw new NotFoundError("الفاتورة غير موجودة");
@@ -935,6 +935,18 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
       throw new ConflictError(
         "لا يمكن حذف فاتورة عليها تحصيلات",
         { field: "paidAmount", fix: "قم بعكس التحصيل أولاً ثم أعد المحاولة" }
+      );
+    }
+
+    // FIN-AUD-06 — block soft-delete in a closed period. The DELETE reverses
+    // the original GL push, so allowing it in a locked period would move
+    // GL balances inside that period after close. CREATE / PATCH already
+    // call checkFinancialPeriodOpen; deletion was the lone gap.
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, toDateISO(inv.createdAt as string | Date));
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن حذف فاتورة في فترة مُقفلة: ${periodCheck.periodName ?? ""}`,
+        { field: "createdAt", meta: { periodName: periodCheck.periodName } },
       );
     }
 
