@@ -28,7 +28,10 @@ describe("hr/idp — IDP create on FormShell + zod with FormDateField", () => {
   const SRC = read("hr/idp.tsx");
 
   it("imports the FormShell stack with FormDateField + FormTextareaField", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormDateField");
     expect(SRC).toContain("FormTextareaField");

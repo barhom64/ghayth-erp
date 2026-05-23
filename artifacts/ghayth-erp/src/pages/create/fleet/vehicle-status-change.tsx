@@ -4,13 +4,15 @@ import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import {
+  PageStatusBadge,
+  CreatePageLayout,
+} from "@workspace/ui-core";
 import { Pencil, CheckCircle, XCircle, Info, AlertTriangle, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { cn } from "@/lib/utils";
-import { CreatePageLayout } from "@/components/create-page-layout";
 
 const VEHICLE_STATUS_OPTIONS = [
   { value: "available", label: "متاحة" },

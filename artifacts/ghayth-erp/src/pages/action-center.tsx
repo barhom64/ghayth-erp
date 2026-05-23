@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UpcomingEventsWidget } from "@/components/shared/upcoming-events-widget";
 import { PromptDialog } from "@/components/shared/prompt-dialog";

@@ -4,7 +4,7 @@ import { BarChart3, Car, Fuel, Wrench, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery } from "@/lib/api";
 import { ExportButton, MultiExportButton } from "@/components/shared/export-buttons";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { z } from "zod";
 import { useParams } from "wouter";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
-import type { ExtraTab } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,12 +10,16 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageStatusBadge, resolveStatus } from "@/components/page-status-badge";
+import {
+  PageStatusBadge,
+  resolveStatus,
+  FormShell,
+  FormTextField,
+  FormDateField,
+  FormGrid,
+} from "@workspace/ui-core";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import {
-  FormShell, FormTextField, FormDateField, FormGrid,
-} from "@/components/form-shell";
 import {
   Gavel, Calendar, FileText, AlertTriangle, Clock,
   CheckCircle2, User, MapPin, TrendingUp, Activity,

@@ -11,7 +11,11 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+} from "@workspace/ui-core";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +23,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Plus, FileText } from "lucide-react";
-import { PageShell } from "@/components/page-shell";
 import { formatDateAr } from "@/lib/formatters";
 
 // ─── Arabic Maps ────────────────────────────────────────────────────

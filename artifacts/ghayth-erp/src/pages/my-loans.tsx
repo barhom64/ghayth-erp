@@ -1,9 +1,12 @@
-import { PageShell } from "@/components/page-shell";
+import {
+  PageShell,
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
-import { PageStatusBadge } from "@/components/page-status-badge";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   Wallet, Clock, CheckCircle2, DollarSign, TrendingDown,
 } from "lucide-react";

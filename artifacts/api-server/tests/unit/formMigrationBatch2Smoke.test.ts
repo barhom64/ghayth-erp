@@ -18,7 +18,10 @@ describe("hr/salary-components — create form on FormShell + zod", () => {
   const SRC = read("hr/salary-components.tsx");
 
   it("imports the FormShell stack", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormTextField");
     expect(SRC).toContain("FormNumberField");
@@ -53,7 +56,10 @@ describe("admin-integrations — create form on FormShell + zod with refine() JS
   const SRC = read("admin-integrations.tsx");
 
   it("imports the FormShell stack", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormTextareaField");
     expect(SRC).toContain("FormSelectField");
   });

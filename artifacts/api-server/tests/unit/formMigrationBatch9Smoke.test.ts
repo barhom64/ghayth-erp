@@ -25,7 +25,10 @@ describe("finance/intercompany — transaction-create on FormShell + zod with Fo
   const SRC = read("finance/intercompany.tsx");
 
   it("imports the FormShell stack with FormDateField", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormDateField");
   });
@@ -60,7 +63,10 @@ describe("finance/project-costing — cost-create on FormShell + zod with closed
   const SRC = read("finance/project-costing.tsx");
 
   it("imports the FormShell stack with FormDateField", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormDateField");
   });
 

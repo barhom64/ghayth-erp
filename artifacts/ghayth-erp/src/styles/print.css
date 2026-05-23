@@ -1,4 +1,14 @@
 @media print {
+  /* Reset the typography knob (index.css :root font-size: 18px) back to
+     the browser default for printed output. Inline print stylesheets in
+     components/print-layout.tsx already use absolute `pt` units and stay
+     unaffected, but a direct browser-print of any non-PrintDocument page
+     would otherwise render rem-based content (Tailwind p-*, text-sm, etc.)
+     12% larger than designed and may not fit A4. */
+  html {
+    font-size: 16px;
+  }
+
   nav,
   aside,
   header,
