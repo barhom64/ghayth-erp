@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Crown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { CreatePageLayout } from "@/components/create-page-layout";
 import {
+  CreatePageLayout,
   FormShell,
   FormTextField,
   FormEmailField,
@@ -18,7 +18,7 @@ import {
   FormDateField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // Phone is normalised to digits + leading + only — schema rejects
 // anything under 9 digits. Email uses zod's built-in `.email()`.

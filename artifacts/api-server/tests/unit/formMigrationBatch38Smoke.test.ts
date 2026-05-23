@@ -37,7 +37,10 @@ function stripComments(src: string): string {
 
 describe("admin/rbac-v2-jit-tab — RequestDialog → inline, DecisionDialog preserved", () => {
   it("imports the FormShell stack + useFormContext/useWatch + zod", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormNumberField");
     expect(SRC).toContain("FormTextareaField");

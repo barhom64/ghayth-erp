@@ -20,7 +20,12 @@ describe("projects/risks — risk-create form on FormShell + zod", () => {
   const SRC = read("projects/risks.tsx");
 
   it("imports the FormShell stack", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    // Accept either the legacy `@/components/form-shell` path or the
+    // canonical `@workspace/ui-core` re-export (UNIFICATION_PLAN §P8).
+    const hasFormShellImport =
+      SRC.includes('from "@/components/form-shell"') ||
+      SRC.includes('from "@workspace/ui-core"');
+    expect(hasFormShellImport).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormSelectField");
   });
@@ -56,7 +61,10 @@ describe("admin/users-tab — new-user form with email validation in zod", () =>
   const SRC = read("admin/users-tab.tsx");
 
   it("imports the FormShell stack with FormEmailField", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormEmailField");
   });
 

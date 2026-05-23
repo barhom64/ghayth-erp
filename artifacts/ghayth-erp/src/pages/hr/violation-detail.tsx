@@ -1,21 +1,27 @@
 import { useParams } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
+import {
+  DetailPageLayout,
+  ProcessStages,
+  type StageStep,
+} from "@workspace/entity-kit";
+import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@/components/page-status-badge";
 import { Link } from "wouter";
 import {
   AlertTriangle, Shield, DollarSign, Calendar, User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { SEVERITY_LEVELS, INCIDENT_LABELS } from "@/lib/hr-type-maps";
-import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
-import { ProcessStages, type StageStep } from "@/components/shared/entity-timeline";
 
 const VIOLATION_LIFECYCLE = [
   { key: "draft",               label: "مسودة" },

@@ -8821,7 +8821,27 @@ CREATE TABLE public.invoice_lines (
     "unitPrice" numeric DEFAULT 0,
     "lineTotal" numeric DEFAULT 0,
     "vatAmount" numeric DEFAULT 0,
-    "lineGross" numeric DEFAULT 0
+    "lineGross" numeric DEFAULT 0,
+    "accountId" integer,
+    "accountCode" character varying(20),
+    "costCenterId" integer,
+    "activityType" character varying(50),
+    "projectId" integer,
+    "vehicleId" integer,
+    "propertyId" integer,
+    "unitId" integer,
+    "assetId" integer,
+    "employeeId" integer,
+    "driverId" integer,
+    "contractId" integer,
+    "umrahSeasonId" integer,
+    "umrahAgentId" integer,
+    "productId" integer,
+    "taxCode" character varying(20),
+    "allocationRuleId" integer,
+    "allocationStatus" character varying(20) DEFAULT 'unmapped'::character varying,
+    "dimensionJson" jsonb,
+    "manualOverrideReason" text
 );
 
 
@@ -9307,7 +9327,15 @@ CREATE TABLE public.journal_lines (
     "originalCurrency" character(3),
     "originalDebit" numeric(18,2),
     "originalCredit" numeric(18,2),
-    "exchangeRate" numeric(18,8)
+    "exchangeRate" numeric(18,8),
+    "costCenterId" integer,
+    "unitId" integer,
+    "assetId" integer,
+    "umrahSeasonId" integer,
+    "umrahAgentId" integer,
+    "sourceLineTable" character varying(64),
+    "sourceLineId" integer,
+    "dimensionJson" jsonb
 );
 
 

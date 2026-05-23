@@ -16,7 +16,7 @@ import {
   FormTextField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const zatcaSchema = z.object({
   enabled: z.boolean(),

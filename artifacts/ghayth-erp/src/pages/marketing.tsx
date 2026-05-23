@@ -1,12 +1,18 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { PageShell } from "@/components/page-shell";
+import {
+  PageShell,
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+} from "@workspace/ui-core";
 import { useApiQuery, asList } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PageStatusBadge } from "@/components/page-status-badge";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Megaphone, Plus, DollarSign, Eye, TrendingUp, Users, BarChart2, Target, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -14,7 +20,6 @@ import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } fro
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { GuardedButton } from "@/components/shared/permission-gate";
 
 const STAGE_LABELS: Record<string, string> = {

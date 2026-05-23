@@ -22,7 +22,10 @@ function stripComments(src: string): string {
 
 describe("finance/custodies — Create + Settle forms on FormShell + zod", () => {
   it("imports the FormShell stack with FormDateField + FormSelectField", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormNumberField");
     expect(SRC).toContain("FormSelectField");
