@@ -150,7 +150,7 @@ router.get("/", authorize({ feature: "tasks", action: "list" }), async (req, res
       paramIdx++;
     }
 
-    if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
+    if (scope.role === "employee" && !scope.isOwner && scope.activeAssignmentId) {
       where += ` AND t."assignedTo" = $${paramIdx}`;
       params.push(scope.activeAssignmentId);
       paramIdx++;
@@ -272,7 +272,7 @@ router.get("/:id", authorize({ feature: "tasks", action: "view", resource: { tab
     const id = parseId(req.params.id, "id");
     let scopeCondition = ` AND t."companyId" = $2`;
     const params: unknown[] = [id, scope.companyId];
-    if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
+    if (scope.role === "employee" && !scope.isOwner && scope.activeAssignmentId) {
       scopeCondition += ` AND t."assignedTo" = $3`;
       params.push(scope.activeAssignmentId);
     }
@@ -454,7 +454,7 @@ router.patch("/:id", authorize({ feature: "tasks", action: "update", resource: {
       idx++;
     }
 
-    if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
+    if (scope.role === "employee" && !scope.isOwner && scope.activeAssignmentId) {
       whereClause += ` AND "assignedTo" = $${idx}`;
       params.push(scope.activeAssignmentId);
       idx++;
@@ -508,7 +508,7 @@ router.delete("/:id", authorize({ feature: "tasks", action: "delete", resource: 
     const id = parseId(req.params.id, "id");
     const beforeParams: any[] = [id, scope.companyId];
     let beforeWhere = `id = $1 AND "companyId" = $2`;
-    if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
+    if (scope.role === "employee" && !scope.isOwner && scope.activeAssignmentId) {
       beforeWhere += ` AND "assignedTo" = $3`;
       beforeParams.push(scope.activeAssignmentId);
     }
@@ -529,7 +529,7 @@ router.delete("/:id", authorize({ feature: "tasks", action: "delete", resource: 
     const params: unknown[] = [id, scope.companyId];
     let whereClause = `id = $1 AND "companyId" = $2`;
 
-    if (!scope.isOwner && scope.role !== "owner" && scope.role !== "general_manager" && scope.role === "employee" && scope.activeAssignmentId) {
+    if (scope.role === "employee" && !scope.isOwner && scope.activeAssignmentId) {
       whereClause += ` AND "assignedTo" = $3`;
       params.push(scope.activeAssignmentId);
     }
