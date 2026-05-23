@@ -393,31 +393,12 @@ async function insertDraftManualJournal(params: {
   return { journalId: journalEntryId, alreadyExists: false };
 }
 
-// Apply the ledger effect of a manual journal at /post time: move
-// chart_of_accounts.currentBalance by each line's debit−credit. The
-// journal_entries.status flip to 'posted' is done by applyTransition in the
-// /post route; this carries the balance side-effect that draft creation
-// deferred. The balance maths mirrors createJournalEntry exactly.
-async function postManualJournalToLedger(journalId: number, companyId: number): Promise<void> {
-  const lines = await rawQuery<{ accountCode: string | null; debit: string; credit: string }>(
-    `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId"=$1`,
-    [journalId],
-  );
-  const deltas = new Map<string, number>();
-  for (const l of lines) {
-    if (!l.accountCode) continue;
-    deltas.set(l.accountCode, (deltas.get(l.accountCode) ?? 0) + (Number(l.debit) - Number(l.credit)));
-  }
-  await withTransaction(async (client) => {
-    for (const [accountCode, delta] of deltas) {
-      if (Math.abs(delta) < 0.001) continue;
-      await client.query(
-        `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1 WHERE "companyId"=$2 AND code=$3`,
-        [delta, companyId, accountCode],
-      );
-    }
-  });
-}
+// (postManualJournalToLedger removed in A3 — its body is inlined into the
+// /post route's applyTransition `onApply` so the status flip and the ledger
+// move commit in a single transaction. A separate withTransaction would not
+// rollback the status flip if the balance UPDATE failed, leaving the entry
+// posted with currentBalance never moved and the one-shot guard locking
+// retries out → permanent silent drift.)
 
 financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
@@ -456,8 +437,9 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
     }
 
     // Posting integrity: a manual journal is persisted as an UNPOSTED draft.
-    // No GL/ledger effect happens here — it is deferred to /post, which calls
-    // postManualJournalToLedger after the approval transition succeeds.
+    // No GL/ledger effect happens here — it is deferred to /post, which
+    // applies it inside applyTransition's onApply so the status flip and the
+    // ledger move commit in one transaction (A3).
     const { journalId, alreadyExists } = await insertDraftManualJournal({
       companyId: scope.companyId,
       branchId: scope.branchId ?? null,
@@ -747,10 +729,16 @@ financeHardeningRouter.patch("/journal-manual/:id/post", authorize({ feature: "f
       );
     }
 
-    // Posting flips BOTH approvalStatus='posted' AND status='posted'. The
+    // Posting flips BOTH approvalStatus='posted' AND status='posted', AND
+    // applies the deferred ledger effect — all in one transaction. The
     // engine drives the approvalStatus transition (gate check + row update),
-    // and setExtras carries the mirror write to status and the posting
-    // metadata columns. This keeps one atomic UPDATE for the whole flip.
+    // setExtras carries the mirror write to status + posting metadata, and
+    // onApply moves currentBalance line-by-line on the SAME client so the
+    // status flip and the balance move commit atomically (A3 — without this,
+    // a crash between a committed status='posted' and the standalone balance
+    // update left currentBalance never moved, with the one-shot
+    // fromStates:['approved'] guard then blocking any retry → permanent
+    // silent drift).
     const updated = await applyTransition<Record<string, unknown>>({
       entity: "journal_entries",
       id: journalId,
@@ -765,13 +753,26 @@ financeHardeningRouter.patch("/journal-manual/:id/post", authorize({ feature: "f
         postedAt: { raw: "NOW()" },
         postedBy: scope.activeAssignmentId,
       },
+      onApply: async (_row, client) => {
+        const linesRes = await client.query(
+          `SELECT "accountCode", debit, credit FROM journal_lines WHERE "journalId"=$1`,
+          [journalId],
+        );
+        const deltas = new Map<string, number>();
+        for (const l of linesRes.rows) {
+          if (!l.accountCode) continue;
+          deltas.set(l.accountCode, (deltas.get(l.accountCode) ?? 0) + (Number(l.debit) - Number(l.credit)));
+        }
+        for (const [accountCode, delta] of deltas) {
+          if (Math.abs(delta) < 0.001) continue;
+          await client.query(
+            `UPDATE chart_of_accounts SET "currentBalance" = "currentBalance" + $1 WHERE "companyId"=$2 AND code=$3`,
+            [delta, scope.companyId, accountCode],
+          );
+        }
+      },
       after: { ref: je.ref, postingStatus: "posted" },
     });
-
-    // Draft creation deferred the ledger effect — apply it now. One-shot:
-    // applyTransition above only succeeds from approvalStatus='approved', so a
-    // retried /post cannot re-apply the balance movement.
-    await postManualJournalToLedger(journalId, scope.companyId);
 
     res.json({
       message: "تم ترحيل القيد اليدوي بنجاح",
