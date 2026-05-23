@@ -97,15 +97,23 @@ d("Wave-2 H2: applyJournalEntryBalances refuses to post into a closed period", (
   // Helper: insert a deferred journal entry dated on the given day with a
   // single debit/credit pair. balancesApplied=false mirrors what
   // createJournalEntry({ deferBalances: true }) writes.
+  //
+  // The entry's `date` (accounting date) is the field the period gate
+  // checks — not `createdAt` (row insertion time). To make the test fail
+  // loudly if anyone reverts to gating on createdAt, the two columns are
+  // INTENTIONALLY set to different values: createdAt always 'now', and
+  // date is the test's opts.date. A bug that re-reads createdAt would
+  // then incorrectly resolve to today's period (always open) and the
+  // closed-period assertion would no longer fail.
   async function insertDeferredEntry(opts: {
     ref: string;
-    date: string; // ISO date — drives the period lookup
+    date: string; // ISO date — accounting/ledger date that drives the period lookup
   }): Promise<number> {
     const { insertId } = await rawExecute(
       `INSERT INTO journal_entries (
          "companyId", "branchId", "createdBy", ref, description, type,
-         "balancesApplied", "createdAt"
-       ) VALUES ($1, $2, $3, $4, 'wave2-h2-test', 'manual', false, $5::timestamptz)`,
+         "balancesApplied", "createdAt", date
+       ) VALUES ($1, $2, $3, $4, 'wave2-h2-test', 'manual', false, NOW(), $5::date)`,
       [companyId, branchId, assignmentId, opts.ref, opts.date]
     );
     // journal_lines is scoped to its parent journal via journalId only;

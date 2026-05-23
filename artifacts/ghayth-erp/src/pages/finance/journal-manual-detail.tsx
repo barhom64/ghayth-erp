@@ -30,6 +30,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { useAuth } from "@/lib/auth";
 
 const LIFECYCLE_STEPS: ReadonlyArray<{ key: string; label: string }> = [
   { key: "draft",           label: "مسودة" },
@@ -77,6 +78,15 @@ export default function JournalManualDetailPage() {
   const id = params?.id || "";
   const { toast } = useToast();
   const { extraTabs, hideTabs } = useRegistryTabs("journal_entry", id);
+  // Set of the current user's assignment IDs. journal.createdBy holds the
+  // assignment ID of whoever inserted the entry (see businessHelpers
+  // createJournalEntry); if it's in this set, the user is the creator and
+  // the server's "creator cannot review own entry" rule (finance-hardening
+  // /:id/review) will reject any approve/reject they attempt. Disable the
+  // buttons up-front so the user sees the constraint instead of clicking
+  // and getting a FORBIDDEN toast.
+  const { assignments } = useAuth();
+  const myAssignmentIds = new Set(assignments.map((a) => a.id));
   const [reversalOpen, setReversalOpen] = useState(false);
   const [reversalReason, setReversalReason] = useState("");
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -273,32 +283,46 @@ export default function JournalManualDetailPage() {
         </GuardedButton>
       )}
 
-      {canShowLifecycle && approvalStatus === "pending_review" && (
-        <>
-          <GuardedButton
-            perm="finance:approve"
-            variant="default"
-            size="sm"
-            className="gap-1 bg-emerald-600 hover:bg-emerald-700"
-            disabled={approveMut.isPending || rejectMut.isPending}
-            onClick={() => approveMut.mutate({ approved: true })}
-          >
-            <CheckCircle2 className="h-4 w-4" />
-            {approveMut.isPending ? "جارٍ الاعتماد…" : "اعتماد"}
-          </GuardedButton>
-          <GuardedButton
-            perm="finance:approve"
-            variant="outline"
-            size="sm"
-            className="gap-1 border-status-error-surface text-status-error-foreground"
-            disabled={approveMut.isPending || rejectMut.isPending}
-            onClick={() => setRejectOpen(true)}
-          >
-            <XCircle className="h-4 w-4" />
-            رفض
-          </GuardedButton>
-        </>
-      )}
+      {canShowLifecycle && approvalStatus === "pending_review" && (() => {
+        // The server (finance-hardening /:id/review) enforces a "creator
+        // cannot review own entry" rule by rejecting with FORBIDDEN. Mirror
+        // that rule on the client so the user sees disabled buttons with a
+        // tooltip instead of clicking and getting a toast.
+        const isCreator = journal?.createdBy != null && myAssignmentIds.has(Number(journal.createdBy));
+        const creatorTooltip = isCreator
+          ? "لا يمكن للمُنشئ مراجعة قيده الخاص — يجب مراجعة محاسب آخر"
+          : undefined;
+        return (
+          <>
+            <GuardedButton
+              perm="finance:approve"
+              variant="default"
+              size="sm"
+              className="gap-1 bg-emerald-600 hover:bg-emerald-700"
+              disabled={approveMut.isPending || rejectMut.isPending || isCreator}
+              deniedTooltip={creatorTooltip}
+              onClick={() => approveMut.mutate({ approved: true })}
+              title={creatorTooltip}
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              {approveMut.isPending ? "جارٍ الاعتماد…" : "اعتماد"}
+            </GuardedButton>
+            <GuardedButton
+              perm="finance:approve"
+              variant="outline"
+              size="sm"
+              className="gap-1 border-status-error-surface text-status-error-foreground"
+              disabled={approveMut.isPending || rejectMut.isPending || isCreator}
+              deniedTooltip={creatorTooltip}
+              onClick={() => setRejectOpen(true)}
+              title={creatorTooltip}
+            >
+              <XCircle className="h-4 w-4" />
+              رفض
+            </GuardedButton>
+          </>
+        );
+      })()}
 
       {canShowLifecycle && approvalStatus === "approved" && (
         <GuardedButton

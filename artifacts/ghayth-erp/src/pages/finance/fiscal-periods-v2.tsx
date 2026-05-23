@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useFormContext } from "react-hook-form";
 import { Calendar, Lock, Unlock, AlertTriangle } from "lucide-react";
 
 // Second wave of @workspace/ui-core adoption. This page first shipped
@@ -19,6 +20,7 @@ import {
 } from "@workspace/ui-core";
 
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +32,16 @@ import { useApiQuery, useApiMutation, ApiError } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import { z } from "zod";
+
+// finance.hardening:create / :update are the canonical server permissions
+// (per the authorize() calls in routes/finance-hardening.ts), but the
+// existing legacy-RBAC client emits the flatter `finance:*` strings via
+// /permissions/my. lib/rbac/autoMigrate.ts keeps the two views aligned at
+// boot. The button perms below match the journal-manual.tsx list page —
+// adopting them keeps the FIN-014 buttons aligned with the rest of the
+// finance UI and the existing permission seeding.
+const PERM_FINANCE_CREATE = "finance:create";
+const PERM_FINANCE_APPROVE = "finance:approve";
 
 /**
  * Fiscal periods — v2 management page (FIN-014).
@@ -167,7 +179,8 @@ export default function FiscalPeriodsV2Page() {
       rowKey={(p) => String(p.id)}
       rowActions={(row) =>
         row.status === "open" ? (
-          <Button
+          <GuardedButton
+            perm={PERM_FINANCE_APPROVE}
             size="sm"
             variant="outline"
             onClick={() => setCloseTarget(row)}
@@ -175,9 +188,10 @@ export default function FiscalPeriodsV2Page() {
           >
             <Lock className="h-4 w-4 ml-1" />
             إقفال
-          </Button>
+          </GuardedButton>
         ) : (
-          <Button
+          <GuardedButton
+            perm={PERM_FINANCE_APPROVE}
             size="sm"
             variant="outline"
             onClick={() => setReopenTarget(row)}
@@ -185,7 +199,7 @@ export default function FiscalPeriodsV2Page() {
           >
             <Unlock className="h-4 w-4 ml-1" />
             إعادة فتح
-          </Button>
+          </GuardedButton>
         )
       }
       filters={{
@@ -202,6 +216,7 @@ export default function FiscalPeriodsV2Page() {
       primaryAction={{
         label: "فترة جديدة",
         onClick: () => setCreateOpen(true),
+        permission: PERM_FINANCE_CREATE,
         testid: "create-period",
       }}
       stats={stats}
@@ -215,6 +230,35 @@ export default function FiscalPeriodsV2Page() {
   );
 }
 
+// ─── isDirty guard for dialogs ────────────────────────────────────────
+//
+// React-hook-form exposes formState.isDirty via useFormContext from any
+// child inside the FormShell. <DirtyTracker /> lifts that bit into a
+// parent state hook so the dialog's onOpenChange can confirm before
+// discarding unsaved work (outside-click or Esc dismiss).
+function DirtyTracker({ onChange }: { onChange: (dirty: boolean) => void }) {
+  const { formState } = useFormContext();
+  const dirty = formState.isDirty;
+  useEffect(() => {
+    onChange(dirty);
+  }, [dirty, onChange]);
+  return null;
+}
+
+/** Confirm-on-dismiss guard. Returns a handler suitable for `onOpenChange`. */
+function makeDirtyGuardedClose(
+  isDirty: boolean,
+  onClose: (open: boolean) => void,
+): (open: boolean) => void {
+  return (next) => {
+    if (!next && isDirty) {
+      const ok = window.confirm("لديك تغييرات لم تُحفظ بعد. هل تريد المغادرة وتجاهل التعديلات؟");
+      if (!ok) return;
+    }
+    onClose(next);
+  };
+}
+
 // ─── Create dialog ────────────────────────────────────────────────────
 
 function CreateDialog({
@@ -225,6 +269,7 @@ function CreateDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
+  const [isDirty, setIsDirty] = useState(false);
   const create = useApiMutation<FiscalPeriodV2Row, CreateValues>(
     "/finance/fiscal-periods-v2",
     "POST",
@@ -232,7 +277,7 @@ function CreateDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={makeDirtyGuardedClose(isDirty, onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>فترة مالية جديدة</DialogTitle>
@@ -249,12 +294,14 @@ function CreateDialog({
             try {
               await create.mutateAsync(values);
               toast({ title: "تم إنشاء الفترة المالية" });
+              setIsDirty(false); // submitted, no longer dirty
               onOpenChange(false);
             } catch (err) {
               handleFormError(err, setFieldError, toast);
             }
           }}
         >
+          <DirtyTracker onChange={setIsDirty} />
           <FormTextField name="name" label="اسم الفترة" required />
           <FormDateField name="startDate" label="تاريخ البداية" required />
           <FormDateField name="endDate" label="تاريخ النهاية" required />
@@ -276,6 +323,7 @@ function CloseDialog({
 }) {
   const { toast } = useToast();
   const [pendingCount, setPendingCount] = useState<number | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
   const close = useApiMutation<{ message: string }, CloseValues>(
     () => `/finance/fiscal-periods-v2/${target!.id}/close`,
     "POST",
@@ -285,10 +333,10 @@ function CloseDialog({
   return (
     <Dialog
       open={!!target}
-      onOpenChange={(open) => {
+      onOpenChange={makeDirtyGuardedClose(isDirty, (open) => {
         if (!open) setPendingCount(null);
         onOpenChange(open);
-      }}
+      })}
     >
       <DialogContent>
         <DialogHeader>
@@ -333,6 +381,7 @@ function CloseDialog({
             try {
               await close.mutateAsync(values);
               toast({ title: `تم إقفال الفترة "${target?.name ?? ""}"` });
+              setIsDirty(false);
               onOpenChange(false);
             } catch (err) {
               if (err instanceof ApiError && err.code === "CONFLICT") {
@@ -347,6 +396,7 @@ function CloseDialog({
             }
           }}
         >
+          <DirtyTracker onChange={setIsDirty} />
           <FormTextareaField
             name="notes"
             label="ملاحظات الإقفال (اختياري)"
@@ -368,6 +418,7 @@ function ReopenDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
+  const [isDirty, setIsDirty] = useState(false);
   const reopen = useApiMutation<{ message: string }, ReopenValues>(
     () => `/finance/fiscal-periods-v2/${target!.id}/reopen`,
     "POST",
@@ -375,7 +426,7 @@ function ReopenDialog({
   );
 
   return (
-    <Dialog open={!!target} onOpenChange={onOpenChange}>
+    <Dialog open={!!target} onOpenChange={makeDirtyGuardedClose(isDirty, onOpenChange)}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>إعادة فتح الفترة المالية</DialogTitle>
@@ -401,12 +452,14 @@ function ReopenDialog({
             try {
               await reopen.mutateAsync(values);
               toast({ title: `تم إعادة فتح الفترة "${target?.name ?? ""}"` });
+              setIsDirty(false);
               onOpenChange(false);
             } catch (err) {
               handleFormError(err, setFieldError, toast);
             }
           }}
         >
+          <DirtyTracker onChange={setIsDirty} />
           <FormTextareaField name="reason" label="سبب إعادة الفتح" required rows={3} />
         </FormShell>
       </DialogContent>
