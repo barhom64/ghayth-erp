@@ -1380,7 +1380,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     let journalId: number | null = memoJournalResult.journalId;
     markIdempotencyReplay(req, res, memoJournalResult.alreadyExists);
     if (journalId && memoId) {
-      await rawExecute(`UPDATE credit_memos SET "journalEntryId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
+      await rawExecute(`UPDATE credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
     }
 
     emitEvent({
@@ -1484,6 +1484,27 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
         `UPDATE invoices SET subtotal = subtotal + $1, "vatAmount" = "vatAmount" + $2, total = total + $3 WHERE id = $4 AND "companyId" = $5 AND "deletedAt" IS NULL`,
         [net, vat, chargeAmount, id, scope.companyId]
       );
+
+      // Mirror invoice-approval's revenue-recognition bump: a debit memo
+      // is supplementary revenue (DR AR / CR Revenue at line 1500), so
+      // `clients.totalRevenue` and `budgets.used` must rise by the
+      // memo's net. Credit memos already decrement these (#892, #905);
+      // debit memos previously never incremented them, leaving the
+      // denormalised counters lagging reality by every memo's net.
+      if (invoice.clientId && net > 0) {
+        await client.query(
+          `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) + $1
+            WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+          [net, invoice.clientId, scope.companyId]
+        );
+      }
+      if (net > 0) {
+        await client.query(
+          `UPDATE budgets SET used = used + $1
+            WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+          [net, scope.companyId, revenueCode, currentPeriod()]
+        );
+      }
     });
 
     const debitMemoResult = await financialEngine.postJournalEntry({
@@ -1506,7 +1527,12 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
     let journalId: number | null = debitMemoResult.journalId;
     markIdempotencyReplay(req, res, debitMemoResult.alreadyExists);
     if (journalId && memoId) {
-      await rawExecute(`UPDATE debit_memos SET "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [memoId, scope.companyId]);
+      // Link memo → JE for the audit trail. Previous code only stamped
+      // updatedAt; debit_memos."journalId" stayed NULL forever.
+      await rawExecute(
+        `UPDATE debit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+        [journalId, memoId, scope.companyId]
+      );
     }
 
     emitEvent({
