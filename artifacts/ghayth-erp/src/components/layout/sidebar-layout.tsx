@@ -120,6 +120,7 @@ const allNavSections: NavSection[] = [
         { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
         { label: "الهيكل التنظيمي", path: "/hr/organization", icon: Network, subKey: "organization" },
         { label: "الهيكل المصوّر", path: "/hr/organization/structure", icon: GitBranch, subKey: "organization" },
+        { label: "التفويضات", path: "/hr/delegations", icon: Users2, subKey: "organization" },
       ]},
       { label: "الورديات", path: "/hr/shifts", icon: CalendarClock, module: "hr", children: [
         { label: "جدول الورديات", path: "/hr/shifts", icon: CalendarClock, subKey: "shifts" },
@@ -132,6 +133,7 @@ const allNavSections: NavSection[] = [
         { label: "تسجيل بالرمز المصوّر", path: "/hr/attendance/qr-scanner", icon: QrCode, subKey: "attendance" },
         { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },
         { label: "طلبات الأعذار", path: "/hr/excuse-requests", icon: ClipboardCheck, subKey: "attendance" },
+        { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
       ]},
       { label: "الإجازات", path: "/hr/leaves", icon: Calendar, module: "hr", children: [
         { label: "طلبات الإجازة", path: "/hr/leaves", icon: Calendar, subKey: "leaves" },
@@ -144,6 +146,7 @@ const allNavSections: NavSection[] = [
         { label: "مكونات الرواتب", path: "/hr/payroll/salary-components", icon: Percent, subKey: "payroll" },
         { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
         { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
+        { label: "الاستحقاقات الشهرية", path: "/hr/accruals", icon: ListChecks, subKey: "payroll" },
       ]},
       { label: "الأداء والتطوير", path: "/hr/performance", icon: Target, module: "hr", children: [
         { label: "تقييم الأداء", path: "/hr/performance", icon: Target, subKey: "performance" },
@@ -191,6 +194,7 @@ const allNavSections: NavSection[] = [
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
         { label: "طلبات الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },
         { label: "الموردين", path: "/finance/vendors", icon: Users },
+        { label: "دفعة الدفع", path: "/finance/payment-run", icon: Banknote },
       ]},
       { label: "النقد والذمم", path: "/finance/treasury", icon: Building, module: "finance", children: [
         { label: "الخزينة", path: "/finance/treasury", icon: Wallet },
