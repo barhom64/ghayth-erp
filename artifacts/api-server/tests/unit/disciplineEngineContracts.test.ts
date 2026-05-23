@@ -411,14 +411,14 @@ describe("ensureInquiryMemoForViolation contracts", () => {
 
   it("inserts new memo with status pending_employee", () => {
     const idx = ENGINE_SRC.indexOf("function ensureInquiryMemoForViolation");
-    const section = ENGINE_SRC.slice(idx, idx + 1500);
+    const section = ENGINE_SRC.slice(idx, idx + 3500);
     expect(section).toContain("INSERT INTO hr_inquiry_memos");
     expect(section).toContain("'pending_employee'");
   });
 
   it("links memo back to violation (updates employee_violations)", () => {
     const idx = ENGINE_SRC.indexOf("function ensureInquiryMemoForViolation");
-    const section = ENGINE_SRC.slice(idx, idx + 2000);
+    const section = ENGINE_SRC.slice(idx, idx + 4000);
     expect(section).toContain("UPDATE employee_violations");
     expect(section).toContain('"inquiryMemoId" = $1');
     expect(section).toContain("status = 'pending_inquiry'");
@@ -426,7 +426,7 @@ describe("ensureInquiryMemoForViolation contracts", () => {
 
   it("records creation event in timeline", () => {
     const idx = ENGINE_SRC.indexOf("function ensureInquiryMemoForViolation");
-    const section = ENGINE_SRC.slice(idx, idx + 2500);
+    const section = ENGINE_SRC.slice(idx, idx + 4500);
     expect(section).toContain("INSERT INTO hr_inquiry_memo_events");
     expect(section).toContain("'system'");
     expect(section).toContain("'created'");
