@@ -63,7 +63,11 @@ describe("HR Leave lifecycle state machine", () => {
       HR_ROUTE.indexOf("if (!approved)"),
       HR_ROUTE.indexOf("if (approved === ")
     );
-    expect(rejectSection).toContain("reserved = reserved - $1");
+    // PR #916 — the rejection branch now uses `GREATEST(reserved - $1, 0)`
+    // (matches the other four reserved-decrement sites; was the only one
+    // missing the floor, which allowed negative reserved under a
+    // race-condition reject+return).
+    expect(rejectSection).toContain("GREATEST(reserved - $1, 0)");
     expect(rejectSection).toContain("hr_leave_balances");
   });
 

@@ -480,7 +480,15 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
       return;
     }
 
-    // ── الموافقة النهائية: تفعيل السلفة + توليد الأقساط ذرياً ──
+    const { hrEngine } = await import("../lib/engines/index.js");
+
+    // ── الموافقة النهائية: تفعيل السلفة + توليد الأقساط + قيد الصرف ذرياً ──
+    // GL post moved INSIDE the transaction (postJournalEntry is reentrant
+    // via SAVEPOINT) so a failed disbursement post rolls back the loan
+    // activation + installment schedule. Previously the GL post ran after
+    // commit with a swallowing .catch(), so a failing post left the loan
+    // active, installments scheduled, and payroll happily deducting against
+    // a receivable that was never recognized on the ledger.
     await withTransaction(async (client) => {
       const upd = await client.query(
         `UPDATE hr_employee_loans
@@ -514,13 +522,12 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
         );
         period = advancePeriod(period);
       }
-    });
 
-    const { hrEngine } = await import("../lib/engines/index.js");
-    hrEngine.postLoanDisbursementGL(
-      { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
-      { id: loan.id, employeeId: loan.employeeId ?? 0, amount: Number(loan.amount) },
-    ).catch((e: unknown) => logger.error(e, "Loan disbursement GL error:"));
+      await hrEngine.postLoanDisbursementGL(
+        { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+        { id: loan.id, employeeId: loan.employeeId ?? 0, amount: Number(loan.amount) },
+      );
+    });
 
     createNotification({
       companyId: scope.companyId, assignmentId: loan.assignmentId,
