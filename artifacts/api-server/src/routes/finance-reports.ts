@@ -85,7 +85,7 @@ reportsRouter.get("/reports/trial-balance", authorize({ feature: "finance.report
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
-    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     const branchFilter = getBranchCondition(scope, undefined, params);
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT coa.id, coa.code, coa.name, coa.type, coa."parentId", coa.level, coa."allowPosting",
@@ -130,7 +130,7 @@ reportsRouter.get("/reports/income-statement", authorize({ feature: "finance.rep
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
-    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     const branchFilter = getBranchCondition(scope, undefined, params);
     const revenues = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.credit) - SUM(fl.debit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}${branchFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
     const expenses = await rawQuery<Record<string, unknown>>(`SELECT coa.code, coa.name, COALESCE(SUM(fl.debit) - SUM(fl.credit), 0) AS amount FROM chart_of_accounts coa LEFT JOIN (SELECT jl."accountCode", jl.debit, jl.credit FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true ${dateFilter}${branchFilter}) fl ON fl."accountCode" = coa.code WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL GROUP BY coa.code, coa.name ORDER BY coa.code LIMIT 500`, params);
@@ -148,7 +148,7 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.report
     const { asOfDate } = req.query as Record<string, string | undefined>;
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
-    if (asOfDate) { params.push(asOfDate); dateFilter = ` AND je."createdAt" <= $${params.length}`; }
+    if (asOfDate) { params.push(asOfDate); dateFilter = ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     const branchFilter = getBranchCondition(scope, undefined, params);
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT coa.code, coa.name, coa.type,
@@ -242,7 +242,7 @@ reportsRouter.get("/reports/cash-flow", authorize({ feature: "finance.reports", 
          FROM journal_entries je
          JOIN journal_lines jl_cash ON jl_cash."journalId" = je.id
         WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true
-          AND je."createdAt" >= $2 AND je."createdAt" <= $3
+          AND je."createdAt" >= $2 AND je."createdAt" < ($3::date + 1)
           AND jl_cash."accountCode" = ANY($4)
           AND (jl_cash.debit > 0 OR jl_cash.credit > 0)${jesBranchCond}
         ORDER BY je."createdAt"`,
@@ -392,7 +392,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
       let filter = "";
       let idx = fixedCount + 1;
       if (sd) { extraParams.push(sd); filter += ` AND "createdAt" >= $${idx++}`; }
-      if (ed) { extraParams.push(ed); filter += ` AND "createdAt" <= $${idx++}`; }
+      if (ed) { extraParams.push(ed); filter += ` AND "createdAt" < ($${idx++}::date + 1)`; }
       return { filter, extraParams };
     }
 
@@ -558,7 +558,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
               CONCAT('فاتورة ', ref) AS description
          FROM invoices
         WHERE "clientId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL
-          AND "createdAt" >= $3 AND "createdAt" <= $4${csBranchCond}
+          AND "createdAt" >= $3 AND "createdAt" < ($4::date + 1)${csBranchCond}
         ORDER BY "createdAt"`,
       csBaseParams(csBranchIds || undefined)
     );
@@ -599,7 +599,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
               (total - COALESCE("paidAmount",0)) AS outstanding
          FROM invoices
         WHERE "clientId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL
-          AND "createdAt" <= $3
+          AND "createdAt" < ($3::date + 1)
           AND (total - COALESCE("paidAmount",0)) > 0.01${agingBranchCond}`,
       agingParams
     );
@@ -688,7 +688,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
          FROM purchase_orders
         WHERE "supplierId"=$1 AND "companyId"=$2
           AND "deletedAt" IS NULL
-          AND "createdAt" >= $3 AND "createdAt" <= $4${vsBranchCond}
+          AND "createdAt" >= $3 AND "createdAt" < ($4::date + 1)${vsBranchCond}
         ORDER BY "createdAt"`,
       vsBaseParams(vsBranchIds || undefined)
     );
@@ -708,7 +708,7 @@ reportsRouter.get("/reports/vendor-statement/:supplierId", authorize({ feature: 
         WHERE "supplierId"=$1 AND "companyId"=$2
           AND "deletedAt" IS NULL
           AND status NOT IN ('paid','completed','cancelled','rejected')
-          AND "createdAt" <= $3${agingPOBranchCond}`,
+          AND "createdAt" < ($3::date + 1)${agingPOBranchCond}`,
       agingPOParams
     );
     const buckets = { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0 };
@@ -783,7 +783,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
         const qParams: any[] = [aid, scope.companyId];
         let dateFilter = "";
         if (startDate) { qParams.push(startDate); dateFilter += ` AND pr."createdAt" >= $${qParams.length}`; }
-        if (endDate) { qParams.push(endDate); dateFilter += ` AND pr."createdAt" <= $${qParams.length}`; }
+        if (endDate) { qParams.push(endDate); dateFilter += ` AND pr."createdAt" < ($${qParams.length}::date + 1)`; }
         rows = await rawQuery<Record<string, unknown>>(
           `SELECT pr.period AS ref, CONCAT('راتب ', pr.period) AS description,
                   pr."grossSalary" AS debit, pr.deductions AS credit,
@@ -800,7 +800,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
       const qParams: any[] = [(Number(entityId) || 0), scope.companyId];
       let dateFilter = "";
       if (startDate) { qParams.push(startDate); dateFilter += ` AND i."createdAt" >= $${qParams.length}`; }
-      if (endDate) { qParams.push(endDate); dateFilter += ` AND i."createdAt" <= $${qParams.length}`; }
+      if (endDate) { qParams.push(endDate); dateFilter += ` AND i."createdAt" < ($${qParams.length}::date + 1)`; }
       if (esBranchIds) { qParams.push(esBranchIds); dateFilter += ` AND i."branchId" = ANY($${qParams.length}::int[])`; }
       rows = await rawQuery<Record<string, unknown>>(
         `SELECT i.ref, COALESCE(i.description, i.ref) AS description,
@@ -817,7 +817,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
       const qParams: any[] = [(Number(entityId) || 0), scope.companyId];
       let dateFilter = "";
       if (startDate) { qParams.push(startDate); dateFilter += ` AND po."createdAt" >= $${qParams.length}`; }
-      if (endDate) { qParams.push(endDate); dateFilter += ` AND po."createdAt" <= $${qParams.length}`; }
+      if (endDate) { qParams.push(endDate); dateFilter += ` AND po."createdAt" < ($${qParams.length}::date + 1)`; }
       if (esBranchIds) { qParams.push(esBranchIds); dateFilter += ` AND po."branchId" = ANY($${qParams.length}::int[])`; }
       rows = await rawQuery<Record<string, unknown>>(
         `SELECT po.ref, CONCAT('أمر شراء: ', po.ref) AS description,
@@ -847,7 +847,7 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
-    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     dateFilter += getBranchCondition(scope, branchId, params);
 
     const custodies = await rawQuery<Record<string, unknown>>(
@@ -906,7 +906,7 @@ reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.re
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
-    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     dateFilter += getBranchCondition(scope, branchId, params);
     if (projectId) { params.push(projectId); dateFilter += ` AND je."projectId" = $${params.length}`; }
 
@@ -952,7 +952,7 @@ reportsRouter.get("/reports/revenue-analysis", authorize({ feature: "finance.rep
     let dateFilter = "";
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
-    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     dateFilter += getBranchCondition(scope, branchId, params);
 
     const byAccount = await rawQuery<Record<string, unknown>>(
@@ -1041,7 +1041,7 @@ reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance.
     let dateFilter = "";
     const params: unknown[] = [scope.companyId, accountCode];
     if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
-    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+    if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     dateFilter += getBranchCondition(scope, branchId, params);
 
     const [accountInfo] = await rawQuery<Record<string, unknown>>(
