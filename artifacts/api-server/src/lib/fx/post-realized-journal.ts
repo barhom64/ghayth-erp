@@ -246,10 +246,15 @@ export async function postRealizedFxJournal(opts: PostRealizedFxOpts): Promise<P
     }
 
     const payload = buildEntry(buildInput);
+    // PD-6 — stable economic-event key. A retried realised-FX post (scheduler
+    // re-fire, network blip, manual retry) for the same invoice + payment date
+    // returns the existing entry instead of double-posting. Same string as ref.
+    const ref = `REAL-FX-${opts.invoiceId}-${opts.paymentDate}`;
     const ctx: EntryContext = {
       companyId: opts.companyId,
       createdBy: opts.postedBy,
-      ref: `REAL-FX-${opts.invoiceId}-${opts.paymentDate}`,
+      ref,
+      sourceKey: ref,
       type: "fx_realised",
       sourceType: "invoice",
       sourceId: opts.invoiceId,
