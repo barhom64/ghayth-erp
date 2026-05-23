@@ -793,6 +793,15 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     if (!branchId && !scope.branchId) {
       throw new ValidationError("الفرع مطلوب لإنشاء السند", { field: "branchId", fix: "حدد الفرع الذي ينتمي إليه هذا السند" });
     }
+    // BR-3: a branch-scoped user must not be able to stamp a voucher onto a
+    // branch they are not assigned to — mirrors the same membership guard
+    // the /expenses route applies above. Owners / general managers bypass
+    // branch scope, as everywhere.
+    if (branchId != null &&
+        !scope.isOwner && !OWNER_GM_ROLES.includes(scope.role) &&
+        scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(Number(branchId))) {
+      throw new ForbiddenError("لا تملك صلاحية إنشاء سند في هذا الفرع", { field: "branchId" });
+    }
     if (!accountCode) {
       throw new ValidationError("الحساب المحاسبي مطلوب", { field: "accountCode", fix: "حدد الحساب المحاسبي الرئيسي للسند" });
     }
