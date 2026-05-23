@@ -875,6 +875,51 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     // idempotent replay (rows already exist from the original insert).
     if (allocations && allocations.length > 0 && !alreadyExists) {
       for (const a of allocations) {
+        const allocAmt = roundTo2(Number(a.amount));
+
+        // #901 cap: Σ existing allocations to this obligation + the new
+        // amount must not exceed the obligation's total. Without this
+        // check, two vouchers each ≤ their own amount can still
+        // over-allocate a PO/Nusk invoice (e.g. PO=50K → V1 allocates
+        // 40K, V2 allocates 30K → vendor shows -20K outstanding).
+        let obligationCap: number | null = null;
+        if (a.obligationType === "purchase_order") {
+          const [po] = await rawQuery<{ totalAmount: string | number }>(
+            `SELECT "totalAmount" FROM purchase_orders
+              WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+            [a.obligationId, scope.companyId]
+          );
+          if (po) obligationCap = Number(po.totalAmount);
+        } else if (a.obligationType === "nusk_invoice") {
+          const [ni] = await rawQuery<{ totalAmount: string | number; refundAmount: string | number }>(
+            `SELECT "totalAmount", "refundAmount" FROM umrah_nusk_invoices
+              WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+            [a.obligationId, scope.companyId]
+          );
+          if (ni) obligationCap = Number(ni.totalAmount) - Number(ni.refundAmount ?? 0);
+        }
+        if (obligationCap !== null) {
+          const [{ already }] = await rawQuery<{ already: string | number }>(
+            `SELECT COALESCE(SUM(amount), 0) AS already
+               FROM supplier_payment_allocations
+              WHERE "companyId" = $1
+                AND "obligationType" = $2
+                AND "obligationId" = $3
+                AND "deletedAt" IS NULL`,
+            [scope.companyId, a.obligationType, a.obligationId]
+          );
+          const alreadyAllocated = Number(already);
+          if (alreadyAllocated + allocAmt > roundTo2(obligationCap) + 0.005) {
+            throw new ValidationError(
+              `إجمالي التخصيصات (${roundTo2(alreadyAllocated + allocAmt)}) يتجاوز قيمة الالتزام (${roundTo2(obligationCap)})`,
+              {
+                field: "allocations",
+                fix: `الالتزام (${a.obligationType} #${a.obligationId}) قُيِّد له ${roundTo2(alreadyAllocated)} سابقًا. خفّض المبلغ.`,
+              }
+            );
+          }
+        }
+
         await rawExecute(
           `INSERT INTO supplier_payment_allocations
              ("companyId", "branchId", "journalEntryId",
@@ -886,7 +931,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
             journalId,
             a.obligationType,
             a.obligationId,
-            roundTo2(Number(a.amount)),
+            allocAmt,
             a.notes ?? null,
             scope.activeAssignmentId ?? null,
           ]
