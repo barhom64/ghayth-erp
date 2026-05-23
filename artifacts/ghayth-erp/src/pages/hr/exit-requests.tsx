@@ -7,6 +7,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import {
   PageShell,
+  PageStatusBadge,
+  STATUS_MAP,
   DataTable,
   type DataTableColumn,
   AdvancedFilters,
@@ -23,9 +25,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
-import { EXIT_TYPES, EXIT_REQUEST_STATUS } from "@/lib/hr-type-maps";
+import { EXIT_TYPES } from "@/lib/hr-type-maps";
 
-const STATUS_OPTIONS = Object.entries(EXIT_REQUEST_STATUS).map(([value, { label }]) => ({ value, label }));
+const STATUS_OPTIONS = Object.entries(STATUS_MAP.exit_request).map(([value, { label }]) => ({ value, label }));
 
 export default function ExitRequestsPage() {
   const [, navigate] = useLocation();
@@ -176,14 +178,7 @@ export default function ExitRequestsPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (v) => {
-        const st = EXIT_REQUEST_STATUS[v.status] || { label: v.status, color: "bg-surface-subtle text-muted-foreground" };
-        return (
-          <Badge variant="outline" className={cn("text-xs", st.color)}>
-            {st.label}
-          </Badge>
-        );
-      },
+      render: (v) => <PageStatusBadge status={v.status} domain="exit_request" />,
     },
     {
       key: "actions",

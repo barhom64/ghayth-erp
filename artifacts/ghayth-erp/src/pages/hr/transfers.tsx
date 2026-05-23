@@ -13,6 +13,8 @@ import {
 import { cn } from "@/lib/utils";
 import {
   PageShell,
+  PageStatusBadge,
+  STATUS_MAP,
   DataTable,
   type DataTableColumn,
   AdvancedFilters,
@@ -28,7 +30,6 @@ import { ApprovalActions } from "@workspace/workflow-kit";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { TRANSFER_STATUS } from "@/lib/hr-type-maps";
 
 // employeeId + toBranchId required (was `if (!form.employeeId || !form.toBranchId)`
 // toast guard — now caught at schema validation before any network call).
@@ -43,8 +44,7 @@ const defaultTransferForm: TransferForm = {
   employeeId: "", toBranchId: "", reason: "", effectiveDate: "",
 };
 
-const STATUS_OPTIONS = Object.entries(TRANSFER_STATUS).map(([value, { label }]) => ({ value, label }));
-const STATUS_MAP = TRANSFER_STATUS;
+const STATUS_OPTIONS = Object.entries(STATUS_MAP.transfer).map(([value, { label }]) => ({ value, label }));
 
 export default function TransfersPage() {
   const [, navigate] = useLocation();
@@ -169,14 +169,7 @@ export default function TransfersPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (v) => {
-        const st = STATUS_MAP[v.status] || { label: v.status, color: "bg-surface-subtle text-muted-foreground" };
-        return (
-          <Badge variant="outline" className={cn("text-xs", st.color)}>
-            {st.label}
-          </Badge>
-        );
-      },
+      render: (v) => <PageStatusBadge status={v.status} domain="transfer" />,
     },
     {
       key: "actions",

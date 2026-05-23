@@ -1,7 +1,12 @@
 import { useParams, useLocation } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageStatusBadge,
+  STATUS_MAP,
+} from "@workspace/ui-core";
 import {
   DetailPageLayout,
   ProcessStages,
@@ -39,15 +44,20 @@ function buildExitSteps(status: string | undefined): StageStep[] {
     return { label: step.label, status: "pending" };
   });
 }
-import { EXIT_TYPES, EXIT_REQUEST_STATUS, CLEARANCE_STATUS } from "@/lib/hr-type-maps";
+import { EXIT_TYPES } from "@/lib/hr-type-maps";
 
-const STATUS_TONE_MAP: Record<string, "default" | "success" | "warning" | "destructive" | "info" | "muted"> = {
-  pending: "warning",
-  approved: "info",
-  in_progress: "info",
-  completed: "success",
-  rejected: "destructive",
-  cancelled: "muted",
+// STATUS_TONE_MAP removed — canonical labels + tones live in
+// STATUS_MAP.exit_request (page-status-badge.tsx). DetailStatus's
+// tighter tone type is mapped from StatusTone via the same inline
+// record used by the other detail pages in this branch.
+const STATUS_TONE_FROM_CANONICAL: Record<string, "default" | "success" | "warning" | "destructive" | "info" | "muted"> = {
+  warning: "warning",
+  info: "info",
+  success: "success",
+  danger: "destructive",
+  neutral: "default",
+  muted: "muted",
+  progress: "info",
 };
 
 export default function ExitDetail() {
@@ -86,7 +96,9 @@ export default function ExitDetail() {
     queryClient.invalidateQueries({ queryKey: ["hr-exit-detail", id] });
   };
 
-  const st = EXIT_REQUEST_STATUS[item?.status] ?? { label: item?.status ?? "—", color: "bg-surface-subtle text-muted-foreground" };
+  const exitStatusDef = STATUS_MAP.exit_request[item?.status as keyof typeof STATUS_MAP.exit_request];
+  const statusLabel = exitStatusDef?.label ?? item?.status ?? "—";
+  const statusTone = STATUS_TONE_FROM_CANONICAL[exitStatusDef?.tone ?? "neutral"];
   const clearance: any[] = item?.clearance || [];
 
   const hireDate = item?.hireDate ? new Date(item.hireDate) : null;
@@ -233,10 +245,9 @@ export default function ExitDetail() {
               columns={[
                 { key: "department", header: "القسم", sortable: true, render: (v) => <span className="font-medium">{v.department || v.section || "—"}</span> },
                 { key: "responsibleName", header: "المسؤول", sortable: true, render: (v) => <span className="text-muted-foreground">{v.responsibleName || "—"}</span> },
-                { key: "status", header: "الحالة", sortable: true, render: (v) => {
-                  const cSt = CLEARANCE_STATUS[v.status] ?? { label: v.status, color: "text-muted-foreground bg-surface-subtle" };
-                  return <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", cSt.color)}>{cSt.label}</span>;
-                } },
+                { key: "status", header: "الحالة", sortable: true, render: (v) => (
+                  <PageStatusBadge status={v.status} domain="clearance" />
+                ) },
                 { key: "notes", header: "ملاحظات", render: (v) => <span className="text-muted-foreground text-xs">{v.notes || "—"}</span> },
                 { key: "actions", header: "", render: (v) => v.status === "pending" ? (
                   <GuardedButton
@@ -269,7 +280,7 @@ export default function ExitDetail() {
       title={`طلب نهاية خدمة — ${item?.employeeName || ""}`}
       subtitle={item ? `${EXIT_TYPES[item.exitType] || item.exitType} — ${item.jobTitle || ""}` : undefined}
       backPath="/hr/exit"
-      status={{ label: st.label, tone: STATUS_TONE_MAP[item?.status] ?? "default" }}
+      status={{ label: statusLabel, tone: statusTone }}
       entityType="exit-request"
       entityId={Number(id)}
       isLoading={isLoading}

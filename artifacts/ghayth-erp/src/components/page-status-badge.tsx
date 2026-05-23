@@ -407,15 +407,15 @@ export const STATUS_MAP = {
     cancelled:            { label: "ملغي",             tone: "neutral"  },
   },
   clearance: {
-    pending:              { label: "قيد المعالجة",     tone: "warning"  },
-    cleared:              { label: "مُخالص",           tone: "success"  },
-    blocked:              { label: "محظور",            tone: "danger"   },
+    pending:              { label: "معلق",             tone: "warning"  },
+    cleared:              { label: "تم",               tone: "success"  },
+    rejected:             { label: "مرفوض",            tone: "danger"   },
   },
   approval_chain: {
-    pending:              { label: "بانتظار",          tone: "warning"  },
-    approved:             { label: "معتمد",            tone: "success"  },
+    pending:              { label: "معلق",             tone: "warning"  },
+    approved:             { label: "موافق",            tone: "success"  },
     rejected:             { label: "مرفوض",            tone: "danger"   },
-    skipped:              { label: "تخطّي",            tone: "neutral"  },
+    escalated:            { label: "تصعيد",            tone: "warning"  },
   },
 
   // ── HR — Transfers + IDP ─────────────────────────────────────────────
@@ -423,13 +423,12 @@ export const STATUS_MAP = {
     pending:              { label: "بانتظار الموافقة", tone: "warning"  },
     approved:             { label: "معتمد",            tone: "success"  },
     rejected:             { label: "مرفوض",            tone: "danger"   },
-    cancelled:            { label: "ملغي",             tone: "neutral"  },
   },
   idp: {
-    draft:                { label: "مسودة",            tone: "muted"    },
-    active:               { label: "نشطة",             tone: "info"     },
-    completed:            { label: "مكتملة",           tone: "success"  },
-    cancelled:            { label: "ملغية",            tone: "neutral"  },
+    planned:              { label: "مخطط",             tone: "info"     },
+    in_progress:          { label: "قيد التنفيذ",      tone: "warning"  },
+    completed:            { label: "مكتمل",            tone: "success"  },
+    cancelled:            { label: "ملغي",             tone: "danger"   },
   },
 
   // ── HR — Overtime + violations ───────────────────────────────────────
@@ -437,13 +436,19 @@ export const STATUS_MAP = {
     pending:              { label: "بانتظار الموافقة", tone: "warning"  },
     approved:             { label: "معتمد",            tone: "success"  },
     rejected:             { label: "مرفوض",            tone: "danger"   },
+    paid:                 { label: "تم الصرف",         tone: "info"     },
   },
   violation: {
-    open:                 { label: "مفتوحة",           tone: "warning"  },
-    under_review:         { label: "قيد المراجعة",     tone: "info"     },
-    resolved:             { label: "تمت المعالجة",     tone: "success"  },
-    closed:               { label: "مُغلقة",           tone: "neutral"  },
-    appealed:             { label: "مُستأنف",          tone: "warning"  },
+    // HR disciplinary-violation lifecycle (hr/violations.tsx).
+    // Mirrors what VIOLATION_STATUS in hr-type-maps used to carry.
+    draft:                { label: "مسودة",            tone: "muted"    },
+    pending_employee:     { label: "بانتظار الموظف",   tone: "warning"  },
+    pending_manager:      { label: "بانتظار المدير",   tone: "warning"  },
+    pending_hr_decision:  { label: "بانتظار HR",       tone: "info"     },
+    approved:             { label: "مُنفَّذ",           tone: "success"  },
+    rejected:             { label: "مرفوض",            tone: "danger"   },
+    appealed:             { label: "استئناف",          tone: "warning"  },
+    cancelled:            { label: "ملغي",             tone: "neutral"  },
   },
 } as const satisfies Record<string, Record<string, StatusDef>>;
 

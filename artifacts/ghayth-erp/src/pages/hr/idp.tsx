@@ -24,9 +24,8 @@ import {
   FormSelectField,
   FormDateField,
   FormGrid,
+  STATUS_MAP,
 } from "@workspace/ui-core";
-
-import { IDP_STATUS } from "@/lib/hr-type-maps";
 
 const idpSchema = z.object({
   employeeId: z.string().min(1, "الموظف مطلوب"),
@@ -41,7 +40,7 @@ const defaultIdpForm: IdpForm = {
   employeeId: "", title: "", goals: "", skills: "", targetDate: "", notes: "",
 };
 
-const STATUS_OPTIONS = Object.entries(IDP_STATUS).map(([value, { label }]) => ({ value, label }));
+const STATUS_OPTIONS = Object.entries(STATUS_MAP.idp).map(([value, { label }]) => ({ value, label }));
 
 export default function IDPPage() {
   const [showForm, setShowForm] = useState(false);
@@ -185,7 +184,7 @@ export default function IDPPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {Object.entries(IDP_STATUS).map(([k, v]) => (
+            {Object.entries(STATUS_MAP.idp).map(([k, v]) => (
               <SelectItem key={k} value={k}>
                 {v.label}
               </SelectItem>

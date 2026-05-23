@@ -15,15 +15,17 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import {
   PageShell,
+  PageStatusBadge,
+  STATUS_MAP,
   DataTable,
   type DataTableColumn,
   AdvancedFilters,
   useFilters,
   applyFilters,
 } from "@workspace/ui-core";
-import { APPROVAL_ROLES, APPROVAL_CHAIN_STATUS } from "@/lib/hr-type-maps";
+import { APPROVAL_ROLES } from "@/lib/hr-type-maps";
 
-const STATUS_OPTIONS = Object.entries(APPROVAL_CHAIN_STATUS).map(([value, { label }]) => ({ value, label }));
+const STATUS_OPTIONS = Object.entries(STATUS_MAP.approval_chain).map(([value, { label }]) => ({ value, label }));
 
 const CHAIN_TYPES: Record<string, string> = {
   leaves: "الإجازات",
@@ -139,8 +141,7 @@ export default function ApprovalChainsPage() {
       header: "الحالة",
       sortable: true,
       render: (v) => {
-        const st = APPROVAL_CHAIN_STATUS[v.status] || APPROVAL_CHAIN_STATUS.pending;
-        return <Badge variant="outline" className={cn("text-xs", st.color)}>{st.label}</Badge>;
+        return <PageStatusBadge status={v.status} domain="approval_chain" />;
       },
     },
   ];

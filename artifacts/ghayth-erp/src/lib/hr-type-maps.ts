@@ -113,30 +113,11 @@ export const TERMINATION_TYPES: Record<string, string> = {
 // Consumers now render via <PageStatusBadge status={...} domain="loan" />
 // or `STATUS_MAP.loan[status]` for filter dropdowns.
 
-// ── حالات طلبات نهاية الخدمة ────────────────────────────────────────
-export const EXIT_REQUEST_STATUS: Record<string, { label: string; color: string }> = {
-  pending:     { label: "بانتظار الموافقة", color: "bg-amber-100 text-status-warning-foreground border-status-warning-surface"  },
-  approved:    { label: "معتمد",            color: "bg-blue-100 text-status-info-foreground border-status-info-surface"     },
-  in_progress: { label: "جاري التنفيذ",     color: "bg-purple-100 text-purple-700 border-purple-300" },
-  completed:   { label: "مكتمل",            color: "bg-green-100 text-status-success-foreground border-status-success-surface"  },
-  rejected:    { label: "مرفوض",            color: "bg-red-100 text-status-error-foreground border-red-300"        },
-  cancelled:   { label: "ملغي",             color: "bg-gray-100 text-muted-foreground border-border"     },
-};
-
-// ── حالات إخلاء الطرف ──────────────────────────────────────────────
-export const CLEARANCE_STATUS: Record<string, { label: string; color: string }> = {
-  pending:  { label: "معلق",  color: "text-status-warning-foreground bg-status-warning-surface" },
-  cleared:  { label: "تم",    color: "text-status-success-foreground bg-status-success-surface" },
-  rejected: { label: "مرفوض", color: "text-status-error-foreground bg-status-error-surface"     },
-};
-
-// ── حالات سلسلة الموافقات ──────────────────────────────────────────
-export const APPROVAL_CHAIN_STATUS: Record<string, { label: string; color: string }> = {
-  pending:   { label: "معلق",  color: "bg-yellow-100 text-yellow-700 border-yellow-300"  },
-  approved:  { label: "موافق", color: "bg-green-100 text-status-success-foreground border-status-success-surface"     },
-  rejected:  { label: "مرفوض", color: "bg-red-100 text-status-error-foreground border-red-300"           },
-  escalated: { label: "تصعيد", color: "bg-purple-100 text-purple-700 border-purple-300"  },
-};
+// ── حالات HR (نهاية الخدمة، إخلاء الطرف، سلسلة الموافقات) ────────────
+// EXIT_REQUEST_STATUS / CLEARANCE_STATUS / APPROVAL_CHAIN_STATUS removed
+// in the design-unification pass. Labels + tones now live in
+// STATUS_MAP.{exit_request,clearance,approval_chain} (page-status-badge.tsx).
+// Consumers render via <PageStatusBadge status={...} domain="..." />.
 
 // ── أنواع السلف ─────────────────────────────────────────────────────
 export const LOAN_TYPES: Record<string, string> = {
@@ -266,39 +247,16 @@ export const APPLICANT_SOURCES: ReadonlyArray<{ value: string; label: string }> 
 ];
 
 // ── حالات النقل ────────────────────────────────────────────────────
-export const TRANSFER_STATUS: Record<string, { label: string; color: string }> = {
-  pending:  { label: "بانتظار الموافقة", color: "bg-amber-100 text-status-warning-foreground border-status-warning-surface" },
-  approved: { label: "معتمد",            color: "bg-green-100 text-status-success-foreground border-status-success-surface" },
-  rejected: { label: "مرفوض",            color: "bg-red-100 text-status-error-foreground border-red-300" },
-};
+// TRANSFER_STATUS removed — STATUS_MAP.transfer (page-status-badge.tsx).
 
 // ── حالات خطط التطوير الفردية ──────────────────────────────────────
-export const IDP_STATUS: Record<string, { label: string; color: string }> = {
-  planned:     { label: "مخطط",        color: "bg-blue-100 text-status-info-foreground border-status-info-surface" },
-  in_progress: { label: "قيد التنفيذ", color: "bg-amber-100 text-status-warning-foreground border-status-warning-surface" },
-  completed:   { label: "مكتمل",       color: "bg-green-100 text-status-success-foreground border-status-success-surface" },
-  cancelled:   { label: "ملغي",        color: "bg-red-100 text-status-error-foreground border-red-300" },
-};
+// IDP_STATUS removed — STATUS_MAP.idp (page-status-badge.tsx).
 
 // ── حالات الوقت الإضافي ────────────────────────────────────────────
-export const OVERTIME_STATUS: Record<string, { label: string; color: string }> = {
-  pending:  { label: "بانتظار الموافقة", color: "bg-amber-100 text-status-warning-foreground border-status-warning-surface" },
-  approved: { label: "معتمد",            color: "bg-green-100 text-status-success-foreground border-status-success-surface" },
-  rejected: { label: "مرفوض",            color: "bg-red-100 text-status-error-foreground border-red-300" },
-  paid:     { label: "تم الصرف",         color: "bg-blue-100 text-status-info-foreground border-status-info-surface" },
-};
+// OVERTIME_STATUS removed — STATUS_MAP.overtime (page-status-badge.tsx).
 
 // ── حالات محاضر المخالفات ───────────────────────────────────────────
-export const VIOLATION_STATUS: Record<string, { label: string; color: string }> = {
-  draft:                { label: "مسودة",            color: "bg-gray-100 text-gray-700 border-border" },
-  pending_employee:     { label: "بانتظار الموظف",   color: "bg-amber-100 text-status-warning-foreground border-status-warning-surface" },
-  pending_manager:      { label: "بانتظار المدير",   color: "bg-orange-100 text-orange-700 border-orange-300" },
-  pending_hr_decision:  { label: "بانتظار HR",       color: "bg-blue-100 text-status-info-foreground border-status-info-surface" },
-  approved:             { label: "مُنفَّذ",          color: "bg-green-100 text-status-success-foreground border-status-success-surface" },
-  rejected:             { label: "مرفوض",            color: "bg-red-100 text-status-error-foreground border-red-300" },
-  appealed:             { label: "استئناف",           color: "bg-purple-100 text-purple-700 border-purple-300" },
-  cancelled:            { label: "ملغي",             color: "bg-gray-100 text-muted-foreground border-border" },
-};
+// VIOLATION_STATUS removed — STATUS_MAP.violation (page-status-badge.tsx).
 
 // ── أسماء الأشهر بالعربي ────────────────────────────────────────────
 export const MONTHS_AR = [

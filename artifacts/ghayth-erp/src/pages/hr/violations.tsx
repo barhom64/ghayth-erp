@@ -23,6 +23,7 @@ import { AvatarInitial } from "@/components/shared/avatar-initial";
 import {
   PageShell,
   PageStatusBadge,
+  STATUS_MAP,
   DataTable,
   type DataTableColumn,
   AdvancedFilters,
@@ -33,7 +34,6 @@ import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { VIOLATION_STATUS } from "@/lib/hr-type-maps";
 import { cn } from "@/lib/utils";
 import {
   Plus, AlertTriangle, Scale, DollarSign, Shield, Clock, Ban, Gavel,
@@ -41,7 +41,7 @@ import {
   ListChecks, BookOpen, TrendingUp,
 } from "lucide-react";
 
-const STATUS_OPTIONS = Object.entries(VIOLATION_STATUS).map(([value, { label }]) => ({ value, label }));
+const STATUS_OPTIONS = Object.entries(STATUS_MAP.violation).map(([value, { label }]) => ({ value, label }));
 
 const INCIDENT_LABELS: Record<string, { label: string; Icon: typeof Clock; color: string }> = {
   late:             { label: "تأخر",         Icon: Clock,      color: "text-status-warning-foreground bg-status-warning-surface"   },
@@ -415,7 +415,7 @@ function MemosTab({ memos }: { memos: any[] }) {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (v) => <PageStatusBadge status={v.status} domain="memo" />,
+      render: (v) => <PageStatusBadge status={v.status} domain="violation" />,
     },
   ];
 

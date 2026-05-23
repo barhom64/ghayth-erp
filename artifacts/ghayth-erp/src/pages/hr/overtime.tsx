@@ -6,6 +6,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import {
   PageShell,
+  PageStatusBadge,
+  STATUS_MAP,
   DataTable,
   type DataTableColumn,
   AdvancedFilters,
@@ -23,13 +25,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
-import { OVERTIME_STATUS } from "@/lib/hr-type-maps";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { useState } from "react";
 
-const STATUS_OPTIONS = Object.entries(OVERTIME_STATUS).map(([value, { label }]) => ({ value, label }));
-const STATUS_MAP = OVERTIME_STATUS;
+const STATUS_OPTIONS = Object.entries(STATUS_MAP.overtime).map(([value, { label }]) => ({ value, label }));
 
 export default function OvertimePage() {
   const [, navigate] = useLocation();
@@ -188,14 +188,7 @@ export default function OvertimePage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (v) => {
-        const st = STATUS_MAP[v.status] || { label: v.status, color: "bg-surface-subtle text-muted-foreground" };
-        return (
-          <Badge variant="outline" className={cn("text-xs", st.color)}>
-            {st.label}
-          </Badge>
-        );
-      },
+      render: (v) => <PageStatusBadge status={v.status} domain="overtime" />,
     },
     {
       key: "actions",

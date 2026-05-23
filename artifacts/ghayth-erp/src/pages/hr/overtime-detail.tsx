@@ -8,6 +8,7 @@ import {
   type StageStep,
 } from "@workspace/entity-kit";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
+import { PageStatusBadge, STATUS_MAP } from "@workspace/ui-core";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Timer, DollarSign, Clock, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { OVERTIME_STATUS } from "@/lib/hr-type-maps";
 
 const OVERTIME_LIFECYCLE = [
   { key: "pending",  label: "بانتظار الموافقة" },
@@ -37,11 +37,18 @@ function buildOvertimeSteps(status: string | undefined): StageStep[] {
   });
 }
 
-const STATUS_TONE_MAP: Record<string, DetailStatus["tone"]> = {
-  pending: "warning",
-  approved: "success",
-  rejected: "destructive",
-  paid: "info",
+// STATUS_TONE_MAP removed — canonical labels + tones live in
+// STATUS_MAP.overtime (page-status-badge.tsx). DetailStatus's tighter
+// tone type is mapped from StatusTone via the same inline record used
+// elsewhere in this branch.
+const STATUS_TONE_FROM_CANONICAL: Record<string, DetailStatus["tone"]> = {
+  warning: "warning",
+  info: "info",
+  success: "success",
+  danger: "destructive",
+  neutral: "default",
+  muted: "muted",
+  progress: "info",
 };
 
 export default function OvertimeDetail() {
@@ -74,8 +81,9 @@ export default function OvertimeDetail() {
     );
   }
 
-  const st = OVERTIME_STATUS[item?.status] ?? { label: item?.status ?? "غير محدد", color: "bg-surface-subtle text-muted-foreground" };
-  const statusTone = STATUS_TONE_MAP[item?.status] ?? "default";
+  const overtimeStatusDef = STATUS_MAP.overtime[item?.status as keyof typeof STATUS_MAP.overtime];
+  const statusLabel = overtimeStatusDef?.label ?? item?.status ?? "غير محدد";
+  const statusTone = STATUS_TONE_FROM_CANONICAL[overtimeStatusDef?.tone ?? "neutral"];
 
   const kpis = [
     { label: "الموظف", value: item.employeeName, icon: User, color: "text-status-info-foreground bg-status-info-surface" },
@@ -89,7 +97,7 @@ export default function OvertimeDetail() {
       title={`طلب وقت إضافي ${item?.requestNumber || ""}`}
       subtitle={item ? `${item.employeeName} — ${item.jobTitle || ""}` : undefined}
       backPath="/hr/overtime"
-      status={{ label: st.label, tone: statusTone }}
+      status={{ label: statusLabel, tone: statusTone }}
       entityType="overtime"
       entityId={Number(id)}
       refNumber={item?.requestNumber}
@@ -100,7 +108,7 @@ export default function OvertimeDetail() {
       extraTabs={registryExtraTabs}
       hideTabs={registryHideTabs}
       actions={
-        <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>
+        item?.status ? <PageStatusBadge status={item.status} domain="overtime" /> : null
       }
       overview={
         <div className="space-y-4">
