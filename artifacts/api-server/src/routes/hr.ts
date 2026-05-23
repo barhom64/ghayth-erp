@@ -2638,7 +2638,13 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
         [scope.companyId, targetPeriod]
       ),
       rawQuery<Record<string, unknown>>(
-        `SELECT la."assignmentId", COALESCE(SUM(la."monthlyInstallment"), 0) AS "installment"
+        // Cap each loan's installment at its remainingAmount so the final
+        // month never deducts more than is actually owed. Without the cap
+        // an employee whose monthlyInstallment exceeds the remaining loan
+        // balance loses the full installment from net pay even though the
+        // DB clamps remainingAmount to zero via GREATEST() at write time.
+        `SELECT la."assignmentId",
+                COALESCE(SUM(LEAST(la."monthlyInstallment", la."remainingAmount")), 0) AS "installment"
          FROM loan_accounts la
          WHERE la."companyId" = $1 AND la.status = 'active' AND la."remainingAmount" > 0
          GROUP BY la."assignmentId"`,
@@ -2804,10 +2810,15 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
 
       if (loanRows.length > 0) {
         const assignmentIdsWithLoans = loanRows.map((r: Record<string, unknown>) => Number(r.assignmentId));
+        // Use LEAST(monthlyInstallment, remainingAmount) so the deduction
+        // matches what was taken from the payroll line (capped above).
+        // The earlier GREATEST() was already preventing negative balances,
+        // but pairing the capped subtrahend keeps net-pay deduction +
+        // remainingAmount decrement aligned.
         await client.query(
           `UPDATE loan_accounts
-           SET "remainingAmount" = GREATEST(0, "remainingAmount" - "monthlyInstallment"),
-               status = CASE WHEN "remainingAmount" - "monthlyInstallment" <= 0 THEN 'settled' ELSE status END
+           SET "remainingAmount" = "remainingAmount" - LEAST("monthlyInstallment", "remainingAmount"),
+               status = CASE WHEN "remainingAmount" - LEAST("monthlyInstallment", "remainingAmount") <= 0 THEN 'settled' ELSE status END
            WHERE "companyId" = $1 AND status = 'active' AND "assignmentId" = ANY($2::int[])`,
           [scope.companyId, assignmentIdsWithLoans]
         );
