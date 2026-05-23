@@ -8,8 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import {
   CreatePageLayout,
   CreationDateField,
-} from "@workspace/ui-core";
-import {
   FormShell,
   FormTextField,
   FormTextareaField,

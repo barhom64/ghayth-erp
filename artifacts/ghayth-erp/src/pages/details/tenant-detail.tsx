@@ -9,9 +9,16 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@workspace/ui-core";
-import { EntityDocuments } from "@workspace/entity-kit";
-import { EntityTimeline } from "@workspace/entity-kit";
+import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
+import {
+  DetailPageLayout,
+  type ExtraTab,
+  EntityComments,
+} from "@workspace/entity-kit";
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
@@ -21,11 +28,8 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
-import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 export default function TenantDetail() {

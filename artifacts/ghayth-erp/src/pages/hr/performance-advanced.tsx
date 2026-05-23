@@ -5,8 +5,11 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { Target, TrendingUp, Award, BarChart3, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@workspace/ui-core";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  PageShell,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 export default function PerformanceAdvancedPage() {

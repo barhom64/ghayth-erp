@@ -5,7 +5,11 @@ import {
   DetailActionButtons,
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
-import { DetailPageLayout } from "@workspace/entity-kit";
+import {
+  DetailPageLayout,
+  ProcessStages,
+  type StageStep,
+} from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +17,6 @@ import { MapPin, Truck, Users, DollarSign } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { ProcessStages, type StageStep } from "@workspace/entity-kit";
 
 const STATUS_MAP: Record<string, { label: string; tone: "success" | "warning" | "destructive" | "info" | "muted" | "default" }> = {
   scheduled: { label: "مجدولة", tone: "info" },

@@ -3,10 +3,15 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Card, CardContent } from "@/components/ui/card";
 import { UserPlus, CheckCircle, Clock, ClipboardCheck } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
-import { PageShell } from "@workspace/ui-core";
-import { PageStatusBadge } from "@workspace/ui-core";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
+import {
+  PageShell,
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+} from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 

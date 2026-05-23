@@ -8,9 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { PageShell } from "@workspace/ui-core";
-import { PageStatusBadge } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+  PageStatusBadge,
+} from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";

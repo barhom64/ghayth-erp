@@ -7,19 +7,26 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Plus, Calendar, Clock, CheckCircle, XCircle, ChevronDown, ChevronUp, Timer, Copy, Download } from "lucide-react";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  PageShell,
+  textColumn,
+  dateColumn,
+  statusColumn,
+  actionsColumn,
+} from "@workspace/ui-core";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@workspace/workflow-kit";
 import { ProcessStages, EntityTimeline } from "@workspace/entity-kit";
-import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
 // P3 pilot — switch the page header, status chip, and selected columns
 // to the new unified primitives (P1.1 / P1.4 / P1.6).  Approval actions,
 // expanded-row stage rendering, and the KPI cards stay as-is for this
 // pilot pass; they'll move in P3 follow-ups.
-import { PageShell } from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
-import { PageStatusBadge } from "@workspace/ui-core";
-import { textColumn, dateColumn, statusColumn, actionsColumn } from "@workspace/ui-core";
 import { LEAVE_TYPES, APPROVAL_ROLES } from "@/lib/hr-type-maps";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";

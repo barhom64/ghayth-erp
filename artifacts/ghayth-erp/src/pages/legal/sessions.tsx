@@ -1,11 +1,16 @@
 import { useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+} from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "lucide-react";
-import { PageShell } from "@workspace/ui-core";
-import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 
 interface Session {
   id: number;

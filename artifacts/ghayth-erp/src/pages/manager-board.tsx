@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { PageShell } from "@workspace/ui-core";
+import {
+  PageShell,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { formatDateAr } from "@/lib/formatters";
@@ -15,7 +19,6 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { getApprovalEndpoint, getApprovalMethod, getApprovalBadgeClass, buildAllPending } from "@/lib/approval-registry";
 import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";

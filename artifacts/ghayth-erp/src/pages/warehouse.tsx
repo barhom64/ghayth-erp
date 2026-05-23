@@ -3,10 +3,16 @@ import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+  PageStatusBadge,
+  AdvancedFilters,
+  useFilters,
+  exportToCSV,
+} from "@workspace/ui-core";
 // P4.9 — Warehouse sweep: shared header + status chips.
-import { PageShell } from "@workspace/ui-core";
-import { PageStatusBadge } from "@workspace/ui-core";
 import { useApiQuery, asList } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Package, ArrowLeftRight, Layers, Truck, Plus, AlertTriangle, DollarSign, Activity } from "lucide-react";
@@ -14,7 +20,6 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
-import { AdvancedFilters, useFilters, exportToCSV } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { withListFilters } from "@/lib/list-query";

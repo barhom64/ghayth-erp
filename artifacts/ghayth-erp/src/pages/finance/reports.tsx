@@ -15,9 +15,12 @@ import {
   Users, BarChart2, PieChart, FileText, Printer, ChevronDown, ChevronRight
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+} from "@workspace/ui-core";
 import { MultiExportButton } from "@/components/shared/export-buttons";
-import { PageShell } from "@workspace/ui-core";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { ErrorState } from "@/components/shared/loading-error-states";
 

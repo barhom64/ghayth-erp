@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { DetailPageLayout, type RelatedEntity } from "@workspace/entity-kit";
+import {
+  DetailPageLayout,
+  type RelatedEntity,
+} from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
@@ -14,7 +17,6 @@ import { Edit, Paperclip, Eye, Receipt } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useToast } from "@/hooks/use-toast";
-import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 
 /**

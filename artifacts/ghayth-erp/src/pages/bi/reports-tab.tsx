@@ -3,8 +3,14 @@ import { useApiQuery, asList } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  exportToCSV,
+} from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
 import { FileBarChart, Plus } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";

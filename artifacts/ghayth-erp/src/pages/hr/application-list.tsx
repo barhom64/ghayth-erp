@@ -8,9 +8,14 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { Plus, Users, UserCheck, Clock, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@workspace/ui-core";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
+import {
+  PageShell,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+} from "@workspace/ui-core";
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 
 const STATUS_OPTIONS = Object.entries(RECRUITMENT_STAGES).map(([value, { label }]) => ({ value, label }));

@@ -1,10 +1,14 @@
 import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { resolveStatus, type StatusTone } from "@workspace/ui-core";
-import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
+import {
+  resolveStatus,
+  type StatusTone,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
+import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   DollarSign,

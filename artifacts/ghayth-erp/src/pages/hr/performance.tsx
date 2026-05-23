@@ -5,13 +5,18 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 // Phase A — HR performance on unified primitives.
-import { PageShell } from "@workspace/ui-core";
+import {
+  PageShell,
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+} from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
-import { PageStatusBadge } from "@workspace/ui-core";
 import { Plus, Star, Target, TrendingUp, Users, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 

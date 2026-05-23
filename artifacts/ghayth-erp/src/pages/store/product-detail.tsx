@@ -2,12 +2,18 @@ import { useRoute, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageStatusBadge,
+  resolveStatus,
+} from "@workspace/ui-core";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
-import { PageStatusBadge, resolveStatus } from "@workspace/ui-core";
-import { EntityDocuments } from "@workspace/entity-kit";
-import { EntityTimeline } from "@workspace/entity-kit";
-import { EntityComments } from "@workspace/entity-kit";
+import {
+  EntityDocuments,
+  EntityTimeline,
+  EntityComments,
+} from "@workspace/entity-kit";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";

@@ -8,7 +8,10 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import { PageStatusBadge } from "@workspace/ui-core";
+import {
+  PageStatusBadge,
+  DataTable,
+} from "@workspace/ui-core";
 import {
   User, Phone, Mail, Briefcase, Calendar, Building, CreditCard,
   ListTodo, Clock, BookOpen, DollarSign, AlertTriangle, Printer,
@@ -27,7 +30,6 @@ import { formatDateAr, formatTimeAr, formatCurrency } from "@/lib/formatters";
 import { PrintPreviewModal } from "@workspace/report-kit";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { EmployeeDisciplineSummary } from "@/components/shared/employee-discipline-summary";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 

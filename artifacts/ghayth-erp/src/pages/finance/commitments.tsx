@@ -1,12 +1,18 @@
 import { useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { PageStatusBadge } from "@workspace/ui-core";
+import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  exportToCSV,
+  PageShell,
+} from "@workspace/ui-core";
 import { FileSignature, DollarSign, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
-import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function CommitmentsPage() {

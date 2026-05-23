@@ -6,14 +6,17 @@ import {
   DetailActionButtons,
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
-import { DetailPageLayout, type RelatedEntity } from "@workspace/entity-kit";
+import {
+  DetailPageLayout,
+  type RelatedEntity,
+  EntityComments,
+} from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Fuel, Gauge } from "lucide-react";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
-import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 

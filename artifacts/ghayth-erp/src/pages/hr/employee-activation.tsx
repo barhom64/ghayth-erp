@@ -10,8 +10,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { UserCheck, UserX, Users, ToggleLeft, Pause, Play, Ban } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  PageShell,
+} from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -24,7 +30,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAppContext } from "@/contexts/app-context";
-import { PageShell } from "@workspace/ui-core";
 
 type LifecycleAction = "activate" | "suspend" | "terminate";
 

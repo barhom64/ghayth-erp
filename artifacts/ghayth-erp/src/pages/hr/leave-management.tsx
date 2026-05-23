@@ -12,8 +12,11 @@ import { ApprovalActions, ActionHistory, NotesDisplay } from "@workspace/workflo
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
-import { PageShell } from "@workspace/ui-core";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  PageShell,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 
 function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => void }) {

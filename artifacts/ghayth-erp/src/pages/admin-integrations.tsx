@@ -1,20 +1,21 @@
 import { useState } from "react";
 import { z } from "zod";
-import { PageShell } from "@workspace/ui-core";
-import { useApiQuery, useApiMutation, asList } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { GuardedButton } from "@/components/shared/permission-gate";
-import { Badge } from "@/components/ui/badge";
 import {
+  PageShell,
   FormShell,
   FormTextField,
   FormTextareaField,
   FormSelectField,
   FormGrid,
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
 } from "@workspace/ui-core";
-import { PageStatusBadge } from "@workspace/ui-core";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";

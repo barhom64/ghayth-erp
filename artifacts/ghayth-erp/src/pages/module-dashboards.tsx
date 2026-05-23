@@ -1,10 +1,12 @@
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { PageShell } from "@workspace/ui-core";
+import {
+  PageShell,
+  resolveStatus,
+} from "@workspace/ui-core";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { resolveStatus } from "@workspace/ui-core";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Users, DollarSign, Truck, Scale, Building2, FolderKanban,

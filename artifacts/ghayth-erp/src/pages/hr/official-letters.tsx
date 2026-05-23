@@ -7,26 +7,29 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 // Phase A — HR official letters on unified primitives.
-import { PageShell } from "@workspace/ui-core";
-import { PageStatusBadge } from "@workspace/ui-core";
-import { Plus, FileText, FileSignature, Send, Eye } from "lucide-react";
-import { KpiGrid } from "@/components/shared/kpi-card";
-import { PrintPreviewModal } from "@workspace/report-kit";
-import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
-import { useAuth } from "@/lib/auth";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { useAppContext } from "@/contexts/app-context";
-import { ApprovalActions } from "@workspace/workflow-kit";
-import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { LETTER_TYPES } from "@/lib/hr-type-maps";
 import {
+  PageShell,
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
   FormShell,
   FormTextField,
   FormTextareaField,
   FormSelectField,
   FormGrid,
 } from "@workspace/ui-core";
+import { Plus, FileText, FileSignature, Send, Eye } from "lucide-react";
+import { KpiGrid } from "@/components/shared/kpi-card";
+import { PrintPreviewModal } from "@workspace/report-kit";
+import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
+import { useAuth } from "@/lib/auth";
+import { useAppContext } from "@/contexts/app-context";
+import { ApprovalActions } from "@workspace/workflow-kit";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { LETTER_TYPES } from "@/lib/hr-type-maps";
 
 // Old: subject was guarded only by `disabled={!form.subject}`. Schema
 // makes it required at validation time + trims whitespace.

@@ -3,14 +3,19 @@ import { useApiQuery } from "@/lib/api";
 import { formatNumber } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
-import { PageStatusBadge } from "@workspace/ui-core";
+import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  PageShell,
+} from "@workspace/ui-core";
 import { Plus, Route, Navigation, CheckCircle, MapPin } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { PageShell } from "@workspace/ui-core";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 
 export default function TripsPage() {

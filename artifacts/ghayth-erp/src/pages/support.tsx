@@ -11,25 +11,21 @@ import {
   type DataTableColumn,
   PageShell,
   PageStatusBadge,
-  textColumn,
   statusColumn,
-  actionsColumn,
   AdvancedFilters,
   useFilters,
   applyFilters,
   exportToCSV,
-} from "@workspace/ui-core";
-import { EntityComments } from "@workspace/entity-kit";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useApiQuery, useApiMutation, asList } from "@/lib/api";
-import { z } from "zod";
-import {
   FormShell,
   FormTextField,
   FormTextareaField,
   FormSelectField,
   FormGrid,
 } from "@workspace/ui-core";
+import { EntityComments } from "@workspace/entity-kit";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { z } from "zod";
 import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Star, ThumbsUp, CheckCircle, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";

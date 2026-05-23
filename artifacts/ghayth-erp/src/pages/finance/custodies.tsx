@@ -13,6 +13,14 @@ import {
   FormSelectField,
   FormDateField,
   FormGrid,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  exportToCSV,
+  PageShell,
+  PageStatusBadge,
 } from "@workspace/ui-core";
 import {
   KeyRound,
@@ -29,11 +37,7 @@ import {
 } from "lucide-react";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
-import { PageShell } from "@workspace/ui-core";
-import { PageStatusBadge } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 /**

@@ -15,6 +15,8 @@ import {
   FormSelectField,
   FormDateField,
   FormGrid,
+  PageStatusBadge,
+  DataTable,
 } from "@workspace/ui-core";
 
 // Schemas for the three create sub-forms below. The edit-project
@@ -60,15 +62,15 @@ import {
 } from "lucide-react";
 import { formatDateAr, getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { EntityObligations } from "@/components/shared/entity-obligations";
-import { EntityComments } from "@workspace/entity-kit";
+import {
+  EntityComments,
+  DetailPageLayout,
+} from "@workspace/entity-kit";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { cn } from "@/lib/utils";
-import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import { PageStatusBadge } from "@workspace/ui-core";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { DatePicker } from "@/components/ui/date-picker";
 
 const PROJECT_TABS = [

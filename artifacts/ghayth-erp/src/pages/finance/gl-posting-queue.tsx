@@ -36,9 +36,12 @@ import {
   ClipboardCheck,
   History,
 } from "lucide-react";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { PageShell } from "@workspace/ui-core";
-import { PageStatusBadge } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+  PageStatusBadge,
+} from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency } from "@/lib/formatters";
 import { toast } from "@/hooks/use-toast";

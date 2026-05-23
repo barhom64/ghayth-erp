@@ -2,8 +2,14 @@ import { Link } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  exportToCSV,
+} from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
 import { TrendingUp, Plus } from "lucide-react";
 import { formatNumber } from "@/lib/formatters";

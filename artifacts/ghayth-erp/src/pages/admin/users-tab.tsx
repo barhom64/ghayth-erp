@@ -11,16 +11,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, X, CheckCircle, KeySquare, Eye, EyeOff, ToggleLeft, ToggleRight } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { PageStatusBadge } from "@workspace/ui-core";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { ROLE_OPTIONS } from "./shared";
 import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
   FormShell,
   FormEmailField,
   FormTextField,
   FormSelectField,
   FormGrid,
 } from "@workspace/ui-core";
+import { ROLE_OPTIONS } from "./shared";
 
 // Schema enforces email validity client-side (the old `!form.email`
 // guard accepted "x" as valid). employeeId stays a string until the

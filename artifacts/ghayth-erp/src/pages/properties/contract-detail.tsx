@@ -7,10 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
+import {
+  DetailPageLayout,
+  type ExtraTab,
+} from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { EntityObligations } from "@/components/shared/entity-obligations";
-import { EntityDocuments } from "@workspace/entity-kit";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";

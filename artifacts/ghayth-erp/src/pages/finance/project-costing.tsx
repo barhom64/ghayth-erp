@@ -6,14 +6,19 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Card, CardContent } from "@/components/ui/card";
-import { PageStatusBadge } from "@workspace/ui-core";
+import {
+  PageStatusBadge,
+  PageShell,
+  FormShell,
+  FormNumberField,
+  FormTextareaField,
+  FormDateField,
+  FormSelectField,
+  FormGrid,
+} from "@workspace/ui-core";
 import { formatCurrency, todayLocal } from "@/lib/formatters";
 import { Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
-import { PageShell } from "@workspace/ui-core";
-import {
-  FormShell, FormNumberField, FormTextareaField, FormDateField, FormSelectField, FormGrid,
-} from "@workspace/ui-core";
 
 // projectId stays a string until the submit handler casts to number.
 // amount uses z.coerce.number().positive() — was tracked as string

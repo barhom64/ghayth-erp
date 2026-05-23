@@ -6,13 +6,16 @@ import { Button } from "@/components/ui/button";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@workspace/report-kit";
 import { PrintButton } from "@/components/shared/print-button";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  resolveStatus,
+} from "@workspace/ui-core";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ShoppingCart, User, Phone, Mail, Calendar, Package, Copy } from "lucide-react";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { DetailPageLayout } from "@workspace/entity-kit";
-import { resolveStatus } from "@workspace/ui-core";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 export default function PurchaseOrderDetailPage() {

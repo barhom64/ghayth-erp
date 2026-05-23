@@ -10,12 +10,16 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageStatusBadge, resolveStatus } from "@workspace/ui-core";
+import {
+  PageStatusBadge,
+  resolveStatus,
+  FormShell,
+  FormTextField,
+  FormDateField,
+  FormGrid,
+} from "@workspace/ui-core";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import {
-  FormShell, FormTextField, FormDateField, FormGrid,
-} from "@workspace/ui-core";
 import {
   Gavel, Calendar, FileText, AlertTriangle, Clock,
   CheckCircle2, User, MapPin, TrendingUp, Activity,

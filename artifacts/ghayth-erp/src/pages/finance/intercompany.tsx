@@ -5,16 +5,22 @@ import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@workspace/ui-core";
+import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+  FormShell,
+  FormNumberField,
+  FormTextareaField,
+  FormDateField,
+  FormSelectField,
+  FormGrid,
+} from "@workspace/ui-core";
 import { formatCurrency, formatDateAr as formatDate, todayLocal } from "@/lib/formatters";
 import { ArrowLeftRight, Layers } from "lucide-react";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Link } from "wouter";
-import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import {
-  FormShell, FormNumberField, FormTextareaField, FormDateField, FormSelectField, FormGrid,
-} from "@workspace/ui-core";
 
 // toCompanyId is a string in the form; the submit handler converts
 // to number for the API. amount coerced via z.coerce.

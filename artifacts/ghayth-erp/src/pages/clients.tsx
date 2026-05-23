@@ -1,19 +1,24 @@
 import { useState, useEffect, Fragment } from "react";
-import { PageShell } from "@workspace/ui-core";
+import {
+  PageShell,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  exportToCSV,
+} from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Link, useLocation } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Plus, Building2, Eye, CheckCircle, Star, TrendingUp } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { CLASSIFICATIONS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { useAppContext } from "@/contexts/app-context";
-import { AdvancedFilters, useFilters, exportToCSV } from "@workspace/ui-core";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";

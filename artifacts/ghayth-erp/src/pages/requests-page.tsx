@@ -7,6 +7,10 @@ import {
   PageStatusBadge,
   DataTable,
   type DataTableColumn,
+  FormShell,
+  FormTextField,
+  FormSelectField,
+  FormGrid,
 } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,9 +20,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  FormShell, FormTextField, FormTextareaField, FormSelectField, FormGrid,
-} from "@workspace/ui-core";
 
 const requestSchema = z.object({
   title: z.string().trim().min(1, "العنوان مطلوب"),

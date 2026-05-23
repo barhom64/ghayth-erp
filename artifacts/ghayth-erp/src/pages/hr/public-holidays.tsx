@@ -7,13 +7,17 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, Edit2, X } from "lucide-react";
-import { PageShell } from "@workspace/ui-core";
+import {
+  PageShell,
+  FormShell,
+  FormTextField,
+  FormSelectField,
+  FormDateField,
+  FormGrid,
+} from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { HOLIDAY_TYPES, HOLIDAY_COLORS, MONTHS_AR } from "@/lib/hr-type-maps";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
-import {
-  FormShell, FormTextField, FormSelectField, FormDateField, FormGrid,
-} from "@workspace/ui-core";
 
 // HOLIDAY_TYPES has a fixed set of keys — `national`, `religious`,
 // `company`, etc. Use them as the closed enum source. type stays a

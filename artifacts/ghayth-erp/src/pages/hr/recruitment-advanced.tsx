@@ -5,8 +5,11 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { Briefcase, Users, UserCheck, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@workspace/ui-core";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  PageShell,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { RECRUITMENT_STAGES } from "@/lib/hr-type-maps";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 

@@ -36,10 +36,13 @@ import {
   XCircle,
   Undo2,
 } from "lucide-react";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { PageShell } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+  PageStatusBadge,
+} from "@workspace/ui-core";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
-import { PageStatusBadge } from "@workspace/ui-core";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { cn } from "@/lib/utils";
 

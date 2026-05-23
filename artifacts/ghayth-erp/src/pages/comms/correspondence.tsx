@@ -10,7 +10,11 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+} from "@workspace/ui-core";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +23,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
-import { PageShell } from "@workspace/ui-core";
 import { formatDateAr } from "@/lib/formatters";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import {

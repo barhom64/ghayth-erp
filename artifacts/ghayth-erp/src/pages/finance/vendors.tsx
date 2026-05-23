@@ -5,11 +5,17 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  exportToCSV,
+  PageShell,
+} from "@workspace/ui-core";
 import { Plus, Users, Phone, Mail, Star, Building2, Calendar } from "lucide-react";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
-import { PageShell } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";

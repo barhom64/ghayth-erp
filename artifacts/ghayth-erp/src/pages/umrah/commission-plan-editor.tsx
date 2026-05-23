@@ -8,14 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { PageShell } from "@workspace/ui-core";
-import { PageStateWrapper } from "@/components/shared/page-state";
-import { GuardedButton } from "@/components/shared/permission-gate";
-import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { useToast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/formatters";
-import { ArrowRight, Plus, Save, Trash2, Calculator, AlertCircle } from "lucide-react";
 import {
+  PageShell,
   FormShell,
   FormTextField,
   FormNumberField,
@@ -23,6 +17,12 @@ import {
   FormTextareaField,
   FormGrid,
 } from "@workspace/ui-core";
+import { PageStateWrapper } from "@/components/shared/page-state";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/formatters";
+import { ArrowRight, Plus, Save, Trash2, Calculator, AlertCircle } from "lucide-react";
 
 // Simulator schema. Its FormShell is independent because the
 // simulate inputs aren't persisted on the plan row — they're

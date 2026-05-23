@@ -10,8 +10,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { PageShell } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+} from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";

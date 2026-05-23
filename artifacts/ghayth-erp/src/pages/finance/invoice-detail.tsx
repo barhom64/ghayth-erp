@@ -21,20 +21,28 @@ import {
   Zap,
   Send,
 } from "lucide-react";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageStatusBadge,
+  resolveStatus,
+} from "@workspace/ui-core";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { ProcessStages, type StageStep } from "@workspace/entity-kit";
+import {
+  ProcessStages,
+  type StageStep,
+  DetailPageLayout,
+  type DetailStatus,
+} from "@workspace/entity-kit";
 import { EntityObligations } from "@/components/shared/entity-obligations";
-import { DetailPageLayout, type DetailStatus } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import {
   useDetailEditDelete,
   DetailActionButtons,
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
-import { PageStatusBadge, resolveStatus } from "@workspace/ui-core";
 
 /**
  * Invoice detail page — migrated to DetailPageLayout which provides

@@ -7,16 +7,24 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 // P4.8 — Finance invoices: shared header + status chips from P1.
-import { PageShell } from "@workspace/ui-core";
-import { PageStatusBadge } from "@workspace/ui-core";
+import {
+  PageShell,
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  exportToCSV,
+} from "@workspace/ui-core";
 import { Plus, Receipt, DollarSign, AlertTriangle, CheckCircle, Eye, ExternalLink, ChevronDown, ChevronUp, Copy, Zap } from "lucide-react";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
-import { CollectionStages } from "@workspace/entity-kit";
+import {
+  CollectionStages,
+  EntityComments,
+} from "@workspace/entity-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@workspace/ui-core";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
-import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";

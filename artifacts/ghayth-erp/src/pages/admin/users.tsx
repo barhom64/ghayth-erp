@@ -8,7 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-  FormShell, FormEmailField, FormTextField, FormSelectField, FormGrid,
+  FormShell,
+  FormEmailField,
+  FormTextField,
+  FormSelectField,
+  FormGrid,
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
 } from "@workspace/ui-core";
 
 // Same schema as users-tab.tsx (#301) — both pages create users with
@@ -42,9 +49,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { PageStatusBadge } from "@workspace/ui-core";
 import { roleKeyColors } from "@/contexts/app-context";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "مالك النظام" },

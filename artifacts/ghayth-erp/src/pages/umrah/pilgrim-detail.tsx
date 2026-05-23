@@ -4,12 +4,15 @@ import { useRoute } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PageStatusBadge } from "@workspace/ui-core";
+import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Save, User, Calendar, AlertTriangle } from "lucide-react";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";

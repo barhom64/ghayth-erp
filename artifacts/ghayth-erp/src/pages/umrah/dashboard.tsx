@@ -4,8 +4,11 @@ import { formatDateAr, formatNumber } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@workspace/ui-core";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Users, Plane, AlertTriangle, UserPlus, Play, Zap } from "lucide-react";

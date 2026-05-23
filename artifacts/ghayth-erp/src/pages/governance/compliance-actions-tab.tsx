@@ -4,19 +4,12 @@ import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { PageStatusBadge } from "@workspace/ui-core";
-import { DataTable } from "@workspace/ui-core";
-import { Activity, Plus, Eye } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
-import { formatDateAr } from "@/lib/formatters";
-import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
-import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
-import { AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
-import { useAppContext } from "@/contexts/app-context";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
+  PageStatusBadge,
+  DataTable,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
   FormShell,
   FormTextField,
   FormTextareaField,
@@ -24,6 +17,15 @@ import {
   FormSelectField,
   FormGrid,
 } from "@workspace/ui-core";
+import { Activity, Plus, Eye } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
+import { formatDateAr } from "@/lib/formatters";
+import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAppContext } from "@/contexts/app-context";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const complianceActionSchema = z.object({
   title: z.string().trim().min(1, "العنوان مطلوب"),

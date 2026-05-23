@@ -1,11 +1,14 @@
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@workspace/ui-core";
+import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { Archive, FileText, Calendar, FolderArchive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, asList } from "@/lib/api";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 const columns: DataTableColumn<any>[] = [
   {
