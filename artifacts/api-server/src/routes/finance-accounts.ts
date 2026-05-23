@@ -251,6 +251,17 @@ accountsRouter.post("/accounts", authorize({ feature: "finance.accounts", action
         ) WHERE id = $3`,
         [b.parentCode, scope.companyId, row.id]
       );
+      // COA-1: a parent account must not stay postable once it has children
+      // — otherwise any roll-up report that sums parent + descendant
+      // accounts double-counts the parent's own postings. Flip
+      // allowPosting=false on first child add. Idempotent: the
+      // AND "allowPosting" = true clause makes subsequent child adds on the
+      // same parent no-ops.
+      await rawExecute(
+        `UPDATE chart_of_accounts SET "allowPosting" = false
+         WHERE "companyId" = $1 AND code = $2 AND "allowPosting" = true AND "deletedAt" IS NULL`,
+        [scope.companyId, b.parentCode]
+      );
     }
 
     emitEvent({
