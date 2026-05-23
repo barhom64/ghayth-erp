@@ -73,9 +73,14 @@ d("Wave-2 H2: applyJournalEntryBalances refuses to post into a closed period", (
 
   beforeEach(async () => {
     // Clean the rows this suite touches between scenarios so each test
-    // starts from a known state. We intentionally leave the base
-    // company/branch/user fixture in place.
-    await rawExecute(`DELETE FROM journal_lines WHERE "companyId"=$1`, [companyId]);
+    // starts from a known state. journal_lines has no companyId of its
+    // own; rows are scoped via the FK journalId → journal_entries.
+    // Order matters: child rows before parent.
+    await rawExecute(
+      `DELETE FROM journal_lines WHERE "journalId" IN
+         (SELECT id FROM journal_entries WHERE "companyId"=$1)`,
+      [companyId]
+    );
     await rawExecute(`DELETE FROM journal_entries WHERE "companyId"=$1`, [companyId]);
     await rawExecute(`DELETE FROM financial_periods WHERE "companyId"=$1`, [companyId]);
     // Ensure the two accounts our journal lines touch exist with a known
@@ -103,10 +108,12 @@ d("Wave-2 H2: applyJournalEntryBalances refuses to post into a closed period", (
        ) VALUES ($1, $2, $3, $4, 'wave2-h2-test', 'manual', false, $5::timestamptz)`,
       [companyId, branchId, assignmentId, opts.ref, opts.date]
     );
+    // journal_lines is scoped to its parent journal via journalId only;
+    // there is no companyId column on journal_lines.
     await rawExecute(
-      `INSERT INTO journal_lines ("companyId", "journalEntryId", "accountCode", debit, credit)
-       VALUES ($1, $2, '1101', 100, 0), ($1, $2, '4101', 0, 100)`,
-      [companyId, insertId]
+      `INSERT INTO journal_lines ("journalId", "accountCode", debit, credit)
+       VALUES ($1, '1101', 100, 0), ($1, '4101', 0, 100)`,
+      [insertId]
     );
     return insertId;
   }
@@ -244,7 +251,11 @@ d("Wave-2 #888: createJournalEntry rejects imbalanced entries instead of silent 
   });
 
   beforeEach(async () => {
-    await rawExecute(`DELETE FROM journal_lines WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(
+      `DELETE FROM journal_lines WHERE "journalId" IN
+         (SELECT id FROM journal_entries WHERE "companyId"=$1)`,
+      [companyId]
+    );
     await rawExecute(`DELETE FROM journal_entries WHERE "companyId"=$1`, [companyId]);
     await rawExecute(`DELETE FROM financial_periods WHERE "companyId"=$1`, [companyId]);
     // Open period that covers today so the upstream period guard never
@@ -315,7 +326,7 @@ d("Wave-2 #888: createJournalEntry rejects imbalanced entries instead of silent 
     );
     expect(je).toBeDefined();
     const lines = await rawQuery<{ accountCode: string }>(
-      `SELECT "accountCode" FROM journal_lines WHERE "journalEntryId"=$1 ORDER BY "accountCode"`,
+      `SELECT "accountCode" FROM journal_lines WHERE "journalId"=$1 ORDER BY "accountCode"`,
       [je.id]
     );
     expect(lines.map((l) => l.accountCode)).toEqual(["1101", "4101"]);
@@ -350,7 +361,11 @@ d("Wave-2 H3: appendRoundingAdjustment moves chart_of_accounts.currentBalance fo
   });
 
   beforeEach(async () => {
-    await rawExecute(`DELETE FROM journal_lines WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(
+      `DELETE FROM journal_lines WHERE "journalId" IN
+         (SELECT id FROM journal_entries WHERE "companyId"=$1)`,
+      [companyId]
+    );
     await rawExecute(`DELETE FROM journal_entries WHERE "companyId"=$1`, [companyId]);
     await rawExecute(
       `INSERT INTO chart_of_accounts ("companyId", code, "nameAr", "nameEn", type, "currentBalance")

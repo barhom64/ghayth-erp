@@ -52,6 +52,12 @@ const MIDDLEWARES_DIR = join(REPO_ROOT, "artifacts/api-server/src/middlewares");
 const ERP_PAGES_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/pages");
 const ERP_COMPONENTS_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/components");
 const ERP_HOOKS_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/hooks");
+// lib/ is included in the kit ratchet scan to close an evasion path:
+// a re-export like `export { PageShell } from "@/components/page-shell"`
+// living in artifacts/ghayth-erp/src/lib/some-shell.ts would otherwise
+// satisfy the @/components import contract without tripping any of the
+// kit-adoption rules below. Scanning lib/ ensures the rule sees those.
+const ERP_LIB_DIR = join(REPO_ROOT, "artifacts/ghayth-erp/src/lib");
 
 // Shared kit-adoption ratchet message — appended to every UI-kit
 // counted rule below. Centralised so the wording stays consistent.
@@ -201,7 +207,7 @@ const RULES = [
 
   {
     id: "page-shell-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     // The component definition itself is exempt — that's where the
     // primitive lives. The @workspace/ui-core re-export shim also
@@ -218,7 +224,7 @@ const RULES = [
   },
   {
     id: "form-shell-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/form-shell.tsx"),
     regex: /from\s+["']@\/components\/form-shell["']/,
@@ -227,7 +233,7 @@ const RULES = [
   },
   {
     id: "data-table-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     skip: (file) =>
       file.endsWith("/components/ui/data-table.tsx") ||
@@ -240,7 +246,7 @@ const RULES = [
   },
   {
     id: "page-status-badge-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     skip: (file) =>
       file.endsWith("/components/page-status-badge.tsx") ||
@@ -256,7 +262,7 @@ const RULES = [
   },
   {
     id: "create-page-layout-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/create-page-layout.tsx"),
     regex: /from\s+["']@\/components\/create-page-layout["']/,
@@ -265,7 +271,7 @@ const RULES = [
   },
   {
     id: "detail-page-layout-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     skip: (file) =>
       file.endsWith("/components/shared/detail-page-layout.tsx") ||
@@ -280,7 +286,7 @@ const RULES = [
 
   {
     id: "advanced-filters-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     skip: (file) =>
       file.endsWith("/components/shared/advanced-filters.tsx") ||
@@ -292,7 +298,7 @@ const RULES = [
   },
   {
     id: "data-table-presets-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     skip: (file) =>
       file.endsWith("/components/data-table-presets.tsx") ||
@@ -303,7 +309,7 @@ const RULES = [
   },
   {
     id: "data-table-wrapper-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     skip: (file) =>
       file.endsWith("/components/data-table-wrapper.tsx") ||
@@ -314,7 +320,7 @@ const RULES = [
   },
   {
     id: "page-header-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/page-header.tsx"),
     regex: /from\s+["']@\/components\/page-header["']/,
@@ -326,7 +332,7 @@ const RULES = [
 
   {
     id: "entity-timeline-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/shared/entity-timeline.tsx"),
     regex: /from\s+["']@\/components\/shared\/entity-timeline["']/,
@@ -335,7 +341,7 @@ const RULES = [
   },
   {
     id: "entity-comments-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/shared/entity-comments.tsx"),
     regex: /from\s+["']@\/components\/shared\/entity-comments["']/,
@@ -345,7 +351,7 @@ const RULES = [
   },
   {
     id: "entity-documents-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/shared/entity-documents.tsx"),
     regex: /from\s+["']@\/components\/shared\/entity-documents["']/,
@@ -357,7 +363,7 @@ const RULES = [
 
   {
     id: "approval-actions-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     skip: (file) => file.endsWith("/components/approval-actions.tsx"),
     regex: /from\s+["']@\/components\/approval-actions["']/,
@@ -369,7 +375,7 @@ const RULES = [
 
   {
     id: "print-layout-from-legacy-path",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR],
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
     extensions: [".tsx", ".ts"],
     skip: (file) =>
       file.endsWith("/components/print-layout.tsx") ||

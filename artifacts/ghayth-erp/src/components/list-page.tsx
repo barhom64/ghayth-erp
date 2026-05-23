@@ -226,9 +226,12 @@ export function ListPage<T>(props: ListPageProps<T>) {
     ? selector(data)
     : ((data as { data?: T[] })?.data ?? []);
 
-  // When `customFilterBar` is set, the consumer owns filter state and
-  // bakes it into endpoint/queryKey — so rows already come pre-filtered
-  // from the server. Skip both useFilters and applyFilters in that case.
+  // useFilters() runs unconditionally because it's a React hook and the
+  // Rules of Hooks forbid skipping it. The result is only consumed when
+  // there's no `customFilterBar` — see the conditional render below. When
+  // `customFilterBar` is set, the consumer owns filter state and bakes it
+  // into endpoint/queryKey, so rows already come pre-filtered from the
+  // server and applyFilters() is the only thing actually skipped here.
   const [filterValues, setFilterValues] = useFilters();
   const filtered: T[] = customFilterBar
     ? rows
@@ -270,10 +273,20 @@ export function ListPage<T>(props: ListPageProps<T>) {
     >
       {stats && stats.length > 0 && (
         <div
-          className={`grid gap-3 grid-cols-2 md:grid-cols-${Math.min(
-            stats.length,
-            4,
-          )}`}
+          // Tailwind's JIT scanner only sees literal class strings, so the
+          // grid template is picked from an explicit switch rather than
+          // an interpolated `md:grid-cols-${N}` — otherwise the runtime
+          // utilities (md:grid-cols-1..4) would be invisible to the build
+          // and silently collapse to a 1-col layout.
+          className={
+            stats.length === 1
+              ? "grid gap-3 grid-cols-1"
+              : stats.length === 2
+                ? "grid gap-3 grid-cols-2 md:grid-cols-2"
+                : stats.length === 3
+                  ? "grid gap-3 grid-cols-2 md:grid-cols-3"
+                  : "grid gap-3 grid-cols-2 md:grid-cols-4"
+          }
         >
           {stats.map((s, i) => (
             <StatTile key={`${s.label}-${i}`} {...s} />

@@ -203,22 +203,26 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", authorize({ feature:
     );
     if (!period) throw new NotFoundError("الفترة غير موجودة");
 
-    const pendingJournals = await rawQuery<Record<string, unknown>>(
-      `SELECT id FROM journal_entries
+    // Count, don't sample. The UI renders meta.pendingCount as the actual
+    // number of blocking entries — a LIMIT 5 here would cap the message at
+    // "5 قيد يدوي" even for periods with 50+ blockers, which misleads the
+    // user about the scope of their cleanup.
+    const [pendingRow] = await rawQuery<{ pendingCount: string }>(
+      `SELECT COUNT(*)::text AS "pendingCount" FROM journal_entries
        WHERE "companyId"=$1 AND "deletedAt" IS NULL
          AND "createdAt"::date BETWEEN $2 AND $3
          AND ("approvalStatus" IS NULL OR "approvalStatus" IN ('draft','pending_review'))
-         AND "isManual" = TRUE
-       LIMIT 5`,
+         AND "isManual" = TRUE`,
       [scope.companyId, period.startDate, period.endDate]
     );
-    if (pendingJournals.length > 0) {
+    const pendingCount = Number(pendingRow?.pendingCount ?? 0);
+    if (pendingCount > 0) {
       throw new ConflictError(
-        `لا يمكن إقفال الفترة: يوجد ${pendingJournals.length} قيد يدوي لم يُرحّل بعد`,
+        `لا يمكن إقفال الفترة: يوجد ${pendingCount} قيد يدوي لم يُرحّل بعد`,
         {
           field: "journalEntries",
           fix: "ارحّل أو احذف القيود اليدوية المعلّقة قبل إقفال الفترة",
-          meta: { pendingCount: pendingJournals.length },
+          meta: { pendingCount },
         },
       );
     }
