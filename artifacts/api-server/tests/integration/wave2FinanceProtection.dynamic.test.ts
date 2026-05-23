@@ -213,16 +213,208 @@ d("Wave-2 H1: reversal runs inside the rejection lifecycle txn (#881)", () => {
   );
 });
 
-d("Wave-2 H3: appendRoundingAdjustment moves chart_of_accounts.currentBalance for 9999 (#884)", () => {
-  it.todo(
-    "after appending a rounding line for 0.02 SAR, account 9999's currentBalance " +
-      "advances by 0.02 — the journal_lines sum and the currentBalance view agree",
-  );
+// ─────────────────────────────────────────────────────────────────────
+// #888 — createJournalEntry no longer auto-plugs gaps via account 9999
+// ─────────────────────────────────────────────────────────────────────
+
+d("Wave-2 #888: createJournalEntry rejects imbalanced entries instead of silent 9999 plug", () => {
+  let rawExecute: typeof import("../../src/lib/rawdb.js").rawExecute;
+  let rawQuery: typeof import("../../src/lib/rawdb.js").rawQuery;
+  let createJournalEntry: typeof import("../../src/lib/businessHelpers.js").createJournalEntry;
+  let ValidationError: typeof import("../../src/lib/errorHandler.js").ValidationError;
+
+  let companyId: number;
+  let branchId: number;
+  let assignmentId: number;
+
+  beforeAll(async () => {
+    const rawdb = await import("../../src/lib/rawdb.js");
+    rawExecute = rawdb.rawExecute;
+    rawQuery = rawdb.rawQuery;
+    const helpers = await import("../../src/lib/businessHelpers.js");
+    createJournalEntry = helpers.createJournalEntry;
+    const errorHandler = await import("../../src/lib/errorHandler.js");
+    ValidationError = errorHandler.ValidationError;
+
+    const { setupTwoCompanyFixture } = await import("./_fixtures/twoCompanies.js");
+    const fx = await setupTwoCompanyFixture();
+    companyId = fx.companyA.id;
+    branchId = fx.companyA.branchId;
+    assignmentId = fx.companyA.assignmentId;
+  });
+
+  beforeEach(async () => {
+    await rawExecute(`DELETE FROM journal_lines WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(`DELETE FROM journal_entries WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(`DELETE FROM financial_periods WHERE "companyId"=$1`, [companyId]);
+    // Open period that covers today so the upstream period guard never
+    // gets in the way of the imbalance test.
+    await rawExecute(
+      `INSERT INTO financial_periods ("companyId", name, "startDate", "endDate", status)
+       VALUES ($1, 'فترة مفتوحة', '2020-01-01', '2099-12-31', 'open')`,
+      [companyId]
+    );
+    await rawExecute(
+      `INSERT INTO chart_of_accounts ("companyId", code, "nameAr", "nameEn", type, "currentBalance")
+       VALUES ($1, '1101', 'بنك اختبار', 'Test Bank', 'asset', 0),
+              ($1, '4101', 'إيراد اختبار', 'Test Revenue', 'revenue', 0),
+              ($1, '9999', 'فروقات التقريب', 'Rounding', 'expense', 0)
+       ON CONFLICT ("companyId", code) DO UPDATE SET "currentBalance" = 0`,
+      [companyId]
+    );
+  });
+
+  it("rejects an imbalanced 0.03 SAR gap with ValidationError (#888 fix)", async () => {
+    let caught: unknown = null;
+    try {
+      await createJournalEntry({
+        companyId,
+        branchId,
+        createdBy: assignmentId,
+        ref: "JE-888-IMBAL",
+        description: "wave2-888 imbalanced",
+        lines: [
+          { accountCode: "1101", debit: 100, credit: 0 },
+          // 100 vs 99.97 → 0.03 gap; previously silently plugged into 9999.
+          { accountCode: "4101", debit: 0, credit: 99.97 },
+        ],
+      });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ValidationError);
+    expect((caught as Error).message).toMatch(/قيد غير متوازن|imbalanced/i);
+
+    // Post-condition: NO journal_entries row inserted (the throw fires
+    // before the INSERT) and NO 9999 line silently appended.
+    const [{ count }] = await rawQuery<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM journal_entries
+       WHERE "companyId"=$1 AND ref='JE-888-IMBAL'`,
+      [companyId]
+    );
+    expect(Number(count)).toBe(0);
+  });
+
+  it("accepts an exactly-balanced entry and writes no 9999 plug line", async () => {
+    await createJournalEntry({
+      companyId,
+      branchId,
+      createdBy: assignmentId,
+      ref: "JE-888-BAL",
+      description: "wave2-888 balanced",
+      lines: [
+        { accountCode: "1101", debit: 100, credit: 0 },
+        { accountCode: "4101", debit: 0, credit: 100 },
+      ],
+    });
+
+    // The entry exists with exactly two lines — no auto-plugged 9999.
+    const [je] = await rawQuery<{ id: number }>(
+      `SELECT id FROM journal_entries WHERE "companyId"=$1 AND ref='JE-888-BAL'`,
+      [companyId]
+    );
+    expect(je).toBeDefined();
+    const lines = await rawQuery<{ accountCode: string }>(
+      `SELECT "accountCode" FROM journal_lines WHERE "journalEntryId"=$1 ORDER BY "accountCode"`,
+      [je.id]
+    );
+    expect(lines.map((l) => l.accountCode)).toEqual(["1101", "4101"]);
+  });
 });
 
-d("Wave-2 #888: createJournalEntry no longer auto-plugs gaps via account 9999", () => {
-  it.todo(
-    "an entry with a 0.03 SAR debit/credit gap throws ValidationError; " +
-      "an exactly-balanced entry succeeds without a 9999 rounding line being injected",
-  );
+// ─────────────────────────────────────────────────────────────────────
+// H3 — appendRoundingAdjustment moves chart_of_accounts.currentBalance
+// ─────────────────────────────────────────────────────────────────────
+
+d("Wave-2 H3: appendRoundingAdjustment moves chart_of_accounts.currentBalance for account 9999 (#884)", () => {
+  let rawExecute: typeof import("../../src/lib/rawdb.js").rawExecute;
+  let rawQuery: typeof import("../../src/lib/rawdb.js").rawQuery;
+  let financialEngine: typeof import("../../src/lib/engines/financialEngine.js").financialEngine;
+
+  let companyId: number;
+  let branchId: number;
+  let assignmentId: number;
+
+  beforeAll(async () => {
+    const rawdb = await import("../../src/lib/rawdb.js");
+    rawExecute = rawdb.rawExecute;
+    rawQuery = rawdb.rawQuery;
+    const engine = await import("../../src/lib/engines/financialEngine.js");
+    financialEngine = engine.financialEngine;
+
+    const { setupTwoCompanyFixture } = await import("./_fixtures/twoCompanies.js");
+    const fx = await setupTwoCompanyFixture();
+    companyId = fx.companyA.id;
+    branchId = fx.companyA.branchId;
+    assignmentId = fx.companyA.assignmentId;
+  });
+
+  beforeEach(async () => {
+    await rawExecute(`DELETE FROM journal_lines WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(`DELETE FROM journal_entries WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(
+      `INSERT INTO chart_of_accounts ("companyId", code, "nameAr", "nameEn", type, "currentBalance")
+       VALUES ($1, '9999', 'فروقات التقريب', 'Rounding', 'expense', 0)
+       ON CONFLICT ("companyId", code) DO UPDATE SET "currentBalance" = 0`,
+      [companyId]
+    );
+  });
+
+  it("posted entry: balance moves by the rounding diff (H3 fix)", async () => {
+    // Seed a posted (balancesApplied=true) journal entry.
+    const { insertId } = await rawExecute(
+      `INSERT INTO journal_entries (
+         "companyId", "branchId", "createdBy", ref, description, type,
+         "balancesApplied", "createdAt"
+       ) VALUES ($1, $2, $3, 'JE-H3', 'wave2-h3', 'manual', true, NOW())`,
+      [companyId, branchId, assignmentId]
+    );
+
+    const [before] = await rawQuery<{ currentBalance: string }>(
+      `SELECT "currentBalance" FROM chart_of_accounts
+       WHERE "companyId"=$1 AND code='9999'`,
+      [companyId]
+    );
+    expect(Number(before.currentBalance)).toBe(0);
+
+    await financialEngine.appendRoundingAdjustment({
+      companyId,
+      journalEntryId: insertId,
+      amount: 0.02,
+    });
+
+    const [after] = await rawQuery<{ currentBalance: string }>(
+      `SELECT "currentBalance" FROM chart_of_accounts
+       WHERE "companyId"=$1 AND code='9999'`,
+      [companyId]
+    );
+    // Pre-H3 the balance stayed at 0 (the bug); H3 moves it by the diff.
+    expect(Number(after.currentBalance)).toBeCloseTo(0.02, 4);
+  });
+
+  it("deferred entry: balance does NOT move yet (avoids double-count later)", async () => {
+    // balancesApplied=false → applyJournalEntryBalances will pick up the
+    // rounding line on approval; appendRoundingAdjustment must leave the
+    // COA untouched for now.
+    const { insertId } = await rawExecute(
+      `INSERT INTO journal_entries (
+         "companyId", "branchId", "createdBy", ref, description, type,
+         "balancesApplied", "createdAt"
+       ) VALUES ($1, $2, $3, 'JE-H3-DEF', 'wave2-h3 deferred', 'manual', false, NOW())`,
+      [companyId, branchId, assignmentId]
+    );
+
+    await financialEngine.appendRoundingAdjustment({
+      companyId,
+      journalEntryId: insertId,
+      amount: 0.02,
+    });
+
+    const [after] = await rawQuery<{ currentBalance: string }>(
+      `SELECT "currentBalance" FROM chart_of_accounts
+       WHERE "companyId"=$1 AND code='9999'`,
+      [companyId]
+    );
+    expect(Number(after.currentBalance)).toBe(0);
+  });
 });
