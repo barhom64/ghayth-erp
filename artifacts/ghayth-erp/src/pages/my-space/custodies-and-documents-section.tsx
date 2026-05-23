@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { KeyRound, FileText, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 
 interface CustodiesAndDocumentsSectionProps {
   custodies: any[];

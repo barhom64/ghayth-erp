@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout, AutoField, CreationDateField } from "@/components/create-page-layout";
+import { CreatePageLayout, AutoField, CreationDateField } from "@workspace/ui-core";
 import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";

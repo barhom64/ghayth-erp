@@ -27,7 +27,10 @@ describe("client-detail — portal-account create on FormShell + zod", () => {
   const SRC = read("client-detail.tsx");
 
   it("imports the FormShell stack with FormEmailField", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormEmailField");
   });

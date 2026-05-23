@@ -754,6 +754,13 @@ export async function applyJournalEntryBalances(
   // yet had its balances applied is processed. Entries that predate FIN-007
   // were created with balancesApplied = true and are skipped here.
   //
+  // Select the entry's accounting `date` (not `createdAt`): the period gate
+  // must evaluate against the ledger date, not the row's insertion time. A
+  // voucher created on 2025-05-31 for the May period but persisted at
+  // 2025-06-01 00:00:05 has date='2025-05-31' and createdAt='2025-06-01' —
+  // the May period is the right gate, not June. The /post endpoint
+  // (finance-hardening.ts:732) already uses `date` for the same reason.
+  //
   // `FOR UPDATE` serialises two concurrent apply calls on the same journal
   // entry. Without the lock, the second caller could read `balancesApplied =
   // false` while the first is mid-apply, then both proceed and bump
@@ -762,7 +769,7 @@ export async function applyJournalEntryBalances(
   // the apply commits — the second waiter then sees `balancesApplied = true`
   // and exits cleanly.
   const { rows: jeRows } = await client.query(
-    `SELECT "balancesApplied", "createdAt"
+    `SELECT "balancesApplied", date::text AS "entryDate"
        FROM journal_entries
       WHERE id = $1 AND "companyId" = $2
       FOR UPDATE`,
@@ -778,7 +785,7 @@ export async function applyJournalEntryBalances(
   // document unapproved until the period is reopened or the entry redated.
   const periodCheck = await checkFinancialPeriodOpen(
     companyId,
-    toDateISO(jeRows[0].createdAt as string)
+    jeRows[0].entryDate as string
   );
   if (!periodCheck.open) {
     throw new ValidationError(

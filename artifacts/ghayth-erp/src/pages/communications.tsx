@@ -1,13 +1,16 @@
 import { useState } from "react";
-import { PageShell } from "@/components/page-shell";
+import {
+  PageShell,
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PageStatusBadge } from "@/components/page-status-badge";
 import { formatDateAr , todayLocal } from "@/lib/formatters";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { ErrorState } from "@/components/shared/loading-error-states";

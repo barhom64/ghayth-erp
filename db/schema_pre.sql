@@ -8821,7 +8821,27 @@ CREATE TABLE public.invoice_lines (
     "unitPrice" numeric DEFAULT 0,
     "lineTotal" numeric DEFAULT 0,
     "vatAmount" numeric DEFAULT 0,
-    "lineGross" numeric DEFAULT 0
+    "lineGross" numeric DEFAULT 0,
+    "accountId" integer,
+    "accountCode" character varying(20),
+    "costCenterId" integer,
+    "activityType" character varying(50),
+    "projectId" integer,
+    "vehicleId" integer,
+    "propertyId" integer,
+    "unitId" integer,
+    "assetId" integer,
+    "employeeId" integer,
+    "driverId" integer,
+    "contractId" integer,
+    "umrahSeasonId" integer,
+    "umrahAgentId" integer,
+    "productId" integer,
+    "taxCode" character varying(20),
+    "allocationRuleId" integer,
+    "allocationStatus" character varying(20) DEFAULT 'unmapped'::character varying,
+    "dimensionJson" jsonb,
+    "manualOverrideReason" text
 );
 
 

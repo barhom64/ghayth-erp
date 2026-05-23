@@ -1,5 +1,5 @@
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";

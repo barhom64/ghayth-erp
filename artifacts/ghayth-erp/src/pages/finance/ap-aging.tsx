@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
-import { DataTable, DataTableColumn } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+} from "@workspace/ui-core";
 import { Download, AlertTriangle, Clock, Building2 } from "lucide-react";
 import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
-import { PageShell } from "@/components/page-shell";
 
 function csvEscape(val: string): string {
   if (val.includes(",") || val.includes('"') || val.includes("\n")) {

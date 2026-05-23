@@ -11,10 +11,19 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
-import { PageShell } from "@/components/page-shell";
+import {
+  PageShell,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  FormShell,
+  FormTextField,
+  FormDateField,
+  FormGrid,
+} from "@workspace/ui-core";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import {
   AlertDialog,
@@ -26,9 +35,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  FormShell, FormTextField, FormDateField, FormGrid,
-} from "@/components/form-shell";
 import { todayLocal } from "@/lib/formatters";
 
 // New count session — schema enforces countDate required (was no

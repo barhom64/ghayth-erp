@@ -6,16 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { PageStatusBadge } from "@/components/page-status-badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { Building2, Plus, X, TrendingDown, Calculator, CheckCircle, DollarSign, PackageCheck } from "lucide-react";
-import { Link, useLocation } from "wouter";
-import { formatCurrency, formatDateAr, formatNumber, todayLocal } from "@/lib/formatters";
-import { PageShell } from "@/components/page-shell";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+  PageShell,
   FormShell,
   FormTextField,
   FormNumberField,
@@ -23,7 +18,13 @@ import {
   FormDateField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Building2, Plus, X, TrendingDown, Calculator, CheckCircle, DollarSign, PackageCheck } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { formatCurrency, formatDateAr, formatNumber, todayLocal } from "@/lib/formatters";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const assetSchema = z.object({
   name: z.string().trim().min(1, "اسم الأصل مطلوب"),

@@ -6,15 +6,15 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { CreatePageLayout } from "@/components/create-page-layout";
 import {
+  CreatePageLayout,
   FormShell,
   FormTextField,
   FormNumberField,
   FormDateField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // Only non-structural proposal fields are editable here. Branch/department
 // changes are intentionally excluded — they re-trigger the destination-branch

@@ -14,6 +14,7 @@ import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import type { JournalEntryLine } from "../lib/businessHelpers.js";
 import {
   createNotification,
   emitEvent,
@@ -40,11 +41,35 @@ import { z } from "zod";
 // ── Zod schemas for POST route validation ──────────────────────────────────
 const createInvoiceSchema = z.object({
   clientId: z.coerce.number({ required_error: "العميل مطلوب" }),
+  // Per-line dimensional fields land on invoice_lines (migration 200) and
+  // flow through to journal_lines on /approve so reports can compute
+  // per-vehicle / per-property / per-project / per-season profitability.
+  // All optional — a line with only description+quantity+unitPrice
+  // still works exactly as today, falling back to the company-level
+  // generic revenue account on approval.
   lines: z.array(z.object({
     description: z.string().optional(),
     quantity: z.coerce.number().optional(),
     unitPrice: z.coerce.number().optional(),
     accountCode: z.string().optional(),
+    accountId: z.coerce.number().optional(),
+    costCenterId: z.coerce.number().optional(),
+    activityType: z.string().optional(),
+    projectId: z.coerce.number().optional(),
+    vehicleId: z.coerce.number().optional(),
+    propertyId: z.coerce.number().optional(),
+    unitId: z.coerce.number().optional(),
+    assetId: z.coerce.number().optional(),
+    employeeId: z.coerce.number().optional(),
+    driverId: z.coerce.number().optional(),
+    contractId: z.coerce.number().optional(),
+    umrahSeasonId: z.coerce.number().optional(),
+    umrahAgentId: z.coerce.number().optional(),
+    productId: z.coerce.number().optional(),
+    taxCode: z.string().optional(),
+    allocationRuleId: z.coerce.number().optional(),
+    dimensionJson: z.record(z.any()).optional(),
+    manualOverrideReason: z.string().optional(),
     total: z.coerce.number().optional(),
   })).min(1, "يجب إضافة بند واحد على الأقل").optional(),
   vatRate: z.coerce.number().optional(),
@@ -375,7 +400,41 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
     }
 
     let baseAmount = 0;
-    let validatedLines: { description: string; quantity: number; unitPrice: number; lineTotal: number; vatAmount: number; lineGross: number }[] = [];
+    // ValidatedLine now carries the per-line dimensional allocation
+    // fields from createInvoiceSchema (migration 200). All optional —
+    // when a line has no `accountCode`, allocationStatus stays
+    // "unmapped" and the approval flow falls back to the company-level
+    // generic revenue account for that line (preserves the original
+    // header-level posting behaviour for legacy callers).
+    type ValidatedLine = {
+      description: string;
+      quantity: number;
+      unitPrice: number;
+      lineTotal: number;
+      vatAmount: number;
+      lineGross: number;
+      accountId: number | null;
+      accountCode: string | null;
+      costCenterId: number | null;
+      activityType: string | null;
+      projectId: number | null;
+      vehicleId: number | null;
+      propertyId: number | null;
+      unitId: number | null;
+      assetId: number | null;
+      employeeId: number | null;
+      driverId: number | null;
+      contractId: number | null;
+      umrahSeasonId: number | null;
+      umrahAgentId: number | null;
+      productId: number | null;
+      taxCode: string | null;
+      allocationRuleId: number | null;
+      allocationStatus: string;
+      dimensionJson: Record<string, unknown> | null;
+      manualOverrideReason: string | null;
+    };
+    let validatedLines: ValidatedLine[] = [];
 
     if (Array.isArray(lineItems) && lineItems.length > 0) {
       for (const line of lineItems) {
@@ -386,12 +445,42 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
           throw new ValidationError("الكمية يجب أن تكون أكبر من صفر", { field: "lines.quantity", fix: "أدخل كمية موجبة لكل بند" });
         }
         const lineTotal = roundTo2(Number(line.quantity) * Number(line.unitPrice));
-        const lineVatRate = line.vatRate != null ? Number(line.vatRate) : Number(vatRate);
-        const lineVat = line.vatAmount != null
-          ? roundTo2(Number(line.vatAmount))
+        const lineVatRate = (line as any).vatRate != null ? Number((line as any).vatRate) : Number(vatRate);
+        const lineVat = (line as any).vatAmount != null
+          ? roundTo2(Number((line as any).vatAmount))
           : roundTo2(lineTotal * (lineVatRate / 100));
         baseAmount += lineTotal;
-        validatedLines.push({ description: line.description ?? "", quantity: Number(line.quantity), unitPrice: Number(line.unitPrice), lineTotal, vatAmount: lineVat, lineGross: lineTotal + lineVat });
+        validatedLines.push({
+          description: line.description ?? "",
+          quantity: Number(line.quantity),
+          unitPrice: Number(line.unitPrice),
+          lineTotal,
+          vatAmount: lineVat,
+          lineGross: lineTotal + lineVat,
+          accountId: line.accountId ?? null,
+          accountCode: line.accountCode ?? null,
+          costCenterId: line.costCenterId ?? null,
+          activityType: line.activityType ?? null,
+          projectId: line.projectId ?? null,
+          vehicleId: line.vehicleId ?? null,
+          propertyId: line.propertyId ?? null,
+          unitId: line.unitId ?? null,
+          assetId: line.assetId ?? null,
+          employeeId: line.employeeId ?? null,
+          driverId: line.driverId ?? null,
+          contractId: line.contractId ?? null,
+          umrahSeasonId: line.umrahSeasonId ?? null,
+          umrahAgentId: line.umrahAgentId ?? null,
+          productId: line.productId ?? null,
+          taxCode: line.taxCode ?? null,
+          allocationRuleId: line.allocationRuleId ?? null,
+          // resolved → caller mapped this line directly to a specific
+          // account; unmapped → falls back to the company-level
+          // invoice_revenue account on approval.
+          allocationStatus: line.accountCode || line.accountId ? "resolved" : "unmapped",
+          dimensionJson: (line.dimensionJson as Record<string, unknown> | undefined) ?? null,
+          manualOverrideReason: line.manualOverrideReason ?? null,
+        });
       }
     } else {
       baseAmount = Number(subtotal ?? rawTotal ?? 0);
@@ -453,8 +542,11 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       insertId = invResult.rows[0].id;
 
       if (validatedLines.length > 0) {
-        // Single bulk INSERT instead of one round-trip per line.
-        const COLS_PER_ROW = 7;
+        // Single bulk INSERT, now carrying the full per-line allocation
+        // payload (migration 200). Lines that didn't specify an account
+        // land as allocationStatus='unmapped' — the approval flow falls
+        // back to the company-level invoice_revenue for those.
+        const COLS_PER_ROW = 27;
         const valuesSql: string[] = [];
         const params: unknown[] = [];
         for (const l of validatedLines) {
@@ -462,10 +554,25 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
           valuesSql.push(
             `(${Array.from({ length: COLS_PER_ROW }, (_, i) => `$${base + i + 1}`).join(",")})`
           );
-          params.push(insertId, l.description, l.quantity, l.unitPrice, l.lineTotal, l.vatAmount, l.lineGross);
+          params.push(
+            insertId, l.description, l.quantity, l.unitPrice, l.lineTotal, l.vatAmount, l.lineGross,
+            l.accountId, l.accountCode, l.costCenterId, l.activityType,
+            l.projectId, l.vehicleId, l.propertyId, l.unitId, l.assetId,
+            l.employeeId, l.driverId, l.contractId, l.umrahSeasonId, l.umrahAgentId,
+            l.productId, l.taxCode, l.allocationRuleId, l.allocationStatus,
+            l.dimensionJson ? JSON.stringify(l.dimensionJson) : null,
+            l.manualOverrideReason
+          );
         }
         await client.query(
-          `INSERT INTO invoice_lines ("invoiceId",description,quantity,"unitPrice","lineTotal","vatAmount","lineGross")
+          `INSERT INTO invoice_lines (
+             "invoiceId",description,quantity,"unitPrice","lineTotal","vatAmount","lineGross",
+             "accountId","accountCode","costCenterId","activityType",
+             "projectId","vehicleId","propertyId","unitId","assetId",
+             "employeeId","driverId","contractId","umrahSeasonId","umrahAgentId",
+             "productId","taxCode","allocationRuleId","allocationStatus",
+             "dimensionJson","manualOverrideReason"
+           )
            VALUES ${valuesSql.join(",")}`,
           params
         );
@@ -632,7 +739,142 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         client,
       });
 
-      // GL entry created ONLY upon approval — BLOCKING (financial integrity guard)
+      // GL entry created ONLY upon approval — BLOCKING (financial integrity guard).
+      //
+      // Phase 1 P0 — per-line revenue posting (Finance Line-Level Allocation).
+      // Read invoice_lines and emit one CR line per (accountCode + dimensions)
+      // bucket. Lines that didn't carry an accountCode (allocationStatus=
+      // 'unmapped') fall back to the company-level invoice_revenue account,
+      // preserving the legacy single-revenue posting for callers that haven't
+      // adopted per-line mapping yet. The AR debit + VAT credit stay
+      // header-level since they are not per-line concepts.
+      const dimLines = await client.query<{
+        accountCode: string | null;
+        lineTotal: string;
+        costCenterId: number | null;
+        activityType: string | null;
+        projectId: number | null;
+        vehicleId: number | null;
+        propertyId: number | null;
+        employeeId: number | null;
+        driverId: number | null;
+        contractId: number | null;
+        productId: number | null;
+      }>(
+        `SELECT "accountCode", "lineTotal"::text AS "lineTotal",
+                "costCenterId", "activityType",
+                "projectId", "vehicleId", "propertyId",
+                "employeeId", "driverId", "contractId", "productId"
+           FROM invoice_lines
+          WHERE "invoiceId" = $1
+          ORDER BY id`,
+        [id]
+      );
+
+      const totalNet = Number(invoice.total) - Number(invoice.vatAmount || 0);
+      const revenueLines: JournalEntryLine[] = [];
+
+      if (dimLines.rows.length > 0) {
+        // Group lines that share the SAME revenue account + dimension
+        // signature into one journal_line, so the GL stays compact
+        // for tenants with many small lines on the same account.
+        const buckets = new Map<string, {
+          accountCode: string;
+          amount: number;
+          costCenter: string | null;
+          activityType: string | null;
+          projectId: number | null;
+          vehicleId: number | null;
+          propertyId: number | null;
+          employeeId: number | null;
+          driverId: number | null;
+          contractId: number | null;
+          productId: number | null;
+        }>();
+        let postedNet = 0;
+        for (const ln of dimLines.rows) {
+          const acct = ln.accountCode || invRevenueCode;
+          const key = [
+            acct,
+            ln.costCenterId ?? "",
+            ln.activityType ?? "",
+            ln.projectId ?? "",
+            ln.vehicleId ?? "",
+            ln.propertyId ?? "",
+            ln.employeeId ?? "",
+            ln.driverId ?? "",
+            ln.contractId ?? "",
+            ln.productId ?? "",
+          ].join("|");
+          const amt = roundTo2(Number(ln.lineTotal));
+          postedNet += amt;
+          const prev = buckets.get(key);
+          if (prev) {
+            prev.amount = roundTo2(prev.amount + amt);
+          } else {
+            buckets.set(key, {
+              accountCode: acct,
+              amount: amt,
+              costCenter: ln.costCenterId != null ? String(ln.costCenterId) : null,
+              activityType: ln.activityType,
+              projectId: ln.projectId,
+              vehicleId: ln.vehicleId,
+              propertyId: ln.propertyId,
+              employeeId: ln.employeeId,
+              driverId: ln.driverId,
+              contractId: ln.contractId,
+              productId: ln.productId,
+            });
+          }
+        }
+
+        // If the sum of line totals diverges from invoice.total-vat (e.g.
+        // legacy invoice with header-level total and no lines), let the
+        // remainder fall on the generic account so the entry still
+        // balances against the AR debit.
+        const diff = roundTo2(totalNet - postedNet);
+        if (Math.abs(diff) >= 0.005) {
+          const fallbackKey = `${invRevenueCode}|||||||||`;
+          const prev = buckets.get(fallbackKey);
+          if (prev) {
+            prev.amount = roundTo2(prev.amount + diff);
+          } else {
+            buckets.set(fallbackKey, {
+              accountCode: invRevenueCode, amount: diff,
+              costCenter: null, activityType: null, projectId: null,
+              vehicleId: null, propertyId: null, employeeId: null,
+              driverId: null, contractId: null, productId: null,
+            });
+          }
+        }
+
+        for (const b of buckets.values()) {
+          if (Math.abs(b.amount) < 0.005) continue;
+          revenueLines.push({
+            accountCode: b.accountCode, debit: 0, credit: b.amount,
+            costCenter: b.costCenter ?? undefined,
+            activityType: b.activityType ?? undefined,
+            projectId: b.projectId ?? undefined,
+            vehicleId: b.vehicleId ?? undefined,
+            propertyId: b.propertyId ?? undefined,
+            employeeId: b.employeeId ?? undefined,
+            driverId: b.driverId ?? undefined,
+            contractId: b.contractId ?? undefined,
+            productId: b.productId ?? undefined,
+            clientId: invoice.clientId as number | undefined,
+          } as any);
+        }
+      }
+
+      // Header-level fallback: no invoice_lines stored at all → one
+      // generic-revenue CR line so the JE still balances.
+      if (revenueLines.length === 0) {
+        revenueLines.push({
+          accountCode: invRevenueCode, debit: 0, credit: totalNet,
+          clientId: invoice.clientId as number | undefined,
+        } as any);
+      }
+
       const result = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId || 0,
@@ -644,8 +886,8 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         sourceId: id,
         sourceKey: `finance:invoice_approval:${id}`,
         lines: [
-          { accountCode: invArCode, debit: Number(invoice.total), credit: 0 },
-          { accountCode: invRevenueCode, debit: 0, credit: Number(invoice.total) - Number(invoice.vatAmount || 0) },
+          { accountCode: invArCode, debit: Number(invoice.total), credit: 0, clientId: invoice.clientId as number | undefined } as any,
+          ...revenueLines,
           { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
         ],
         guardTable: "invoices",

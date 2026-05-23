@@ -1,10 +1,15 @@
 import { useApiQuery, asList } from "@/lib/api";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+  PageStatusBadge,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+} from "@workspace/ui-core";
 import { Mail } from "lucide-react";
 import { useLocation } from "wouter";
-import { PageShell } from "@/components/page-shell";
-import { PageStatusBadge } from "@/components/page-status-badge";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
 
 interface LegalCase {
   id: number;

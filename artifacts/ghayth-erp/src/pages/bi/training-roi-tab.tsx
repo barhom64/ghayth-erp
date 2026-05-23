@@ -1,7 +1,7 @@
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable } from "@workspace/ui-core";
 import { TrendingUp } from "lucide-react";
 import { formatNumber } from "@/lib/formatters";
 

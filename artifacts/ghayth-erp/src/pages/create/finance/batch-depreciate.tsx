@@ -6,7 +6,7 @@ import { TrendingDown, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { CreatePageLayout } from "@/components/create-page-layout";
+import { CreatePageLayout } from "@workspace/ui-core";
 import { FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { todayLocal } from "@/lib/formatters";
 

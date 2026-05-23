@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Activity, Target, Star, ChevronLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { formatTimeAgo } from "./shared";
 import { actionLabel } from "@/lib/action-labels";
 
