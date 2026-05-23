@@ -64,7 +64,7 @@ import { EntityComments } from "@/components/shared/entity-comments";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { cn } from "@/lib/utils";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { KpiGrid } from "@/components/shared/kpi-card";

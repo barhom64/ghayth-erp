@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Headphones, User, MessageSquare, Send, Trash2, Clock } from "lucide-react";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout } from "@workspace/entity-kit";
 import { ApprovalActions } from "@/components/approval-actions";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { EntityComments } from "@/components/shared/entity-comments";

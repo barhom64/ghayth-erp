@@ -149,7 +149,7 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 | `page-header-from-legacy-path` | 3 | نشط |
 
 **entity-kit**:
-| `detail-page-layout-from-legacy-path` | 63 | نشط |
+| `detail-page-layout-from-legacy-path` | 9 | نشط |
 | `entity-timeline-from-legacy-path` | 7 | نشط |
 | `entity-comments-from-legacy-path` | 52 | نشط |
 | `entity-documents-from-legacy-path` | 3 | نشط |
@@ -160,9 +160,10 @@ CHECK constraint مطابق على العمود قبل الـ deploy.
 **report-kit**:
 | `print-layout-from-legacy-path` | 12 | نشط |
 
-**الإجمالي**: **762 موضع** legacy import مغطّى بـ ratchet (هبط من 906
-الأولي بعد سابع sweep). كل واحد لا يمكنه الزيادة. كل migration يخفض
-العدد بمقدار 1 ويستوجب تحديث baseline في نفس الـ PR.
+**الإجمالي**: **708 موضع** legacy import مغطّى بـ ratchet (هبط من 906
+الأولي بعد ثامن sweep — هبوط 54 نقطة في sweep واحد على
+DetailPageLayout). كل واحد لا يمكنه الزيادة. كل migration يخفض العدد
+بمقدار 1 ويستوجب تحديث baseline في نفس الـ PR.
 
 ### آلية العمل (للمساهمين)
 

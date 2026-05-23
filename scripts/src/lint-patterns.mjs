@@ -264,7 +264,7 @@ const RULES = [
       file.endsWith("/components/shared/detail-page-layout.tsx") ||
       file.endsWith("/components/shared/entity-detail-page.tsx"),
     regex: /from\s+["']@\/components\/shared\/detail-page-layout["']/,
-    countBaseline: 63,
+    countBaseline: 9,
     message: `DetailPageLayout imported from the legacy path. ${kitRatchetHint("entity-kit")}`,
   },
 

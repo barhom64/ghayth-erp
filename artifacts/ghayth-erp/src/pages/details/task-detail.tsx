@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

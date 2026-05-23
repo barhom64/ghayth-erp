@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { DetailPageLayout, type ExtraTab } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";

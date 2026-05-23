@@ -15,7 +15,7 @@ import { EntityFinancialProfile } from "@/components/shared/entity-financial-pro
 import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { useAppContext } from "@/contexts/app-context";
-import { DetailPageLayout } from "@/components/shared/detail-page-layout";
+import { DetailPageLayout } from "@workspace/entity-kit";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
