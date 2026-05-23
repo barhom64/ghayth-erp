@@ -1056,6 +1056,39 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       scope.companyId, "inventory_receipt", "debit", "1250"
     );
 
+    // Phase 5.4 — run the allocation resolver on every receipt line.
+    // The resolver consults accounting_allocation_rules first; a
+    // rule match overrides the static TREATMENT_PURPOSE map below.
+    // Tenants that haven't authored any rules behave exactly like
+    // Phase 4.2 alone (TREATMENT_PURPOSE → defaultInvAccount).
+    const { resolveLineAllocation, writeAllocationResult } = await import("../lib/accountingAllocation.js");
+    const lineResolutions = await Promise.all(
+      receiptLineRows.map((ln) =>
+        resolveLineAllocation({
+          companyId: scope.companyId,
+          documentType: "grn",
+          lineType: ln.lineTreatment ?? undefined,
+          entityType: "vendor",
+          accountCode: ln.accountCode,
+          costCenterId: ln.costCenterId,
+          dimensions: {
+            vehicleId: ln.vehicleId,
+            propertyId: ln.propertyId,
+            unitId: ln.unitId,
+            assetId: ln.assetId,
+            projectId: ln.projectId,
+            employeeId: ln.employeeId,
+            driverId: ln.driverId,
+            contractId: ln.contractId,
+            productId: ln.productId,
+            vendorId: po.supplierId as number | null,
+          },
+          sourceTable: "goods_receipt_items",
+          sourceLineId: ln.id,
+        })
+      )
+    );
+
     type DrBucket = {
       accountCode: string;
       amount: number;
@@ -1073,8 +1106,15 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     };
     const buckets = new Map<string, DrBucket>();
     let postedNet = 0;
-    for (const ln of receiptLineRows) {
-      let acct = ln.accountCode;
+    for (let i = 0; i < receiptLineRows.length; i++) {
+      const ln = receiptLineRows[i];
+      const res = lineResolutions[i];
+
+      // Account resolution chain:
+      //   1. Resolver picked an account (rule match or manual override)
+      //   2. Fall back to TREATMENT_PURPOSE map (Phase 4.2)
+      //   3. Fall back to defaultInvAccount (legacy)
+      let acct = res.resolvedAccountCode;
       if (!acct) {
         const map = ln.lineTreatment ? TREATMENT_PURPOSE[ln.lineTreatment] : null;
         if (map) {
@@ -1084,18 +1124,25 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
         }
       }
       if (!acct) acct = defaultInvAccount;
+
+      // Use resolver-resolved cost-centre + dimensions so an
+      // explicit `from_vehicle` strategy in the rule picks up the
+      // cost-centre even when the line itself didn't have one.
+      const dims = res.dimensions;
+      const cc = res.costCenterId ?? ln.costCenterId;
+
       const key = [
         acct,
-        ln.costCenterId ?? "",
+        cc ?? "",
         ln.activityType ?? "",
-        ln.projectId ?? "",
-        ln.vehicleId ?? "",
-        ln.propertyId ?? "",
-        ln.employeeId ?? "",
-        ln.driverId ?? "",
-        ln.contractId ?? "",
-        ln.productId ?? "",
-        ln.assetId ?? "",
+        dims.projectId ?? "",
+        dims.vehicleId ?? "",
+        dims.propertyId ?? "",
+        dims.employeeId ?? "",
+        dims.driverId ?? "",
+        dims.contractId ?? "",
+        dims.productId ?? "",
+        dims.assetId ?? "",
       ].join("|");
       const amt = roundTo2(Number(ln.lineTotal));
       postedNet += amt;
@@ -1107,16 +1154,16 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
           accountCode: acct,
           amount: amt,
           vendorId: po.supplierId as number | undefined,
-          costCenter: ln.costCenterId != null ? String(ln.costCenterId) : null,
+          costCenter: cc != null ? String(cc) : null,
           activityType: ln.activityType,
-          projectId: ln.projectId,
-          vehicleId: ln.vehicleId,
-          propertyId: ln.propertyId,
-          employeeId: ln.employeeId,
-          driverId: ln.driverId,
-          contractId: ln.contractId,
-          productId: ln.productId,
-          assetId: ln.assetId,
+          projectId: dims.projectId,
+          vehicleId: dims.vehicleId,
+          propertyId: dims.propertyId,
+          employeeId: dims.employeeId,
+          driverId: dims.driverId,
+          contractId: dims.contractId,
+          productId: dims.productId,
+          assetId: dims.assetId,
         });
       }
     }
@@ -1178,6 +1225,28 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     markIdempotencyReplay(req, res, grnJournalResult.alreadyExists);
     if (journalId) {
       await rawExecute(`UPDATE goods_receipts SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`, [journalId, grnId, scope.companyId]);
+    }
+
+    // Phase 5.4 — record the per-line allocation outcome so the GL
+    // can be drilled back to «which rule moved each receipt line to
+    // which account». Runs only when the JE was actually new (not
+    // an idempotent replay), and outside the JE-posting transaction
+    // so a writeResult failure doesn't roll back the receipt.
+    if (!grnJournalResult.alreadyExists) {
+      for (let i = 0; i < receiptLineRows.length; i++) {
+        const ln = receiptLineRows[i];
+        const res = lineResolutions[i];
+        await writeAllocationResult(
+          {
+            companyId: scope.companyId,
+            documentType: "grn",
+            sourceTable: "goods_receipt_items",
+            sourceLineId: ln.id,
+          },
+          res,
+          scope.activeAssignmentId,
+        );
+      }
     }
 
     // Update PO header status — partial vs fully received
