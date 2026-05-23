@@ -658,6 +658,37 @@ journalRouter.patch("/expenses/:id/approve", authorize({ feature: "finance.journ
         // rawQuery/rawExecute join this transaction via the async context.
         if (newStatus === "rejected" || newStatus === "returned") {
           await reverseAccountBalances(scope.companyId, expenseId);
+          // Also unwind the budget reservation. The creation path
+          // (lines 437-480 in this file) bumped `budgets.used` by the
+          // expense's debit amount when (companyId, accountCode, period)
+          // matched a budget row. Without this matching decrement on
+          // rejection/return the row stayed inflated forever — every
+          // future expense on the same code saw inflated utilization and
+          // hit the 80/100/110% gates against a phantom balance.
+          //
+          // GREATEST() floors at zero so any prior manual edit can't push
+          // `used` negative even if the linked budget row was already
+          // adjusted.
+          await client.query(
+            `UPDATE budgets b
+                SET used = GREATEST(0, b.used - sub.total)
+               FROM (
+                 SELECT jl."accountCode",
+                        to_char(je."createdAt", 'YYYY-MM') AS period,
+                        SUM(jl.debit) AS total
+                   FROM journal_lines jl
+                   JOIN journal_entries je ON je.id = jl."journalId"
+                  WHERE jl."journalId" = $1
+                    AND jl.debit > 0
+                    AND jl."deletedAt" IS NULL
+                  GROUP BY jl."accountCode", to_char(je."createdAt", 'YYYY-MM')
+               ) sub
+              WHERE b."companyId" = $2
+                AND b."accountCode" = sub."accountCode"
+                AND b.period = sub.period
+                AND b."deletedAt" IS NULL`,
+            [expenseId, scope.companyId]
+          );
         }
       },
       after: { ref: exp.ref, decision: newStatus, notes: notes ?? null },
@@ -875,6 +906,51 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     // idempotent replay (rows already exist from the original insert).
     if (allocations && allocations.length > 0 && !alreadyExists) {
       for (const a of allocations) {
+        const allocAmt = roundTo2(Number(a.amount));
+
+        // #901 cap: Σ existing allocations to this obligation + the new
+        // amount must not exceed the obligation's total. Without this
+        // check, two vouchers each ≤ their own amount can still
+        // over-allocate a PO/Nusk invoice (e.g. PO=50K → V1 allocates
+        // 40K, V2 allocates 30K → vendor shows -20K outstanding).
+        let obligationCap: number | null = null;
+        if (a.obligationType === "purchase_order") {
+          const [po] = await rawQuery<{ totalAmount: string | number }>(
+            `SELECT "totalAmount" FROM purchase_orders
+              WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+            [a.obligationId, scope.companyId]
+          );
+          if (po) obligationCap = Number(po.totalAmount);
+        } else if (a.obligationType === "nusk_invoice") {
+          const [ni] = await rawQuery<{ totalAmount: string | number; refundAmount: string | number }>(
+            `SELECT "totalAmount", "refundAmount" FROM umrah_nusk_invoices
+              WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+            [a.obligationId, scope.companyId]
+          );
+          if (ni) obligationCap = Number(ni.totalAmount) - Number(ni.refundAmount ?? 0);
+        }
+        if (obligationCap !== null) {
+          const [{ already }] = await rawQuery<{ already: string | number }>(
+            `SELECT COALESCE(SUM(amount), 0) AS already
+               FROM supplier_payment_allocations
+              WHERE "companyId" = $1
+                AND "obligationType" = $2
+                AND "obligationId" = $3
+                AND "deletedAt" IS NULL`,
+            [scope.companyId, a.obligationType, a.obligationId]
+          );
+          const alreadyAllocated = Number(already);
+          if (alreadyAllocated + allocAmt > roundTo2(obligationCap) + 0.005) {
+            throw new ValidationError(
+              `إجمالي التخصيصات (${roundTo2(alreadyAllocated + allocAmt)}) يتجاوز قيمة الالتزام (${roundTo2(obligationCap)})`,
+              {
+                field: "allocations",
+                fix: `الالتزام (${a.obligationType} #${a.obligationId}) قُيِّد له ${roundTo2(alreadyAllocated)} سابقًا. خفّض المبلغ.`,
+              }
+            );
+          }
+        }
+
         await rawExecute(
           `INSERT INTO supplier_payment_allocations
              ("companyId", "branchId", "journalEntryId",
@@ -886,7 +962,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
             journalId,
             a.obligationType,
             a.obligationId,
-            roundTo2(Number(a.amount)),
+            allocAmt,
             a.notes ?? null,
             scope.activeAssignmentId ?? null,
           ]
@@ -1424,6 +1500,23 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
                status = 'reversed'
          WHERE id = $3 AND "companyId" = $4`,
         [newJournalId, reason, id, scope.companyId]
+      );
+
+      // C4 + C5 follow-up (#901) — a payment voucher reversed via
+      // /journal/:id/reverse must also retire its supplier_payment_allocations
+      // rows. Without this soft-delete, the vendor statement keeps counting
+      // the reversed voucher as a payment against the obligation, so the
+      // PO/Nusk-invoice outstanding stays artificially low and aging
+      // double-counts the next legitimate payment. Soft-delete keeps the
+      // row for audit while the partial index in migration 198 already
+      // excludes `deletedAt IS NOT NULL` from the obligation lookup.
+      await client.query(
+        `UPDATE supplier_payment_allocations
+            SET "deletedAt" = NOW()
+          WHERE "journalEntryId" = $1
+            AND "companyId" = $2
+            AND "deletedAt" IS NULL`,
+        [id, scope.companyId]
       );
     });
 
