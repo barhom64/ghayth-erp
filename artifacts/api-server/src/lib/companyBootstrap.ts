@@ -501,6 +501,7 @@ async function createDefaultSettings(client: pg.PoolClient, companyId: number, c
     gosiSaudiEmployerRate: "11.75",
     gosiNonSaudiEmployeeRate: "0",
     gosiNonSaudiEmployerRate: "2",
+    gosiCeiling: "45000",
     payrollCutoffDay: "25",
     payrollPayDay: "28",
     payrollAutoProcess: "false",
