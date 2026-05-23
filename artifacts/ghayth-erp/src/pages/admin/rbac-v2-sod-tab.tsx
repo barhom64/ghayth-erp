@@ -15,7 +15,7 @@ import {
   FormTextField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // Schema for the create-rule form. ruleKey is regex-locked (lowercase
 // + underscore), feature/action pairs are required. severity is a

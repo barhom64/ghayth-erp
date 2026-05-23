@@ -13,7 +13,7 @@ import {
   FormNumberField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const entityTypes = [
   { value: "leave", label: "الإجازات" },

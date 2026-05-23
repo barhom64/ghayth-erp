@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Package, Plus, X, CheckCircle2 } from "lucide-react";

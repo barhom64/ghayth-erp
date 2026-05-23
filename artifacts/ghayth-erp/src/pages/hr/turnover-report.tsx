@@ -8,10 +8,13 @@ import { TrendingDown, Users, DollarSign, BarChart3, PieChart } from "lucide-rea
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart as RechartsPie, Pie } from "recharts";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@/components/page-shell";
+import {
+  PageShell,
+  DataTable,
+  type DataTableColumn,
+  exportToCSV,
+} from "@workspace/ui-core";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { exportToCSV } from "@/components/shared/advanced-filters";
 
 const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 

@@ -16,7 +16,7 @@ import {
   FormSelectField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 // Justification floor (10 chars) lives in the schema so the submit
 // button can't fire below the threshold. Request minutes are capped

@@ -6,15 +6,15 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { CreatePageLayout } from "@/components/create-page-layout";
 import {
+  CreatePageLayout,
   FormShell,
   FormNumberField,
   FormSelectField,
   FormDateField,
   FormTextareaField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 
 const TYPE_OPTIONS = [
   { value: "full_time", label: "دوام كامل" },

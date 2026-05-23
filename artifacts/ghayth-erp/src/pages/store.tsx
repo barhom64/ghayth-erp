@@ -5,17 +5,26 @@ import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PageStatusBadge } from "@/components/page-status-badge";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  exportToCSV,
+  FormShell,
+  FormTextField,
+  FormNumberField,
+  FormGrid,
+} from "@workspace/ui-core";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ShoppingCart, Package, Plus, X, DollarSign, Eye } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { StoreTabsNav } from "@/components/shared/store-tabs-nav";
-import { FormShell, FormTextField, FormNumberField, FormGrid } from "@/components/form-shell";
 
 // Coerced numeric fields — the old form tracked them as strings and
 // Number()-coerced at submit. zod handles both checks (numeric + non-

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { SlidersHorizontal, CheckCircle, Settings2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { FormShell } from "@/components/form-shell";
+import { FormShell } from "@workspace/ui-core";
 
 // The server stores controls under dotted keys (e.g.
 // "approval.require_notes_on_reject"). react-hook-form treats dots

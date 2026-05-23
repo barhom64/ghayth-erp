@@ -1,13 +1,16 @@
 import { useState } from "react";
-import { PageShell } from "@/components/page-shell";
+import {
+  PageShell,
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageStatusBadge } from "@/components/page-status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { useApiQuery, asList } from "@/lib/api";
 import { Brain, Users, Car, Building, FolderKanban, Headphones, TrendingUp, AlertTriangle, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function Intelligence() {

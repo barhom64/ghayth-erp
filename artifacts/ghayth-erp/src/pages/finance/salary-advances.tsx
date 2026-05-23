@@ -7,16 +7,24 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import {
-  FormShell, FormTextField, FormNumberField, FormSelectField, FormGrid,
-} from "@/components/form-shell";
+  FormShell,
+  FormTextField,
+  FormNumberField,
+  FormSelectField,
+  FormGrid,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  exportToCSV,
+  PageShell,
+  PageStatusBadge,
+} from "@workspace/ui-core";
 import { Banknote, DollarSign, Plus, X, Clock, CheckCircle } from "lucide-react";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
 import { useAppContext } from "@/contexts/app-context";
-import { ApprovalActions } from "@/components/approval-actions";
-import { PageShell } from "@/components/page-shell";
-import { PageStatusBadge } from "@/components/page-status-badge";
+import { ApprovalActions } from "@workspace/workflow-kit";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 /**

@@ -13,7 +13,7 @@ import {
   FormTextField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 import {
   Zap, Plus, Power, PowerOff, Trash2, History, Shield,
   AlertTriangle, CheckCircle, XCircle, Clock, Settings2,

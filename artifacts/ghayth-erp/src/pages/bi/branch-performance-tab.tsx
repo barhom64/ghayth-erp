@@ -1,6 +1,6 @@
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import { Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";

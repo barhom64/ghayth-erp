@@ -26,7 +26,10 @@ describe("hr/public-holidays — dual-mode holiday form on FormShell + zod (CONT
   const SRC = read("hr/public-holidays.tsx");
 
   it("imports the FormShell stack with FormDateField", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormDateField");
     expect(SRC).toContain("FormSelectField");

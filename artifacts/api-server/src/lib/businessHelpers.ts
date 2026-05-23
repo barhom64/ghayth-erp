@@ -442,6 +442,22 @@ export interface JournalEntryLine {
   activityType?: string;
   costCenter?: string;
   templateId?: number;
+  // Phase 2 P0 — additional dimensional fields backed by migration 201.
+  // All optional; the INSERT path appends them only when present so
+  // existing callers stay backwards-compatible.
+  costCenterId?: number;
+  unitId?: number;
+  assetId?: number;
+  umrahSeasonId?: number;
+  umrahAgentId?: number;
+  /** sourceLineTable + sourceLineId together back-link a journal_line
+   *  to the originating source row (e.g. 'invoice_lines' + 42). Lets
+   *  reports drill from a GL line back to the bill of sale. */
+  sourceLineTable?: string;
+  sourceLineId?: number;
+  /** Free-form dimension bag for future allocation rules that don't
+   *  warrant a dedicated column yet. */
+  dimensionJson?: Record<string, unknown>;
 }
 
 export async function createJournalEntry(params: {
@@ -554,18 +570,39 @@ export async function createJournalEntry(params: {
         accountId = accResult.rows[0]?.id ?? null;
       }
 
+      // Phase 2 P0 — full dimensional INSERT. Existing callers that don't
+      // set the optional fields land them as NULL, matching the
+      // backwards-compatible default for migration 201. The dimensional
+      // payload is what makes per-vehicle / per-property / per-project /
+      // per-season profitability reports computable straight from
+      // journal_lines without joining back to the source document.
       await client.query(
         `INSERT INTO journal_lines (
           "journalId","accountCode","accountId",debit,credit,description,"costCenter",
           "departmentId","projectId","employeeId","vehicleId","propertyId","contractId",
-          "activityType","templateId"
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+          "activityType","templateId",
+          "productId","clientId","vendorId","driverId",
+          "costCenterId","unitId","assetId","umrahSeasonId","umrahAgentId",
+          "sourceLineTable","sourceLineId","dimensionJson"
+         ) VALUES (
+          $1,$2,$3,$4,$5,$6,$7,
+          $8,$9,$10,$11,$12,$13,
+          $14,$15,
+          $16,$17,$18,$19,
+          $20,$21,$22,$23,$24,
+          $25,$26,$27
+         )`,
         [
           jId, line.accountCode, accountId, line.debit, line.credit,
           line.description ?? null, line.costCenter ?? null,
           line.departmentId ?? null, line.projectId ?? null, line.employeeId ?? null,
           line.vehicleId ?? null, line.propertyId ?? null, line.contractId ?? null,
           line.activityType ?? null, line.templateId ?? null,
+          line.productId ?? null, line.clientId ?? null, line.vendorId ?? null, line.driverId ?? null,
+          line.costCenterId ?? null, line.unitId ?? null, line.assetId ?? null,
+          line.umrahSeasonId ?? null, line.umrahAgentId ?? null,
+          line.sourceLineTable ?? null, line.sourceLineId ?? null,
+          line.dimensionJson ? JSON.stringify(line.dimensionJson) : null,
         ]
       );
     }
@@ -717,6 +754,13 @@ export async function applyJournalEntryBalances(
   // yet had its balances applied is processed. Entries that predate FIN-007
   // were created with balancesApplied = true and are skipped here.
   //
+  // Select the entry's accounting `date` (not `createdAt`): the period gate
+  // must evaluate against the ledger date, not the row's insertion time. A
+  // voucher created on 2025-05-31 for the May period but persisted at
+  // 2025-06-01 00:00:05 has date='2025-05-31' and createdAt='2025-06-01' —
+  // the May period is the right gate, not June. The /post endpoint
+  // (finance-hardening.ts:732) already uses `date` for the same reason.
+  //
   // `FOR UPDATE` serialises two concurrent apply calls on the same journal
   // entry. Without the lock, the second caller could read `balancesApplied =
   // false` while the first is mid-apply, then both proceed and bump
@@ -725,7 +769,7 @@ export async function applyJournalEntryBalances(
   // the apply commits — the second waiter then sees `balancesApplied = true`
   // and exits cleanly.
   const { rows: jeRows } = await client.query(
-    `SELECT "balancesApplied", "createdAt"
+    `SELECT "balancesApplied", date::text AS "entryDate"
        FROM journal_entries
       WHERE id = $1 AND "companyId" = $2
       FOR UPDATE`,
@@ -741,7 +785,7 @@ export async function applyJournalEntryBalances(
   // document unapproved until the period is reopened or the entry redated.
   const periodCheck = await checkFinancialPeriodOpen(
     companyId,
-    toDateISO(jeRows[0].createdAt as string)
+    jeRows[0].entryDate as string
   );
   if (!periodCheck.open) {
     throw new ValidationError(

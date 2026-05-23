@@ -3,8 +3,13 @@ import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
-import { PageStatusBadge } from "@/components/page-status-badge";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import {
+  PageStatusBadge,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+} from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +25,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { AlertTriangle, DollarSign, Clock, Zap, XCircle, MinusCircle } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { AdvancedFilters, useFilters } from "@/components/shared/advanced-filters";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";

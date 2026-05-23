@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";

@@ -12,7 +12,7 @@ import { Slider } from "@/components/ui/slider";
 import { ArrowRight, Shield, Lock, EyeOff, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 
 const UPWARD_CRITERIA = [
   { key: "leadership", label: "القيادة وتوزيع المهام" },

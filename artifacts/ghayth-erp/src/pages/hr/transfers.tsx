@@ -11,17 +11,24 @@ import {
   FileText, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@/components/page-shell";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters } from "@/components/shared/advanced-filters";
-import { ApprovalActions } from "@/components/approval-actions";
+import {
+  PageShell,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  FormShell,
+  FormTextField,
+  FormSelectField,
+  FormDateField,
+  FormGrid,
+} from "@workspace/ui-core";
+import { ApprovalActions } from "@workspace/workflow-kit";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { TRANSFER_STATUS } from "@/lib/hr-type-maps";
-import {
-  FormShell, FormTextField, FormSelectField, FormDateField, FormGrid,
-} from "@/components/form-shell";
 
 // employeeId + toBranchId required (was `if (!form.employeeId || !form.toBranchId)`
 // toast guard — now caught at schema validation before any network call).
