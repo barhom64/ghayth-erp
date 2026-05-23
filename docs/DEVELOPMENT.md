@@ -7,7 +7,13 @@ This is the short, opinionated day-to-day playbook. It assumes you have already 
 ## 1. First-run checklist
 
 1. Install Node 24, pnpm, and PostgreSQL 16.
-2. Clone the repo and `pnpm install`.
+2. Clone the repo and `pnpm install`. The post-install hook wires
+   `core.hooksPath` at `.githooks/`, which enables three guards:
+   `pre-commit` (runs `scripts/guard.sh`), `post-merge` and
+   `post-checkout` (auto-re-install when `package.json` or
+   `pnpm-lock.yaml` change between refs — prevents the silent
+   "Cannot find module '@workspace/ui-core'" drift you get after
+   pulling a branch that added a new workspace package).
 3. **Bootstrap the local DB from the committed schema dump:**
    ```bash
    pnpm db:bootstrap
