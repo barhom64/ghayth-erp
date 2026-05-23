@@ -388,6 +388,44 @@ const RULES = [
   },
 ];
 
+// ─── Pure matchers (exported for self-tests) ─────────────────────────────
+//
+// `matchSourceAgainstRule(rule, source)` returns the list of hits a single
+// rule produces against a single in-memory source string. No filesystem,
+// no scan list, no `skip()` evaluation — the caller has already decided
+// the file qualifies. Mirrors the matching logic used inside main(), so a
+// test fixing the matcher fixes both runtime and test surface.
+//
+/** @returns {Array<{ line: number, snippet: string }>} */
+export function matchSourceAgainstRule(rule, source) {
+  const hits = [];
+  if (rule.multiline) {
+    const re = rule.regex.global
+      ? rule.regex
+      : new RegExp(rule.regex.source, rule.regex.flags + "g");
+    let m;
+    while ((m = re.exec(source)) !== null) {
+      const lineNumber = source.slice(0, m.index).split("\n").length;
+      const snippet = m[0].split("\n")[0].trim();
+      hits.push({
+        line: lineNumber,
+        snippet:
+          snippet.length > 200 ? snippet.slice(0, 200) + "…" : snippet,
+      });
+      if (re.lastIndex === m.index) re.lastIndex++;
+    }
+  } else {
+    source.split("\n").forEach((line, index) => {
+      if (rule.regex.test(line)) {
+        hits.push({ line: index + 1, snippet: line.trim() });
+      }
+    });
+  }
+  return hits;
+}
+
+export { RULES };
+
 /** Recursively yield every file under a directory matching the given extensions. */
 async function* walk(dir, extensions = [".ts"]) {
   let entries;
@@ -407,30 +445,23 @@ async function* walk(dir, extensions = [".ts"]) {
   }
 }
 
-const failures = [];
-const countedRuleHits = new Map(); // rule.id → [{file, line, snippet}]
-const ratchetWarnings = []; // baseline-can-be-lowered hints
+async function main() {
+  const failures = [];
+  const countedRuleHits = new Map(); // rule.id → [{file, line, snippet}]
+  const ratchetWarnings = []; // baseline-can-be-lowered hints
 
-for (const rule of RULES) {
-  for (const root of rule.scan) {
-    for await (const file of walk(root, rule.extensions ?? [".ts"])) {
-      if (rule.skip && rule.skip(file)) continue;
-      const source = await readFile(file, "utf8");
-      const isCounted = typeof rule.countBaseline === "number";
-      if (rule.multiline) {
-        const re = rule.regex.global
-          ? rule.regex
-          : new RegExp(rule.regex.source, rule.regex.flags + "g");
-        let m;
-        while ((m = re.exec(source)) !== null) {
-          const lineNumber = source.slice(0, m.index).split("\n").length;
-          const snippet = m[0].split("\n")[0].trim();
+  for (const rule of RULES) {
+    for (const root of rule.scan) {
+      for await (const file of walk(root, rule.extensions ?? [".ts"])) {
+        if (rule.skip && rule.skip(file)) continue;
+        const source = await readFile(file, "utf8");
+        const isCounted = typeof rule.countBaseline === "number";
+        for (const raw of matchSourceAgainstRule(rule, source)) {
           const hit = {
             rule: rule.id,
             file: relative(REPO_ROOT, file),
-            line: lineNumber,
-            snippet:
-              snippet.length > 200 ? snippet.slice(0, 200) + "…" : snippet,
+            line: raw.line,
+            snippet: raw.snippet,
             message: rule.message,
           };
           if (isCounted) {
@@ -439,91 +470,81 @@ for (const rule of RULES) {
           } else {
             failures.push(hit);
           }
-          if (re.lastIndex === m.index) re.lastIndex++;
         }
-      } else {
-        source.split("\n").forEach((line, index) => {
-          if (rule.regex.test(line)) {
-            const hit = {
-              rule: rule.id,
-              file: relative(REPO_ROOT, file),
-              line: index + 1,
-              snippet: line.trim(),
-              message: rule.message,
-            };
-            if (isCounted) {
-              if (!countedRuleHits.has(rule.id)) countedRuleHits.set(rule.id, []);
-              countedRuleHits.get(rule.id).push(hit);
-            } else {
-              failures.push(hit);
-            }
-          }
+      }
+    }
+
+    // Apply ratchet check after each counted rule's full sweep.
+    if (typeof rule.countBaseline === "number") {
+      const hits = countedRuleHits.get(rule.id) ?? [];
+      const baseline = rule.countBaseline;
+      if (hits.length > baseline) {
+        // Regression: new violations beyond the baseline. Convert all hits
+        // to hard failures so the diff is visible.
+        const overage = hits.length - baseline;
+        for (const h of hits) {
+          failures.push({
+            ...h,
+            message:
+              `Ratchet exceeded: count is ${hits.length}, baseline is ${baseline} ` +
+              `(+${overage} new violation${overage === 1 ? "" : "s"}). ${rule.message}`,
+          });
+        }
+      } else if (hits.length < baseline) {
+        // Progress: baseline can be lowered. Emit a non-blocking warning.
+        ratchetWarnings.push({
+          rule: rule.id,
+          liveCount: hits.length,
+          baseline,
         });
       }
     }
   }
 
-  // Apply ratchet check after each counted rule's full sweep.
-  if (typeof rule.countBaseline === "number") {
-    const hits = countedRuleHits.get(rule.id) ?? [];
-    const baseline = rule.countBaseline;
-    if (hits.length > baseline) {
-      // Regression: new violations beyond the baseline. Convert all hits
-      // to hard failures so the diff is visible.
-      const overage = hits.length - baseline;
-      for (const h of hits) {
-        failures.push({
-          ...h,
-          message:
-            `Ratchet exceeded: count is ${hits.length}, baseline is ${baseline} ` +
-            `(+${overage} new violation${overage === 1 ? "" : "s"}). ${rule.message}`,
-        });
-      }
-    } else if (hits.length < baseline) {
-      // Progress: baseline can be lowered. Emit a non-blocking warning.
-      ratchetWarnings.push({
-        rule: rule.id,
-        liveCount: hits.length,
-        baseline,
-      });
+  // Emit ratchet progress hints before any failures so contributors see
+  // them on green runs too.
+  if (ratchetWarnings.length > 0) {
+    console.log("");
+    console.log("ℹ ratchet progress — baselines can be lowered:");
+    for (const w of ratchetWarnings) {
+      console.log(
+        `   • ${w.rule}: live count ${w.liveCount} < baseline ${w.baseline} ` +
+        `(drop countBaseline to ${w.liveCount} in scripts/src/lint-patterns.mjs)`,
+      );
     }
+    console.log("");
   }
+
+  if (failures.length === 0) {
+    console.log("✓ lint-patterns: clean — no forbidden legacy patterns found.");
+    process.exit(0);
+  }
+
+  console.error(
+    `✗ lint-patterns: ${failures.length} violation(s) of forbidden patterns:\n`,
+  );
+  const grouped = new Map();
+  for (const f of failures) {
+    if (!grouped.has(f.rule)) grouped.set(f.rule, []);
+    grouped.get(f.rule).push(f);
+  }
+  for (const [rule, hits] of grouped) {
+    const head = hits[0];
+    console.error(`── ${rule} (${hits.length}) ──`);
+    console.error(`   ${head.message}`);
+    for (const h of hits) {
+      console.error(`   • ${h.file}:${h.line}  ${h.snippet}`);
+    }
+    console.error("");
+  }
+  process.exit(1);
 }
 
-// Emit ratchet progress hints before any failures so contributors see
-// them on green runs too.
-if (ratchetWarnings.length > 0) {
-  console.log("");
-  console.log("ℹ ratchet progress — baselines can be lowered:");
-  for (const w of ratchetWarnings) {
-    console.log(
-      `   • ${w.rule}: live count ${w.liveCount} < baseline ${w.baseline} ` +
-      `(drop countBaseline to ${w.liveCount} in scripts/src/lint-patterns.mjs)`,
-    );
-  }
-  console.log("");
+// Run only when executed directly — importing this module from
+// lint-patterns.test.mjs must not trigger the full scan.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((err) => {
+    console.error("[lint-patterns] crashed:", err);
+    process.exit(1);
+  });
 }
-
-if (failures.length === 0) {
-  console.log("✓ lint-patterns: clean — no forbidden legacy patterns found.");
-  process.exit(0);
-}
-
-console.error(
-  `✗ lint-patterns: ${failures.length} violation(s) of forbidden patterns:\n`,
-);
-const grouped = new Map();
-for (const f of failures) {
-  if (!grouped.has(f.rule)) grouped.set(f.rule, []);
-  grouped.get(f.rule).push(f);
-}
-for (const [rule, hits] of grouped) {
-  const head = hits[0];
-  console.error(`── ${rule} (${hits.length}) ──`);
-  console.error(`   ${head.message}`);
-  for (const h of hits) {
-    console.error(`   • ${h.file}:${h.line}  ${h.snippet}`);
-  }
-  console.error("");
-}
-process.exit(1);
