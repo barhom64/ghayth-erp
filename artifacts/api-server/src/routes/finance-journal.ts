@@ -1198,9 +1198,33 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
     if (!description) throw new ValidationError("وصف القيد مطلوب", { field: "description" });
     if (!Array.isArray(lines) || lines.length < 2) throw new ValidationError("القيد يجب أن يحتوي على بندين على الأقل", { field: "lines" });
     for (const l of lines) { l.debit = roundTo2(Number(l.debit) || 0); l.credit = roundTo2(Number(l.credit) || 0); }
+    // Reject negative amounts up front. Without this guard a user passing
+    // `{debit:-100, credit:0}` produces a "negative debit" that survives
+    // the imbalance check (sums match if mirrored on the credit side) and
+    // then reverses the chart_of_accounts movement at apply time —
+    // posting a balanced-but-inverted entry on the GL. The accounting
+    // convention is non-negative amounts in the proper column, period.
+    for (const l of lines) {
+      if (l.debit < 0 || l.credit < 0) {
+        throw new ValidationError("لا يُسمح بمبالغ سالبة في بنود القيد", {
+          field: "lines",
+          fix: "استعمل الجانب المقابل (مدين/دائن) لعكس الإشارة بدل الرقم السالب",
+        });
+      }
+      if (l.debit > 0 && l.credit > 0) {
+        throw new ValidationError("لا يُسمح بمدين ودائن في نفس البند", {
+          field: "lines",
+          fix: "اقسم البند إلى بندين منفصلين",
+        });
+      }
+    }
     const totalDebit = roundTo2(lines.reduce((s: number, l) => s + l.debit, 0));
     const totalCredit = roundTo2(lines.reduce((s: number, l) => s + l.credit, 0));
-    if (Math.abs(totalDebit - totalCredit) > 0.01) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
+    // Aligned with createJournalEntry (businessHelpers.ts:529) which rejects
+    // at `>= 0.005`. The previous `> 0.01` route-level threshold let a
+    // 1-cent imbalance through into the engine where it failed with a less
+    // helpful error — same correctness, worse UX.
+    if (Math.abs(totalDebit - totalCredit) >= 0.005) throw new ValidationError(`القيد غير متوازن: مدين ${totalDebit.toFixed(2)} ≠ دائن ${totalCredit.toFixed(2)}`, { field: "lines", fix: "تأكد من تساوي المدين والدائن" });
 
     const postingDate = date ? toDateISO(date) : currentDateInTz("Asia/Riyadh");
     const engineLines = lines.map((l) => ({
