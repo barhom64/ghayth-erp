@@ -127,9 +127,18 @@ contractsRouter.post("/", authorize({ feature: "hr.contracts", action: "create" 
 
     let assignmentId = data.assignmentId ?? null;
     if (!assignmentId) {
+      // Auto-pick an active assignment when the caller didn't pass one.
+      // Without `"deletedAt" IS NULL` a soft-deleted assignment that still
+      // has `endDate=NULL` (a stale logically-terminated row that was
+      // soft-deleted instead of being closed via endDate) would be
+      // selected and the new contract would attach to a ghost: the FK
+      // resolves, but every downstream query that filters `deletedAt`
+      // (probation tracking, payroll, attendance) would see the contract
+      // as orphaned.
       const [assn] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM employee_assignments
-         WHERE "employeeId"=$1 AND "companyId"=$2 AND ("endDate" IS NULL OR "endDate" >= CURRENT_DATE)
+         WHERE "employeeId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL
+           AND ("endDate" IS NULL OR "endDate" >= CURRENT_DATE)
          ORDER BY "isPrimary" DESC NULLS LAST, "hireDate" DESC NULLS LAST, id DESC LIMIT 1`,
         [data.employeeId, scope.companyId]
       );
