@@ -313,10 +313,16 @@ export async function postFxRevaluationJournal(opts: PostRevaluationOpts): Promi
 
     const payload = buildEntry(buildInput);
 
+    // PD-6 — sourceKey is tied to the log row (not just the date) so a re-fire
+    // for the same revaluation run idempotently hits the existing journal
+    // entry. The log-row-level guard above (`log.journalEntryId !== null`)
+    // already prevents repost through this path; this is defence-in-depth for
+    // a future caller that builds the ctx by hand.
     const ctx: EntryContext = {
       companyId: opts.companyId,
       createdBy: opts.postedBy,
       ref: `FX-REV-${log.asOfDate}`,
+      sourceKey: `FX-REV-LOG-${opts.revaluationLogId}`,
       type: "fx_revaluation",
       sourceType: "fx_revaluation_log",
       sourceId: opts.revaluationLogId,

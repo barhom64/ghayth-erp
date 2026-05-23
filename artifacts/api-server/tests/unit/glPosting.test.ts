@@ -223,6 +223,111 @@ describe("postJournalEntry — INSERT shape", () => {
   });
 });
 
+describe("postJournalEntry — sourceKey idempotency (PD-6)", () => {
+  it("returns the existing entry without re-posting when sourceKey already exists", async () => {
+    // First mocked rawQuery is the sourceKey lookup; resolve to an existing
+    // posted row. None of the rest of the pipeline (account lookup, INSERT,
+    // currentBalance updates) should fire.
+    mockRawQuery.mockReset();
+    mockRawExecute.mockReset();
+    mockRawQuery.mockResolvedValueOnce([{ id: 555, status: "posted" }]);
+    mockRawExecute.mockResolvedValue({ affectedRows: 1 });
+
+    const payload = buildSimpleEntry({
+      description: "duplicate event",
+      amount: 100,
+      debitAccountId: 100,
+      creditAccountId: 490,
+    });
+    const r = await postJournalEntry(payload, {
+      companyId: 5,
+      sourceKey: "REAL-FX-INV-1234-2026-05-01",
+    });
+
+    expect(r.journalEntryId).toBe(555);
+    expect(r.status).toBe("posted");
+    expect(r.alreadyExists).toBe(true);
+    // No INSERTs ran — duplicate post short-circuits.
+    expect(mockRawExecute).not.toHaveBeenCalled();
+    // Only the sourceKey lookup happened — no period check, no account
+    // lookup, no header INSERT.
+    expect(mockRawQuery).toHaveBeenCalledTimes(1);
+    expect(String(mockRawQuery.mock.calls[0][0])).toContain(
+      'FROM journal_entries',
+    );
+    expect(mockRawQuery.mock.calls[0][1]).toEqual([
+      5,
+      "REAL-FX-INV-1234-2026-05-01",
+    ]);
+  });
+
+  it("posts and writes sourceKey when no existing entry matches", async () => {
+    // sourceKey lookup returns empty → full pipeline runs.
+    mockRawQuery.mockReset();
+    mockRawExecute.mockReset();
+    mockRawQuery
+      // sourceKey lookup (empty)
+      .mockResolvedValueOnce([])
+      // financial-period check (open)
+      .mockResolvedValueOnce([])
+      // account lookup
+      .mockResolvedValueOnce([
+        { id: 100, code: "1100" },
+        { id: 490, code: "4900" },
+      ])
+      // INSERT RETURNING id
+      .mockResolvedValueOnce([{ id: 4242 }]);
+    mockRawExecute.mockResolvedValue({ affectedRows: 1 });
+
+    const payload = buildSimpleEntry({
+      description: "fresh event",
+      amount: 30,
+      debitAccountId: 100,
+      creditAccountId: 490,
+    });
+    const r = await postJournalEntry(payload, {
+      companyId: 5,
+      sourceKey: "CC-99",
+    });
+
+    expect(r.journalEntryId).toBe(4242);
+    expect(r.alreadyExists).toBeUndefined();
+
+    // The INSERT receives the sourceKey as the 11th positional param.
+    const headerCall = mockRawQuery.mock.calls.find((c) =>
+      String(c[0]).includes("INSERT INTO journal_entries"),
+    );
+    expect(headerCall).toBeDefined();
+    const params = headerCall?.[1] as any[];
+    expect(params[10]).toBe("CC-99");
+  });
+
+  it("skips the sourceKey lookup entirely when ctx.sourceKey is undefined", async () => {
+    // No sourceKey on ctx → no lookup query; fall straight through to the
+    // period check (and the rest of the pipeline) as before.
+    setupAccountResolve(
+      [
+        { id: 100, code: "1100" },
+        { id: 490, code: "4900" },
+      ],
+      77,
+    );
+    const payload = buildSimpleEntry({
+      description: "no key",
+      amount: 10,
+      debitAccountId: 100,
+      creditAccountId: 490,
+    });
+    await postJournalEntry(payload, { companyId: 5 });
+
+    // No call to the sourceKey lookup query.
+    const lookupCall = mockRawQuery.mock.calls.find((c) =>
+      String(c[0]).includes('"sourceKey" = $2'),
+    );
+    expect(lookupCall).toBeUndefined();
+  });
+});
+
 describe("postJournalEntry — financial period close (H1)", () => {
   it("blocks a posted entry whose effective date lands in a closed period", async () => {
     setupAccountResolve(

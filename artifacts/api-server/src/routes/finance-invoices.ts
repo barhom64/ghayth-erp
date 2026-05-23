@@ -932,6 +932,259 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POSTING PREVIEW — Finance Line-Level Allocation Phase 3 P0.
+//
+// Returns the journal lines that WOULD be posted if the operator approved
+// this invoice right now, plus a list of blockers (which prevent approval)
+// and warnings (informational). The shape mirrors the structure built
+// inside /approve so the UI can render the exact same posting.
+//
+// Read-only — no GL movement, no transaction, no idempotency token needed.
+//
+// Blockers (preventing approval):
+//   * Financial period is closed/locked for the invoice's date
+//   * Invoice is in a non-approvable state (paid, cancelled, void, …)
+//
+// Warnings (rendered but non-blocking):
+//   * Some lines have allocationStatus = 'unmapped'    → they will fall
+//     back to the company-level invoice_revenue account
+//   * No invoice_lines stored                          → header-level
+//     single-revenue fallback
+//   * Sum-of-lines differs from invoice.total-vat      → rounding-
+//     difference correction will land on the generic account
+// ─────────────────────────────────────────────────────────────────────────────
+invoicesRouter.post("/invoices/:id/preview-posting", authorize({
+  feature: "finance.invoices",
+  action: "view",
+  resource: { table: "invoices", idParam: "id", columns: ['"companyId"', '"branchId"'] },
+}), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+
+    const [invoice] = await rawQuery<Record<string, unknown>>(
+      `SELECT i.*, c.name AS "clientName"
+         FROM invoices i
+         LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
+
+    const blockers: { field: string; message: string }[] = [];
+    const warnings: { field: string; message: string; lineIds?: number[] }[] = [];
+
+    // Blocker — invoice not in approvable state.
+    const approvableStates = ["draft", "returned"];
+    if (!approvableStates.includes(String(invoice.status))) {
+      blockers.push({
+        field: "status",
+        message: `الفاتورة بحالة "${invoice.status}" — الاعتماد يتطلب draft أو returned`,
+      });
+    }
+
+    // Blocker — financial period closed/locked for invoice.createdAt.
+    const invoiceDate = (invoice.createdAt as Date | string | null)
+      ? toDateISO(invoice.createdAt as Date | string)
+      : null;
+    if (invoiceDate) {
+      const periodCheck = await checkFinancialPeriodOpen(scope.companyId, invoiceDate);
+      if (!periodCheck.open) {
+        blockers.push({
+          field: "period",
+          message: `الفترة المالية مغلقة (${periodCheck.periodName ?? invoiceDate}) — لا يمكن الاعتماد`,
+        });
+      }
+    }
+
+    // Resolve GL accounts (read-only; doesn't post).
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1200"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+    ]);
+
+    // Read invoice_lines with dimensional fields (migration 200).
+    const lines = await rawQuery<{
+      id: number;
+      description: string | null;
+      lineTotal: string;
+      accountCode: string | null;
+      allocationStatus: string | null;
+      costCenterId: number | null;
+      activityType: string | null;
+      projectId: number | null;
+      vehicleId: number | null;
+      propertyId: number | null;
+      unitId: number | null;
+      assetId: number | null;
+      employeeId: number | null;
+      driverId: number | null;
+      contractId: number | null;
+      umrahSeasonId: number | null;
+      umrahAgentId: number | null;
+      productId: number | null;
+    }>(
+      `SELECT id, description,
+              "lineTotal"::text AS "lineTotal",
+              "accountCode", "allocationStatus",
+              "costCenterId", "activityType",
+              "projectId", "vehicleId", "propertyId", "unitId", "assetId",
+              "employeeId", "driverId", "contractId",
+              "umrahSeasonId", "umrahAgentId", "productId"
+         FROM invoice_lines
+        WHERE "invoiceId" = $1
+        ORDER BY id`,
+      [id]
+    );
+
+    const totalNet = Number(invoice.total) - Number(invoice.vatAmount || 0);
+
+    // Build the preview journal lines using the SAME algorithm as
+    // /approve. Kept in sync deliberately — if /approve evolves the
+    // preview must match.
+    type PreviewLine = {
+      accountCode: string;
+      debit: number;
+      credit: number;
+      description?: string;
+      dimensions: Record<string, unknown>;
+    };
+    const previewLines: PreviewLine[] = [];
+
+    previewLines.push({
+      accountCode: invArCode,
+      debit: Number(invoice.total),
+      credit: 0,
+      description: `ذمم مدينة — فاتورة ${invoice.ref}`,
+      dimensions: { clientId: invoice.clientId },
+    });
+
+    const unmappedLineIds: number[] = [];
+    if (lines.length > 0) {
+      const buckets = new Map<string, PreviewLine & { _amount: number }>();
+      let postedNet = 0;
+      for (const ln of lines) {
+        const acct = ln.accountCode || invRevenueCode;
+        if (!ln.accountCode) unmappedLineIds.push(ln.id);
+        const key = [
+          acct, ln.costCenterId ?? "", ln.activityType ?? "",
+          ln.projectId ?? "", ln.vehicleId ?? "", ln.propertyId ?? "",
+          ln.employeeId ?? "", ln.driverId ?? "", ln.contractId ?? "",
+          ln.productId ?? "",
+        ].join("|");
+        const amt = roundTo2(Number(ln.lineTotal));
+        postedNet += amt;
+        const prev = buckets.get(key);
+        if (prev) {
+          prev._amount = roundTo2(prev._amount + amt);
+          prev.credit = prev._amount;
+        } else {
+          buckets.set(key, {
+            accountCode: acct,
+            debit: 0,
+            credit: amt,
+            _amount: amt,
+            description: `إيرادات — ${ln.description ?? ""}`.trim(),
+            dimensions: {
+              clientId: invoice.clientId,
+              costCenterId: ln.costCenterId,
+              activityType: ln.activityType,
+              projectId: ln.projectId,
+              vehicleId: ln.vehicleId,
+              propertyId: ln.propertyId,
+              unitId: ln.unitId,
+              assetId: ln.assetId,
+              employeeId: ln.employeeId,
+              driverId: ln.driverId,
+              contractId: ln.contractId,
+              umrahSeasonId: ln.umrahSeasonId,
+              umrahAgentId: ln.umrahAgentId,
+              productId: ln.productId,
+            },
+          });
+        }
+      }
+      const diff = roundTo2(totalNet - postedNet);
+      if (Math.abs(diff) >= 0.005) {
+        warnings.push({
+          field: "rounding",
+          message: `فرق تقريب ${diff.toFixed(2)} ﷼ سيُرحَّل على حساب الإيرادات العام (${invRevenueCode})`,
+        });
+        const fallbackKey = `${invRevenueCode}|||||||||`;
+        const prev = buckets.get(fallbackKey);
+        if (prev) {
+          prev._amount = roundTo2(prev._amount + diff);
+          prev.credit = prev._amount;
+        } else {
+          buckets.set(fallbackKey, {
+            accountCode: invRevenueCode,
+            debit: 0,
+            credit: diff,
+            _amount: diff,
+            description: `إيرادات — فرق تقريب`,
+            dimensions: { clientId: invoice.clientId },
+          });
+        }
+      }
+      for (const b of buckets.values()) {
+        if (Math.abs(b._amount) < 0.005) continue;
+        // strip the private _amount field before returning to the client
+        const { _amount: _omit, ...clean } = b;
+        previewLines.push(clean);
+      }
+    } else {
+      previewLines.push({
+        accountCode: invRevenueCode,
+        debit: 0,
+        credit: totalNet,
+        description: `إيرادات — فاتورة ${invoice.ref}`,
+        dimensions: { clientId: invoice.clientId },
+      });
+      warnings.push({
+        field: "lines",
+        message: "الفاتورة ليس لها بنود مخزنة — سيتم ترحيل سطر إيرادات عام واحد",
+      });
+    }
+
+    if (Number(invoice.vatAmount || 0) > 0) {
+      previewLines.push({
+        accountCode: invVatPayableCode,
+        debit: 0,
+        credit: Number(invoice.vatAmount || 0),
+        description: `ضريبة قيمة مضافة — فاتورة ${invoice.ref}`,
+        dimensions: {},
+      });
+    }
+
+    if (unmappedLineIds.length > 0) {
+      warnings.push({
+        field: "allocation",
+        message: `${unmappedLineIds.length} بند بدون حساب محدد — سيُرحَّل على حساب الإيرادات العام (${invRevenueCode}). افتح كل بند وأضف الحساب لتوزيع أدق.`,
+        lineIds: unmappedLineIds,
+      });
+    }
+
+    const totalDebit = roundTo2(previewLines.reduce((s, l) => s + l.debit, 0));
+    const totalCredit = roundTo2(previewLines.reduce((s, l) => s + l.credit, 0));
+    const isBalanced = Math.abs(totalDebit - totalCredit) < 0.005;
+
+    res.json({
+      invoiceId: id,
+      invoiceRef: invoice.ref,
+      canApprove: blockers.length === 0 && isBalanced,
+      blockers,
+      warnings,
+      journalLines: previewLines,
+      totals: { debit: totalDebit, credit: totalCredit, balanced: isBalanced },
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Preview posting error:");
+  }
+});
+
 invoicesRouter.post("/invoices/:id/post", authorize({ feature: "finance.invoices", action: "approve" }), requireOwnership({ table: "invoices", checks: ["company", "branch"] }), async (req, res) => {
   try {
     const scope = req.scope!;
