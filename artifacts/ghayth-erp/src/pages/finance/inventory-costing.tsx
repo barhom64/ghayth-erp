@@ -5,10 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+} from "@workspace/ui-core";
 import { Package, Calculator, TrendingUp, CheckCircle, Info } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
-import { PageShell } from "@/components/page-shell";
 
 export default function InventoryCostingPage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);

@@ -11,7 +11,7 @@ import { ScrollText, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { DatePicker } from "@/components/ui/date-picker";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 const ACTION_LABELS: Record<string, string> = {
   create: "إنشاء",

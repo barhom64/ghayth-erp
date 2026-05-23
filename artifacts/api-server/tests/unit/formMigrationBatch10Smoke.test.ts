@@ -25,7 +25,10 @@ describe("fleet/traffic-violations — violation-create on FormShell + zod", () 
   const SRC = read("fleet/traffic-violations.tsx");
 
   it("imports the FormShell stack with FormDateField + FormNumberField", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormDateField");
     expect(SRC).toContain("FormNumberField");

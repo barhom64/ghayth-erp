@@ -8,7 +8,7 @@ import {
   FormPhoneField,
   FormSelectField,
   FormGrid,
-} from "@/components/form-shell";
+} from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,9 +22,7 @@ import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useSettings } from "@/contexts/settings-context";
 import { useToast } from "@/hooks/use-toast";
-import { LetterheadHeader } from "@/components/print-layout";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
-import type { BranchLetterhead } from "@/components/print-layout";
 import { useAppContext } from "@/contexts/app-context";
 import { GovIntegrationsTab } from "./settings/gov-integrations-tab";
 import { ZatcaSettingsTab } from "./settings/zatca-settings-tab";

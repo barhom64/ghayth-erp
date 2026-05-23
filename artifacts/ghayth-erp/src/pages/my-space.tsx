@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { useAuth } from "@/lib/auth";

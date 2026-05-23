@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import {
   Brain, CheckCircle2, ArrowUpRight, Lightbulb, ShieldAlert, X,

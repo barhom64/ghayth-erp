@@ -1,5 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { CEODashboardTab } from "./bi/ceo-dashboard-tab";
 import { OverviewTab } from "./bi/overview-tab";
 import { BranchPerformanceTab } from "./bi/branch-performance-tab";

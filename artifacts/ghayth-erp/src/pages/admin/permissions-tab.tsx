@@ -7,7 +7,7 @@ import { Shield, UserCog, CheckCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { ROLE_OPTIONS } from "./shared";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 const PERM_MODULES = [
   { key: "hr", label: "الموارد البشرية" },

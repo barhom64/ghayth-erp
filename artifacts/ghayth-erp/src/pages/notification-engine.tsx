@@ -2,7 +2,11 @@ import { useState, useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { PageShell } from "@/components/page-shell";
+import {
+  PageShell,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +17,6 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   Route, Bell, Mail, MessageSquare, Smartphone, Globe, Zap, Plus, Save,
   Trash2, RefreshCw, ArrowRight, AlertCircle, CheckCircle, XCircle,

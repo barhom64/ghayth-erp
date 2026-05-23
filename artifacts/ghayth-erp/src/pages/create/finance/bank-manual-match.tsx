@@ -4,13 +4,16 @@ import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  CreatePageLayout,
+} from "@workspace/ui-core";
 import { Search, Link2 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { CreatePageLayout } from "@/components/create-page-layout";
 
 export default function BankManualMatchPage() {
   const [, params] = useRoute("/finance/bank-reconciliation/manual-match/:batchId/:rowId") as [boolean, { batchId: string; rowId: string }];

@@ -5,9 +5,15 @@ import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
-import { PageShell } from "@/components/page-shell";
+import {
+  PageShell,
+  DataTable,
+  type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  exportToCSV,
+} from "@workspace/ui-core";
 import { Crown, Plus, Pencil, Phone, Building2, Home, Trash2 } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useAppContext } from "@/contexts/app-context";

@@ -8,7 +8,7 @@ import { Crown, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { CreatePageLayout, CreationDateField } from "@/components/create-page-layout";
+import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function OwnersCreate() {

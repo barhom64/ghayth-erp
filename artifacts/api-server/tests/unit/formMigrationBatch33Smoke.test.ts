@@ -28,7 +28,10 @@ function stripComments(src: string): string {
 
 describe("settings/letterhead-tab — branch letterhead form with live preview", () => {
   it("imports the FormShell stack + react-hook-form's useWatch + useFormContext", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormEmailField");
     expect(SRC).toContain("FormPhoneField");

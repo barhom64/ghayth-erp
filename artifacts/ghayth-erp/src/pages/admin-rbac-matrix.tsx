@@ -1,4 +1,4 @@
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

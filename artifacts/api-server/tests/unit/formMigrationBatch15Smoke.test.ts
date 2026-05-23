@@ -27,7 +27,10 @@ describe("hr/shifts-management — assign-shift form on FormShell + zod (fixes h
   const SRC = read("hr/shifts-management.tsx");
 
   it("imports the FormShell stack with FormDateField + FormSelectField", () => {
-    expect(SRC).toContain('from "@/components/form-shell"');
+    expect(
+      SRC.includes('from "@/components/form-shell"') ||
+        SRC.includes('from "@workspace/ui-core"'),
+    ).toBe(true);
     expect(SRC).toContain("FormShell");
     expect(SRC).toContain("FormDateField");
     expect(SRC).toContain("FormSelectField");

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { formatDateAr } from "@/lib/formatters";
 import { useApiMutation } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { PageShell } from "@/components/page-shell";
+import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";

@@ -5,12 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { PageStatusBadge } from "@/components/page-status-badge";
-import { AdvancedFilters, useFilters, applyFilters, exportToCSV } from "@/components/shared/advanced-filters";
+import {
+  DataTable,
+  type DataTableColumn,
+  PageShell,
+  PageStatusBadge,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
+  exportToCSV,
+} from "@workspace/ui-core";
+import { EntityComments } from "@workspace/entity-kit";
 import { TagFilterSelect, useTagFilter, EntityTags } from "@/components/shared/entity-tags";
-import { EntityComments } from "@/components/shared/entity-comments";
-import { PageShell } from "@/components/page-shell";
 import {
   FileText, Plus, ChevronDown, ChevronUp, CalendarDays, Banknote,
   CheckCircle2, Clock, AlertTriangle, RefreshCw, Zap, Droplets, Wifi,
