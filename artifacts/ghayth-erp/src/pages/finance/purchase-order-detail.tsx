@@ -14,6 +14,7 @@ import { ApprovalActions, ActionHistory } from "@/components/approval-actions";
 import { DetailPageLayout } from "@/components/shared/detail-page-layout";
 import { resolveStatus } from "@/components/page-status-badge";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { PurchaseOrderReceiveSection } from "@/components/finance/purchase-order-receive-section";
 
 export default function PurchaseOrderDetailPage() {
   const [, params] = useRoute("/finance/purchase-orders/:id");
@@ -98,6 +99,10 @@ export default function PurchaseOrderDetailPage() {
             />
           </CardContent>
         </Card>
+      )}
+
+      {po && (po.status === "approved" || po.status === "partially_received" || po.status === "received" || po.status === "invoiced") && (
+        <PurchaseOrderReceiveSection poId={id || po.id} poStatus={po.status} />
       )}
 
       <Card>
