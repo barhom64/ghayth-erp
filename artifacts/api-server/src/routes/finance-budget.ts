@@ -691,7 +691,7 @@ budgetRouter.get("/fiscal-periods", authorize({ feature: "finance.budget", actio
               COALESCE(SUM(jl.debit), 0) AS "totalDebit"
        FROM journal_entries je
        LEFT JOIN journal_lines jl ON jl."journalId" = je.id
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
          AND je."createdAt" >= make_date($2, 1, 1) AND je."createdAt" < make_date($2 + 1, 1, 1)
        GROUP BY to_char(je."createdAt", 'YYYY-MM')`,
       [scope.companyId, thisYear]

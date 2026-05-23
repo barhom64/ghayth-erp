@@ -1255,7 +1255,7 @@ financeHardeningRouter.get("/intercompany/consolidation", authorize({ feature: "
          JOIN journal_entries je ON je.id=jl."journalId"
          JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId"
          JOIN companies c ON c.id=je."companyId"
-         WHERE je."companyId" = ANY($1) AND je."deletedAt" IS NULL AND je."balancesApplied" = true
+         WHERE je."companyId" = ANY($1) AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
          GROUP BY je."companyId", c.name`,
         [companies]
       ),
@@ -1283,7 +1283,7 @@ financeHardeningRouter.get("/projects", authorize({ feature: "finance.hardening"
               COALESCE(SUM(jl.debit),0) AS "actualCost",
               p.budget - COALESCE(SUM(jl.debit),0) AS "budgetRemaining"
        FROM projects p
-       LEFT JOIN journal_entries je ON je."projectId"=p.id AND je."deletedAt" IS NULL AND je."balancesApplied" = true
+       LEFT JOIN journal_entries je ON je."projectId"=p.id AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
        LEFT JOIN journal_lines jl ON jl."journalId"=je.id AND jl.debit > 0
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
        GROUP BY p.id
@@ -1368,7 +1368,7 @@ financeHardeningRouter.get("/projects/:id/costs", authorize({ feature: "finance.
               je."costCenter", je."operationType"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId"=je.id AND jl.debit > 0
-       WHERE je."projectId"=$1 AND je."companyId"=$2 AND je."deletedAt" IS NULL AND je."balancesApplied" = true
+       WHERE je."projectId"=$1 AND je."companyId"=$2 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
        GROUP BY je.id
        ORDER BY je."createdAt" DESC`,
       [id, scope.companyId]
@@ -1480,7 +1480,7 @@ financeHardeningRouter.get("/cost-center-report", authorize({ feature: "finance.
   try {
     const scope = req.scope!;
     const { startDate, endDate, costCenter } = req.query as Record<string, string | undefined>;
-    const conditions = [`je."companyId"=$1`, `je."deletedAt" IS NULL`, `je."balancesApplied" = true`, `je."costCenter" IS NOT NULL`];
+    const conditions = [`je."companyId"=$1`, `je."deletedAt" IS NULL`, `je."balancesApplied" = true`, `je."reversedById" IS NULL`, `je."costCenter" IS NOT NULL`];
     const params: unknown[] = [scope.companyId];
     if (startDate) { params.push(startDate); conditions.push(`je."createdAt"::date >= $${params.length}`); }
     if (endDate) { params.push(endDate); conditions.push(`je."createdAt"::date <= $${params.length}`); }
