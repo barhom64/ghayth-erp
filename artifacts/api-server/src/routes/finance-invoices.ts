@@ -963,8 +963,11 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
     // Reverse the GL balances that were pushed at creation time so AR /
     // Revenue / VAT payable drop back. The journal_entries row is located via
     // its ref (JE-<invoice ref>) since invoices don't store a journalId column.
+    // `createdAt` is needed to derive the period that the approval-time
+    // budgets.used bump targeted (currentPeriod() at approval = JE createdAt
+    // period), so the decrement hits the same bucket.
     const [je] = await rawQuery<Record<string, unknown>>(
-      `SELECT id FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
+      `SELECT id, "createdAt" FROM journal_entries WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL`,
       [scope.companyId, `JE-${inv.ref}`]
     );
     await withTransaction(async (client: any) => {
@@ -999,6 +1002,28 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
           await client.query(
             `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) - $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
             [net, inv.clientId, scope.companyId]
+          );
+        }
+      }
+
+      // Reverse the budgets.used bump that approval applied. Same gate
+      // (revenue-recognized status + JE exists) so the decrement only
+      // fires when the bump actually happened. Period is the JE's
+      // createdAt month — the same value `currentPeriod()` had at
+      // approval time — so the decrement lands in the bucket that was
+      // inflated.
+      if (wasRecognised && je && je.createdAt) {
+        const net = Number(inv.total) - Number(inv.vatAmount || 0);
+        if (net > 0) {
+          const { financialEngine } = await import("../lib/engines/index.js");
+          const invRevenueCode = await financialEngine.resolveAccountCode(
+            scope.companyId, "invoice_revenue", "credit", "4000"
+          );
+          const approvalPeriod = String(je.createdAt).slice(0, 7);
+          await client.query(
+            `UPDATE budgets SET used = GREATEST(used - $1, 0)
+             WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+            [net, scope.companyId, invRevenueCode, approvalPeriod]
           );
         }
       }
@@ -1254,6 +1279,32 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
           `UPDATE clients SET "totalRevenue" = COALESCE("totalRevenue",0) - $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
           [net, invoice.clientId, scope.companyId]
         );
+      }
+
+      // Reverse the budgets.used bump proportional to the memo's net. The
+      // approval bumped the revenue budget by the full invoice net for the
+      // JE's createdAt month; a credit memo refunds part of that revenue,
+      // so the same bucket is decremented by the memo's net.
+      if (net > 0) {
+        const origJeRes = await client.query(
+          `SELECT "createdAt" FROM journal_entries
+            WHERE "companyId" = $1 AND ref = $2 AND "deletedAt" IS NULL
+            LIMIT 1`,
+          [scope.companyId, `JE-${invoice.ref}`]
+        );
+        const origJe = origJeRes.rows[0];
+        if (origJe && origJe.createdAt) {
+          const { financialEngine } = await import("../lib/engines/index.js");
+          const invRevenueCode = await financialEngine.resolveAccountCode(
+            scope.companyId, "invoice_revenue", "credit", "4000"
+          );
+          const approvalPeriod = String(origJe.createdAt).slice(0, 7);
+          await client.query(
+            `UPDATE budgets SET used = GREATEST(used - $1, 0)
+             WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,
+            [net, scope.companyId, invRevenueCode, approvalPeriod]
+          );
+        }
       }
     });
 
