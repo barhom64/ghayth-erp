@@ -1,12 +1,16 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@/components/shared/detail-page-layout";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, AlertTriangle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Edit, AlertTriangle, Save } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { EntityComments } from "@/components/shared/entity-comments";
 import { EntityTags } from "@/components/shared/entity-tags";
@@ -89,6 +93,33 @@ export default function RiskDetail() {
   );
 
   const risk = data;
+
+  // GOV-RISK-TREAT — PATCH /governance/risks/:id/treatment exposes a
+  // separate write surface for the treatment plan fields (plan, owner,
+  // dueDate, status). The card below mounts the form whenever a risk is
+  // loaded; useEffect re-seeds local state when the fetched record changes.
+  const [treatment, setTreatment] = useState({
+    treatmentPlan: "",
+    treatmentOwner: "",
+    treatmentDueDate: "",
+    treatmentStatus: "planned",
+  });
+  useEffect(() => {
+    if (risk) {
+      setTreatment({
+        treatmentPlan: risk.treatmentPlan ?? "",
+        treatmentOwner: risk.treatmentOwner ?? "",
+        treatmentDueDate: risk.treatmentDueDate ? String(risk.treatmentDueDate).slice(0, 10) : "",
+        treatmentStatus: risk.treatmentStatus ?? "planned",
+      });
+    }
+  }, [risk]);
+  const treatmentMut = useApiMutation<unknown, typeof treatment>(
+    () => `/governance/risks/${id}/treatment`,
+    "PATCH",
+    [["risk", String(id)], ["risks"]],
+    { successMessage: "تم حفظ خطة المعالجة", onSuccess: () => refetch() },
+  );
 
   const likelihoodScore = risk?.likelihood ? LIKELIHOOD_SCORE[risk.likelihood] || 0 : 0;
   const impactScore = risk?.impact ? IMPACT_SCORE[risk.impact] || 0 : 0;
@@ -320,6 +351,72 @@ export default function RiskDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {id && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Edit className="h-4 w-4" /> خطة المعالجة
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs">المسؤول</Label>
+                <Input
+                  value={treatment.treatmentOwner}
+                  onChange={(e) => setTreatment((t) => ({ ...t, treatmentOwner: e.target.value }))}
+                  placeholder="اسم المسؤول"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">تاريخ الاستحقاق</Label>
+                <Input
+                  type="date"
+                  value={treatment.treatmentDueDate}
+                  onChange={(e) => setTreatment((t) => ({ ...t, treatmentDueDate: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">الحالة</Label>
+                <Select value={treatment.treatmentStatus} onValueChange={(v) => setTreatment((t) => ({ ...t, treatmentStatus: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="planned">مخطّطة</SelectItem>
+                    <SelectItem value="in_progress">قيد التنفيذ</SelectItem>
+                    <SelectItem value="done">مُنجزة</SelectItem>
+                    <SelectItem value="cancelled">مُلغاة</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">الخطة</Label>
+              <Textarea
+                value={treatment.treatmentPlan}
+                onChange={(e) => setTreatment((t) => ({ ...t, treatmentPlan: e.target.value }))}
+                placeholder="وصف خطوات المعالجة المقترحة..."
+                rows={3}
+                className="mt-1"
+              />
+            </div>
+            <div className="flex justify-end">
+              <GuardedButton
+                perm="governance:update"
+                size="sm"
+                disabled={treatmentMut.isPending}
+                onClick={() => treatmentMut.mutate(treatment)}
+                rateLimitAware
+              >
+                <Save className="h-4 w-4 ml-1" />
+                {treatmentMut.isPending ? "جاري الحفظ..." : "حفظ الخطة"}
+              </GuardedButton>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {id && <EntityComments entityType="risk" entityId={id} />}
       {id && <EntityTags entityType="risk" entityId={id} />}
