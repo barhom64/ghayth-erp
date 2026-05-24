@@ -4330,7 +4330,9 @@ CREATE TABLE public.credit_memos (
     "memoDate" date NOT NULL,
     "journalId" integer,
     "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "taxCode" character varying(20),
+    "taxInclusive" boolean DEFAULT false
 );
 
 
@@ -4873,7 +4875,9 @@ CREATE TABLE public.debit_memos (
     "memoDate" date NOT NULL,
     "journalId" integer,
     "createdBy" integer,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "taxCode" character varying(20),
+    "taxInclusive" boolean DEFAULT false
 );
 
 
@@ -7485,6 +7489,7 @@ CREATE TABLE public.goods_receipt_items (
     "contractId" integer,
     "productId" integer,
     "taxCode" character varying(20),
+    "taxInclusive" boolean DEFAULT false,
     "allocationRuleId" integer,
     "allocationStatus" character varying(20) DEFAULT 'unmapped'::character varying,
     "dimensionJson" jsonb,
@@ -8864,6 +8869,7 @@ CREATE TABLE public.invoice_lines (
     "umrahAgentId" integer,
     "productId" integer,
     "taxCode" character varying(20),
+    "taxInclusive" boolean DEFAULT false,
     "allocationRuleId" integer,
     "allocationStatus" character varying(20) DEFAULT 'unmapped'::character varying,
     "dimensionJson" jsonb,
@@ -8997,7 +9003,32 @@ CREATE TABLE public.invoices (
     "postedAt" timestamp without time zone,
     "zatcaReportedAt" timestamp with time zone,
     "zatcaLastError" text,
+    "taxCode" character varying(20),
+    "taxInclusive" boolean DEFAULT false,
     CONSTRAINT chk_invoices_status CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('sent'::character varying)::text, ('partially_paid'::character varying)::text, ('paid'::character varying)::text, ('overdue'::character varying)::text, ('void'::character varying)::text, ('rejected'::character varying)::text, ('cancelled'::character varying)::text])))
+);
+
+CREATE TABLE public.tax_codes (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    code character varying(20) NOT NULL,
+    name character varying(100) NOT NULL,
+    "nameEn" character varying(100),
+    rate numeric(7,4) DEFAULT 0 NOT NULL,
+    "taxType" character varying(30) NOT NULL,
+    "accountId" integer,
+    "inputAccountId" integer,
+    "isInclusiveDefault" boolean DEFAULT false,
+    "zatcaCategoryCode" character varying(10),
+    "zatcaExemptionReason" text,
+    description text,
+    "isActive" boolean DEFAULT true,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT tax_codes_company_code_uniq UNIQUE ("companyId", code),
+    CONSTRAINT tax_codes_type_check CHECK (("taxType")::text = ANY (ARRAY['standard'::text, 'zero'::text, 'exempt'::text, 'out_of_scope'::text, 'reverse_charge'::text])),
+    CONSTRAINT tax_codes_rate_check CHECK (rate >= 0 AND rate <= 100)
 );
 
 
@@ -12269,6 +12300,7 @@ CREATE TABLE public.purchase_order_items (
     "contractId" integer,
     "productId" integer,
     "taxCode" character varying(20),
+    "taxInclusive" boolean DEFAULT false,
     "allocationRuleId" integer,
     "allocationStatus" character varying(20) DEFAULT 'unmapped'::character varying,
     "dimensionJson" jsonb,
@@ -12413,6 +12445,7 @@ CREATE TABLE public.purchase_request_items (
     "contractId" integer,
     "projectId" integer,
     "taxCode" character varying(20),
+    "taxInclusive" boolean DEFAULT false,
     "allocationRuleId" integer,
     "allocationStatus" character varying(20) DEFAULT 'unmapped'::character varying,
     "dimensionJson" jsonb,

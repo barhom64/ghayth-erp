@@ -67,12 +67,25 @@ const createInvoiceSchema = z.object({
     umrahAgentId: z.coerce.number().optional(),
     productId: z.coerce.number().optional(),
     taxCode: z.string().optional(),
+    // When true, `unitPrice` (and `total` if given) are gross of VAT
+    // and the helper extracts net + tax. When false (or omitted), the
+    // values are net and tax is added on top. Default inherits from
+    // the invoice header's `taxInclusive` flag (set on the outer
+    // schema below). This is the Daftra-style flow.
+    taxInclusive: z.boolean().optional(),
     allocationRuleId: z.coerce.number().optional(),
     dimensionJson: z.record(z.any()).optional(),
     manualOverrideReason: z.string().optional(),
     total: z.coerce.number().optional(),
   })).min(1, "يجب إضافة بند واحد على الأقل").optional(),
+  // `vatRate` retained for backwards compatibility — old API callers
+  // that don't know about tax_codes can still pass a literal rate.
+  // New flow: pick a `taxCode` (header default) and the line math is
+  // driven by tax_codes.rate. taxInclusive declares whether the entered
+  // amount is gross or net.
   vatRate: z.coerce.number().optional(),
+  taxCode: z.string().optional(),
+  taxInclusive: z.boolean().optional(),
   dueDate: z.string().optional(),
   date: z.string().optional(),
   description: z.string().max(1000).optional(),
@@ -341,12 +354,33 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
     const parsed = zodParse(createInvoiceSchema.safeParse(req.body));
     const {
       clientId, description, subtotal, total: rawTotal, lines: lineItems,
-      vatRate: rawVatRate, dueDate, date: invoiceBodyDate, paymentTermsDays, branchId, companyId: bodyCompanyId, notes,
+      vatRate: rawVatRate, taxCode: headerTaxCode, taxInclusive: headerTaxInclusive,
+      dueDate, date: invoiceBodyDate, paymentTermsDays, branchId, companyId: bodyCompanyId, notes,
       isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason,
       // as-any-reason: justified-pragmatic - destructuring on zodParse inferred type whose property names are not directly indexable at the call site
     } = parsed as any;
-    const vatRate = rawVatRate ?? await getCompanyVatRate(bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId);
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
+
+    // Tax-code-driven flow (preferred):
+    //   - The body declares a header `taxCode` (e.g. "VAT15"). Lines may
+    //     override per-line.
+    //   - `taxInclusive` says whether the input amounts are gross or net.
+    //   - tax_codes.rate is the source of truth — no scattered `15`
+    //     literals.
+    // Backwards-compat: when no taxCode is provided, fall back to the
+    // legacy `vatRate` numeric the route used to expect.
+    const { computeTaxFromTaxCode, splitFromRate, getDefaultTaxCode } = await import("../lib/taxCodes.js");
+    let defaultTaxCode = headerTaxCode as string | undefined;
+    let defaultTaxInclusive: boolean = headerTaxInclusive ?? false;
+    if (!defaultTaxCode && rawVatRate == null) {
+      // No explicit choice — auto-pick the tenant's standard code.
+      const def = await getDefaultTaxCode(effectiveCompanyId);
+      if (def) {
+        defaultTaxCode = def.code;
+        defaultTaxInclusive = def.isInclusiveDefault;
+      }
+    }
+    const vatRate = rawVatRate ?? await getCompanyVatRate(effectiveCompanyId);
 
     if (!clientId) {
       throw new ValidationError("العميل مطلوب لإنشاء الفاتورة", { field: "clientId", fix: "حدد العميل الذي ستُصدر له الفاتورة" });
@@ -429,6 +463,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       umrahAgentId: number | null;
       productId: number | null;
       taxCode: string | null;
+      taxInclusive: boolean;
       allocationRuleId: number | null;
       allocationStatus: string;
       dimensionJson: Record<string, unknown> | null;
@@ -444,19 +479,58 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
         if (!line.quantity || line.quantity <= 0) {
           throw new ValidationError("الكمية يجب أن تكون أكبر من صفر", { field: "lines.quantity", fix: "أدخل كمية موجبة لكل بند" });
         }
-        const lineTotal = roundTo2(Number(line.quantity) * Number(line.unitPrice));
-        const lineVatRate = (line as any).vatRate != null ? Number((line as any).vatRate) : Number(vatRate);
-        const lineVat = (line as any).vatAmount != null
-          ? roundTo2(Number((line as any).vatAmount))
-          : roundTo2(lineTotal * (lineVatRate / 100));
-        baseAmount += lineTotal;
+        const rawLineAmount = roundTo2(Number(line.quantity) * Number(line.unitPrice));
+
+        // Tax math — three flows in priority order:
+        //
+        //   1. Line declares a taxCode → look it up, use its rate +
+        //      ZATCA category. Operator can override inclusive flag
+        //      per line (e.g. mixed inclusive + exclusive on one
+        //      invoice).
+        //   2. Header declares a taxCode → inherit it.
+        //   3. Legacy fallback → use the line's `vatRate` literal or
+        //      the company default.
+        //
+        // `rawLineAmount` is the input amount (qty × unitPrice). The
+        // helper produces a balanced { net, tax, gross } that we
+        // store as { lineTotal, vatAmount, lineGross }.
+        const effectiveTaxCode = (line.taxCode ?? defaultTaxCode) as string | undefined;
+        const lineInclusive = (line as any).taxInclusive != null
+          ? Boolean((line as any).taxInclusive)
+          : defaultTaxInclusive;
+        let lineNet: number;
+        let lineVat: number;
+        if (effectiveTaxCode) {
+          const split = await computeTaxFromTaxCode({
+            companyId: effectiveCompanyId,
+            amount: rawLineAmount,
+            taxInclusive: lineInclusive,
+            taxCode: effectiveTaxCode,
+          });
+          lineNet = split.net;
+          lineVat = split.tax;
+        } else {
+          // Legacy path — preserves the old `vatRate` literal behaviour.
+          const lineVatRate = (line as any).vatRate != null ? Number((line as any).vatRate) : Number(vatRate);
+          if (lineInclusive) {
+            const split = splitFromRate(rawLineAmount, true, "LEGACY", lineVatRate);
+            lineNet = split.net;
+            lineVat = split.tax;
+          } else {
+            lineNet = rawLineAmount;
+            lineVat = (line as any).vatAmount != null
+              ? roundTo2(Number((line as any).vatAmount))
+              : roundTo2(rawLineAmount * (lineVatRate / 100));
+          }
+        }
+        baseAmount += lineNet;
         validatedLines.push({
           description: line.description ?? "",
           quantity: Number(line.quantity),
           unitPrice: Number(line.unitPrice),
-          lineTotal,
+          lineTotal: lineNet,
           vatAmount: lineVat,
-          lineGross: lineTotal + lineVat,
+          lineGross: roundTo2(lineNet + lineVat),
           accountId: line.accountId ?? null,
           accountCode: line.accountCode ?? null,
           costCenterId: line.costCenterId ?? null,
@@ -472,7 +546,8 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
           umrahSeasonId: line.umrahSeasonId ?? null,
           umrahAgentId: line.umrahAgentId ?? null,
           productId: line.productId ?? null,
-          taxCode: line.taxCode ?? null,
+          taxCode: effectiveTaxCode ?? null,
+          taxInclusive: lineInclusive,
           allocationRuleId: line.allocationRuleId ?? null,
           // resolved → caller mapped this line directly to a specific
           // account; unmapped → falls back to the company-level
@@ -531,13 +606,17 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       const invResult = await client.query(
         `INSERT INTO invoices ("companyId","branchId","clientId",ref,description,
                 subtotal,"vatRate","vatAmount",total,"paidAmount",status,"dueDate","createdBy",notes,
-                "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason","costCenter")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
+                "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason","costCenter",
+                "taxCode","taxInclusive")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
         [effectiveCompanyId, branchId ?? scope.branchId, clientId ?? null, ref, description ?? null,
           baseAmount, Number(vatRate), vatAmount, total, finalDueDate, scope.activeAssignmentId, notes ?? null,
           isTaxLinked ? true : false, invoiceTypeCode ?? "388", taxCategoryCode ?? "S", exemptionReason ?? null,
           // as-any-reason: justified-pragmatic - defensive read of optional costCenter field not yet in createInvoiceSchema; behavior unchanged
-          (req.body as any).costCenter ?? null]
+          (req.body as any).costCenter ?? null,
+          defaultTaxCode ?? null,
+          defaultTaxInclusive,
+        ]
       );
       insertId = invResult.rows[0].id;
 
@@ -546,7 +625,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
         // payload (migration 200). Lines that didn't specify an account
         // land as allocationStatus='unmapped' — the approval flow falls
         // back to the company-level invoice_revenue for those.
-        const COLS_PER_ROW = 27;
+        const COLS_PER_ROW = 28;
         const valuesSql: string[] = [];
         const params: unknown[] = [];
         for (const l of validatedLines) {
@@ -559,7 +638,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
             l.accountId, l.accountCode, l.costCenterId, l.activityType,
             l.projectId, l.vehicleId, l.propertyId, l.unitId, l.assetId,
             l.employeeId, l.driverId, l.contractId, l.umrahSeasonId, l.umrahAgentId,
-            l.productId, l.taxCode, l.allocationRuleId, l.allocationStatus,
+            l.productId, l.taxCode, l.taxInclusive, l.allocationRuleId, l.allocationStatus,
             l.dimensionJson ? JSON.stringify(l.dimensionJson) : null,
             l.manualOverrideReason
           );
@@ -570,7 +649,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
              "accountId","accountCode","costCenterId","activityType",
              "projectId","vehicleId","propertyId","unitId","assetId",
              "employeeId","driverId","contractId","umrahSeasonId","umrahAgentId",
-             "productId","taxCode","allocationRuleId","allocationStatus",
+             "productId","taxCode","taxInclusive","allocationRuleId","allocationStatus",
              "dimensionJson","manualOverrideReason"
            )
            VALUES ${valuesSql.join(",")}`,
