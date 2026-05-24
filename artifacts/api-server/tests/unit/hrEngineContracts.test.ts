@@ -54,7 +54,10 @@ describe("hrEngine GL account resolution patterns", () => {
 
   it("postPayrollRunGL (accrual) resolves expense + salary_payable + GOSI/deductions payable", () => {
     const idx = ENGINE_SRC.indexOf("async postPayrollRunGL");
-    const section = ENGINE_SRC.slice(idx, idx + 1800);
+    // Slice to the next async method boundary so the assertion stays
+    // correct as the body grows (breakdown comment block, etc).
+    const next = ENGINE_SRC.indexOf("  async ", idx + 10);
+    const section = ENGINE_SRC.slice(idx, next > idx ? next : idx + 5000);
     expect(section).toContain("payroll_salary_expense");
     expect(section).toContain("payroll_gosi_expense");
     expect(section).toContain("payroll_overtime_expense");
@@ -198,7 +201,8 @@ describe("hrEngine debit/credit structure", () => {
 
   it("postPayrollRunGL: filters out zero-value lines", () => {
     const idx = ENGINE_SRC.indexOf("async postPayrollRunGL");
-    const section = ENGINE_SRC.slice(idx, idx + 3500);
+    const next = ENGINE_SRC.indexOf("  async ", idx + 10);
+    const section = ENGINE_SRC.slice(idx, next > idx ? next : idx + 6000);
     expect(section).toContain(".filter(l => l.debit > 0 || l.credit > 0)");
   });
 
