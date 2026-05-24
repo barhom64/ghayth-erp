@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -513,6 +514,49 @@ export function FormCheckboxField({
             id={name}
             checked={field.value === true}
             onCheckedChange={(v) => field.onChange(v === true)}
+            disabled={disabled}
+          />
+          <div className="flex flex-col">
+            <Label htmlFor={name} className="cursor-pointer">{label}</Label>
+            {description && (
+              <span className="text-xs text-muted-foreground">{description}</span>
+            )}
+          </div>
+        </div>
+      )}
+    />
+  );
+}
+
+/**
+ * Boolean switch field. Same role as FormCheckboxField but with the
+ * shadcn `<Switch>` UI — used for settings-style "enable/disable"
+ * toggles like "يقبل الحركة (ترحيل)" or "حساب تحليلي" on the chart
+ * of accounts editor.
+ */
+export interface FormSwitchFieldProps {
+  name: string;
+  label: string;
+  description?: string;
+  disabled?: boolean;
+}
+export function FormSwitchField({
+  name,
+  label,
+  description,
+  disabled,
+}: FormSwitchFieldProps) {
+  const { control } = useFormContext();
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <div className="flex items-start gap-3 pt-6">
+          <Switch
+            id={name}
+            checked={field.value === true}
+            onCheckedChange={(v) => field.onChange(v)}
             disabled={disabled}
           />
           <div className="flex flex-col">
