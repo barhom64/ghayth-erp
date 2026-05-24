@@ -301,3 +301,47 @@ describe("PG-1/2 — Scheduler GL routing through financialEngine", () => {
     expect(RECURRING_PROC).not.toMatch(/from\s+["'][^"']*businessHelpers[^"']*["'][^;]*createJournalEntry/);
   });
 });
+
+// ─── VL-1 — Voucher PATCH guard contract ────────────────────────────────────
+// PATCH /vouchers/:id was a generic "edit description on any journal_entries
+// row" — no status guard, no period gate, and no ref-prefix filter. An
+// approved voucher's description could be silently rewritten in place,
+// breaking the "approved JE is immutable" audit invariant. The fix mirrors
+// PD-4 on PATCH /expenses/:id (which already had the equivalent guards):
+//   • Ref-prefix filter so only RV/PV rows are addressable from this route
+//   • Status guard rejecting edits on approved/rejected/cancelled/reversed
+//   • Period gate rejecting edits when the voucher's `date` sits in a
+//     closed period (the eventual approval would be blocked by H2 anyway)
+
+describe("VL-1 — PATCH /vouchers/:id guards", () => {
+  it("filters by RV/PV ref prefix on both SELECT and UPDATE (no leakage to other JE types)", () => {
+    const idx = JRN_ROUTE.indexOf('journalRouter.patch("/vouchers/:id"');
+    expect(idx).toBeGreaterThan(-1);
+    const block = JRN_ROUTE.slice(idx, idx + 3500);
+    // Both the precondition SELECT and the UPDATE carry the ref filter.
+    // A regression that drops one would let an expense / manual-journal
+    // id pass through and silently rewrite that row's description.
+    const refClauseMatches = block.match(/ref LIKE 'RV%' OR ref LIKE 'PV%'/g) ?? [];
+    expect(refClauseMatches.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("rejects edits on approved / terminal-state vouchers (VL-1)", () => {
+    const idx = JRN_ROUTE.indexOf('journalRouter.patch("/vouchers/:id"');
+    const block = JRN_ROUTE.slice(idx, idx + 3500);
+    expect(block).toContain("TERMINAL_VOUCHER_STATES");
+    expect(block).toContain('"approved"');
+    expect(block).toContain('"rejected"');
+    expect(block).toContain('"cancelled"');
+    expect(block).toContain('"reversed"');
+    expect(block).toContain("ConflictError");
+  });
+
+  it("runs the financial-period gate against the voucher's accounting date", () => {
+    const idx = JRN_ROUTE.indexOf('journalRouter.patch("/vouchers/:id"');
+    const block = JRN_ROUTE.slice(idx, idx + 3500);
+    // Period check by the voucher's `date` (ledger date), not `createdAt`
+    // (insertion time) — H2/H4 convention.
+    expect(block).toContain('date::text AS "entryDate"');
+    expect(block).toContain("checkFinancialPeriodOpen(scope.companyId, existing.entryDate)");
+  });
+});

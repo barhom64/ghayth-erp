@@ -1000,7 +1000,55 @@ journalRouter.patch("/vouchers/:id", authorize({ feature: "finance.journal", act
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { description } = zodParse(updateDescriptionSchema.safeParse(req.body ?? {}));
-    const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET description = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`, [description, id, scope.companyId]);
+
+    // VL-1 — fetch the voucher (and only a voucher, per the RV/PV ref
+    // filter) so we can verify status + period BEFORE any UPDATE. The
+    // ref filter is critical: without it, the route was a generic
+    // "edit description on any journal_entries row" — sending an
+    // expense or manual-journal id would silently rewrite that row's
+    // description, bypassing every domain-specific guard.
+    const [existing] = await rawQuery<{ status: string; entryDate: string }>(
+      `SELECT status, date::text AS "entryDate"
+         FROM journal_entries
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          AND (ref LIKE 'RV%' OR ref LIKE 'PV%')`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("السند غير موجود");
+
+    // VL-1 (mirrors PD-4 on PATCH /expenses/:id): an approved or terminal-
+    // state voucher is immutable — corrections happen via a reversing
+    // entry through POST /journal/:id/reverse, never an in-place edit.
+    // Pre-approval states (draft, pending_approval, returned) are still
+    // editable.
+    const TERMINAL_VOUCHER_STATES = new Set([
+      "approved", "rejected", "cancelled", "reversed", "posted",
+    ]);
+    if (TERMINAL_VOUCHER_STATES.has(existing.status)) {
+      throw new ConflictError(
+        `لا يمكن تعديل سند بحالة "${existing.status}" — التصحيح يكون عبر قيد عاكس`,
+        { field: "status", fix: "أنشئ قيداً عاكساً عبر POST /journal/:id/reverse بدلاً من تعديل السند المُرحَّل" }
+      );
+    }
+
+    // Period gate: even a draft voucher whose date sits in a now-closed
+    // period must not be edited — the eventual approval would be blocked
+    // by H2 anyway. Catching it here gives the operator a clear error
+    // pointing at the period, not a confusing "approval failed" later.
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, existing.entryDate);
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تعديل سند بتاريخ في فترة مُقفلة: ${periodCheck.periodName ?? existing.entryDate}`,
+        { field: "financialPeriod", meta: { periodName: periodCheck.periodName } }
+      );
+    }
+
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `UPDATE journal_entries SET description = $1
+        WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL
+          AND (ref LIKE 'RV%' OR ref LIKE 'PV%') RETURNING *`,
+      [description, id, scope.companyId]
+    );
     if (!row) throw new NotFoundError("السند غير موجود");
     res.json(row);
   } catch (err) {
@@ -1461,6 +1509,26 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
         throw new ValidationError("لا يمكن عكس قيد هو أصلاً قيد عاكس");
       }
 
+      // Defense in depth — even if `reversedById` was manually
+      // unset on the original (legacy data, partial recovery), make
+      // sure no OTHER reversal already references this id. Two
+      // active reversals on the same original double-reverse the
+      // chart_of_accounts deltas and corrupt the trial balance.
+      const { rows: [existingReversal] } = await client.query(
+        `SELECT id, ref FROM journal_entries
+          WHERE "reversalOfId" = $1
+            AND "companyId" = $2
+            AND "deletedAt" IS NULL
+          LIMIT 1`,
+        [id, scope.companyId]
+      );
+      if (existingReversal) {
+        throw new ValidationError(
+          `هذا القيد معكوس مسبقاً بالقيد #${existingReversal.id} (${existingReversal.ref}) — لا يمكن إنشاء عكس ثانٍ`,
+          { field: "id", fix: "افحص القيد العاكس القائم أو اعكسه بدلاً من إنشاء واحد جديد" }
+        );
+      }
+
       const { rows: originalLines } = await client.query(
         `SELECT "accountCode", debit, credit, description, "costCenter", "departmentId", "projectId", "employeeId"
          FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL ORDER BY id ASC`,
@@ -1534,6 +1602,44 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
             AND "deletedAt" IS NULL`,
         [id, scope.companyId]
       );
+
+      // Symmetric rollback for the customer side: when reversing a
+      // payment JE that was sourced from a customer invoice, decrement
+      // the invoice's paidAmount + recompute its status. Without this,
+      // the invoice still shows as paid/partial after the reversal —
+      // AR aging + customer statements are wrong.
+      //
+      // The payment JE was created in finance-invoices.ts with
+      // sourceType='invoice' AND type='payment'. The amount to roll
+      // back is the JE's total debit (the cash side of the original
+      // posting).
+      if (original.sourceType === "invoice" && original.type === "payment" && original.sourceId) {
+        const { rows: [paymentTotals] } = await client.query(
+          `SELECT COALESCE(SUM(debit), 0)::text AS total
+             FROM journal_lines
+            WHERE "journalId" = $1 AND "deletedAt" IS NULL`,
+          [id]
+        );
+        const paidDelta = Number(paymentTotals?.total ?? 0);
+        if (paidDelta > 0) {
+          // Decrement paidAmount but never below zero (defensive
+          // floor; matches the existing GREATEST() idiom elsewhere
+          // in the finance code). Re-derive status from the
+          // resulting balance.
+          await client.query(
+            `UPDATE invoices
+                SET "paidAmount" = GREATEST(COALESCE("paidAmount",0) - $1, 0),
+                    status = CASE
+                      WHEN GREATEST(COALESCE("paidAmount",0) - $1, 0) >= total - 0.01 THEN 'paid'
+                      WHEN GREATEST(COALESCE("paidAmount",0) - $1, 0) > 0           THEN 'partial'
+                      ELSE 'draft'
+                    END,
+                    "updatedAt" = NOW()
+              WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+            [paidDelta, original.sourceId, scope.companyId]
+          );
+        }
+      }
 
       return { newJournalId: newId, newRef, originalRef: original.ref as string };
     });
