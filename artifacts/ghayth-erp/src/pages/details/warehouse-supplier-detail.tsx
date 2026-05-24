@@ -231,6 +231,9 @@ export default function WarehouseSupplierDetail() {
               ref={`SUP-${id}`}
               date={formatDateAr(supplier.createdAt)}
               sections={printSections}
+              entityType="vendor"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           )}
           <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!supplier}>

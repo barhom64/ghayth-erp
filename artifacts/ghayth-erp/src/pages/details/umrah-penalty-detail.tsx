@@ -288,6 +288,9 @@ export default function UmrahPenaltyDetail() {
             ref={`PEN-${id}`}
             date={formatDateAr(penalty.createdAt)}
             sections={printSections}
+            entityType="umrah_penalty"
+            entityId={id ?? 0}
+            formats={["a4"]}
           />
         ) : undefined
       }

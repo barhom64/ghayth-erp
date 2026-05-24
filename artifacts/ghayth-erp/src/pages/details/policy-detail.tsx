@@ -243,6 +243,9 @@ export default function PolicyDetail() {
               ref={`POL-${id}`}
               date={formatDateAr(policy.createdAt)}
               sections={printSections}
+              entityType="policy"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           )}
           <GuardedButton

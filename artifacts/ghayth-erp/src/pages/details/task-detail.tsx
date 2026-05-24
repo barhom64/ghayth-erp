@@ -215,6 +215,9 @@ export default function TaskDetail() {
             title={task?.title || `مهمة #${id}`}
             ref={id ? `TSK-${id}` : undefined}
             sections={printSections}
+            entityType="task"
+            entityId={id ?? 0}
+            formats={["a4"]}
           />
         </div>
       }

@@ -21,9 +21,9 @@ import {
   FormSelectField,
   FormGrid,
 } from "@workspace/ui-core";
-import { Plus, FileText, FileSignature, Send, Eye } from "lucide-react";
+import { Plus, FileText, FileSignature, Send } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { PrintPreviewModal } from "@workspace/report-kit";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
 import { useAppContext } from "@/contexts/app-context";
@@ -56,7 +56,6 @@ const LETTER_TYPE_OPTIONS = Object.entries(LETTER_TYPES).map(([value, label]) =>
 export default function OfficialLettersPage() {
   const [, navigate] = useLocation();
   const [showForm, setShowForm] = useState(false);
-  const [previewLetter, setPreviewLetter] = useState<any>(null);
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["official-letters"], "/hr/official-letters");
   const items = data?.data || [];
   // HR-U4 — successMessage بدل buildErrorToast اليدوي.
@@ -89,9 +88,14 @@ export default function OfficialLettersPage() {
       header: "إجراءات",
       render: (l) => (
         <div className="flex gap-1">
-          <Button variant="ghost" size="sm" onClick={() => setPreviewLetter(l)} title="معاينة وطباعة">
-            <Eye className="h-4 w-4" />
-          </Button>
+          <PrintButton
+            entityType="official_letter"
+            entityId={l.id}
+            formats={["a4"]}
+            label=""
+            variant="ghost"
+            size="sm"
+          />
         </div>
       ),
     },
@@ -204,47 +208,6 @@ export default function OfficialLettersPage() {
 
       />
 
-      {previewLetter && (
-        <PrintPreviewModal
-          open={!!previewLetter}
-          onClose={() => setPreviewLetter(null)}
-          branch={branch}
-          documentTitle={LETTER_TYPES[previewLetter.type] || "خطاب رسمي"}
-          documentRef={previewLetter.ref || `LTR-${previewLetter.id}`}
-          documentDate={previewLetter.createdAt ? formatDateAr(previewLetter.createdAt) : ""}
-        >
-          <div style={{ marginBottom: "24px" }}>
-            <h3 style={{ fontSize: "14pt", fontWeight: "bold", marginBottom: "12px" }}>{previewLetter.subject}</h3>
-            {previewLetter.employeeName && (
-              <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-                <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                  <span className="info-label" style={{ color: "#555" }}>الموظف:</span>
-                  <span className="info-value" style={{ fontWeight: 600 }}>{previewLetter.employeeName}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {previewLetter.content && (
-            <div className="letter-body" style={{ whiteSpace: "pre-wrap", lineHeight: 2, fontSize: "12pt", margin: "20px 0" }}>
-              {previewLetter.content}
-            </div>
-          )}
-
-          <div className="signature-area" style={{ marginTop: "60px", display: "flex", justifyContent: "space-between" }}>
-            <div className="signature-box" style={{ textAlign: "center", minWidth: "150px" }}>
-              <div className="signature-line" style={{ borderTop: "1px solid #333", marginTop: "40px", paddingTop: "4px", fontSize: "9pt" }}>
-                توقيع المسؤول
-              </div>
-            </div>
-            <div className="signature-box" style={{ textAlign: "center", minWidth: "150px" }}>
-              <div className="signature-line" style={{ borderTop: "1px solid #333", marginTop: "40px", paddingTop: "4px", fontSize: "9pt" }}>
-                الختم الرسمي
-              </div>
-            </div>
-          </div>
-        </PrintPreviewModal>
-      )}
     </PageShell>
   );
 }

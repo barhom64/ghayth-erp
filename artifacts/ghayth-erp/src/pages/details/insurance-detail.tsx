@@ -298,6 +298,9 @@ export default function InsuranceDetail() {
               ref={`INS-${id}`}
               date={formatDateAr(insurance.startDate || insurance.createdAt)}
               sections={printSections}
+              entityType="insurance"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           )}
           <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />

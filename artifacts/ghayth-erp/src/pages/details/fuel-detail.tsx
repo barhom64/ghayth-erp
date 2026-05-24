@@ -232,6 +232,9 @@ export default function FuelDetail() {
             ref={item?.ref || `FUEL-${id}`}
             date={formatDateAr(item?.date || item?.createdAt)}
             sections={printSections}
+            entityType="fuel"
+            entityId={id ?? 0}
+            formats={["a4"]}
           />
           <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>
