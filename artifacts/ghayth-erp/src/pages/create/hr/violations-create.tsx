@@ -112,7 +112,7 @@ const DEFAULTS: ViolationForm = {
 
 // ─── Draft persistence (FormShell-compatible) ────────────────────────────────
 //
-// Replaces useAutoDraft with an approach that works inside FormShell's
+// Replaces the legacy auto-draft hook with an approach that works inside FormShell's
 // FormProvider. Two pieces:
 //
 //   1. loadDraftDefaults() — synchronous, called once to seed defaultValues

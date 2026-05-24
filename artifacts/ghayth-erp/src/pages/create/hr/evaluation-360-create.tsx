@@ -219,7 +219,7 @@ export default function Evaluation360Create() {
 }
 
 // Debounced auto-draft persistence subcomponent. Replaces the
-// useAutoDraft hook's localStorage write loop. Subscribes to all
+// legacy auto-draft hook's localStorage write loop. Subscribes to all
 // form values via useWatch and writes a JSON snapshot to
 // localStorage after `debounceMs` of quiet — same behaviour as the
 // hook, just driven by RHF state instead of useState.
