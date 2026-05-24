@@ -6675,6 +6675,7 @@ CREATE TABLE public.financial_periods (
     "reopenReason" text,
     "lockedAt" timestamp without time zone,
     "lockedBy" integer,
+    "lockReason" text,
     "yearEndClosed" boolean DEFAULT false NOT NULL,
     "yearEndClosedAt" timestamp with time zone,
     "yearEndClosingJournalId" integer,

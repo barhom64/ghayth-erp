@@ -325,6 +325,67 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", authorize({ feature
   }
 });
 
+// PER-3 — POST /fiscal-periods-v2/:id/lock
+// Audit-lock a fiscal period after year-end + external audit. `locked`
+// is a stricter state than `closed`: `checkFinancialPeriodOpen` and
+// `systemGovernor` both already treat it as posting-blocking (see
+// businessHelpers.ts:1219 and systemGovernor.ts:29), and unlike `closed`
+// there is intentionally NO reverse route — once a period is locked,
+// the only way to mutate the ledger inside its date range is the
+// audited fiscal-period reopen flow (which requires escalation since
+// it transitions closed→open, NOT locked→open). The CHECK constraint
+// on financial_periods.status already enumerates 'locked' as a valid
+// state; we just expose the transition that was previously
+// unreachable from the API.
+financeHardeningRouter.post("/fiscal-periods-v2/:id/lock", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+
+    const periodId = parseId(req.params.id, "id");
+    // Reuse the same shape the reopen schema enforces — a written
+    // reason is mandatory so the audit trail captures "WHY was this
+    // period locked" alongside who and when.
+    const { reason } = zodParse(reopenFiscalPeriodSchema.safeParse(req.body ?? {}));
+
+    const [period] = await rawQuery<Record<string, unknown>>(
+      `SELECT name FROM financial_periods WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [periodId, scope.companyId]
+    );
+    if (!period) throw new NotFoundError("الفترة غير موجودة");
+
+    const updated = await applyTransition<Record<string, unknown>>({
+      entity: "financial_periods",
+      id: periodId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "fiscal_period.locked",
+      // closed → locked. A period cannot be locked directly from open;
+      // it must first go through the audited close workflow. This
+      // mirrors the reopen route's `closed → open` direction.
+      fromStates: ["closed"],
+      toState: "locked",
+      reason,
+      extraWhere: `"deletedAt" IS NULL`,
+      setExtras: {
+        lockedAt: { raw: "NOW()" },
+        lockedBy: scope.activeAssignmentId,
+        lockReason: reason,
+      },
+      after: { name: period.name, reason },
+    });
+
+    res.json({
+      message: `تم قفل الفترة المالية "${period.name}" بشكل دائم`,
+      reason,
+      status: updated.status,
+      event: "fiscal_period.locked",
+    });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Lock fiscal period error:");
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MANUAL JOURNAL APPROVAL WORKFLOW
 // draft → pending_review → approved → posted
