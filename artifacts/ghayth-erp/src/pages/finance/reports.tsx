@@ -14,7 +14,7 @@ import {
   ArrowDownCircle, ArrowUpCircle, BookOpen, AlertTriangle, Download,
   Users, BarChart2, PieChart, FileText, Printer, ChevronDown, ChevronRight
 } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, currentPeriodRiyadh } from "@/lib/formatters";
 import {
   DataTable,
   type DataTableColumn,
@@ -931,8 +931,7 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
 }
 
 function BudgetVariance() {
-  const now = new Date();
-  const [period, setPeriod] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  const [period, setPeriod] = useState(currentPeriodRiyadh());
   const { data, isLoading, isError } = useApiQuery<any>(["budget-variance", period], `/finance/reports/budget-variance?period=${period}`);
   const rows = data?.data || [];
   const summary = data?.summary || {};
