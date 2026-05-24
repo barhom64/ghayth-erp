@@ -10,7 +10,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import { LOAN_TYPES } from "@/lib/hr-type-maps";
 import { Banknote, Info, Calculator, AlertTriangle } from "lucide-react";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
@@ -88,11 +88,13 @@ export default function LoansCreate() {
     }
   };
 
-  // حساب فترة بدء الخصم الافتراضية
+  // حساب فترة بدء الخصم الافتراضية — الشهر التالي بتقويم الرياض
   const defaultPeriod = useMemo(() => {
-    const now = new Date();
-    const y = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
-    const m = now.getMonth() === 11 ? 1 : now.getMonth() + 2;
+    const currentMonth = Number(currentMonthPaddedRiyadh());
+    const currentYear = currentYearRiyadh();
+    const isDec = currentMonth === 12;
+    const y = isDec ? currentYear + 1 : currentYear;
+    const m = isDec ? 1 : currentMonth + 1;
     return `${y}-${String(m).padStart(2, "0")}`;
   }, []);
 
