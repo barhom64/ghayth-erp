@@ -6434,7 +6434,10 @@ CREATE TABLE public.supplier_payment_allocations (
     notes text,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "createdBy" integer,
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "whtAmount" numeric(18,2) DEFAULT 0,
+    "whtRate" numeric(7,4),
+    "whtCategory" character varying(20)
 );
 
 CREATE INDEX idx_spa_obligation
@@ -14001,7 +14004,31 @@ CREATE TABLE public.suppliers (
     status character varying(20) DEFAULT 'active'::character varying,
     "createdAt" timestamp without time zone DEFAULT now(),
     "deletedAt" timestamp with time zone,
-    category character varying(80)
+    category character varying(80),
+    "residencyStatus" character varying(20) DEFAULT 'resident'::character varying,
+    "taxResidenceCountry" character(2),
+    "defaultWhtRate" numeric(7,4),
+    "whtCategoryDefault" character varying(20),
+    CONSTRAINT suppliers_residency_check CHECK (("residencyStatus" IS NULL OR ("residencyStatus")::text = ANY (ARRAY['resident'::text, 'non_resident_gcc'::text, 'non_resident_treaty'::text, 'non_resident_other'::text])))
+);
+
+CREATE TABLE public.wht_categories (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    code character varying(20) NOT NULL,
+    name character varying(100) NOT NULL,
+    "nameEn" character varying(100),
+    rate numeric(7,4) DEFAULT 0 NOT NULL,
+    "appliesTo" character varying(40) NOT NULL,
+    "payableAccountId" integer,
+    description text,
+    "isActive" boolean DEFAULT true,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT wht_categories_company_code_uniq UNIQUE ("companyId", code),
+    CONSTRAINT wht_categories_rate_check CHECK (rate >= 0 AND rate <= 100),
+    CONSTRAINT wht_categories_applies_check CHECK (("appliesTo")::text = ANY (ARRAY['royalties'::text, 'technical_services'::text, 'management_fees'::text, 'dividends'::text, 'interest'::text, 'rent_movable'::text, 'telecommunications'::text, 'air_tickets'::text, 'freight'::text, 'insurance_premium'::text, 'other'::text]))
 );
 
 
