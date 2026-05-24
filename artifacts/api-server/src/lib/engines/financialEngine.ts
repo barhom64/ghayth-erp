@@ -160,6 +160,20 @@ class FinancialEngineImpl implements DomainEngine {
       params.push(request.status);
     }
     if (request.postingDate) {
+      // Both `date` (ledger/accounting date — drives the period gate, H2,
+      // H4, and the date-range filter on financial statements) AND
+      // `createdAt` (the column financial reports actually range-filter
+      // on per C2) must reflect the postingDate. `createJournalEntry`
+      // doesn't accept a date parameter today, so it INSERTs with the
+      // schema default (CURRENT_DATE); without this UPDATE the engine
+      // would leave `date` = today even when the caller back-dated the
+      // entry, breaking year-end close (#987) and any other back-dated
+      // posting (FX revaluation, inventory writeoff with a custom date,
+      // etc.). Path B (lib/gl/posting.ts) already writes both columns
+      // via `COALESCE($6::date, CURRENT_DATE)` at insert time — this is
+      // the Path-A mirror.
+      updates.push(`date = $${paramIdx++}`);
+      params.push(request.postingDate);
       updates.push(`"createdAt" = $${paramIdx++}`);
       params.push(request.postingDate);
     }
