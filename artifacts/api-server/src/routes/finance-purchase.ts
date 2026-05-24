@@ -1465,10 +1465,15 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     }
 
     const poIdNums = poIds.map((x: any) => Number(x)).filter((n: number) => !Number.isNaN(n));
+    // Pull each PO with the supplier's residency + WHT defaults in the
+    // same hop — the payment-run handler needs them to decide whether
+    // the buyer must withhold tax from each PO (Income Tax Law Art. 68).
     const pos = await rawQuery<Record<string, unknown>>(
-      `SELECT id, ref, "totalAmount", "supplierId", "branchId", status
-         FROM purchase_orders
-        WHERE id = ANY($1) AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      `SELECT po.id, po.ref, po."totalAmount", po."supplierId", po."branchId", po.status,
+              s."residencyStatus", s."defaultWhtRate", s."whtCategoryDefault"
+         FROM purchase_orders po
+         LEFT JOIN suppliers s ON s.id = po."supplierId" AND s."deletedAt" IS NULL
+        WHERE po.id = ANY($1) AND po."companyId" = $2 AND po."deletedAt" IS NULL`,
       [poIdNums, scope.companyId]
     );
     if (pos.length !== poIdNums.length) {
@@ -1486,6 +1491,56 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
       financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1100"),
     ]);
+
+    // ── WHT computation ─────────────────────────────────────────────────
+    // For each PO whose supplier is non-resident, withhold the configured
+    // rate (treaty / supplier-default / category) and route the held cash
+    // to the WHT-payable account so the next ZATCA filing can claim it.
+    // Resident suppliers short-circuit inside computeWHT → applies=false.
+    const { computeWHT } = await import("../lib/withholdingTax.js");
+    interface PoWht {
+      poId: number;
+      supplierId: number;
+      wht: number;
+      net: number;
+      rate: number;
+      category: string | null;
+      payableAccountCode: string | null;
+    }
+    const whtByPo: PoWht[] = [];
+    for (const po of pos) {
+      const supplierId = Number(po.supplierId);
+      if (!supplierId) continue;
+      const split = await computeWHT({
+        companyId: scope.companyId,
+        supplierId,
+        grossAmount: Number(po.totalAmount),
+      });
+      if (split.applies && split.wht > 0) {
+        whtByPo.push({
+          poId: Number(po.id),
+          supplierId,
+          wht: split.wht,
+          net: split.net,
+          rate: split.rate,
+          category: split.category,
+          payableAccountCode: split.payableAccountCode,
+        });
+      }
+    }
+    const totalWht = roundTo2(whtByPo.reduce((s, w) => s + w.wht, 0));
+    const netCashOut = roundTo2(totalPayment - totalWht);
+    // Bucket the WHT-payable credits by account code so a payment-run
+    // paying 50 POs to 30 different non-residents still produces one
+    // CR line per ZATCA-payable account (typically just '2330').
+    const whtPayableFallback = await financialEngine.resolveAccountCode(
+      scope.companyId, "wht_payable", "credit", "2330",
+    );
+    const whtCreditByAccount = new Map<string, number>();
+    for (const w of whtByPo) {
+      const code = w.payableAccountCode || whtPayableFallback;
+      whtCreditByAccount.set(code, roundTo2((whtCreditByAccount.get(code) ?? 0) + w.wht));
+    }
 
     // Persist a payment_runs header row (create table if missing)
     let runId: number | null = null;
@@ -1571,19 +1626,30 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     }
 
     // Post a single aggregated journal entry for the whole run, with one AP
-    // debit per PO so per-vendor subledger still reconciles.
+    // debit per PO so per-vendor subledger still reconciles. The cash credit
+    // is REDUCED by the total WHT withheld (the buyer doesn't actually
+    // pay it out — it sits in WHT payable until the next ZATCA filing).
+    //
+    //   DR AP        Σ po.totalAmount       (per-PO, full gross)
+    //        CR WHT Payable    Σ wht        (aggregated by payable account)
+    //        CR Cash           total − wht
     let journalId: number | null = null;
     const lines: any[] = [];
     for (const po of pos) {
       lines.push({ accountCode: apAccount, debit: Number(po.totalAmount), credit: 0, vendorId: po.supplierId });
     }
-    lines.push({ accountCode: cashAccount, debit: 0, credit: totalPayment });
+    for (const [code, amount] of whtCreditByAccount) {
+      lines.push({ accountCode: code, debit: 0, credit: amount });
+    }
+    lines.push({ accountCode: cashAccount, debit: 0, credit: netCashOut });
     const paymentRunJournalResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
       createdBy: scope.activeAssignmentId,
       ref: runRef,
-      description: `دفعة مجمّعة ${runRef}: ${pos.length} أمر شراء بإجمالي ${totalPayment}`,
+      description: totalWht > 0
+        ? `دفعة مجمّعة ${runRef}: ${pos.length} أمر شراء، إجمالي ${totalPayment} (نقد ${netCashOut} + استقطاع ${totalWht})`
+        : `دفعة مجمّعة ${runRef}: ${pos.length} أمر شراء بإجمالي ${totalPayment}`,
       sourceType: "payment_run",
       sourceId: runId ?? 0,
       sourceKey: `finance:payment_run:${runId}`,
@@ -1595,6 +1661,33 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     markIdempotencyReplay(req, res, paymentRunJournalResult.alreadyExists);
     if (journalId && runId) {
       await rawExecute(`UPDATE payment_runs SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, runId, scope.companyId]);
+    }
+
+    // Snapshot per-PO WHT onto supplier_payment_allocations so vendor
+    // statements + the next ZATCA WHT filing can reproduce exactly which
+    // payment withheld what. Only the PO that actually had WHT applied
+    // gets a row — skipping resident-supplier POs keeps the table sparse.
+    // Idempotent replay (alreadyExists) skips re-inserts.
+    if (journalId && whtByPo.length > 0 && !paymentRunJournalResult.alreadyExists) {
+      for (const w of whtByPo) {
+        await rawExecute(
+          `INSERT INTO supplier_payment_allocations
+             ("companyId","branchId","journalEntryId","obligationType","obligationId",
+              amount,"whtAmount","whtRate","whtCategory","createdBy")
+           VALUES ($1,$2,$3,'purchase_order',$4,$5,$6,$7,$8,$9)`,
+          [
+            scope.companyId,
+            scope.branchId ?? null,
+            journalId,
+            w.poId,
+            w.net,                  // amount actually paid (net)
+            w.wht,
+            w.rate,
+            w.category,
+            scope.activeAssignmentId ?? null,
+          ]
+        );
+      }
     }
 
     emitEvent({

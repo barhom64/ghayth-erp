@@ -19,7 +19,9 @@ describe("Fix #1 — invoices.journalEntryId now persisted on approve", () => {
     const idx = INVOICES.indexOf("journalId = result.journalId;");
     expect(idx).toBeGreaterThan(-1);
     const after = INVOICES.slice(idx, idx + 800);
-    expect(after).toMatch(/UPDATE invoices SET "journalEntryId" = \$1[\s\S]{0,200}WHERE id = \$2 AND "companyId" = \$3/);
+    // The UPDATE also sets cogsTotal (COGS wiring) so the placeholder
+    // numbers shift — assert structurally instead of pinning them.
+    expect(after).toMatch(/UPDATE invoices SET "journalEntryId" = \$1[\s\S]{0,200}WHERE id = \$\d+ AND "companyId" = \$\d+/);
   });
 });
 

@@ -9,10 +9,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { currentPeriodRiyadh } from "@/lib/formatters";
 
-const now = new Date();
 const DRAFT_KEY = "finance_budget_create";
-const INITIAL = { accountCode: "", period: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`, amount: "" };
+const INITIAL = { accountCode: "", period: currentPeriodRiyadh(), amount: "" };
 
 export default function BudgetCreate() {
   const [, setLocation] = useLocation();

@@ -883,6 +883,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         accountCode: string | null;
         accountId: number | null;
         lineTotal: string;
+        quantity: string;
         costCenterId: number | null;
         activityType: string | null;
         projectId: number | null;
@@ -899,6 +900,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         taxCode: string | null;
       }>(
         `SELECT id, "accountCode", "accountId", "lineTotal"::text AS "lineTotal",
+                quantity::text AS quantity,
                 "costCenterId", "activityType",
                 "projectId", "vehicleId", "propertyId", "unitId", "assetId",
                 "employeeId", "driverId", "contractId", "productId",
@@ -1062,6 +1064,51 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         } as any);
       }
 
+      // ── COGS planning (Audit P1 #7) ────────────────────────────────────
+      // For every invoice line carrying an inventoried productId, run the
+      // valuation picker (FIFO/LIFO/avg per product.costingMethod) to
+      // figure out which lots feed the sale. Returns the DR COGS / CR
+      // Inventory journal lines we splice into the same JE, plus the
+      // per-line snapshot we write back to invoice_lines (so a future
+      // sales-return reversal credits the SAME lots back).
+      const { planCogsForInvoice, applyStockMovements } = await import(
+        "../lib/inventory/cogsPosting.js"
+      );
+      const cogsPlan = await planCogsForInvoice(client as any, {
+        companyId: scope.companyId,
+        invoiceId: id,
+        branchId: scope.branchId ?? null,
+        lines: dimLines.rows.map((r) => ({
+          invoiceLineId: r.id,
+          quantity: Number(r.quantity ?? 0),
+          productId: r.productId,
+          costCenterId: r.costCenterId,
+          projectId: r.projectId,
+          employeeId: r.employeeId,
+        })),
+      });
+      // Hard-block approval on insufficient stock — selling what we
+      // don't have is the bug we're trying to fix, not a fall-through
+      // case. `product_not_tracked` etc. are warnings (logged); only
+      // insufficient_stock is fatal.
+      const shortages = cogsPlan.warnings.filter((w) => w.reason === "insufficient_stock");
+      if (shortages.length > 0) {
+        throw new ValidationError(
+          `مخزون غير كافٍ للسطر #${shortages[0].invoiceLineId}: ${shortages[0].detail ?? ""}`.trim(),
+          { field: "invoice_lines", meta: { shortages } },
+        );
+      }
+      // Other warnings (product_not_found / product_not_tracked / no_active_lots
+      // / no_cogs_account / no_inventory_account) are non-fatal but logged so
+      // ops can clean up the master data. The invoice posts revenue but no
+      // COGS for those lines.
+      if (cogsPlan.warnings.length > 0) {
+        logger.warn(
+          { invoiceId: id, warnings: cogsPlan.warnings },
+          "invoice approve: some lines skipped COGS posting",
+        );
+      }
+
       const result = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId || 0,
@@ -1076,6 +1123,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           { accountCode: invArCode, debit: Number(invoice.total), credit: 0, clientId: invoice.clientId as number | undefined } as any,
           ...revenueLines,
           { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
+          ...cogsPlan.journalLines,
         ],
         guardTable: "invoices",
         guardId: id,
@@ -1091,10 +1139,33 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       // real data because guard.sh's check-schema-drift is skipped
       // in CI (no DATABASE_URL).
       await client.query(
-        `UPDATE invoices SET "journalEntryId" = $1
-          WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
-        [journalId, id, scope.companyId]
+        `UPDATE invoices SET "journalEntryId" = $1, "cogsTotal" = $2
+          WHERE id = $3 AND "companyId" = $4 AND "deletedAt" IS NULL`,
+        [journalId, cogsPlan.totalCogs, id, scope.companyId]
       );
+
+      // ── Apply COGS side-effects (stock + per-line snapshots) ─────────
+      // Done inside the same withTransaction as the JE post so any
+      // failure rolls everything back. Skip on idempotent replay since
+      // the lots were already decremented + snapshots written.
+      if (!alreadyExists && cogsPlan.journalLines.length > 0) {
+        await applyStockMovements(
+          client as any, scope.companyId,
+          cogsPlan.stockMovements, scope.activeAssignmentId ?? 0,
+        );
+        for (const snap of cogsPlan.lineSnapshots) {
+          await client.query(
+            `UPDATE invoice_lines
+                SET "cogsAmount" = $1, "cogsUnitCost" = $2,
+                    "cogsAllocationJson" = $3::jsonb, "cogsPostedAt" = NOW()
+              WHERE id = $4`,
+            [
+              snap.cogsAmount, snap.cogsUnitCost,
+              JSON.stringify(snap.allocations), snap.invoiceLineId,
+            ],
+          );
+        }
+      }
 
       // Phase 5.3 — persist the allocation resolution per line so the
       // accounting_allocation_results table reflects which rule moved
@@ -2116,6 +2187,19 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     let invoice: any;
     let net!: number;
     let vat!: number;
+    let memoJournalResult: { journalId: number; alreadyExists: boolean } | null = null;
+    // Atomicity guarantee: credit_memos INSERT, invoice paidAmount/status
+    // bump, clients.totalRevenue reversal, budgets.used decrement, AND the
+    // GL post all commit or roll back together. The previous shape ran the
+    // first four inside withTransaction and called financialEngine.post
+    // OUTSIDE — a JE post that threw (closed period, missing accounting_
+    // mapping, account allowPosting=false) left the credit_memos row +
+    // counters committed with no ledger movement. Worse, there's no
+    // idempotency on the credit_memos INSERT itself: a retry creates a
+    // duplicate memo row AND double-counts paidAmount + totalRevenue +
+    // budgets.used. financialEngine.postJournalEntry's internal
+    // withTransaction joins this outer one reentrantly via SAVEPOINT
+    // (rawdb.ts:108).
     await withTransaction(async (client) => {
       const invRes = await client.query(
         `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatAmount",
@@ -2224,30 +2308,41 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
           );
         }
       }
+
+      // GL post INSIDE the txn so a throw rolls back the memo row +
+      // counter updates. Engine's internal withTransaction joins
+      // reentrantly via SAVEPOINT.
+      memoJournalResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: invoice.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `CM-${invoice.ref}-${memoId}`,
+        description: `إشعار دائن على الفاتورة ${invoice.ref}: ${reason}`,
+        sourceType: "credit_memo",
+        sourceId: memoId ?? 0,
+        sourceKey: `finance:credit_memo:${memoId}`,
+        lines: [
+          { accountCode: salesReturnsCode, debit: net, credit: 0, clientId: invoice.clientId },
+          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: vat, credit: 0, clientId: invoice.clientId }] : []),
+          { accountCode: arCode, debit: 0, credit: creditAmount, clientId: invoice.clientId },
+        ],
+        guardTable: "credit_memos",
+        guardId: memoId ?? 0,
+      });
+
+      // Stamp the JE id back on the credit memo inside the same txn so
+      // the credit_memos.journalId FK invariant either lands complete
+      // or rolls back with everything else.
+      if (memoJournalResult.journalId && memoId) {
+        await client.query(
+          `UPDATE credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [memoJournalResult.journalId, memoId, scope.companyId]
+        );
+      }
     });
 
-    const memoJournalResult = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: invoice.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: `CM-${invoice.ref}-${memoId}`,
-      description: `إشعار دائن على الفاتورة ${invoice.ref}: ${reason}`,
-      sourceType: "credit_memo",
-      sourceId: memoId ?? 0,
-      sourceKey: `finance:credit_memo:${memoId}`,
-      lines: [
-        { accountCode: salesReturnsCode, debit: net, credit: 0, clientId: invoice.clientId },
-        ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: vat, credit: 0, clientId: invoice.clientId }] : []),
-        { accountCode: arCode, debit: 0, credit: creditAmount, clientId: invoice.clientId },
-      ],
-      guardTable: "credit_memos",
-      guardId: memoId ?? 0,
-    });
-    let journalId: number | null = memoJournalResult.journalId;
-    markIdempotencyReplay(req, res, memoJournalResult.alreadyExists);
-    if (journalId && memoId) {
-      await rawExecute(`UPDATE credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
-    }
+    const journalId: number | null = memoJournalResult!.journalId;
+    markIdempotencyReplay(req, res, memoJournalResult!.alreadyExists);
 
     emitEvent({
       companyId: scope.companyId,
@@ -2304,6 +2399,16 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
     ]);
 
     let memoId: number | null = null;
+    let debitMemoResult: { journalId: number; alreadyExists: boolean } | null = null;
+    // Atomicity guarantee — same shape as credit-memo above: debit_memos
+    // INSERT, invoice subtotal/vat/total bump, clients.totalRevenue
+    // bump, budgets.used bump, AND the GL post all commit or roll back
+    // together. The earlier shape ran the first four inside this
+    // withTransaction and called financialEngine.post AFTER — a JE post
+    // that threw left a half-formed memo + inflated invoice + inflated
+    // client/budget counters with no GL trace. A retry would create a
+    // duplicate memo row (no idempotency on debit_memos INSERT) AND
+    // double-count the counters.
     await withTransaction(async (client) => {
       try {
         const ins = await client.query(
@@ -2371,35 +2476,42 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
           [net, scope.companyId, revenueCode, currentPeriod()]
         );
       }
+
+      // GL post INSIDE the txn so a throw rolls back the memo row +
+      // counter bumps. Engine's internal withTransaction joins
+      // reentrantly via SAVEPOINT.
+      debitMemoResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: invoice.branchId as number,
+        createdBy: scope.activeAssignmentId,
+        ref: `DM-${invoice.ref}-${memoId}`,
+        description: `إشعار مدين على الفاتورة ${invoice.ref}: ${reason}`,
+        sourceType: "debit_memo",
+        sourceId: memoId ?? 0,
+        sourceKey: `finance:debit_memo:${memoId}`,
+        lines: [
+          { accountCode: arCode, debit: chargeAmount, credit: 0, clientId: invoice.clientId as number | undefined },
+          { accountCode: revenueCode, debit: 0, credit: net, clientId: invoice.clientId as number | undefined },
+          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: 0, credit: vat, clientId: invoice.clientId as number | undefined }] : []),
+        ],
+        guardTable: "debit_memos",
+        guardId: memoId ?? 0,
+      });
+
+      // Link memo → JE inside the same txn so debit_memos.journalId is
+      // never NULL-after-commit. The earlier shape did this via
+      // rawExecute after the txn, so a crash between the txn commit and
+      // the rawExecute left journalId NULL forever.
+      if (debitMemoResult.journalId && memoId) {
+        await client.query(
+          `UPDATE debit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [debitMemoResult.journalId, memoId, scope.companyId]
+        );
+      }
     });
 
-    const debitMemoResult = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: invoice.branchId as number,
-      createdBy: scope.activeAssignmentId,
-      ref: `DM-${invoice.ref}-${memoId}`,
-      description: `إشعار مدين على الفاتورة ${invoice.ref}: ${reason}`,
-      sourceType: "debit_memo",
-      sourceId: memoId ?? 0,
-      sourceKey: `finance:debit_memo:${memoId}`,
-      lines: [
-        { accountCode: arCode, debit: chargeAmount, credit: 0, clientId: invoice.clientId as number | undefined },
-        { accountCode: revenueCode, debit: 0, credit: net, clientId: invoice.clientId as number | undefined },
-        ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: 0, credit: vat, clientId: invoice.clientId as number | undefined }] : []),
-      ],
-      guardTable: "debit_memos",
-      guardId: memoId ?? 0,
-    });
-    let journalId: number | null = debitMemoResult.journalId;
-    markIdempotencyReplay(req, res, debitMemoResult.alreadyExists);
-    if (journalId && memoId) {
-      // Link memo → JE for the audit trail. Previous code only stamped
-      // updatedAt; debit_memos."journalId" stayed NULL forever.
-      await rawExecute(
-        `UPDATE debit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
-        [journalId, memoId, scope.companyId]
-      );
-    }
+    const journalId: number | null = debitMemoResult!.journalId;
+    markIdempotencyReplay(req, res, debitMemoResult!.alreadyExists);
 
     emitEvent({
       companyId: scope.companyId,
