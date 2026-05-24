@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
+import { formatDateAr, formatCurrency, formatNumber, formatTimeAr } from "@/lib/formatters";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area,
@@ -260,9 +260,9 @@ function AttendanceWidget() {
               <p className="text-sm font-semibold text-status-neutral-foreground">تسجيل الحضور والانصراف</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {hasCheckedOut
-                  ? `تم الانصراف — ${attendance.checkOut?.slice(11, 16) || ""}`
+                  ? `تم الانصراف — ${formatTimeAr(attendance.checkOut)}`
                   : hasCheckedIn
-                  ? `تم الحضور ${attendance.checkIn?.slice(11, 16) || ""} — بانتظار الانصراف`
+                  ? `تم الحضور ${formatTimeAr(attendance.checkIn)} — بانتظار الانصراف`
                   : `الوقت الحالي: ${timeStr}`}
               </p>
             </div>
