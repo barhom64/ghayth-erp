@@ -1330,3 +1330,266 @@ d("Year-end closing entry: dated {year}-12-31 even when December is closed", () 
     ).rejects.toThrow(/skipPeriodCheck is reserved for closing entries/);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────
+// RC-1 — Path A ↔ Path B equivalence.
+// Two GL posting primitives exist today:
+//   Path A: financialEngine.postJournalEntry (used by routes, schedulers)
+//   Path B: lib/gl/posting.ts::postJournalEntry (used by FX revaluation,
+//           realised FX, cycle-count variance, lot writeoff, Mudad salary)
+// After PD-6 (sourceKey on Path B), H4 (period gate on Path B reverse),
+// and C2 (createdAt = accounting date on both paths), the two paths
+// should produce IDENTICAL ledger state for the same logical input.
+// This suite posts the same content via both paths and asserts the
+// resulting journal_entries + journal_lines + chart_of_accounts state
+// is equivalent. A future drift between the two paths (e.g. one path
+// stops writing the period gate, or one path silently rounds
+// differently) breaks the equivalence loud and fast.
+// ─────────────────────────────────────────────────────────────────────
+
+d("RC-1: Path A ↔ Path B produce equivalent ledger state for the same logical input", () => {
+  let rawExecute: typeof import("../../src/lib/rawdb.js").rawExecute;
+  let rawQuery: typeof import("../../src/lib/rawdb.js").rawQuery;
+  let financialEngine: typeof import("../../src/lib/engines/financialEngine.js").financialEngine;
+  let pathBPost: typeof import("../../src/lib/gl/posting.js").postJournalEntry;
+  let buildEntry: typeof import("../../src/lib/gl/journal-poster.js").buildEntry;
+
+  let companyId: number;
+  let branchId: number;
+  let assignmentId: number;
+
+  beforeAll(async () => {
+    const rawdb = await import("../../src/lib/rawdb.js");
+    rawExecute = rawdb.rawExecute;
+    rawQuery = rawdb.rawQuery;
+    const engineMod = await import("../../src/lib/engines/financialEngine.js");
+    financialEngine = engineMod.financialEngine;
+    const posting = await import("../../src/lib/gl/posting.js");
+    pathBPost = posting.postJournalEntry;
+    const poster = await import("../../src/lib/gl/journal-poster.js");
+    buildEntry = poster.buildEntry;
+
+    const { setupTwoCompanyFixture } = await import("./_fixtures/twoCompanies.js");
+    const fx = await setupTwoCompanyFixture();
+    companyId = fx.companyA.id;
+    branchId = fx.companyA.branchId;
+    assignmentId = fx.companyA.assignmentId;
+  });
+
+  beforeEach(async () => {
+    await rawExecute(
+      `DELETE FROM journal_lines WHERE "journalId" IN
+         (SELECT id FROM journal_entries WHERE "companyId"=$1)`,
+      [companyId]
+    );
+    await rawExecute(`DELETE FROM journal_entries WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(`DELETE FROM financial_periods WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(`DELETE FROM chart_of_accounts WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(
+      `INSERT INTO financial_periods ("companyId", name, "startDate", "endDate", status)
+       VALUES ($1, 'فترة مفتوحة', '2020-01-01', '2099-12-31', 'open')`,
+      [companyId]
+    );
+    await rawExecute(
+      `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "currentBalance", "allowPosting", "isActive")
+       VALUES ($1, '1101', 'بنك اختبار', 'Test Bank', 'asset', 0, true, true),
+              ($1, '4101', 'إيراد اختبار', 'Test Revenue', 'revenue', 0, true, true)`,
+      [companyId]
+    );
+  });
+
+  it(
+    "same logical entry posted via Path A and Path B produces equivalent " +
+      "journal_entries + journal_lines + COA delta",
+    async () => {
+      // Look up account IDs for Path B (which keys lines by accountId).
+      const accounts = await rawQuery<{ id: number; code: string }>(
+        `SELECT id, code FROM chart_of_accounts
+           WHERE "companyId"=$1 AND code IN ('1101', '4101') ORDER BY code`,
+        [companyId]
+      );
+      const acc1101 = accounts.find((a) => a.code === "1101")!;
+      const acc4101 = accounts.find((a) => a.code === "4101")!;
+
+      const date = "2025-06-15";
+      const description = "RC-1 equivalence";
+
+      // Path A — financialEngine.postJournalEntry (the canonical engine).
+      const pathAResult = await financialEngine.postJournalEntry({
+        companyId,
+        branchId,
+        createdBy: assignmentId,
+        ref: "RC1-PATH-A",
+        description,
+        type: "manual",
+        sourceType: "rc1_test",
+        sourceId: 1,
+        sourceKey: "finance:rc1:path-a",
+        postingDate: date,
+        status: "posted",
+        lines: [
+          { accountCode: "1101", debit: 100, credit: 0 },
+          { accountCode: "4101", debit: 0, credit: 100 },
+        ],
+      });
+
+      // Path B — lib/gl/posting.ts::postJournalEntry.
+      const payload = buildEntry({
+        description,
+        lines: [
+          { accountId: acc1101.id, amount: 100, description: "DR bank" },
+          { accountId: acc4101.id, amount: -100, description: "CR revenue" },
+        ],
+      });
+      const pathBResult = await pathBPost(payload, {
+        companyId,
+        branchId,
+        createdBy: assignmentId,
+        ref: "RC1-PATH-B",
+        date,
+        type: "manual",
+        sourceType: "rc1_test",
+        sourceId: 2,
+        sourceKey: "finance:rc1:path-b",
+        status: "posted",
+      });
+
+      // 1. Both succeed and write a journal_entries header.
+      expect(pathAResult.journalId).toBeGreaterThan(0);
+      expect(pathBResult.journalEntryId).toBeGreaterThan(0);
+
+      // 2. Header row equivalence — date, createdAt::date, status,
+      //    balancesApplied. (ref, sourceKey, sourceId differ on
+      //    purpose because they're per-post identifiers.)
+      const rows = await rawQuery<{
+        id: number;
+        entryDate: string;
+        createdAtDate: string;
+        status: string;
+        balancesApplied: boolean;
+        type: string;
+      }>(
+        `SELECT id,
+                date::text AS "entryDate",
+                "createdAt"::date::text AS "createdAtDate",
+                status,
+                "balancesApplied",
+                type
+           FROM journal_entries
+          WHERE id = ANY($1::int[])
+          ORDER BY id`,
+        [[pathAResult.journalId, pathBResult.journalEntryId]]
+      );
+      expect(rows.length).toBe(2);
+      const [a, b] = rows;
+      expect(a.entryDate).toBe(date);
+      expect(b.entryDate).toBe(date);
+      expect(a.createdAtDate).toBe(date);
+      expect(b.createdAtDate).toBe(date);
+      expect(a.status).toBe("posted");
+      expect(b.status).toBe("posted");
+      expect(a.balancesApplied).toBe(true);
+      expect(b.balancesApplied).toBe(true);
+      expect(a.type).toBe(b.type);
+
+      // 3. Line-row equivalence — same accountCode + debit + credit on
+      //    both paths' line sets. We compare normalized signatures so
+      //    column ordering / ids / descriptions don't matter.
+      const lineSig = async (jid: number) => {
+        const lines = await rawQuery<{
+          accountCode: string; debit: string; credit: string;
+        }>(
+          `SELECT "accountCode", debit::text AS debit, credit::text AS credit
+             FROM journal_lines WHERE "journalId" = $1
+             ORDER BY "accountCode", debit, credit`,
+          [jid]
+        );
+        return lines.map((l) => `${l.accountCode}|${Number(l.debit)}|${Number(l.credit)}`);
+      };
+      const aSig = await lineSig(pathAResult.journalId);
+      const bSig = await lineSig(pathBResult.journalEntryId);
+      expect(aSig).toEqual(bSig);
+      expect(aSig).toEqual(["1101|100|0", "4101|0|100"]);
+
+      // 4. COA currentBalance equivalence — both paths together moved
+      //    the bank +200 (2 × +100 debit) and revenue -200 (2 × +100
+      //    credit). Both paths apply balances at insert when
+      //    status='posted', so by this point COA reflects both.
+      const [bank] = await rawQuery<{ currentBalance: string }>(
+        `SELECT "currentBalance" FROM chart_of_accounts
+          WHERE "companyId"=$1 AND code='1101'`,
+        [companyId]
+      );
+      const [rev] = await rawQuery<{ currentBalance: string }>(
+        `SELECT "currentBalance" FROM chart_of_accounts
+          WHERE "companyId"=$1 AND code='4101'`,
+        [companyId]
+      );
+      expect(Number(bank.currentBalance)).toBe(200);
+      expect(Number(rev.currentBalance)).toBe(-200);
+    }
+  );
+
+  it("both paths honor sourceKey idempotency — a re-post collapses onto the same JE", async () => {
+    // Stable sourceKey + same companyId on both paths → the second
+    // call must return the existing entry rather than insert a
+    // duplicate. PD-6 lock-in for Path B; engine-level lock-in for
+    // Path A.
+    const accounts = await rawQuery<{ id: number; code: string }>(
+      `SELECT id, code FROM chart_of_accounts
+         WHERE "companyId"=$1 AND code IN ('1101', '4101') ORDER BY code`,
+      [companyId]
+    );
+    const acc1101 = accounts.find((a) => a.code === "1101")!;
+    const acc4101 = accounts.find((a) => a.code === "4101")!;
+
+    // Path A — first post writes, second returns alreadyExists.
+    const a1 = await financialEngine.postJournalEntry({
+      companyId, branchId, createdBy: assignmentId,
+      ref: "RC1-IDEM-A", description: "RC-1 idem A",
+      type: "manual", sourceType: "rc1_idem", sourceId: 10,
+      sourceKey: "finance:rc1:idem-path-a",
+      lines: [
+        { accountCode: "1101", debit: 50, credit: 0 },
+        { accountCode: "4101", debit: 0, credit: 50 },
+      ],
+    });
+    const a2 = await financialEngine.postJournalEntry({
+      companyId, branchId, createdBy: assignmentId,
+      ref: "RC1-IDEM-A-RETRY", description: "RC-1 idem A retry",
+      type: "manual", sourceType: "rc1_idem", sourceId: 10,
+      sourceKey: "finance:rc1:idem-path-a", // same key
+      lines: [
+        { accountCode: "1101", debit: 50, credit: 0 },
+        { accountCode: "4101", debit: 0, credit: 50 },
+      ],
+    });
+    expect(a1.journalId).toBe(a2.journalId);
+    expect(a2.alreadyExists).toBe(true);
+
+    // Path B — same idempotency semantics (PD-6).
+    const payload = buildEntry({
+      description: "RC-1 idem B",
+      lines: [
+        { accountId: acc1101.id, amount: 50, description: "DR" },
+        { accountId: acc4101.id, amount: -50, description: "CR" },
+      ],
+    });
+    const b1 = await pathBPost(payload, {
+      companyId, branchId, createdBy: assignmentId,
+      ref: "RC1-IDEM-B", type: "manual",
+      sourceType: "rc1_idem", sourceId: 20,
+      sourceKey: "finance:rc1:idem-path-b",
+      status: "posted",
+    });
+    const b2 = await pathBPost(payload, {
+      companyId, branchId, createdBy: assignmentId,
+      ref: "RC1-IDEM-B-RETRY", type: "manual",
+      sourceType: "rc1_idem", sourceId: 20,
+      sourceKey: "finance:rc1:idem-path-b", // same key
+      status: "posted",
+    });
+    expect(b1.journalEntryId).toBe(b2.journalEntryId);
+    expect(b2.alreadyExists).toBe(true);
+  });
+});
