@@ -1,135 +1,133 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { z } from "zod";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { DatePicker } from "@/components/ui/date-picker";
-import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
+import {
+  CreatePageLayout,
+  CreationDateField,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormTextareaField,
+  FormSelectField,
+  FormDateField,
+} from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { useFieldErrors } from "@/hooks/use-field-errors";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+
+const schema = z.object({
+  title: z.string().min(1, "يرجى إدخال عنوان القضية"),
+  caseNumber: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v || /^[A-Za-z0-9\-\/]+$/.test(v),
+      "رقم القضية يجب أن يحتوي على أحرف وأرقام وشرطات فقط",
+    ),
+  caseType: z.string().optional(),
+  priority: z.enum(["low", "medium", "high", "urgent"]),
+  court: z.string().optional(),
+  opposingParty: z.string().optional(),
+  lawyerName: z.string().optional(),
+  filingDate: z.string().optional(),
+  status: z.enum(["open", "in_progress", "judgment", "execution", "closed"]),
+  description: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+const CASE_TYPE_OPTIONS = [
+  { value: "labor", label: "عمالية" },
+  { value: "commercial", label: "تجارية" },
+  { value: "civil", label: "مدنية" },
+  { value: "criminal", label: "جزائية" },
+  { value: "administrative", label: "إدارية" },
+  { value: "other", label: "أخرى" },
+];
+const PRIORITY_OPTIONS = [
+  { value: "low", label: "منخفضة" },
+  { value: "medium", label: "متوسطة" },
+  { value: "high", label: "عالية" },
+  { value: "urgent", label: "عاجلة" },
+];
+const STATUS_OPTIONS = [
+  { value: "open", label: "مفتوحة" },
+  { value: "in_progress", label: "جارية" },
+  { value: "judgment", label: "حكم" },
+  { value: "execution", label: "تنفيذ" },
+  { value: "closed", label: "مغلقة" },
+];
 
 export default function LegalCasesCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const addCase = useApiMutation("/legal/cases", "POST", [["legal-cases"], ["legal-stats"]]);
-  const { data: employeesData, isLoading, isError } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
-  const employees = employeesData?.data || [];
+  const { data: employeesData, isLoading, isError } = useApiQuery<{ data: any[] }>(
+    ["employees-list"],
+    "/employees",
+  );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("legal_cases_create", {
-    title: "", caseNumber: "", caseType: "", priority: "medium",
-    court: "", opposingParty: "", lawyerName: "", filingDate: "",
-    status: "open", description: "", notes: "",
-  });
-  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
-  const handleSubmit = async () => {
-    const firstError = validate({
-      title: form.title ? null : "يرجى إدخال عنوان القضية",
-      caseNumber: form.caseNumber && !/^[A-Za-z0-9\-\/]+$/.test(form.caseNumber) ? "رقم القضية يجب أن يحتوي على أحرف وأرقام وشرطات فقط" : null,
-    });
-    if (firstError) {
-      toast({ variant: "destructive", title: firstError });
-      return;
-    }
-    try {
-      await addCase.mutateAsync({
-        ...form,
-        ...(attachments.length > 0 ? { attachments } : {}),
-      });
-      clearDraft();
-      toast({ title: "تمت إضافة القضية بنجاح" });
-      setLocation("/legal");
-    } catch (err: any) {
-      setApiError(err);
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة القضية", description: err?.fix ?? err?.message });
-    }
-  };
+  const employees = employeesData?.data || [];
+  const lawyerOptions = employees.map((emp: any) => ({
+    value: emp.name,
+    label: `${emp.name} - ${emp.jobTitle || emp.role}`,
+  }));
 
   return (
     <CreatePageLayout title="قضية جديدة" backPath="/legal">
-      {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
-          <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
-        </div>
-      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <CreationDateField />
       </div>
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <TextField label="عنوان القضية" required value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} error={fieldErrors.title} />
-          <TextField label="رقم القضية" dir="ltr" value={form.caseNumber} onChange={(v) => setForm((f) => ({ ...f, caseNumber: v }))} error={fieldErrors.caseNumber} />
-          <FormFieldWrapper label="نوع القضية">
-            <Select value={form.caseType || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, caseType: v === "_none" ? "" : v }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">اختر النوع</SelectItem>
-                <SelectItem value="labor">عمالية</SelectItem>
-                <SelectItem value="commercial">تجارية</SelectItem>
-                <SelectItem value="civil">مدنية</SelectItem>
-                <SelectItem value="criminal">جزائية</SelectItem>
-                <SelectItem value="administrative">إدارية</SelectItem>
-                <SelectItem value="other">أخرى</SelectItem>
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-          <FormFieldWrapper label="الأولوية">
-            <Select value={form.priority} onValueChange={(v) => setForm((f) => ({ ...f, priority: v }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="low">منخفضة</SelectItem>
-                <SelectItem value="medium">متوسطة</SelectItem>
-                <SelectItem value="high">عالية</SelectItem>
-                <SelectItem value="urgent">عاجلة</SelectItem>
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-          <FormFieldWrapper label="الحالة">
-            <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="open">مفتوحة</SelectItem>
-                <SelectItem value="in_progress">جارية</SelectItem>
-                <SelectItem value="judgment">حكم</SelectItem>
-                <SelectItem value="execution">تنفيذ</SelectItem>
-                <SelectItem value="closed">مغلقة</SelectItem>
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-          <TextField label="المحكمة" value={form.court} onChange={(v) => setForm((f) => ({ ...f, court: v }))} placeholder="اسم المحكمة" />
-          <TextField label="الخصم" value={form.opposingParty} onChange={(v) => setForm((f) => ({ ...f, opposingParty: v }))} placeholder="اسم الخصم" />
-          <FormFieldWrapper label="المحامي المسؤول">
-            <Select value={form.lawyerName || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, lawyerName: v === "_none" ? "" : v }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">— اختر من الموظفين أو أدخل يدوياً —</SelectItem>
-                {employees.map((emp: any) => (
-                  <SelectItem key={emp.id} value={emp.name}>{emp.name} - {emp.jobTitle || emp.role}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-          <FormFieldWrapper label="تاريخ الإيداع">
-            <DatePicker value={form.filingDate} onChange={(v) => setForm((f) => ({ ...f, filingDate: v }))} />
-          </FormFieldWrapper>
-        </div>
-        <TextAreaField label="وصف القضية" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="تفاصيل القضية..." />
-        <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="ملاحظات إضافية..." />
+      <FormShell
+        schema={schema}
+        defaultValues={{
+          title: "",
+          caseNumber: "",
+          caseType: "",
+          priority: "medium",
+          court: "",
+          opposingParty: "",
+          lawyerName: "",
+          filingDate: "",
+          status: "open",
+          description: "",
+          notes: "",
+        }}
+        submitLabel={addCase.isPending ? "جاري الإضافة..." : "إضافة"}
+        secondaryActions={
+          <Button type="button" variant="outline" onClick={() => setLocation("/legal")}>
+            إلغاء
+          </Button>
+        }
+        onSubmit={async (values) => {
+          await addCase.mutateAsync({
+            ...values,
+            ...(attachments.length > 0 ? { attachments } : {}),
+          });
+          toast({ title: "تمت إضافة القضية بنجاح" });
+          setLocation("/legal");
+        }}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="title" label="عنوان القضية" required />
+          <FormTextField name="caseNumber" label="رقم القضية" />
+          <FormSelectField name="caseType" label="نوع القضية" options={CASE_TYPE_OPTIONS} placeholder="اختر النوع" />
+          <FormSelectField name="priority" label="الأولوية" options={PRIORITY_OPTIONS} />
+          <FormSelectField name="status" label="الحالة" options={STATUS_OPTIONS} />
+          <FormTextField name="court" label="المحكمة" placeholder="اسم المحكمة" />
+          <FormTextField name="opposingParty" label="الخصم" placeholder="اسم الخصم" />
+          <FormSelectField name="lawyerName" label="المحامي المسؤول" options={lawyerOptions} placeholder="— اختر من الموظفين —" />
+          <FormDateField name="filingDate" label="تاريخ الإيداع" />
+        </FormGrid>
+        <FormTextareaField name="description" label="وصف القضية" placeholder="تفاصيل القضية..." />
+        <FormTextareaField name="notes" label="ملاحظات" placeholder="ملاحظات إضافية..." />
         <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات القضية" />
-        <div className="flex justify-end gap-3 pt-4">
-          <Button variant="outline" onClick={() => setLocation("/legal")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={addCase.isPending} rateLimitAware>{addCase.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
-        </div>
-      </div>
+      </FormShell>
     </CreatePageLayout>
   );
 }
