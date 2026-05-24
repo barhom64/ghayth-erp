@@ -250,6 +250,9 @@ export default function TransferDetail() {
               ref={`TRF-${id}`}
               date={formatDateAr(transfer.createdAt)}
               sections={printSections}
+              entityType="transfer"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           )}
           <GuardedButton

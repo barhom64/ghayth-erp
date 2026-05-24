@@ -318,6 +318,9 @@ export default function RequestDetail() {
                 ref={request.ref || `REQ-${id}`}
                 date={formatDateAr(request.createdAt)}
                 sections={printSections}
+                entityType="request"
+                entityId={id ?? 0}
+                formats={["a4"]}
               />
             )}
             <GuardedButton

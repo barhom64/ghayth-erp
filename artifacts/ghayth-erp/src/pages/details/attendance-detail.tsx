@@ -275,6 +275,9 @@ export default function AttendanceDetail() {
               ref={`ATT-${id}`}
               date={formatDateAr(record.date || record.createdAt)}
               sections={printSections}
+              entityType="attendance"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           )}
           <GuardedButton

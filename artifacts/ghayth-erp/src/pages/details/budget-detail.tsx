@@ -321,6 +321,9 @@ export default function BudgetDetail() {
             ref={item?.ref || `BUD-${id}`}
             date={formatDateAr(item?.createdAt)}
             sections={printSections}
+            entityType="budget"
+            entityId={id ?? 0}
+            formats={["a4"]}
           />
           <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
         </>
