@@ -86,6 +86,7 @@ run_step "check:migration-policy" node scripts/src/check-migration-policy.mjs
 # real findings unrelated to the guard wiring itself).
 run_step "check:utc-time-drift" node scripts/src/check-utc-time-drift.mjs
 run_step "check:workflow-pnpm-filters" node scripts/src/check-workflow-pnpm-filters.mjs
+run_step "check:workflow-silent-failures" node scripts/src/check-workflow-silent-failures.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test
 
 END=$(date +%s)
