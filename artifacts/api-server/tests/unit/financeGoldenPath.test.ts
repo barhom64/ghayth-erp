@@ -468,3 +468,52 @@ describe("POST /invoices/:id/debit-memo — atomic memo + counters + GL", () => 
     expect(journalIdStampIdx).toBeGreaterThan(enginePostIdx);
   });
 });
+
+// ─── finance-algorithms — depreciation + FX revaluation atomicity ──────────
+describe("POST /fixed-assets/:id/depreciate — atomic JE + depreciation_entries + asset UPDATE", () => {
+  it("posts the JE INSIDE the same withTransaction as the schedule + asset writes", () => {
+    const ALG_ROUTE_LOCAL = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/finance-algorithms.ts"), "utf8");
+    const idx = ALG_ROUTE_LOCAL.indexOf('"/fixed-assets/:id/depreciate"');
+    expect(idx).toBeGreaterThan(-1);
+    const nextRoute = ALG_ROUTE_LOCAL.indexOf('"/fixed-assets/depreciate-all"', idx);
+    const block = ALG_ROUTE_LOCAL.slice(idx, nextRoute > 0 ? nextRoute : idx + 8000);
+    const txnStart = block.indexOf("withTransaction(async (client)");
+    expect(txnStart).toBeGreaterThan(-1);
+    const enginePostIdx = block.indexOf("financialEngine.postJournalEntry({", txnStart);
+    const entryInsertIdx = block.indexOf("INSERT INTO depreciation_entries", txnStart);
+    const assetUpdateIdx = block.indexOf("UPDATE fixed_assets SET", txnStart);
+    expect(enginePostIdx).toBeGreaterThan(txnStart);
+    expect(entryInsertIdx).toBeGreaterThan(enginePostIdx);
+    expect(assetUpdateIdx).toBeGreaterThan(entryInsertIdx);
+  });
+});
+
+describe("POST /fixed-assets/depreciate-all — per-asset atomic post", () => {
+  it("each asset iteration wraps engine post + schedule INSERT + asset UPDATE in one txn", () => {
+    const ALG_ROUTE_LOCAL = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/finance-algorithms.ts"), "utf8");
+    const idx = ALG_ROUTE_LOCAL.indexOf('"/fixed-assets/depreciate-all"');
+    expect(idx).toBeGreaterThan(-1);
+    const block = ALG_ROUTE_LOCAL.slice(idx, idx + 8000);
+    const txnStart = block.indexOf("withTransaction(async (client)");
+    expect(txnStart).toBeGreaterThan(-1);
+    const enginePostIdx = block.indexOf("financialEngine.postJournalEntry({", txnStart);
+    const entryInsertIdx = block.indexOf("INSERT INTO depreciation_entries", txnStart);
+    expect(enginePostIdx).toBeGreaterThan(txnStart);
+    expect(entryInsertIdx).toBeGreaterThan(enginePostIdx);
+  });
+});
+
+describe("POST /fx/revaluation/post — atomic JE + fx_revaluations audit", () => {
+  it("posts the JE INSIDE the withTransaction that emits per-currency fx_revaluations", () => {
+    const ALG_ROUTE_LOCAL = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/finance-algorithms.ts"), "utf8");
+    const idx = ALG_ROUTE_LOCAL.indexOf('"/fx/revaluation/post"');
+    expect(idx).toBeGreaterThan(-1);
+    const block = ALG_ROUTE_LOCAL.slice(idx, idx + 12000);
+    const txnStart = block.indexOf("withTransaction(async (client)");
+    expect(txnStart).toBeGreaterThan(-1);
+    const enginePostIdx = block.indexOf("financialEngine.postJournalEntry({", txnStart);
+    const fxInsertIdx = block.indexOf("INSERT INTO fx_revaluations", txnStart);
+    expect(enginePostIdx).toBeGreaterThan(txnStart);
+    expect(fxInsertIdx).toBeGreaterThan(enginePostIdx);
+  });
+});
