@@ -1155,9 +1155,13 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       // failure rolls everything back. Skip on idempotent replay since
       // the lots were already decremented + snapshots written.
       if (!alreadyExists && cogsPlan.journalLines.length > 0) {
+        // journalId is already known here — the JE was just posted
+        // above. Pass it so warehouse_movements.journalEntryId carries
+        // the link the auditor needs.
         await applyStockMovements(
           client as any, scope.companyId,
           cogsPlan.stockMovements, scope.activeAssignmentId ?? 0,
+          journalId,
         );
         for (const snap of cogsPlan.lineSnapshots) {
           await client.query(
@@ -2615,6 +2619,24 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
           `UPDATE credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
           [memoJournalResult.journalId, memoId, scope.companyId]
         );
+
+        // Retroactively stamp the JE id onto the warehouse_movements
+        // rows we wrote above (applyStockReversals runs BEFORE the JE
+        // post, so it couldn't pass the id at insert-time). Match by
+        // (companyId, reference, type='return', journalEntryId IS NULL)
+        // — the reference is unique-per-memo so this targets exactly
+        // the rows from this run. Migration 211 added the column.
+        if (cogsReversalPlan.lineUpdates.length > 0) {
+          await client.query(
+            `UPDATE warehouse_movements
+                SET "journalEntryId" = $1
+              WHERE "companyId" = $2
+                AND reference = $3
+                AND type = 'return'
+                AND "journalEntryId" IS NULL`,
+            [memoJournalResult.journalId, scope.companyId, `CM-${memoId}`],
+          );
+        }
       }
     });
 
