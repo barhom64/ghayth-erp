@@ -310,6 +310,9 @@ export default function LegalSessionDetail() {
               ref={`SESS-${id}`}
               date={formatDateAr(session.sessionDate || session.createdAt)}
               sections={printSections}
+              entityType="legal_session"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           )}
           <GuardedButton

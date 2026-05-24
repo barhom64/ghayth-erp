@@ -248,6 +248,9 @@ export default function UmrahAgentDetail() {
               ref={`AGT-${id}`}
               date={formatDateAr(new Date().toISOString())}
               sections={printSections}
+              entityType="umrah_agent"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           }
         />

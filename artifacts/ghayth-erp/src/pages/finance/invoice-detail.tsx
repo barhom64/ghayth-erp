@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,9 +6,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@workspace/report-kit";
 import { PrintButton } from "@/components/shared/print-button";
-import { extractBranchFromResponse } from "@/lib/branch-utils";
 import {
   Banknote,
   DollarSign,
@@ -25,9 +23,7 @@ import {
   DataTable,
   type DataTableColumn,
   PageStatusBadge,
-  resolveStatus,
 } from "@workspace/ui-core";
-import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
@@ -122,9 +118,7 @@ export default function InvoiceDetailPage() {
     !!id,
   );
   const [showPayment, setShowPayment] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
-  const printContainerRef = useRef<HTMLDivElement>(null);
 
   // R.4 iter 4 — both mutations now flow through useApiMutation so
   // typed errors (VALIDATION_ERROR with field, CONFLICT with meta,
@@ -162,8 +156,6 @@ export default function InvoiceDetailPage() {
   const remaining = invoice
     ? Number(invoice.total) - Number(invoice.paidAmount || 0)
     : 0;
-  const branch = invoice ? extractBranchFromResponse(invoice) ?? undefined : undefined;
-  const docDate = invoice?.createdAt ? formatDateAr(invoice.createdAt) : "";
   const lifecycleSteps = buildLifecycleSteps(invoice?.status);
 
   const handleRecordPayment = (e: React.FormEvent<HTMLFormElement>) => {
@@ -211,26 +203,12 @@ export default function InvoiceDetailPage() {
         </GuardedButton>
       )}
       {invoice && (
-        <>
-          <ExportButton
-            endpoint={`/export/pdf/invoice/${id}`}
-            filename={`invoice-${id}.pdf`}
-            type="pdf"
-            label="ملف طباعي"
-          />
-          <PrintButton
-            entityType="invoice"
-            entityId={invoice.id ?? id}
-            formats={["a4", "thermal_80", "excel"]}
-            label="طباعة"
-          />
-          <PrintActions
-            onPreview={() => setShowPreview(true)}
-            onPrint={() =>
-              directPrint(printContainerRef.current, `فاتورة ${invoice.ref}`)
-            }
-          />
-        </>
+        <PrintButton
+          entityType="invoice"
+          entityId={invoice.id ?? id}
+          formats={["a4", "thermal_80", "excel"]}
+          label="طباعة"
+        />
       )}
     </div>
   );
@@ -482,161 +460,6 @@ export default function InvoiceDetailPage() {
 
       {id && <EntityObligations entityType="invoice" entityId={id} hideWhenEmpty />}
 
-      {/* Print preview modal + hidden print container (kept inside overview
-          so they mount when invoice data is available) */}
-      <PrintPreviewModal
-        open={showPreview}
-        onClose={() => setShowPreview(false)}
-        branch={branch}
-        documentTitle="فاتورة"
-        documentRef={invoice.ref}
-        documentDate={docDate}
-      >
-        <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-          <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>العميل:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{invoice.clientName || "-"}</span>
-          </div>
-          {invoice.clientPhone && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>الهاتف:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{invoice.clientPhone}</span>
-          </div>}
-          <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>تاريخ الاستحقاق:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{invoice.dueDate ? formatDateAr(invoice.dueDate) : "-"}</span>
-          </div>
-          <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(invoice.status, "invoice")?.label || invoice.status || "-"}</span>
-          </div>
-        </div>
-
-        {lines.length > 0 && (
-          <table>
-            <thead><tr>
-              <th>#</th>
-              <th>الوصف</th>
-              <th>الكمية</th>
-              <th>سعر الوحدة</th>
-              <th>الإجمالي</th>
-              <th>الضريبة</th>
-              <th>الصافي</th>
-            </tr></thead>
-            <tbody>
-              {lines.map((l: any, i: number) => (
-                <tr key={i}>
-                  <td>{i + 1}</td>
-                  <td>{l.description || "-"}</td>
-                  <td>{l.quantity}</td>
-                  <td>{formatCurrency(Number(l.unitPrice))}</td>
-                  <td>{formatCurrency(Number(l.lineTotal))}</td>
-                  <td>{formatCurrency(Number(l.vatAmount || 0))}</td>
-                  <td style={{ fontWeight: "bold" }}>{formatCurrency(Number(l.lineGross || l.lineTotal))}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
-          <tbody>
-            <tr>
-              <td className="label" style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ قبل الضريبة:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.subtotal || 0))}</td>
-            </tr>
-            <tr>
-              <td className="label" style={{ color: "#555", border: "none", padding: "4px 8px" }}>ضريبة ({invoice.vatRate || 15}%):</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.vatAmount || 0))}</td>
-            </tr>
-            <tr style={{ borderTop: "2px solid #333" }}>
-              <td className="label" style={{ color: "#111", border: "none", padding: "4px 8px", fontWeight: "bold" }}>الإجمالي:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{formatCurrency(Number(invoice.total))}</td>
-            </tr>
-            <tr>
-              <td className="label" style={{ color: "#16a34a", border: "none", padding: "4px 8px" }}>المدفوع:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#16a34a" }}>{formatCurrency(Number(invoice.paidAmount || 0))}</td>
-            </tr>
-            <tr>
-              <td className="label" style={{ color: "#dc2626", border: "none", padding: "4px 8px" }}>المتبقي:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#dc2626" }}>{formatCurrency(remaining)}</td>
-            </tr>
-          </tbody>
-        </table>
-        {invoice.zatcaQrCode && (
-          <div style={{ marginTop: "24px", display: "flex", alignItems: "flex-start", gap: "12px", borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
-            <div>
-              <p style={{ fontSize: "8pt", color: "#555", marginBottom: "4px" }}>رمز الاستجابة السريعة — هيئة الزكاة والضريبة والجمارك</p>
-              <img
-                src={invoice.zatcaQrCode}
-                alt="رمز الاستجابة السريعة لهيئة الزكاة"
-                style={{ width: "80px", height: "80px", border: "1px solid #ccc" }}
-              />
-            </div>
-            <div style={{ fontSize: "7pt", color: "#777", marginTop: "20px" }}>
-              {invoice.zatcaUuid && <p>المعرف الفريد: {invoice.zatcaUuid}</p>}
-              {invoice.zatcaStatus && <p>حالة الربط مع هيئة الزكاة: {invoice.zatcaStatus}</p>}
-            </div>
-          </div>
-        )}
-      </PrintPreviewModal>
-
-      <div ref={printContainerRef} style={{ position: "absolute", left: "-9999px", top: 0 }}>
-        <PrintDocument branch={branch} documentTitle="فاتورة" documentRef={invoice.ref} documentDate={docDate}>
-          <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-            <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>العميل:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{invoice.clientName || "-"}</span>
-            </div>
-            {invoice.clientPhone && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>الهاتف:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{invoice.clientPhone}</span>
-            </div>}
-            <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>تاريخ الاستحقاق:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{invoice.dueDate ? formatDateAr(invoice.dueDate) : "-"}</span>
-            </div>
-            <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(invoice.status, "invoice")?.label || invoice.status || "-"}</span>
-            </div>
-          </div>
-          {lines.length > 0 && (
-            <table>
-              <thead><tr><th>#</th><th>الوصف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th><th>الضريبة</th><th>الصافي</th></tr></thead>
-              <tbody>
-                {lines.map((l: any, i: number) => (
-                  <tr key={i}><td>{i + 1}</td><td>{l.description || "-"}</td><td>{l.quantity}</td><td>{formatCurrency(Number(l.unitPrice))}</td><td>{formatCurrency(Number(l.lineTotal))}</td><td>{formatCurrency(Number(l.vatAmount || 0))}</td><td style={{ fontWeight: "bold" }}>{formatCurrency(Number(l.lineGross || l.lineTotal))}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
-            <tbody>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ قبل الضريبة:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.subtotal || 0))}</td></tr>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>ضريبة ({invoice.vatRate || 15}%):</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.vatAmount || 0))}</td></tr>
-              <tr style={{ borderTop: "2px solid #333" }}><td style={{ color: "#111", border: "none", padding: "4px 8px", fontWeight: "bold" }}>الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{formatCurrency(Number(invoice.total))}</td></tr>
-              <tr><td style={{ color: "#16a34a", border: "none", padding: "4px 8px" }}>المدفوع:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#16a34a" }}>{formatCurrency(Number(invoice.paidAmount || 0))}</td></tr>
-              <tr><td style={{ color: "#dc2626", border: "none", padding: "4px 8px" }}>المتبقي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#dc2626" }}>{formatCurrency(remaining)}</td></tr>
-            </tbody>
-          </table>
-          {invoice.zatcaQrCode && (
-            <div style={{ marginTop: "24px", display: "flex", alignItems: "flex-start", gap: "12px", borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
-              <div>
-                <p style={{ fontSize: "8pt", color: "#555", marginBottom: "4px" }}>رمز الاستجابة السريعة — هيئة الزكاة والضريبة والجمارك</p>
-                <img
-                  src={invoice.zatcaQrCode}
-                  alt="رمز الاستجابة السريعة لهيئة الزكاة"
-                  style={{ width: "80px", height: "80px", border: "1px solid #ccc" }}
-                />
-              </div>
-              <div style={{ fontSize: "7pt", color: "#777", marginTop: "20px" }}>
-                {invoice.zatcaUuid && <p>المعرّف الفريد: {invoice.zatcaUuid}</p>}
-                {invoice.zatcaStatus && <p>حالة الهيئة: {invoice.zatcaStatus}</p>}
-              </div>
-            </div>
-          )}
-        </PrintDocument>
-      </div>
     </div>
   ) : null;
 

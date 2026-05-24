@@ -460,6 +460,9 @@ export default function PerformanceDetail() {
               ref={review.ref || `PERF-${id}`}
               date={formatDateAr(review.createdAt)}
               sections={printSections}
+              entityType="performance_review"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           )}
           <DetailActionButtons hook={editDelete} editPerm="hr:update" deletePerm="hr:delete" />

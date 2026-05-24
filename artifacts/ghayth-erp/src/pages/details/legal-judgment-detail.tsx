@@ -295,6 +295,9 @@ export default function LegalJudgmentDetail() {
               ref={judgment.judgmentNumber || `JDG-${id}`}
               date={formatDateAr(judgment.judgmentDate || judgment.createdAt)}
               sections={printSections}
+              entityType="legal_judgment"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           )}
           <GuardedButton

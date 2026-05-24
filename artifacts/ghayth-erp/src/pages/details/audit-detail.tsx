@@ -256,6 +256,9 @@ export default function AuditDetail() {
               ref={`AUD-${id}`}
               date={formatDateAr(audit.createdAt)}
               sections={printSections}
+              entityType="audit_record"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           )}
           <GuardedButton

@@ -883,6 +883,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         accountCode: string | null;
         accountId: number | null;
         lineTotal: string;
+        quantity: string;
         costCenterId: number | null;
         activityType: string | null;
         projectId: number | null;
@@ -899,6 +900,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         taxCode: string | null;
       }>(
         `SELECT id, "accountCode", "accountId", "lineTotal"::text AS "lineTotal",
+                quantity::text AS quantity,
                 "costCenterId", "activityType",
                 "projectId", "vehicleId", "propertyId", "unitId", "assetId",
                 "employeeId", "driverId", "contractId", "productId",
@@ -1062,6 +1064,51 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         } as any);
       }
 
+      // ── COGS planning (Audit P1 #7) ────────────────────────────────────
+      // For every invoice line carrying an inventoried productId, run the
+      // valuation picker (FIFO/LIFO/avg per product.costingMethod) to
+      // figure out which lots feed the sale. Returns the DR COGS / CR
+      // Inventory journal lines we splice into the same JE, plus the
+      // per-line snapshot we write back to invoice_lines (so a future
+      // sales-return reversal credits the SAME lots back).
+      const { planCogsForInvoice, applyStockMovements } = await import(
+        "../lib/inventory/cogsPosting.js"
+      );
+      const cogsPlan = await planCogsForInvoice(client as any, {
+        companyId: scope.companyId,
+        invoiceId: id,
+        branchId: scope.branchId ?? null,
+        lines: dimLines.rows.map((r) => ({
+          invoiceLineId: r.id,
+          quantity: Number(r.quantity ?? 0),
+          productId: r.productId,
+          costCenterId: r.costCenterId,
+          projectId: r.projectId,
+          employeeId: r.employeeId,
+        })),
+      });
+      // Hard-block approval on insufficient stock — selling what we
+      // don't have is the bug we're trying to fix, not a fall-through
+      // case. `product_not_tracked` etc. are warnings (logged); only
+      // insufficient_stock is fatal.
+      const shortages = cogsPlan.warnings.filter((w) => w.reason === "insufficient_stock");
+      if (shortages.length > 0) {
+        throw new ValidationError(
+          `مخزون غير كافٍ للسطر #${shortages[0].invoiceLineId}: ${shortages[0].detail ?? ""}`.trim(),
+          { field: "invoice_lines", meta: { shortages } },
+        );
+      }
+      // Other warnings (product_not_found / product_not_tracked / no_active_lots
+      // / no_cogs_account / no_inventory_account) are non-fatal but logged so
+      // ops can clean up the master data. The invoice posts revenue but no
+      // COGS for those lines.
+      if (cogsPlan.warnings.length > 0) {
+        logger.warn(
+          { invoiceId: id, warnings: cogsPlan.warnings },
+          "invoice approve: some lines skipped COGS posting",
+        );
+      }
+
       const result = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId || 0,
@@ -1076,6 +1123,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           { accountCode: invArCode, debit: Number(invoice.total), credit: 0, clientId: invoice.clientId as number | undefined } as any,
           ...revenueLines,
           { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
+          ...cogsPlan.journalLines,
         ],
         guardTable: "invoices",
         guardId: id,
@@ -1091,10 +1139,33 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       // real data because guard.sh's check-schema-drift is skipped
       // in CI (no DATABASE_URL).
       await client.query(
-        `UPDATE invoices SET "journalEntryId" = $1
-          WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
-        [journalId, id, scope.companyId]
+        `UPDATE invoices SET "journalEntryId" = $1, "cogsTotal" = $2
+          WHERE id = $3 AND "companyId" = $4 AND "deletedAt" IS NULL`,
+        [journalId, cogsPlan.totalCogs, id, scope.companyId]
       );
+
+      // ── Apply COGS side-effects (stock + per-line snapshots) ─────────
+      // Done inside the same withTransaction as the JE post so any
+      // failure rolls everything back. Skip on idempotent replay since
+      // the lots were already decremented + snapshots written.
+      if (!alreadyExists && cogsPlan.journalLines.length > 0) {
+        await applyStockMovements(
+          client as any, scope.companyId,
+          cogsPlan.stockMovements, scope.activeAssignmentId ?? 0,
+        );
+        for (const snap of cogsPlan.lineSnapshots) {
+          await client.query(
+            `UPDATE invoice_lines
+                SET "cogsAmount" = $1, "cogsUnitCost" = $2,
+                    "cogsAllocationJson" = $3::jsonb, "cogsPostedAt" = NOW()
+              WHERE id = $4`,
+            [
+              snap.cogsAmount, snap.cogsUnitCost,
+              JSON.stringify(snap.allocations), snap.invoiceLineId,
+            ],
+          );
+        }
+      }
 
       // Phase 5.3 — persist the allocation resolution per line so the
       // accounting_allocation_results table reflects which rule moved

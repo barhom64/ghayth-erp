@@ -12,7 +12,7 @@
  * entity has more than one allowed format.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Printer, Loader2, ChevronDown, Download, FileSpreadsheet, FileText, Receipt, Tag } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -80,22 +80,37 @@ export function PrintButton({
 }: PrintButtonProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   const primary: PrintFormat = defaultFormat ?? formats[0] ?? "a4";
 
   async function run(format: PrintFormat) {
     setLoading(true);
+    // Open the preview window synchronously *before* awaiting the API call so
+    // browsers don't treat it as a popup (popup blockers permit windows opened
+    // directly from user gesture handlers). For downloads we don't need a
+    // window at all.
+    const previewWindow =
+      format === "excel" || download ? null : window.open("", "_blank");
+
+    if (previewWindow && !download && format !== "excel") {
+      // Friendly loading screen until the bytes arrive — beats the user
+      // staring at an empty about:blank tab.
+      previewWindow.document.write(
+        `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"/><title>جارٍ تجهيز الطباعة…</title></head><body style="font-family:Tahoma,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;color:#475569"><div style="text-align:center"><div style="font-size:18pt">جارٍ تجهيز المعاينة…</div><div style="margin-top:8px;font-size:11pt;color:#94a3b8">يرجى الانتظار قليلاً</div></div></body></html>`
+      );
+    }
+
     try {
       const resp = await apiFetch<RenderResponse>(`/print/render`, {
         method: "POST",
         body: JSON.stringify({ entityType, entityId: String(entityId), format }),
       });
-      const bytes = base64ToUint8Array(resp.base64);
-      const blob = new Blob([bytes.buffer as ArrayBuffer], { type: resp.mime });
-      const url = URL.createObjectURL(blob);
 
       if (format === "excel" || download) {
+        // Binary downloads stay on the current tab.
+        const bytes = base64ToUint8Array(resp.base64);
+        const blob = new Blob([bytes.buffer as ArrayBuffer], { type: resp.mime });
+        const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
         a.download = resp.filename;
@@ -104,19 +119,24 @@ export function PrintButton({
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       } else {
-        // HTML — open in iframe so the embedded auto-print script runs.
-        if (!iframeRef.current) {
-          const iframe = document.createElement("iframe");
-          iframe.style.position = "fixed";
-          iframe.style.right = "-10000px";
-          iframe.style.top = "0";
-          iframe.style.width = "1px";
-          iframe.style.height = "1px";
-          iframe.style.border = "0";
-          document.body.appendChild(iframe);
-          iframeRef.current = iframe;
+        // HTML preview goes into the pre-opened window. document.write() lets
+        // the embedded auto-print script run in the same-origin context the
+        // window inherited from this page — blob:// iframes were getting
+        // blocked from calling window.print() in Chrome/Firefox.
+        const html = atob(resp.base64);
+        if (previewWindow) {
+          previewWindow.document.open();
+          previewWindow.document.write(html);
+          previewWindow.document.close();
+          previewWindow.focus();
+        } else {
+          // Popup blocker stopped us — fall back to a Blob link click so the
+          // user can at least see the document. They'll need to print manually.
+          const bytes = base64ToUint8Array(resp.base64);
+          const blob = new Blob([bytes.buffer as ArrayBuffer], { type: resp.mime });
+          const url = URL.createObjectURL(blob);
+          window.location.href = url;
         }
-        iframeRef.current.src = url;
       }
       if (resp.isReprint) {
         toast({
@@ -125,6 +145,9 @@ export function PrintButton({
         });
       }
     } catch (err) {
+      // The preview window is still showing "جارٍ تجهيز…" — close it so the
+      // user gets the toast instead of staring at the loading screen.
+      if (previewWindow && !previewWindow.closed) previewWindow.close();
       const e = err as ApiError;
       if (e.status === 409) {
         toast({
@@ -162,15 +185,6 @@ export function PrintButton({
       setLoading(false);
     }
   }
-
-  useEffect(() => {
-    return () => {
-      if (iframeRef.current) {
-        iframeRef.current.remove();
-        iframeRef.current = null;
-      }
-    };
-  }, []);
 
   if (formats.length <= 1) {
     return (
