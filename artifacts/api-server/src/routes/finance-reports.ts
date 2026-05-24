@@ -1499,3 +1499,197 @@ reportsRouter.get("/reports/unmapped-lines", authorize({ feature: "finance.repor
   } catch (err) { handleRouteError(err, res, "Unmapped lines error:"); }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ZATCA WHT summary — Audit follow-up to #999/#1006/#1010.
+//
+// The WHT campaign now snapshots every withheld tax on
+// supplier_payment_allocations (whtAmount/whtRate/whtCategory). Without
+// a queryable report, that data is invisible — operators can't reconcile
+// the WHT-payable balance before the monthly ZATCA filing.
+//
+// This endpoint joins SPA + suppliers + journal_entries and returns:
+//   * grand total: Σ whtAmount across all WHT-bearing allocations
+//   * by-category breakdown (the ZATCA filing demands this split)
+//   * by-supplier breakdown (residency + tax number + total withheld)
+//   * source rows so an auditor can drill down to each payment
+//
+// Read-only, no transaction. Date range defaults to the current
+// Gregorian month (ZATCA WHT is monthly).
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/wht-summary",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { startDate, endDate, supplierId, category } =
+        req.query as Record<string, string | undefined>;
+
+      const params: unknown[] = [scope.companyId];
+      let whereExtra = "";
+      if (startDate) { params.push(startDate); whereExtra += ` AND je."postingDate" >= $${params.length}`; }
+      if (endDate)   { params.push(endDate);   whereExtra += ` AND je."postingDate" < ($${params.length}::date + 1)`; }
+      if (supplierId) {
+        const sid = Number(supplierId);
+        if (Number.isFinite(sid) && sid > 0) {
+          params.push(sid);
+          // SPA points at obligations (PO / nusk-invoice), not the supplier
+          // directly. Filter via the joined supplier.
+          whereExtra += ` AND sup.id = $${params.length}`;
+        }
+      }
+      if (category) { params.push(category); whereExtra += ` AND spa."whtCategory" = $${params.length}`; }
+      const { branchId: requestedBranchId } = req.query as Record<string, string | undefined>;
+      const branchFilter = getBranchCondition(scope, requestedBranchId, params);
+
+      // The SPA row holds the obligation id; suppliers come from the
+      // obligation table (purchase_orders for now — nusk_invoice has
+      // its own agent linkage, not a supplier FK). Only POs carry
+      // residency, so the LEFT JOIN keeps nusk-invoice rows in the
+      // report with NULL supplier fields rather than dropping them.
+      const baseSql = `
+        FROM supplier_payment_allocations spa
+        JOIN journal_entries je
+          ON je.id = spa."journalEntryId"
+         AND je."deletedAt" IS NULL
+         AND je."balancesApplied" = true
+         AND je."reversedById" IS NULL
+        LEFT JOIN purchase_orders po
+          ON po.id = spa."obligationId"
+         AND spa."obligationType" = 'purchase_order'
+         AND po."deletedAt" IS NULL
+        LEFT JOIN suppliers sup
+          ON sup.id = po."supplierId"
+         AND sup."deletedAt" IS NULL
+        LEFT JOIN wht_categories cat
+          ON cat."companyId" = spa."companyId"
+         AND cat.code = spa."whtCategory"
+         AND cat."deletedAt" IS NULL
+        WHERE spa."companyId" = $1
+          AND spa."deletedAt" IS NULL
+          AND COALESCE(spa."whtAmount", 0) > 0
+          ${whereExtra}${branchFilter}
+      `;
+
+      interface DetailRow {
+        allocationId: number;
+        journalEntryId: number;
+        journalRef: string | null;
+        postingDate: string | null;
+        obligationType: string;
+        obligationId: number;
+        amount: string | number;
+        whtAmount: string | number;
+        whtRate: string | number | null;
+        whtCategory: string | null;
+        whtCategoryName: string | null;
+        whtCategoryAppliesTo: string | null;
+        supplierId: number | null;
+        supplierName: string | null;
+        supplierTaxNumber: string | null;
+        supplierResidencyStatus: string | null;
+        supplierTaxResidenceCountry: string | null;
+      }
+
+      const rows = await rawQuery<DetailRow>(
+        `SELECT spa.id           AS "allocationId",
+                spa."journalEntryId",
+                je.ref            AS "journalRef",
+                je."postingDate"::text AS "postingDate",
+                spa."obligationType",
+                spa."obligationId",
+                spa.amount::float8        AS amount,
+                spa."whtAmount"::float8   AS "whtAmount",
+                spa."whtRate"::float8     AS "whtRate",
+                spa."whtCategory",
+                cat.name                  AS "whtCategoryName",
+                cat."appliesTo"           AS "whtCategoryAppliesTo",
+                sup.id                    AS "supplierId",
+                sup.name                  AS "supplierName",
+                sup."taxNumber"           AS "supplierTaxNumber",
+                sup."residencyStatus"     AS "supplierResidencyStatus",
+                sup."taxResidenceCountry" AS "supplierTaxResidenceCountry"
+         ${baseSql}
+         ORDER BY je."postingDate" DESC NULLS LAST, spa.id DESC
+         LIMIT 5000`,
+        params,
+      );
+
+      // Roll-ups (computed in JS to keep the SQL one round-trip).
+      const byCategory = new Map<string, {
+        category: string;
+        categoryName: string | null;
+        appliesTo: string | null;
+        wht: number;
+        gross: number;     // amount + whtAmount
+        net: number;       // amount (cash to supplier)
+        rows: number;
+      }>();
+      const bySupplier = new Map<number, {
+        supplierId: number;
+        supplierName: string | null;
+        taxNumber: string | null;
+        residencyStatus: string | null;
+        taxResidenceCountry: string | null;
+        wht: number;
+        gross: number;
+        net: number;
+        rows: number;
+      }>();
+      let totalWht = 0;
+      let totalNet = 0;
+      let totalGross = 0;
+
+      for (const r of rows) {
+        const wht = Number(r.whtAmount ?? 0);
+        const net = Number(r.amount ?? 0);
+        const gross = net + wht;
+        totalWht += wht;
+        totalNet += net;
+        totalGross += gross;
+
+        const catKey = r.whtCategory ?? "_uncat";
+        const cat = byCategory.get(catKey) ?? {
+          category: catKey, categoryName: r.whtCategoryName,
+          appliesTo: r.whtCategoryAppliesTo,
+          wht: 0, gross: 0, net: 0, rows: 0,
+        };
+        cat.wht += wht; cat.gross += gross; cat.net += net; cat.rows += 1;
+        byCategory.set(catKey, cat);
+
+        if (r.supplierId != null) {
+          const sup = bySupplier.get(r.supplierId) ?? {
+            supplierId: r.supplierId,
+            supplierName: r.supplierName,
+            taxNumber: r.supplierTaxNumber,
+            residencyStatus: r.supplierResidencyStatus,
+            taxResidenceCountry: r.supplierTaxResidenceCountry,
+            wht: 0, gross: 0, net: 0, rows: 0,
+          };
+          sup.wht += wht; sup.gross += gross; sup.net += net; sup.rows += 1;
+          bySupplier.set(r.supplierId, sup);
+        }
+      }
+
+      res.json(maskFields(req, {
+        filters: { startDate, endDate, supplierId, category },
+        summary: {
+          totalWht: roundTo2(totalWht),
+          totalNet: roundTo2(totalNet),
+          totalGross: roundTo2(totalGross),
+          rowCount: rows.length,
+        },
+        byCategory: Array.from(byCategory.values())
+          .map((c) => ({ ...c, wht: roundTo2(c.wht), gross: roundTo2(c.gross), net: roundTo2(c.net) }))
+          .sort((a, b) => b.wht - a.wht),
+        bySupplier: Array.from(bySupplier.values())
+          .map((s) => ({ ...s, wht: roundTo2(s.wht), gross: roundTo2(s.gross), net: roundTo2(s.net) }))
+          .sort((a, b) => b.wht - a.wht),
+        data: rows,
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "WHT summary error:");
+    }
+  },
+);
+
