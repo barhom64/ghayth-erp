@@ -49,6 +49,8 @@ export type EntityDetailPageProps = {
   badges?: ReactNode;
   metaItems?: Array<{ icon: ComponentType<{ className?: string }>; label: string }>;
   actions?: EntityHeaderAction[];
+  /** Free-form ReactNode rendered next to `actions` (e.g. <PrintButton/>). */
+  headerExtra?: ReactNode;
   backHref?: string;
   backLabel?: string;
 
@@ -101,6 +103,7 @@ export function EntityDetailPage(props: EntityDetailPageProps) {
     badges,
     metaItems,
     actions,
+    headerExtra,
     backHref = "/",
     backLabel = "العودة",
     kpis,
@@ -211,9 +214,9 @@ export function EntityDetailPage(props: EntityDetailPageProps) {
                   )}
                 </div>
               </div>
-              {actions && actions.length > 0 && (
+              {((actions && actions.length > 0) || headerExtra) && (
                 <div className="flex items-center gap-2 shrink-0">
-                  {actions.map((a, i) => {
+                  {actions?.map((a, i) => {
                     const Icon = a.icon;
                     return (
                       <Button
@@ -229,6 +232,7 @@ export function EntityDetailPage(props: EntityDetailPageProps) {
                       </Button>
                     );
                   })}
+                  {headerExtra}
                 </div>
               )}
             </div>

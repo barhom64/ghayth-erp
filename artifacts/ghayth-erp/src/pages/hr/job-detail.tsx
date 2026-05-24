@@ -29,6 +29,7 @@ import {
   XCircle,
   RotateCcw,
 } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 
 const STAGE_LABELS: Record<string, string> = {
   new: "جديد",
@@ -231,7 +232,12 @@ export default function JobDetailPage() {
       error={isError || notFound ? (notFound ? "لم يتم العثور على الوظيفة" : "تعذر تحميل بيانات الوظيفة") : undefined}
       onRetry={() => refetch()}
       overview={overview}
-      actions={actions}
+      actions={
+        <div className="flex items-center gap-2">
+          actions
+          <PrintButton entityType="job" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
       extraTabs={[...extraTabs, ...registryExtraTabs]}
       hideTabs={registryHideTabs}
       status={job?.status ? { label: resolveStatus(job.status)?.label || job.status, tone: STATUS_TONE_MAP[job.status] ?? "default" } : undefined}
