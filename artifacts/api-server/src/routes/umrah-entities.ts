@@ -243,23 +243,6 @@ router.post("/sub-agents", authorize({ feature: "umrah", action: "create" }), as
 // Single-row sub-agent fetch. Used by the detail page UI to render
 // the full row (same joined columns the list returns) plus the
 // statement / pricing / attachments panels.
-router.get("/sub-agents/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
-  try {
-    const scope = req.scope!;
-    const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
-         FROM umrah_sub_agents sa
-         LEFT JOIN umrah_agents a ON sa."agentId" = a.id
-         LEFT JOIN clients c ON sa."clientId" = c.id AND c."deletedAt" IS NULL
-        WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
-    res.json(maskFields(req, row));
-  } catch (err) { handleRouteError(err, res, "Get sub-agent"); }
-});
-
 router.get("/sub-agents/unlinked", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -288,6 +271,23 @@ router.get("/sub-agents/unlinked", authorize({ feature: "umrah", action: "list" 
     );
     res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List unlinked sub-agents"); }
+});
+
+router.get("/sub-agents/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
+         FROM umrah_sub_agents sa
+         LEFT JOIN umrah_agents a ON sa."agentId" = a.id
+         LEFT JOIN clients c ON sa."clientId" = c.id AND c."deletedAt" IS NULL
+        WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
+    res.json(maskFields(req, row));
+  } catch (err) { handleRouteError(err, res, "Get sub-agent"); }
 });
 
 router.patch("/sub-agents/:id", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
