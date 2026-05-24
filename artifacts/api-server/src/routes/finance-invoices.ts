@@ -2187,6 +2187,19 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     let invoice: any;
     let net!: number;
     let vat!: number;
+    let memoJournalResult: { journalId: number; alreadyExists: boolean } | null = null;
+    // Atomicity guarantee: credit_memos INSERT, invoice paidAmount/status
+    // bump, clients.totalRevenue reversal, budgets.used decrement, AND the
+    // GL post all commit or roll back together. The previous shape ran the
+    // first four inside withTransaction and called financialEngine.post
+    // OUTSIDE — a JE post that threw (closed period, missing accounting_
+    // mapping, account allowPosting=false) left the credit_memos row +
+    // counters committed with no ledger movement. Worse, there's no
+    // idempotency on the credit_memos INSERT itself: a retry creates a
+    // duplicate memo row AND double-counts paidAmount + totalRevenue +
+    // budgets.used. financialEngine.postJournalEntry's internal
+    // withTransaction joins this outer one reentrantly via SAVEPOINT
+    // (rawdb.ts:108).
     await withTransaction(async (client) => {
       const invRes = await client.query(
         `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatAmount",
@@ -2295,30 +2308,41 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
           );
         }
       }
+
+      // GL post INSIDE the txn so a throw rolls back the memo row +
+      // counter updates. Engine's internal withTransaction joins
+      // reentrantly via SAVEPOINT.
+      memoJournalResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: invoice.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `CM-${invoice.ref}-${memoId}`,
+        description: `إشعار دائن على الفاتورة ${invoice.ref}: ${reason}`,
+        sourceType: "credit_memo",
+        sourceId: memoId ?? 0,
+        sourceKey: `finance:credit_memo:${memoId}`,
+        lines: [
+          { accountCode: salesReturnsCode, debit: net, credit: 0, clientId: invoice.clientId },
+          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: vat, credit: 0, clientId: invoice.clientId }] : []),
+          { accountCode: arCode, debit: 0, credit: creditAmount, clientId: invoice.clientId },
+        ],
+        guardTable: "credit_memos",
+        guardId: memoId ?? 0,
+      });
+
+      // Stamp the JE id back on the credit memo inside the same txn so
+      // the credit_memos.journalId FK invariant either lands complete
+      // or rolls back with everything else.
+      if (memoJournalResult.journalId && memoId) {
+        await client.query(
+          `UPDATE credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [memoJournalResult.journalId, memoId, scope.companyId]
+        );
+      }
     });
 
-    const memoJournalResult = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: invoice.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: `CM-${invoice.ref}-${memoId}`,
-      description: `إشعار دائن على الفاتورة ${invoice.ref}: ${reason}`,
-      sourceType: "credit_memo",
-      sourceId: memoId ?? 0,
-      sourceKey: `finance:credit_memo:${memoId}`,
-      lines: [
-        { accountCode: salesReturnsCode, debit: net, credit: 0, clientId: invoice.clientId },
-        ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: vat, credit: 0, clientId: invoice.clientId }] : []),
-        { accountCode: arCode, debit: 0, credit: creditAmount, clientId: invoice.clientId },
-      ],
-      guardTable: "credit_memos",
-      guardId: memoId ?? 0,
-    });
-    let journalId: number | null = memoJournalResult.journalId;
-    markIdempotencyReplay(req, res, memoJournalResult.alreadyExists);
-    if (journalId && memoId) {
-      await rawExecute(`UPDATE credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
-    }
+    const journalId: number | null = memoJournalResult!.journalId;
+    markIdempotencyReplay(req, res, memoJournalResult!.alreadyExists);
 
     emitEvent({
       companyId: scope.companyId,
@@ -2375,6 +2399,16 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
     ]);
 
     let memoId: number | null = null;
+    let debitMemoResult: { journalId: number; alreadyExists: boolean } | null = null;
+    // Atomicity guarantee — same shape as credit-memo above: debit_memos
+    // INSERT, invoice subtotal/vat/total bump, clients.totalRevenue
+    // bump, budgets.used bump, AND the GL post all commit or roll back
+    // together. The earlier shape ran the first four inside this
+    // withTransaction and called financialEngine.post AFTER — a JE post
+    // that threw left a half-formed memo + inflated invoice + inflated
+    // client/budget counters with no GL trace. A retry would create a
+    // duplicate memo row (no idempotency on debit_memos INSERT) AND
+    // double-count the counters.
     await withTransaction(async (client) => {
       try {
         const ins = await client.query(
@@ -2442,35 +2476,42 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
           [net, scope.companyId, revenueCode, currentPeriod()]
         );
       }
+
+      // GL post INSIDE the txn so a throw rolls back the memo row +
+      // counter bumps. Engine's internal withTransaction joins
+      // reentrantly via SAVEPOINT.
+      debitMemoResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: invoice.branchId as number,
+        createdBy: scope.activeAssignmentId,
+        ref: `DM-${invoice.ref}-${memoId}`,
+        description: `إشعار مدين على الفاتورة ${invoice.ref}: ${reason}`,
+        sourceType: "debit_memo",
+        sourceId: memoId ?? 0,
+        sourceKey: `finance:debit_memo:${memoId}`,
+        lines: [
+          { accountCode: arCode, debit: chargeAmount, credit: 0, clientId: invoice.clientId as number | undefined },
+          { accountCode: revenueCode, debit: 0, credit: net, clientId: invoice.clientId as number | undefined },
+          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: 0, credit: vat, clientId: invoice.clientId as number | undefined }] : []),
+        ],
+        guardTable: "debit_memos",
+        guardId: memoId ?? 0,
+      });
+
+      // Link memo → JE inside the same txn so debit_memos.journalId is
+      // never NULL-after-commit. The earlier shape did this via
+      // rawExecute after the txn, so a crash between the txn commit and
+      // the rawExecute left journalId NULL forever.
+      if (debitMemoResult.journalId && memoId) {
+        await client.query(
+          `UPDATE debit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [debitMemoResult.journalId, memoId, scope.companyId]
+        );
+      }
     });
 
-    const debitMemoResult = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: invoice.branchId as number,
-      createdBy: scope.activeAssignmentId,
-      ref: `DM-${invoice.ref}-${memoId}`,
-      description: `إشعار مدين على الفاتورة ${invoice.ref}: ${reason}`,
-      sourceType: "debit_memo",
-      sourceId: memoId ?? 0,
-      sourceKey: `finance:debit_memo:${memoId}`,
-      lines: [
-        { accountCode: arCode, debit: chargeAmount, credit: 0, clientId: invoice.clientId as number | undefined },
-        { accountCode: revenueCode, debit: 0, credit: net, clientId: invoice.clientId as number | undefined },
-        ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: 0, credit: vat, clientId: invoice.clientId as number | undefined }] : []),
-      ],
-      guardTable: "debit_memos",
-      guardId: memoId ?? 0,
-    });
-    let journalId: number | null = debitMemoResult.journalId;
-    markIdempotencyReplay(req, res, debitMemoResult.alreadyExists);
-    if (journalId && memoId) {
-      // Link memo → JE for the audit trail. Previous code only stamped
-      // updatedAt; debit_memos."journalId" stayed NULL forever.
-      await rawExecute(
-        `UPDATE debit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
-        [journalId, memoId, scope.companyId]
-      );
-    }
+    const journalId: number | null = debitMemoResult!.journalId;
+    markIdempotencyReplay(req, res, debitMemoResult!.alreadyExists);
 
     emitEvent({
       companyId: scope.companyId,
