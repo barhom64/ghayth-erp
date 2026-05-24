@@ -72,6 +72,7 @@ import { cn } from "@/lib/utils";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { DatePicker } from "@/components/ui/date-picker";
+import { PrintButton } from "@/components/shared/print-button";
 
 const PROJECT_TABS = [
   { key: "overview", label: "نظرة عامة", icon: FolderKanban },
@@ -729,7 +730,12 @@ export default function ProjectDetail() {
       updatedAt={project?.updatedAt}
       hideTabs={registryHideTabs}
       overview={overview}
-      actions={actions}
+      actions={
+        <div className="flex items-center gap-2">
+          actions
+          <PrintButton entityType="project" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
     />
   );
 }

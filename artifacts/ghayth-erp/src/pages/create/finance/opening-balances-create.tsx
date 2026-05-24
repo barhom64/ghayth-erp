@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Plus, Trash2, Upload } from "lucide-react";
-import { formatCurrency, roundMoney } from "@/lib/formatters";
+import { formatCurrency, roundMoney, currentYearRiyadh } from "@/lib/formatters";
 import { FormFieldWrapper, NumberField } from "@/components/shared/form-field-wrapper";
 
 interface OBLine {
@@ -26,8 +26,7 @@ interface OBLine {
 const emptyLine = (): OBLine => ({ accountCode: "", debit: "", credit: "" });
 
 function firstDayOfFiscalYear(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-01-01`;
+  return `${currentYearRiyadh()}-01-01`;
 }
 
 export default function OpeningBalancesCreatePage() {

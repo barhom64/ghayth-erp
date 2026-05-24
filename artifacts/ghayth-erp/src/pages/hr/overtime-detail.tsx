@@ -16,6 +16,7 @@ import { Timer, DollarSign, Clock, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { OVERTIME_STATUS } from "@/lib/hr-type-maps";
+import { PrintButton } from "@/components/shared/print-button";
 
 const OVERTIME_LIFECYCLE = [
   { key: "pending",  label: "بانتظار الموافقة" },
@@ -100,7 +101,10 @@ export default function OvertimeDetail() {
       extraTabs={registryExtraTabs}
       hideTabs={registryHideTabs}
       actions={
-        <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>
+          <PrintButton entityType="overtime_request" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
       }
       overview={
         <div className="space-y-4">

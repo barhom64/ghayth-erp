@@ -18,6 +18,7 @@ import {
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { HOLIDAY_TYPES, HOLIDAY_COLORS, MONTHS_AR } from "@/lib/hr-type-maps";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { currentYearRiyadh } from "@/lib/formatters";
 
 // HOLIDAY_TYPES has a fixed set of keys — `national`, `religious`,
 // `company`, etc. Use them as the closed enum source. type stays a
@@ -37,7 +38,7 @@ const defaultHolidayForm: HolidayForm = {
 };
 
 export default function PublicHolidaysPage() {
-  const currentYear = new Date().getFullYear();
+  const currentYear = currentYearRiyadh();
   const [year, setYear] = useState(currentYear);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);

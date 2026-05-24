@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { currentYearRiyadh } from "@/lib/formatters";
 
 export function LeaveBalanceTab() {
   const { data, isLoading, isError } = useApiQuery<any>(["bi-dept-leave"], "/bi/reports/department-leave-balance");
@@ -14,7 +15,7 @@ export function LeaveBalanceTab() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-bold">رصيد إجازات الأقسام — {data?.year || new Date().getFullYear()}</h2>
+      <h2 className="text-xl font-bold">رصيد إجازات الأقسام — {data?.year || currentYearRiyadh()}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {isLoading && [...Array(3)].map((_, i) => <Card key={i}><CardContent className="p-6"><div className="h-24 bg-surface-subtle rounded animate-pulse" /></CardContent></Card>)}
         {!isLoading && rows.map((r: any) => (

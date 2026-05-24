@@ -33,7 +33,7 @@
 # Display-only: dashboard heading "الإيرادات السنوية ({year})" — the
 # numbers underneath come from a server-derived period; this is just
 # the heading text.
-artifacts/ghayth-erp/src/pages/properties-dashboard.tsx:187
+artifacts/ghayth-erp/src/pages/properties-dashboard.tsx:189
 
 # Display-only: footer copyright year on the public login page. UTC
 # vs Riyadh boundary is at most 3 hours of "wrong year" once a year.
@@ -48,14 +48,14 @@ artifacts/ghayth-erp/src/pages/calendar.tsx:80
 # Object-storage path partition. Bucket key prefix, not a business
 # date. (The declaration line already carries `// utc-ok:` but the
 # `now.getFullYear()` / `now.getMonth()` uses are on separate lines.)
-artifacts/api-server/src/lib/print/printStorage.ts:36
 artifacts/api-server/src/lib/print/printStorage.ts:37
+artifacts/api-server/src/lib/print/printStorage.ts:38
 
 # Timer math: `setMonth(<X>.getMonth() + 3)` for a maintenance
 # reminder. Computes "3 months from now"; UTC vs Riyadh skew is at
 # most 3 hours against a 90-day horizon — immaterial.
 artifacts/api-server/src/lib/proactiveEngine.ts:529
-artifacts/api-server/src/routes/fleet.ts:1400
+artifacts/api-server/src/routes/fleet.ts:1527
 
 # ============================================================
 # (B) Tech debt — pre-existing Task #433/#435/#437-class bugs
