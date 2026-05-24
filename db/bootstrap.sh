@@ -152,9 +152,17 @@ if [ -f "$PERIODS_FILE" ]; then
   PGPASSWORD="$DB_PASSWORD" psql "$DSN" -v ON_ERROR_STOP=1 -q -f "$PERIODS_FILE"
 fi
 
-# 8. mark every existing migration as applied so runMigrations skips them
-# on the first server boot. Otherwise they'd try to ALTER TABLE on a
-# baseline that already has those columns.
+# 8. mark migrations included in the dump as applied so runMigrations
+# skips re-applying their contents. Migrations ADDED AFTER the dump was
+# generated are intentionally left unmarked — the server's runMigrations
+# at boot will pick them up and apply them on top of the baseline.
+#
+# The cutoff is the filename of the last migration baked into
+# db/schema.sql. It lives in db/.baseline-cutoff so it's explicit,
+# version-controlled, and easy to bump whenever the dump is regenerated.
+# Without this, every migration added after the dump silently fails
+# to run on fresh bootstraps (symptom: 500s referencing newly-added
+# columns / unique indexes that were never created).
 echo "  Marking applied migrations as baseline..."
 PGPASSWORD="$DB_PASSWORD" psql "$DSN" -v ON_ERROR_STOP=1 -q <<'SQL'
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -163,15 +171,37 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 );
 SQL
 
-# Walk the migrations dir and pre-record every file so the runner skips
-# them. The user can override this by passing SKIP_BASELINE_MARK=1.
 if [ -z "$SKIP_BASELINE_MARK" ]; then
+  CUTOFF_FILE="$REPO_ROOT/db/.baseline-cutoff"
+  CUTOFF=""
+  if [ -f "$CUTOFF_FILE" ]; then
+    CUTOFF=$(grep -v '^[[:space:]]*$' "$CUTOFF_FILE" | grep -v '^#' | head -1 | tr -d '[:space:]')
+  fi
+  if [ -z "$CUTOFF" ]; then
+    echo "  ⚠ db/.baseline-cutoff missing or empty — marking ALL migrations"
+    echo "    (this matches the pre-cutoff behaviour but will silently skip"
+    echo "    any migration added after the dump). Create db/.baseline-cutoff"
+    echo "    with the last migration filename baked into db/schema.sql."
+  else
+    echo "  baseline cutoff: $CUTOFF (migrations > cutoff will run on first boot)"
+  fi
+
+  MARKED=0
+  SKIPPED=0
   for mig in "$REPO_ROOT/artifacts/api-server/src/migrations"/*.sql; do
     [ -f "$mig" ] || continue
     fn="$(basename "$mig")"
+    # Lexicographic compare: filenames are NNN_*.sql so this orders correctly
+    # for our use case. If cutoff is empty we mark everything (legacy).
+    if [ -n "$CUTOFF" ] && [ "$fn" \> "$CUTOFF" ]; then
+      SKIPPED=$((SKIPPED+1))
+      continue
+    fi
     PGPASSWORD="$DB_PASSWORD" psql "$DSN" -q -c \
       "INSERT INTO schema_migrations(filename) VALUES ('$fn') ON CONFLICT DO NOTHING;" >/dev/null
+    MARKED=$((MARKED+1))
   done
+  echo "  marked $MARKED applied, left $SKIPPED unmarked for the boot runner"
 fi
 
 echo
