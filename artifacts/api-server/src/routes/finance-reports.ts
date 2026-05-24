@@ -2089,3 +2089,238 @@ reportsRouter.get(
   },
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// COGS / margin summary — audit follow-up to the COGS campaign
+// (#1002/#1013/#1017). The COGS engine now writes per-line cogsAmount
+// + cogsReversedAmount snapshots; this endpoint surfaces them as the
+// gross-margin view operators have been missing.
+//
+// Per-line:
+//   revenue   = invoice_lines.lineTotal                       (billed)
+//   cogs      = cogsAmount − cogsReversedAmount                (net of returns)
+//   profit    = revenue − cogs
+//   marginPct = profit / revenue × 100
+//
+// Rollups: per-product, per-client, per-month.
+//
+// Filters honour startDate / endDate (against invoice approval date),
+// product / client narrowing, and branch scope. Excludes lines from
+// invoices that were reversed or never approved (cogsPostedAt IS NOT NULL).
+//
+// Read-only, no transaction.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/cogs-summary",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { startDate, endDate, productId, clientId } =
+        req.query as Record<string, string | undefined>;
+
+      const params: unknown[] = [scope.companyId];
+      let whereExtra = "";
+      if (startDate) { params.push(startDate); whereExtra += ` AND il."cogsPostedAt" >= $${params.length}`; }
+      if (endDate)   { params.push(endDate);   whereExtra += ` AND il."cogsPostedAt" < ($${params.length}::date + 1)`; }
+      if (productId) {
+        const pid = Number(productId);
+        if (Number.isFinite(pid) && pid > 0) {
+          params.push(pid);
+          whereExtra += ` AND il."productId" = $${params.length}`;
+        }
+      }
+      if (clientId) {
+        const cid = Number(clientId);
+        if (Number.isFinite(cid) && cid > 0) {
+          params.push(cid);
+          whereExtra += ` AND i."clientId" = $${params.length}`;
+        }
+      }
+      const branchFilter = getBranchCondition(scope, undefined, params, "i");
+
+      interface CogsRow {
+        invoiceLineId: number;
+        invoiceId: number;
+        invoiceRef: string;
+        clientId: number | null;
+        clientName: string | null;
+        productId: number | null;
+        productSku: string | null;
+        productName: string | null;
+        cogsPostedAt: string | null;
+        period: string | null;     // YYYY-MM
+        quantity: string | number;
+        revenue: string | number;
+        cogsGross: string | number;
+        cogsReversed: string | number;
+        cogsNet: string | number;
+        profit: string | number;
+      }
+
+      // Only invoice lines that actually had COGS posted by the engine
+      // make it into the report — cogsPostedAt IS NOT NULL guards out
+      // un-approved drafts AND service lines.
+      const rows = await rawQuery<CogsRow>(
+        `SELECT il.id                    AS "invoiceLineId",
+                i.id                     AS "invoiceId",
+                i.ref                    AS "invoiceRef",
+                i."clientId",
+                c.name                   AS "clientName",
+                il."productId",
+                p.sku                    AS "productSku",
+                p.name                   AS "productName",
+                il."cogsPostedAt"::text  AS "cogsPostedAt",
+                to_char(il."cogsPostedAt", 'YYYY-MM') AS period,
+                il.quantity::float8      AS quantity,
+                il."lineTotal"::float8   AS revenue,
+                COALESCE(il."cogsAmount", 0)::float8         AS "cogsGross",
+                COALESCE(il."cogsReversedAmount", 0)::float8 AS "cogsReversed",
+                (COALESCE(il."cogsAmount", 0) - COALESCE(il."cogsReversedAmount", 0))::float8 AS "cogsNet",
+                (il."lineTotal" -
+                   (COALESCE(il."cogsAmount", 0) - COALESCE(il."cogsReversedAmount", 0)))::float8 AS profit
+           FROM invoice_lines il
+           JOIN invoices i ON i.id = il."invoiceId" AND i."deletedAt" IS NULL
+           LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+           LEFT JOIN warehouse_products p ON p.id = il."productId" AND p."deletedAt" IS NULL
+          WHERE i."companyId" = $1
+            AND COALESCE(il."cogsAmount", 0) > 0
+            AND il."cogsPostedAt" IS NOT NULL
+            ${whereExtra}${branchFilter}
+          ORDER BY il."cogsPostedAt" DESC NULLS LAST, il.id DESC
+          LIMIT 10000`,
+        params,
+      );
+
+      const byProduct = new Map<number, {
+        productId: number;
+        sku: string | null;
+        name: string | null;
+        quantity: number;
+        revenue: number;
+        cogsNet: number;
+        profit: number;
+        marginPct: number;
+        rows: number;
+      }>();
+      const byClient = new Map<number, {
+        clientId: number;
+        clientName: string | null;
+        revenue: number;
+        cogsNet: number;
+        profit: number;
+        marginPct: number;
+        rows: number;
+      }>();
+      const byPeriod = new Map<string, {
+        period: string;
+        revenue: number;
+        cogsNet: number;
+        profit: number;
+        marginPct: number;
+        rows: number;
+      }>();
+      let totalRevenue = 0;
+      let totalCogsGross = 0;
+      let totalCogsReversed = 0;
+      let totalProfit = 0;
+
+      for (const r of rows) {
+        const revenue = Number(r.revenue ?? 0);
+        const cogsGross = Number(r.cogsGross ?? 0);
+        const cogsReversed = Number(r.cogsReversed ?? 0);
+        const cogsNet = cogsGross - cogsReversed;
+        const profit = revenue - cogsNet;
+        const quantity = Number(r.quantity ?? 0);
+
+        totalRevenue += revenue;
+        totalCogsGross += cogsGross;
+        totalCogsReversed += cogsReversed;
+        totalProfit += profit;
+
+        if (r.productId != null) {
+          const p = byProduct.get(r.productId) ?? {
+            productId: r.productId, sku: r.productSku, name: r.productName,
+            quantity: 0, revenue: 0, cogsNet: 0, profit: 0, marginPct: 0, rows: 0,
+          };
+          p.quantity += quantity;
+          p.revenue += revenue;
+          p.cogsNet += cogsNet;
+          p.profit += profit;
+          p.rows += 1;
+          byProduct.set(r.productId, p);
+        }
+
+        if (r.clientId != null) {
+          const cl = byClient.get(r.clientId) ?? {
+            clientId: r.clientId, clientName: r.clientName,
+            revenue: 0, cogsNet: 0, profit: 0, marginPct: 0, rows: 0,
+          };
+          cl.revenue += revenue;
+          cl.cogsNet += cogsNet;
+          cl.profit += profit;
+          cl.rows += 1;
+          byClient.set(r.clientId, cl);
+        }
+
+        if (r.period) {
+          const per = byPeriod.get(r.period) ?? {
+            period: r.period,
+            revenue: 0, cogsNet: 0, profit: 0, marginPct: 0, rows: 0,
+          };
+          per.revenue += revenue;
+          per.cogsNet += cogsNet;
+          per.profit += profit;
+          per.rows += 1;
+          byPeriod.set(r.period, per);
+        }
+      }
+
+      const pct = (profit: number, revenue: number) =>
+        revenue > 0 ? roundTo2((profit / revenue) * 100) : 0;
+
+      res.json(maskFields(req, {
+        filters: { startDate, endDate, productId, clientId },
+        summary: {
+          totalRevenue:      roundTo2(totalRevenue),
+          totalCogsGross:    roundTo2(totalCogsGross),
+          totalCogsReversed: roundTo2(totalCogsReversed),
+          totalCogsNet:      roundTo2(totalCogsGross - totalCogsReversed),
+          totalProfit:       roundTo2(totalProfit),
+          marginPct:         pct(totalProfit, totalRevenue),
+          rowCount:          rows.length,
+        },
+        byProduct: Array.from(byProduct.values())
+          .map((p) => ({
+            ...p,
+            quantity: roundTo2(p.quantity),
+            revenue: roundTo2(p.revenue),
+            cogsNet: roundTo2(p.cogsNet),
+            profit: roundTo2(p.profit),
+            marginPct: pct(p.profit, p.revenue),
+          }))
+          .sort((a, b) => b.profit - a.profit),
+        byClient: Array.from(byClient.values())
+          .map((cl) => ({
+            ...cl,
+            revenue: roundTo2(cl.revenue),
+            cogsNet: roundTo2(cl.cogsNet),
+            profit: roundTo2(cl.profit),
+            marginPct: pct(cl.profit, cl.revenue),
+          }))
+          .sort((a, b) => b.profit - a.profit),
+        byPeriod: Array.from(byPeriod.values())
+          .map((per) => ({
+            ...per,
+            revenue: roundTo2(per.revenue),
+            cogsNet: roundTo2(per.cogsNet),
+            profit: roundTo2(per.profit),
+            marginPct: pct(per.profit, per.revenue),
+          }))
+          .sort((a, b) => (a.period < b.period ? -1 : 1)),
+        data: rows,
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "COGS summary error:");
+    }
+  },
+);
