@@ -1,159 +1,125 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { z } from "zod";
 import { useApiMutation, useApiQuery } from "@/lib/api";
+import { useFormContext } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
-import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
+import {
+  CreatePageLayout,
+  CreationDateField,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormPhoneField,
+  FormSelectField,
+  FormDateField,
+  FormEntitySelect,
+} from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
-import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
-import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { EmployeeSelect } from "@/components/shared/entity-selects";
 
-const DRAFT_KEY = "fleet_drivers_create";
-const INITIAL = { name: "", phone: "", licenseNumber: "", licenseExpiry: "", licenseType: "", employeeId: "", status: "available" };
+const schema = z.object({
+  name: z.string().min(1, "اسم السائق مطلوب"),
+  phone: z.string().min(1, "رقم الهاتف مطلوب"),
+  licenseNumber: z.string().min(1, "رقم الرخصة مطلوب"),
+  licenseExpiry: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v || new Date(v) >= new Date(),
+      "تاريخ انتهاء الرخصة يجب أن يكون في المستقبل",
+    ),
+  licenseType: z.string().optional(),
+  employeeId: z.string().optional(),
+  status: z.enum(["available", "on_trip", "off_duty", "suspended"]),
+});
+
+const LICENSE_TYPE = [
+  { value: "private", label: "خاصة" },
+  { value: "public", label: "عامة" },
+  { value: "heavy", label: "ثقيلة" },
+];
+
+const STATUS = [
+  { value: "available", label: "متاح" },
+  { value: "on_trip", label: "في رحلة" },
+  { value: "off_duty", label: "خارج الخدمة" },
+  { value: "suspended", label: "موقوف" },
+];
+
+// Auto-populates name + phone from selected employee.
+function EmployeeAutoFill({ employees }: { employees: any[] }) {
+  const { watch, setValue } = useFormContext();
+  const empId = watch("employeeId") as string;
+  if (!empId) return null;
+  const emp = employees.find((e: any) => String(e.id) === empId);
+  if (emp) {
+    if (emp.name) setValue("name", emp.name);
+    if (emp.phone) setValue("phone", emp.phone);
+  }
+  return (
+    <div className="mt-3">
+      <EmployeeContextCard employeeId={empId} />
+    </div>
+  );
+}
 
 export default function DriversCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/fleet/drivers", "POST", [["drivers"]]);
-  const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
-
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const { data: employeesData } = useApiQuery<{ data: any[] }>(
+    ["employees-list"],
+    "/employees",
+  );
+  const employees = employeesData?.data || [];
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const { fieldErrors, validate, setApiError } = useFieldErrors();
-
-  const handleEmployeeSelect = (empId: string) => {
-    const employees = employeesData?.data || [];
-    const emp = employees.find((e: any) => String(e.id) === empId);
-    if (emp) {
-      setForm((f) => ({ ...f, employeeId: empId, name: emp.name || f.name, phone: emp.phone || f.phone }));
-    } else {
-      setForm((f) => ({ ...f, employeeId: empId }));
-    }
-  };
-
-  const handleSubmit = async () => {
-    const expiryInPast = form.licenseExpiry && new Date(form.licenseExpiry) < new Date();
-    const firstError = validate({
-      name: form.name.trim() ? null : "اسم السائق مطلوب",
-      phone: form.phone.trim() ? null : "رقم الهاتف مطلوب",
-      licenseNumber: form.licenseNumber.trim() ? null : "رقم الرخصة مطلوب",
-      licenseExpiry: expiryInPast ? "تاريخ انتهاء الرخصة يجب أن يكون في المستقبل" : null,
-    });
-    if (firstError) {
-      toast({ variant: "destructive", title: "الرجاء تصحيح الأخطاء في النموذج" });
-      return;
-    }
-    try {
-      await createMut.mutateAsync({
-        ...form,
-        employeeId: form.employeeId ? Number(form.employeeId) : undefined,
-      });
-      clearDraft();
-      toast({ title: "تم إضافة السائق بنجاح" });
-      setLocation("/fleet/drivers");
-    } catch (err: any) {
-      setApiError(err);
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة السائق", description: err?.fix ?? err?.message });
-    }
-  };
 
   return (
     <CreatePageLayout title="إضافة سائق جديد" backPath="/fleet/drivers">
-      {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
-          <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
-        </div>
-      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <CreationDateField />
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <EmployeeSelect
-            value={form.employeeId}
-            onChange={handleEmployeeSelect}
-            label="ربط بموظف"
-            allowCreate={false}
-          />
-          {form.employeeId && (
-            <div className="mt-3">
-              <EmployeeContextCard employeeId={form.employeeId} />
-            </div>
-          )}
-        </div>
-
-        <TextField
-          label="الاسم"
-          required
-          value={form.name}
-          onChange={(v) => setForm((f) => ({ ...f, name: v }))}
-          error={fieldErrors.name}
-        />
-
-        <TextField
-          label="الهاتف"
-          required
-          type="tel"
-          inputMode="tel"
-          dir="ltr"
-          value={form.phone}
-          onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
-          error={fieldErrors.phone}
-        />
-
-        <TextField
-          label="رقم الرخصة"
-          required
-          value={form.licenseNumber}
-          onChange={(v) => setForm((f) => ({ ...f, licenseNumber: v }))}
-          error={fieldErrors.licenseNumber}
-        />
-
-        <FormFieldWrapper label="نوع الرخصة">
-          <Select value={form.licenseType || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, licenseType: v === "_none" ? "" : v }))}>
-            <SelectTrigger>
-              <SelectValue placeholder="اختر النوع" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">اختر النوع</SelectItem>
-              <SelectItem value="private">خاصة</SelectItem>
-              <SelectItem value="public">عامة</SelectItem>
-              <SelectItem value="heavy">ثقيلة</SelectItem>
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
-
-        <FormFieldWrapper label="انتهاء الرخصة" error={fieldErrors.licenseExpiry}>
-          <DatePicker value={form.licenseExpiry} onChange={(v) => setForm((f) => ({ ...f, licenseExpiry: v }))} />
-        </FormFieldWrapper>
-
-        <FormFieldWrapper label="الحالة">
-          <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="available">متاح</SelectItem>
-              <SelectItem value="on_trip">في رحلة</SelectItem>
-              <SelectItem value="off_duty">خارج الخدمة</SelectItem>
-              <SelectItem value="suspended">موقوف</SelectItem>
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
-      </div>
-      <FileDropZone files={attachments} onFilesChange={setAttachments} />
-      <div className="flex justify-end gap-3 pt-6">
-        <Button variant="outline" onClick={() => setLocation("/fleet/drivers")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
-          {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
-        </Button>
-      </div>
+      <FormShell
+        schema={schema}
+        defaultValues={{
+          name: "",
+          phone: "",
+          licenseNumber: "",
+          licenseExpiry: "",
+          licenseType: "",
+          employeeId: "",
+          status: "available",
+        }}
+        submitLabel={createMut.isPending ? "جاري الحفظ..." : "حفظ"}
+        secondaryActions={
+          <Button type="button" variant="outline" onClick={() => setLocation("/fleet/drivers")}>
+            إلغاء
+          </Button>
+        }
+        onSubmit={async (values) => {
+          await createMut.mutateAsync({
+            ...values,
+            employeeId: values.employeeId ? Number(values.employeeId) : undefined,
+          });
+          toast({ title: "تم إضافة السائق بنجاح" });
+          setLocation("/fleet/drivers");
+        }}
+      >
+        <FormEntitySelect name="employeeId" select={EmployeeSelect} label="ربط بموظف" />
+        <EmployeeAutoFill employees={employees} />
+        <FormGrid cols={3}>
+          <FormTextField name="name" label="الاسم" required />
+          <FormPhoneField name="phone" label="الهاتف" required />
+          <FormTextField name="licenseNumber" label="رقم الرخصة" required />
+          <FormSelectField name="licenseType" label="نوع الرخصة" placeholder="اختر النوع" options={LICENSE_TYPE} />
+          <FormDateField name="licenseExpiry" label="انتهاء الرخصة" />
+          <FormSelectField name="status" label="الحالة" options={STATUS} />
+        </FormGrid>
+        <FileDropZone files={attachments} onFilesChange={setAttachments} />
+      </FormShell>
     </CreatePageLayout>
   );
 }
