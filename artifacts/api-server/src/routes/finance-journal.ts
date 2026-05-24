@@ -1509,6 +1509,26 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
         throw new ValidationError("لا يمكن عكس قيد هو أصلاً قيد عاكس");
       }
 
+      // Defense in depth — even if `reversedById` was manually
+      // unset on the original (legacy data, partial recovery), make
+      // sure no OTHER reversal already references this id. Two
+      // active reversals on the same original double-reverse the
+      // chart_of_accounts deltas and corrupt the trial balance.
+      const { rows: [existingReversal] } = await client.query(
+        `SELECT id, ref FROM journal_entries
+          WHERE "reversalOfId" = $1
+            AND "companyId" = $2
+            AND "deletedAt" IS NULL
+          LIMIT 1`,
+        [id, scope.companyId]
+      );
+      if (existingReversal) {
+        throw new ValidationError(
+          `هذا القيد معكوس مسبقاً بالقيد #${existingReversal.id} (${existingReversal.ref}) — لا يمكن إنشاء عكس ثانٍ`,
+          { field: "id", fix: "افحص القيد العاكس القائم أو اعكسه بدلاً من إنشاء واحد جديد" }
+        );
+      }
+
       const { rows: originalLines } = await client.query(
         `SELECT "accountCode", debit, credit, description, "costCenter", "departmentId", "projectId", "employeeId"
          FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL ORDER BY id ASC`,
@@ -1583,6 +1603,44 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
         [id, scope.companyId]
       );
 
+      // Symmetric rollback for the customer side: when reversing a
+      // payment JE that was sourced from a customer invoice, decrement
+      // the invoice's paidAmount + recompute its status. Without this,
+      // the invoice still shows as paid/partial after the reversal —
+      // AR aging + customer statements are wrong.
+      //
+      // The payment JE was created in finance-invoices.ts with
+      // sourceType='invoice' AND type='payment'. The amount to roll
+      // back is the JE's total debit (the cash side of the original
+      // posting).
+      if (original.sourceType === "invoice" && original.type === "payment" && original.sourceId) {
+        const { rows: [paymentTotals] } = await client.query(
+          `SELECT COALESCE(SUM(debit), 0)::text AS total
+             FROM journal_lines
+            WHERE "journalId" = $1 AND "deletedAt" IS NULL`,
+          [id]
+        );
+        const paidDelta = Number(paymentTotals?.total ?? 0);
+        if (paidDelta > 0) {
+          // Decrement paidAmount but never below zero (defensive
+          // floor; matches the existing GREATEST() idiom elsewhere
+          // in the finance code). Re-derive status from the
+          // resulting balance.
+          await client.query(
+            `UPDATE invoices
+                SET "paidAmount" = GREATEST(COALESCE("paidAmount",0) - $1, 0),
+                    status = CASE
+                      WHEN GREATEST(COALESCE("paidAmount",0) - $1, 0) >= total - 0.01 THEN 'paid'
+                      WHEN GREATEST(COALESCE("paidAmount",0) - $1, 0) > 0           THEN 'partial'
+                      ELSE 'draft'
+                    END,
+                    "updatedAt" = NOW()
+              WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+            [paidDelta, original.sourceId, scope.companyId]
+          );
+        }
+      }
+
       return { newJournalId: newId, newRef, originalRef: original.ref as string };
     });
 
@@ -1627,6 +1685,11 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
   const startDate = `${year}-01-01`;
   const endDate = `${year}-12-31`;
 
+  // Use journal_entries.date (the accounting date) rather than
+  // createdAt (the insertion timestamp). A JE backdated to 2025-12-31
+  // but inserted on 2026-01-02 must still belong to 2025's year-end
+  // closing. createdAt was the wrong filter — it bucketed late-inserted
+  // entries into the wrong year's P&L.
   const revenues = await rawQuery<Record<string, unknown>>(
     `SELECT coa.code, coa.name,
             COALESCE(SUM(jl.credit), 0) - COALESCE(SUM(jl.debit), 0) AS balance
@@ -1634,7 +1697,8 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
      LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
      LEFT JOIN journal_entries je ON je.id = jl."journalId"
           AND je."companyId" = $1 AND je."deletedAt" IS NULL
-          AND je."createdAt" >= $2 AND je."createdAt" <= ($3::date + INTERVAL '1 day')
+          AND je."balancesApplied" = true AND je."reversedById" IS NULL
+          AND je.date >= $2 AND je.date <= $3::date
      WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL
      GROUP BY coa.code, coa.name
      HAVING COALESCE(SUM(jl.credit), 0) - COALESCE(SUM(jl.debit), 0) <> 0
@@ -1648,7 +1712,8 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
      LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
      LEFT JOIN journal_entries je ON je.id = jl."journalId"
           AND je."companyId" = $1 AND je."deletedAt" IS NULL
-          AND je."createdAt" >= $2 AND je."createdAt" <= ($3::date + INTERVAL '1 day')
+          AND je."balancesApplied" = true AND je."reversedById" IS NULL
+          AND je.date >= $2 AND je.date <= $3::date
      WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL
      GROUP BY coa.code, coa.name
      HAVING COALESCE(SUM(jl.debit), 0) - COALESCE(SUM(jl.credit), 0) <> 0
