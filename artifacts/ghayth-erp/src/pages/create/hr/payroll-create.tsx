@@ -1,164 +1,184 @@
 import { useLocation } from "wouter";
+import { z } from "zod";
 import { useApiMutation, useApiQuery } from "@/lib/api";
+import { useFormContext } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
+import {
+  CreatePageLayout,
+  CreationDateField,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormTextareaField,
+  FormSelectField,
+} from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { useToast } from "@/hooks/use-toast";
-import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useAppContext } from "@/contexts/app-context";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { DollarSign, Users, Building2, CheckCircle2, Info } from "lucide-react";
-import { TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+
+const schema = z.object({
+  month: z.string().min(1, "الشهر مطلوب"),
+  reference: z.string().optional(),
+  notes: z.string().optional(),
+  scope: z.string(),
+});
+
+function MonthLabelCard() {
+  const { watch } = useFormContext();
+  const month = watch("month") as string;
+  const label = month ? formatDateAr(month + "-01") : "-";
+  return (
+    <Card className="border-orange-100 bg-orange-50/30">
+      <CardContent className="p-3 flex items-center gap-3">
+        <CheckCircle2 className="w-8 h-8 text-orange-600" />
+        <div>
+          <p className="text-xl font-bold">{label}</p>
+          <p className="text-xs text-muted-foreground">الشهر المحدد</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReferencePlaceholder() {
+  const { watch, register } = useFormContext();
+  const month = watch("month") as string;
+  // We use register to bind the input but provide a dynamic placeholder
+  // that reflects the currently-selected month.
+  return (
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium">مرجع الدفعة</label>
+      <input
+        {...register("reference")}
+        className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+        placeholder={`PAY-${month?.replace("-", "")}`}
+      />
+      <p className="text-xs text-muted-foreground">رقم مرجعي للتتبع (اختياري)</p>
+    </div>
+  );
+}
 
 export default function PayrollCreate() {
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
-  // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
-  // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
   const createMut = useApiMutation("/hr/payroll", "POST", [["payroll"]], {
     successMessage: "تم تشغيل مسير الرواتب بنجاح",
   });
   const now = new Date();
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("hr_payroll_create", {
-    month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
-    reference: "",
-    notes: "",
-    scope: "all",
-  });
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-  const { data: empData, isLoading: loadingEmp, isError: errorEmp } = useApiQuery<any>(["employees-list"], `/employees${scopeSuffix}`);
-  const employees = empData?.data || [];
-  const activeEmployees = employees.filter((e: any) => e.status === "active" || !e.status);
-  const totalSalaries = activeEmployees.reduce((sum: number, e: any) => sum + Number(e.salary || 0), 0);
-
-  const { data: branchData, isLoading: loadingBranch, isError: errorBranch } = useApiQuery<any>(["branches"], "/settings/branches");
-  const branches = branchData?.data || [];
-
-  const { fieldErrors, validate, setApiError } = useFieldErrors();
+  const { data: empData, isLoading: loadingEmp, isError: errorEmp } = useApiQuery<any>(
+    ["employees-list"],
+    `/employees${scopeSuffix}`,
+  );
+  const { data: branchData, isLoading: loadingBranch, isError: errorBranch } = useApiQuery<any>(
+    ["branches"],
+    "/settings/branches",
+  );
 
   if (loadingEmp || loadingBranch) return <LoadingSpinner />;
   if (errorEmp || errorBranch) return <ErrorState />;
 
-  const handleSubmit = () => {
-    const firstError = validate({
-      month: form.month ? null : "الشهر مطلوب",
-    });
-    if (firstError) {
-      toast({ variant: "destructive", title: firstError });
-      return;
-    }
-    createMut.mutate(
-      {
-        month: form.month,
-        reference: form.reference || undefined,
-        notes: form.notes || undefined,
-        scope: form.scope,
-      },
-      {
-        onSuccess: () => {
-          clearDraft();
-          setLocation("/hr/payroll");
-        },
-        onError: (err: any) => {
-          setApiError(err);
-        },
-      },
-    );
-  };
+  const employees = empData?.data || [];
+  const activeEmployees = employees.filter((e: any) => e.status === "active" || !e.status);
+  const totalSalaries = activeEmployees.reduce((sum: number, e: any) => sum + Number(e.salary || 0), 0);
+  const branches = branchData?.data || [];
 
-  const monthLabel = form.month
-    ? formatDateAr(form.month + "-01")
-    : "";
+  const scopeOptions = [
+    { value: "all", label: "جميع الموظفين" },
+    ...branches.map((b: any) => ({ value: `branch:${b.id}`, label: b.name })),
+  ];
 
   return (
     <CreatePageLayout title="تشغيل مسير الرواتب" backPath="/hr/payroll">
-      {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
-          <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
-        </div>
-      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <CreationDateField />
       </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <Card className="border-status-info-surface bg-status-info-surface">
-          <CardContent className="p-3 flex items-center gap-3">
-            <Users className="w-8 h-8 text-status-info-foreground" />
-            <div>
-              <p className="text-xl font-bold">{activeEmployees.length}</p>
-              <p className="text-xs text-muted-foreground">موظفين نشطين</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-status-success-surface bg-status-success-surface">
-          <CardContent className="p-3 flex items-center gap-3">
-            <DollarSign className="w-8 h-8 text-status-success-foreground" />
-            <div>
-              <p className="text-xl font-bold">{formatCurrency(totalSalaries)}</p>
-              <p className="text-xs text-muted-foreground">إجمالي الرواتب (تقديري)</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-purple-100 bg-purple-50/30">
-          <CardContent className="p-3 flex items-center gap-3">
-            <Building2 className="w-8 h-8 text-purple-600" />
-            <div>
-              <p className="text-xl font-bold">{branches.length || 1}</p>
-              <p className="text-xs text-muted-foreground">فروع</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-orange-100 bg-orange-50/30">
-          <CardContent className="p-3 flex items-center gap-3">
-            <CheckCircle2 className="w-8 h-8 text-orange-600" />
-            <div>
-              <p className="text-xl font-bold">{monthLabel || "-"}</p>
-              <p className="text-xs text-muted-foreground">الشهر المحدد</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="space-y-6">
-        <div>
-          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
-            <DollarSign className="w-4 h-4" />
-            بيانات المسير
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormFieldWrapper label="الشهر" required error={fieldErrors.month}>
-              <Input type="month" value={form.month} onChange={(e) => setForm((f) => ({ ...f, month: e.target.value }))} />
-            </FormFieldWrapper>
-            <FormFieldWrapper label="مرجع الدفعة" hint="رقم مرجعي للتتبع (اختياري)">
-              <Input value={form.reference} onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))} placeholder={`PAY-${form.month?.replace("-", "")}`} />
-            </FormFieldWrapper>
-            <FormFieldWrapper label="النطاق" hint="حدد الفرع أو اختر الجميع">
-              <Select value={form.scope} onValueChange={(v) => setForm((f) => ({ ...f, scope: v }))}>
-                <SelectTrigger><SelectValue placeholder="اختر النطاق" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">جميع الموظفين</SelectItem>
-                  {branches.map((b: any) => (
-                    <SelectItem key={b.id} value={`branch:${b.id}`}>{b.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormFieldWrapper>
-          </div>
+      <FormShell
+        schema={schema}
+        defaultValues={{
+          month: defaultMonth,
+          reference: "",
+          notes: "",
+          scope: "all",
+        }}
+        submitLabel={createMut.isPending ? "جاري التشغيل..." : "تشغيل مسير الرواتب"}
+        secondaryActions={
+          <Button type="button" variant="outline" onClick={() => setLocation("/hr/payroll")}>
+            إلغاء
+          </Button>
+        }
+        onSubmit={async (values) => {
+          await new Promise<void>((resolve, reject) =>
+            createMut.mutate(
+              {
+                month: values.month,
+                reference: values.reference || undefined,
+                notes: values.notes || undefined,
+                scope: values.scope,
+              },
+              {
+                onSuccess: () => {
+                  setLocation("/hr/payroll");
+                  resolve();
+                },
+                onError: (err) => reject(err),
+              },
+            ),
+          );
+        }}
+      >
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card className="border-status-info-surface bg-status-info-surface">
+            <CardContent className="p-3 flex items-center gap-3">
+              <Users className="w-8 h-8 text-status-info-foreground" />
+              <div>
+                <p className="text-xl font-bold">{activeEmployees.length}</p>
+                <p className="text-xs text-muted-foreground">موظفين نشطين</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-status-success-surface bg-status-success-surface">
+            <CardContent className="p-3 flex items-center gap-3">
+              <DollarSign className="w-8 h-8 text-status-success-foreground" />
+              <div>
+                <p className="text-xl font-bold">{formatCurrency(totalSalaries)}</p>
+                <p className="text-xs text-muted-foreground">إجمالي الرواتب (تقديري)</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-purple-100 bg-purple-50/30">
+            <CardContent className="p-3 flex items-center gap-3">
+              <Building2 className="w-8 h-8 text-purple-600" />
+              <div>
+                <p className="text-xl font-bold">{branches.length || 1}</p>
+                <p className="text-xs text-muted-foreground">فروع</p>
+              </div>
+            </CardContent>
+          </Card>
+          <MonthLabelCard />
         </div>
 
-        <TextAreaField
+        <h3 className="text-sm font-semibold text-status-neutral-foreground flex items-center gap-2">
+          <DollarSign className="w-4 h-4" /> بيانات المسير
+        </h3>
+        <FormGrid cols={3}>
+          <FormTextField name="month" label="الشهر" type="month" required />
+          <ReferencePlaceholder />
+          <FormSelectField
+            name="scope"
+            label="النطاق"
+            options={scopeOptions}
+            description="حدد الفرع أو اختر الجميع"
+          />
+        </FormGrid>
+
+        <FormTextareaField
+          name="notes"
           label="ملاحظات"
-          value={form.notes}
-          onChange={(v) => setForm((f) => ({ ...f, notes: v }))}
           placeholder="ملاحظات إضافية حول هذا المسير..."
           rows={3}
         />
@@ -177,14 +197,7 @@ export default function PayrollCreate() {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="flex justify-end gap-3 pt-6">
-        <Button variant="outline" onClick={() => setLocation("/hr/payroll")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.month || createMut.isPending} size="lg" rateLimitAware>
-          {createMut.isPending ? "جاري التشغيل..." : "تشغيل مسير الرواتب"}
-        </Button>
-      </div>
+      </FormShell>
     </CreatePageLayout>
   );
 }
