@@ -450,6 +450,46 @@ check(
   ),
 );
 
+// ─── manual-form-instead-of-formshell rule (design-unification §4) ──────
+//
+// Counted ratchet that catches the legacy `useAutoDraft` hook — proxy
+// for "this page is on the manual form pattern instead of FormShell".
+// Pages with this hook reinvent submit-button position, error toasts,
+// loading state and field errors; canonical pages use FormShell with
+// a zod schema and inherit all of those uniformly.
+
+console.log("manual-form-instead-of-formshell rule");
+
+check(
+  "useAutoDraft import IS flagged",
+  fires(
+    "manual-form-instead-of-formshell",
+    `import { useAutoDraft } from "@/hooks/use-auto-draft";`,
+  ),
+);
+check(
+  "useAutoDraft call site IS flagged",
+  fires(
+    "manual-form-instead-of-formshell",
+    `const { form, setForm, clearDraft } = useAutoDraft("k", {});`,
+  ),
+);
+check(
+  "FormShell import is NOT flagged",
+  !fires(
+    "manual-form-instead-of-formshell",
+    `import { FormShell } from "@workspace/ui-core";`,
+  ),
+);
+check(
+  "useAutoDraftSomething (different identifier) is NOT flagged",
+  // Guard against the regex catching prefix-matches.
+  !fires(
+    "manual-form-instead-of-formshell",
+    `import { useAutoDraftSomething } from "elsewhere";`,
+  ),
+);
+
 // ─── Ratchet structural invariant ───────────────────────────────────────
 //
 // All 15 kit rules were intentionally hardened — none of them should

@@ -476,6 +476,51 @@ const RULES = [
       "Tailwind `text-xs`/`text-sm` for body-adjacent text.",
   },
 
+  // ── Form patterns — Manual draft+errors instead of FormShell ────────
+  //
+  // FormShell (lib/ui-core, exported via @workspace/ui-core) wraps
+  // react-hook-form + zod + a unified submit/error/loading UI. Before
+  // it existed, pages rolled their own form state with two custom
+  // hooks: useAutoDraft (drafts → localStorage) and useFieldErrors
+  // (server VALIDATION_ERROR → per-field). Pages that import either
+  // hook are by-definition NOT using FormShell — they reinvent the
+  // submit-button position, the "saving…" state, the toast strategy
+  // and the field-error display.
+  //
+  // The rule counts every `useAutoDraft` import as a proxy for "this
+  // page is on the manual form pattern". Drop the baseline by the
+  // same number when you migrate a page off useAutoDraft onto
+  // FormShell + zod schema.
+  //
+  // When the count reaches 0, harden the rule and delete the two
+  // hooks from the codebase — they'll have no remaining importers.
+  {
+    id: "manual-form-instead-of-formshell",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) =>
+      // The hook definition files themselves are exempt — they're
+      // where the pattern lives. Once the rule reaches 0 these can
+      // be deleted entirely.
+      file.endsWith("/hooks/use-auto-draft.ts") ||
+      file.endsWith("/hooks/use-auto-draft.tsx") ||
+      file.endsWith("/hooks/use-field-errors.ts") ||
+      file.endsWith("/hooks/use-field-errors.tsx"),
+    regex: /\buseAutoDraft\b/,
+    countBaseline: 140,
+    message:
+      "`useAutoDraft` (and its sibling `useFieldErrors`) is the manual " +
+      "form pattern that predates FormShell. Pages on the manual " +
+      "pattern carry their own submit-button position, error toast " +
+      "strategy, field-error display and \"saving…\" state — none of " +
+      "which line up across pages. Migrate to `<FormShell schema={...} " +
+      "defaultValues={...} onSubmit={...}>` from @workspace/ui-core; " +
+      "see pages/create/warehouse/categories-create.tsx or " +
+      "pages/create/hr/contracts-edit.tsx for the canonical shape. " +
+      "The countBaseline is a ratchet — drop it by the same number " +
+      "every time you migrate a page off useAutoDraft.",
+  },
+
   // ─── Design-system tokens — Inline hex colors ───────────────────────
   //
   // `style={{ color: "#16a34a" }}` and friends bypass the design-system
