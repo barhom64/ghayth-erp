@@ -173,6 +173,10 @@ export const STATUS_MAP = {
     converted:            { label: "مُحوَّل إلى أمر شراء", tone: "info" },
     received:             { label: "مُستلَم",          tone: "success"  },
     partially_received:   { label: "مُستلَم جزئياً",   tone: "progress" },
+    // 3-way-match lifecycle (PO matched against goods-receipt + invoice).
+    // Eligible for payment runs (see finance-purchase.ts payment-run
+    // preview). Surfaces on the PO list & detail screens.
+    invoice_matched:      { label: "مطابق للفاتورة",  tone: "success"  },
     vendor_confirmed:     { label: "مؤكَّد من المورد", tone: "info"     },
     payment_scheduled:    { label: "جدولة الدفع",     tone: "info"     },
   },
@@ -440,6 +444,29 @@ export const STATUS_MAP = {
     regular:              { label: "اعتيادي",          tone: "neutral"  },
     prospect:             { label: "محتمل",            tone: "success"  },
     churned:              { label: "متسرّب",           tone: "danger"   },
+  },
+
+  // ── Finance — Invoice-line allocation resolver result ────────────────
+  // finance-invoices.ts allocation preview tags each line by how the
+  // account+cost-centre+dimensions were resolved. Surfaces on the
+  // invoice-detail allocation panel and on the approval review screen.
+  allocation: {
+    rule_match:           { label: "تطابق قاعدة",      tone: "success"  },
+    manual_override:      { label: "إعداد يدوي",       tone: "info"     },
+    pending:              { label: "بانتظار التحديد",  tone: "warning"  },
+    unresolved:           { label: "بدون قاعدة",       tone: "danger"   },
+  },
+
+  // ── Fleet — Alert lifecycle ──────────────────────────────────────────
+  // fleet_alerts row lifecycle: active → acknowledged → resolved
+  // (operator silences) or active → dismissed (operator dismisses
+  // without resolving). Surfaces on the fleet ops dashboard + driver
+  // alert tray. Backend writes via fleet.ts UPDATE fleet_alerts.
+  fleet_alert: {
+    active:               { label: "نشط",             tone: "danger"   },
+    acknowledged:         { label: "مُؤكَّد",          tone: "warning"  },
+    resolved:             { label: "محلول",           tone: "success"  },
+    dismissed:            { label: "مُهمَل",          tone: "neutral"  },
   },
 
   // ── HR — Employee contract lifecycle ─────────────────────────────────
