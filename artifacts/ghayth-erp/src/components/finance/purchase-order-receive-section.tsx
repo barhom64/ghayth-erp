@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { Package, Plus, X, CheckCircle2 } from "lucide-react";
 
 /**
@@ -52,7 +52,7 @@ interface ReceiptRow {
 
 export function PurchaseOrderReceiveSection({ poId, poStatus }: { poId: number | string; poStatus: string | undefined }) {
   const [showForm, setShowForm] = useState(false);
-  const [receivedDate, setReceivedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [receivedDate, setReceivedDate] = useState(() => todayLocal());
   const [qualityNotes, setQualityNotes] = useState("");
   const [perLineQty, setPerLineQty] = useState<Record<number, string>>({});
 

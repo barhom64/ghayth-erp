@@ -9,7 +9,7 @@ import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Banknote, Send, AlertCircle } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { BulkCheckbox } from "@/components/shared/bulk-actions";
 
 /**
@@ -53,7 +53,7 @@ export default function PaymentRunPage() {
   const [cutoffDate, setCutoffDate] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [paymentDate, setPaymentDate] = useState(() => todayLocal());
   const [method, setMethod] = useState("bank_transfer");
   const [reference, setReference] = useState("");
   const [confirming, setConfirming] = useState(false);
