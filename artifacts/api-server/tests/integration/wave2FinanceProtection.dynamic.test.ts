@@ -698,7 +698,11 @@ d("Wave-2 C3: expense entry + approval chain are atomic (#885)", () => {
       // input). The C3 invariant: the whole transaction rolls back so the
       // JE row disappears too — no orphan posted expense without its
       // approval request.
-      const idempotencyToken = `WAVE2-C3-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      // Stable per-test token — the engine's volatility guard
+      // (financialEngine.ts:74) rejects any sourceKey that embeds a
+      // 13-digit Date.now() millisecond timestamp. Two random-base36
+      // segments give enough entropy without tripping the regex.
+      const idempotencyToken = `WAVE2-C3-FAIL-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
       const ref = `EXP-${idempotencyToken}`;
 
       let caught: unknown = null;
@@ -758,7 +762,7 @@ d("Wave-2 C3: expense entry + approval chain are atomic (#885)", () => {
     // in that scenario either) — well, actually it would still commit
     // since the body succeeds. The real defense: assert the JE is
     // observably present after the commit.
-    const idempotencyToken = `WAVE2-C3-OK-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const idempotencyToken = `WAVE2-C3-OK-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
     const ref = `EXP-${idempotencyToken}`;
 
     await withTransaction(async () => {
