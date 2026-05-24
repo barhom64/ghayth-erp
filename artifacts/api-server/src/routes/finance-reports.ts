@@ -1694,6 +1694,195 @@ reportsRouter.get(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Inventory turnover ratio — companion to #1033 (inventory valuation)
+// and the COGS summary endpoint.
+//
+//     turnover     = period COGS / inventory value at end of period
+//     daysOnHand   = period days / turnover         (DSI proxy)
+//
+// Period COGS comes from invoice_lines.cogsAmount − cogsReversedAmount
+// (net of returns) filtered on cogsPostedAt; inventory value comes
+// from Σ (lot.quantity × lot.unitCost) on the same active-lot set the
+// valuation report uses. Pure read-only.
+//
+// Per-product roll-up so operators can spot dead-stock SKUs
+// (turnover < 1) and over-stocked best-sellers (high turnover →
+// frequent reorders). The header summary is the company-wide ratio.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/inventory-turnover",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { startDate, endDate, productId, warehouseId } =
+        req.query as Record<string, string | undefined>;
+
+      const start = startDate ?? null;
+      const end = endDate ?? null;
+
+      // ── 1. Period COGS by product ────────────────────────────────────
+      const cogsParams: unknown[] = [scope.companyId];
+      let cogsExtra = "";
+      if (start) { cogsParams.push(start); cogsExtra += ` AND il."cogsPostedAt" >= $${cogsParams.length}`; }
+      if (end)   { cogsParams.push(end);   cogsExtra += ` AND il."cogsPostedAt" < ($${cogsParams.length}::date + 1)`; }
+      if (productId) {
+        const pid = Number(productId);
+        if (Number.isFinite(pid) && pid > 0) {
+          cogsParams.push(pid);
+          cogsExtra += ` AND il."productId" = $${cogsParams.length}`;
+        }
+      }
+      const cogsBranchFilter = getBranchCondition(scope, undefined, cogsParams, "i");
+
+      const cogsRows = await rawQuery<{
+        productId: number;
+        cogsNet: string | number;
+      }>(
+        `SELECT il."productId",
+                SUM(COALESCE(il."cogsAmount", 0) - COALESCE(il."cogsReversedAmount", 0))::float8 AS "cogsNet"
+           FROM invoice_lines il
+           JOIN invoices i ON i.id = il."invoiceId" AND i."deletedAt" IS NULL
+          WHERE i."companyId" = $1
+            AND il."productId" IS NOT NULL
+            AND il."cogsPostedAt" IS NOT NULL
+            AND COALESCE(il."cogsAmount", 0) > 0
+            ${cogsExtra}${cogsBranchFilter}
+          GROUP BY il."productId"`,
+        cogsParams,
+      );
+      const cogsByProduct = new Map<number, number>();
+      for (const r of cogsRows) {
+        cogsByProduct.set(r.productId, Number(r.cogsNet ?? 0));
+      }
+
+      // ── 2. Current inventory value by product ─────────────────────────
+      const invParams: unknown[] = [scope.companyId];
+      let invExtra = "";
+      if (warehouseId) {
+        const wid = Number(warehouseId);
+        if (Number.isFinite(wid) && wid > 0) {
+          invParams.push(wid);
+          invExtra += ` AND l."warehouseId" = $${invParams.length}`;
+        }
+      }
+      if (productId) {
+        const pid = Number(productId);
+        if (Number.isFinite(pid) && pid > 0) {
+          invParams.push(pid);
+          invExtra += ` AND p.id = $${invParams.length}`;
+        }
+      }
+      const invBranchFilter = getBranchCondition(scope, undefined, invParams, "w");
+
+      const invRows = await rawQuery<{
+        productId: number;
+        sku: string | null;
+        name: string;
+        warehouseId: number | null;
+        warehouseName: string | null;
+        onHandQty: string | number;
+        value: string | number;
+      }>(
+        `SELECT p.id                            AS "productId",
+                p.sku,
+                p.name,
+                MAX(l."warehouseId")            AS "warehouseId",
+                MAX(w.name)                     AS "warehouseName",
+                SUM(COALESCE(l.quantity, 0))::float8 AS "onHandQty",
+                SUM(COALESCE(l.quantity, 0) * COALESCE(l."unitCost", 0))::float8 AS value
+           FROM warehouse_products p
+           LEFT JOIN warehouse_stock_lots l
+             ON l."productId" = p.id
+            AND l."companyId" = p."companyId"
+            AND l.status = 'active'
+            AND l."qualityControlStatus" = 'approved'
+            AND l."deletedAt" IS NULL
+           LEFT JOIN warehouses w
+             ON w.id = l."warehouseId"
+            AND w."deletedAt" IS NULL
+          WHERE p."companyId" = $1
+            AND p."deletedAt" IS NULL
+            AND COALESCE(p.status, 'active') = 'active'
+            ${invExtra}${invBranchFilter}
+          GROUP BY p.id, p.sku, p.name`,
+        invParams,
+      );
+
+      // ── 3. Period-day count for daysOnHand ───────────────────────────
+      let periodDays: number | null = null;
+      if (start && end) {
+        const ms = new Date(end).getTime() - new Date(start).getTime();
+        if (Number.isFinite(ms) && ms >= 0) {
+          // +1 because both endpoints are inclusive in our SQL.
+          periodDays = Math.floor(ms / 86400_000) + 1;
+        }
+      }
+
+      // ── 4. Join into per-product turnover rows ────────────────────────
+      interface TurnoverRow {
+        productId: number;
+        sku: string | null;
+        name: string;
+        warehouseId: number | null;
+        warehouseName: string | null;
+        onHandQty: number;
+        currentValue: number;
+        periodCogs: number;
+        turnover: number | null;   // null when value=0 (avoid /0)
+        daysOnHand: number | null; // null when turnover=0 or period unknown
+      }
+
+      const rows: TurnoverRow[] = invRows.map((p) => {
+        const value = Number(p.value ?? 0);
+        const periodCogs = cogsByProduct.get(p.productId) ?? 0;
+        const turnover = value > 0 ? periodCogs / value : null;
+        const daysOnHand = (turnover != null && turnover > 0 && periodDays != null)
+          ? Math.round((periodDays / turnover) * 100) / 100
+          : null;
+        return {
+          productId: p.productId,
+          sku: p.sku,
+          name: p.name,
+          warehouseId: p.warehouseId,
+          warehouseName: p.warehouseName,
+          onHandQty: roundTo2(Number(p.onHandQty ?? 0)),
+          currentValue: roundTo2(value),
+          periodCogs: roundTo2(periodCogs),
+          turnover: turnover != null ? Math.round(turnover * 100) / 100 : null,
+          daysOnHand,
+        };
+      });
+
+      // ── 5. Header summary (company-wide ratio) ───────────────────────
+      const totalValue = rows.reduce((s, r) => s + r.currentValue, 0);
+      const totalCogs  = rows.reduce((s, r) => s + r.periodCogs, 0);
+      const overallTurnover = totalValue > 0
+        ? Math.round((totalCogs / totalValue) * 100) / 100
+        : null;
+      const overallDaysOnHand = (overallTurnover != null && overallTurnover > 0 && periodDays != null)
+        ? Math.round((periodDays / overallTurnover) * 100) / 100
+        : null;
+
+      res.json(maskFields(req, {
+        filters: { startDate, endDate, productId, warehouseId },
+        period: { days: periodDays },
+        summary: {
+          totalCurrentValue: roundTo2(totalValue),
+          totalPeriodCogs:   roundTo2(totalCogs),
+          overallTurnover,
+          overallDaysOnHand,
+          productCount: rows.length,
+        },
+        data: rows.sort((a, b) => (b.turnover ?? -1) - (a.turnover ?? -1)),
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "Inventory turnover report error:");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Inventory valuation report — audit follow-up to the COGS campaign.
 //
 // Σ (lot.quantity × lot.unitCost) over every ACTIVE, qc-APPROVED lot
