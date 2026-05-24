@@ -1,145 +1,164 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { z } from "zod";
 import { useApiMutation } from "@/lib/api";
+import { useFormContext } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
+import {
+  CreatePageLayout,
+  CreationDateField,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormTextareaField,
+  FormNumberField,
+  FormSelectField,
+  FormDateField,
+  FormEntitySelect,
+} from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrencySymbol } from "@/lib/formatters";
-import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { DatePicker } from "@/components/ui/date-picker";
 import { ClientContextCard } from "@/components/shared/client-context-card";
 import { ManagerWorkloadCard } from "@/components/shared/manager-workload-card";
-import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { ClientSelect, EmployeeSelect } from "@/components/shared/entity-selects";
 
-const DRAFT_KEY = "projects_create";
-const INITIAL = { name: "", clientId: "", managerId: "", status: "planning", budget: "", startDate: "", endDate: "", description: "" };
+const schema = z
+  .object({
+    name: z.string().min(1, "يرجى إدخال اسم المشروع"),
+    clientId: z.string().optional(),
+    managerId: z.string().optional(),
+    status: z.enum(["planning", "in_progress", "on_hold", "completed"]),
+    budget: z
+      .string()
+      .optional()
+      .refine((v) => !v || Number(v) >= 0, "الميزانية يجب أن تكون صفر أو أكثر"),
+    startDate: z.string().min(1, "تاريخ البدء مطلوب"),
+    endDate: z.string().min(1, "تاريخ الانتهاء مطلوب"),
+    description: z.string().optional(),
+  })
+  .refine(
+    (v) => !v.startDate || !v.endDate || v.endDate > v.startDate,
+    { message: "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء", path: ["endDate"] },
+  );
+
+const STATUS_OPTIONS = [
+  { value: "planning", label: "تخطيط" },
+  { value: "in_progress", label: "قيد التنفيذ" },
+  { value: "on_hold", label: "متوقف" },
+  { value: "completed", label: "مكتمل" },
+];
+
+function ClientCard() {
+  const { watch } = useFormContext();
+  const clientId = watch("clientId") as string;
+  if (!clientId) return null;
+  return (
+    <div className="mt-3">
+      <ClientContextCard clientId={clientId} section="project" />
+    </div>
+  );
+}
+
+function ManagerCard() {
+  const { watch } = useFormContext();
+  const managerId = watch("managerId") as string;
+  if (!managerId) return null;
+  return (
+    <div className="mt-3">
+      <ManagerWorkloadCard employeeId={managerId} />
+    </div>
+  );
+}
+
+function ImpactPreview() {
+  const { watch } = useFormContext();
+  const name = watch("name") as string;
+  const startDate = watch("startDate") as string;
+  const endDate = watch("endDate") as string;
+  const managerId = watch("managerId") as string;
+  const budget = watch("budget") as string;
+  const status = watch("status") as string;
+  if (!name || !startDate || !endDate) return null;
+  return (
+    <ImpactPreviewButton
+      endpoint="/projects/impact-preview"
+      payload={{
+        managerId: managerId ? Number(managerId) : undefined,
+        budget: budget ? Number(budget) : undefined,
+        startDate,
+        endDate,
+        type: status,
+      }}
+      label="معاينة أثر المشروع"
+    />
+  );
+}
 
 export default function ProjectsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const addProject = useApiMutation("/projects", "POST", [["projects"], ["projects-stats"]]);
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
-  const { fieldErrors, validate, setApiError } = useFieldErrors();
-
-  const handleSubmit = async () => {
-    const firstError = validate({
-      name: form.name ? null : "يرجى إدخال اسم المشروع",
-      startDate: form.startDate ? null : "تاريخ البدء مطلوب",
-      endDate: !form.endDate
-        ? "تاريخ الانتهاء مطلوب"
-        : form.startDate && form.endDate <= form.startDate
-          ? "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء"
-          : null,
-      budget: form.budget && Number(form.budget) < 0 ? "الميزانية يجب أن تكون صفر أو أكثر" : null,
-    });
-    if (firstError) {
-      toast({ variant: "destructive", title: firstError });
-      return;
-    }
-    try {
-      await addProject.mutateAsync({
-        name: form.name,
-        clientId: form.clientId ? Number(form.clientId) : null,
-        managerId: form.managerId ? Number(form.managerId) : null,
-        status: form.status,
-        budget: Number(form.budget) || 0,
-        startDate: form.startDate || undefined,
-        endDate: form.endDate || undefined,
-        description: form.description || undefined,
-      });
-      clearDraft();
-      toast({ title: "تم إنشاء المشروع بنجاح" });
-      setLocation("/projects");
-    } catch (err: any) {
-      setApiError(err);
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء المشروع", description: err?.fix ?? err?.message });
-    }
-  };
 
   return (
     <CreatePageLayout title="مشروع جديد" backPath="/projects">
-      {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
-          <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
-        </div>
-      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <CreationDateField />
       </div>
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <TextField
-            label="اسم المشروع"
-            required
-            value={form.name}
-            onChange={(v) => setForm((f) => ({ ...f, name: v }))}
-            placeholder="اسم المشروع"
-            error={fieldErrors.name}
-          />
+      <FormShell
+        schema={schema}
+        defaultValues={{
+          name: "",
+          clientId: "",
+          managerId: "",
+          status: "planning",
+          budget: "",
+          startDate: "",
+          endDate: "",
+          description: "",
+        }}
+        submitLabel={addProject.isPending ? "جاري الإنشاء..." : "إنشاء"}
+        secondaryActions={
+          <Button type="button" variant="outline" onClick={() => setLocation("/projects")}>
+            إلغاء
+          </Button>
+        }
+        onSubmit={async (values) => {
+          await addProject.mutateAsync({
+            name: values.name,
+            clientId: values.clientId ? Number(values.clientId) : null,
+            managerId: values.managerId ? Number(values.managerId) : null,
+            status: values.status,
+            budget: Number(values.budget) || 0,
+            startDate: values.startDate || undefined,
+            endDate: values.endDate || undefined,
+            description: values.description || undefined,
+          });
+          toast({ title: "تم إنشاء المشروع بنجاح" });
+          setLocation("/projects");
+        }}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="name" label="اسم المشروع" required placeholder="اسم المشروع" />
           <div>
-            <ClientSelect value={form.clientId} onChange={(v) => setForm((f) => ({ ...f, clientId: v }))} label="العميل" />
-            {form.clientId && (
-              <div className="mt-3">
-                <ClientContextCard clientId={form.clientId} section="project" />
-              </div>
-            )}
+            <FormEntitySelect name="clientId" select={ClientSelect} label="العميل" />
+            <ClientCard />
           </div>
           <div>
-            <EmployeeSelect value={form.managerId} onChange={(v) => setForm((f) => ({ ...f, managerId: v }))} label="مدير المشروع" />
-            {form.managerId && (
-              <div className="mt-3">
-                <ManagerWorkloadCard employeeId={form.managerId} />
-              </div>
-            )}
+            <FormEntitySelect name="managerId" select={EmployeeSelect} label="مدير المشروع" />
+            <ManagerCard />
           </div>
-          <FormFieldWrapper label="الحالة">
-            <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="planning">تخطيط</SelectItem>
-                <SelectItem value="in_progress">قيد التنفيذ</SelectItem>
-                <SelectItem value="on_hold">متوقف</SelectItem>
-                <SelectItem value="completed">مكتمل</SelectItem>
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-          <NumberField label={`الميزانية (${getCurrencySymbol()})`} value={form.budget} onChange={(v) => setForm((f) => ({ ...f, budget: v }))} placeholder="٠" step={0.01} min={0} error={fieldErrors.budget} />
-          <FormFieldWrapper label="تاريخ البدء" required error={fieldErrors.startDate}>
-            <DatePicker value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} />
-          </FormFieldWrapper>
-          <FormFieldWrapper label="تاريخ الانتهاء" required error={fieldErrors.endDate}>
-            <DatePicker value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} />
-          </FormFieldWrapper>
-        </div>
-        <TextAreaField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="وصف المشروع وأهدافه..." />
-
-        {form.name && form.startDate && form.endDate && (
-          <ImpactPreviewButton
-            endpoint="/projects/impact-preview"
-            payload={{
-              managerId: form.managerId ? Number(form.managerId) : undefined,
-              budget: form.budget ? Number(form.budget) : undefined,
-              startDate: form.startDate,
-              endDate: form.endDate,
-              type: form.status,
-            }}
-            label="معاينة أثر المشروع"
-          />
-        )}
-
+          <FormSelectField name="status" label="الحالة" options={STATUS_OPTIONS} />
+          <FormNumberField name="budget" label={`الميزانية (${getCurrencySymbol()})`} placeholder="٠" step="0.01" min="0" />
+          <FormDateField name="startDate" label="تاريخ البدء" required />
+          <FormDateField name="endDate" label="تاريخ الانتهاء" required />
+        </FormGrid>
+        <FormTextareaField name="description" label="الوصف" placeholder="وصف المشروع وأهدافه..." />
+        <ImpactPreview />
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
-        <div className="flex justify-end gap-3 pt-4">
-          <Button variant="outline" onClick={() => setLocation("/projects")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={addProject.isPending} rateLimitAware>{addProject.isPending ? "جاري الإنشاء..." : "إنشاء"}</Button>
-        </div>
-      </div>
+      </FormShell>
     </CreatePageLayout>
   );
 }
