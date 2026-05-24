@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Building2, Eye, CheckCircle, Star, TrendingUp } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { CLASSIFICATIONS } from "@/lib/constants";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, periodRiyadh, currentPeriodRiyadh } from "@/lib/formatters";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
@@ -174,9 +174,7 @@ export default function Clients() {
         { label: "VIP", value: (clients || []).filter((c: any) => c.classification === "vip").length, icon: Star, color: "text-purple-600 bg-purple-50" },
         { label: "جديد هذا الشهر", value: (clients || []).filter((c: any) => {
           if (!c.createdAt) return false;
-          const d = new Date(c.createdAt);
-          const now = new Date();
-          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+          return periodRiyadh(c.createdAt) === currentPeriodRiyadh();
         }).length, icon: TrendingUp, color: "text-cyan-600 bg-cyan-50" },
       ]} />
 
