@@ -1741,6 +1741,13 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", authorize({ feature
     if (existingYE) throw new ConflictError(`قيد إقفال السنة ${year} موجود مسبقاً`);
     const description = `قيد إقفال السنة المالية ${year} — صافي الدخل ${netIncome.toFixed(2)}`;
     const { financialEngine } = await import("../lib/engines/index.js");
+    // Year-end closing entry: accounting practice dictates the entry is
+    // dated 12/31 of the year being closed (not today). By the time this
+    // endpoint runs all 12 monthly periods of that year are closed (the
+    // route validates this above), so the period gate would otherwise
+    // reject the post — `skipPeriodCheck: true` is the sanctioned escape
+    // hatch for type='closing' specifically (financialEngine enforces the
+    // type guard so the flag can't be used as a generic bypass).
     const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1752,6 +1759,8 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", authorize({ feature
       sourceId: 0,
       sourceKey: `finance:year_end:${scope.companyId}:${year}`,
       lines,
+      postingDate: `${year}-12-31`,
+      skipPeriodCheck: true,
     });
 
     // Mark all fiscal periods for the year as yearEndClosed = true

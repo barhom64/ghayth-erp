@@ -82,6 +82,22 @@ class FinancialEngineImpl implements DomainEngine {
       );
     }
 
+    // skipPeriodCheck is an escape hatch reserved for year-end closing
+    // entries (type='closing'). The whole point of YE close is to post a
+    // dated 12/31 entry into a period that has already been closed — by
+    // definition, all 12 monthly periods of the year are closed before
+    // YE close can proceed (see /fiscal-periods/:period/year-end-close
+    // in finance-journal.ts). For every other domain post the gate is
+    // mandatory: a non-closing entry that wants to bypass it is almost
+    // certainly a bug. Guard runs BEFORE the sourceKey rawQuery so a
+    // misuse fails fast without hitting the DB.
+    if (request.skipPeriodCheck && request.type !== "closing") {
+      throw new Error(
+        `[FinancialEngine] skipPeriodCheck is reserved for closing entries (type='closing'); ` +
+          `received type='${request.type ?? "general"}'`
+      );
+    }
+
     const existing = await rawQuery<{ id: number }>(
       `SELECT id FROM journal_entries WHERE "companyId"=$1 AND "sourceKey"=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [request.companyId, request.sourceKey]
@@ -94,15 +110,17 @@ class FinancialEngineImpl implements DomainEngine {
       };
     }
 
-    const periodDate = request.postingDate ?? todayISO();
-    const periodCheck = await checkFinancialPeriodOpen(
-      request.companyId,
-      periodDate
-    );
-    if (!periodCheck.open) {
-      throw new Error(
-        `الفترة المالية "${periodCheck.periodName}" مغلقة — لا يمكن ترحيل قيود`
+    if (!request.skipPeriodCheck) {
+      const periodDate = request.postingDate ?? todayISO();
+      const periodCheck = await checkFinancialPeriodOpen(
+        request.companyId,
+        periodDate
       );
+      if (!periodCheck.open) {
+        throw new Error(
+          `الفترة المالية "${periodCheck.periodName}" مغلقة — لا يمكن ترحيل قيود`
+        );
+      }
     }
 
     const entryParams = {
