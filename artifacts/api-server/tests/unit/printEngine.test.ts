@@ -166,11 +166,12 @@ describe("Print Engine v2 — registry helpers", () => {
 
   it("exposes getEntityPrintProfile with a permissive fallback", () => {
     expect(src).toContain("export function getEntityPrintProfile");
-    // The fallback must default to a4 + a synthesized permission, otherwise
-    // unwired entities would 500 instead of rendering a generic dump.
+    // The fallback must default to a4 + the generic print:create permission,
+    // otherwise unwired entities would 500 (synthesized per-entity permissions
+    // aren't in role_permissions for entities the seed migration didn't cover).
     expect(src).toContain('defaultFormat: "a4"');
     expect(src).toContain("registered: false");
-    expect(src).toContain('`print:${entityType}:create`');
+    expect(src).toContain('permission: "print:create"');
   });
 
   it("PrintFormat union covers all four output families", () => {

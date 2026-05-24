@@ -27,7 +27,6 @@ import {
   emitEvent,
   todayISO,
   checkFinancialPeriodOpen,
-  reverseAccountBalances,
 } from "../lib/businessHelpers.js";
 import { requestIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib/requestIdempotency.js";
 
@@ -1260,27 +1259,38 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
 
     const { financialEngine } = await import("../lib/engines/index.js");
 
-    // postJournalEntry manages its own transaction internally, so we use a
-    // compensating-reversal pattern: if the second post fails we soft-delete the first.
-    // The idempotency token anchors both legs so a retry collapses onto the same pair.
-    const fromResult = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref,
-      description: description ?? `معاملة بين الشركات ${ref}`,
-      type: "intercompany",
-      sourceType: "intercompany",
-      sourceId: 0,
-      sourceKey: `finance:intercompany:from:${idempotencyToken}`,
-      postingDate: txDate,
-      lines: fromLines,
-    });
-    markIdempotencyReplay(req, res, fromResult.alreadyExists);
+    // Atomicity guarantee: from-leg JE, to-leg JE, and the parent
+    // intercompany_transactions row commit or roll back together. The
+    // previous shape used a compensating-reversal pattern on to-leg
+    // failure but the SUBSEQUENT intercompany_transactions INSERT lived
+    // bare-outside-any-txn — a constraint violation there (companies FK
+    // failing on a concurrent deletedAt, malformed amount, etc.) left
+    // BOTH committed JE legs orphaned with no parent row to tie them
+    // back to. The outer withTransaction here closes that window.
+    //
+    // financialEngine.postJournalEntry's internal withTransaction joins
+    // this outer one reentrantly via SAVEPOINT (rawdb.ts:108), so a
+    // throw anywhere — from-leg post, to-leg post, parent INSERT —
+    // rolls all three back together. Cross-company posting is safe in a
+    // single transaction because Postgres doesn't gate transactions on
+    // the companyId column; the companyId scoping is purely a data
+    // attribute.
+    const { fromResult, toResult } = await withTransaction(async () => {
+      const fromResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref,
+        description: description ?? `معاملة بين الشركات ${ref}`,
+        type: "intercompany",
+        sourceType: "intercompany",
+        sourceId: 0,
+        sourceKey: `finance:intercompany:from:${idempotencyToken}`,
+        postingDate: txDate,
+        lines: fromLines,
+      });
 
-    let toResult: { journalId: number; alreadyExists: boolean };
-    try {
-      toResult = await financialEngine.postJournalEntry({
+      const toResult = await financialEngine.postJournalEntry({
         companyId: Number(toCompanyId),
         // Use the caller-provided toBranchId. Falls back to 0
         // (company-wide sentinel — same value used by other engine
@@ -1298,30 +1308,16 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
         postingDate: txDate,
         lines: toLines,
       });
-    } catch (err) {
-      // Compensating reversal: the from-side post already moved
-      // chart_of_accounts.currentBalance (postJournalEntry with status
-      // 'posted' applies balances). A bare soft-delete leaves those GL
-      // movements in place — the from-company's AR + Revenue stay
-      // inflated by `amount` with no auditable JE explaining them.
-      //
-      // reverseAccountBalances unwinds the per-account currentBalance
-      // updates and flips balancesApplied → false; the soft-delete then
-      // hides the row from reports. Order matters: reverse first, then
-      // soft-delete (reverseAccountBalances reads the JE row by id).
-      await reverseAccountBalances(scope.companyId, fromResult.journalId);
-      await rawExecute(
-        `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
-        [fromResult.journalId, scope.companyId]
-      );
-      throw err;
-    }
 
-    await rawExecute(
-      `INSERT INTO intercompany_transactions (ref,"fromCompanyId","toCompanyId",amount,description,"transactionDate",status,"fromJournalId","toJournalId","createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,'posted',$7,$8,$9)`,
-      [ref, scope.companyId, Number(toCompanyId), Number(amount), description ?? null, txDate, fromResult.journalId, toResult.journalId, scope.activeAssignmentId]
-    );
+      await rawExecute(
+        `INSERT INTO intercompany_transactions (ref,"fromCompanyId","toCompanyId",amount,description,"transactionDate",status,"fromJournalId","toJournalId","createdBy")
+         VALUES ($1,$2,$3,$4,$5,$6,'posted',$7,$8,$9)`,
+        [ref, scope.companyId, Number(toCompanyId), Number(amount), description ?? null, txDate, fromResult.journalId, toResult.journalId, scope.activeAssignmentId]
+      );
+
+      return { fromResult, toResult };
+    });
+    markIdempotencyReplay(req, res, fromResult.alreadyExists);
 
     const fromJournalId = fromResult.journalId;
     const toJournalId = toResult.journalId;

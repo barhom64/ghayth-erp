@@ -203,6 +203,9 @@ export default function TrafficViolationDetail() {
             ref={item?.ref || `TV-${id}`}
             date={formatDateAr(item?.violationDate || item?.createdAt)}
             sections={printSections}
+            entityType="traffic_violation"
+            entityId={id ?? 0}
+            formats={["a4"]}
           />
           <GuardedButton perm="fleet:update" variant="outline" size="sm" onClick={() => setLocation("/fleet/traffic-violations")} disabled={!item}>
             <Edit className="h-4 w-4 ms-1" />

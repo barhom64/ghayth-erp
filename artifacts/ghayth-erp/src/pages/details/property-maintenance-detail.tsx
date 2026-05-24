@@ -239,6 +239,9 @@ export default function PropertyMaintenanceDetail() {
             ref={item?.ref || `PMT-${id}`}
             date={formatDateAr(item?.createdAt)}
             sections={printSections}
+            entityType="maintenance_request"
+            entityId={id ?? 0}
+            formats={["a4"]}
           />
           <GuardedButton
             perm="properties:update"
