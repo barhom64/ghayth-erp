@@ -17,7 +17,7 @@ import {
   useAdvancedFilters,
 } from "@workspace/ui-core";
 import { Plus, Wallet, TrendingDown, PieChart, Calendar, ChevronDown, ChevronUp, Paperclip, ExternalLink, Link2 } from "lucide-react";
-import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
+import { formatDateAr, formatCurrency, formatNumber, periodRiyadh, currentPeriodRiyadh } from "@/lib/formatters";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { EntityComments } from "@workspace/entity-kit";
 import { EntityTags, useTagFilter, TagFilterSelect } from "@/components/shared/entity-tags";
@@ -192,9 +192,7 @@ export default function ExpensesPage() {
         { label: "عدد المصروفات", value: formatNumber(items.length), icon: Wallet, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "المتوسط", value: items.length > 0 ? formatCurrency(Math.round(totalExpenses / items.length)) : formatCurrency(0), icon: PieChart, color: "text-purple-600 bg-purple-50" },
         { label: "هذا الشهر", value: formatNumber(items.filter((e: any) => {
-          const d = new Date(e.createdAt);
-          const now = new Date();
-          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+          return periodRiyadh(e.createdAt) === currentPeriodRiyadh();
         }).length), icon: Calendar, color: "text-orange-600 bg-orange-50" },
       ]} />
 

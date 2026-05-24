@@ -6,7 +6,7 @@ import {
   Clock, Calendar, DollarSign, LogIn, LogOut as LogOutIcon, Timer, XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, currentDayOfMonthRiyadh, daysInCurrentMonthRiyadh } from "@/lib/formatters";
 import { formatTime } from "./shared";
 
 interface SummaryCardsProps {
@@ -77,9 +77,8 @@ export function SummaryCards({ attendance, monthlyStats, currentShift, lastPaysl
             <div className="mt-4 pt-4 border-t space-y-2">
               <p className="text-xs font-medium text-muted-foreground">تقدم الشهر الحالي</p>
               {(() => {
-                const now = new Date();
-                const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-                const dayOfMonth = now.getDate();
+                const daysInMonth = daysInCurrentMonthRiyadh();
+                const dayOfMonth = currentDayOfMonthRiyadh();
                 const monthPct = Math.round((dayOfMonth / daysInMonth) * 100);
                 const attendPct = monthlyStats.workingDays > 0
                   ? Math.round((monthlyStats.presentDays / monthlyStats.workingDays) * 100)
