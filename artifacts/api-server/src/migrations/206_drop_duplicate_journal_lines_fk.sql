@@ -1,0 +1,42 @@
+-- 206_drop_duplicate_journal_lines_fk.sql
+--
+-- @policy:breaking
+--   Drops a redundant FK constraint. The remaining constraint
+--   (journal_lines_journalId_fkey) already enforces the same
+--   foreign-key relationship — the dropped one was a duplicate
+--   with an additional ON DELETE CASCADE clause that nobody
+--   relies on (no code path deletes journal_entries directly;
+--   the standard reverse-and-soft-delete flow is used instead).
+--   So removing the cascade is safe and the table still has
+--   referential integrity via the surviving FK. Documented as
+--   breaking only because the policy check flags any
+--   DROP CONSTRAINT.
+--
+-- @rollback:
+--   ALTER TABLE public.journal_lines
+--     ADD CONSTRAINT journal_lines_journal_id_fk
+--     FOREIGN KEY ("journalId") REFERENCES public.journal_entries(id)
+--     ON DELETE CASCADE;
+--   Safe to roll back any time. Note the rolled-back state would
+--   re-introduce two FK constraints on the same column with
+--   conflicting ON DELETE behaviour, so think twice before
+--   actually doing this.
+--
+-- Schema audit on a real Postgres turned up two FK constraints on
+-- the same `journal_lines.journalId` column with conflicting
+-- ON DELETE behaviour:
+--
+--   journal_lines_journalId_fkey  → no ON DELETE clause
+--   journal_lines_journal_id_fk   → ON DELETE CASCADE
+--
+-- PG keeps both, so a DELETE on journal_entries races between
+-- "blocked because lines reference me" and "cascade-delete those
+-- lines" — the result is implementation-defined.
+--
+-- Drop the snake_case one (later addition, with the more aggressive
+-- CASCADE behaviour). The original journal_lines_journalId_fkey
+-- (no cascade) is the safer default: deletes on journal_entries
+-- should be blocked when lines exist, not silently wipe them.
+
+ALTER TABLE public.journal_lines
+  DROP CONSTRAINT IF EXISTS journal_lines_journal_id_fk;

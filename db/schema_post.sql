@@ -11659,11 +11659,6 @@ ALTER TABLE ONLY public.journal_lines
 
 
 --
--- Name: journal_lines journal_lines_journal_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.journal_lines
-    ADD CONSTRAINT journal_lines_journal_id_fk FOREIGN KEY ("journalId") REFERENCES public.journal_entries(id) ON DELETE CASCADE;
 
 
 --

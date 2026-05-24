@@ -1032,6 +1032,19 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       journalId = result.journalId;
       alreadyExists = result.alreadyExists;
 
+      // Persist the JE link on invoices.journalEntryId so tax-summary
+      // and VAT-return queries (which JOIN journal_entries via this
+      // column) can find the invoice's GL row. Without this UPDATE
+      // the column stayed NULL forever and the tax declaration
+      // returned 0 for invoice VAT — silent for any tenant with
+      // real data because guard.sh's check-schema-drift is skipped
+      // in CI (no DATABASE_URL).
+      await client.query(
+        `UPDATE invoices SET "journalEntryId" = $1
+          WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        [journalId, id, scope.companyId]
+      );
+
       // Phase 5.3 — persist the allocation resolution per line so the
       // accounting_allocation_results table reflects which rule moved
       // each line to which account. Runs after the JE posts so a
