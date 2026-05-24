@@ -14,7 +14,7 @@ import {
   type DataTableColumn,
   exportToCSV,
 } from "@workspace/ui-core";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, currentYearRiyadh } from "@/lib/formatters";
 
 const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
 
@@ -30,7 +30,7 @@ const REASON_LABELS: Record<string, string> = {
 const COLORS = ["#6366f1", "#f59e0b", "#ef4444", "#10b981", "#3b82f6", "#ec4899"];
 
 export default function TurnoverReportPage() {
-  const currentYear = new Date().getFullYear();
+  const currentYear = currentYearRiyadh();
   const [year, setYear] = useState(currentYear);
 
   const { data, isLoading, isError } = useApiQuery<any>(["turnover-report", String(year)], `/hr/turnover-report?year=${year}`);

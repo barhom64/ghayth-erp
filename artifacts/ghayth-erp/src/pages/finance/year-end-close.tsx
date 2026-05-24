@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, currentYearRiyadh } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Archive, TrendingUp, TrendingDown, Calculator, CheckCircle } from "lucide-react";
 import {
@@ -40,7 +40,7 @@ interface YearEndPreview {
 
 export default function YearEndClosePage() {
   const { toast } = useToast();
-  const currentYear = new Date().getFullYear();
+  const currentYear = currentYearRiyadh();
   const [year, setYear] = useState<string>(String(currentYear));
   const [retainedEarningsAccountCode, setRetainedEarningsAccountCode] = useState<string>("3300");
   const [force, setForce] = useState(false);
