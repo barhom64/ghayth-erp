@@ -71,6 +71,7 @@ export {
   FormTextareaField,
   FormSelectField,
   FormCheckboxField,
+  FormEntitySelect,
   FormGrid,
 } from "../../../artifacts/ghayth-erp/src/components/form-shell";
 export type {
@@ -79,6 +80,7 @@ export type {
   FormTextareaFieldProps,
   FormSelectFieldProps,
   FormCheckboxFieldProps,
+  FormEntitySelectProps,
   FormSelectOption,
 } from "../../../artifacts/ghayth-erp/src/components/form-shell";
 

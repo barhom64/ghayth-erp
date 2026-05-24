@@ -423,6 +423,68 @@ export function FormSelectField({
 }
 
 /**
+ * Wires any external entity-select component (VehicleSelect,
+ * DriverSelect, ClientSelect, …) into FormShell's react-hook-form
+ * context via Controller. The wrapped component must implement the
+ * `{ value, onChange, label?, required?, error? }` shape that the
+ * existing entity-selects from `@/components/shared/entity-selects`
+ * already use, so it works as a drop-in for the manual-form pattern
+ *
+ *   <FormEntitySelect name="vehicleId" select={VehicleSelect}
+ *                     label="المركبة" required />
+ *
+ * The Controller forwards the form's current string value and pipes
+ * onChange back through `field.onChange`; the form's per-field error
+ * (from `formState.errors[name].message`) is forwarded into the
+ * select's `error` prop so it lights up the same way native FormShell
+ * fields do.
+ */
+export interface FormEntitySelectProps {
+  name: string;
+  label?: string;
+  required?: boolean;
+  placeholder?: string;
+  /**
+   * The actual entity-select component. Must accept the
+   * `value`/`onChange`/`label`/`required`/`error` shape.
+   */
+  select: React.ComponentType<{
+    value: string;
+    onChange: (value: string) => void;
+    label?: string;
+    required?: boolean;
+    placeholder?: string;
+    error?: string;
+  }>;
+}
+export function FormEntitySelect({
+  name,
+  label,
+  required,
+  placeholder,
+  select: SelectComponent,
+}: FormEntitySelectProps) {
+  const { control, formState } = useFormContext();
+  const errorMsg = (formState.errors[name]?.message ?? undefined) as string | undefined;
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <SelectComponent
+          value={(field.value as string) ?? ""}
+          onChange={(v) => field.onChange(v)}
+          label={label}
+          required={required}
+          placeholder={placeholder}
+          error={errorMsg}
+        />
+      )}
+    />
+  );
+}
+
+/**
  * Boolean checkbox field. Renders a shadcn `<Checkbox>` with the label
  * to its trailing side and wires the controlled value through
  * react-hook-form's Controller. The `description` prop renders as
