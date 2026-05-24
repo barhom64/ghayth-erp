@@ -1192,3 +1192,141 @@ d("Wave-2 H3: appendRoundingAdjustment moves chart_of_accounts.currentBalance fo
     expect(Number(after.currentBalance)).toBe(0);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────
+// Year-end closing entry — dated {year}-12-31, posts into a closed
+// December via the engine's `skipPeriodCheck` escape hatch (reserved
+// for type='closing'). Accounting practice: the closing entry MUST
+// reflect the snapshot at the end of the year being closed, not the
+// date the operator happened to click the button. Without this, a YE
+// close run on 2026-01-15 produces a JE dated 2026-01-15 — out of
+// the year being closed entirely, silently breaking year-over-year
+// reports and comparative statements.
+// ─────────────────────────────────────────────────────────────────────
+
+d("Year-end closing entry: dated {year}-12-31 even when December is closed", () => {
+  let rawExecute: typeof import("../../src/lib/rawdb.js").rawExecute;
+  let rawQuery: typeof import("../../src/lib/rawdb.js").rawQuery;
+  let financialEngine: typeof import("../../src/lib/engines/financialEngine.js").financialEngine;
+
+  let companyId: number;
+  let branchId: number;
+  let assignmentId: number;
+
+  beforeAll(async () => {
+    const rawdb = await import("../../src/lib/rawdb.js");
+    rawExecute = rawdb.rawExecute;
+    rawQuery = rawdb.rawQuery;
+    const engineMod = await import("../../src/lib/engines/financialEngine.js");
+    financialEngine = engineMod.financialEngine;
+
+    const { setupTwoCompanyFixture } = await import("./_fixtures/twoCompanies.js");
+    const fx = await setupTwoCompanyFixture();
+    companyId = fx.companyA.id;
+    branchId = fx.companyA.branchId;
+    assignmentId = fx.companyA.assignmentId;
+  });
+
+  beforeEach(async () => {
+    await rawExecute(
+      `DELETE FROM journal_lines WHERE "journalId" IN
+         (SELECT id FROM journal_entries WHERE "companyId"=$1)`,
+      [companyId]
+    );
+    await rawExecute(`DELETE FROM journal_entries WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(`DELETE FROM financial_periods WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(`DELETE FROM chart_of_accounts WHERE "companyId"=$1`, [companyId]);
+    await rawExecute(
+      `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "currentBalance", "allowPosting", "isActive")
+       VALUES ($1, '4101', 'إيراد اختبار', 'Test Revenue', 'revenue', 0, true, true),
+              ($1, '3201', 'الأرباح المحتجزة', 'Retained Earnings', 'equity', 0, true, true)`,
+      [companyId]
+    );
+  });
+
+  it(
+    "posts the YE entry dated {year}-12-31 even when Dec {year} is closed " +
+      "(skipPeriodCheck is honored for type='closing' only)",
+    async () => {
+      // Set up Dec 2025 as CLOSED — the realistic state at YE-close time.
+      await rawExecute(
+        `INSERT INTO financial_periods ("companyId", name, "startDate", "endDate", status)
+         VALUES ($1, 'ديسمبر 2025', '2025-12-01', '2025-12-31', 'closed')`,
+        [companyId]
+      );
+
+      // Post the closing entry exactly the way the YE route does it.
+      const { journalId } = await financialEngine.postJournalEntry({
+        companyId,
+        branchId,
+        createdBy: assignmentId,
+        ref: "YE-2025",
+        description: "قيد إقفال السنة المالية 2025 — صافي الدخل 0.00",
+        type: "closing",
+        sourceType: "year_end_close",
+        sourceId: 0,
+        sourceKey: `finance:year_end:${companyId}:2025`,
+        lines: [
+          { accountCode: "4101", debit: 100, credit: 0 },
+          { accountCode: "3201", debit: 0, credit: 100 },
+        ],
+        postingDate: "2025-12-31",
+        skipPeriodCheck: true,
+      });
+
+      // The two invariants we care about:
+      //   1. `date` is the year-end date (2025-12-31), not today
+      //   2. `createdAt` is also stamped with the year-end date (the
+      //      financialEngine applyHeaderOverrides path writes postingDate
+      //      onto createdAt — see C2 fix). So range-filtered reports
+      //      asking "give me all entries WHERE createdAt BETWEEN
+      //      2025-01-01 AND 2025-12-31" include the YE entry, not the
+      //      Jan-{following-year} reports.
+      const [row] = await rawQuery<{
+        entryDate: string;
+        createdAtDate: string;
+        type: string;
+      }>(
+        `SELECT date::text AS "entryDate",
+                "createdAt"::date::text AS "createdAtDate",
+                type
+           FROM journal_entries WHERE id = $1`,
+        [journalId]
+      );
+      expect(row.entryDate).toBe("2025-12-31");
+      expect(row.createdAtDate).toBe("2025-12-31");
+      expect(row.type).toBe("closing");
+    }
+  );
+
+  it("rejects the YE shape on a non-closing type even with skipPeriodCheck=true", async () => {
+    // Belt-and-braces — the escape hatch must remain YE-only. A regression
+    // that drops the type guard would let any caller silently bypass the
+    // period gate by flipping one flag, undoing PER-2 / H2 / H4 in one
+    // line of code.
+    await rawExecute(
+      `INSERT INTO financial_periods ("companyId", name, "startDate", "endDate", status)
+       VALUES ($1, 'ديسمبر 2025', '2025-12-01', '2025-12-31', 'closed')`,
+      [companyId]
+    );
+    await expect(
+      financialEngine.postJournalEntry({
+        companyId,
+        branchId,
+        createdBy: assignmentId,
+        ref: "NOT-YE-2025",
+        description: "tries to bypass period gate via skipPeriodCheck",
+        type: "expense",
+        sourceType: "expense",
+        sourceId: 0,
+        sourceKey: `finance:not-ye-bypass:${companyId}:2025`,
+        lines: [
+          { accountCode: "4101", debit: 100, credit: 0 },
+          { accountCode: "3201", debit: 0, credit: 100 },
+        ],
+        postingDate: "2025-12-31",
+        skipPeriodCheck: true,
+      })
+    ).rejects.toThrow(/skipPeriodCheck is reserved for closing entries/);
+  });
+});
