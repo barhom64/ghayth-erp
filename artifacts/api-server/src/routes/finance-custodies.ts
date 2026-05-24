@@ -577,41 +577,58 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
       }
     }
 
-    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      createdBy: custodyAssignmentId,
-      ref,
-      description: description ?? `عهدة ${resolvedEmployeeName}`,
-      sourceType: "custody",
-      sourceId: 0,
-      sourceKey: `finance:custody:${ref}`,
-      lines: [
-        { accountCode: custodyAccountCode, debit: Number(amount), credit: 0, employeeId: custodyEmployeeId ?? undefined },
-        { accountCode: sourceAcct, debit: 0, credit: Number(amount) },
-      ],
+    // Atomicity guarantee: custody JE, metadata UPDATE, approval-chain
+    // initiation, and the pending_approval status flip all commit or
+    // roll back together. The earlier shape ran them sequentially with
+    // engine.post committed first, then a series of bare rawExecute /
+    // initiateApprovalChain calls — a throw on approval-chain init
+    // (FK violation, missing chain definition) left the JE committed
+    // without an approval chain, mirroring the C3 silent-corruption
+    // pattern that #885 closed on /expenses. financialEngine.post
+    // JournalEntry's internal withTransaction joins this outer one
+    // reentrantly via SAVEPOINT (rawdb.ts:108).
+    let journalId!: number;
+    let alreadyExists = false;
+    let approvalResult!: Awaited<ReturnType<typeof initiateApprovalChain>>;
+    await withTransaction(async () => {
+      const posted = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        createdBy: custodyAssignmentId,
+        ref,
+        description: description ?? `عهدة ${resolvedEmployeeName}`,
+        sourceType: "custody",
+        sourceId: 0,
+        sourceKey: `finance:custody:${ref}`,
+        lines: [
+          { accountCode: custodyAccountCode, debit: Number(amount), credit: 0, employeeId: custodyEmployeeId ?? undefined },
+          { accountCode: sourceAcct, debit: 0, credit: Number(amount) },
+        ],
+      });
+      journalId = posted.journalId;
+      alreadyExists = posted.alreadyExists;
+
+      if (purpose || expectedReturnDate) {
+        await rawExecute(
+          `UPDATE journal_entries SET notes = $1, "dueDate" = $2 WHERE id = $3 AND "companyId" = $4 AND "deletedAt" IS NULL`,
+          [purpose || null, expectedReturnDate || null, journalId, scope.companyId]
+        );
+      }
+
+      approvalResult = await initiateApprovalChain({
+        companyId: scope.companyId, branchId: scope.branchId,
+        chainType: "advances", refType: "custody", refId: journalId,
+        amount: Number(amount),
+      });
+
+      if (approvalResult.requiresApproval) {
+        await rawExecute(
+          `UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`,
+          [journalId, scope.companyId]
+        );
+      }
     });
     markIdempotencyReplay(req, res, alreadyExists);
-
-    if (purpose || expectedReturnDate) {
-      await rawExecute(
-        `UPDATE journal_entries SET notes = $1, "dueDate" = $2 WHERE id = $3 AND "companyId" = $4 AND "deletedAt" IS NULL`,
-        [purpose || null, expectedReturnDate || null, journalId, scope.companyId]
-      );
-    }
-
-    const approvalResult = await initiateApprovalChain({
-      companyId: scope.companyId, branchId: scope.branchId,
-      chainType: "advances", refType: "custody", refId: journalId,
-      amount: Number(amount),
-    });
-
-    if (approvalResult.requiresApproval) {
-      await rawExecute(
-        `UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`,
-        [journalId, scope.companyId]
-      );
-    }
 
     emitEvent({
       companyId: scope.companyId,

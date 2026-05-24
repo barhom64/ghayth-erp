@@ -1311,6 +1311,7 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
       id: number;
       description: string | null;
       lineTotal: string;
+      quantity: string;
       accountCode: string | null;
       accountId: number | null;
       allocationStatus: string | null;
@@ -1331,6 +1332,7 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
     }>(
       `SELECT id, description,
               "lineTotal"::text AS "lineTotal",
+              quantity::text     AS quantity,
               "accountCode", "accountId", "allocationStatus",
               "costCenterId", "activityType",
               "projectId", "vehicleId", "propertyId", "unitId", "assetId",
@@ -1519,6 +1521,80 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
       });
     }
 
+    // COGS preview (Audit follow-up to #1013).
+    // Mirror the COGS planner the /approve handler calls so the UI can
+    // show stock shortages BEFORE the operator clicks approve. The
+    // planner only does SELECTs — we pass `pool` directly so the
+    // preview never holds a transaction open. applyStockMovements is
+    // NEVER called from this path.
+    const { planCogsForInvoice } = await import("../lib/inventory/cogsPosting.js");
+    const { pool: cogsPool } = await import("../lib/rawdb.js");
+    type CogsLine = import("../lib/inventory/cogsPosting.js").CogsJournalLine;
+    let cogsPreviewLines: CogsLine[] = [];
+    let cogsTotal = 0;
+    const cogsWarnings: Array<{ lineId: number; productId: number | null; reason: string; detail?: string }> = [];
+    try {
+      // Use the pool directly so the preview never holds a
+      // transaction open. The planner only does SELECTs;
+      // pool.query() is structurally compatible with PoolClient.query.
+      const cogsPlan = await planCogsForInvoice(cogsPool as never, {
+        companyId: scope.companyId,
+        invoiceId: id,
+        branchId: (invoice.branchId as number) ?? null,
+        lines: lines.map((r) => ({
+          invoiceLineId: r.id,
+          quantity: Number(r.quantity ?? 0),
+          productId: r.productId,
+          costCenterId: r.costCenterId,
+          projectId: r.projectId,
+          employeeId: r.employeeId,
+        })),
+      });
+      cogsPreviewLines = cogsPlan.journalLines;
+      cogsTotal = cogsPlan.totalCogs;
+      for (const w of cogsPlan.warnings) {
+        cogsWarnings.push({
+          lineId: w.invoiceLineId, productId: w.productId,
+          reason: w.reason, detail: w.detail,
+        });
+        // insufficient_stock is the same fatal condition /approve treats
+        // as a ValidationError. Surface it as a BLOCKER here so the UI
+        // can disable the approve button and explain WHY.
+        if (w.reason === "insufficient_stock") {
+          blockers.push({
+            field: `invoice_lines[${w.invoiceLineId}]`,
+            message: `مخزون غير كافٍ للسطر #${w.invoiceLineId}${w.detail ? ` — ${w.detail}` : ""}`,
+          });
+        }
+      }
+      // Splice the bucketed DR COGS / CR Inventory pairs into the
+      // preview so the operator sees the COMPLETE JE that will post,
+      // not a half view that hides the inventory side.
+      for (const cl of cogsPreviewLines) {
+        previewLines.push({
+          accountCode: cl.accountCode,
+          debit: cl.debit,
+          credit: cl.credit,
+          description: cl.description,
+          dimensions: {
+            costCenterId: cl.costCenterId,
+            branchId: cl.branchId,
+            projectId: cl.projectId,
+            departmentId: cl.departmentId,
+          },
+        });
+      }
+    } catch (err) {
+      // Don't let a preview-time failure break the rest of the response —
+      // the operator can still see the revenue/AR/VAT view. Surface as a
+      // soft warning so they know COGS isn't shown.
+      logger.warn({ err, invoiceId: id }, "posting-preview: COGS plan failed");
+      warnings.push({
+        field: "cogs",
+        message: "تعذّر حساب تكلفة البضاعة في المعاينة — راجع المخزون قبل الاعتماد",
+      });
+    }
+
     const totalDebit = roundTo2(previewLines.reduce((s, l) => s + l.debit, 0));
     const totalCredit = roundTo2(previewLines.reduce((s, l) => s + l.credit, 0));
     const isBalanced = Math.abs(totalDebit - totalCredit) < 0.005;
@@ -1534,6 +1610,11 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
       // the line it came from. Distinct from `warnings` above which
       // are document-level (period closed / no lines / rounding diff).
       resolverWarnings,
+      // Audit follow-up to #1013 — per-line COGS warnings (product not
+      // found / not tracked / insufficient stock). The UI can pin each
+      // to the line so the operator knows which item to fix.
+      cogsWarnings,
+      cogsTotal,
       journalLines: previewLines,
       totals: { debit: totalDebit, credit: totalCredit, balanced: isBalanced },
     });
