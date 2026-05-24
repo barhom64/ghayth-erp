@@ -1,31 +1,116 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { z } from "zod";
 import { useApiMutation, useApiQuery } from "@/lib/api";
+import { useFormContext } from "react-hook-form";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
+import {
+  CreatePageLayout,
+  CreationDateField,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormTextareaField,
+  FormSelectField,
+} from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
-import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+
+const schema = z.object({
+  subject: z.string().min(1, "يرجى إدخال موضوع الخطاب"),
+  channel: z.enum(["email", "sms", "whatsapp", "letter"]),
+  fromNumber: z.string().optional(),
+  toNumber: z.string().min(1, "يرجى إدخال المستلم"),
+  body: z.string().optional(),
+  relatedProjectId: z.string().optional(),
+});
+
+const CHANNEL_OPTIONS = [
+  { value: "email", label: "بريد إلكتروني" },
+  { value: "sms", label: "رسالة نصية" },
+  { value: "whatsapp", label: "واتساب" },
+  { value: "letter", label: "خطاب رسمي" },
+];
+
+// Inline picker that updates the `toNumber` field via setValue when a
+// quick-pick employee / client is selected.
+function QuickPicker({
+  label,
+  options,
+  onPick,
+}: {
+  label: string;
+  options: { value: string; label: string; pick: string }[];
+  onPick: (val: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-sm font-medium">{label}</label>
+      <select
+        className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+        onChange={(e) => {
+          const item = options.find((o) => o.value === e.target.value);
+          if (item) onPick(item.pick);
+          e.currentTarget.value = "";
+        }}
+      >
+        <option value="">— اختر —</option>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function ClientEmployeePickers({
+  clients,
+  employees,
+}: {
+  clients: any[];
+  employees: any[];
+}) {
+  const { setValue } = useFormContext();
+  return (
+    <>
+      <QuickPicker
+        label="اختر مستلم من العملاء"
+        options={clients.map((c: any) => ({
+          value: String(c.id),
+          label: `${c.name}${c.phone ? ` - ${c.phone}` : ""}`,
+          pick: c.phone || c.email || "",
+        }))}
+        onPick={(v) => setValue("toNumber", v)}
+      />
+      <QuickPicker
+        label="أو اختر موظف"
+        options={employees.map((emp: any) => ({
+          value: String(emp.id),
+          label: `${emp.name}${emp.phone ? ` - ${emp.phone}` : ""}`,
+          pick: emp.phone || emp.email || "",
+        }))}
+        onPick={(v) => setValue("toNumber", v)}
+      />
+    </>
+  );
+}
 
 export default function LettersCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("letters_create", {
-    subject: "", channel: "letter", fromNumber: "", toNumber: "", body: "", relatedProjectId: "",
-  });
-  // COM-003 — official letters are correspondence records, not dispatchable
-  // messages. POST /communications/send rejects channel "letter"; the letter
-  // is created in the correspondence module instead.
-  const createMut = useApiMutation<unknown, Record<string, any>>("/correspondence", "POST", [["correspondence"]]);
-  const { data: clientsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
+  const createMut = useApiMutation<unknown, Record<string, any>>(
+    "/correspondence",
+    "POST",
+    [["correspondence"]],
+  );
+  const { data: clientsData, isLoading, isError } = useApiQuery<{ data: any[] }>(
+    ["clients-list"],
+    "/clients",
+  );
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const { data: projectsData } = useApiQuery<{ data: any[] }>(["projects-list"], "/projects");
-  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -34,103 +119,62 @@ export default function LettersCreate() {
   const employees = employeesData?.data || [];
   const projects = projectsData?.data || [];
 
-  const handleSubmit = () => {
-    const firstError = validate({
-      subject: form.subject ? null : "يرجى إدخال موضوع الخطاب",
-      toNumber: form.toNumber ? null : "يرجى إدخال المستلم",
-    });
-    if (firstError) {
-      toast({ variant: "destructive", title: firstError });
-      return;
-    }
-    createMut.mutate({
-      direction: "outgoing",
-      subject: form.subject,
-      channel: form.channel,
-      content: form.body || undefined,
-      senderName: form.fromNumber || undefined,
-      recipientName: form.toNumber,
-      ...(form.relatedProjectId ? { entityType: "project", entityId: Number(form.relatedProjectId) } : {}),
-      ...(attachments.length > 0 ? { attachments } : {}),
-    }, {
-      onSuccess: () => { clearDraft(); toast({ title: "تم إنشاء الخطاب بنجاح" }); setLocation("/correspondence"); },
-      onError: (err: any) => {
-        setApiError(err);
-        toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الخطاب", description: err?.fix ?? err?.message });
-      },
-    });
-  };
+  const projectOptions = projects.map((p: any) => ({ value: String(p.id), label: p.name }));
 
   return (
     <CreatePageLayout title="خطاب جديد" backPath="/correspondence">
-      {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
-          <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
-        </div>
-      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <CreationDateField />
       </div>
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <TextField label="الموضوع" required value={form.subject} onChange={(v) => setForm((f) => ({ ...f, subject: v }))} placeholder="موضوع الخطاب" error={fieldErrors.subject} />
-          <FormFieldWrapper label="القناة">
-            <Select value={form.channel} onValueChange={(v) => setForm((f) => ({ ...f, channel: v }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="email">بريد إلكتروني</SelectItem>
-                <SelectItem value="sms">رسالة نصية</SelectItem>
-                <SelectItem value="whatsapp">واتساب</SelectItem>
-                <SelectItem value="letter">خطاب رسمي</SelectItem>
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-          <FormFieldWrapper label="اختر مستلم من العملاء">
-            <Select value="_none" onValueChange={(v) => {
-              if (v === "_none") return;
-              const client = clients.find((c: any) => String(c.id) === v);
-              if (client) setForm((f) => ({ ...f, toNumber: client.phone || client.email || "" }));
-            }}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">— اختر عميل —</SelectItem>
-                {clients.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name} {c.phone ? `- ${c.phone}` : ""}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-          <FormFieldWrapper label="أو اختر موظف">
-            <Select value="_none" onValueChange={(v) => {
-              if (v === "_none") return;
-              const emp = employees.find((emp: any) => String(emp.id) === v);
-              if (emp) setForm((f) => ({ ...f, toNumber: emp.phone || emp.email || "" }));
-            }}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">— اختر موظف —</SelectItem>
-                {employees.map((emp: any) => <SelectItem key={emp.id} value={String(emp.id)}>{emp.name} {emp.phone ? `- ${emp.phone}` : ""}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-          <TextField label="من" value={form.fromNumber} onChange={(v) => setForm((f) => ({ ...f, fromNumber: v }))} placeholder="رقم أو بريد المرسل" />
-          <TextField label="إلى" required value={form.toNumber} onChange={(v) => setForm((f) => ({ ...f, toNumber: v }))} placeholder="رقم أو بريد المستلم" error={fieldErrors.toNumber} />
-          <FormFieldWrapper label="ربط بمشروع (اختياري)">
-            <Select value={form.relatedProjectId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, relatedProjectId: v === "_none" ? "" : v }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">— بدون ربط —</SelectItem>
-                {projects.map((p: any) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-        </div>
-        <TextAreaField label="المحتوى" value={form.body} onChange={(v) => setForm((f) => ({ ...f, body: v }))} placeholder="نص الخطاب..." rows={5} />
+      <FormShell
+        schema={schema}
+        defaultValues={{
+          subject: "",
+          channel: "letter",
+          fromNumber: "",
+          toNumber: "",
+          body: "",
+          relatedProjectId: "",
+        }}
+        submitLabel={createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}
+        secondaryActions={
+          <Button type="button" variant="outline" onClick={() => setLocation("/correspondence")}>
+            إلغاء
+          </Button>
+        }
+        onSubmit={async (values) => {
+          await createMut.mutateAsync({
+            direction: "outgoing",
+            subject: values.subject,
+            channel: values.channel,
+            content: values.body || undefined,
+            senderName: values.fromNumber || undefined,
+            recipientName: values.toNumber,
+            ...(values.relatedProjectId
+              ? { entityType: "project", entityId: Number(values.relatedProjectId) }
+              : {}),
+            ...(attachments.length > 0 ? { attachments } : {}),
+          });
+          toast({ title: "تم إنشاء الخطاب بنجاح" });
+          setLocation("/correspondence");
+        }}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="subject" label="الموضوع" required placeholder="موضوع الخطاب" />
+          <FormSelectField name="channel" label="القناة" options={CHANNEL_OPTIONS} />
+          <ClientEmployeePickers clients={clients} employees={employees} />
+          <FormTextField name="fromNumber" label="من" placeholder="رقم أو بريد المرسل" />
+          <FormTextField name="toNumber" label="إلى" required placeholder="رقم أو بريد المستلم" />
+          <FormSelectField
+            name="relatedProjectId"
+            label="ربط بمشروع (اختياري)"
+            placeholder="— بدون ربط —"
+            options={projectOptions}
+          />
+        </FormGrid>
+        <FormTextareaField name="body" label="المحتوى" placeholder="نص الخطاب..." rows={5} />
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
-        <div className="flex justify-end gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={() => setLocation("/correspondence")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>{createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}</Button>
-        </div>
-      </div>
+      </FormShell>
     </CreatePageLayout>
   );
 }
