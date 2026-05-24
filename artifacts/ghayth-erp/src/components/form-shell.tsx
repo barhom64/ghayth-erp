@@ -20,6 +20,7 @@ import type { ZodType } from "zod";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -406,6 +407,49 @@ export function FormSelectField({
         ))}
       </select>
     </FieldWrapper>
+  );
+}
+
+/**
+ * Boolean checkbox field. Renders a shadcn `<Checkbox>` with the label
+ * to its trailing side and wires the controlled value through
+ * react-hook-form's Controller. The `description` prop renders as
+ * tertiary text below the checkbox (e.g. "نشط (سيتم استخدامه افتراضيًا)").
+ */
+export interface FormCheckboxFieldProps {
+  name: string;
+  label: string;
+  description?: string;
+  disabled?: boolean;
+}
+export function FormCheckboxField({
+  name,
+  label,
+  description,
+  disabled,
+}: FormCheckboxFieldProps) {
+  const { control } = useFormContext();
+  return (
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <div className="flex items-start gap-2 pt-6">
+          <Checkbox
+            id={name}
+            checked={field.value === true}
+            onCheckedChange={(v) => field.onChange(v === true)}
+            disabled={disabled}
+          />
+          <div className="flex flex-col">
+            <Label htmlFor={name} className="cursor-pointer">{label}</Label>
+            {description && (
+              <span className="text-xs text-muted-foreground">{description}</span>
+            )}
+          </div>
+        </div>
+      )}
+    />
   );
 }
 

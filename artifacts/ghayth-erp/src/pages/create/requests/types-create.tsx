@@ -1,84 +1,76 @@
 import { useLocation } from "wouter";
+import { z } from "zod";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout } from "@workspace/ui-core";
+import {
+  CreatePageLayout,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormTextareaField,
+  FormSelectField,
+  FormCheckboxField,
+} from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
-import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { useFieldErrors } from "@/hooks/use-field-errors";
-import { Checkbox } from "@/components/ui/checkbox";
-import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+
+const schema = z.object({
+  name: z.string().min(1, "يرجى إدخال اسم نوع الطلب"),
+  category: z.enum(["administrative", "financial", "technical", "hr", "maintenance"]),
+  isActive: z.boolean(),
+  description: z.string().optional(),
+});
+
+const CATEGORY_OPTIONS = [
+  { value: "administrative", label: "إداري" },
+  { value: "financial", label: "مالي" },
+  { value: "technical", label: "تقني" },
+  { value: "hr", label: "موارد بشرية" },
+  { value: "maintenance", label: "صيانة" },
+];
 
 export default function RequestsTypeCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("requests_type_create", {
-    name: "", category: "administrative", isActive: true, description: "",
-  });
-  const createMut = useApiMutation<unknown, Record<string, string | boolean | undefined>>("/requests/types", "POST", [["request-types"]]);
-  const { fieldErrors, validate, setApiError } = useFieldErrors();
-
-  const handleSubmit = () => {
-    const firstError = validate({
-      name: form.name ? null : "يرجى إدخال اسم نوع الطلب",
-    });
-    if (firstError) {
-      toast({ variant: "destructive", title: firstError });
-      return;
-    }
-    createMut.mutate({
-      name: form.name,
-      category: form.category,
-      isActive: form.isActive,
-      description: form.description || undefined,
-    }, {
-      onSuccess: () => { clearDraft(); toast({ title: "تم إضافة نوع الطلب بنجاح" }); setLocation("/requests/types"); },
-      onError: (err: any) => {
-        setApiError(err);
-        toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة نوع الطلب", description: err?.fix ?? err?.message });
-      },
-    });
-  };
+  const createMut = useApiMutation<unknown, Record<string, string | boolean | undefined>>(
+    "/requests/types",
+    "POST",
+    [["request-types"]],
+  );
 
   return (
     <CreatePageLayout title="إضافة نوع طلب" backPath="/requests/types">
-      {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
-          <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
-        </div>
-      )}
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <TextField label="اسم النوع" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="اسم نوع الطلب" error={fieldErrors.name} />
-          <FormFieldWrapper label="التصنيف">
-            <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="administrative">إداري</SelectItem>
-                <SelectItem value="financial">مالي</SelectItem>
-                <SelectItem value="technical">تقني</SelectItem>
-                <SelectItem value="hr">موارد بشرية</SelectItem>
-                <SelectItem value="maintenance">صيانة</SelectItem>
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-          <div className="flex items-center gap-2 pt-6">
-            <Checkbox
-              id="isActive"
-              checked={form.isActive}
-              onCheckedChange={(v) => setForm((f) => ({ ...f, isActive: v === true }))}
-            />
-            <Label htmlFor="isActive">نشط</Label>
-          </div>
-        </div>
-        <TextAreaField label="الوصف" value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} placeholder="وصف نوع الطلب..." />
-        <div className="flex justify-end gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={() => setLocation("/requests/types")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>{createMut.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
-        </div>
-      </div>
+      <FormShell
+        schema={schema}
+        defaultValues={{
+          name: "",
+          category: "administrative",
+          isActive: true,
+          description: "",
+        }}
+        submitLabel={createMut.isPending ? "جاري الإضافة..." : "إضافة"}
+        secondaryActions={
+          <Button type="button" variant="outline" onClick={() => setLocation("/requests/types")}>
+            إلغاء
+          </Button>
+        }
+        onSubmit={async (values) => {
+          await createMut.mutateAsync({
+            name: values.name,
+            category: values.category,
+            isActive: values.isActive,
+            description: values.description || undefined,
+          });
+          toast({ title: "تم إضافة نوع الطلب بنجاح" });
+          setLocation("/requests/types");
+        }}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="name" label="اسم النوع" required placeholder="اسم نوع الطلب" />
+          <FormSelectField name="category" label="التصنيف" options={CATEGORY_OPTIONS} />
+          <FormCheckboxField name="isActive" label="نشط" />
+        </FormGrid>
+        <FormTextareaField name="description" label="الوصف" placeholder="وصف نوع الطلب..." />
+      </FormShell>
     </CreatePageLayout>
   );
 }
