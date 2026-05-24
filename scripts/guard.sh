@@ -87,6 +87,11 @@ run_step "check:migration-policy" node scripts/src/check-migration-policy.mjs
 run_step "check:utc-time-drift" node scripts/src/check-utc-time-drift.mjs
 run_step "check:workflow-pnpm-filters" node scripts/src/check-workflow-pnpm-filters.mjs
 run_step "check:workflow-silent-failures" node scripts/src/check-workflow-silent-failures.mjs
+# Fourth of the four originally-dormant guards from PR #574 — finally
+# active after the 51-site finance-period-drift cleanup landed across
+# PRs #1019 (frontend batch 1), #1026 (frontend batch 2), and #1028
+# (bi.ts + finance-budget.ts route files).
+run_step "check:finance-period-drift" node scripts/src/check-finance-period-drift.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test
 
 END=$(date +%s)
