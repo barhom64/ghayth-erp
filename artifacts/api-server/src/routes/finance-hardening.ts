@@ -118,6 +118,14 @@ const releaseBankGuaranteeSchema = z.object({
 
 const createIntercompanySchema = z.object({
   toCompanyId: z.coerce.number(),
+  // The branch within the destination company that owns its leg of
+  // the entry. Optional — when omitted, the to-side JE is filed
+  // company-wide (branchId NULL). The previous code defaulted to
+  // `scope.branchId` (the SOURCE company's branch) which leaks the
+  // user's home-company branch id into the destination company,
+  // where it may not even exist as a valid branch row. Branch
+  // isolation queries on the destination company side then break.
+  toBranchId: z.coerce.number().optional(),
   amount: z.coerce.number(),
   description: z.string().optional(),
   transactionDate: z.string().optional(),
@@ -1128,7 +1136,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
   try {
     const scope = req.scope!;
 
-    const { toCompanyId, amount, description, transactionDate, arAccountCode, apAccountCode, revenueAccountCode, expenseAccountCode } = zodParse(createIntercompanySchema.safeParse(req.body ?? {}));
+    const { toCompanyId, toBranchId, amount, description, transactionDate, arAccountCode, apAccountCode, revenueAccountCode, expenseAccountCode } = zodParse(createIntercompanySchema.safeParse(req.body ?? {}));
 
     if (toCompanyId === scope.companyId) {
       throw new ValidationError("لا يمكن إنشاء معاملة بين الشركة ونفسها", {
@@ -1141,6 +1149,27 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
         fix: "تأكد من أن لديك تعييناً نشطاً على الشركة المستلمة",
         meta: { toCompanyId: Number(toCompanyId), allowedCompanies: scope.allowedCompanies ?? [] },
       });
+    }
+
+    // If a toBranchId is supplied, validate it belongs to toCompanyId
+    // (catches a typo or stale UI state pointing at a branch in the
+    // wrong company). Without this check the JE silently posts on a
+    // branch id that doesn't belong to the destination company →
+    // branch-isolation queries on that company side return empty.
+    if (toBranchId != null) {
+      const branchRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM branches
+          WHERE id = $1 AND "companyId" = $2
+            AND COALESCE("deletedAt", NULL) IS NULL
+          LIMIT 1`,
+        [toBranchId, toCompanyId]
+      );
+      if (branchRows.length === 0) {
+        throw new ValidationError(
+          `الفرع #${toBranchId} لا ينتمي إلى الشركة المستلمة #${toCompanyId}`,
+          { field: "toBranchId", fix: "اختر فرعاً تابعاً للشركة المستلمة" }
+        );
+      }
     }
 
     const idempotencyToken = requestIdempotencyToken(req);
@@ -1192,7 +1221,12 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
     try {
       toResult = await financialEngine.postJournalEntry({
         companyId: Number(toCompanyId),
-        branchId: scope.branchId,
+        // Use the caller-provided toBranchId. Falls back to 0
+        // (company-wide sentinel — same value used by other engine
+        // call sites e.g. hrEngine when no branch is in play).
+        // NOT scope.branchId, which would leak the SOURCE company's
+        // branch id into the DESTINATION company.
+        branchId: toBranchId ?? 0,
         createdBy: scope.activeAssignmentId,
         ref,
         description: description ?? `معاملة بين الشركات ${ref}`,
