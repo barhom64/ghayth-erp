@@ -123,34 +123,34 @@ router.get("/", authorize({ feature: "notifications", action: "list" }), async (
 
     // Two separate helper invocations because each rawQuery owns its
     // own params array (Promise.all runs them in parallel).
-    const countQuery = buildScopedWhere(
+    const countWhere = buildScopedWhere(
       scope, { companyIds: [scope.companyId] }, { disableBranchScope: true },
     );
-    countQuery.params.push(scope.activeAssignmentId);
-    const countAssignmentIdx = countQuery.nextParamIndex;
+    countWhere.params.push(scope.activeAssignmentId);
+    const countAssignmentIdx = countWhere.nextParamIndex;
 
-    const listQuery = buildScopedWhere(
+    const listWhere = buildScopedWhere(
       scope, { companyIds: [scope.companyId] }, { disableBranchScope: true },
     );
-    listQuery.params.push(scope.activeAssignmentId);
-    const listAssignmentIdx = listQuery.nextParamIndex;
-    listQuery.params.push(pageSize);
-    const listLimitIdx = listQuery.params.length;
-    listQuery.params.push(offset);
-    const listOffsetIdx = listQuery.params.length;
+    listWhere.params.push(scope.activeAssignmentId);
+    const listAssignmentIdx = listWhere.nextParamIndex;
+    listWhere.params.push(pageSize);
+    const listLimitIdx = listWhere.params.length;
+    listWhere.params.push(offset);
+    const listOffsetIdx = listWhere.params.length;
 
     const [[countRow], notifications] = await Promise.all([
       rawQuery<{ count: string }>(
-        `SELECT COUNT(*) AS count FROM notifications WHERE ${countQuery.where} AND "assignmentId" = $${countAssignmentIdx}`,
-        countQuery.params,
+        `SELECT COUNT(*) AS count FROM notifications WHERE ${countWhere.where} AND "assignmentId" = $${countAssignmentIdx}`,
+        countWhere.params,
       ),
       rawQuery<NotificationListRow>(
         `SELECT id, type, title, body, priority, "isRead", "createdAt", "refType", "refId", "actionUrl"
          FROM notifications
-         WHERE ${listQuery.where} AND "assignmentId" = $${listAssignmentIdx}
+         WHERE ${listWhere.where} AND "assignmentId" = $${listAssignmentIdx}
          ORDER BY "createdAt" DESC, id DESC
          LIMIT $${listLimitIdx} OFFSET $${listOffsetIdx}`,
-        listQuery.params,
+        listWhere.params,
       ),
     ]);
 
