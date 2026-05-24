@@ -634,6 +634,185 @@ accountsRouter.get("/summary", authorize({ feature: "finance.accounts", action: 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// TAX CODES — Migration 205.
+//
+// CRUD for the per-company tax-code registry that drives invoice
+// math + ZATCA categorisation. Default Saudi codes (VAT15, VAT0,
+// EXEMPT, OOS, RCM15) are seeded by migration 205; tenants can edit
+// names/accounts/inclusive defaults or add new codes (e.g. a future
+// VAT5 if rates change).
+//
+// Scoped to feature='finance.accounts' — same RBAC role as chart-of-
+// accounts admin.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TAX_TYPES = ["standard", "zero", "exempt", "out_of_scope", "reverse_charge"] as const;
+
+const upsertTaxCodeSchema = z.object({
+  code: z.string().min(1).max(20),
+  name: z.string().min(1).max(100),
+  nameEn: z.string().max(100).optional().nullable(),
+  rate: z.coerce.number().min(0).max(100),
+  taxType: z.enum(TAX_TYPES),
+  accountId: z.coerce.number().optional().nullable(),
+  inputAccountId: z.coerce.number().optional().nullable(),
+  isInclusiveDefault: z.coerce.boolean().optional().default(false),
+  zatcaCategoryCode: z.string().max(10).optional().nullable(),
+  zatcaExemptionReason: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  isActive: z.coerce.boolean().optional().default(true),
+});
+
+accountsRouter.get("/tax-codes", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { taxType, isActive } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let where = `"companyId" = $1 AND "deletedAt" IS NULL`;
+    if (taxType) {
+      params.push(taxType);
+      where += ` AND "taxType" = $${params.length}`;
+    }
+    if (isActive === "true" || isActive === "false") {
+      params.push(isActive === "true");
+      where += ` AND "isActive" = $${params.length}`;
+    }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM tax_codes WHERE ${where} ORDER BY "taxType", rate DESC, code ASC LIMIT 500`,
+      params
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "List tax codes error:");
+  }
+});
+
+accountsRouter.get("/tax-codes/:id", authorize({ feature: "finance.accounts", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM tax_codes WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("رمز الضريبة غير موجود");
+    res.json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Get tax code error:");
+  }
+});
+
+accountsRouter.post("/tax-codes", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const p = zodParse(upsertTaxCodeSchema.safeParse(req.body));
+    const insRes = await rawExecute(
+      `INSERT INTO tax_codes (
+         "companyId", code, name, "nameEn", rate, "taxType",
+         "accountId", "inputAccountId", "isInclusiveDefault",
+         "zatcaCategoryCode", "zatcaExemptionReason",
+         description, "isActive"
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [
+        scope.companyId, p.code, p.name, p.nameEn ?? null, p.rate, p.taxType,
+        p.accountId ?? null, p.inputAccountId ?? null, p.isInclusiveDefault ?? false,
+        p.zatcaCategoryCode ?? null, p.zatcaExemptionReason ?? null,
+        p.description ?? null, p.isActive ?? true,
+      ]
+    );
+    const newId = insRes.insertId;
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM tax_codes WHERE id = $1`, [newId]);
+
+    // The tax-codes module caches per (companyId, code) — invalidate
+    // so subsequent calls see the new row immediately.
+    const { clearTaxCodeCache } = await import("../lib/taxCodes.js");
+    clearTaxCodeCache(scope.companyId);
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "tax_codes", entityId: Number(newId),
+      after: { code: p.code, name: p.name, rate: p.rate, taxType: p.taxType },
+    }).catch((e) => logger.error(e, "tax code audit failed"));
+
+    res.status(201).json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Create tax code error:");
+  }
+});
+
+accountsRouter.patch("/tax-codes/:id", authorize({ feature: "finance.accounts", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const p = zodParse(upsertTaxCodeSchema.partial().safeParse(req.body));
+
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    const push = (col: string, val: unknown) => {
+      values.push(val);
+      fields.push(`"${col}" = $${values.length}`);
+    };
+    if (p.code !== undefined) push("code", p.code);
+    if (p.name !== undefined) push("name", p.name);
+    if (p.nameEn !== undefined) push("nameEn", p.nameEn ?? null);
+    if (p.rate !== undefined) push("rate", p.rate);
+    if (p.taxType !== undefined) push("taxType", p.taxType);
+    if (p.accountId !== undefined) push("accountId", p.accountId ?? null);
+    if (p.inputAccountId !== undefined) push("inputAccountId", p.inputAccountId ?? null);
+    if (p.isInclusiveDefault !== undefined) push("isInclusiveDefault", p.isInclusiveDefault);
+    if (p.zatcaCategoryCode !== undefined) push("zatcaCategoryCode", p.zatcaCategoryCode ?? null);
+    if (p.zatcaExemptionReason !== undefined) push("zatcaExemptionReason", p.zatcaExemptionReason ?? null);
+    if (p.description !== undefined) push("description", p.description ?? null);
+    if (p.isActive !== undefined) push("isActive", p.isActive);
+    if (fields.length === 0) throw new ValidationError("لا تغييرات لتطبيقها");
+    fields.push(`"updatedAt" = NOW()`);
+
+    values.push(id, scope.companyId);
+    const updRes = await rawExecute(
+      `UPDATE tax_codes SET ${fields.join(", ")}
+        WHERE id = $${values.length - 1} AND "companyId" = $${values.length} AND "deletedAt" IS NULL`,
+      values
+    );
+    if (updRes.affectedRows === 0) throw new NotFoundError("رمز الضريبة غير موجود");
+
+    const { clearTaxCodeCache } = await import("../lib/taxCodes.js");
+    clearTaxCodeCache(scope.companyId);
+
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM tax_codes WHERE id = $1`, [id]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "tax_codes", entityId: id, after: row,
+    }).catch((e) => logger.error(e, "tax code audit failed"));
+    res.json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Update tax code error:");
+  }
+});
+
+accountsRouter.delete("/tax-codes/:id", authorize({ feature: "finance.accounts", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    // Soft delete only — preserves audit / historical line references.
+    const updRes = await rawExecute(
+      `UPDATE tax_codes SET "deletedAt" = NOW(), "isActive" = false
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (updRes.affectedRows === 0) throw new NotFoundError("رمز الضريبة غير موجود");
+    const { clearTaxCodeCache } = await import("../lib/taxCodes.js");
+    clearTaxCodeCache(scope.companyId);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "tax_codes", entityId: id,
+    }).catch((e) => logger.error(e, "tax code audit failed"));
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "Delete tax code error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ACCOUNTING ALLOCATION RULES — Finance Line-Level Allocation Phase 6.
 //
 // REST CRUD over accounting_allocation_rules (migration 203). Drives the
