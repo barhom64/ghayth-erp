@@ -410,9 +410,33 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
 
     const { description, lines, costCenter, notes } = zodParse(createManualJournalSchema.safeParse(req.body ?? {}));
 
+    // Mirror the negative-amount + both-sides guards landed in #957
+    // for the /journal route. Without these, hardening accepts a
+    // balanced-but-inverted entry (e.g. `{debit:-100, credit:0}` on
+    // both sides) and reverses chart_of_accounts at apply time.
+    for (const l of lines) {
+      const d = Number(l.debit ?? 0);
+      const c = Number(l.credit ?? 0);
+      if (d < 0 || c < 0) {
+        throw new ValidationError("لا يُسمح بمبالغ سالبة في بنود القيد", {
+          field: "lines",
+          fix: "استعمل الجانب المقابل (مدين/دائن) لعكس الإشارة بدل الرقم السالب",
+        });
+      }
+      if (d > 0 && c > 0) {
+        throw new ValidationError("لا يُسمح بمدين ودائن في نفس البند", {
+          field: "lines",
+          fix: "اقسم البند إلى بندين منفصلين",
+        });
+      }
+    }
+
     const totalDebit = lines.reduce((s: number, l) => s + Number(l.debit ?? 0), 0);
     const totalCredit = lines.reduce((s: number, l) => s + Number(l.credit ?? 0), 0);
-    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+    // Align with createJournalEntry (businessHelpers.ts:529) — strict
+    // cent threshold so we don't silently let a 1-cent imbalance
+    // through. Previously `> 0.01` only caught ≥ 2-cent diffs.
+    if (Math.abs(totalDebit - totalCredit) >= 0.005) {
       throw new ValidationError(
         `القيد غير متوازن: مدين ${totalDebit.toFixed(2)}، دائن ${totalCredit.toFixed(2)}`,
         {
