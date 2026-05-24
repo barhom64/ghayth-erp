@@ -17,6 +17,7 @@ import {
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Package,
   Activity,
@@ -223,6 +224,7 @@ export default function ProductDetailPage() {
           },
         },
       ]}
+      headerExtra={product ? <PrintButton entityType="store_product" entityId={product.id ?? id ?? 0} formats={["a4", "label"]} label="طباعة" /> : null}
       kpis={[
         {
           label: "المخزون الحالي",

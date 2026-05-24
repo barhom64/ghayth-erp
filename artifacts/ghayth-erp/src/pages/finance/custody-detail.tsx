@@ -21,6 +21,7 @@ import {
   type StageStep,
 } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { PrintButton } from "@/components/shared/print-button";
 
 const timelineIcons: Record<string, any> = {
   created: KeyRound,
@@ -306,6 +307,7 @@ export default function CustodyDetailPage() {
 
   return (
     <DetailPageLayout
+      actions={<PrintButton entityType="custody" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
       title={data?.ref ? `عهدة ${data.ref}` : "العهدة"}
       subtitle={data?.description || data?.purpose || undefined}
       backPath="/finance/custodies"

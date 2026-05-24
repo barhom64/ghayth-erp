@@ -16,6 +16,7 @@ import { Save, User, Calendar, AlertTriangle } from "lucide-react";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { PrintButton } from "@/components/shared/print-button";
 
 const STATUS_OPTIONS = [
   { value: "pending", label: "لم يصل" },
@@ -165,7 +166,12 @@ export default function PilgrimDetail() {
       createdAt={data?.createdAt}
       updatedAt={data?.updatedAt}
       overview={overview}
-      actions={actions}
+      actions={
+        <div className="flex items-center gap-2">
+          actions
+          <PrintButton entityType="umrah_pilgrim" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
     />
   );
 }

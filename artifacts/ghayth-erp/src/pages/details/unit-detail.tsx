@@ -29,6 +29,7 @@ import {
 } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { PrintButton } from "@/components/shared/print-button";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Building },
@@ -667,7 +668,12 @@ export default function UnitDetail() {
       updatedAt={unit?.updatedAt}
       hideTabs={registryHideTabs}
       overview={overview}
-      actions={actions}
+      actions={
+        <div className="flex items-center gap-2">
+          actions
+          <PrintButton entityType="property_unit" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
     />
   );
 }

@@ -19,6 +19,7 @@ import { Wallet, Calendar, DollarSign, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { LOAN_STATUS, INSTALLMENT_STATUS, LOAN_TYPES } from "@/lib/hr-type-maps";
+import { PrintButton } from "@/components/shared/print-button";
 
 const STATUS_TONE_MAP: Record<string, DetailStatus["tone"]> = {
   pending: "warning",
@@ -211,7 +212,10 @@ export default function LoanDetail() {
       hideTabs={registryHideTabs}
       overview={overview}
       actions={
-        <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge className={cn("text-sm px-3 py-1", st.color)}>{st.label}</Badge>
+          {loan && <PrintButton entityType="loan_request" entityId={loan.id ?? id ?? 0} formats={["a4"]} label="طباعة" />}
+        </div>
       }
     />
   );

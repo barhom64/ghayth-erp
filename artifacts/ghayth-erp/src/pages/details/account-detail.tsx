@@ -9,6 +9,7 @@ import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function AccountDetail() {
   const [, params] = useRoute("/finance/accounts/:id");
@@ -76,7 +77,12 @@ export default function AccountDetail() {
       onRetry={refetch}
       extraTabs={extraTabs}
       hideTabs={hideTabs}
-      actions={<DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />}
+      actions={
+        <div className="flex items-center gap-2">
+          <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
+          <PrintButton entityType="account_statement" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
     />
   );
 }

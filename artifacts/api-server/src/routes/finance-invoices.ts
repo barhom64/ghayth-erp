@@ -2269,6 +2269,15 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     let net!: number;
     let vat!: number;
     let memoJournalResult: { journalId: number; alreadyExists: boolean } | null = null;
+    // Plan COGS reversal alongside the financial entries — the planner
+    // runs inside the same withTransaction so a JE failure rolls the
+    // stock restock back automatically. See lib/inventory/cogsPosting.ts.
+    // Initialised to the empty plan so the spread below stays typed
+    // without `?.` narrowing through a closure.
+    type CogsReversalPlanT = import("../lib/inventory/cogsPosting.js").CogsReversalPlan;
+    let cogsReversalPlan: CogsReversalPlanT = {
+      journalLines: [], stockMovements: [], lineUpdates: [], totalReversed: 0,
+    };
     // Atomicity guarantee: credit_memos INSERT, invoice paidAmount/status
     // bump, clients.totalRevenue reversal, budgets.used decrement, AND the
     // GL post all commit or roll back together. The previous shape ran the
@@ -2364,6 +2373,45 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
         );
       }
 
+      // ── COGS reversal (Audit follow-up to #1002/#1013) ──────────────
+      // Plan the inverted DR Inventory / CR COGS lines + the lot
+      // restock for this memo's slice of the original sale.
+      // ratio = creditAmount / invoice.total → 1.0 for a full return,
+      // < 1 for partials. Skipped (empty plan) when the invoice had
+      // no COGS to begin with (service-only invoice).
+      const { planCogsReversal, applyStockReversals } = await import(
+        "../lib/inventory/cogsPosting.js"
+      );
+      const invoiceTotal = Number(invoice.total) || 0;
+      const reversalRatio = invoiceTotal > 0 ? creditAmount / invoiceTotal : 0;
+      cogsReversalPlan = await planCogsReversal(client as any, {
+        companyId: scope.companyId,
+        invoiceId: id,
+        ratio: reversalRatio,
+        memoId: memoId ?? 0,
+      });
+      if (cogsReversalPlan.lineUpdates.length > 0) {
+        await applyStockReversals(
+          client as any, scope.companyId,
+          cogsReversalPlan.stockMovements, scope.activeAssignmentId ?? 0,
+        );
+        for (const u of cogsReversalPlan.lineUpdates) {
+          await client.query(
+            `UPDATE invoice_lines
+                SET "cogsReversedAmount" = $1,
+                    "cogsReversedAt"     = NOW(),
+                    "cogsReversalJson"   = COALESCE("cogsReversalJson", '[]'::jsonb) || $2::jsonb
+              WHERE id = $3`,
+            [u.newReversedAmount, JSON.stringify([u.snapshot]), u.invoiceLineId],
+          );
+        }
+        await client.query(
+          `UPDATE credit_memos SET "cogsReversedTotal" = $1
+            WHERE id = $2 AND "companyId" = $3`,
+          [cogsReversalPlan.totalReversed, memoId, scope.companyId],
+        );
+      }
+
       // Reverse the budgets.used bump proportional to the memo's net. The
       // approval bumped the revenue budget by the full invoice net for the
       // JE's createdAt month; a credit memo refunds part of that revenue,
@@ -2406,6 +2454,10 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
           { accountCode: salesReturnsCode, debit: net, credit: 0, clientId: invoice.clientId },
           ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: vat, credit: 0, clientId: invoice.clientId }] : []),
           { accountCode: arCode, debit: 0, credit: creditAmount, clientId: invoice.clientId },
+          // COGS reversal lines (DR Inventory / CR COGS) — only present
+          // when the original sale had inventoried lines. Service-only
+          // invoices keep the byte-identical pre-PR JE shape.
+          ...cogsReversalPlan.journalLines,
         ],
         guardTable: "credit_memos",
         guardId: memoId ?? 0,

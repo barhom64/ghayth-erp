@@ -26,6 +26,7 @@ import {
   DetailActionButtons,
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function VendorDetailPage() {
   const [, params] = useRoute("/finance/vendors/:id");
@@ -226,7 +227,12 @@ export default function VendorDetailPage() {
       error={isError ? true : undefined}
       onRetry={() => refetch()}
       overview={overview}
-      actions={actions}
+      actions={
+        <div className="flex items-center gap-2">
+          actions
+          <PrintButton entityType="vendor" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
       extraTabs={extraTabs}
     />
   );

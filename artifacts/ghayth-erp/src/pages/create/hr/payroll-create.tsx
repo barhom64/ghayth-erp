@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useAppContext } from "@/contexts/app-context";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, currentPeriodRiyadh } from "@/lib/formatters";
 import { DollarSign, Users, Building2, CheckCircle2, Info } from "lucide-react";
 import { TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
@@ -25,9 +25,8 @@ export default function PayrollCreate() {
   const createMut = useApiMutation("/hr/payroll", "POST", [["payroll"]], {
     successMessage: "تم تشغيل مسير الرواتب بنجاح",
   });
-  const now = new Date();
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("hr_payroll_create", {
-    month: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+    month: currentPeriodRiyadh(),
     reference: "",
     notes: "",
     scope: "all",

@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { useAuth } from "@/lib/auth";
+import { PrintButton } from "@/components/shared/print-button";
 
 const LIFECYCLE_STEPS: ReadonlyArray<{ key: string; label: string }> = [
   { key: "draft",           label: "مسودة" },
@@ -378,7 +379,12 @@ export default function JournalManualDetailPage() {
         overview={overview}
         extraTabs={extraTabs}
         hideTabs={hideTabs}
-        actions={actions}
+        actions={
+        <div className="flex items-center gap-2">
+          actions
+          <PrintButton entityType="journal_entry" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
       />
 
       {/* FIN-013 — reject dialog (peer reviewer rejects with required notes) */}

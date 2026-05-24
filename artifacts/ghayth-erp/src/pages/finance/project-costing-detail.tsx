@@ -16,6 +16,7 @@ import {
   Wallet,
   Percent,
 } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 
 const TONE_MAP: Record<StatusTone, "success" | "warning" | "info" | "muted" | "destructive" | "default"> = {
   success: "success",
@@ -102,6 +103,7 @@ export default function ProjectCostingDetailPage() {
 
   return (
     <DetailPageLayout
+      actions={<PrintButton entityType="project_costing" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
       title={project?.name || "المشروع"}
       subtitle={project?.description || undefined}
       backPath="/finance/project-costing"
