@@ -83,7 +83,26 @@ export function PrintButton({
 
   const primary: PrintFormat = defaultFormat ?? formats[0] ?? "a4";
 
+  // Guard: if the page passed us a placeholder id (0, undefined, empty string),
+  // the entity hasn't loaded yet — clicking would either 400 from the server or
+  // print an empty document. Better to disable the button so the user can't
+  // even try, with a tooltip explaining why.
+  const hasRealId =
+    entityId !== undefined &&
+    entityId !== null &&
+    entityId !== "" &&
+    entityId !== 0 &&
+    entityId !== "0";
+
   async function run(format: PrintFormat) {
+    if (!hasRealId) {
+      toast({
+        title: "الوثيقة غير محمّلة",
+        description: "يرجى الانتظار حتى يكتمل تحميل البيانات قبل الطباعة.",
+        variant: "destructive",
+      });
+      return;
+    }
     setLoading(true);
     // Open the preview window synchronously *before* awaiting the API call so
     // browsers don't treat it as a popup (popup blockers permit windows opened
@@ -188,7 +207,7 @@ export function PrintButton({
 
   if (formats.length <= 1) {
     return (
-      <Button variant={variant} size={size} onClick={() => run(primary)} disabled={loading} className="gap-1">
+      <Button variant={variant} size={size} onClick={() => run(primary)} disabled={loading || !hasRealId} title={!hasRealId ? "الوثيقة غير محمّلة بعد" : undefined} className="gap-1">
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
         {label}
       </Button>
@@ -197,7 +216,7 @@ export function PrintButton({
 
   return (
     <div className="flex">
-      <Button variant={variant} size={size} onClick={() => run(primary)} disabled={loading} className="gap-1 rounded-l-none">
+      <Button variant={variant} size={size} onClick={() => run(primary)} disabled={loading || !hasRealId} title={!hasRealId ? "الوثيقة غير محمّلة بعد" : undefined} className="gap-1 rounded-l-none">
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : FORMAT_ICON[primary]}
         {label}
       </Button>
