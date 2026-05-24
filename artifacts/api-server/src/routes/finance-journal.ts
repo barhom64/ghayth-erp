@@ -598,9 +598,57 @@ journalRouter.delete("/expenses/:id", authorize({ feature: "finance.journal", ac
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status = 'draft' RETURNING id`, [id, scope.companyId]);
-    if (!row) throw new NotFoundError("المصروف غير موجود");
-    await reverseAccountBalances(scope.companyId, row.id as number);
+    // Wrap the soft-delete + ledger reversal + budget release in ONE
+    // transaction so a partial failure rolls all three back. Without
+    // this, a release that crashed mid-flight could leave the expense
+    // marked deleted but budgets.used still inflated by its amount.
+    const result = await withTransaction(async (client) => {
+      const { rows } = await client.query(
+        `UPDATE journal_entries SET "deletedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status = 'draft'
+          RETURNING id`,
+        [id, scope.companyId]
+      );
+      if (rows.length === 0) return null;
+      const expenseId = Number(rows[0].id);
+
+      // reverseAccountBalances is a no-op on drafts (balancesApplied=false),
+      // so this is belt + braces against a future caller that flips the
+      // status before calling DELETE.
+      await reverseAccountBalances(scope.companyId, expenseId);
+
+      // Budget-release: the CREATE path (finance-journal.ts:474) bumps
+      // `budgets.used` by the expense amount BEFORE the JE is even posted,
+      // so every draft holds a soft reservation. The reject/return path
+      // (finance-journal.ts:672) releases that reservation; DELETE was the
+      // only sibling path that didn't, leaving budgets.used permanently
+      // inflated by the deleted draft's amount. Mirrors the reject-path
+      // SQL exactly so a single bug fix here doesn't drift from there.
+      // GREATEST() floors at zero, matching the reject path's defensive
+      // shape.
+      await client.query(
+        `UPDATE budgets b
+            SET used = GREATEST(0, b.used - sub.total)
+           FROM (
+             SELECT jl."accountCode",
+                    to_char(je."createdAt", 'YYYY-MM') AS period,
+                    SUM(jl.debit) AS total
+               FROM journal_lines jl
+               JOIN journal_entries je ON je.id = jl."journalId"
+              WHERE jl."journalId" = $1
+                AND jl.debit > 0
+                AND jl."deletedAt" IS NULL
+              GROUP BY jl."accountCode", to_char(je."createdAt", 'YYYY-MM')
+           ) sub
+          WHERE b."companyId" = $2
+            AND b."accountCode" = sub."accountCode"
+            AND b.period = sub.period
+            AND b."deletedAt" IS NULL`,
+        [expenseId, scope.companyId]
+      );
+      return expenseId;
+    });
+    if (result === null) throw new NotFoundError("المصروف غير موجود");
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Finance journal error:");
