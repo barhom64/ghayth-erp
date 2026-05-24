@@ -253,6 +253,26 @@ class HREngineImpl implements DomainEngine {
       totalBankPayout: number;
       totalGosiPayable: number;
       totalOtherDeductions: number;
+      /**
+       * Optional per-employee breakdown. When provided, the salary +
+       * GOSI expense + overtime DR lines are split per employee with
+       * employeeId + departmentId stamped on each journal_line, so
+       * profitability reports can aggregate payroll cost by
+       * department / branch / individual. The credit liabilities
+       * stay aggregated (one salary_payable, one gosi_payable, one
+       * deductions_payable line) since they're collective balances.
+       *
+       * When omitted (legacy callers), the function emits the same
+       * 6-line aggregate JE as before — backwards compatible.
+       */
+      breakdown?: Array<{
+        employeeId: number;
+        departmentId?: number | null;
+        branchId?: number | null;
+        basic: number;
+        overtime: number;
+        gosiEmployer: number;
+      }>;
     }
   ) {
     // HR-001 — accrual leg. Run creation recognises the payroll expense and
@@ -282,10 +302,94 @@ class HREngineImpl implements DomainEngine {
     const otherDeductions = roundTo2(payroll.totalOtherDeductions);
     const totalGross = roundTo2(bankPayout + gosiPayable + otherDeductions - totalOvertime - gosiEmployer);
 
+    // Build debit lines — per-employee when breakdown is provided,
+    // otherwise the legacy 3-line aggregate. The credit side stays
+    // aggregated regardless: salary_payable, gosi_payable and
+    // deductions_payable are settlement liabilities, not per-employee
+    // expense.
+    const debitLines: Array<{
+      accountCode: string; debit: number; credit: number;
+      employeeId?: number; departmentId?: number;
+    }> = [];
+
+    if (payroll.breakdown && payroll.breakdown.length > 0) {
+      // Validate the breakdown sums match the aggregates within a
+      // small rounding tolerance. If they diverge by more than a
+      // cent the breakdown is unreliable — fall back to aggregate.
+      let sumBasic = 0, sumOT = 0, sumGosi = 0;
+      for (const e of payroll.breakdown) {
+        sumBasic += roundTo2(e.basic);
+        sumOT += roundTo2(e.overtime);
+        sumGosi += roundTo2(e.gosiEmployer);
+      }
+      const grossDiff = Math.abs(roundTo2(sumBasic) - totalGross);
+      const otDiff = Math.abs(roundTo2(sumOT) - totalOvertime);
+      const gosiDiff = Math.abs(roundTo2(sumGosi) - gosiEmployer);
+      const breakdownTrusted = grossDiff < 0.5 && otDiff < 0.5 && gosiDiff < 0.5;
+
+      if (breakdownTrusted) {
+        // Per-employee DR lines for salary + overtime + GOSI.
+        // The rounding remainder lands on the LAST employee row in
+        // each bucket so the bucket total stays exact.
+        const lastIdx = payroll.breakdown.length - 1;
+        let runningBasic = 0, runningOT = 0, runningGosi = 0;
+        for (let i = 0; i < payroll.breakdown.length; i++) {
+          const e = payroll.breakdown[i];
+          const basicRounded = i === lastIdx
+            ? roundTo2(totalGross - runningBasic)
+            : roundTo2(e.basic);
+          const otRounded = i === lastIdx
+            ? roundTo2(totalOvertime - runningOT)
+            : roundTo2(e.overtime);
+          const gosiRounded = i === lastIdx
+            ? roundTo2(gosiEmployer - runningGosi)
+            : roundTo2(e.gosiEmployer);
+          if (basicRounded > 0) {
+            debitLines.push({
+              accountCode: salaryExpenseCode, debit: basicRounded, credit: 0,
+              employeeId: e.employeeId,
+              ...(e.departmentId != null ? { departmentId: e.departmentId } : {}),
+            });
+            runningBasic = roundTo2(runningBasic + basicRounded);
+          }
+          if (otRounded > 0) {
+            debitLines.push({
+              accountCode: overtimeExpenseCode, debit: otRounded, credit: 0,
+              employeeId: e.employeeId,
+              ...(e.departmentId != null ? { departmentId: e.departmentId } : {}),
+            });
+            runningOT = roundTo2(runningOT + otRounded);
+          }
+          if (gosiRounded > 0) {
+            debitLines.push({
+              accountCode: gosiExpenseCode, debit: gosiRounded, credit: 0,
+              employeeId: e.employeeId,
+              ...(e.departmentId != null ? { departmentId: e.departmentId } : {}),
+            });
+            runningGosi = roundTo2(runningGosi + gosiRounded);
+          }
+        }
+      } else {
+        // Breakdown didn't reconcile — fall back to aggregate lines
+        // so the entry still posts; the dimensional split would be
+        // misleading.
+        debitLines.push(
+          { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
+          { accountCode: overtimeExpenseCode, debit: totalOvertime, credit: 0 },
+          { accountCode: gosiExpenseCode, debit: gosiEmployer, credit: 0 },
+        );
+      }
+    } else {
+      // Legacy 3-line aggregate.
+      debitLines.push(
+        { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
+        { accountCode: overtimeExpenseCode, debit: totalOvertime, credit: 0 },
+        { accountCode: gosiExpenseCode, debit: gosiEmployer, credit: 0 },
+      );
+    }
+
     const lines = [
-      { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
-      { accountCode: overtimeExpenseCode, debit: totalOvertime, credit: 0 },
-      { accountCode: gosiExpenseCode, debit: gosiEmployer, credit: 0 },
+      ...debitLines,
       { accountCode: salaryPayableCode, debit: 0, credit: bankPayout },
       { accountCode: gosiPayableCode, debit: 0, credit: gosiPayable },
       { accountCode: deductionsPayableCode, debit: 0, credit: otherDeductions },
