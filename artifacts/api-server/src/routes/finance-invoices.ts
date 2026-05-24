@@ -1694,6 +1694,25 @@ invoicesRouter.patch("/invoices/:id", authorize({ feature: "finance.invoices", a
       before.status = existing.status; after.status = status;
     }
     if (description !== undefined && description !== existing.description) {
+      // ZATCA-mutation guard: once an invoice has been submitted to ZATCA
+      // (zatcaStatus IS NOT NULL — values include 'submitted', 'accepted',
+      // 'rejected' per finance-zatca.ts), its description is part of the
+      // record sent to the tax authority (finance-zatca.ts uses
+      // invoice.description as the line-description fallback). Editing it
+      // here creates a local-vs-ZATCA divergence: the regulator's record
+      // shows the original text while the local DB shows the new one.
+      // The sanctioned correction path for a submitted invoice is a credit
+      // memo + re-issue, not an in-place description rewrite.
+      if (existing.zatcaStatus !== null && existing.zatcaStatus !== undefined) {
+        throw new ConflictError(
+          `لا يمكن تعديل وصف فاتورة مُسجَّلة في ZATCA (الحالة: ${existing.zatcaStatus}) — استخدم إشعار دائن + إعادة إصدار`,
+          {
+            field: "description",
+            fix: "أنشئ إشعار دائن (credit memo) ثم أعد إصدار الفاتورة بالوصف الصحيح",
+            meta: { zatcaStatus: existing.zatcaStatus },
+          }
+        );
+      }
       sets.push(`description = $${idx++}`); params.push(description);
       before.description = existing.description; after.description = description;
     }

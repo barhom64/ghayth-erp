@@ -345,3 +345,71 @@ describe("VL-1 — PATCH /vouchers/:id guards", () => {
     expect(block).toContain("checkFinancialPeriodOpen(scope.companyId, existing.entryDate)");
   });
 });
+
+// ─── DELETE /expenses/:id — budget reservation release ─────────────────────
+// The expense CREATE path (finance-journal.ts:474) bumps `budgets.used` by
+// the expense amount as a soft reservation, BEFORE the JE is even posted.
+// Reject/return at finance-journal.ts:672 releases that reservation when
+// the expense is killed mid-workflow. But DELETE used to be the lone
+// sibling that didn't release it — every draft expense deleted before
+// approval permanently inflated budgets.used by its amount. This block
+// locks the release in so the parity stays.
+
+describe("DELETE /expenses/:id — budget reservation release", () => {
+  it("releases the budgets.used reservation alongside the soft-delete", () => {
+    const idx = JRN_ROUTE.indexOf('journalRouter.delete("/expenses/:id"');
+    expect(idx).toBeGreaterThan(-1);
+    const block = JRN_ROUTE.slice(idx, idx + 3000);
+    // The release SQL mirrors the reject/return path exactly: budgets.used
+    // -= sum of the deleted JE's debit lines, GREATEST(0,…) flooring,
+    // matched by (companyId, accountCode, period) where period is derived
+    // from the JE's createdAt month.
+    expect(block).toContain("UPDATE budgets b");
+    expect(block).toContain("SET used = GREATEST(0, b.used - sub.total)");
+    expect(block).toContain('to_char(je."createdAt"');
+    expect(block).toContain("SUM(jl.debit)");
+  });
+
+  it("wraps soft-delete + ledger reversal + budget release in one transaction", () => {
+    // Atomicity: if the budget release fails after the soft-delete
+    // committed, you'd be back at the original silent-corruption state
+    // (deleted expense but inflated budget). withTransaction makes the
+    // three writes commit or roll back together.
+    const idx = JRN_ROUTE.indexOf('journalRouter.delete("/expenses/:id"');
+    const block = JRN_ROUTE.slice(idx, idx + 3000);
+    expect(block).toContain("withTransaction(async (client)");
+    // The order matters too: SELECT-and-soft-delete first, then reverse
+    // balances, then release budget — all inside the same transaction.
+    const softDeleteIdx = block.indexOf('UPDATE journal_entries SET "deletedAt"');
+    const reverseIdx = block.indexOf("reverseAccountBalances");
+    const budgetIdx = block.indexOf("UPDATE budgets b");
+    expect(softDeleteIdx).toBeGreaterThan(-1);
+    expect(reverseIdx).toBeGreaterThan(softDeleteIdx);
+    expect(budgetIdx).toBeGreaterThan(reverseIdx);
+  });
+});
+
+// ─── PATCH /invoices/:id — ZATCA-submission immutability ────────────────────
+// finance-zatca.ts uses invoice.description as the line-description
+// fallback when invoice_lines are missing one. Once an invoice has been
+// submitted to ZATCA (zatcaStatus IS NOT NULL — accepted / submitted /
+// rejected), editing the description locally creates an audit-trail
+// divergence: the regulator's record shows the original text, the local
+// DB shows the new one. The sanctioned correction is a credit memo +
+// re-issue, not an in-place rewrite. Lock the guard in so a future
+// refactor that drops the check is caught immediately.
+
+describe("PATCH /invoices/:id — ZATCA-submission immutability", () => {
+  it("rejects description edits when zatcaStatus is set", () => {
+    const idx = INV_ROUTE.indexOf('invoicesRouter.patch("/invoices/:id"');
+    expect(idx).toBeGreaterThan(-1);
+    const block = INV_ROUTE.slice(idx, idx + 4500);
+    // The guard sits inside the `description !== undefined` branch so
+    // edits to OTHER fields (dueDate, status via state machine) still
+    // work post-submission — only the ZATCA-material description is
+    // locked.
+    expect(block).toContain("existing.zatcaStatus");
+    expect(block).toContain("ConflictError");
+    expect(block).toMatch(/credit memo|إشعار دائن/);
+  });
+});
