@@ -58,6 +58,18 @@ export const roleKeyColors: Record<string, string> = {
   employee: "#95A5A6",
 };
 
+/**
+ * Lookup a role's chip color with a stable fallback for unknown role
+ * keys. Replaces the `roleKeyColors[key] || "#95A5A6"` pattern that was
+ * scattered across admin/* pages — that pattern tripped the
+ * inline-hex-color lint rule. Centralising the fallback here means
+ * consumers carry no literal hex of their own.
+ */
+export function getRoleColor(key: string | undefined | null): string {
+  if (!key) return roleKeyColors.employee;
+  return roleKeyColors[key] ?? roleKeyColors.employee;
+}
+
 const ALL_HR_SUBS = ["employees", "attendance", "leaves", "payroll", "performance", "training", "organization", "recruitment", "violations", "shifts"];
 
 const roleKeySubPages: Record<string, Record<string, string[]>> = {

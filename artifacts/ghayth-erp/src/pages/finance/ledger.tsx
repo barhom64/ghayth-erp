@@ -1,6 +1,7 @@
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -95,7 +96,7 @@ export default function LedgerPage() {
         </CardContent></Card>
         <Card className={Number(balance) >= 0 ? "bg-status-success-surface" : "bg-status-error-surface"}><CardContent className="p-4 text-center">
           <p className="text-xs text-muted-foreground">الرصيد الحالي</p>
-          <p className="text-2xl font-bold" style={{ color: Number(balance) >= 0 ? "#16a34a" : "#dc2626" }}>
+          <p className={cn("text-2xl font-bold", Number(balance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
             {formatCurrency(Number(balance))}
           </p>
         </CardContent></Card>
@@ -146,7 +147,7 @@ export default function LedgerPage() {
             sortable: true,
             className: "font-bold",
             render: (e) => (
-              <span style={{ color: Number(e.runningBalance) >= 0 ? "#16a34a" : "#dc2626" }}>
+              <span className={cn(Number(e.runningBalance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
                 {formatCurrency(Number(e.runningBalance))}
               </span>
             ),
@@ -166,7 +167,7 @@ export default function LedgerPage() {
           <div className="col-span-3">المجموع</div>
           <div className="text-status-success-foreground">{formatCurrency(Number(summary.totalDebit || 0))}</div>
           <div className="text-status-error-foreground">{formatCurrency(Number(summary.totalCredit || 0))}</div>
-          <div style={{ color: Number(balance) >= 0 ? "#16a34a" : "#dc2626" }}>
+          <div className={cn(Number(balance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
             {formatCurrency(Number(balance))}
           </div>
         </div>

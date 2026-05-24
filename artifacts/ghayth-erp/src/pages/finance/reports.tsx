@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useApiQuery } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -122,7 +123,7 @@ function TrialBalanceNode({ node, level = 0 }: { node: any; level?: number }) {
         <td className="p-3"><Badge variant="outline" className="text-xs">{typeMap[node.type] || node.type}</Badge></td>
         <td className="p-3 text-status-success-foreground">{formatCurrency(Number(node.totalDebit || 0))}</td>
         <td className="p-3 text-status-error-foreground">{formatCurrency(Number(node.totalCredit || 0))}</td>
-        <td className="p-3 font-bold" style={{ color: Number(node.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
+        <td className={cn("p-3 font-bold", Number(node.balance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
           {formatCurrency(Number(node.balance || 0))}
         </td>
       </tr>
@@ -136,7 +137,7 @@ function TrialBalanceNode({ node, level = 0 }: { node: any; level?: number }) {
           </td>
           <td className="p-2 text-status-success-foreground text-xs font-bold">{formatCurrency(Number(node.subtotalDebit || node.totalDebit || 0))}</td>
           <td className="p-2 text-status-error-foreground text-xs font-bold">{formatCurrency(Number(node.subtotalCredit || node.totalCredit || 0))}</td>
-          <td className="p-2 text-xs font-bold" style={{ color: Number(node.subtotalBalance || node.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
+          <td className={cn("p-2 text-xs font-bold", Number(node.subtotalBalance || node.balance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
             {formatCurrency(Number(node.subtotalBalance || node.balance || 0))}
           </td>
         </tr>
@@ -191,7 +192,7 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
     {
       key: "balance", header: "الرصيد", sortable: true,
       render: (r) => (
-        <span className="font-bold" style={{ color: Number(r.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
+        <span className={cn("font-bold", Number(r.balance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
           {formatCurrency(Number(r.balance || 0))}
         </span>
       ),
@@ -242,7 +243,7 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
             <Card key={type} className="border-dashed">
               <CardContent className="p-3 text-center">
                 <p className="text-xs text-muted-foreground">{typeMap[type] || type}</p>
-                <p className="text-sm font-bold" style={{ color: Number(vals.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
+                <p className={cn("text-sm font-bold", Number(vals.balance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
                   {formatCurrency(Number(vals.balance || 0))}
                 </p>
               </CardContent>
@@ -389,9 +390,9 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
           <p className="text-2xl font-bold text-status-error-foreground">{formatCurrency(totalExpenses)}</p>
         </CardContent></Card>
         <Card className={netIncome >= 0 ? "bg-emerald-50" : "bg-rose-50"}><CardContent className="p-4 text-center">
-          <DollarSign className="h-6 w-6 mx-auto mb-1" style={{ color: netIncome >= 0 ? "#059669" : "#dc2626" }} />
+          <DollarSign className={cn("h-6 w-6 mx-auto mb-1", netIncome >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")} />
           <p className="text-xs text-muted-foreground">صافي الدخل</p>
-          <p className="text-2xl font-bold" style={{ color: netIncome >= 0 ? "#059669" : "#dc2626" }}>
+          <p className={cn("text-2xl font-bold", netIncome >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
             {formatCurrency(netIncome)}
           </p>
         </CardContent></Card>
@@ -440,10 +441,10 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5" style={{ color: netIncome >= 0 ? "#059669" : "#dc2626" }} />
+              <DollarSign className={cn("h-5 w-5", netIncome >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")} />
               <span className="font-bold text-lg">صافي الدخل (الربح/الخسارة)</span>
             </div>
-            <span className="text-2xl font-bold" style={{ color: netIncome >= 0 ? "#059669" : "#dc2626" }}>
+            <span className={cn("text-2xl font-bold", netIncome >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
               {formatCurrency(netIncome)}
             </span>
           </div>
@@ -592,9 +593,9 @@ function CashFlow({ dateParams }: { dateParams: string }) {
           <p className="text-2xl font-bold text-status-error-foreground">{formatCurrency(Number(summary.totalOutflow || 0))}</p>
         </CardContent></Card>
         <Card className={Number(summary.netCashFlow || 0) >= 0 ? "bg-emerald-50" : "bg-rose-50"}><CardContent className="p-4 text-center">
-          <DollarSign className="h-6 w-6 mx-auto mb-1" style={{ color: Number(summary.netCashFlow || 0) >= 0 ? "#059669" : "#dc2626" }} />
+          <DollarSign className={cn("h-6 w-6 mx-auto mb-1", Number(summary.netCashFlow || 0) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")} />
           <p className="text-xs text-muted-foreground">صافي التدفق</p>
-          <p className="text-2xl font-bold" style={{ color: Number(summary.netCashFlow || 0) >= 0 ? "#059669" : "#dc2626" }}>
+          <p className={cn("text-2xl font-bold", Number(summary.netCashFlow || 0) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
             {formatCurrency(Number(summary.netCashFlow || 0))}
           </p>
         </CardContent></Card>
@@ -651,7 +652,7 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
     {
       key: "runningBalance", header: "الرصيد",
       render: (e) => (
-        <span className="font-bold text-xs" style={{ color: Number(e.runningBalance) >= 0 ? "#16a34a" : "#dc2626" }}>
+        <span className={cn("font-bold text-xs", Number(e.runningBalance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
           {formatCurrency(Number(e.runningBalance || 0))}
         </span>
       ),
@@ -688,7 +689,7 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
         <Card className={Number(summary.closingBalance) >= 0 ? "bg-status-success-surface" : "bg-status-error-surface"}>
           <CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground">الرصيد الختامي</p>
-            <p className="text-xl font-bold" style={{ color: Number(summary.closingBalance) >= 0 ? "#16a34a" : "#dc2626" }}>
+            <p className={cn("text-xl font-bold", Number(summary.closingBalance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
               {formatCurrency(Number(summary.closingBalance || 0))}
             </p>
           </CardContent>
@@ -1063,7 +1064,7 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
     {
       key: "runningBalance", header: "الرصيد التراكمي",
       render: (r) => (
-        <span className="font-bold text-xs" style={{ color: Number(r.runningBalance) >= 0 ? "#16a34a" : "#dc2626" }}>
+        <span className={cn("font-bold text-xs", Number(r.runningBalance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
           {formatCurrency(Number(r.runningBalance || 0))}
         </span>
       ),
@@ -1140,7 +1141,7 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
             <Card className={Number(summary.balance) >= 0 ? "bg-status-success-surface" : "bg-status-error-surface"}>
               <CardContent className="p-4 text-center">
                 <p className="text-xs text-muted-foreground">الرصيد</p>
-                <p className="text-xl font-bold" style={{ color: Number(summary.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
+                <p className={cn("text-xl font-bold", Number(summary.balance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
                   {formatCurrency(Number(summary.balance || 0))}
                 </p>
               </CardContent>
@@ -1161,7 +1162,7 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
               <div className="col-span-3 p-3">المجموع</div>
               <div className="p-3 text-status-success-foreground">{formatCurrency(Number(summary.totalDebit || 0))}</div>
               <div className="p-3 text-status-error-foreground">{formatCurrency(Number(summary.totalCredit || 0))}</div>
-              <div className="p-3 font-bold" style={{ color: Number(summary.balance) >= 0 ? "#16a34a" : "#dc2626" }}>
+              <div className={cn("p-3 font-bold", Number(summary.balance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
                 {formatCurrency(Number(summary.balance || 0))}
               </div>
               <div className="p-3">{summary.count || 0} حركة</div>

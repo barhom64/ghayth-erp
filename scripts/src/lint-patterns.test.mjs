@@ -376,6 +376,80 @@ check(
   !fires("text-px-literal", `<h2 className="text-2xl">عنوان</h2>`),
 );
 
+// ─── inline-hex-color rule (design-unification §3) ──────────────────────
+//
+// Hard rule that catches any `style={{ ... #hex ... }}` inline color in
+// a JSX attribute. Two real concerns: dark-mode breakage (the literal
+// stays the same when theme flips) and brand drift (multiple shades of
+// "success green" diverge across pages). Print/letterhead pages and a
+// few brand/data-driven surfaces are skip-listed in the rule itself.
+
+console.log("inline-hex-color rule");
+
+check(
+  "style={{ color: \"#16a34a\" }} IS flagged",
+  fires("inline-hex-color", `<span style={{ color: "#16a34a" }}>إيجابي</span>`),
+);
+check(
+  "style={{ background: \"#1565c0\" }} IS flagged",
+  fires("inline-hex-color", `<div style={{ background: "#1565c0" }}>brand</div>`),
+);
+check(
+  "ternary with two hex literals IS flagged",
+  fires(
+    "inline-hex-color",
+    `<span style={{ color: x > 0 ? "#16a34a" : "#dc2626" }}>X</span>`,
+  ),
+);
+check(
+  "linear-gradient with hex stops IS flagged",
+  fires(
+    "inline-hex-color",
+    `<div style={{ background: "linear-gradient(135deg,#1565c0,#0d47a1)" }} />`,
+  ),
+);
+check(
+  "8-digit hex (#aabbccdd) IS flagged",
+  fires("inline-hex-color", `<div style={{ color: "#aabbccdd" }} />`),
+);
+check(
+  "3-digit shorthand (#abc) IS flagged",
+  fires("inline-hex-color", `<div style={{ color: "#abc" }} />`),
+);
+check(
+  "style with CSS variable is NOT flagged",
+  // var(--token) is the canonical replacement — must pass cleanly.
+  !fires(
+    "inline-hex-color",
+    `<div style={{ color: "var(--color-status-success-foreground)" }} />`,
+  ),
+);
+check(
+  "className with token (no inline style) is NOT flagged",
+  !fires(
+    "inline-hex-color",
+    `<span className="text-status-success-foreground">إيجابي</span>`,
+  ),
+);
+check(
+  "inline style with only a non-color property is NOT flagged",
+  // The rule scopes to color/background; an unrelated style like
+  // `paddingInlineStart` must not trip the regex.
+  !fires(
+    "inline-hex-color",
+    `<td style={{ paddingInlineStart: \`\${12 + level * 20}px\` }} />`,
+  ),
+);
+check(
+  "hex inside a JS string literal (not in JSX style) is NOT flagged",
+  // The rule anchors on `style={{` so a constant map (`{ owner: "#C0392B" }`)
+  // outside a JSX style attribute must not fire.
+  !fires(
+    "inline-hex-color",
+    `const ROLE_COLORS = { owner: "#C0392B", manager: "#8E44AD" };`,
+  ),
+);
+
 // ─── Ratchet structural invariant ───────────────────────────────────────
 //
 // All 15 kit rules were intentionally hardened — none of them should
@@ -406,6 +480,10 @@ const kitRuleIds = [
   // Design-unification pass §2 — hardened after the text-[Npx] baseline
   // reached 0 in a single sweep (481 literals → text-2xs / text-3xs).
   "text-px-literal",
+  // Design-unification pass §3 — hardened after the inline-hex baseline
+  // reached 0 (41 → 0; 30 status literals lifted to design tokens, 11
+  // role-color fallbacks centralised in getRoleColor()).
+  "inline-hex-color",
 ];
 for (const id of kitRuleIds) {
   const rule = ruleById(id);

@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -72,7 +73,7 @@ export default function BudgetPage() {
         const used = Number(b.used || 0);
         const remaining = alloc - used;
         return (
-          <span className="font-semibold" style={{ color: remaining >= 0 ? "#16a34a" : "#dc2626" }}>
+          <span className={cn("font-semibold", remaining >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
             {formatCurrency(remaining)}
           </span>
         );

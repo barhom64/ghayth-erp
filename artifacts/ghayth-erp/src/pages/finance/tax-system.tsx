@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -150,7 +151,7 @@ export default function TaxSystemPage() {
                 <div>
                   <p className="text-xs text-muted-foreground">صافي الضريبة</p>
                   {summaryLoading ? <Skeleton className="h-7 w-20" /> : (
-                    <p className="text-xl font-bold" style={{ color: Number(summary?.netVat || 0) >= 0 ? "#dc2626" : "#16a34a" }}>
+                    <p className={cn("text-xl font-bold", Number(summary?.netVat || 0) >= 0 ? "text-status-error-foreground" : "text-status-success-foreground")}>
                       {formatCurrency(Number(summary?.netVat || 0))}
                     </p>
                   )}

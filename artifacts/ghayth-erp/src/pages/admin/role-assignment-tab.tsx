@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Shield, Plus, Trash2, CheckCircle } from "lucide-react";
-import { roleKeyColors } from "@/contexts/app-context";
+import { roleKeyColors, getRoleColor } from "@/contexts/app-context";
 import { MODULE_LABELS, PredefinedRole, UserRoleRow } from "./shared";
 
 export function RoleAssignmentTab() {
@@ -96,9 +96,9 @@ export function RoleAssignmentTab() {
                       <div className="flex items-center gap-3">
                         <div
                           className="w-8 h-8 rounded-lg flex items-center justify-center"
-                          style={{ backgroundColor: (roleKeyColors[role.roleKey] || "#95A5A6") + "15" }}
+                          style={{ backgroundColor: getRoleColor(role.roleKey) + "15" }}
                         >
-                          <Shield className="w-4 h-4" style={{ color: roleKeyColors[role.roleKey] || "#95A5A6" }} />
+                          <Shield className="w-4 h-4" style={{ color:getRoleColor(role.roleKey)}} />
                         </div>
                         <div>
                           <span className="font-medium text-sm">{role.label}</span>
@@ -141,9 +141,9 @@ export function RoleAssignmentTab() {
                   >
                     <div
                       className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: (roleKeyColors[role.roleKey] || "#95A5A6") + "15" }}
+                      style={{ backgroundColor: getRoleColor(role.roleKey) + "15" }}
                     >
-                      <Shield className="w-4 h-4" style={{ color: roleKeyColors[role.roleKey] || "#95A5A6" }} />
+                      <Shield className="w-4 h-4" style={{ color:getRoleColor(role.roleKey)}} />
                     </div>
                     <div className="min-w-0">
                       <span className="text-sm font-medium block">{role.label}</span>

@@ -11,7 +11,7 @@ import { KeyRound, CheckCircle, Shield, Plus, X } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { roleKeyColors } from "@/contexts/app-context";
+import { roleKeyColors, getRoleColor } from "@/contexts/app-context";
 import {
   DataTable,
   type DataTableColumn,
@@ -248,13 +248,13 @@ export default function AdminRolesPage() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: (roleKeyColors[r.roleKey] || "#95A5A6") + "15" }}>
-                      <KeyRound className="w-4 h-4" style={{ color: roleKeyColors[r.roleKey] || "#95A5A6" }} />
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: getRoleColor(r.roleKey) + "15" }}>
+                      <KeyRound className="w-4 h-4" style={{ color:getRoleColor(r.roleKey)}} />
                     </div>
                     <div>
                       <span className="font-semibold text-sm">{r.label}</span>
                       <Badge variant="outline" className="ms-2 text-2xs">مستوى {r.level}</Badge>
-                      <Badge className="ms-1 text-2xs" style={{ backgroundColor: (roleKeyColors[r.roleKey] || "#95A5A6") + "20", color: roleKeyColors[r.roleKey] || "#95A5A6", border: "none" }}>
+                      <Badge className="ms-1 text-2xs" style={{ backgroundColor: getRoleColor(r.roleKey) + "20", color:getRoleColor(r.roleKey), border: "none" }}>
                         {r.roleKey}
                       </Badge>
                     </div>

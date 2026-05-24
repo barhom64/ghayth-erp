@@ -100,9 +100,9 @@ export function FinancialTab({ entityType, entityId, sections }: FinancialTabPro
         {summary.netBalance !== undefined && (
           <Card className={Number(summary.netBalance) >= 0 ? "bg-status-success-surface" : "bg-status-error-surface"}>
             <CardContent className="p-3 text-center">
-              <DollarSign className="h-4 w-4 mx-auto mb-1" style={{ color: Number(summary.netBalance) >= 0 ? "#16a34a" : "#dc2626" }} />
+              <DollarSign className={cn("h-4 w-4 mx-auto mb-1", Number(summary.netBalance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")} />
               <p className="text-xs text-muted-foreground">صافي الرصيد</p>
-              <p className="text-lg font-bold" style={{ color: Number(summary.netBalance) >= 0 ? "#16a34a" : "#dc2626" }}>
+              <p className={cn("text-lg font-bold", Number(summary.netBalance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
                 {formatCurrency(Number(summary.netBalance))}
               </p>
             </CardContent>
@@ -170,7 +170,7 @@ export function FinancialTab({ entityType, entityId, sections }: FinancialTabPro
                       <td className="p-3 text-status-error-foreground font-medium">
                         {Number(m.credit || 0) > 0 ? formatCurrency(Number(m.credit)) : "-"}
                       </td>
-                      <td className="p-3 font-bold text-xs" style={{ color: Number(m.runningBalance) >= 0 ? "#16a34a" : "#dc2626" }}>
+                      <td className={cn("p-3 font-bold text-xs", Number(m.runningBalance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
                         {formatCurrency(Number(m.runningBalance || 0))}
                       </td>
                     </tr>

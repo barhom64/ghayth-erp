@@ -475,6 +475,69 @@ const RULES = [
       "(0.5rem) for the very dense table-cell labels, or the built-in " +
       "Tailwind `text-xs`/`text-sm` for body-adjacent text.",
   },
+
+  // ─── Design-system tokens — Inline hex colors ───────────────────────
+  //
+  // `style={{ color: "#16a34a" }}` and friends bypass the design-system
+  // color tokens (`text-status-success-foreground`, etc). Two real
+  // problems:
+  //
+  //   1. Dark-mode breakage. When the theme flips to dark, the literal
+  //      hex stays the same — usually unreadable. The token system has
+  //      separate values for light/dark.
+  //   2. Brand drift. Two pages render "positive number" green with
+  //      #16a34a and #059669 — close but not the same. The system
+  //      ends up with 4-6 shades of green nobody can keep aligned.
+  //
+  // Skip-list: print/letterhead pages legitimately use fixed hex —
+  // they render on paper, no dark mode, fixed brand identity. Those
+  // four files account for 75 of the 115 historical hex codes.
+  //
+  // countBaseline drops as offenders migrate; rule becomes hard at 0.
+  {
+    id: "inline-hex-color",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    skip: (file) =>
+      // Print-template pages — fixed hex for paper output is correct.
+      // Removing this exemption would force fragile token-to-hex
+      // resolution at print time.
+      file.endsWith("/pages/finance/invoice-detail.tsx") ||
+      file.endsWith("/pages/finance/purchase-order-detail.tsx") ||
+      file.endsWith("/pages/details/opportunity-detail.tsx") ||
+      file.endsWith("/pages/store/order-detail.tsx") ||
+      file.endsWith("/pages/hr/official-letters.tsx") ||
+      // Login page: pre-auth screen, no dark-mode concern, fixed brand
+      // gradient identity (#1565c0 → #0d47a1 primary, #d97706 → #b45309
+      // forgot-password). Adding these to @theme would create a single-
+      // consumer token; the gradients are intentionally one-off here.
+      file.endsWith("/pages/login.tsx") ||
+      // Data-driven category-color surfaces. Folder.color and Role.color
+      // are runtime DB fields, not theme tokens; the `|| "#fallback"`
+      // pattern is the right way to handle "no color configured yet".
+      file.endsWith("/pages/documents-page.tsx") ||
+      file.endsWith("/pages/admin/rbac-v2-tab.tsx"),
+    // Match `style={{ ... #abc ... }}` where any hex literal (3/6/8
+    // digits) appears inside an inline style object. The leading
+    // `style=\{\{` anchors it to the JSX inline-style attribute.
+    regex: /style=\{\{[^}]*#[0-9a-fA-F]{3,8}\b/,
+    multiline: true,
+    // Hardened from ratchet → hard rule (baseline 41 → 0 after the
+    // design-unification sprint: 41 status hex codes migrated to
+    // text-status-{success,error,warning}-foreground tokens via a
+    // Python global rewrite; 11 roleKeyColors fallbacks centralised
+    // into a `getRoleColor()` helper in app-context; 1 inverse-color
+    // tax-system literal lifted into a cn() conditional).
+    message:
+      "Inline hex color in a JSX `style={{ color: \"#...\" }}` attribute " +
+      "is forbidden outside print/letterhead pages. Use the design-system " +
+      "tokens (`text-status-success-foreground` / `bg-status-warning-surface` " +
+      "/ etc.) on a `className` instead — they have separate light/dark " +
+      "values and stay consistent across the system. For a conditional " +
+      "color, lift the className into a `cn(...)` expression on a single " +
+      "element. For data-driven colors (a `row.color` field), centralise " +
+      "the fallback in a helper (see `getRoleColor()` in app-context).",
+  },
 ];
 
 // ─── Pure matchers (exported for self-tests) ─────────────────────────────

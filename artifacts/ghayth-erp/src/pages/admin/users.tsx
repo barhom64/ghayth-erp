@@ -49,7 +49,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { roleKeyColors } from "@/contexts/app-context";
+import { roleKeyColors, getRoleColor } from "@/contexts/app-context";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "مالك النظام" },
@@ -105,7 +105,7 @@ export default function AdminUsersPage() {
       render: (r: any) => (
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-            style={{ backgroundColor: roleKeyColors[r.role] || "#95A5A6" }}>
+            style={{ backgroundColor:getRoleColor(r.role)}}>
             {r.email?.charAt(0)?.toUpperCase()}
           </div>
           <span className="font-mono text-xs">{r.email}</span>
