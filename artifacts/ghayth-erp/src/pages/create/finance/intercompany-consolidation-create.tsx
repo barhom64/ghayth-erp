@@ -5,8 +5,8 @@ import { CreatePageLayout } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 // Note: this page is read-only display, not a form. The previous version
-// imported useAutoDraft + useFieldErrors as dead code; removed for the
-// design-unification pass.
+// imported the manual-form draft + field-error hooks as dead code;
+// removed for the design-unification pass.
 
 export default function IntercompanyConsolidationCreatePage() {
   const { scopeQueryString } = useAppContext();
