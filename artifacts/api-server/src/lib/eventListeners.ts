@@ -716,6 +716,10 @@ export function registerEventListeners() {
     await logEvent("fiscal_period.reopened", payload);
     await logAudit("fiscal_period.reopened", { ...payload, action: "reopen", entity: "fiscal_period" });
   });
+  eventBus.on("fiscal_period.locked", async (payload) => {
+    await logEvent("fiscal_period.locked", payload);
+    await logAudit("fiscal_period.locked", { ...payload, action: "lock", entity: "fiscal_period" });
+  });
   eventBus.on("payment_run.executed", async (payload) => {
     await logEvent("payment_run.executed", payload);
     await logAudit("payment_run.executed", { ...payload, action: "execute", entity: "payment_run" });

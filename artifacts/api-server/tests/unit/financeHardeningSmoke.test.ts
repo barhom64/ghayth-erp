@@ -24,6 +24,36 @@ describe("finance-hardening — fiscal periods v2", () => {
     expect(SRC).toContain('"/fiscal-periods-v2/:id/close"');
     expect(SRC).toContain('"/fiscal-periods-v2/:id/reopen"');
   });
+
+  // PER-3 — audit-lock endpoint. `locked` is the stricter terminal
+  // state above `closed`; once locked there is intentionally NO
+  // reverse route. `checkFinancialPeriodOpen` + `systemGovernor`
+  // already treat status='locked' as posting-blocking, so the
+  // platform is wired to honor the lock the moment it's set.
+  it("lock endpoint exists (PER-3) and uses lifecycle engine", () => {
+    expect(SRC).toContain('"/fiscal-periods-v2/:id/lock"');
+    const idx = SRC.indexOf('"/fiscal-periods-v2/:id/lock"');
+    const block = SRC.slice(idx, idx + 2200);
+    // Goes through applyTransition with the correct from/to states and
+    // writes the audit-trail columns we just added in migration 207.
+    expect(block).toContain('entity: "financial_periods"');
+    expect(block).toContain('action: "fiscal_period.locked"');
+    expect(block).toContain('fromStates: ["closed"]');
+    expect(block).toContain('toState: "locked"');
+    expect(block).toContain("lockedAt:");
+    expect(block).toContain("lockedBy:");
+    expect(block).toContain("lockReason:");
+  });
+
+  it("no /fiscal-periods-v2/:id/unlock route exists (locked is intentionally terminal)", () => {
+    // PER-3 contract: a locked period stays locked. The platform has
+    // a `reopen` route for `closed → open`, but not for `locked → *`.
+    // The sanctioned way out is to NEVER lock unless the audit
+    // sign-off is final. Catching a future PR that adds an unlock
+    // route is the whole point of this test.
+    expect(SRC).not.toContain('"/fiscal-periods-v2/:id/unlock"');
+    expect(SRC).not.toContain('fromStates: ["locked"]');
+  });
 });
 
 describe("finance-hardening — manual journal entries", () => {
