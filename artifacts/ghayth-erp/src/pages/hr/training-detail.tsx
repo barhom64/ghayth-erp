@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { PrintButton } from "@/components/shared/print-button";
 
 const TRAINING_LIFECYCLE = [
   { key: "planned",   label: "مخطط" },
@@ -258,6 +259,7 @@ export default function TrainingDetailPage() {
 
   return (
     <DetailPageLayout
+      actions={<PrintButton entityType="training" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
       title={program?.title || "تفاصيل البرنامج التدريبي"}
       subtitle={program?.description || undefined}
       backPath="/hr/training"

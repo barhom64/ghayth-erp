@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function ShiftDetail() {
   const [, params] = useRoute("/hr/shifts/:id");
@@ -77,7 +78,12 @@ export default function ShiftDetail() {
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
-      actions={<DetailActionButtons hook={editDelete} editPerm="hr:update" deletePerm="hr:delete" />}
+      actions={
+        <div className="flex items-center gap-2">
+          <DetailActionButtons hook={editDelete} editPerm="hr:update" deletePerm="hr:delete" />
+          <PrintButton entityType="shift" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
     />
   );
 }
