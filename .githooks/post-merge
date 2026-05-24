@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+#
+# .githooks/post-merge — auto-run pnpm install when deps changed.
+#
+# Why: after `git pull`, if pnpm-lock.yaml or any package.json moved,
+# the local node_modules drifts from the lockfile. Symptom is silent
+# until you try to typecheck or boot dev — typically "Cannot find
+# module '@workspace/ui-core'" × 300 files when a new workspace
+# package gets added (e.g. PR #959 introduced ui-core / entity-kit /
+# workflow-kit / report-kit, and contributors who pulled without
+# re-installing saw 2,208 TS errors before figuring out the cause).
+#
+# Strategy: diff HEAD against ORIG_HEAD (the pre-merge tip). If any
+# package.json or pnpm-lock.yaml changed in the merge, run pnpm
+# install. Otherwise stay silent — most pulls don't touch deps.
+#
+# Bypass with --no-verify on the merge if you genuinely want stale
+# deps for a one-off test.
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# ORIG_HEAD is set by git merge/pull to the pre-merge ref. If it's
+# missing (rare, e.g. first merge after init), default to comparing
+# against HEAD^ so the diff still works.
+PREV="${1:-}"
+if [ -z "$PREV" ]; then
+  PREV="$(git rev-parse --verify --quiet ORIG_HEAD || git rev-parse --verify --quiet HEAD^)"
+fi
+if [ -z "$PREV" ]; then
+  exit 0
+fi
+
+CHANGED="$(git diff --name-only "$PREV" HEAD -- 'package.json' '**/package.json' 'pnpm-lock.yaml' 'pnpm-workspace.yaml' 2>/dev/null || true)"
+
+if [ -n "$CHANGED" ]; then
+  echo "[post-merge] dependency files changed — running pnpm install:"
+  echo "$CHANGED" | sed 's/^/  - /'
+  pnpm install
+fi
