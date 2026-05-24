@@ -10,8 +10,6 @@ import {
 } from "@workspace/ui-core";
 import { Pencil, CheckCircle, XCircle, Info, AlertTriangle, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { useFieldErrors } from "@/hooks/use-field-errors";
 import { cn } from "@/lib/utils";
 
 const VEHICLE_STATUS_OPTIONS = [
@@ -42,12 +40,7 @@ export default function VehicleStatusChangePage() {
 
   const { data: vehicle, isLoading } = useApiQuery<any>(["vehicle-detail", id || ""], `/fleet/vehicles/${id}`, !!id);
 
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("fleet_vehicle_status_change", {
-    selectedNewStatus: "",
-  });
-  const { fieldErrors, validate } = useFieldErrors();
-  const selectedNewStatus = form.selectedNewStatus;
-  const setSelectedNewStatus = (v: string) => setForm(f => ({ ...f, selectedNewStatus: v }));
+  const [selectedNewStatus, setSelectedNewStatus] = useState("");
   const [impactData, setImpactData] = useState<any>(null);
   const [impactLoading, setImpactLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -74,7 +67,6 @@ export default function VehicleStatusChangePage() {
         method: "PATCH",
         body: JSON.stringify({ status: selectedNewStatus }),
       });
-      clearDraft();
       toast({ title: "تم تغيير الحالة بنجاح" });
       qc.invalidateQueries({ queryKey: ["vehicle-detail", id] });
       qc.invalidateQueries({ queryKey: ["fleet-vehicles"] });
@@ -95,12 +87,6 @@ export default function VehicleStatusChangePage() {
       subtitle={`${vehicle.plateNumber || vehicle.make} ${vehicle.model}`}
       backPath={`/fleet/${id}`}
     >
-      {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
-          <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
-        </div>
-      )}
       <div className="space-y-5">
         <h3 className="flex items-center gap-2 text-lg font-semibold">
           <Pencil className="h-5 w-5 text-status-info" /> تغيير الحالة
