@@ -7,10 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Pencil, CheckCircle, XCircle, Info, AlertTriangle, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { useFieldErrors } from "@/hooks/use-field-errors";
 import { cn } from "@/lib/utils";
 import { CreatePageLayout } from "@workspace/ui-core";
+
+// This page is a status-change wizard — single click + impact preview
+// + confirm. It doesn't fit the FormShell shape (no input fields, no
+// schema validation, no submit handler). The previous version
+// imported the manual-form draft + field-error hooks as dead code;
+// removed them for the design-unification pass.
 
 const STATUS_OPTIONS = [
   { value: "available", label: "متاحة" },
@@ -56,13 +60,10 @@ export default function UnitStatusChangePage() {
 
   const { data: unit, isLoading } = useApiQuery<any>(["unit-detail", id || ""], `/properties/units/${id}`, !!id);
 
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("properties_unit_status_change", { selectedNewStatus: "" });
-  const { fieldErrors, validate } = useFieldErrors();
+  const [selectedNewStatus, setSelectedNewStatus] = useState("");
   const [impactData, setImpactData] = useState<any>(null);
   const [impactLoading, setImpactLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const selectedNewStatus = form.selectedNewStatus;
-  const setSelectedNewStatus = (v: string) => setForm(f => ({ ...f, selectedNewStatus: v }));
 
   const loadImpactPreview = async (newStatus: string) => {
     if (!newStatus || !id) return;
@@ -87,7 +88,6 @@ export default function UnitStatusChangePage() {
         body: JSON.stringify({ status: selectedNewStatus }),
       });
       toast({ title: "تم تغيير الحالة بنجاح" });
-      clearDraft();
       qc.invalidateQueries({ queryKey: ["unit-detail", id] });
       qc.invalidateQueries({ queryKey: ["property-units"] });
       setLocation(`/properties/${id}`);
@@ -107,12 +107,6 @@ export default function UnitStatusChangePage() {
       subtitle={unit.unitNumber || unit.name || `وحدة #${id}`}
       backPath={`/properties/${id}`}
     >
-      {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
-          <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
-        </div>
-      )}
       <div className="space-y-5">
         <h3 className="flex items-center gap-2 text-lg font-semibold">
           <Pencil className="h-5 w-5 text-status-info" /> تغيير الحالة
