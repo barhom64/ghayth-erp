@@ -442,6 +442,37 @@ export const STATUS_MAP = {
     churned:              { label: "متسرّب",           tone: "danger"   },
   },
 
+  // ── HR — Employee contract lifecycle ─────────────────────────────────
+  // CHECK constraint on hr_contracts.approvalStatus (migration #090):
+  //   draft → pending_approval → approved → signed → active
+  //                        ↘   rejected
+  //                                  active → expired / terminated
+  // Backend writes "signed" when both `signedByEmployee` and
+  // `signedByCompany` flip to TRUE (see hr-contracts.ts UPDATE).
+  contract: {
+    draft:                { label: "مسودة",            tone: "muted"    },
+    pending_approval:     { label: "بانتظار الاعتماد", tone: "warning"  },
+    approved:             { label: "معتمد",            tone: "info"     },
+    rejected:             { label: "مرفوض",            tone: "danger"   },
+    signed:               { label: "موقَّع",           tone: "success"  },
+    active:               { label: "نشط",              tone: "success"  },
+    expired:              { label: "منتهي الصلاحية",   tone: "neutral"  },
+    terminated:           { label: "منهي",             tone: "danger"   },
+  },
+
+  // ── HR — Attendance deduction lifecycle ──────────────────────────────
+  // attendance_deductions.status transitions:
+  //   pending → pending_payroll → deducted_in_payroll
+  // Surfaces in monthly close + payroll preview screens. The "signed"
+  // path of contract above belongs to a different concept; here the
+  // chain ends when the deduction lands in the actual payslip.
+  attendance_deduction: {
+    pending:              { label: "قيد المراجعة",     tone: "warning"  },
+    pending_payroll:      { label: "بانتظار الرواتب",  tone: "warning"  },
+    deducted_in_payroll:  { label: "خُصم في الرواتب",  tone: "success"  },
+    waived:               { label: "تُجووز",           tone: "neutral"  },
+  },
+
   // ── HR — Overtime + violations ───────────────────────────────────────
   overtime: {
     pending:              { label: "بانتظار الموافقة", tone: "warning"  },

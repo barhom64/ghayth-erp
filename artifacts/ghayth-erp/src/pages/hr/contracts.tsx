@@ -9,12 +9,12 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   DataTable,
   type DataTableColumn,
   PageShell,
+  PageStatusBadge,
 } from "@workspace/ui-core";
 import {
   DropdownMenu,
@@ -26,23 +26,11 @@ import { MoreHorizontal, Plus, FileText } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 
 // ─── Arabic Maps ────────────────────────────────────────────────────
-
-const APPROVAL_STATUS_MAP: Record<string, { label: string; color: string }> = {
-  draft: { label: "مسودة", color: "bg-surface-subtle text-status-neutral-foreground" },
-  pending_approval: { label: "بانتظار الاعتماد", color: "bg-status-warning-surface text-status-warning-foreground" },
-  approved: { label: "معتمد", color: "bg-status-info-surface text-status-info-foreground" },
-  rejected: { label: "مرفوض", color: "bg-status-error-surface text-status-error-foreground" },
-};
-
-const CONTRACT_STATUS_MAP: Record<string, { label: string; color: string }> = {
-  draft: { label: "مسودة", color: "bg-surface-subtle text-status-neutral-foreground" },
-  pending_approval: { label: "بانتظار الاعتماد", color: "bg-status-warning-surface text-status-warning-foreground" },
-  approved: { label: "معتمد", color: "bg-status-info-surface text-status-info-foreground" },
-  rejected: { label: "مرفوض", color: "bg-status-error-surface text-status-error-foreground" },
-  signed: { label: "موقّع", color: "bg-purple-100 text-purple-700" },
-  active: { label: "نشط", color: "bg-status-success-surface text-status-success-foreground" },
-  terminated: { label: "منتهي", color: "bg-status-error-surface text-status-error-foreground" },
-};
+//
+// Contract & approval statuses now flow through STATUS_MAP.contract
+// (page-status-badge.tsx). The local APPROVAL_STATUS_MAP and
+// CONTRACT_STATUS_MAP were removed in the design-unification pass —
+// canonical labels + tones come from the shared system map.
 
 const CONTRACT_TYPE_MAP: Record<string, string> = {
   full_time: "دوام كامل",
@@ -125,8 +113,8 @@ export default function ContractsPage() {
     { key: "contractType", header: "نوع العقد", sortable: true, render: (r: any) => CONTRACT_TYPE_MAP[r.contractType] || r.contractType },
     { key: "startDate", header: "تاريخ البداية", sortable: true, render: (r: any) => <span className="text-sm text-muted-foreground">{r.startDate ? formatDateAr(r.startDate) : "—"}</span> },
     { key: "endDate", header: "تاريخ النهاية", sortable: true, render: (r: any) => <span className="text-sm text-muted-foreground">{r.endDate ? formatDateAr(r.endDate) : "—"}</span> },
-    { key: "approvalStatus", header: "حالة الاعتماد", sortable: true, render: (r: any) => <StatusBadge value={r.approvalStatus} map={APPROVAL_STATUS_MAP} /> },
-    { key: "status", header: "حالة العقد", sortable: true, render: (r: any) => <StatusBadge value={r.status} map={CONTRACT_STATUS_MAP} /> },
+    { key: "approvalStatus", header: "حالة الاعتماد", sortable: true, render: (r: any) => <PageStatusBadge status={r.approvalStatus} domain="contract" /> },
+    { key: "status", header: "حالة العقد", sortable: true, render: (r: any) => <PageStatusBadge status={r.status} domain="contract" /> },
     {
       key: "actions", header: "", width: "50px",
       render: (r: any) => (
@@ -175,21 +163,8 @@ export default function ContractsPage() {
 
 // ─── Sub-components ─────────────────────────────────────────────────
 
-function StatusBadge({
-  value,
-  map,
-}: {
-  value: string;
-  map: Record<string, { label: string; color: string }>;
-}) {
-  const entry = map[value];
-  if (!entry) return <Badge variant="secondary">{value}</Badge>;
-  return (
-    <Badge variant="secondary" className={entry.color}>
-      {entry.label}
-    </Badge>
-  );
-}
+// Local StatusBadge removed — superseded by PageStatusBadge with
+// domain="contract" (handles approvalStatus + status uniformly).
 
 function ActionsMenu({
   contract,
