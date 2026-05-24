@@ -1000,7 +1000,55 @@ journalRouter.patch("/vouchers/:id", authorize({ feature: "finance.journal", act
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { description } = zodParse(updateDescriptionSchema.safeParse(req.body ?? {}));
-    const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET description = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`, [description, id, scope.companyId]);
+
+    // VL-1 — fetch the voucher (and only a voucher, per the RV/PV ref
+    // filter) so we can verify status + period BEFORE any UPDATE. The
+    // ref filter is critical: without it, the route was a generic
+    // "edit description on any journal_entries row" — sending an
+    // expense or manual-journal id would silently rewrite that row's
+    // description, bypassing every domain-specific guard.
+    const [existing] = await rawQuery<{ status: string; entryDate: string }>(
+      `SELECT status, date::text AS "entryDate"
+         FROM journal_entries
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          AND (ref LIKE 'RV%' OR ref LIKE 'PV%')`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("السند غير موجود");
+
+    // VL-1 (mirrors PD-4 on PATCH /expenses/:id): an approved or terminal-
+    // state voucher is immutable — corrections happen via a reversing
+    // entry through POST /journal/:id/reverse, never an in-place edit.
+    // Pre-approval states (draft, pending_approval, returned) are still
+    // editable.
+    const TERMINAL_VOUCHER_STATES = new Set([
+      "approved", "rejected", "cancelled", "reversed", "posted",
+    ]);
+    if (TERMINAL_VOUCHER_STATES.has(existing.status)) {
+      throw new ConflictError(
+        `لا يمكن تعديل سند بحالة "${existing.status}" — التصحيح يكون عبر قيد عاكس`,
+        { field: "status", fix: "أنشئ قيداً عاكساً عبر POST /journal/:id/reverse بدلاً من تعديل السند المُرحَّل" }
+      );
+    }
+
+    // Period gate: even a draft voucher whose date sits in a now-closed
+    // period must not be edited — the eventual approval would be blocked
+    // by H2 anyway. Catching it here gives the operator a clear error
+    // pointing at the period, not a confusing "approval failed" later.
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, existing.entryDate);
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تعديل سند بتاريخ في فترة مُقفلة: ${periodCheck.periodName ?? existing.entryDate}`,
+        { field: "financialPeriod", meta: { periodName: periodCheck.periodName } }
+      );
+    }
+
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `UPDATE journal_entries SET description = $1
+        WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL
+          AND (ref LIKE 'RV%' OR ref LIKE 'PV%') RETURNING *`,
+      [description, id, scope.companyId]
+    );
     if (!row) throw new NotFoundError("السند غير موجود");
     res.json(row);
   } catch (err) {
