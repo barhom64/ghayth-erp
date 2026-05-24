@@ -5,6 +5,8 @@ import { join } from "node:path";
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const INV_ROUTE = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/finance-invoices.ts"), "utf8");
 const JRN_ROUTE = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/finance-journal.ts"), "utf8");
+const CRON_SCHEDULER = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/cronScheduler.ts"), "utf8");
+const RECURRING_PROC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/recurringJournalProcessor.ts"), "utf8");
 
 // ─── Finance Golden Path Tests ─────────────────────────────────────────────
 // P4.8 — Lock in finance domain lifecycle contracts: invoices, journal
@@ -243,5 +245,59 @@ describe("Finance VAT handling", () => {
 
   it("supports extractBaseFromGross", () => {
     expect(INV_ROUTE).toContain("extractBaseFromGross");
+  });
+});
+
+// ─── PG-1/2 — Scheduler GL routing invariant ──────────────────────────────
+// Background (RCA PG-1/2): every automated journal entry the platform
+// posts MUST go through `financialEngine.postJournalEntry` so it inherits
+// the engine's three guarantees uniformly — (1) sourceKey idempotency
+// (PD-6), (2) financial-period gate (PER-2), (3) account validation. A
+// scheduler path that bypasses the engine — by issuing a raw INSERT or
+// by calling the lower-level createJournalEntry directly — silently
+// strips all three protections. The system supports two scheduled GL
+// producers today: the depreciation cron (cronScheduler.ts) and the
+// recurring-journal processor (recurringJournalProcessor.ts). These
+// tests lock in the routing contract so a future refactor cannot quietly
+// regress to a direct INSERT or a bare createJournalEntry call.
+
+describe("PG-1/2 — Scheduler GL routing through financialEngine", () => {
+  it("cronScheduler.depreciation goes through financialEngine.postJournalEntry", () => {
+    // The monthly depreciation cron posts via the engine (cron at line
+    // ~2198 today). The engine carries the period gate + sourceKey, so
+    // a closed period or a retry hit a guarded path instead of producing
+    // a duplicate depreciation entry. A regression that switches this
+    // to rawExecute(`INSERT INTO journal_entries ...`) loses both
+    // guarantees silently.
+    expect(CRON_SCHEDULER).toContain("financialEngine.postJournalEntry");
+    expect(CRON_SCHEDULER).toContain("sourceKey:");
+  });
+
+  it("cronScheduler.depreciation does not bypass with a raw journal_entries INSERT", () => {
+    // Belt-and-braces: assert the cron file never issues a direct INSERT
+    // INTO journal_entries. Catches a refactor that imports rawExecute
+    // and re-implements the post inline.
+    expect(CRON_SCHEDULER).not.toMatch(/INSERT\s+INTO\s+journal_entries/i);
+  });
+
+  it("recurringJournalProcessor goes through financialEngine.postJournalEntry", () => {
+    // processDueRecurringJournals → runRecurringJournal calls the engine
+    // (line ~36). Like the depreciation cron, this inherits period gate
+    // + sourceKey idempotency so a re-fire (operator-triggered or
+    // scheduler-triggered) collapses onto the existing JE instead of
+    // duplicating.
+    expect(RECURRING_PROC).toContain("financialEngine.postJournalEntry");
+    expect(RECURRING_PROC).toContain("sourceKey:");
+  });
+
+  it("recurringJournalProcessor does not bypass with a raw journal_entries INSERT", () => {
+    expect(RECURRING_PROC).not.toMatch(/INSERT\s+INTO\s+journal_entries/i);
+  });
+
+  it("recurringJournalProcessor does not bypass via direct createJournalEntry import", () => {
+    // createJournalEntry is the lower-level primitive; the scheduler
+    // must route via the engine wrapper so the sourceKey-volatility
+    // guard (rejects Date.now()-style keys) fires before any post.
+    expect(RECURRING_PROC).not.toMatch(/from\s+["'][^"']*businessHelpers[^"']*["'][^;]*createJournalEntry/);
   });
 });
