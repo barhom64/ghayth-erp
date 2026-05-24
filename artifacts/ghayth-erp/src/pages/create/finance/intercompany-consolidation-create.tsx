@@ -3,14 +3,14 @@ import { useAppContext } from "@/contexts/app-context";
 import { formatCurrency, roundMoney } from "@/lib/formatters";
 import { CreatePageLayout } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { useFieldErrors } from "@/hooks/use-field-errors";
+
+// Note: this page is read-only display, not a form. The previous version
+// imported useAutoDraft + useFieldErrors as dead code; removed for the
+// design-unification pass.
 
 export default function IntercompanyConsolidationCreatePage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const { form: _form, setForm: _setForm, clearDraft, hasDraft } = useAutoDraft("intercompany_consolidation_create", {});
-  const { fieldErrors, validate } = useFieldErrors();
 
   const { data: consolidationData, isLoading: loadingConsolidation, isError } = useApiQuery<any>(
     ["intercompany-consolidation"],
@@ -50,7 +50,7 @@ export default function IntercompanyConsolidationCreatePage() {
 
               <div className="rounded-xl border border-status-warning-surface bg-status-warning-surface p-3 text-sm">
                 <span className="font-semibold">مطلوب حذفه من التوحيد: </span>
-                <span className="font-mono font-bold text-yellow-800">{formatCurrency(consolidation.intercompanyElimination ?? 0)}</span>
+                <span className="font-mono font-bold text-status-warning-foreground">{formatCurrency(consolidation.intercompanyElimination ?? 0)}</span>
                 <span className="text-status-warning-foreground mr-2">— مجموع المعاملات البينية التي تُحذف عند التوحيد</span>
               </div>
 

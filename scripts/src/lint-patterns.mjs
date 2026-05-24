@@ -507,7 +507,7 @@ const RULES = [
       file.endsWith("/hooks/use-field-errors.ts") ||
       file.endsWith("/hooks/use-field-errors.tsx"),
     regex: /\buseAutoDraft\b/,
-    countBaseline: 134,
+    countBaseline: 127,
     message:
       "`useAutoDraft` (and its sibling `useFieldErrors`) is the manual " +
       "form pattern that predates FormShell. Pages on the manual " +

@@ -232,6 +232,12 @@ export interface FormTextFieldProps extends BaseFieldProps {
   autoComplete?: string;
   inputMode?: ComponentProps<typeof Input>["inputMode"];
   disabled?: boolean;
+  /** Forwarded to the underlying <input> — useful for type="number". */
+  min?: string | number;
+  /** Forwarded to the underlying <input> — useful for type="number". */
+  max?: string | number;
+  /** Forwarded to the underlying <input> — useful for type="number". */
+  step?: string | number;
 }
 
 export function FormTextField({
@@ -245,6 +251,9 @@ export function FormTextField({
   autoComplete,
   inputMode,
   disabled,
+  min,
+  max,
+  step,
 }: FormTextFieldProps) {
   const { register } = useFormContext();
   return (
@@ -258,6 +267,9 @@ export function FormTextField({
       <Input
         id={name}
         type={type}
+        min={min}
+        max={max}
+        step={step}
         placeholder={placeholder}
         autoComplete={autoComplete}
         inputMode={inputMode}
