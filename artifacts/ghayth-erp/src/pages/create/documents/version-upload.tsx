@@ -8,11 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Upload, FileText, Save } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { useFieldErrors } from "@/hooks/use-field-errors";
 import { cn } from "@/lib/utils";
 import { CreatePageLayout } from "@workspace/ui-core";
-import { TextField } from "@/components/shared/form-field-wrapper";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+// File-upload wizard, not a typical form. Replaced manual-form draft/
+// field-error hooks with plain state — only one optional notes field
+// alongside the file picker.
 
 const BASE = "";
 
@@ -38,19 +41,15 @@ export default function VersionUploadPage() {
 
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("documents_version_upload", { notes: "" });
-  const { fieldErrors, validate } = useFieldErrors();
+  const [notes, setNotes] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleUploadVersion = useCallback(async () => {
-    const firstError = validate({
-      file: !file ? "يرجى اختيار ملف للرفع" : null,
-    });
-    if (firstError) {
-      toast({ variant: "destructive", title: firstError });
+    if (!file) {
+      toast({ variant: "destructive", title: "يرجى اختيار ملف للرفع" });
       return;
     }
-    if (!file || !docId) return;
+    if (!docId) return;
     setUploading(true);
     try {
       const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
@@ -74,13 +73,13 @@ export default function VersionUploadPage() {
           fileSize: file.size,
           mimeType: file.type,
           storageKey: objectPath,
-          notes: form.notes,
+          notes,
         }),
       });
 
       toast({ title: "تم رفع الإصدار بنجاح" });
       setFile(null);
-      clearDraft();
+      setNotes("");
       refetch();
     } catch (err: any) {
       if (err instanceof RateLimitError) {
@@ -92,7 +91,7 @@ export default function VersionUploadPage() {
     } finally {
       setUploading(false);
     }
-  }, [file, form.notes, docId, refetch, toast, validate, clearDraft]);
+  }, [file, notes, docId, refetch, toast]);
 
   return (
     <CreatePageLayout
@@ -100,12 +99,6 @@ export default function VersionUploadPage() {
       subtitle="عرض ورفع إصدارات جديدة"
       backPath="/documents"
     >
-      {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
-          <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
-        </div>
-      )}
       <div className="space-y-6">
         <div>
           <h3 className="flex items-center gap-2 text-lg font-semibold mb-3">
@@ -129,7 +122,15 @@ export default function VersionUploadPage() {
               )}
               <input ref={inputRef} type="file" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); e.target.value = ""; }} />
             </div>
-            <TextField label="ملاحظات (اختياري)" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="وصف التغييرات في هذا الإصدار" />
+            <div className="space-y-1.5">
+              <Label htmlFor="version-notes">ملاحظات (اختياري)</Label>
+              <Input
+                id="version-notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="وصف التغييرات في هذا الإصدار"
+              />
+            </div>
             <Button onClick={handleUploadVersion} disabled={!file || uploading} className="gap-2" rateLimitAware>
               <Save className="h-4 w-4" /> {uploading ? "جاري الرفع..." : "رفع الإصدار"}
             </Button>
