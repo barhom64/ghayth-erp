@@ -318,7 +318,7 @@ export function DataTable<T>({
                   <div
                     role="status"
                     aria-live="polite"
-                    className="mt-1 text-[11px] text-status-warning-foreground"
+                    className="mt-1 text-2xs text-status-warning-foreground"
                   >
                     {cooldown.label}
                   </div>

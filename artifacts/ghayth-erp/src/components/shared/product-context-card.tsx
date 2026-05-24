@@ -202,7 +202,7 @@ export function ProductContextCard({
                     <Badge
                       variant="outline"
                       className={cn(
-                        "text-[10px]",
+                        "text-2xs",
                         m.type === "in" ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground",
                       )}
                     >

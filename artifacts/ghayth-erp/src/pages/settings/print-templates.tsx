@@ -712,7 +712,7 @@ function Inspector({ block, onChange }: { block: VisualBlock; onChange: (patch: 
       <div className="space-y-2">
         <Label className="text-xs">نص الفقرة</Label>
         <Textarea rows={5} value={block.body} onChange={(e) => onChange({ body: e.target.value } as Partial<VisualBlock>)} />
-        <div className="text-[10px] text-muted-foreground">يدعم متغيرات {`{{path.to.value}}`}</div>
+        <div className="text-2xs text-muted-foreground">يدعم متغيرات {`{{path.to.value}}`}</div>
       </div>
     );
   }
@@ -792,7 +792,7 @@ function Inspector({ block, onChange }: { block: VisualBlock; onChange: (patch: 
               />
             </div>
             <div className="flex justify-between items-center">
-              <label className="text-[10px] flex items-center gap-1">
+              <label className="text-2xs flex items-center gap-1">
                 <input
                   type="checkbox"
                   checked={Boolean(item.bold)}

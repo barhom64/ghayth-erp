@@ -82,7 +82,7 @@ export default function Clients() {
       render: (client) => (
         <span className="font-medium flex items-center gap-2">
           {client.name || "-"}
-          {client.isBlacklisted && <Badge variant="destructive" className="text-[10px]">قائمة سوداء</Badge>}
+          {client.isBlacklisted && <Badge variant="destructive" className="text-2xs">قائمة سوداء</Badge>}
         </span>
       ),
     },

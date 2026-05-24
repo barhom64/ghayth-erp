@@ -210,7 +210,7 @@ export default function OperationsCenter() {
                         </p>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <Badge variant="outline" className={cn("text-[10px]",
+                        <Badge variant="outline" className={cn("text-2xs",
                           item.escalationStatus === "critical_escalation" ? "bg-status-error-surface text-status-error-foreground border-status-error-surface font-bold" :
                           item.escalationStatus === "escalated" ? "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface" :
                           "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface"
@@ -219,7 +219,7 @@ export default function OperationsCenter() {
                            item.escalationStatus === "escalated" ? "مُصعّد" : "متأخر"}
                         </Badge>
                         {item.priority && (
-                          <Badge variant="outline" className={cn("text-[10px]",
+                          <Badge variant="outline" className={cn("text-2xs",
                             item.priority === "critical" || item.priority === "urgent" ? "bg-status-error-surface text-status-error-foreground" :
                             item.priority === "high" ? "bg-status-warning-surface text-status-warning-foreground" : ""
                           )}>
@@ -269,7 +269,7 @@ export default function OperationsCenter() {
                         {event.entityId ? ` #${event.entityId}` : ""}
                       </p>
                     </div>
-                    <span className="text-[10px] text-muted-foreground shrink-0">
+                    <span className="text-2xs text-muted-foreground shrink-0">
                       {event.createdAt ? formatTimeAgo(event.createdAt) : ""}
                     </span>
                   </div>

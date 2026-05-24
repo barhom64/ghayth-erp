@@ -39,7 +39,7 @@ export function CustodiesAndDocumentsSection({ custodies, documents }: Custodies
                     <p className="text-sm font-medium text-status-neutral-foreground truncate">{c.description || `عهدة #${c.id}`}</p>
                     <p className="text-xs text-muted-foreground">{formatCurrency(Number(c.amount))}</p>
                   </div>
-                  <PageStatusBadge status={c.status} domain="custody" className="text-[10px] shrink-0" />
+                  <PageStatusBadge status={c.status} domain="custody" className="text-2xs shrink-0" />
                 </div>
               ))}
             </div>

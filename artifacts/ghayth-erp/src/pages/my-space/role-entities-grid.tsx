@@ -27,11 +27,11 @@ export function RoleEntitiesGrid({ roleEntities, role }: RoleEntitiesGridProps) 
             <div className="grid grid-cols-2 gap-2 text-center">
               <div className="p-2 rounded-lg bg-emerald-50">
                 <p className="text-lg font-bold text-emerald-700">{roleEntities.units.rented || 0}</p>
-                <p className="text-[10px] text-emerald-600">مؤجرة</p>
+                <p className="text-2xs text-emerald-600">مؤجرة</p>
               </div>
               <div className="p-2 rounded-lg bg-status-info-surface">
                 <p className="text-lg font-bold text-status-info-foreground">{roleEntities.units.available || 0}</p>
-                <p className="text-[10px] text-status-info-foreground">متاحة</p>
+                <p className="text-2xs text-status-info-foreground">متاحة</p>
               </div>
             </div>
           </CardContent>
@@ -53,11 +53,11 @@ export function RoleEntitiesGrid({ roleEntities, role }: RoleEntitiesGridProps) 
             <div className="grid grid-cols-2 gap-2 text-center">
               <div className="p-2 rounded-lg bg-status-success-surface">
                 <p className="text-lg font-bold text-status-success-foreground">{roleEntities.vehicles.available || 0}</p>
-                <p className="text-[10px] text-status-success-foreground">متاحة</p>
+                <p className="text-2xs text-status-success-foreground">متاحة</p>
               </div>
               <div className="p-2 rounded-lg bg-orange-50">
                 <p className="text-lg font-bold text-orange-700">{roleEntities.vehicles.maintenance || 0}</p>
-                <p className="text-[10px] text-orange-600">صيانة</p>
+                <p className="text-2xs text-orange-600">صيانة</p>
               </div>
             </div>
           </CardContent>
@@ -79,11 +79,11 @@ export function RoleEntitiesGrid({ roleEntities, role }: RoleEntitiesGridProps) 
             <div className="grid grid-cols-2 gap-2 text-center">
               <div className="p-2 rounded-lg bg-status-error-surface">
                 <p className="text-lg font-bold text-status-error-foreground">{roleEntities.cases.open || 0}</p>
-                <p className="text-[10px] text-status-error-foreground">مفتوحة</p>
+                <p className="text-2xs text-status-error-foreground">مفتوحة</p>
               </div>
               <div className="p-2 rounded-lg bg-status-success-surface">
                 <p className="text-lg font-bold text-status-success-foreground">{roleEntities.cases.closed || 0}</p>
-                <p className="text-[10px] text-status-success-foreground">مغلقة</p>
+                <p className="text-2xs text-status-success-foreground">مغلقة</p>
               </div>
             </div>
           </CardContent>
@@ -104,11 +104,11 @@ export function RoleEntitiesGrid({ roleEntities, role }: RoleEntitiesGridProps) 
             <div className="grid grid-cols-2 gap-2 text-center">
               <div className="p-2 rounded-lg bg-teal-50">
                 <p className="text-lg font-bold text-teal-700">{roleEntities.hr.active || 0}</p>
-                <p className="text-[10px] text-teal-600">نشط</p>
+                <p className="text-2xs text-teal-600">نشط</p>
               </div>
               <div className="p-2 rounded-lg bg-surface-subtle">
                 <p className="text-lg font-bold text-status-neutral-foreground">{roleEntities.hr.inactive || 0}</p>
-                <p className="text-[10px] text-muted-foreground">غير نشط</p>
+                <p className="text-2xs text-muted-foreground">غير نشط</p>
               </div>
             </div>
           </CardContent>
@@ -129,15 +129,15 @@ export function RoleEntitiesGrid({ roleEntities, role }: RoleEntitiesGridProps) 
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="p-2 rounded-lg bg-status-success-surface">
                 <p className="text-lg font-bold text-status-success-foreground">{roleEntities.finance.paid || 0}</p>
-                <p className="text-[10px] text-status-success-foreground">مدفوعة</p>
+                <p className="text-2xs text-status-success-foreground">مدفوعة</p>
               </div>
               <div className="p-2 rounded-lg bg-status-warning-surface">
                 <p className="text-lg font-bold text-status-warning-foreground">{roleEntities.finance.pending || 0}</p>
-                <p className="text-[10px] text-status-warning-foreground">معلقة</p>
+                <p className="text-2xs text-status-warning-foreground">معلقة</p>
               </div>
               <div className="p-2 rounded-lg bg-status-error-surface">
                 <p className="text-lg font-bold text-status-error-foreground">{roleEntities.finance.overdue || 0}</p>
-                <p className="text-[10px] text-status-error-foreground">متأخرة</p>
+                <p className="text-2xs text-status-error-foreground">متأخرة</p>
               </div>
             </div>
           </CardContent>

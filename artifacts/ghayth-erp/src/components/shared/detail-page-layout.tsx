@@ -337,7 +337,7 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
                       {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900 truncate">{e.label}</p>
-                        {e.sublabel && <p className="text-[10px] text-muted-foreground truncate">{e.sublabel}</p>}
+                        {e.sublabel && <p className="text-2xs text-muted-foreground truncate">{e.sublabel}</p>}
                       </div>
                     </div>
                   );
@@ -364,7 +364,7 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
                 <Icon className="h-4 w-4" />
                 <span>{t.label}</span>
                 {t.badge !== undefined && t.badge !== null && t.badge !== "" && (
-                  <Badge variant="secondary" className="ms-1 h-5 min-w-5 px-1 text-[10px]">
+                  <Badge variant="secondary" className="ms-1 h-5 min-w-5 px-1 text-2xs">
                     {t.badge}
                   </Badge>
                 )}

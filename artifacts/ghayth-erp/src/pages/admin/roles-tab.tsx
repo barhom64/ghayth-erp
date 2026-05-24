@@ -75,8 +75,8 @@ export function RolesTab() {
                   </div>
                   <div>
                     <span className="font-semibold text-sm">{r.label}</span>
-                    <Badge variant="outline" className="ms-2 text-[10px]">مستوى {r.level}</Badge>
-                    <Badge className="ms-1 text-[10px]" style={{ backgroundColor: (roleKeyColors[r.roleKey] || "#95A5A6") + "20", color: roleKeyColors[r.roleKey] || "#95A5A6", border: "none" }}>
+                    <Badge variant="outline" className="ms-2 text-2xs">مستوى {r.level}</Badge>
+                    <Badge className="ms-1 text-2xs" style={{ backgroundColor: (roleKeyColors[r.roleKey] || "#95A5A6") + "20", color: roleKeyColors[r.roleKey] || "#95A5A6", border: "none" }}>
                       {r.roleKey}
                     </Badge>
                   </div>
@@ -116,7 +116,7 @@ export function RolesTab() {
               ) : (
                 <div className="flex flex-wrap gap-1">
                   {(roleModulesMap.get(r.roleKey) ?? r.modules).map((m: string) => (
-                    <Badge key={m} variant="outline" className="text-[10px] px-1.5 py-0">
+                    <Badge key={m} variant="outline" className="text-2xs px-1.5 py-0">
                       {MODULE_LABELS[m] || m}
                     </Badge>
                   ))}

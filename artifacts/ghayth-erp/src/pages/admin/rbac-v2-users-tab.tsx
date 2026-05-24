@@ -180,7 +180,7 @@ export function UserRoleAssignmentTab() {
                   {u.jobTitle || u.legacy_role} · {u.branchName || "—"}
                   {u.departmentName && ` · ${u.departmentName}`}
                 </div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">{u.email}</div>
+                <div className="text-2xs text-muted-foreground mt-0.5">{u.email}</div>
               </button>
             ))}
             {!usersLoading && users.length === 0 && (

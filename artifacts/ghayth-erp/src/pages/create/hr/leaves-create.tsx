@@ -130,7 +130,7 @@ export default function LeavesCreate() {
                 <CardContent className="p-3 text-center">
                   <p className="text-xs text-muted-foreground">{b.name || b.typeName || b.type || "إجازة"}</p>
                   <p className="text-xl font-bold mt-1">{b.remaining ?? b.balance ?? 0}</p>
-                  <p className="text-[10px] text-muted-foreground">من {b.annualDays ?? b.total ?? b.entitled ?? 0} يوم</p>
+                  <p className="text-2xs text-muted-foreground">من {b.annualDays ?? b.total ?? b.entitled ?? 0} يوم</p>
                 </CardContent>
               </Card>
             ))}

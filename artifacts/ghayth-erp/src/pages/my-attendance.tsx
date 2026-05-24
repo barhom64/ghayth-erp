@@ -60,7 +60,7 @@ const attendanceColumns: DataTableColumn<any>[] = [
         <div className="flex items-center gap-1">
           <span className="text-status-error-foreground font-medium">{formatCurrency(Number(r.totalDeductions))}</span>
           {sev && (
-            <Badge className={cn("text-[10px] px-1 py-0", sev.color)}>
+            <Badge className={cn("text-2xs px-1 py-0", sev.color)}>
               <AlertTriangle className="w-2.5 h-2.5 me-0.5 inline" />{sev.label}
             </Badge>
           )}

@@ -130,15 +130,15 @@ function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: 
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <h3 className="font-semibold text-sm">{rule.name}</h3>
               {rule.module && (
-                <Badge variant="outline" className={`text-[10px] ${getModuleColor(rule.module)}`}>
+                <Badge variant="outline" className={`text-2xs ${getModuleColor(rule.module)}`}>
                   {moduleLabel(rule.module)}
                 </Badge>
               )}
-              <Badge variant={rule.isActive ? "default" : "secondary"} className="text-[10px]">
+              <Badge variant={rule.isActive ? "default" : "secondary"} className="text-2xs">
                 {rule.isActive ? "مفعّل" : "معطّل"}
               </Badge>
               {!rule.companyId && (
-                <Badge variant="outline" className="text-[10px] bg-status-warning-surface text-status-warning-foreground">افتراضي</Badge>
+                <Badge variant="outline" className="text-2xs bg-status-warning-surface text-status-warning-foreground">افتراضي</Badge>
               )}
             </div>
             {rule.description && <p className="text-xs text-muted-foreground mb-2">{rule.description}</p>}
@@ -362,11 +362,11 @@ function RuleLogsList() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-medium text-xs">{log.ruleName}</div>
-            <div className="text-[11px] text-muted-foreground">
+            <div className="text-2xs text-muted-foreground">
               {log.actionTaken} → {log.actionResult}
             </div>
           </div>
-          <div className="text-[10px] text-muted-foreground shrink-0 flex items-center gap-1">
+          <div className="text-2xs text-muted-foreground shrink-0 flex items-center gap-1">
             <Clock className="h-3 w-3" />
             {formatDate(log.executedAt)}
           </div>

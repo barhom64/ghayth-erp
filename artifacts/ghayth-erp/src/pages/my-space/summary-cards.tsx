@@ -141,7 +141,7 @@ export function SummaryCards({ attendance, monthlyStats, currentShift, lastPaysl
                   {String(currentShift.days).split(",").map((d: string) => {
                     const dayNames: Record<string, string> = { "0": "أحد", "1": "إثن", "2": "ثلا", "3": "أرب", "4": "خمي", "5": "جمع", "6": "سبت" };
                     return (
-                      <Badge key={d} variant="outline" className="text-[10px]">
+                      <Badge key={d} variant="outline" className="text-2xs">
                         {dayNames[d.trim()] || d}
                       </Badge>
                     );

@@ -89,7 +89,7 @@ export function EntityComments({ entityType, entityId, className }: EntityCommen
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium text-gray-700">{c.userName || "مستخدم"}</span>
                   <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-muted-foreground">{formatTimeAgo(c.createdAt)}</span>
+                    <span className="text-2xs text-muted-foreground">{formatTimeAgo(c.createdAt)}</span>
                     <button
                       onClick={() => removeComment(c.id)}
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-red-500 p-0.5"

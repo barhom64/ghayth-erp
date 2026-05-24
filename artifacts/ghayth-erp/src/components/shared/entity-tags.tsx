@@ -68,7 +68,7 @@ export function EntityTags({ entityType, entityId, className, inline }: EntityTa
         {tags.map((t: any) => {
           const c = COLOR_MAP[t.color] || COLOR_MAP.blue;
           return (
-            <span key={t.id} className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium border", c.bg, c.text, c.border)}>
+            <span key={t.id} className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-2xs font-medium border", c.bg, c.text, c.border)}>
               {t.tag}
             </span>
           );
@@ -188,7 +188,7 @@ export function TagBadges({ tags }: { tags: Array<{ tag: string; color: string }
       {tags.map((t, i) => {
         const c = COLOR_MAP[t.color] || COLOR_MAP.blue;
         return (
-          <span key={i} className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border", c.bg, c.text, c.border)}>
+          <span key={i} className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-medium border", c.bg, c.text, c.border)}>
             {t.tag}
           </span>
         );

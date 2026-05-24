@@ -36,7 +36,7 @@ export function SecondaryAlertsSection({ overdueItems, expiringSoon }: Secondary
                         {item.deadline && ` — ${formatDateAr(item.deadline)}`}
                       </p>
                     </div>
-                    <Badge className="text-[10px] bg-status-error-surface text-status-error-foreground shrink-0">{resolveStatus(item.status)?.label || item.status}</Badge>
+                    <Badge className="text-2xs bg-status-error-surface text-status-error-foreground shrink-0">{resolveStatus(item.status)?.label || item.status}</Badge>
                   </div>
                 </Link>
               ))}
@@ -66,7 +66,7 @@ export function SecondaryAlertsSection({ overdueItems, expiringSoon }: Secondary
                         {item.itemType === "document" ? "مستند" : "عقد"}
                       </p>
                     </div>
-                    <Badge className={cn("text-[10px] shrink-0", daysLeft <= 7 ? "bg-status-error-surface text-status-error-foreground" : "bg-status-warning-surface text-status-warning-foreground")}>
+                    <Badge className={cn("text-2xs shrink-0", daysLeft <= 7 ? "bg-status-error-surface text-status-error-foreground" : "bg-status-warning-surface text-status-warning-foreground")}>
                       {daysLeft <= 0 ? "منتهي" : `${daysLeft} يوم`}
                     </Badge>
                   </div>

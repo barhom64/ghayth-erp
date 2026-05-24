@@ -95,7 +95,7 @@ export default function PropertiesBuildings() {
             </span>
           )}
           {b.deedNumber && (
-            <span className="text-[10px] text-muted-foreground">صك: {b.deedNumber}</span>
+            <span className="text-2xs text-muted-foreground">صك: {b.deedNumber}</span>
           )}
         </div>
       ),

@@ -466,11 +466,11 @@ export default function DocumentsTemplates() {
                     <p className="text-xs text-muted-foreground">{typeLabels[t.type] || t.type || "-"}</p>
                   </div>
                 </div>
-                {t.isDefault && <Badge className="bg-status-warning-surface text-status-warning-foreground text-[10px]">مسبق</Badge>}
+                {t.isDefault && <Badge className="bg-status-warning-surface text-status-warning-foreground text-2xs">مسبق</Badge>}
               </div>
               {t.description && <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{t.description}</p>}
               <div className="flex items-center justify-between">
-                <Badge className={cn("text-[10px]", categoryColors[t.category] || "bg-surface-subtle text-status-neutral-foreground")}>
+                <Badge className={cn("text-2xs", categoryColors[t.category] || "bg-surface-subtle text-status-neutral-foreground")}>
                   {categoryLabels[t.category] || t.category || "-"}
                 </Badge>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

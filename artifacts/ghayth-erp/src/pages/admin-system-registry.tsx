@@ -63,12 +63,12 @@ function categoryLabel(cat: string): string {
 
 function severityColor(severity: string): string {
   const map: Record<string, string> = {
-    critical: "bg-status-error-surface text-status-error-foreground text-[10px]",
-    high: "bg-status-warning-surface text-status-warning-foreground text-[10px]",
-    medium: "bg-status-warning-surface text-yellow-800 text-[10px]",
-    low: "bg-status-info-surface text-status-info-foreground text-[10px]",
+    critical: "bg-status-error-surface text-status-error-foreground text-2xs",
+    high: "bg-status-warning-surface text-status-warning-foreground text-2xs",
+    medium: "bg-status-warning-surface text-yellow-800 text-2xs",
+    low: "bg-status-info-surface text-status-info-foreground text-2xs",
   };
-  return map[severity] ?? "text-[10px]";
+  return map[severity] ?? "text-2xs";
 }
 
 function severityLabel(severity: string): string {
@@ -141,9 +141,9 @@ export default function AdminSystemRegistry() {
 
   const entityColumns: DataTableColumn<any>[] = [
     { key: "table", header: "الجدول", searchable: true, render: (r: any) => <span className="font-mono text-xs">{r.table}</span> },
-    { key: "domainLabel", header: "النطاق", render: (r: any) => <Badge variant="outline" className="text-[10px]">{r.domainLabel}</Badge> },
+    { key: "domainLabel", header: "النطاق", render: (r: any) => <Badge variant="outline" className="text-2xs">{r.domainLabel}</Badge> },
     { key: "hasLifecycle", header: "آلة حالة", align: "center", render: (r: any) => r.hasLifecycle ? (
-      <Badge className="bg-status-success-surface text-status-success-foreground text-[10px]">
+      <Badge className="bg-status-success-surface text-status-success-foreground text-2xs">
         {r.lifecycle?.states?.length || "?"} حالة
       </Badge>
     ) : (
@@ -152,11 +152,11 @@ export default function AdminSystemRegistry() {
   ];
 
   const eventColumns: DataTableColumn<any>[] = [
-    { key: "action", header: "الحدث", searchable: true, render: (r: any) => <span className="font-mono text-[11px]">{r.action}</span> },
-    { key: "domain", header: "النطاق", render: (r: any) => <Badge variant="outline" className="text-[10px]">{r.domain}</Badge> },
+    { key: "action", header: "الحدث", searchable: true, render: (r: any) => <span className="font-mono text-2xs">{r.action}</span> },
+    { key: "domain", header: "النطاق", render: (r: any) => <Badge variant="outline" className="text-2xs">{r.domain}</Badge> },
     { key: "label", header: "الوصف", searchable: true },
     { key: "critical", header: "حرج", align: "center", render: (r: any) => r.critical ? (
-      <Badge className="bg-status-error-surface text-status-error-foreground text-[10px]">حرج</Badge>
+      <Badge className="bg-status-error-surface text-status-error-foreground text-2xs">حرج</Badge>
     ) : (
       <span className="text-muted-foreground">—</span>
     )},
@@ -249,7 +249,7 @@ export default function AdminSystemRegistry() {
               <TabsTrigger value="coverage">
                 التغطية
                 {coverageBySeverity.critical > 0 && (
-                  <Badge className="bg-status-error-surface text-status-error-foreground text-[10px] ms-1">{coverageBySeverity.critical}</Badge>
+                  <Badge className="bg-status-error-surface text-status-error-foreground text-2xs ms-1">{coverageBySeverity.critical}</Badge>
                 )}
               </TabsTrigger>
               <TabsTrigger value="domains">النطاقات</TabsTrigger>
@@ -276,21 +276,21 @@ export default function AdminSystemRegistry() {
                       <Layers className="w-5 h-5 text-primary" />
                       {d.label}
                       <Badge variant="outline" className="font-mono text-xs">{d.id}</Badge>
-                      {d.glIntegration && <Badge className="bg-status-success-surface text-status-success-foreground text-[10px]">GL</Badge>}
-                      <Badge variant="outline" className="text-[10px]">{d.tables?.length || 0} جدول</Badge>
-                      <Badge variant="outline" className="text-[10px]">{d.permissions?.length || 0} صلاحية</Badge>
+                      {d.glIntegration && <Badge className="bg-status-success-surface text-status-success-foreground text-2xs">GL</Badge>}
+                      <Badge variant="outline" className="text-2xs">{d.tables?.length || 0} جدول</Badge>
+                      <Badge variant="outline" className="text-2xs">{d.permissions?.length || 0} صلاحية</Badge>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="flex flex-wrap gap-1">
                       {(d.tables || []).map((t: string) => (
-                        <Badge key={t} variant="outline" className="font-mono text-[10px]">{t}</Badge>
+                        <Badge key={t} variant="outline" className="font-mono text-2xs">{t}</Badge>
                       ))}
                     </div>
                     {d.engines?.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {d.engines.map((e: string) => (
-                          <Badge key={e} className="bg-status-info-surface text-status-info-foreground text-[10px]">{e}</Badge>
+                          <Badge key={e} className="bg-status-info-surface text-status-info-foreground text-2xs">{e}</Badge>
                         ))}
                       </div>
                     )}
@@ -316,8 +316,8 @@ export default function AdminSystemRegistry() {
                       >
                         {isExpanded ? <ChevronUp className="w-4 h-4 shrink-0" /> : <ChevronDown className="w-4 h-4 shrink-0" />}
                         <span className="font-semibold text-sm">{e.label}</span>
-                        <Badge variant="outline" className="font-mono text-[10px]">{e.table}</Badge>
-                        <Badge className="text-[10px] bg-surface-subtle text-status-neutral-foreground">{e.type === "document" ? "مستند" : e.type === "transaction" ? "معاملة" : e.type === "master" ? "بيان رئيسي" : e.type === "request" ? "طلب" : "إعداد"}</Badge>
+                        <Badge variant="outline" className="font-mono text-2xs">{e.table}</Badge>
+                        <Badge className="text-2xs bg-surface-subtle text-status-neutral-foreground">{e.type === "document" ? "مستند" : e.type === "transaction" ? "معاملة" : e.type === "master" ? "بيان رئيسي" : e.type === "request" ? "طلب" : "إعداد"}</Badge>
                         <div className="flex gap-1 ms-auto">
                           <FeatureDot active={!!e.lifecycle} title="دورة حياة" />
                           <FeatureDot active={!!e.approval} title="اعتماد" />
@@ -331,16 +331,16 @@ export default function AdminSystemRegistry() {
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div><span className="text-muted-foreground">المالك:</span> <span className="font-medium">{e.owner || "—"}</span></div>
                             <div><span className="text-muted-foreground">المنشأ:</span> <span className="font-medium">{e.origin || "—"}</span></div>
-                            <div><span className="text-muted-foreground">النطاق:</span> <Badge variant="outline" className="text-[10px]">{e.domain}</Badge></div>
+                            <div><span className="text-muted-foreground">النطاق:</span> <Badge variant="outline" className="text-2xs">{e.domain}</Badge></div>
                             <div><span className="text-muted-foreground">النوع:</span> <span className="font-medium">{e.type}</span></div>
                           </div>
                           {e.routes && (
                             <div>
                               <p className="text-muted-foreground text-xs mb-1">المسارات:</p>
                               <div className="flex flex-wrap gap-1">
-                                {e.routes.list && <Badge variant="outline" className="font-mono text-[10px]">{e.routes.list}</Badge>}
-                                {e.routes.create && <Badge variant="outline" className="font-mono text-[10px]">{e.routes.create}</Badge>}
-                                {e.routes.detail && <Badge variant="outline" className="font-mono text-[10px]">{e.routes.detail}</Badge>}
+                                {e.routes.list && <Badge variant="outline" className="font-mono text-2xs">{e.routes.list}</Badge>}
+                                {e.routes.create && <Badge variant="outline" className="font-mono text-2xs">{e.routes.create}</Badge>}
+                                {e.routes.detail && <Badge variant="outline" className="font-mono text-2xs">{e.routes.detail}</Badge>}
                               </div>
                             </div>
                           )}
@@ -349,7 +349,7 @@ export default function AdminSystemRegistry() {
                               <p className="text-muted-foreground text-xs mb-1">دورة الحياة:</p>
                               <div className="flex flex-wrap gap-1">
                                 {e.lifecycle.states.map((s: string) => (
-                                  <Badge key={s} className={s === e.lifecycle.initialState ? "bg-status-info-surface text-status-info-foreground text-[10px]" : "bg-surface-subtle text-status-neutral-foreground text-[10px]"}>
+                                  <Badge key={s} className={s === e.lifecycle.initialState ? "bg-status-info-surface text-status-info-foreground text-2xs" : "bg-surface-subtle text-status-neutral-foreground text-2xs"}>
                                     {s}{s === e.lifecycle.initialState ? " (ابتدائي)" : ""}
                                   </Badge>
                                 ))}
@@ -362,7 +362,7 @@ export default function AdminSystemRegistry() {
                               <div className="flex gap-1 items-center">
                                 {e.approval.approverRoles.map((c: string, i: number) => (
                                   <span key={c} className="flex items-center gap-1">
-                                    <Badge className="bg-status-success-surface text-status-success-foreground text-[10px]">{c}</Badge>
+                                    <Badge className="bg-status-success-surface text-status-success-foreground text-2xs">{c}</Badge>
                                     {i < e.approval.approverRoles.length - 1 && <span className="text-muted-foreground">←</span>}
                                   </span>
                                 ))}
@@ -374,7 +374,7 @@ export default function AdminSystemRegistry() {
                               <p className="text-muted-foreground text-xs mb-1">الأحداث ({e.events.length}):</p>
                               <div className="flex flex-wrap gap-1">
                                 {e.events.map((ev: string) => (
-                                  <Badge key={ev} variant="outline" className="font-mono text-[10px]">{ev}</Badge>
+                                  <Badge key={ev} variant="outline" className="font-mono text-2xs">{ev}</Badge>
                                 ))}
                               </div>
                             </div>
@@ -384,7 +384,7 @@ export default function AdminSystemRegistry() {
                               <p className="text-muted-foreground text-xs mb-1">الصلاحيات:</p>
                               <div className="flex flex-wrap gap-1">
                                 {e.permissions.map((p: string) => (
-                                  <Badge key={p} variant="outline" className="font-mono text-[10px]">{p}</Badge>
+                                  <Badge key={p} variant="outline" className="font-mono text-2xs">{p}</Badge>
                                 ))}
                               </div>
                             </div>
@@ -450,7 +450,7 @@ export default function AdminSystemRegistry() {
                             {filteredGaps.map((g: any, i: number) => (
                               <tr key={i} className="border-t">
                                 <td className="p-2 font-medium text-xs">{g.entityLabel}</td>
-                                <td className="p-2"><Badge variant="outline" className="text-[10px]">{g.domain}</Badge></td>
+                                <td className="p-2"><Badge variant="outline" className="text-2xs">{g.domain}</Badge></td>
                                 <td className="p-2 text-xs text-muted-foreground">{categoryLabel(g.category)}</td>
                                 <td className="p-2 text-xs">{g.description}</td>
                                 <td className="p-2 text-center">
@@ -535,7 +535,7 @@ export default function AdminSystemRegistry() {
                         <span className="text-sm font-medium min-w-[120px]">{e.entityLabel}</span>
                         <div className="flex flex-wrap gap-1">
                           {e.notifications.map((n: string) => (
-                            <Badge key={n} variant="outline" className="text-[10px]">{n}</Badge>
+                            <Badge key={n} variant="outline" className="text-2xs">{n}</Badge>
                           ))}
                         </div>
                       </div>
@@ -567,7 +567,7 @@ export default function AdminSystemRegistry() {
                         <span className="text-sm font-medium min-w-[120px]">{e.entityLabel}</span>
                         <div className="flex flex-wrap gap-1">
                           {e.reports.map((r: string) => (
-                            <Badge key={r} variant="outline" className="text-[10px]">{r}</Badge>
+                            <Badge key={r} variant="outline" className="text-2xs">{r}</Badge>
                           ))}
                         </div>
                       </div>
@@ -595,7 +595,7 @@ export default function AdminSystemRegistry() {
                   <div className="space-y-2">
                     {(printRegistry?.templates ?? []).map((t: any) => (
                       <div key={t.entityId} className="flex items-center gap-3 p-2 bg-surface-subtle rounded-lg text-sm">
-                        <Badge variant="outline" className="text-[10px]">{t.domain}</Badge>
+                        <Badge variant="outline" className="text-2xs">{t.domain}</Badge>
                         <span className="font-medium">{t.entityLabel}</span>
                         <span className="font-mono text-xs text-muted-foreground">{t.templateKey}</span>
                         {t.detailRoute && <span className="text-xs text-muted-foreground ms-auto">{t.detailRoute}</span>}
@@ -625,7 +625,7 @@ export default function AdminSystemRegistry() {
                   ) : (
                     <div className="flex flex-wrap gap-1">
                       {(missing?.tablesWithoutEvents?.items ?? []).map((t: any) => (
-                        <Badge key={t.table} variant="outline" className="font-mono text-[10px]">
+                        <Badge key={t.table} variant="outline" className="font-mono text-2xs">
                           {t.domain}/{t.table}
                         </Badge>
                       ))}
@@ -673,7 +673,7 @@ export default function AdminSystemRegistry() {
                   ) : (
                     <div className="flex flex-wrap gap-1">
                       {(missing?.orphanNotifications?.items ?? []).map((n: any, i: number) => (
-                        <Badge key={i} variant="outline" className="text-[10px]">{n.type}</Badge>
+                        <Badge key={i} variant="outline" className="text-2xs">{n.type}</Badge>
                       ))}
                       {(missing?.orphanNotifications?.count ?? 0) === 0 && (
                         <p className="text-status-success-foreground text-sm">كل الإشعارات لديها مسار صفحة</p>

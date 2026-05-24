@@ -81,6 +81,29 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /*
+   * Sub-`text-xs` size tokens (UNIFICATION_PLAN §P9).
+   *
+   * Pages used to hard-code `text-[10px]`, `text-[9px]`, `text-[8px]`
+   * for chips, captions and dense table cells. Those literal pixel
+   * values bypass the +12% typography knob (html { font-size: 18px })
+   * and end up disproportionately small next to scaled body text.
+   *
+   * These two tokens replace those literals with rem-based sizes that
+   * scale with the knob:
+   *
+   *   text-2xs  =  0.625rem  →  10px at 16px base / 11.25px at 18px base
+   *   text-3xs  =  0.5rem    →   8px at 16px base /  9px    at 18px base
+   *
+   * The lint rule `text-px-literal` (scripts/src/lint-patterns.mjs)
+   * forbids `text-[Npx]` so all future small-text adoption flows
+   * through these tokens or text-xs.
+   */
+  --text-2xs: 0.625rem;
+  --text-2xs--line-height: 0.875rem;
+  --text-3xs: 0.5rem;
+  --text-3xs--line-height: 0.75rem;
 }
 
 :root {

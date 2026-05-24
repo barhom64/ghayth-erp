@@ -192,7 +192,7 @@ function ViolationTimeline({ violations }: { violations: any[] }) {
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm truncate">{v.description}</p>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <Badge variant="outline" className="text-[10px]">{violationTypeLabel(v.type)}</Badge>
+                  <Badge variant="outline" className="text-2xs">{violationTypeLabel(v.type)}</Badge>
                   <span className="text-xs text-muted-foreground">{v.period}</span>
                   {v.createdAt && <span className="text-xs text-muted-foreground">{formatDateAr(v.createdAt)}</span>}
                 </div>
@@ -331,7 +331,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
               <tab.icon className="h-3.5 w-3.5" />
               {tab.label}
               {count > 0 && tab.key !== "overview" && tab.key !== "info" && (
-                <Badge variant="secondary" className="text-[10px] px-1.5 h-4">{count}</Badge>
+                <Badge variant="secondary" className="text-2xs px-1.5 h-4">{count}</Badge>
               )}
             </button>
           );
@@ -585,7 +585,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                       <span>دخول: {formatTimeAr(a.checkIn)}</span>
                       <span>خروج: {formatTimeAr(a.checkOut)}</span>
                       {a.lateMinutes > 0 && (
-                        <Badge variant="destructive" className="text-[10px]">تأخر {a.lateMinutes} د</Badge>
+                        <Badge variant="destructive" className="text-2xs">تأخر {a.lateMinutes} د</Badge>
                       )}
                     </div>
                   </div>
@@ -923,7 +923,7 @@ function PriorityBadge({ priority }: { priority: string }) {
     low: "منخفض",
   };
   return (
-    <Badge className={cn("text-[10px]", colors[priority] || "bg-surface-subtle text-status-neutral-foreground")}>
+    <Badge className={cn("text-2xs", colors[priority] || "bg-surface-subtle text-status-neutral-foreground")}>
       {labels[priority] || priority}
     </Badge>
   );
@@ -937,7 +937,7 @@ function SeverityBadge({ severity }: { severity: string }) {
     low: "bg-status-info-surface text-status-info-foreground",
   };
   return (
-    <Badge className={cn("text-[10px]", colors[severity] || "bg-surface-subtle text-status-neutral-foreground")}>
+    <Badge className={cn("text-2xs", colors[severity] || "bg-surface-subtle text-status-neutral-foreground")}>
       {severityLabel(severity)}
     </Badge>
   );

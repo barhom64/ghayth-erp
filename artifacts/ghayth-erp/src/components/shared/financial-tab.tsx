@@ -161,7 +161,7 @@ export function FinancialTab({ entityType, entityId, sections }: FinancialTabPro
                       <td className="p-3 text-sm">{m.description || "-"}</td>
                       <td className="p-3">
                         {m.movementType && (
-                          <Badge variant="outline" className="text-[10px]">{m.movementType}</Badge>
+                          <Badge variant="outline" className="text-2xs">{m.movementType}</Badge>
                         )}
                       </td>
                       <td className="p-3 text-status-success-foreground font-medium">

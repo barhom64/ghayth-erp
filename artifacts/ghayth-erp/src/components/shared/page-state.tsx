@@ -259,7 +259,7 @@ export function PageStateWrapper({
         <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap justify-center">
             <h3 className="text-base font-semibold text-gray-900">{desc.title}</h3>
-            {desc.code && <Badge variant="outline" className="text-[10px] font-mono">{desc.code}</Badge>}
+            {desc.code && <Badge variant="outline" className="text-2xs font-mono">{desc.code}</Badge>}
           </div>
           <p className="text-sm text-muted-foreground max-w-lg">{desc.description}</p>
           {desc.field && (

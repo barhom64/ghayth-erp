@@ -423,7 +423,7 @@ function ConvertCommButton({ logEntry, onSuccess }: { logEntry: any; onSuccess: 
               size="sm"
               disabled={converting}
               onClick={() => handleConvert(opt.key)}
-              className={cn("h-7 px-2 gap-1 text-[11px]", opt.color)}
+              className={cn("h-7 px-2 gap-1 text-2xs", opt.color)}
             >
               <opt.icon className="h-3 w-3" />
               {opt.label}
@@ -491,7 +491,7 @@ function CommLogActions({ logEntry, onSuccess }: { logEntry: any; onSuccess: () 
       <GuardedButton perm="communications:update" variant="ghost" size="sm" className="h-7 px-2" onClick={() => setEditing(true)}><Pencil className="h-3 w-3" /></GuardedButton>
       {confirmDelete ? (
         <>
-          <GuardedButton perm="communications:delete" variant="outline" size="sm" className="h-7 px-2 text-[11px] text-status-error-foreground" disabled={busy} onClick={remove}>تأكيد</GuardedButton>
+          <GuardedButton perm="communications:delete" variant="outline" size="sm" className="h-7 px-2 text-2xs text-status-error-foreground" disabled={busy} onClick={remove}>تأكيد</GuardedButton>
           <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setConfirmDelete(false)}><X className="h-3 w-3" /></Button>
         </>
       ) : (
@@ -520,7 +520,7 @@ function CommLogTab() {
     { key: "createdAt", header: "التاريخ", sortable: true, render: (l) => formatDateAr(l.createdAt) },
     { key: "actions", header: "إجراء", render: (l) => (
       <div className="inline-flex items-center gap-1">
-        {l.relatedType ? <Badge variant="outline" className="text-[10px]">{l.relatedType}</Badge> : <ConvertCommButton logEntry={l} onSuccess={() => refetch()} />}
+        {l.relatedType ? <Badge variant="outline" className="text-2xs">{l.relatedType}</Badge> : <ConvertCommButton logEntry={l} onSuccess={() => refetch()} />}
         <CommLogActions logEntry={l} onSuccess={() => refetch()} />
       </div>
     ) },

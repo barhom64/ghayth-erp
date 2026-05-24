@@ -76,7 +76,7 @@ export function ConditionsEditor({ value, onChange, triggerLabel }: Props) {
         <Filter className="h-3 w-3 me-1" />
         {triggerLabel || "شروط"}
         {conditionCount > 0 && (
-          <Badge variant="outline" className="ms-1 h-4 px-1 text-[10px] bg-white text-status-info-foreground">
+          <Badge variant="outline" className="ms-1 h-4 px-1 text-2xs bg-white text-status-info-foreground">
             {conditionCount}
           </Badge>
         )}
@@ -120,7 +120,7 @@ export function ConditionsEditor({ value, onChange, triggerLabel }: Props) {
                 <p className="text-xs font-semibold text-status-neutral-foreground mb-2">حدود المبلغ (تُقرأ من السجل)</p>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] text-muted-foreground block mb-1">الحد الأدنى</label>
+                    <label className="text-2xs text-muted-foreground block mb-1">الحد الأدنى</label>
                     <Input
                       type="number"
                       value={draft.amountMin ?? ""}
@@ -135,7 +135,7 @@ export function ConditionsEditor({ value, onChange, triggerLabel }: Props) {
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-muted-foreground block mb-1">الحد الأقصى</label>
+                    <label className="text-2xs text-muted-foreground block mb-1">الحد الأقصى</label>
                     <Input
                       type="number"
                       value={draft.amountMax ?? ""}
@@ -189,7 +189,7 @@ export function ConditionsEditor({ value, onChange, triggerLabel }: Props) {
                 <p className="text-xs font-semibold text-status-neutral-foreground mb-2">الوقت</p>
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <div>
-                    <label className="text-[10px] text-muted-foreground block mb-1">من ساعة</label>
+                    <label className="text-2xs text-muted-foreground block mb-1">من ساعة</label>
                     <Input
                       type="number"
                       min={0}
@@ -210,7 +210,7 @@ export function ConditionsEditor({ value, onChange, triggerLabel }: Props) {
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-muted-foreground block mb-1">إلى ساعة</label>
+                    <label className="text-2xs text-muted-foreground block mb-1">إلى ساعة</label>
                     <Input
                       type="number"
                       min={1}
@@ -258,7 +258,7 @@ export function ConditionsEditor({ value, onChange, triggerLabel }: Props) {
                     );
                   })}
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1">انقر على اليوم لتفعيله/تعطيله. الافتراضي كل الأيام مسموحة.</p>
+                <p className="text-2xs text-muted-foreground mt-1">انقر على اليوم لتفعيله/تعطيله. الافتراضي كل الأيام مسموحة.</p>
               </CardContent>
             </Card>
 
@@ -285,8 +285,8 @@ export function ConditionsEditor({ value, onChange, triggerLabel }: Props) {
             {/* Live preview */}
             <Card className="bg-status-info-surface border-status-info-surface">
               <CardContent className="p-3">
-                <p className="text-[10px] font-semibold text-status-info-foreground mb-1">معاينة JSON:</p>
-                <pre className="text-[10px] bg-white p-2 rounded overflow-x-auto" dir="ltr">
+                <p className="text-2xs font-semibold text-status-info-foreground mb-1">معاينة JSON:</p>
+                <pre className="text-2xs bg-white p-2 rounded overflow-x-auto" dir="ltr">
                   {JSON.stringify(draft, null, 2) || "{}"}
                 </pre>
               </CardContent>
@@ -324,7 +324,7 @@ function ListInput({ label, value, placeholder, onChange }: {
 
   return (
     <div className="mb-2">
-      <label className="text-[10px] text-muted-foreground block mb-1">{label}</label>
+      <label className="text-2xs text-muted-foreground block mb-1">{label}</label>
       <div className="flex gap-1">
         <Input
           value={input}

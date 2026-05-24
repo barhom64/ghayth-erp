@@ -683,7 +683,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             </div>
             <div className="flex items-center gap-1.5">
               {!isExpanded && item.children && item.children.length > 0 && (
-                <span className="text-[10px] text-muted-foreground bg-gray-100 rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
+                <span className="text-2xs text-muted-foreground bg-gray-100 rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
                   {item.children.length}
                 </span>
               )}
@@ -1037,7 +1037,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                 )}
                 {section.title !== "الرئيسية" && !isSidebarCollapsed && (
                   <div className="px-3 pt-2 pb-1">
-                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <span className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider">
                       {section.title}
                     </span>
                   </div>
@@ -1137,7 +1137,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
               >
                 <Search className="h-4 w-4 shrink-0" />
                 <span className="flex-1 text-start">بحث في الصفحات والإجراءات...</span>
-                <kbd className="hidden lg:flex items-center gap-0.5 text-[10px] text-gray-300 bg-white border border-border rounded px-1 py-0.5">Ctrl+K</kbd>
+                <kbd className="hidden lg:flex items-center gap-0.5 text-2xs text-gray-300 bg-white border border-border rounded px-1 py-0.5">Ctrl+K</kbd>
               </button>
             </div>
 
@@ -1173,7 +1173,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                           {role.label}
                         </span>
                         {role.source === "v2" && (
-                          <span className="ms-2 text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-mono">
+                          <span className="ms-2 text-2xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-mono">
                             v2
                           </span>
                         )}
@@ -1203,7 +1203,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                               : `${selectedCompanyIds.length} شركات`}
                         </span>
                         {selectedCompanyIds.length > 1 && (
-                          <span className="bg-emerald-600 text-white text-[10px] px-1 py-0.5 rounded-full min-w-[16px] text-center leading-none">
+                          <span className="bg-emerald-600 text-white text-2xs px-1 py-0.5 rounded-full min-w-[16px] text-center leading-none">
                             {selectedCompanyIds.length}
                           </span>
                         )}
@@ -1275,7 +1275,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                           : `${selectedBranchIds.length} فروع`}
                     </span>
                     {selectedBranchIds.length > 1 && (
-                      <span className="bg-blue-600 text-white text-[10px] px-1 py-0.5 rounded-full min-w-[16px] text-center leading-none">
+                      <span className="bg-blue-600 text-white text-2xs px-1 py-0.5 rounded-full min-w-[16px] text-center leading-none">
                         {selectedBranchIds.length}
                       </span>
                     )}

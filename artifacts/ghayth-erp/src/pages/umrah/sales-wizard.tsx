@@ -234,7 +234,7 @@ export default function UmrahSalesWizard() {
                             />
                           </td>
                           <td className="py-2 px-2">
-                            <span className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] ${meta.tone}`}>
+                            <span className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-2xs ${meta.tone}`}>
                               <SourceIcon className="h-3 w-3" />
                               {meta.text}
                             </span>

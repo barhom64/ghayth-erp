@@ -438,6 +438,43 @@ const RULES = [
       "decorative chips, use a design-token surface (`bg-status-success-surface " +
       "text-status-success-foreground`, etc.) instead of literal colors.",
   },
+
+  // ─── Design-system tokens — Pixel-literal text sizes ─────────────────
+  //
+  // `text-[10px]`, `text-[9px]` etc. embed pixel-literal sizes that
+  // bypass the typography knob (html { font-size: 18px }). When the
+  // knob scales everything else +12%, text-[10px] stays exactly 10px
+  // — disproportionately small next to scaled body text.
+  //
+  // Two replacements depending on the call site:
+  //   • text-[10px] → text-2xs   (rem-based 0.625rem, defined in
+  //                               index.css @theme — scales with knob)
+  //   • text-[8px]  → text-3xs   (rem-based 0.5rem)
+  //   • text-[Nrem] or text-xs/sm/etc — already rem-based, NOT caught
+  //
+  // countBaseline drops as offenders migrate; rule becomes hard fail at 0.
+  {
+    id: "text-px-literal",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    // No skip-list: the rule wants 0 occurrences everywhere. Charts /
+    // icons / illustrations that legitimately need pixel literals use
+    // `style={{ fontSize: "Npx" }}` (inline style, different surface,
+    // not caught by this rule).
+    regex: /text-\[\d+px\]/,
+    // Hardened from ratchet → hard rule (baseline reached 0 in one
+    // sweep: 481 literals across 60+ files migrated to text-2xs /
+    // text-3xs in a single sed pass once the rem-based tokens were
+    // defined in index.css @theme).
+    message:
+      "`text-[Npx]` with a pixel literal bypasses the typography knob " +
+      "(html { font-size: 18px } in index.css) so the text does not " +
+      "scale with the +12% global up-size. Use the rem-based design " +
+      "tokens defined in index.css @theme: `text-2xs` (0.625rem ≈ 11px " +
+      "at the current scale) for chip/caption sizes, `text-3xs` " +
+      "(0.5rem) for the very dense table-cell labels, or the built-in " +
+      "Tailwind `text-xs`/`text-sm` for body-adjacent text.",
+  },
 ];
 
 // ─── Pure matchers (exported for self-tests) ─────────────────────────────

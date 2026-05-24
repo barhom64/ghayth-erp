@@ -29,7 +29,7 @@ function ScoreBadge({ score, label }: { score: number | null | undefined; label?
   const color = score >= 80 ? "text-status-success-foreground" : score >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground";
   return (
     <div className="text-center">
-      {label && <p className="text-[10px] text-muted-foreground mb-0.5">{label}</p>}
+      {label && <p className="text-2xs text-muted-foreground mb-0.5">{label}</p>}
       <span className={cn("font-bold text-sm", color)}>{score}%</span>
     </div>
   );

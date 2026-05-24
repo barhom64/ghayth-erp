@@ -421,7 +421,7 @@ export function UnifiedDateInput({
                       variant="ghost"
                       size="sm"
                       type="button"
-                      className="h-6 px-2 text-[10px]"
+                      className="h-6 px-2 text-2xs"
                       onClick={() => {
                         const d = p.getDate();
                         if (d instanceof Date) handleCalendarSelect(d);

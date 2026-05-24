@@ -422,7 +422,7 @@ export default function ActionCenter() {
                   <TabIcon className="w-4 h-4" />
                   {tab.label}
                   {count > 0 && (
-                    <Badge variant={activeTab === tab.key ? "secondary" : "destructive"} className="text-[10px] px-1.5">
+                    <Badge variant={activeTab === tab.key ? "secondary" : "destructive"} className="text-2xs px-1.5">
                       {count}
                     </Badge>
                   )}
@@ -617,7 +617,7 @@ export default function ActionCenter() {
                         {t.assigneeName && <p className="text-xs text-muted-foreground">{t.assigneeName}</p>}
                       </div>
                       {t.priority && (
-                        <Badge variant="outline" className={cn("text-[10px] shrink-0",
+                        <Badge variant="outline" className={cn("text-2xs shrink-0",
                           t.priority === "high" ? "bg-status-error-surface text-status-error-foreground" : t.priority === "medium" ? "bg-status-warning-surface text-status-warning-foreground" : ""
                         )}>
                           {priorityLabels[t.priority] || t.priority}

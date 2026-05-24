@@ -310,7 +310,7 @@ export default function ReceivableDetail() {
                 </div>
               ))}
               {paymentHistory.length > 5 && (
-                <p className="text-[11px] text-muted-foreground pt-1">
+                <p className="text-2xs text-muted-foreground pt-1">
                   و {paymentHistory.length - 5} دفعة أخرى...
                 </p>
               )}

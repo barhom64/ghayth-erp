@@ -81,7 +81,7 @@ export default function AdminDomainRegistry() {
                       </p>
                       <div className="flex flex-wrap gap-1">
                         {(domain.tables || []).map((t: string) => (
-                          <Badge key={t} variant="outline" className="font-mono text-[10px]">{t}</Badge>
+                          <Badge key={t} variant="outline" className="font-mono text-2xs">{t}</Badge>
                         ))}
                       </div>
                     </div>
@@ -92,7 +92,7 @@ export default function AdminDomainRegistry() {
                       </p>
                       <div className="flex flex-wrap gap-1">
                         {(domain.engines || []).map((e: string) => (
-                          <Badge key={e} className="bg-status-info-surface text-status-info-foreground text-[10px]">{e}</Badge>
+                          <Badge key={e} className="bg-status-info-surface text-status-info-foreground text-2xs">{e}</Badge>
                         ))}
                       </div>
                     </div>
@@ -103,7 +103,7 @@ export default function AdminDomainRegistry() {
                       </p>
                       <div className="flex flex-wrap gap-1">
                         {(domain.permissions || []).map((p: string) => (
-                          <Badge key={p} variant="outline" className="text-[10px]">{p}</Badge>
+                          <Badge key={p} variant="outline" className="text-2xs">{p}</Badge>
                         ))}
                       </div>
                     </div>
@@ -115,7 +115,7 @@ export default function AdminDomainRegistry() {
                         </p>
                         <div className="flex flex-wrap gap-1">
                           {domain.lifecycleEntities.map((e: string) => (
-                            <Badge key={e} variant="secondary" className="text-[10px]">{e}</Badge>
+                            <Badge key={e} variant="secondary" className="text-2xs">{e}</Badge>
                           ))}
                         </div>
                       </div>
@@ -128,7 +128,7 @@ export default function AdminDomainRegistry() {
                         </p>
                         <div className="flex flex-wrap gap-1">
                           {domain.cronJobs.map((c: string) => (
-                            <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>
+                            <Badge key={c} variant="outline" className="text-2xs">{c}</Badge>
                           ))}
                         </div>
                       </div>
@@ -139,7 +139,7 @@ export default function AdminDomainRegistry() {
                         <p className="font-medium mb-1">الالتزامات</p>
                         <div className="flex flex-wrap gap-1">
                           {domain.obligationTypes.map((o: string) => (
-                            <Badge key={o} className="bg-status-warning-surface text-status-warning-foreground text-[10px]">{o}</Badge>
+                            <Badge key={o} className="bg-status-warning-surface text-status-warning-foreground text-2xs">{o}</Badge>
                           ))}
                         </div>
                       </div>

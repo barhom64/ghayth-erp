@@ -241,7 +241,7 @@ export default function ViolationsReportPage() {
                   {byType.map((t: any) => (
                     <div key={t.type} className="flex items-center justify-between p-1.5 rounded border bg-surface-subtle text-xs">
                       <span>{TYPE_LABELS[t.type] || t.type}</span>
-                      <Badge variant="outline" className="text-[10px]">{t.count}</Badge>
+                      <Badge variant="outline" className="text-2xs">{t.count}</Badge>
                     </div>
                   ))}
                 </div>
@@ -261,7 +261,7 @@ export default function ViolationsReportPage() {
                   {byDepartment.map((d: any) => (
                     <div key={d.department} className="flex items-center justify-between p-1.5 rounded border bg-surface-subtle text-xs">
                       <span>{DEPARTMENT_LABELS[d.department] || d.department}</span>
-                      <Badge variant="outline" className="text-[10px]">{d.count}</Badge>
+                      <Badge variant="outline" className="text-2xs">{d.count}</Badge>
                     </div>
                   ))}
                 </div>

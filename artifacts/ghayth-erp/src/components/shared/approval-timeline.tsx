@@ -56,14 +56,14 @@ export function ApprovalTimeline({ entityType, entityId, title = "مسار ال�
                   <div className={cn("flex-1 pb-3", !isLast && "border-b border-border")}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <Badge className={cn("text-[10px]", config.bgColor, config.color)}>
+                        <Badge className={cn("text-2xs", config.bgColor, config.color)}>
                           {config.label}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
                           {action.actionByName || action.actionByEmail || "النظام"}
                         </span>
                       </div>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-2xs text-muted-foreground">
                         {formatDateAr(action.createdAt)}
                       </span>
                     </div>

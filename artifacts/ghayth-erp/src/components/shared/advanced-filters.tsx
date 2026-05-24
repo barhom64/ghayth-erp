@@ -165,7 +165,7 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
               <div
                 role="status"
                 aria-live="polite"
-                className="mt-1 text-[11px] text-status-warning-foreground"
+                className="mt-1 text-2xs text-status-warning-foreground"
               >
                 {cooldown.label}
               </div>
@@ -196,7 +196,7 @@ function ConfigBasedFilters({ config, values, onChange, onExportCSV, resultCount
           <Filter className="h-3.5 w-3.5" />
           فلترة
           {activeCount > 0 && (
-            <Badge variant="secondary" className="text-[10px] px-1 h-4">{activeCount}</Badge>
+            <Badge variant="secondary" className="text-2xs px-1 h-4">{activeCount}</Badge>
           )}
         </Button>
 
@@ -303,7 +303,7 @@ function SimpleFilters({
           <Filter className="h-3.5 w-3.5" />
           فلاتر متقدمة
           {hasActiveFilters && (
-            <span className="bg-primary text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
+            <span className="bg-primary text-white text-2xs rounded-full w-4 h-4 flex items-center justify-center">
               {[statusValue !== "all" ? 1 : 0, dateFrom ? 1 : 0, dateTo ? 1 : 0, branchValue !== "all" ? 1 : 0].reduce((a, b) => a + b, 0)}
             </span>
           )}

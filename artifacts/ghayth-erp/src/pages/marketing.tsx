@@ -69,7 +69,7 @@ function FunnelTab() {
                     <p className="text-sm font-semibold text-status-neutral-foreground">{s.count}</p>
                     <p className="text-xs text-muted-foreground">{STAGE_LABELS[s.stage] || s.stage}</p>
                     {s.conversionFromPrev && (
-                      <p className="text-[10px] text-emerald-600 mt-0.5">↑ {s.conversionFromPrev}%</p>
+                      <p className="text-2xs text-emerald-600 mt-0.5">↑ {s.conversionFromPrev}%</p>
                     )}
                   </div>
                 );

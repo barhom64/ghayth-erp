@@ -88,7 +88,7 @@ export function EntityFinancialProfile({ entityType, entityId }: EntityFinancial
                 <div key={acc.accountId} className="border rounded-lg p-3">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-mono text-xs text-status-info-foreground">{acc.accountCode}</span>
-                    <Badge variant="outline" className="text-[10px]">{acc.accountType}</Badge>
+                    <Badge variant="outline" className="text-2xs">{acc.accountType}</Badge>
                   </div>
                   <p className="text-sm font-medium truncate">{acc.accountName}</p>
                   <p className={`text-base font-bold mt-1 ${Number(acc.balance) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground"}`}>
@@ -126,7 +126,7 @@ export function EntityFinancialProfile({ entityType, entityId }: EntityFinancial
                         />
                       </div>
                     </div>
-                    <Badge variant="secondary" className="text-[10px] shrink-0">{item.transactionCount}</Badge>
+                    <Badge variant="secondary" className="text-2xs shrink-0">{item.transactionCount}</Badge>
                   </div>
                 );
               })}
@@ -161,7 +161,7 @@ export function EntityFinancialProfile({ entityType, entityId }: EntityFinancial
                       <td className="p-2 text-xs max-w-[200px] truncate">{t.description || "—"}</td>
                       <td className="p-2 text-xs">
                         <span className="font-mono text-muted-foreground">{t.accountCode}</span>
-                        {t.accountName && <span className="text-muted-foreground ms-1 text-[10px]">{t.accountName}</span>}
+                        {t.accountName && <span className="text-muted-foreground ms-1 text-2xs">{t.accountName}</span>}
                       </td>
                       <td className="p-2 text-status-success-foreground font-medium text-xs">
                         {Number(t.debit || 0) > 0 ? formatCurrency(Number(t.debit)) : "—"}

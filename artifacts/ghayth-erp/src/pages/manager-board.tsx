@@ -142,10 +142,10 @@ export default function ManagerBoard() {
         const isUrgent = item.priority === "high" || item.priority === "urgent";
         return (
           <>
-            <Badge className={cn("text-[10px]", getApprovalBadgeClass(item._type))}>
+            <Badge className={cn("text-2xs", getApprovalBadgeClass(item._type))}>
               {item._label}
             </Badge>
-            {isUrgent && <Badge className="text-[10px] ms-1 bg-status-error-surface text-status-error-foreground">عاجل</Badge>}
+            {isUrgent && <Badge className="text-2xs ms-1 bg-status-error-surface text-status-error-foreground">عاجل</Badge>}
           </>
         );
       },
@@ -240,7 +240,7 @@ export default function ManagerBoard() {
                   <div key={key} className="flex items-center gap-3 p-3 rounded-lg bg-status-error-surface border border-status-error-surface">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <Badge className="text-[10px] bg-status-error-surface text-status-error-foreground">{item._label}</Badge>
+                        <Badge className="text-2xs bg-status-error-surface text-status-error-foreground">{item._label}</Badge>
                         <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.employeeName || item.requestedBy || "—"}</p>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">{item.reason || item.description || item.leaveTypeName || "—"}</p>
@@ -289,7 +289,7 @@ export default function ManagerBoard() {
                   ].map(c => (
                     <div key={c.label} className={cn("p-2 rounded-lg text-center", c.color)}>
                       <p className="text-lg font-bold">{c.value}</p>
-                      <p className="text-[10px] mt-0.5">{c.label}</p>
+                      <p className="text-2xs mt-0.5">{c.label}</p>
                     </div>
                   ))}
                 </div>
@@ -304,10 +304,10 @@ export default function ManagerBoard() {
                         )} />
                         <p className="text-sm flex-1 truncate">{member.employeeName || "—"}</p>
                         {member.lateMinutes > 0 && (
-                          <Badge className="text-[10px] bg-status-warning-surface text-status-warning-foreground">{member.lateMinutes}د تأخر</Badge>
+                          <Badge className="text-2xs bg-status-warning-surface text-status-warning-foreground">{member.lateMinutes}د تأخر</Badge>
                         )}
                         {member.status === "on_leave" && (
-                          <Badge className="text-[10px] bg-status-info-surface text-status-info-foreground">إجازة</Badge>
+                          <Badge className="text-2xs bg-status-info-surface text-status-info-foreground">إجازة</Badge>
                         )}
                       </div>
                     ))}
@@ -341,7 +341,7 @@ export default function ManagerBoard() {
               ].map(c => (
                 <div key={c.label} className={cn("p-2 rounded-lg text-center", c.color)}>
                   <p className="text-lg font-bold">{c.value}</p>
-                  <p className="text-[10px] mt-0.5">{c.label}</p>
+                  <p className="text-2xs mt-0.5">{c.label}</p>
                 </div>
               ))}
             </div>
@@ -364,7 +364,7 @@ export default function ManagerBoard() {
                         t.status === "in_progress" ? "bg-status-info-surface0" : "bg-status-warning-surface0"
                       )} />
                       <p className="text-xs flex-1 truncate">{t.title}</p>
-                      {t.assignedTo && <span className="text-[10px] text-muted-foreground">{t.assignedToName || t.assignedTo}</span>}
+                      {t.assignedTo && <span className="text-2xs text-muted-foreground">{t.assignedToName || t.assignedTo}</span>}
                     </div>
                   ))}
                 </div>
@@ -481,7 +481,7 @@ function DelegationBoard({ delegationsData }: { delegationsData: any }) {
                       <span className="text-muted-foreground">{d.delegatorName || d.fromName || "—"}</span>
                       <span className="text-muted-foreground">→</span>
                       <span className="text-muted-foreground">{d.delegateName || d.delegateeName || d.toName || "—"}</span>
-                      <Badge className="text-[10px] ms-auto bg-surface-subtle text-muted-foreground">منتهي</Badge>
+                      <Badge className="text-2xs ms-auto bg-surface-subtle text-muted-foreground">منتهي</Badge>
                     </div>
                   ))}
                 </div>

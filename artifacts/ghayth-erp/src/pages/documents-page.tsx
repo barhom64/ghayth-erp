@@ -193,7 +193,7 @@ function DocumentsList() {
                         {d.fileName && <span className="text-xs text-muted-foreground">{d.fileName}</span>}
                         {d.fileSize && <span className="text-xs text-muted-foreground">({formatSize(d.fileSize)})</span>}
                         {d.createdAt && <span className="text-xs text-muted-foreground">{formatDateAr(d.createdAt)}</span>}
-                        {d.currentVersion > 1 && <Badge variant="secondary" className="text-[10px]">v{d.currentVersion}</Badge>}
+                        {d.currentVersion > 1 && <Badge variant="secondary" className="text-2xs">v{d.currentVersion}</Badge>}
                       </div>
                       {d.description && <p className="text-xs text-muted-foreground mt-1 truncate">{d.description}</p>}
                     </div>

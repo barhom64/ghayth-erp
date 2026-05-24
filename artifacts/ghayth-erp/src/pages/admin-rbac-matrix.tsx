@@ -157,7 +157,7 @@ export default function AdminRbacMatrix() {
                                   <Badge
                                     key={perm}
                                     variant="outline"
-                                    className={`text-[10px] ${hasIt ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" : "bg-surface-subtle text-muted-foreground border-border"}`}
+                                    className={`text-2xs ${hasIt ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" : "bg-surface-subtle text-muted-foreground border-border"}`}
                                   >
                                     {hasIt ? <CheckCircle className="w-3 h-3 me-0.5" /> : <XCircle className="w-3 h-3 me-0.5" />}
                                     {perm.split(":").slice(1).join(":")}

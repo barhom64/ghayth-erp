@@ -101,7 +101,7 @@ export function ZatcaClearanceBadge({
       <Icon className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
       {state.label}
       {environment === "sandbox" && !compact ? (
-        <span className="text-[10px] opacity-70">(تجريبي)</span>
+        <span className="text-2xs opacity-70">(تجريبي)</span>
       ) : null}
     </Badge>
   );

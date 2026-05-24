@@ -94,9 +94,9 @@ function PaymentSchedulePanel({ contractId }: { contractId: number }) {
               return isPaid ? (
                 <PageStatusBadge status="paid" domain="installment" />
               ) : isOverdue ? (
-                <Badge className="bg-status-error-surface text-status-error-foreground text-[10px] gap-1 px-1"><AlertTriangle className="h-2.5 w-2.5" /> متأخرة</Badge>
+                <Badge className="bg-status-error-surface text-status-error-foreground text-2xs gap-1 px-1"><AlertTriangle className="h-2.5 w-2.5" /> متأخرة</Badge>
               ) : (
-                <Badge variant="outline" className="text-[10px] gap-1 px-1"><Clock className="h-2.5 w-2.5" /> معلقة</Badge>
+                <Badge variant="outline" className="text-2xs gap-1 px-1"><Clock className="h-2.5 w-2.5" /> معلقة</Badge>
               );
             },
           },
@@ -108,7 +108,7 @@ function PaymentSchedulePanel({ contractId }: { contractId: number }) {
               if (!isPaid) {
                 return (
                   <Link href={`/properties/contracts/${contractId}/pay/${inst.id}`}>
-                    <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1">
+                    <Button size="sm" variant="outline" className="h-6 text-2xs gap-1">
                       <CreditCard className="h-3 w-3" /> تسجيل دفع
                     </Button>
                   </Link>
@@ -116,7 +116,7 @@ function PaymentSchedulePanel({ contractId }: { contractId: number }) {
               }
               if (inst.receiptNumber) {
                 return (
-                  <span className="text-[10px] text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3" />{inst.receiptNumber}</span>
+                  <span className="text-2xs text-muted-foreground flex items-center gap-1"><Receipt className="h-3 w-3" />{inst.receiptNumber}</span>
                 );
               }
               return null;
@@ -136,49 +136,49 @@ function ContractDetailPanel({ contract }: { contract: any }) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
         {c.ejarNumber && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-muted-foreground mb-0.5">رقم إيجار</p>
+            <p className="text-2xs text-muted-foreground mb-0.5">رقم إيجار</p>
             <p className="font-bold font-mono text-status-info-foreground">{c.ejarNumber}</p>
           </div>
         )}
         {c.contractType && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-muted-foreground mb-0.5">نوع العقد</p>
+            <p className="text-2xs text-muted-foreground mb-0.5">نوع العقد</p>
             <p className="font-medium">{CONTRACT_TYPE_LABELS[c.contractType] || c.contractType}</p>
           </div>
         )}
         {c.paymentFrequency && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-muted-foreground mb-0.5">دورة السداد</p>
+            <p className="text-2xs text-muted-foreground mb-0.5">دورة السداد</p>
             <p className="font-medium">{FREQ_LABELS[c.paymentFrequency] || c.paymentFrequency}</p>
           </div>
         )}
         {c.yearlyRent && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-muted-foreground mb-0.5">الإيجار السنوي</p>
+            <p className="text-2xs text-muted-foreground mb-0.5">الإيجار السنوي</p>
             <p className="font-bold text-emerald-700">{formatCurrency(c.yearlyRent)}</p>
           </div>
         )}
         {c.depositAmount && Number(c.depositAmount) > 0 && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-muted-foreground mb-0.5">التأمين</p>
+            <p className="text-2xs text-muted-foreground mb-0.5">التأمين</p>
             <p className="font-medium">{formatCurrency(c.depositAmount)}</p>
           </div>
         )}
         {c.latePenaltyValue && Number(c.latePenaltyValue) > 0 && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-muted-foreground mb-0.5">غرامة التأخير</p>
+            <p className="text-2xs text-muted-foreground mb-0.5">غرامة التأخير</p>
             <p className="font-medium text-status-error-foreground">{c.latePenaltyValue}%</p>
           </div>
         )}
         {c.gracePeriodDays && Number(c.gracePeriodDays) > 0 && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-muted-foreground mb-0.5">فترة السماح</p>
+            <p className="text-2xs text-muted-foreground mb-0.5">فترة السماح</p>
             <p className="font-medium">{c.gracePeriodDays} يوم</p>
           </div>
         )}
         {c.brokerageFee && Number(c.brokerageFee) > 0 && (
           <div className="bg-white border rounded-lg p-3">
-            <p className="text-[10px] text-muted-foreground mb-0.5">عمولة السعي</p>
+            <p className="text-2xs text-muted-foreground mb-0.5">عمولة السعي</p>
             <p className="font-medium">{formatCurrency(c.brokerageFee)}</p>
           </div>
         )}
@@ -205,7 +205,7 @@ function ContractDetailPanel({ contract }: { contract: any }) {
         <div className="flex items-center gap-2">
           <RefreshCw className="h-4 w-4 text-muted-foreground" />
           <span className="text-xs text-muted-foreground">التجديد التلقائي:</span>
-          <Badge className={c.autoRenewal ? "bg-status-success-surface text-status-success-foreground text-[10px]" : "bg-surface-subtle text-muted-foreground text-[10px]"}>
+          <Badge className={c.autoRenewal ? "bg-status-success-surface text-status-success-foreground text-2xs" : "bg-surface-subtle text-muted-foreground text-2xs"}>
             {c.autoRenewal ? "مفعّل" : "غير مفعّل"}
           </Badge>
         </div>

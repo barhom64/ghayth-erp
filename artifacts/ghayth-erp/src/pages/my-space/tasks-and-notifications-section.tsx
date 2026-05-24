@@ -44,7 +44,7 @@ export function TasksAndNotificationsSection({ todayTasks, notifications }: Task
                     )} />
                     <p className="text-sm font-medium text-status-neutral-foreground truncate flex-1">{t.title}</p>
                     {t.priority && (
-                      <Badge variant="outline" className={cn("text-[10px] shrink-0",
+                      <Badge variant="outline" className={cn("text-2xs shrink-0",
                         t.priority === "high" ? "bg-status-error-surface text-status-error-foreground" : t.priority === "medium" ? "bg-status-warning-surface text-status-warning-foreground" : ""
                       )}>
                         {priorityLabels[t.priority] || t.priority}

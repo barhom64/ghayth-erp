@@ -121,7 +121,7 @@ export function NotificationDropdown() {
       >
         <Bell className="h-4 w-4 text-muted-foreground" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -end-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-status-error-surface0 text-white text-[10px] font-bold px-1">
+          <span className="absolute -top-0.5 -end-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-status-error-surface0 text-white text-2xs font-bold px-1">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -133,7 +133,7 @@ export function NotificationDropdown() {
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-bold text-gray-900">الإشعارات</h3>
               {unreadCount > 0 && (
-                <Badge variant="destructive" className="text-[10px] px-1.5">{unreadCount}</Badge>
+                <Badge variant="destructive" className="text-2xs px-1.5">{unreadCount}</Badge>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -190,7 +190,7 @@ export function NotificationDropdown() {
                       {n.body && (
                         <p className="text-xs text-muted-foreground truncate mt-0.5">{n.body}</p>
                       )}
-                      <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+                      <p className="text-2xs text-muted-foreground mt-1 flex items-center gap-1">
                         <Clock className="h-2.5 w-2.5" />
                         {n.createdAt ? formatTimeAgo(n.createdAt) : ""}
                       </p>

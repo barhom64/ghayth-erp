@@ -119,12 +119,12 @@ function HrDashboard() {
                       <div className="bg-red-400" style={{ height: `${(Number(d.absent) / total) * 60}px` }} />
                       <div className="bg-orange-400 rounded-b" style={{ height: `${(Number(d.late) / total) * 60}px` }} />
                     </div>
-                    <span className="text-[9px] text-muted-foreground">{d.date ? formatDateAr(d.date) : ""}</span>
+                    <span className="text-3xs text-muted-foreground">{d.date ? formatDateAr(d.date) : ""}</span>
                   </div>
                 );
               })}
             </div>
-            <div className="flex items-center gap-4 mt-2 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-4 mt-2 text-2xs text-muted-foreground">
               <span className="flex items-center gap-1"><span className="w-2 h-2 bg-green-400 rounded-full" />حاضر</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 bg-red-400 rounded-full" />غائب</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 bg-orange-400 rounded-full" />متأخر</span>
@@ -181,7 +181,7 @@ function FinanceDashboard() {
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1">
                     <div className="w-full bg-blue-400 rounded-t" style={{ height: `${(Number(m.revenue) / maxRev) * 80}px`, minHeight: "2px" }} />
-                    <span className="text-[9px] text-muted-foreground">{m.month?.slice(5)}</span>
+                    <span className="text-3xs text-muted-foreground">{m.month?.slice(5)}</span>
                   </div>
                 );
               })}
@@ -329,7 +329,7 @@ function PropertiesDashboard() {
             <div className="text-2xl font-bold">{data.maintenance?.open ?? 0}</div>
             <p className="text-xs text-muted-foreground">طلبات مفتوحة</p>
             {(data.maintenance?.critical ?? 0) > 0 && (
-              <Badge variant="destructive" className="mt-2 text-[10px]">
+              <Badge variant="destructive" className="mt-2 text-2xs">
                 {data.maintenance.critical} حرجة
               </Badge>
             )}
@@ -405,7 +405,7 @@ function ProjectsDashboard() {
                   </div>
                   <span className="w-10 text-xs text-start">{p.progress ?? 0}%</span>
                   {p.status === "active" && p.endDate && new Date(p.endDate) < new Date() && (
-                    <Badge variant="destructive" className="text-[9px]">متأخر</Badge>
+                    <Badge variant="destructive" className="text-3xs">متأخر</Badge>
                   )}
                 </div>
               ))}
@@ -481,7 +481,7 @@ function StoreDashboard() {
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1">
                     <div className="w-full bg-blue-400 rounded-t" style={{ height: `${(Number(m.orders) / maxOrd) * 80}px`, minHeight: "2px" }} />
-                    <span className="text-[9px] text-muted-foreground">{m.month?.slice(5)}</span>
+                    <span className="text-3xs text-muted-foreground">{m.month?.slice(5)}</span>
                   </div>
                 );
               })}
@@ -539,12 +539,12 @@ function SupportDashboard() {
                       <div className="bg-blue-400 rounded-t" style={{ height: `${(Number(d.created) / maxVal) * 60}px` }} />
                       <div className="bg-green-400 rounded-b" style={{ height: `${(Number(d.resolved) / maxVal) * 60}px` }} />
                     </div>
-                    <span className="text-[9px] text-muted-foreground">{d.date ? formatDateAr(d.date) : ""}</span>
+                    <span className="text-3xs text-muted-foreground">{d.date ? formatDateAr(d.date) : ""}</span>
                   </div>
                 );
               })}
             </div>
-            <div className="flex items-center gap-4 mt-2 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-4 mt-2 text-2xs text-muted-foreground">
               <span className="flex items-center gap-1"><span className="w-2 h-2 bg-blue-400 rounded-full" />جديدة</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 bg-green-400 rounded-full" />محلولة</span>
             </div>

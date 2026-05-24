@@ -202,7 +202,7 @@ export function VehicleContextCard({
                     <span className="text-gray-700">
                       {trip.fromLocation || "—"} ← {trip.toLocation || "—"}
                     </span>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-2xs">
                       {trip.distance ? `${trip.distance} كم` : "—"}
                     </Badge>
                   </div>

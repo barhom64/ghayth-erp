@@ -195,50 +195,50 @@ function DashboardMockScreen() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-lg font-bold text-status-neutral-foreground">لوحة تحكم الأملاك</div>
-          <div className="text-muted-foreground text-[10px]">نظرة شاملة على أداء المحفظة العقارية</div>
+          <div className="text-muted-foreground text-2xs">نظرة شاملة على أداء المحفظة العقارية</div>
         </div>
         <div className="flex gap-1.5">
-          <div className="bg-white border rounded px-2 py-1 text-[10px] text-muted-foreground">+ مبنى جديد</div>
-          <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ وحدة جديدة</div>
+          <div className="bg-white border rounded px-2 py-1 text-2xs text-muted-foreground">+ مبنى جديد</div>
+          <div className="bg-blue-600 text-white rounded px-2 py-1 text-2xs">+ وحدة جديدة</div>
         </div>
       </div>
       <div className="grid grid-cols-4 gap-2 mb-3">
         <div className="bg-blue-600 text-white rounded-lg p-3">
-          <div className="text-[10px] opacity-80">إجمالي الوحدات</div>
+          <div className="text-2xs opacity-80">إجمالي الوحدات</div>
           <div className="text-2xl font-bold">48</div>
-          <div className="text-[9px] opacity-70">3 مباني</div>
+          <div className="text-3xs opacity-70">3 مباني</div>
         </div>
         <div className="bg-emerald-500 text-white rounded-lg p-3">
-          <div className="text-[10px] opacity-80">نسبة الإشغال</div>
+          <div className="text-2xs opacity-80">نسبة الإشغال</div>
           <div className="text-2xl font-bold">83%</div>
-          <div className="text-[9px] opacity-70">40 مؤجرة · 8 شاغرة</div>
+          <div className="text-3xs opacity-70">40 مؤجرة · 8 شاغرة</div>
         </div>
         <div className="bg-violet-600 text-white rounded-lg p-3">
-          <div className="text-[10px] opacity-80">تحصيل الشهر</div>
+          <div className="text-2xs opacity-80">تحصيل الشهر</div>
           <div className="text-xl font-bold">125,000</div>
-          <div className="text-[9px] opacity-70">من 150,000 ر.س</div>
+          <div className="text-3xs opacity-70">من 150,000 ر.س</div>
         </div>
         <div className="bg-status-error-surface0 text-white rounded-lg p-3">
-          <div className="text-[10px] opacity-80">المتأخرات</div>
+          <div className="text-2xs opacity-80">المتأخرات</div>
           <div className="text-xl font-bold">18,500</div>
-          <div className="text-[9px] opacity-70">4 دفعات متأخرة</div>
+          <div className="text-3xs opacity-70">4 دفعات متأخرة</div>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-2 mb-3">
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-muted-foreground mb-2">📅 الإيرادات السنوية</div>
+          <div className="text-2xs font-semibold text-muted-foreground mb-2">📅 الإيرادات السنوية</div>
           <div className="grid grid-cols-3 gap-1 text-center">
             <div className="bg-indigo-50 rounded p-1.5">
               <div className="font-bold text-indigo-700 text-sm">940,000</div>
-              <div className="text-[9px] text-muted-foreground">محصل</div>
+              <div className="text-3xs text-muted-foreground">محصل</div>
             </div>
             <div className="bg-surface-subtle rounded p-1.5">
               <div className="font-bold text-status-neutral-foreground text-sm">1,200,000</div>
-              <div className="text-[9px] text-muted-foreground">متوقع</div>
+              <div className="text-3xs text-muted-foreground">متوقع</div>
             </div>
             <div className="bg-status-error-surface rounded p-1.5">
               <div className="font-bold text-status-error text-sm">260,000</div>
-              <div className="text-[9px] text-muted-foreground">متبقي</div>
+              <div className="text-3xs text-muted-foreground">متبقي</div>
             </div>
           </div>
           <div className="mt-2 h-1.5 bg-surface-subtle rounded-full overflow-hidden">
@@ -246,44 +246,44 @@ function DashboardMockScreen() {
           </div>
         </div>
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-muted-foreground mb-2">⏰ عقود تنتهي قريباً</div>
+          <div className="text-2xs font-semibold text-muted-foreground mb-2">⏰ عقود تنتهي قريباً</div>
           <div className="grid grid-cols-3 gap-1 text-center">
             <div className="bg-status-error-surface border border-status-error-surface rounded p-1.5">
               <div className="text-2xl font-bold text-status-error-foreground">2</div>
-              <div className="text-[9px] text-muted-foreground">30 يوم</div>
+              <div className="text-3xs text-muted-foreground">30 يوم</div>
             </div>
             <div className="bg-orange-50 border border-orange-100 rounded p-1.5">
               <div className="text-2xl font-bold text-orange-600">5</div>
-              <div className="text-[9px] text-muted-foreground">60 يوم</div>
+              <div className="text-3xs text-muted-foreground">60 يوم</div>
             </div>
             <div className="bg-status-warning-surface border border-status-warning-surface rounded p-1.5">
               <div className="text-2xl font-bold text-status-warning-foreground">8</div>
-              <div className="text-[9px] text-muted-foreground">90 يوم</div>
+              <div className="text-3xs text-muted-foreground">90 يوم</div>
             </div>
           </div>
         </div>
       </div>
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-muted-foreground mb-1">🔧 طلبات الصيانة</div>
+          <div className="text-2xs font-semibold text-muted-foreground mb-1">🔧 طلبات الصيانة</div>
           <div className="text-3xl font-bold text-status-warning-foreground">7</div>
-          <div className="text-[9px] text-muted-foreground">طلب مفتوح</div>
-          <div className="mt-2 bg-surface-subtle border rounded text-[9px] text-center py-1 text-muted-foreground">+ طلب صيانة جديد</div>
+          <div className="text-3xs text-muted-foreground">طلب مفتوح</div>
+          <div className="mt-2 bg-surface-subtle border rounded text-3xs text-center py-1 text-muted-foreground">+ طلب صيانة جديد</div>
         </div>
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-muted-foreground mb-1">💰 إجمالي التحصيل</div>
+          <div className="text-2xs font-semibold text-muted-foreground mb-1">💰 إجمالي التحصيل</div>
           <div className="text-xl font-bold text-violet-700">4,820,000</div>
-          <div className="text-[9px] text-muted-foreground">من 6,000,000 إجمالي</div>
+          <div className="text-3xs text-muted-foreground">من 6,000,000 إجمالي</div>
           <div className="mt-1.5 h-1.5 bg-surface-subtle rounded-full overflow-hidden">
             <div className="h-full bg-emerald-500 rounded-full" style={{ width: "80%" }} />
           </div>
         </div>
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-muted-foreground mb-1">🔗 روابط سريعة</div>
+          <div className="text-2xs font-semibold text-muted-foreground mb-1">🔗 روابط سريعة</div>
           <div className="space-y-1">
-            <div className="text-[9px] text-muted-foreground bg-surface-subtle rounded px-1.5 py-1">+ إضافة مستأجر جديد</div>
-            <div className="text-[9px] text-muted-foreground bg-surface-subtle rounded px-1.5 py-1">+ إنشاء عقد إيجار</div>
-            <div className="text-[9px] text-muted-foreground bg-surface-subtle rounded px-1.5 py-1">💵 تسجيل دفعة</div>
+            <div className="text-3xs text-muted-foreground bg-surface-subtle rounded px-1.5 py-1">+ إضافة مستأجر جديد</div>
+            <div className="text-3xs text-muted-foreground bg-surface-subtle rounded px-1.5 py-1">+ إنشاء عقد إيجار</div>
+            <div className="text-3xs text-muted-foreground bg-surface-subtle rounded px-1.5 py-1">💵 تسجيل دفعة</div>
           </div>
         </div>
       </div>
@@ -297,13 +297,13 @@ function BuildingsMockScreen() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-lg font-bold text-status-neutral-foreground">المباني والمجمعات</div>
-          <div className="text-muted-foreground text-[10px]">3 مباني مسجلة</div>
+          <div className="text-muted-foreground text-2xs">3 مباني مسجلة</div>
         </div>
-        <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ إضافة مبنى</div>
+        <div className="bg-blue-600 text-white rounded px-2 py-1 text-2xs">+ إضافة مبنى</div>
       </div>
       <div className="bg-white border rounded mb-3 flex items-center gap-1.5 px-2 py-1.5">
         <span className="text-gray-300">🔍</span>
-        <span className="text-[10px] text-muted-foreground">بحث بالاسم أو العنوان...</span>
+        <span className="text-2xs text-muted-foreground">بحث بالاسم أو العنوان...</span>
       </div>
       <div className="grid grid-cols-3 gap-2">
         {[
@@ -314,40 +314,40 @@ function BuildingsMockScreen() {
           <div key={i} className="bg-white border rounded-lg p-3">
             <div className="flex items-start justify-between mb-1">
               <div>
-                <div className="font-semibold text-status-neutral-foreground text-[11px]">{b.name}</div>
-                <div className="text-[9px] text-muted-foreground">{b.address}</div>
+                <div className="font-semibold text-status-neutral-foreground text-2xs">{b.name}</div>
+                <div className="text-3xs text-muted-foreground">{b.address}</div>
               </div>
-              <div className="text-[9px] border rounded px-1 text-muted-foreground">{b.type}</div>
+              <div className="text-3xs border rounded px-1 text-muted-foreground">{b.type}</div>
             </div>
             <div className="grid grid-cols-3 gap-1 text-center my-2">
               <div className="bg-surface-subtle rounded p-1">
                 <div className="font-bold">{b.total}</div>
-                <div className="text-[8px] text-muted-foreground">إجمالي</div>
+                <div className="text-3xs text-muted-foreground">إجمالي</div>
               </div>
               <div className="bg-status-info-surface rounded p-1">
                 <div className="font-bold text-status-info-foreground">{b.rented}</div>
-                <div className="text-[8px] text-muted-foreground">مؤجرة</div>
+                <div className="text-3xs text-muted-foreground">مؤجرة</div>
               </div>
               <div className="bg-emerald-50 rounded p-1">
                 <div className="font-bold text-emerald-600">{b.available}</div>
-                <div className="text-[8px] text-muted-foreground">شاغرة</div>
+                <div className="text-3xs text-muted-foreground">شاغرة</div>
               </div>
             </div>
             <div className="mb-2">
-              <div className="flex justify-between text-[8px] text-muted-foreground mb-0.5">
+              <div className="flex justify-between text-3xs text-muted-foreground mb-0.5">
                 <span>الإشغال</span><span className="font-bold">{b.occ}%</span>
               </div>
               <div className="h-1 bg-surface-subtle rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${b.occ}%` }} />
               </div>
             </div>
-            <div className="flex justify-between items-center text-[9px] mb-2">
+            <div className="flex justify-between items-center text-3xs mb-2">
               <span className="text-muted-foreground">الإيرادات</span>
               <span className="font-bold text-emerald-600">{b.rev} ر.س</span>
             </div>
             <div className="flex gap-1">
-              <div className="flex-1 text-center bg-surface-subtle border rounded py-1 text-[8px] text-muted-foreground">👁 عرض الوحدات</div>
-              <div className="w-7 text-center bg-surface-subtle border rounded py-1 text-[8px] text-muted-foreground">✏</div>
+              <div className="flex-1 text-center bg-surface-subtle border rounded py-1 text-3xs text-muted-foreground">👁 عرض الوحدات</div>
+              <div className="w-7 text-center bg-surface-subtle border rounded py-1 text-3xs text-muted-foreground">✏</div>
             </div>
           </div>
         ))}
@@ -362,26 +362,26 @@ function UnitsMockScreen() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-lg font-bold text-status-neutral-foreground">الوحدات العقارية</div>
-          <div className="text-muted-foreground text-[10px]">إدارة وتتبع الوحدات العقارية</div>
+          <div className="text-muted-foreground text-2xs">إدارة وتتبع الوحدات العقارية</div>
         </div>
-        <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ إضافة وحدة</div>
+        <div className="bg-blue-600 text-white rounded px-2 py-1 text-2xs">+ إضافة وحدة</div>
       </div>
       <div className="grid grid-cols-4 gap-2 mb-3">
-        <div className="bg-white border rounded p-2 text-center"><div className="text-lg font-bold">48</div><div className="text-[9px] text-muted-foreground">إجمالي الوحدات</div></div>
-        <div className="bg-emerald-600 text-white rounded p-2 text-center"><div className="text-lg font-bold">8</div><div className="text-[9px] opacity-80">متاحة</div></div>
-        <div className="bg-blue-600 text-white rounded p-2 text-center"><div className="text-lg font-bold">40</div><div className="text-[9px] opacity-80">مؤجرة</div></div>
-        <div className="bg-violet-600 text-white rounded p-2 text-center"><div className="text-[11px] font-bold">4,820,000</div><div className="text-[9px] opacity-80">إجمالي التحصيل</div></div>
+        <div className="bg-white border rounded p-2 text-center"><div className="text-lg font-bold">48</div><div className="text-3xs text-muted-foreground">إجمالي الوحدات</div></div>
+        <div className="bg-emerald-600 text-white rounded p-2 text-center"><div className="text-lg font-bold">8</div><div className="text-3xs opacity-80">متاحة</div></div>
+        <div className="bg-blue-600 text-white rounded p-2 text-center"><div className="text-lg font-bold">40</div><div className="text-3xs opacity-80">مؤجرة</div></div>
+        <div className="bg-violet-600 text-white rounded p-2 text-center"><div className="text-2xs font-bold">4,820,000</div><div className="text-3xs opacity-80">إجمالي التحصيل</div></div>
       </div>
       <div className="bg-white border rounded p-2 mb-3 flex items-center gap-2">
         <span className="text-gray-300 text-sm">🔍</span>
-        <span className="text-[10px] text-muted-foreground flex-1">بحث برقم الوحدة أو المبنى...</span>
-        <span className="text-[9px] border rounded px-1.5 py-0.5 text-muted-foreground">الحالة ▾</span>
-        <span className="text-[9px] border rounded px-1.5 py-0.5 text-emerald-600">تصدير جدولي</span>
+        <span className="text-2xs text-muted-foreground flex-1">بحث برقم الوحدة أو المبنى...</span>
+        <span className="text-3xs border rounded px-1.5 py-0.5 text-muted-foreground">الحالة ▾</span>
+        <span className="text-3xs border rounded px-1.5 py-0.5 text-emerald-600">تصدير جدولي</span>
       </div>
       <div className="bg-white border rounded overflow-hidden">
         <div className="grid grid-cols-6 bg-surface-subtle border-b">
           {["رقم الوحدة", "المبنى", "النوع", "المساحة", "الإيجار", "الحالة"].map((h, i) => (
-            <div key={i} className="px-2 py-1.5 text-[9px] text-muted-foreground font-semibold">{h}</div>
+            <div key={i} className="px-2 py-1.5 text-3xs text-muted-foreground font-semibold">{h}</div>
           ))}
         </div>
         {[
@@ -391,12 +391,12 @@ function UnitsMockScreen() {
           { unit: "C-101", bld: "المركز التجاري", type: "محل", area: "80 م²", rent: "5,000 ر.س", status: "صيانة", color: "bg-orange-100 text-orange-700" },
         ].map((r, i) => (
           <div key={i} className="grid grid-cols-6 border-b hover:bg-surface-subtle">
-            <div className="px-2 py-1.5 text-[9px] text-status-info-foreground font-medium">{r.unit}</div>
-            <div className="px-2 py-1.5 text-[9px] text-muted-foreground">{r.bld}</div>
-            <div className="px-2 py-1.5 text-[9px] text-muted-foreground">{r.type}</div>
-            <div className="px-2 py-1.5 text-[9px] text-muted-foreground">{r.area}</div>
-            <div className="px-2 py-1.5 text-[9px] font-bold text-status-neutral-foreground">{r.rent}</div>
-            <div className="px-2 py-1.5"><span className={cn("text-[8px] px-1 rounded", r.color)}>{r.status}</span></div>
+            <div className="px-2 py-1.5 text-3xs text-status-info-foreground font-medium">{r.unit}</div>
+            <div className="px-2 py-1.5 text-3xs text-muted-foreground">{r.bld}</div>
+            <div className="px-2 py-1.5 text-3xs text-muted-foreground">{r.type}</div>
+            <div className="px-2 py-1.5 text-3xs text-muted-foreground">{r.area}</div>
+            <div className="px-2 py-1.5 text-3xs font-bold text-status-neutral-foreground">{r.rent}</div>
+            <div className="px-2 py-1.5"><span className={cn("text-3xs px-1 rounded", r.color)}>{r.status}</span></div>
           </div>
         ))}
       </div>
@@ -410,19 +410,19 @@ function TenantsMockScreen() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-lg font-bold text-status-neutral-foreground">المستأجرون</div>
-          <div className="text-muted-foreground text-[10px]">سجل كامل لجميع المستأجرين الحاليين والسابقين</div>
+          <div className="text-muted-foreground text-2xs">سجل كامل لجميع المستأجرين الحاليين والسابقين</div>
         </div>
-        <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ مستأجر جديد</div>
+        <div className="bg-blue-600 text-white rounded px-2 py-1 text-2xs">+ مستأجر جديد</div>
       </div>
       <div className="bg-white border rounded p-2 mb-3 flex items-center gap-2">
         <span className="text-gray-300 text-sm">🔍</span>
-        <span className="text-[10px] text-muted-foreground flex-1">بحث بالاسم أو الهاتف أو رقم الهوية...</span>
-        <span className="text-[9px] border rounded px-1.5 py-0.5 text-emerald-600">تصدير جدولي</span>
+        <span className="text-2xs text-muted-foreground flex-1">بحث بالاسم أو الهاتف أو رقم الهوية...</span>
+        <span className="text-3xs border rounded px-1.5 py-0.5 text-emerald-600">تصدير جدولي</span>
       </div>
       <div className="bg-white border rounded overflow-hidden">
         <div className="grid bg-surface-subtle border-b" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 2fr 1fr" }}>
           {["الاسم", "الهاتف", "رقم الهوية", "العقود", "الوحدة الحالية", "إجمالي المدفوعات", "إجراءات"].map((h, i) => (
-            <div key={i} className="px-2 py-1.5 text-[9px] text-muted-foreground font-semibold">{h}</div>
+            <div key={i} className="px-2 py-1.5 text-3xs text-muted-foreground font-semibold">{h}</div>
           ))}
         </div>
         {[
@@ -432,17 +432,17 @@ function TenantsMockScreen() {
         ].map((t, i) => (
           <div key={i} className="grid border-b hover:bg-surface-subtle" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 2fr 1fr" }}>
             <div className="px-2 py-2 flex items-center gap-1.5">
-              <div className="w-6 h-6 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-[9px] font-bold shrink-0">{t.name[0]}</div>
-              <span className="text-[9px] font-medium">{t.name}</span>
+              <div className="w-6 h-6 rounded-full bg-violet-100 text-violet-600 flex items-center justify-center text-3xs font-bold shrink-0">{t.name[0]}</div>
+              <span className="text-3xs font-medium">{t.name}</span>
             </div>
-            <div className="px-2 py-2 text-[9px] text-status-info-foreground">{t.phone}</div>
-            <div className="px-2 py-2 text-[9px] font-mono">{t.id}</div>
-            <div className="px-2 py-2"><span className="text-[8px] bg-emerald-100 text-emerald-700 px-1 rounded">{t.contracts}</span></div>
-            <div className="px-2 py-2 text-[9px] text-muted-foreground">{t.unit}</div>
-            <div className="px-2 py-2 text-[9px] font-bold text-emerald-600">{t.paid}</div>
+            <div className="px-2 py-2 text-3xs text-status-info-foreground">{t.phone}</div>
+            <div className="px-2 py-2 text-3xs font-mono">{t.id}</div>
+            <div className="px-2 py-2"><span className="text-3xs bg-emerald-100 text-emerald-700 px-1 rounded">{t.contracts}</span></div>
+            <div className="px-2 py-2 text-3xs text-muted-foreground">{t.unit}</div>
+            <div className="px-2 py-2 text-3xs font-bold text-emerald-600">{t.paid}</div>
             <div className="px-2 py-2 flex gap-1">
-              <span className="text-[8px] border rounded px-1 py-0.5 text-muted-foreground">ملف</span>
-              <span className="text-[10px] text-gray-300">⌄</span>
+              <span className="text-3xs border rounded px-1 py-0.5 text-muted-foreground">ملف</span>
+              <span className="text-2xs text-gray-300">⌄</span>
             </div>
           </div>
         ))}
@@ -457,18 +457,18 @@ function OwnersMockScreen() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-lg font-bold text-status-neutral-foreground">الملاك</div>
-          <div className="text-muted-foreground text-[10px]">سجل ملاك العقارات — للعقارات المُدارة لصالح الغير</div>
+          <div className="text-muted-foreground text-2xs">سجل ملاك العقارات — للعقارات المُدارة لصالح الغير</div>
         </div>
-        <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ إضافة مالك</div>
+        <div className="bg-blue-600 text-white rounded px-2 py-1 text-2xs">+ إضافة مالك</div>
       </div>
       <div className="bg-white border rounded p-2 mb-3 flex gap-2 items-center">
         <span className="text-gray-300">🔍</span>
-        <span className="text-[10px] text-muted-foreground">بحث بالاسم أو الهاتف أو رقم الهوية...</span>
+        <span className="text-2xs text-muted-foreground">بحث بالاسم أو الهاتف أو رقم الهوية...</span>
       </div>
       <div className="bg-white border rounded overflow-hidden">
         <div className="grid bg-surface-subtle border-b" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
           {["الاسم", "النوع", "الهاتف", "المباني", "الوحدات", "العقود النشطة", "إجراءات"].map((h) => (
-            <div key={h} className="px-2 py-1.5 text-[9px] text-muted-foreground font-semibold">{h}</div>
+            <div key={h} className="px-2 py-1.5 text-3xs text-muted-foreground font-semibold">{h}</div>
           ))}
         </div>
         {[
@@ -478,17 +478,17 @@ function OwnersMockScreen() {
         ].map((o, i) => (
           <div key={i} className="grid border-b hover:bg-surface-subtle" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
             <div className="px-2 py-2 flex items-center gap-1.5">
-              <div className="w-6 h-6 rounded-full bg-status-warning-surface text-status-warning-foreground flex items-center justify-center text-[9px] font-bold">{o.name[0]}</div>
-              <span className="text-[9px] font-medium">{o.name}</span>
+              <div className="w-6 h-6 rounded-full bg-status-warning-surface text-status-warning-foreground flex items-center justify-center text-3xs font-bold">{o.name[0]}</div>
+              <span className="text-3xs font-medium">{o.name}</span>
             </div>
-            <div className="px-2 py-2"><span className="text-[8px] border rounded px-1">{o.type}</span></div>
-            <div className="px-2 py-2 text-[9px] text-status-info-foreground">{o.phone}</div>
-            <div className="px-2 py-2 text-[9px] text-muted-foreground">{o.buildings}</div>
-            <div className="px-2 py-2 text-[9px] text-muted-foreground">{o.units}</div>
-            <div className="px-2 py-2"><span className="text-[8px] bg-emerald-100 text-emerald-700 px-1 rounded">{o.contracts} نشط</span></div>
+            <div className="px-2 py-2"><span className="text-3xs border rounded px-1">{o.type}</span></div>
+            <div className="px-2 py-2 text-3xs text-status-info-foreground">{o.phone}</div>
+            <div className="px-2 py-2 text-3xs text-muted-foreground">{o.buildings}</div>
+            <div className="px-2 py-2 text-3xs text-muted-foreground">{o.units}</div>
+            <div className="px-2 py-2"><span className="text-3xs bg-emerald-100 text-emerald-700 px-1 rounded">{o.contracts} نشط</span></div>
             <div className="px-2 py-2 flex gap-1">
-              <span className="text-[8px] border rounded px-1 py-0.5 text-muted-foreground">تعديل</span>
-              <span className="text-[8px] text-red-400">🗑</span>
+              <span className="text-3xs border rounded px-1 py-0.5 text-muted-foreground">تعديل</span>
+              <span className="text-3xs text-red-400">🗑</span>
             </div>
           </div>
         ))}
@@ -503,20 +503,20 @@ function ContractsMockScreen() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-lg font-bold text-status-neutral-foreground">عقود الإيجار</div>
-          <div className="text-muted-foreground text-[10px]">إدارة وتتبع جميع عقود الإيجار — متوافق مع إيجار</div>
+          <div className="text-muted-foreground text-2xs">إدارة وتتبع جميع عقود الإيجار — متوافق مع إيجار</div>
         </div>
-        <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ إضافة عقد</div>
+        <div className="bg-blue-600 text-white rounded px-2 py-1 text-2xs">+ إضافة عقد</div>
       </div>
       <div className="bg-white border rounded p-2 mb-3 flex items-center gap-2">
         <span className="text-gray-300">🔍</span>
-        <span className="text-[10px] text-muted-foreground flex-1">بحث بالمستأجر أو الوحدة أو رقم إيجار...</span>
-        <span className="text-[9px] border rounded px-1.5 py-0.5">الحالة ▾</span>
-        <span className="text-[9px] border rounded px-1.5 py-0.5">التاريخ</span>
+        <span className="text-2xs text-muted-foreground flex-1">بحث بالمستأجر أو الوحدة أو رقم إيجار...</span>
+        <span className="text-3xs border rounded px-1.5 py-0.5">الحالة ▾</span>
+        <span className="text-3xs border rounded px-1.5 py-0.5">التاريخ</span>
       </div>
       <div className="bg-white border rounded overflow-hidden">
         <div className="grid bg-surface-subtle border-b" style={{ gridTemplateColumns: "1fr 1fr 2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
           {["رقم إيجار", "الوحدة", "المستأجر", "من", "إلى", "الإيجار", "الدورة", "الحالة", "تفاصيل"].map((h) => (
-            <div key={h} className="px-2 py-1.5 text-[8px] text-muted-foreground font-semibold">{h}</div>
+            <div key={h} className="px-2 py-1.5 text-3xs text-muted-foreground font-semibold">{h}</div>
           ))}
         </div>
         {[
@@ -526,19 +526,19 @@ function ContractsMockScreen() {
         ].map((c, i) => (
           <div key={i} className={cn("grid border-b hover:bg-surface-subtle cursor-pointer", i === 1 ? "bg-status-info-surface/40" : "")} style={{ gridTemplateColumns: "1fr 1fr 2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
             {[c.ejar, c.unit, c.tenant, c.from, c.to, c.rent + " ر.س", c.freq].map((v, j) => (
-              <div key={j} className="px-2 py-2 text-[8px] text-status-neutral-foreground">{v}</div>
+              <div key={j} className="px-2 py-2 text-3xs text-status-neutral-foreground">{v}</div>
             ))}
-            <div className="px-2 py-2"><span className={cn("text-[8px] px-1 rounded", c.sColor)}>{c.status}</span></div>
+            <div className="px-2 py-2"><span className={cn("text-3xs px-1 rounded", c.sColor)}>{c.status}</span></div>
             <div className="px-2 py-2 text-gray-300 text-center">⌄</div>
           </div>
         ))}
-        <div className="border-t p-3 bg-status-info-surface text-[9px]">
+        <div className="border-t p-3 bg-status-info-surface text-3xs">
           <div className="font-semibold text-muted-foreground mb-2">📋 تفاصيل العقد EJR-2024-002</div>
           <div className="grid grid-cols-4 gap-2">
-            <div className="bg-white border rounded p-2"><div className="text-[8px] text-muted-foreground">نوع العقد</div><div className="font-medium">سكني</div></div>
-            <div className="bg-white border rounded p-2"><div className="text-[8px] text-muted-foreground">الإيجار السنوي</div><div className="font-bold text-emerald-700">32,000 ر.س</div></div>
-            <div className="bg-white border rounded p-2"><div className="text-[8px] text-muted-foreground">التأمين</div><div className="font-medium">5,000 ر.س</div></div>
-            <div className="bg-white border rounded p-2"><div className="text-[8px] text-muted-foreground">التجديد التلقائي</div><div className="text-emerald-600">مفعّل</div></div>
+            <div className="bg-white border rounded p-2"><div className="text-3xs text-muted-foreground">نوع العقد</div><div className="font-medium">سكني</div></div>
+            <div className="bg-white border rounded p-2"><div className="text-3xs text-muted-foreground">الإيجار السنوي</div><div className="font-bold text-emerald-700">32,000 ر.س</div></div>
+            <div className="bg-white border rounded p-2"><div className="text-3xs text-muted-foreground">التأمين</div><div className="font-medium">5,000 ر.س</div></div>
+            <div className="bg-white border rounded p-2"><div className="text-3xs text-muted-foreground">التجديد التلقائي</div><div className="text-emerald-600">مفعّل</div></div>
           </div>
         </div>
       </div>
@@ -552,21 +552,21 @@ function PaymentsMockScreen() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-lg font-bold text-status-neutral-foreground">مدفوعات الإيجار</div>
-          <div className="text-muted-foreground text-[10px]">متابعة وتسجيل مدفوعات الإيجار</div>
+          <div className="text-muted-foreground text-2xs">متابعة وتسجيل مدفوعات الإيجار</div>
         </div>
-        <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">💵 تسجيل دفعة</div>
+        <div className="bg-blue-600 text-white rounded px-2 py-1 text-2xs">💵 تسجيل دفعة</div>
       </div>
       <div className="bg-white border rounded p-2 mb-3 flex items-center gap-2">
         <span className="text-gray-300">🔍</span>
-        <span className="text-[10px] text-muted-foreground flex-1">بحث بالمستأجر أو الوحدة...</span>
-        <span className="text-[9px] border rounded px-1.5 py-0.5">مدفوع</span>
-        <span className="text-[9px] border rounded px-1.5 py-0.5">معلق</span>
-        <span className="text-[9px] border rounded px-1.5 py-0.5">متأخر</span>
+        <span className="text-2xs text-muted-foreground flex-1">بحث بالمستأجر أو الوحدة...</span>
+        <span className="text-3xs border rounded px-1.5 py-0.5">مدفوع</span>
+        <span className="text-3xs border rounded px-1.5 py-0.5">معلق</span>
+        <span className="text-3xs border rounded px-1.5 py-0.5">متأخر</span>
       </div>
       <div className="bg-white border rounded overflow-hidden">
         <div className="grid bg-surface-subtle border-b" style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
           {["المستأجر", "الوحدة", "تاريخ الاستحقاق", "المبلغ", "المدفوع", "الحالة", "إجراء"].map((h) => (
-            <div key={h} className="px-2 py-1.5 text-[9px] text-muted-foreground font-semibold">{h}</div>
+            <div key={h} className="px-2 py-1.5 text-3xs text-muted-foreground font-semibold">{h}</div>
           ))}
         </div>
         {[
@@ -575,14 +575,14 @@ function PaymentsMockScreen() {
           { tenant: "المستأجر ٣ (مثال)", unit: "C-305", due: "2024/11/01", amount: "2,800", paid: "0", status: "متأخر", sColor: "bg-status-error-surface text-status-error-foreground", action: "تسجيل" },
         ].map((p, i) => (
           <div key={i} className={cn("grid border-b", p.status === "متأخر" ? "bg-rose-50" : "hover:bg-surface-subtle")} style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr 1fr" }}>
-            <div className="px-2 py-2 text-[9px] font-medium">{p.tenant}</div>
-            <div className="px-2 py-2 text-[9px] text-muted-foreground">{p.unit}</div>
-            <div className="px-2 py-2 text-[9px] text-muted-foreground">{p.due}</div>
-            <div className="px-2 py-2 text-[9px] font-bold">{formatCurrency(Number(p.amount.replace(/,/g, "")))}</div>
-            <div className="px-2 py-2 text-[9px] text-emerald-600">{formatCurrency(Number(p.paid.replace(/,/g, "")))}</div>
-            <div className="px-2 py-2"><span className={cn("text-[8px] px-1 rounded", p.sColor)}>{p.status}</span></div>
+            <div className="px-2 py-2 text-3xs font-medium">{p.tenant}</div>
+            <div className="px-2 py-2 text-3xs text-muted-foreground">{p.unit}</div>
+            <div className="px-2 py-2 text-3xs text-muted-foreground">{p.due}</div>
+            <div className="px-2 py-2 text-3xs font-bold">{formatCurrency(Number(p.amount.replace(/,/g, "")))}</div>
+            <div className="px-2 py-2 text-3xs text-emerald-600">{formatCurrency(Number(p.paid.replace(/,/g, "")))}</div>
+            <div className="px-2 py-2"><span className={cn("text-3xs px-1 rounded", p.sColor)}>{p.status}</span></div>
             <div className="px-2 py-2">
-              {p.action && <span className="text-[8px] text-emerald-600 border border-emerald-200 rounded px-1 py-0.5">{p.action}</span>}
+              {p.action && <span className="text-3xs text-emerald-600 border border-emerald-200 rounded px-1 py-0.5">{p.action}</span>}
             </div>
           </div>
         ))}
@@ -597,25 +597,25 @@ function MaintenanceMockScreen() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-lg font-bold text-status-neutral-foreground">طلبات الصيانة</div>
-          <div className="text-muted-foreground text-[10px]">إدارة ومتابعة طلبات الصيانة</div>
+          <div className="text-muted-foreground text-2xs">إدارة ومتابعة طلبات الصيانة</div>
         </div>
-        <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ طلب صيانة جديد</div>
+        <div className="bg-blue-600 text-white rounded px-2 py-1 text-2xs">+ طلب صيانة جديد</div>
       </div>
       <div className="flex gap-2 mb-3">
         <div className="bg-white border rounded p-2 flex-1 flex items-center gap-1">
           <span className="text-gray-300">🔍</span>
-          <span className="text-[10px] text-muted-foreground">بحث سريع...</span>
+          <span className="text-2xs text-muted-foreground">بحث سريع...</span>
         </div>
       </div>
       <div className="flex gap-1 mb-3">
         {["الكل", "مفتوح", "جاري", "مكتمل", "مغلق"].map((s, i) => (
-          <span key={i} className={cn("text-[9px] px-2 py-1 rounded border", i === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-muted-foreground")}>{s}</span>
+          <span key={i} className={cn("text-3xs px-2 py-1 rounded border", i === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-muted-foreground")}>{s}</span>
         ))}
       </div>
       <div className="bg-white border rounded overflow-hidden">
         <div className="grid bg-surface-subtle border-b" style={{ gridTemplateColumns: "1fr 1fr 1fr 2fr 1fr 1fr 1fr" }}>
           {["الوحدة", "المبنى", "الفئة", "الوصف", "الأولوية", "الحالة", "إجراء"].map((h) => (
-            <div key={h} className="px-2 py-1.5 text-[9px] text-muted-foreground font-semibold">{h}</div>
+            <div key={h} className="px-2 py-1.5 text-3xs text-muted-foreground font-semibold">{h}</div>
           ))}
         </div>
         {[
@@ -624,15 +624,15 @@ function MaintenanceMockScreen() {
           { unit: "C-102", bld: "المركز التجاري", cat: "تكييف", desc: "عطل في جهاز التكييف", pri: "منخفضة", priColor: "bg-surface-subtle text-muted-foreground", status: "مفتوح", stColor: "bg-status-info-surface text-status-info-foreground" },
         ].map((r, i) => (
           <div key={i} className="grid border-b hover:bg-surface-subtle" style={{ gridTemplateColumns: "1fr 1fr 1fr 2fr 1fr 1fr 1fr" }}>
-            <div className="px-2 py-2 text-[9px] font-medium">{r.unit}</div>
-            <div className="px-2 py-2 text-[9px] text-muted-foreground">{r.bld}</div>
-            <div className="px-2 py-2 text-[9px] text-muted-foreground">{r.cat}</div>
-            <div className="px-2 py-2 text-[9px] text-muted-foreground truncate">{r.desc}</div>
-            <div className="px-2 py-2"><span className={cn("text-[8px] px-1 rounded", r.priColor)}>{r.pri}</span></div>
-            <div className="px-2 py-2"><span className={cn("text-[8px] px-1 rounded", r.stColor)}>{r.status}</span></div>
+            <div className="px-2 py-2 text-3xs font-medium">{r.unit}</div>
+            <div className="px-2 py-2 text-3xs text-muted-foreground">{r.bld}</div>
+            <div className="px-2 py-2 text-3xs text-muted-foreground">{r.cat}</div>
+            <div className="px-2 py-2 text-3xs text-muted-foreground truncate">{r.desc}</div>
+            <div className="px-2 py-2"><span className={cn("text-3xs px-1 rounded", r.priColor)}>{r.pri}</span></div>
+            <div className="px-2 py-2"><span className={cn("text-3xs px-1 rounded", r.stColor)}>{r.status}</span></div>
             <div className="px-2 py-2 flex gap-1">
-              <span className="text-[8px] text-emerald-600 border border-emerald-200 rounded px-1">قبول</span>
-              <span className="text-[8px] text-red-400 border border-status-error-surface rounded px-1">رفض</span>
+              <span className="text-3xs text-emerald-600 border border-emerald-200 rounded px-1">قبول</span>
+              <span className="text-3xs text-red-400 border border-status-error-surface rounded px-1">رفض</span>
             </div>
           </div>
         ))}
@@ -647,13 +647,13 @@ function InspectionsMockScreen() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-lg font-bold text-status-neutral-foreground">فحص الوحدات العقارية</div>
-          <div className="text-muted-foreground text-[10px]">جدولة وتتبع عمليات فحص الوحدات</div>
+          <div className="text-muted-foreground text-2xs">جدولة وتتبع عمليات فحص الوحدات</div>
         </div>
-        <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ جدولة فحص</div>
+        <div className="bg-blue-600 text-white rounded px-2 py-1 text-2xs">+ جدولة فحص</div>
       </div>
       <div className="flex gap-1 mb-3">
         {["الكل", "مجدول", "مكتمل", "ملغى"].map((s, i) => (
-          <span key={i} className={cn("text-[9px] px-2 py-1 rounded border", i === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-muted-foreground")}>{s}</span>
+          <span key={i} className={cn("text-3xs px-2 py-1 rounded border", i === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-muted-foreground")}>{s}</span>
         ))}
       </div>
       <div className="space-y-2">
@@ -665,20 +665,20 @@ function InspectionsMockScreen() {
           <div key={i} className="bg-white border rounded-lg p-3 flex items-start justify-between hover:shadow-sm">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="font-medium text-[10px]">{insp.unit} — {insp.bld}</span>
-                <span className={cn("text-[8px] px-1 rounded", insp.sColor)}>{insp.status}</span>
-                <span className="text-[8px] bg-surface-subtle text-muted-foreground px-1 rounded">{insp.type}</span>
+                <span className="font-medium text-2xs">{insp.unit} — {insp.bld}</span>
+                <span className={cn("text-3xs px-1 rounded", insp.sColor)}>{insp.status}</span>
+                <span className="text-3xs bg-surface-subtle text-muted-foreground px-1 rounded">{insp.type}</span>
               </div>
-              <div className="text-[9px] text-muted-foreground">
+              <div className="text-3xs text-muted-foreground">
                 <span>المفتش: {insp.inspector}</span>
                 <span className="mx-2">·</span>
                 <span>الموعد: {formatDateAr(insp.date)}</span>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {insp.rating && <span className="text-[9px] text-status-warning">⭐ {insp.rating}/5</span>}
+              {insp.rating && <span className="text-3xs text-status-warning">⭐ {insp.rating}/5</span>}
               {insp.status === "مجدول" && (
-                <span className="text-[8px] bg-blue-600 text-white rounded px-1.5 py-0.5">✓ إتمام</span>
+                <span className="text-3xs bg-blue-600 text-white rounded px-1.5 py-0.5">✓ إتمام</span>
               )}
             </div>
           </div>
@@ -694,27 +694,27 @@ function DepositsMockScreen() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-lg font-bold text-status-neutral-foreground">ودائع الضمان</div>
-          <div className="text-muted-foreground text-[10px]">إدارة ودائع ضمان المستأجرين</div>
+          <div className="text-muted-foreground text-2xs">إدارة ودائع ضمان المستأجرين</div>
         </div>
-        <div className="bg-blue-600 text-white rounded px-2 py-1 text-[10px]">+ تسجيل وديعة</div>
+        <div className="bg-blue-600 text-white rounded px-2 py-1 text-2xs">+ تسجيل وديعة</div>
       </div>
       <div className="grid grid-cols-3 gap-2 mb-3">
         <div className="border rounded-lg p-2 text-center">
           <div className="text-xl font-bold">5</div>
-          <div className="text-[9px] text-muted-foreground">إجمالي الودائع</div>
+          <div className="text-3xs text-muted-foreground">إجمالي الودائع</div>
         </div>
         <div className="border border-status-info-surface bg-status-info-surface rounded-lg p-2 text-center">
           <div className="text-xl font-bold text-status-info-foreground">47,500 ر.س</div>
-          <div className="text-[9px] text-muted-foreground">ودائع محتجزة</div>
+          <div className="text-3xs text-muted-foreground">ودائع محتجزة</div>
         </div>
         <div className="border border-status-success-surface bg-status-success-surface rounded-lg p-2 text-center">
           <div className="text-xl font-bold text-status-success-foreground">12,000 ر.س</div>
-          <div className="text-[9px] text-muted-foreground">مُستردة</div>
+          <div className="text-3xs text-muted-foreground">مُستردة</div>
         </div>
       </div>
       <div className="flex gap-1 mb-3">
         {["الكل", "محتجزة", "مستردة"].map((s, i) => (
-          <span key={i} className={cn("text-[9px] px-2 py-1 rounded border", i === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-muted-foreground")}>{s}</span>
+          <span key={i} className={cn("text-3xs px-2 py-1 rounded border", i === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-muted-foreground")}>{s}</span>
         ))}
       </div>
       <div className="space-y-2">
@@ -726,19 +726,19 @@ function DepositsMockScreen() {
           <div key={i} className="bg-white border rounded-lg p-3 flex items-center justify-between hover:shadow-sm">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="font-medium text-[10px]">{d.tenant}</span>
-                <span className="text-muted-foreground text-[9px]">— {d.unit} ({d.bld})</span>
-                <span className={cn("text-[8px] px-1 rounded", d.sColor)}>{d.status}</span>
+                <span className="font-medium text-2xs">{d.tenant}</span>
+                <span className="text-muted-foreground text-3xs">— {d.unit} ({d.bld})</span>
+                <span className={cn("text-3xs px-1 rounded", d.sColor)}>{d.status}</span>
               </div>
-              <div className="text-[9px] text-muted-foreground">
+              <div className="text-3xs text-muted-foreground">
                 تاريخ الاستلام: {d.received}
                 {d.refund && <span className="mr-2 text-status-success-foreground"> · مُسترد: {formatCurrency(Number(d.refund.replace(/,/g, "")))}</span>}
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="font-bold text-[11px]">{formatCurrency(Number(d.amount.replace(/,/g, "")))}</div>
+              <div className="font-bold text-2xs">{formatCurrency(Number(d.amount.replace(/,/g, "")))}</div>
               {d.status === "محتجزة" && (
-                <span className="text-[8px] border border-border rounded px-1.5 py-0.5 text-muted-foreground">استرداد</span>
+                <span className="text-3xs border border-border rounded px-1.5 py-0.5 text-muted-foreground">استرداد</span>
               )}
             </div>
           </div>
@@ -755,48 +755,48 @@ function OccupancyMockScreen() {
         <span className="text-lg">🏢</span>
         <div>
           <div className="text-lg font-bold text-status-neutral-foreground">تقرير الإشغال العقاري</div>
-          <div className="text-muted-foreground text-[10px]">نظرة شاملة على حالة الوحدات العقارية</div>
+          <div className="text-muted-foreground text-2xs">نظرة شاملة على حالة الوحدات العقارية</div>
         </div>
       </div>
       <div className="grid grid-cols-5 gap-2 mb-3">
         <div className="border-2 border-status-info-surface rounded-lg p-2 text-center">
           <div className="text-2xl font-bold text-status-info-foreground">83%</div>
-          <div className="text-[9px] text-muted-foreground">معدل الإشغال</div>
+          <div className="text-3xs text-muted-foreground">معدل الإشغال</div>
         </div>
         <div className="border rounded-lg p-2 text-center">
           <div className="text-xl font-bold">48</div>
-          <div className="text-[9px] text-muted-foreground">إجمالي الوحدات</div>
+          <div className="text-3xs text-muted-foreground">إجمالي الوحدات</div>
         </div>
         <div className="border border-status-success-surface bg-status-success-surface rounded-lg p-2 text-center">
           <div className="text-xl font-bold text-status-success-foreground">40</div>
-          <div className="text-[9px] text-muted-foreground">مؤجرة</div>
+          <div className="text-3xs text-muted-foreground">مؤجرة</div>
         </div>
         <div className="border border-status-info-surface bg-status-info-surface rounded-lg p-2 text-center">
           <div className="text-xl font-bold text-status-info-foreground">8</div>
-          <div className="text-[9px] text-muted-foreground">متاحة</div>
+          <div className="text-3xs text-muted-foreground">متاحة</div>
         </div>
         <div className="border rounded-lg p-2 text-center">
           <div className="text-lg font-bold">150,000</div>
-          <div className="text-[9px] text-muted-foreground">إيجار شهري (ر.س)</div>
+          <div className="text-3xs text-muted-foreground">إيجار شهري (ر.س)</div>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-muted-foreground mb-2">توزيع حالة الوحدات</div>
+          <div className="text-2xs font-semibold text-muted-foreground mb-2">توزيع حالة الوحدات</div>
           <div className="flex items-center gap-3">
             <div className="w-20 h-20 rounded-full border-8 border-emerald-500 flex items-center justify-center relative">
               <div className="absolute inset-1 rounded-full border-4 border-transparent border-t-blue-500 border-r-blue-500" style={{ transform: "rotate(45deg)" }} />
               <span className="text-sm font-bold">83%</span>
             </div>
             <div className="space-y-2">
-              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500" /><span className="text-[9px]">مؤجرة: 40</span></div>
-              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-status-info-surface0" /><span className="text-[9px]">متاحة: 8</span></div>
-              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-orange-400" /><span className="text-[9px]">صيانة: 0</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500" /><span className="text-3xs">مؤجرة: 40</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-status-info-surface0" /><span className="text-3xs">متاحة: 8</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-orange-400" /><span className="text-3xs">صيانة: 0</span></div>
             </div>
           </div>
         </div>
         <div className="bg-white border rounded-lg p-3">
-          <div className="text-[10px] font-semibold text-muted-foreground mb-2">الإشغال حسب المبنى</div>
+          <div className="text-2xs font-semibold text-muted-foreground mb-2">الإشغال حسب المبنى</div>
           <div className="space-y-2">
             {[
               { name: "برج النخيل", occ: 18, total: 20, rate: 90 },
@@ -804,7 +804,7 @@ function OccupancyMockScreen() {
               { name: "المركز التجاري", occ: 11, total: 13, rate: 85 },
             ].map((b, i) => (
               <div key={i}>
-                <div className="flex justify-between text-[9px] mb-0.5">
+                <div className="flex justify-between text-3xs mb-0.5">
                   <span>{b.name}</span>
                   <span className="text-muted-foreground">{b.occ}/{b.total} ({b.rate}%)</span>
                 </div>
@@ -817,10 +817,10 @@ function OccupancyMockScreen() {
         </div>
       </div>
       <div className="bg-white border rounded overflow-hidden">
-        <div className="px-3 py-2 text-[10px] font-semibold text-muted-foreground border-b bg-surface-subtle">قائمة الوحدات (48)</div>
+        <div className="px-3 py-2 text-2xs font-semibold text-muted-foreground border-b bg-surface-subtle">قائمة الوحدات (48)</div>
         <div className="grid bg-surface-subtle border-b" style={{ gridTemplateColumns: "1fr 1fr 1fr 2fr 1fr 1fr" }}>
           {["الوحدة", "المبنى", "الحالة", "المستأجر", "الإيجار الشهري", "انتهاء العقد"].map((h) => (
-            <div key={h} className="px-2 py-1 text-[8px] text-muted-foreground">{h}</div>
+            <div key={h} className="px-2 py-1 text-3xs text-muted-foreground">{h}</div>
           ))}
         </div>
         {[
@@ -828,12 +828,12 @@ function OccupancyMockScreen() {
           { unit: "A-102", bld: "برج النخيل", status: "متاحة", sColor: "bg-status-info-surface text-status-info-foreground", tenant: "—", rent: "2,800 ر.س", end: "—" },
         ].map((u, i) => (
           <div key={i} className="grid border-b hover:bg-surface-subtle" style={{ gridTemplateColumns: "1fr 1fr 1fr 2fr 1fr 1fr" }}>
-            <div className="px-2 py-1.5 text-[9px] font-medium">{u.unit}</div>
-            <div className="px-2 py-1.5 text-[9px] text-muted-foreground">{u.bld}</div>
-            <div className="px-2 py-1.5"><span className={cn("text-[8px] px-1 rounded", u.sColor)}>{u.status}</span></div>
-            <div className="px-2 py-1.5 text-[9px]">{u.tenant}</div>
-            <div className="px-2 py-1.5 text-[9px]">{u.rent}</div>
-            <div className="px-2 py-1.5 text-[9px] text-muted-foreground">{u.end}</div>
+            <div className="px-2 py-1.5 text-3xs font-medium">{u.unit}</div>
+            <div className="px-2 py-1.5 text-3xs text-muted-foreground">{u.bld}</div>
+            <div className="px-2 py-1.5"><span className={cn("text-3xs px-1 rounded", u.sColor)}>{u.status}</span></div>
+            <div className="px-2 py-1.5 text-3xs">{u.tenant}</div>
+            <div className="px-2 py-1.5 text-3xs">{u.rent}</div>
+            <div className="px-2 py-1.5 text-3xs text-muted-foreground">{u.end}</div>
           </div>
         ))}
       </div>
@@ -1266,7 +1266,7 @@ export default function PropertiesGuide() {
             <BookOpen className="h-5 w-5 text-status-info-foreground" />
             <div>
               <h1 className="text-base font-bold text-status-neutral-foreground">دليل إدارة الأملاك</h1>
-              <p className="text-[10px] text-muted-foreground">دليل إرشادي مصور — نظام غيث لتخطيط موارد المؤسسات</p>
+              <p className="text-2xs text-muted-foreground">دليل إرشادي مصور — نظام غيث لتخطيط موارد المؤسسات</p>
             </div>
           </div>
           <Link href="/properties/dashboard">
@@ -1288,7 +1288,7 @@ export default function PropertiesGuide() {
           )}
         >
           <div className="p-4">
-            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-3">محتويات الدليل</p>
+            <p className="text-2xs text-muted-foreground font-semibold uppercase tracking-wider mb-3">محتويات الدليل</p>
             <nav className="space-y-1">
               {sections.map((s) => {
                 const Icon = s.icon;

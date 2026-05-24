@@ -213,16 +213,16 @@ function DiffViewer({ changes, before, after }: { changes?: any[]; before?: any;
       <div className="mt-2 grid grid-cols-2 gap-2">
         {before && (
           <div className="bg-status-error-surface rounded-lg p-2 border border-status-error-surface">
-            <div className="text-[10px] font-semibold text-status-error mb-1">قبل التعديل</div>
-            <pre className="text-[10px] text-status-error-foreground whitespace-pre-wrap overflow-hidden max-h-20">
+            <div className="text-2xs font-semibold text-status-error mb-1">قبل التعديل</div>
+            <pre className="text-2xs text-status-error-foreground whitespace-pre-wrap overflow-hidden max-h-20">
               {typeof before === "object" ? JSON.stringify(before, null, 1) : String(before)}
             </pre>
           </div>
         )}
         {after && (
           <div className="bg-status-success-surface rounded-lg p-2 border border-status-success-surface">
-            <div className="text-[10px] font-semibold text-status-success mb-1">بعد التعديل</div>
-            <pre className="text-[10px] text-status-success-foreground whitespace-pre-wrap overflow-hidden max-h-20">
+            <div className="text-2xs font-semibold text-status-success mb-1">بعد التعديل</div>
+            <pre className="text-2xs text-status-success-foreground whitespace-pre-wrap overflow-hidden max-h-20">
               {typeof after === "object" ? JSON.stringify(after, null, 1) : String(after)}
             </pre>
           </div>

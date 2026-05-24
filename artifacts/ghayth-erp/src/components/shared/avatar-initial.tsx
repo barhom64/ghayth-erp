@@ -26,7 +26,7 @@ export function AvatarInitial({ name, color = "blue", size = "default", classNam
   return (
     <div className={cn(
       "rounded-full flex items-center justify-center font-bold shrink-0",
-      size === "sm" ? "w-7 h-7 text-[10px]" : "w-8 h-8 text-xs",
+      size === "sm" ? "w-7 h-7 text-2xs" : "w-8 h-8 text-xs",
       COLOR_SCHEMES[color],
       className,
     )}>

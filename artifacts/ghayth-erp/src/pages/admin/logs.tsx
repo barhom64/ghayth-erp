@@ -78,7 +78,7 @@ export default function AdminLogsPage() {
       header: "الإجراء",
       sortable: true,
       render: (r: any) => (
-        <Badge className={cn("text-[10px]",
+        <Badge className={cn("text-2xs",
           r.action?.includes("create") ? "bg-status-success-surface text-status-success-foreground" :
           r.action?.includes("delete") ? "bg-status-error-surface text-status-error-foreground" :
           r.action?.includes("update") ? "bg-status-info-surface text-status-info-foreground" :
@@ -129,13 +129,13 @@ export default function AdminLogsPage() {
         {beforeData && (
           <div>
             <Label className="text-xs text-status-error mb-1 block">قبل التغيير</Label>
-            <pre className="text-[10px] bg-status-error-surface p-2 rounded border border-status-error-surface overflow-auto max-h-40 font-mono" dir="ltr">{safeParse(beforeData)}</pre>
+            <pre className="text-2xs bg-status-error-surface p-2 rounded border border-status-error-surface overflow-auto max-h-40 font-mono" dir="ltr">{safeParse(beforeData)}</pre>
           </div>
         )}
         {afterData && (
           <div>
             <Label className="text-xs text-status-success mb-1 block">بعد التغيير</Label>
-            <pre className="text-[10px] bg-status-success-surface p-2 rounded border border-status-success-surface overflow-auto max-h-40 font-mono" dir="ltr">{safeParse(afterData)}</pre>
+            <pre className="text-2xs bg-status-success-surface p-2 rounded border border-status-success-surface overflow-auto max-h-40 font-mono" dir="ltr">{safeParse(afterData)}</pre>
           </div>
         )}
       </div>

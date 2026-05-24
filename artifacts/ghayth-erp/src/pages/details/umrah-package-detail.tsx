@@ -225,7 +225,7 @@ export default function UmrahPackageDetail() {
             <CardContent className="text-sm">
               <p className="font-medium">{pkg.seasonTitle}</p>
               {pkg.seasonId && (
-                <Badge variant="outline" className="mt-1 text-[10px]">SN-{pkg.seasonId}</Badge>
+                <Badge variant="outline" className="mt-1 text-2xs">SN-{pkg.seasonId}</Badge>
               )}
             </CardContent>
           </Card>

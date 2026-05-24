@@ -355,7 +355,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
               <X className="h-4 w-4 text-muted-foreground hover:text-muted-foreground" />
             </button>
           )}
-          <kbd className="hidden sm:flex items-center gap-1 shrink-0 px-1.5 py-0.5 text-[10px] text-muted-foreground bg-gray-100 rounded border border-border">إغلاق</kbd>
+          <kbd className="hidden sm:flex items-center gap-1 shrink-0 px-1.5 py-0.5 text-2xs text-muted-foreground bg-gray-100 rounded border border-border">إغلاق</kbd>
         </div>
 
         <div ref={listRef} className="overflow-y-auto flex-1 py-1">
@@ -368,7 +368,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
           ) : (
             Object.entries(grouped).map(([category, items]) => (
               <div key={category}>
-                <div className="px-3 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider sticky top-0 bg-white/95 backdrop-blur-sm">
+                <div className="px-3 py-1.5 text-2xs font-semibold text-muted-foreground uppercase tracking-wider sticky top-0 bg-white/95 backdrop-blur-sm">
                   {category}
                 </div>
                 {items.map(item => {
@@ -402,7 +402,7 @@ export function CommandPalette({ open, onClose, initialFilter }: CommandPaletteP
           )}
         </div>
 
-        <div className="border-t border-border px-4 py-2 flex items-center gap-4 text-[11px] text-muted-foreground">
+        <div className="border-t border-border px-4 py-2 flex items-center gap-4 text-2xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <kbd className="px-1 py-0.5 bg-gray-100 rounded border border-border">↑↓</kbd> للتنقل
           </span>

@@ -152,8 +152,8 @@ export function ProcessStages({ steps, className }: { steps: StageStep[]; classN
             <div className="flex flex-col items-center gap-1 min-w-[80px]">
               <div className={cn("w-4 h-4 rounded-full ring-2", s.dot)} />
               <span className={cn("text-xs font-medium text-center", s.text)}>{step.label}</span>
-              {step.detail && <span className="text-[10px] text-muted-foreground text-center leading-tight max-w-[80px]">{step.detail}</span>}
-              {step.time && <span className="text-[10px] text-muted-foreground">{step.time}</span>}
+              {step.detail && <span className="text-2xs text-muted-foreground text-center leading-tight max-w-[80px]">{step.detail}</span>}
+              {step.time && <span className="text-2xs text-muted-foreground">{step.time}</span>}
             </div>
             {i < steps.length - 1 && (
               <div className={cn("h-0.5 w-8 mt-2 shrink-0", s.line)} />

@@ -160,7 +160,7 @@ export default function ClientDetail() {
               <tab.icon className="h-4 w-4" />
               {tab.label}
               {count > 0 && tab.key !== "info" && tab.key !== "overview" && (
-                <Badge variant="secondary" className="text-[10px] px-1.5">{count}</Badge>
+                <Badge variant="secondary" className="text-2xs px-1.5">{count}</Badge>
               )}
             </button>
           );
@@ -174,28 +174,28 @@ export default function ClientDetail() {
               <CardContent className="p-4 text-center">
                 <p className="text-xs text-status-info-foreground mb-1">إجمالي الفواتير</p>
                 <p className="text-xl font-bold text-status-info-foreground">{formatCurrency(Number(financials.totalInvoiced) || 0)}</p>
-                <p className="text-[10px] text-status-info">{Number(financials.invoiceCount) || 0} فاتورة</p>
+                <p className="text-2xs text-status-info">{Number(financials.invoiceCount) || 0} فاتورة</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-status-success-surface">
               <CardContent className="p-4 text-center">
                 <p className="text-xs text-status-success-foreground mb-1">المدفوع</p>
                 <p className="text-xl font-bold text-status-success-foreground">{formatCurrency(Number(financials.totalPaid) || 0)}</p>
-                <p className="text-[10px] text-status-success">{Number(financials.paidCount) || 0} مدفوعة</p>
+                <p className="text-2xs text-status-success">{Number(financials.paidCount) || 0} مدفوعة</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-status-error-surface">
               <CardContent className="p-4 text-center">
                 <p className="text-xs text-status-error-foreground mb-1">المستحق</p>
                 <p className="text-xl font-bold text-status-error-foreground">{formatCurrency(Number(financials.totalOutstanding) || 0)}</p>
-                <p className="text-[10px] text-status-error">{Number(financials.overdueCount) || 0} متأخرة</p>
+                <p className="text-2xs text-status-error">{Number(financials.overdueCount) || 0} متأخرة</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-purple-50/50">
               <CardContent className="p-4 text-center">
                 <p className="text-xs text-purple-600 mb-1">الفرص</p>
                 <p className="text-xl font-bold text-purple-700">{formatCurrency(opportunities.reduce((s: number, o: any) => s + Number(o.value || 0), 0))}</p>
-                <p className="text-[10px] text-purple-500">{opportunities.length} فرصة</p>
+                <p className="text-2xs text-purple-500">{opportunities.length} فرصة</p>
               </CardContent>
             </Card>
           </div>
@@ -249,19 +249,19 @@ export default function ClientDetail() {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="p-2 rounded-lg bg-status-info-surface text-center">
                     <p className="text-lg font-bold text-status-info-foreground">{invoices.length}</p>
-                    <p className="text-[10px] text-status-info-foreground">فاتورة</p>
+                    <p className="text-2xs text-status-info-foreground">فاتورة</p>
                   </div>
                   <div className="p-2 rounded-lg bg-status-success-surface text-center">
                     <p className="text-lg font-bold text-status-success-foreground">{opportunities.length}</p>
-                    <p className="text-[10px] text-status-success-foreground">فرصة</p>
+                    <p className="text-2xs text-status-success-foreground">فرصة</p>
                   </div>
                   <div className="p-2 rounded-lg bg-orange-50 text-center">
                     <p className="text-lg font-bold text-orange-700">{tickets.length}</p>
-                    <p className="text-[10px] text-orange-600">تذكرة</p>
+                    <p className="text-2xs text-orange-600">تذكرة</p>
                   </div>
                   <div className="p-2 rounded-lg bg-purple-50 text-center">
                     <p className="text-lg font-bold text-purple-700">{projects.length}</p>
-                    <p className="text-[10px] text-purple-600">مشروع</p>
+                    <p className="text-2xs text-purple-600">مشروع</p>
                   </div>
                 </div>
               </CardContent>
@@ -825,19 +825,19 @@ function UmrahTab({ clientId }: { clientId: string }) {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
               <div className="p-2 rounded-lg bg-emerald-50 text-center">
                 <p className="text-lg font-bold text-emerald-700">{sa.pilgrimCount ?? sa.totalMutamers ?? 0}</p>
-                <p className="text-[10px] text-emerald-600">معتمر</p>
+                <p className="text-2xs text-emerald-600">معتمر</p>
               </div>
               <div className="p-2 rounded-lg bg-status-info-surface text-center">
                 <p className="text-lg font-bold text-status-info-foreground">{sa.groupCount ?? 0}</p>
-                <p className="text-[10px] text-status-info-foreground">مجموعة</p>
+                <p className="text-2xs text-status-info-foreground">مجموعة</p>
               </div>
               <div className="p-2 rounded-lg bg-orange-50 text-center">
                 <p className="text-lg font-bold text-orange-700">{sa.violationCount ?? 0}</p>
-                <p className="text-[10px] text-orange-600">مخالفة</p>
+                <p className="text-2xs text-orange-600">مخالفة</p>
               </div>
               <div className="p-2 rounded-lg bg-purple-50 text-center">
                 <p className="text-lg font-bold text-purple-700">{formatCurrency(Number(sa.totalInvoiced ?? 0))}</p>
-                <p className="text-[10px] text-purple-600">إجمالي فواتير</p>
+                <p className="text-2xs text-purple-600">إجمالي فواتير</p>
               </div>
             </div>
             {sa.invoices?.length > 0 && (
@@ -943,7 +943,7 @@ function PriorityBadge({ priority }: { priority: string }) {
     low: "منخفض",
   };
   return (
-    <Badge className={cn("text-[10px]", colors[priority] || "bg-surface-subtle text-status-neutral-foreground")}>
+    <Badge className={cn("text-2xs", colors[priority] || "bg-surface-subtle text-status-neutral-foreground")}>
       {labels[priority] || priority}
     </Badge>
   );

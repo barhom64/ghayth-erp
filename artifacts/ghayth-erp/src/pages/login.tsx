@@ -231,7 +231,7 @@ export default function Login() {
                     <div key={a.id} className="login-news-item p-3 rounded-xl">
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-white text-sm font-medium leading-snug flex-1">{a.title}</p>
-                        <span className="text-blue-300 text-[10px] whitespace-nowrap flex items-center gap-1 shrink-0">
+                        <span className="text-blue-300 text-2xs whitespace-nowrap flex items-center gap-1 shrink-0">
                           <Clock className="h-3 w-3" />
                           {formatDate(a.publishedAt)}
                         </span>

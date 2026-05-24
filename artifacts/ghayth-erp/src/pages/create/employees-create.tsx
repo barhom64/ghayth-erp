@@ -202,7 +202,7 @@ export default function EmployeesCreate() {
                     <Icon className="w-4 h-4 text-status-info-foreground" />
                   </div>
                   <span className="text-sm font-medium text-status-neutral-foreground">{i + 1}. {op.label}</span>
-                  <Badge className={`ms-auto text-[10px] ${isDone ? "bg-status-success-surface text-status-success-foreground" : "bg-surface-subtle text-muted-foreground"}`}>
+                  <Badge className={`ms-auto text-2xs ${isDone ? "bg-status-success-surface text-status-success-foreground" : "bg-surface-subtle text-muted-foreground"}`}>
                     {isDone ? "مكتمل" : op.key === "user" ? "يتطلب بريد إلكتروني" : "—"}
                   </Badge>
                 </div>

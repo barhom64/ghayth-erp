@@ -282,23 +282,23 @@ export default function UnitDetail() {
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                 <div className="text-center p-2 bg-white rounded-lg border">
                   <p className="text-lg font-bold text-status-info-foreground">{formatCurrency(totalExpected)}</p>
-                  <p className="text-[10px] text-muted-foreground">المتوقع تحصيله</p>
+                  <p className="text-2xs text-muted-foreground">المتوقع تحصيله</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
                   <p className="text-lg font-bold text-emerald-600">{formatCurrency(totalCollected)}</p>
-                  <p className="text-[10px] text-muted-foreground">المحصل فعليا</p>
+                  <p className="text-2xs text-muted-foreground">المحصل فعليا</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
                   <p className="text-lg font-bold text-status-error-foreground">{formatCurrency(totalExpected - totalCollected)}</p>
-                  <p className="text-[10px] text-muted-foreground">المتبقي</p>
+                  <p className="text-2xs text-muted-foreground">المتبقي</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
                   <p className="text-lg font-bold text-status-warning-foreground">{formatCurrency(totalMaintCost)}</p>
-                  <p className="text-[10px] text-muted-foreground">تكلفة الصيانة</p>
+                  <p className="text-2xs text-muted-foreground">تكلفة الصيانة</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
                   <p className={cn("text-lg font-bold", netRevenue >= 0 ? "text-emerald-600" : "text-status-error-foreground")}>{formatCurrency(netRevenue)}</p>
-                  <p className="text-[10px] text-muted-foreground">صافي الإيرادات</p>
+                  <p className="text-2xs text-muted-foreground">صافي الإيرادات</p>
                 </div>
               </div>
               {collectionRate > 0 && (
@@ -336,7 +336,7 @@ export default function UnitDetail() {
               <tab.icon className="h-4 w-4" />
               {tab.label}
               {count > 0 && (
-                <Badge variant="secondary" className="text-[10px] px-1.5">{count}</Badge>
+                <Badge variant="secondary" className="text-2xs px-1.5">{count}</Badge>
               )}
             </button>
           );
@@ -356,14 +356,14 @@ export default function UnitDetail() {
               <CardContent className="p-4 text-center">
                 <p className="text-xs text-status-error-foreground mb-1">المتأخرات</p>
                 <p className="text-xl font-bold text-status-error-foreground">{formatCurrency(overduePayments.reduce((s: number, p: any) => s + Number(p.amount || 0) - Number(p.paidAmount || 0), 0))}</p>
-                <p className="text-[10px] text-status-error">{overduePayments.length} دفعة</p>
+                <p className="text-2xs text-status-error">{overduePayments.length} دفعة</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-orange-50/50">
               <CardContent className="p-4 text-center">
                 <p className="text-xs text-orange-600 mb-1">تكلفة الصيانة</p>
                 <p className="text-xl font-bold text-orange-700">{formatCurrency(maintenance.reduce((s: number, m: any) => s + Number(m.cost || 0), 0))}</p>
-                <p className="text-[10px] text-orange-500">{maintenance.length} طلب</p>
+                <p className="text-2xs text-orange-500">{maintenance.length} طلب</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-status-info-surface">
@@ -372,7 +372,7 @@ export default function UnitDetail() {
                 <p className="text-xl font-bold text-status-info-foreground">
                   {activeContract ? "100%" : "0%"}
                 </p>
-                <p className="text-[10px] text-status-info">{activeContract ? "مؤجرة حالياً" : "شاغرة"}</p>
+                <p className="text-2xs text-status-info">{activeContract ? "مؤجرة حالياً" : "شاغرة"}</p>
               </CardContent>
             </Card>
           </div>
@@ -447,7 +447,7 @@ export default function UnitDetail() {
                           <div className={cn("w-2 h-2 rounded-full", paid ? "bg-status-success-surface0" : "bg-gray-400")} />
                           <div>
                             <p className="text-xs">{p.tenantName || "مستأجر"}</p>
-                            <p className="text-[10px] text-muted-foreground">{formatDateAr(p.dueDate)}</p>
+                            <p className="text-2xs text-muted-foreground">{formatDateAr(p.dueDate)}</p>
                           </div>
                         </div>
                         <div className="text-right">

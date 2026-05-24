@@ -358,7 +358,7 @@ export default function AutoDetectionPage() {
                           <span className="text-muted-foreground">—</span>
                           <span className="text-muted-foreground">{d.description}</span>
                           {d.memoCreated && (
-                            <Badge className="bg-status-info-surface text-status-info-foreground text-[10px] mr-auto">محضر جديد</Badge>
+                            <Badge className="bg-status-info-surface text-status-info-foreground text-2xs mr-auto">محضر جديد</Badge>
                           )}
                         </div>
                       );
@@ -431,7 +431,7 @@ export default function AutoDetectionPage() {
                     onChange={(e) => handleNumberSetting("lateThresholdMinutes", Number(e.target.value))}
                     className="h-9"
                   />
-                  <p className="text-[11px] text-muted-foreground">لن يُرصد تأخر أقل من هذا الحد</p>
+                  <p className="text-2xs text-muted-foreground">لن يُرصد تأخر أقل من هذا الحد</p>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">حد المغادرة المبكرة (دقائق)</Label>
@@ -443,7 +443,7 @@ export default function AutoDetectionPage() {
                     onChange={(e) => handleNumberSetting("earlyLeaveThresholdMinutes", Number(e.target.value))}
                     className="h-9"
                   />
-                  <p className="text-[11px] text-muted-foreground">لن تُرصد مغادرة مبكرة أقل من هذا الحد</p>
+                  <p className="text-2xs text-muted-foreground">لن تُرصد مغادرة مبكرة أقل من هذا الحد</p>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">نطاق GPS (متر)</Label>
@@ -455,7 +455,7 @@ export default function AutoDetectionPage() {
                     onChange={(e) => handleNumberSetting("gpsRadiusMeters", Number(e.target.value))}
                     className="h-9"
                   />
-                  <p className="text-[11px] text-muted-foreground">المسافة القصوى المسموحة من موقع الفرع</p>
+                  <p className="text-2xs text-muted-foreground">المسافة القصوى المسموحة من موقع الفرع</p>
                 </div>
               </div>
             </div>
@@ -541,7 +541,7 @@ export default function AutoDetectionPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold">{d.employeeName}</span>
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge variant="outline" className="text-2xs">
                             {meta?.label ?? d.type}
                           </Badge>
                         </div>
@@ -549,10 +549,10 @@ export default function AutoDetectionPage() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {d.memoCreated && (
-                          <Badge className="bg-status-info-surface text-status-info-foreground text-[10px]">محضر جديد</Badge>
+                          <Badge className="bg-status-info-surface text-status-info-foreground text-2xs">محضر جديد</Badge>
                         )}
                         {d.violationId && (
-                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                          <Badge variant="outline" className="text-2xs text-muted-foreground">
                             #{d.violationId}
                           </Badge>
                         )}
@@ -593,7 +593,7 @@ function SettingToggle({
       <Icon className={cn("h-5 w-5 shrink-0", iconColor)} />
       <div className="flex-1 min-w-0">
         <Label className="text-sm font-medium cursor-pointer">{label}</Label>
-        <p className="text-[11px] text-muted-foreground leading-tight">{description}</p>
+        <p className="text-2xs text-muted-foreground leading-tight">{description}</p>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>

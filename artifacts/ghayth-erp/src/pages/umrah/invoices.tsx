@@ -351,7 +351,7 @@ function NuskInvoicesTab() {
       render: (r) => (
         deleteId === r.id ? (
           <div className="inline-flex items-center gap-1">
-            <GuardedButton perm="umrah:delete" variant="outline" size="sm" className="h-7 px-2 text-[11px] text-status-error-foreground" disabled={deleteMut.isPending} onClick={() => deleteMut.mutate({ id: r.id })}>تأكيد</GuardedButton>
+            <GuardedButton perm="umrah:delete" variant="outline" size="sm" className="h-7 px-2 text-2xs text-status-error-foreground" disabled={deleteMut.isPending} onClick={() => deleteMut.mutate({ id: r.id })}>تأكيد</GuardedButton>
             <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setDeleteId(null)}><X className="h-3 w-3" /></Button>
           </div>
         ) : (

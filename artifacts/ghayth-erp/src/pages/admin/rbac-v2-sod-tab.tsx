@@ -161,7 +161,7 @@ export function SodRulesTab() {
             <div key={r.id} className="grid grid-cols-12 gap-2 items-center py-2 px-3 border-b last:border-b-0 hover:bg-surface-subtle min-w-[600px]">
               <div className="col-span-3">
                 <p className="text-sm font-medium">{r.label_ar}</p>
-                <p className="text-[10px] text-muted-foreground font-mono">{r.rule_key}</p>
+                <p className="text-2xs text-muted-foreground font-mono">{r.rule_key}</p>
               </div>
               <div className="col-span-5 text-xs font-mono text-status-neutral-foreground">
                 {r.feature_a}.{r.action_a} <span className="text-status-error">↔</span> {r.feature_b}.{r.action_b}

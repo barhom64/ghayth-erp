@@ -243,7 +243,7 @@ export default function DriverDetail() {
                 <p className="text-xs text-muted-foreground">
                   {[assignedVehicle.make, assignedVehicle.model, assignedVehicle.year].filter(Boolean).join(" ")}
                 </p>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-2xs">
                   {assignedVehicle.status || "-"}
                 </Badge>
               </div>

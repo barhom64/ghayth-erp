@@ -553,7 +553,7 @@ export default function Dashboard() {
                         )}
                       </div>
                       {task.priority && (
-                        <Badge variant="outline" className={cn("text-[10px] shrink-0", priorityColors[task.priority] || "")}>
+                        <Badge variant="outline" className={cn("text-2xs shrink-0", priorityColors[task.priority] || "")}>
                           {task.priority === "high" ? "عاجل" : task.priority === "medium" ? "متوسط" : "عادي"}
                         </Badge>
                       )}
@@ -633,7 +633,7 @@ export default function Dashboard() {
                 {roleData.hr.probationEnding?.length > 0 && (
                   <div className="mt-1 space-y-0.5">
                     {roleData.hr.probationEnding.slice(0, 3).map((p: any, i: number) => (
-                      <p key={i} className="text-[10px] text-purple-500">{p.name} — {p.probationEndDate}</p>
+                      <p key={i} className="text-2xs text-purple-500">{p.name} — {p.probationEndDate}</p>
                     ))}
                   </div>
                 )}
@@ -658,7 +658,7 @@ export default function Dashboard() {
                   <p className="text-2xl font-bold text-status-error-foreground">{roleData.finance.overdueCount}</p>
                   <p className="text-xs text-status-error-foreground">فواتير متأخرة</p>
                   {roleData.finance.overdueAmount > 0 && (
-                    <p className="text-[10px] text-status-error mt-0.5">{formatCurrency(Number(roleData.finance.overdueAmount))}</p>
+                    <p className="text-2xs text-status-error mt-0.5">{formatCurrency(Number(roleData.finance.overdueAmount))}</p>
                   )}
                 </div>
               </Link>

@@ -200,9 +200,9 @@ export default function UmrahImport() {
                       render: (row) => {
                         const missing = getRowValidation(row);
                         return missing.length === 0 ? (
-                          <Badge className="bg-status-success-surface text-status-success-foreground text-[10px]">صالح</Badge>
+                          <Badge className="bg-status-success-surface text-status-success-foreground text-2xs">صالح</Badge>
                         ) : (
-                          <Badge className="bg-status-warning-surface text-status-warning-foreground text-[10px]">ناقص: {missing.map((m) => FIELD_LABELS[m] || m).join(", ")}</Badge>
+                          <Badge className="bg-status-warning-surface text-status-warning-foreground text-2xs">ناقص: {missing.map((m) => FIELD_LABELS[m] || m).join(", ")}</Badge>
                         );
                       },
                     },

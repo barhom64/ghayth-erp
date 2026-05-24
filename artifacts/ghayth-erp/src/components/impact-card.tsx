@@ -105,7 +105,7 @@ export function ImpactCard({ entityType, entityId, action }: ImpactCardProps) {
                 </div>
               );
             })}
-          <div className="text-[10px] text-muted-foreground text-center pt-1">
+          <div className="text-2xs text-muted-foreground text-center pt-1">
             هذا تقدير للأثر المتوقع — سيتم التنفيذ الفعلي عند التأكيد
           </div>
         </CardContent>

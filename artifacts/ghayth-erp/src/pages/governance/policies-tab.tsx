@@ -78,7 +78,7 @@ export function PoliciesTab() {
       render: (p) => (
         <div>
           <span className="font-medium">{p.title}</span>
-          {p.parentId && <Badge variant="outline" className="ms-2 text-[10px]">فرعي</Badge>}
+          {p.parentId && <Badge variant="outline" className="ms-2 text-2xs">فرعي</Badge>}
         </div>
       ),
     },

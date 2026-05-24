@@ -287,9 +287,9 @@ export default function CashflowDashboard() {
                             <span className="text-sm font-medium text-status-neutral-foreground">{item.category || item.name || item.label || `بند ${i + 1}`}</span>
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-muted-foreground">{formatCurrency(actual_amount)} / {formatCurrency(budget_amount)}</span>
-                              {isOver && <Badge className="text-[10px] bg-status-error-surface text-status-error-foreground">تجاوز!</Badge>}
-                              {isCritical && <Badge className="text-[10px] bg-status-error-surface text-status-error-foreground">95%+ حرج</Badge>}
-                              {isHigh && <Badge className="text-[10px] bg-status-warning-surface text-status-warning-foreground">80%+ تنبيه</Badge>}
+                              {isOver && <Badge className="text-2xs bg-status-error-surface text-status-error-foreground">تجاوز!</Badge>}
+                              {isCritical && <Badge className="text-2xs bg-status-error-surface text-status-error-foreground">95%+ حرج</Badge>}
+                              {isHigh && <Badge className="text-2xs bg-status-warning-surface text-status-warning-foreground">80%+ تنبيه</Badge>}
                             </div>
                           </div>
                           <div className="w-full h-2 rounded-full bg-surface-subtle overflow-hidden">
@@ -341,7 +341,7 @@ export default function CashflowDashboard() {
                       </div>
                       <div className="text-end">
                         <p className={cn("text-sm font-bold", isOverdue ? "text-status-error-foreground" : "text-status-neutral-foreground")}>{formatCurrency(inv.amount)}</p>
-                        {isOverdue && <Badge className="text-[10px] bg-status-error-surface text-status-error-foreground">متأخر</Badge>}
+                        {isOverdue && <Badge className="text-2xs bg-status-error-surface text-status-error-foreground">متأخر</Badge>}
                       </div>
                     </div>
                   );

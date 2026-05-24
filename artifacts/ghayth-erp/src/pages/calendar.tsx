@@ -207,14 +207,14 @@ export default function CalendarPage() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium truncate">{event.title}</span>
-                              <Badge className={`text-[10px] ${config.color}`}>{config.label}</Badge>
+                              <Badge className={`text-2xs ${config.color}`}>{config.label}</Badge>
                             </div>
                             {event.context && (
                               <p className="text-xs text-muted-foreground mt-0.5">{event.context}</p>
                             )}
                           </div>
                           {event.priority && event.priority === "high" && (
-                            <Badge className="bg-status-error-surface text-status-error-foreground text-[10px]">عاجل</Badge>
+                            <Badge className="bg-status-error-surface text-status-error-foreground text-2xs">عاجل</Badge>
                           )}
                         </div>
                       </Link>
@@ -289,14 +289,14 @@ function MonthGrid({ year, month, events, onPrev, onNext, onToday }: MonthGridPr
                     const config = CATEGORY_CONFIG[e.category] || CATEGORY_CONFIG.task;
                     return (
                       <Link key={e.id} href={e.link || "#"}>
-                        <div className={`text-[10px] truncate rounded px-1 py-0.5 cursor-pointer hover:opacity-80 ${config.color}`}>
+                        <div className={`text-2xs truncate rounded px-1 py-0.5 cursor-pointer hover:opacity-80 ${config.color}`}>
                           {e.title}
                         </div>
                       </Link>
                     );
                   })}
                   {dayEvents.length > 3 && (
-                    <div className="text-[10px] text-muted-foreground">+{dayEvents.length - 3} أخرى</div>
+                    <div className="text-2xs text-muted-foreground">+{dayEvents.length - 3} أخرى</div>
                   )}
                 </div>
               </div>

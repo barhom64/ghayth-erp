@@ -98,7 +98,7 @@ function KpiTile({ label, value, hint, icon: Icon, tone = "neutral", href }: Kpi
           <div className="min-w-0 flex-1">
             <p className="text-xs text-muted-foreground truncate">{label}</p>
             <p className="text-xl font-bold tracking-tight truncate mt-0.5">{value}</p>
-            {hint && <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{hint}</p>}
+            {hint && <p className="text-2xs text-muted-foreground mt-0.5 truncate">{hint}</p>}
           </div>
         </div>
       </CardContent>
@@ -388,7 +388,7 @@ export default function FinanceDashboard() {
                   )}
                 </div>
                 <PageStatusBadge status={je.approvalStatus} domain="shared" />
-                <span className="text-[11px] text-muted-foreground shrink-0">{timeAgo(je.createdAt)}</span>
+                <span className="text-2xs text-muted-foreground shrink-0">{timeAgo(je.createdAt)}</span>
               </li>
             ))}
           </ul>
@@ -486,7 +486,7 @@ export default function FinanceDashboard() {
                             {row.entity} · #{row.entityId}
                           </span>
                         </div>
-                        <span className="text-[11px] text-muted-foreground shrink-0">
+                        <span className="text-2xs text-muted-foreground shrink-0">
                           {timeAgo(row.createdAt)}
                         </span>
                       </div>

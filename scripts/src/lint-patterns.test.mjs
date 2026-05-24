@@ -330,6 +330,52 @@ check(
   ),
 );
 
+// ─── text-px-literal rule (design-unification §2) ───────────────────────
+//
+// Hard rule that catches any `text-[Npx]` literal. Tailwind's px-suffix
+// arbitrary value bypasses the typography knob; replacements are the
+// rem-based design tokens (text-2xs, text-3xs) defined in index.css
+// @theme.
+
+console.log("text-px-literal rule");
+
+check(
+  "text-[10px] IS flagged",
+  fires("text-px-literal", `<span className="text-[10px]">11.25px على الـ knob</span>`),
+);
+check(
+  "text-[8px] IS flagged",
+  fires("text-px-literal", `<div className="font-mono text-[8px]">جدول مكثّف</div>`),
+);
+check(
+  "text-[100px] IS flagged",
+  // The regex captures any number of digits — guards against future
+  // designers using larger pixel literals (text-[100px] for headlines).
+  fires("text-px-literal", `<h1 className="text-[100px]">عنوان</h1>`),
+);
+check(
+  "text-2xs (rem-based token) is NOT flagged",
+  !fires("text-px-literal", `<Badge className="text-2xs">صغير</Badge>`),
+);
+check(
+  "text-3xs (rem-based token) is NOT flagged",
+  !fires("text-px-literal", `<Badge className="text-3xs">صغير جدًا</Badge>`),
+);
+check(
+  "text-[0.625rem] (rem literal) is NOT flagged",
+  !fires("text-px-literal", `<span className="text-[0.625rem]">rem literal</span>`),
+);
+check(
+  "text-xs (built-in Tailwind class) is NOT flagged",
+  !fires("text-px-literal", `<Badge className="text-xs">صغير</Badge>`),
+);
+check(
+  "text-2xl (looks similar, different prefix) is NOT flagged",
+  // Guard against the regex accidentally catching `text-2xl` because of
+  // the `2x` overlap with `2xs`. Two-character prefix shouldn't fire.
+  !fires("text-px-literal", `<h2 className="text-2xl">عنوان</h2>`),
+);
+
 // ─── Ratchet structural invariant ───────────────────────────────────────
 //
 // All 15 kit rules were intentionally hardened — none of them should
@@ -357,6 +403,9 @@ const kitRuleIds = [
   // Design-unification pass §1 — hardened after the badge baseline
   // reached 0 in the first sprint (commits 28ca74f4 → present).
   "badge-with-literal-status-color",
+  // Design-unification pass §2 — hardened after the text-[Npx] baseline
+  // reached 0 in a single sweep (481 literals → text-2xs / text-3xs).
+  "text-px-literal",
 ];
 for (const id of kitRuleIds) {
   const rule = ruleById(id);

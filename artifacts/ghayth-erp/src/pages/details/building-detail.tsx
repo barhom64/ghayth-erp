@@ -133,15 +133,15 @@ export default function BuildingDetail() {
                   <div className="grid grid-cols-3 gap-1 text-center mt-3">
                     <div>
                       <p className="text-xs font-bold">{u.area ? `${u.area}م²` : "—"}</p>
-                      <p className="text-[10px] text-muted-foreground">المساحة</p>
+                      <p className="text-2xs text-muted-foreground">المساحة</p>
                     </div>
                     <div>
                       <p className="text-xs font-bold">{u.bedrooms || "—"}</p>
-                      <p className="text-[10px] text-muted-foreground">غرف</p>
+                      <p className="text-2xs text-muted-foreground">غرف</p>
                     </div>
                     <div>
                       <p className="text-xs font-bold text-emerald-600">{formatCurrency(u.monthlyRent || 0)}</p>
-                      <p className="text-[10px] text-muted-foreground">إيجار</p>
+                      <p className="text-2xs text-muted-foreground">إيجار</p>
                     </div>
                   </div>
                 </CardContent>

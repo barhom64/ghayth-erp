@@ -199,7 +199,7 @@ export default function RiskDetail() {
     <div className="space-y-2">
       <div className="text-xs text-muted-foreground">مصفوفة المخاطر (الاحتمالية × الأثر)</div>
       <div className="overflow-x-auto">
-        <table className="text-[10px] border-collapse">
+        <table className="text-2xs border-collapse">
           <thead>
             <tr>
               <th className="p-1"></th>

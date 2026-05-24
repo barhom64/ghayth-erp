@@ -227,7 +227,7 @@ export function JitRequestsTab() {
                         {r.rejectedReason && (
                           <p className="text-xs text-status-error-foreground">سبب الرفض: {r.rejectedReason}</p>
                         )}
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-2xs text-muted-foreground">
                           {new Date(r.createdAt).toLocaleString("ar")}
                           {r.granted_at && ` · مُنح: ${new Date(r.granted_at).toLocaleTimeString("ar")}`}
                         </p>
@@ -370,7 +370,7 @@ function MinutesHint() {
   const minutes = useWatch<JitRequestForm, "requestedMinutes">({ name: "requestedMinutes" });
   const n = Number(minutes) || 0;
   return (
-    <p className="text-[10px] text-muted-foreground mt-1">
+    <p className="text-2xs text-muted-foreground mt-1">
       {n >= 60 ? `${Math.floor(n / 60)} ساعة ${n % 60} د` : `${n} دقيقة`}
     </p>
   );
@@ -380,7 +380,7 @@ function MinutesHint() {
 function JustificationCounter() {
   const justification = useWatch<JitRequestForm, "justification">({ name: "justification" });
   return (
-    <p className="text-[10px] text-muted-foreground mt-1">
+    <p className="text-2xs text-muted-foreground mt-1">
       {(justification || "").length} / 500
     </p>
   );

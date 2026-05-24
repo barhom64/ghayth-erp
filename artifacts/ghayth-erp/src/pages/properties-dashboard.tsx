@@ -193,15 +193,15 @@ export default function PropertiesDashboard() {
             <div className="grid grid-cols-3 gap-3">
               <div className="text-center p-2 bg-indigo-50 rounded-lg">
                 <p className="text-lg font-bold text-indigo-700">{formatCurrency(s.annualCollected || 0)}</p>
-                <p className="text-[10px] text-muted-foreground">محصل</p>
+                <p className="text-2xs text-muted-foreground">محصل</p>
               </div>
               <div className="text-center p-2 bg-surface-subtle rounded-lg">
                 <p className="text-lg font-bold text-status-neutral-foreground">{formatCurrency(s.annualExpected || 0)}</p>
-                <p className="text-[10px] text-muted-foreground">متوقع</p>
+                <p className="text-2xs text-muted-foreground">متوقع</p>
               </div>
               <div className="text-center p-2 bg-status-error-surface rounded-lg">
                 <p className="text-lg font-bold text-status-error-foreground">{formatCurrency((s.annualExpected || 0) - (s.annualCollected || 0))}</p>
-                <p className="text-[10px] text-muted-foreground">متبقي</p>
+                <p className="text-2xs text-muted-foreground">متبقي</p>
               </div>
             </div>
             {(s.annualExpected || 0) > 0 && (
@@ -228,15 +228,15 @@ export default function PropertiesDashboard() {
             <div className="grid grid-cols-3 gap-3">
               <div className="text-center p-2 bg-status-error-surface rounded-lg border border-status-error-surface">
                 <p className="text-2xl font-bold text-status-error-foreground">{s.expiring30 || 0}</p>
-                <p className="text-[10px] text-muted-foreground">خلال 30 يوم</p>
+                <p className="text-2xs text-muted-foreground">خلال 30 يوم</p>
               </div>
               <div className="text-center p-2 bg-orange-50 rounded-lg border border-orange-100">
                 <p className="text-2xl font-bold text-orange-600">{s.expiring60 || 0}</p>
-                <p className="text-[10px] text-muted-foreground">خلال 60 يوم</p>
+                <p className="text-2xs text-muted-foreground">خلال 60 يوم</p>
               </div>
               <div className="text-center p-2 bg-status-warning-surface rounded-lg border border-status-warning-surface">
                 <p className="text-2xl font-bold text-status-warning-foreground">{s.expiring90 || 0}</p>
-                <p className="text-[10px] text-muted-foreground">خلال 90 يوم</p>
+                <p className="text-2xs text-muted-foreground">خلال 90 يوم</p>
               </div>
             </div>
             <Link href="/properties/contracts">

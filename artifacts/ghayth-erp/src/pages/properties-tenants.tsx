@@ -84,7 +84,7 @@ export default function PropertiesTenants() {
         <div className="flex items-center gap-1">
           <span className="text-sm font-bold">{t.totalContracts || 0}</span>
           {t.activeContracts > 0 && (
-            <Badge className="bg-status-success-surface text-status-success-foreground text-[10px] px-1">
+            <Badge className="bg-status-success-surface text-status-success-foreground text-2xs px-1">
               {t.activeContracts} نشط
             </Badge>
           )}

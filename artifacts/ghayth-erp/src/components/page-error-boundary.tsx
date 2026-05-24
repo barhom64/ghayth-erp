@@ -217,7 +217,7 @@ export class PageErrorBoundary extends Component<Props, State> {
             {isDev && err.stack && (
               <details className="text-xs text-muted-foreground mt-2">
                 <summary className="cursor-pointer select-none">عرض تفاصيل المطور</summary>
-                <pre className="mt-2 p-2 bg-surface-subtle rounded overflow-auto text-[10px] leading-tight">
+                <pre className="mt-2 p-2 bg-surface-subtle rounded overflow-auto text-2xs leading-tight">
                   {err.stack}
                 </pre>
               </details>

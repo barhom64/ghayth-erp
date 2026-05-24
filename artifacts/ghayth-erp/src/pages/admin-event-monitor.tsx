@@ -38,7 +38,7 @@ export default function AdminEventMonitor() {
 
   const catalogColumns: DataTableColumn<any>[] = [
     { key: "action", header: "الحدث", searchable: true, render: (r: any) => <span className="font-mono text-xs">{r.action}</span> },
-    { key: "domain", header: "النطاق", render: (r: any) => <Badge variant="outline" className="text-[10px]">{r.domain}</Badge> },
+    { key: "domain", header: "النطاق", render: (r: any) => <Badge variant="outline" className="text-2xs">{r.domain}</Badge> },
     { key: "label", header: "الوصف", searchable: true },
     { key: "critical", header: "حرج", render: (r: any) => r.critical ? <Badge className="bg-status-error-surface text-status-error-foreground">حرج</Badge> : null },
   ];

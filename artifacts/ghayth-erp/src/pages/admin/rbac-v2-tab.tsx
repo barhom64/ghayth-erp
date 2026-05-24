@@ -837,7 +837,7 @@ function SimulateDialog({ open, onClose, features }: { open: boolean; onClose: (
                     </div>
                     {(effective.grants || []).map((g: any, i: number) => (
                       <div key={i} className="grid grid-cols-12 gap-2 py-1 px-2 border-t hover:bg-surface-subtle">
-                        <div className="col-span-4 font-mono text-[10px]">{g.feature_key}</div>
+                        <div className="col-span-4 font-mono text-2xs">{g.feature_key}</div>
                         <div className="col-span-5">{(g.actions || []).map((a: string) => ACTION_LABELS[a] || a).join(", ")}</div>
                         <div className="col-span-2">{SCOPE_LABELS[g.scope] || g.scope}</div>
                         <div className="col-span-1 truncate" title={g.role_label}>{g.role_label}</div>
@@ -863,7 +863,7 @@ function SimulateDialog({ open, onClose, features }: { open: boolean; onClose: (
                     <div className="border rounded text-xs">
                       {effective.limits.map((l: any, i: number) => (
                         <div key={i} className="grid grid-cols-3 gap-2 py-1 px-2 border-t first:border-t-0 hover:bg-surface-subtle">
-                          <div className="font-mono text-[10px]">{l.feature_key} · {l.action}</div>
+                          <div className="font-mono text-2xs">{l.feature_key} · {l.action}</div>
                           <div>{l.max_amount ? `${l.max_amount} ${l.currency}` : "بلا حد"}</div>
                           <div>{l.requires_dual_control ? "ثنائي" : "—"}</div>
                         </div>

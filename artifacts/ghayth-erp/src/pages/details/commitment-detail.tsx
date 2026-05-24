@@ -211,7 +211,7 @@ export default function CommitmentDetail() {
               />
             </div>
             {fulfilled > 0 && (
-              <p className="text-[11px] text-muted-foreground mt-1">
+              <p className="text-2xs text-muted-foreground mt-1">
                 منفذ: {formatCurrency(fulfilled)} من {formatCurrency(amount)}
               </p>
             )}

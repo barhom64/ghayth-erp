@@ -291,23 +291,23 @@ export default function VehicleDetail() {
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                 <div className="text-center p-2 bg-white rounded-lg border">
                   <p className="text-lg font-bold text-status-info-foreground">{formatNumber(totalDistance)} كم</p>
-                  <p className="text-[10px] text-muted-foreground">إجمالي المسافة</p>
+                  <p className="text-2xs text-muted-foreground">إجمالي المسافة</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
                   <p className="text-lg font-bold text-status-success-foreground">{totalLiters.toFixed(0)} لتر</p>
-                  <p className="text-[10px] text-muted-foreground">إجمالي الوقود</p>
+                  <p className="text-2xs text-muted-foreground">إجمالي الوقود</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
                   <p className="text-lg font-bold text-teal-600">{fuelEfficiency} كم/لتر</p>
-                  <p className="text-[10px] text-muted-foreground">كفاءة الوقود</p>
+                  <p className="text-2xs text-muted-foreground">كفاءة الوقود</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
                   <p className="text-lg font-bold text-status-warning-foreground">{formatCurrency(totalOperatingCost)}</p>
-                  <p className="text-[10px] text-muted-foreground">تكلفة التشغيل الكلية</p>
+                  <p className="text-2xs text-muted-foreground">تكلفة التشغيل الكلية</p>
                 </div>
                 <div className="text-center p-2 bg-white rounded-lg border">
                   <p className="text-lg font-bold text-purple-600">{maintenance.filter((m: any) => m.status !== "completed").length}</p>
-                  <p className="text-[10px] text-muted-foreground">صيانة قيد التنفيذ</p>
+                  <p className="text-2xs text-muted-foreground">صيانة قيد التنفيذ</p>
                 </div>
               </div>
             </CardContent>
@@ -335,7 +335,7 @@ export default function VehicleDetail() {
               <tab.icon className="h-4 w-4" />
               {tab.label}
               {count > 0 && tab.key !== "info" && tab.key !== "overview" && (
-                <Badge variant="secondary" className="text-[10px] px-1.5">{count}</Badge>
+                <Badge variant="secondary" className="text-2xs px-1.5">{count}</Badge>
               )}
             </button>
           );
@@ -355,21 +355,21 @@ export default function VehicleDetail() {
               <CardContent className="p-4 text-center">
                 <p className="text-xs text-status-success-foreground mb-1">تكلفة الوقود</p>
                 <p className="text-xl font-bold text-status-success-foreground">{formatCurrency(totalFuelCost)}</p>
-                <p className="text-[10px] text-status-success">{fuelLogs.length} تعبئة</p>
+                <p className="text-2xs text-status-success">{fuelLogs.length} تعبئة</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-orange-50/50">
               <CardContent className="p-4 text-center">
                 <p className="text-xs text-orange-600 mb-1">تكلفة الصيانة</p>
                 <p className="text-xl font-bold text-orange-700">{formatCurrency(totalMaintenanceCost)}</p>
-                <p className="text-[10px] text-orange-500">{maintenance.length} عملية</p>
+                <p className="text-2xs text-orange-500">{maintenance.length} عملية</p>
               </CardContent>
             </Card>
             <Card className="border-0 shadow-sm bg-purple-50/50">
               <CardContent className="p-4 text-center">
                 <p className="text-xs text-purple-600 mb-1">إجمالي التكلفة</p>
                 <p className="text-xl font-bold text-purple-700">{formatCurrency(totalFuelCost + totalMaintenanceCost)}</p>
-                <p className="text-[10px] text-purple-500">{trips.length} رحلة</p>
+                <p className="text-2xs text-purple-500">{trips.length} رحلة</p>
               </CardContent>
             </Card>
           </div>
@@ -495,11 +495,11 @@ export default function VehicleDetail() {
                               className="bg-green-400 h-full rounded-full transition-all"
                               style={{ width: `${(data.cost / maxCost) * 100}%` }}
                             />
-                            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium">
+                            <span className="absolute inset-0 flex items-center justify-center text-2xs font-medium">
                               {formatCurrency(data.cost)} ({data.liters.toFixed(0)} لتر)
                             </span>
                           </div>
-                          <span className="text-[10px] text-muted-foreground w-10">{data.count} مرة</span>
+                          <span className="text-2xs text-muted-foreground w-10">{data.count} مرة</span>
                         </div>
                       ))}
                     </div>
@@ -524,7 +524,7 @@ export default function VehicleDetail() {
                         <div className={cn("w-2 h-2 rounded-full", m.status === "completed" ? "bg-status-success-surface0" : m.status === "in_progress" ? "bg-orange-500" : "bg-gray-400")} />
                         <div>
                           <p className="text-xs font-medium">{m.type || m.description || "صيانة"}</p>
-                          <p className="text-[10px] text-muted-foreground">{formatDateAr(m.scheduledDate || m.createdAt)}</p>
+                          <p className="text-2xs text-muted-foreground">{formatDateAr(m.scheduledDate || m.createdAt)}</p>
                         </div>
                       </div>
                       <div className="text-right flex items-center gap-2">
@@ -718,19 +718,19 @@ export default function VehicleDetail() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                   <div className="text-center p-3 bg-status-info-surface rounded-lg border border-status-info-surface">
                     <p className="text-lg font-bold text-status-info-foreground">{formatCurrency(Number(tco.totalCost || 0))}</p>
-                    <p className="text-[10px] text-status-info-foreground">التكلفة الإجمالية</p>
+                    <p className="text-2xs text-status-info-foreground">التكلفة الإجمالية</p>
                   </div>
                   <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-100">
                     <p className="text-lg font-bold text-orange-700">{formatCurrency(Number(tco.costPerKm || 0))}</p>
-                    <p className="text-[10px] text-orange-600">تكلفة/كم</p>
+                    <p className="text-2xs text-orange-600">تكلفة/كم</p>
                   </div>
                   <div className="text-center p-3 bg-surface-subtle rounded-lg border">
                     <p className="text-lg font-bold">{Number(tco.totalKm || 0).toLocaleString("ar-SA")}</p>
-                    <p className="text-[10px] text-muted-foreground">إجمالي الكيلومترات</p>
+                    <p className="text-2xs text-muted-foreground">إجمالي الكيلومترات</p>
                   </div>
                   <div className="text-center p-3 bg-purple-50 rounded-lg border border-purple-100">
                     <p className="text-lg font-bold text-purple-700">{Number(tco.totalTrips || 0)}</p>
-                    <p className="text-[10px] text-purple-600">إجمالي الرحلات</p>
+                    <p className="text-2xs text-purple-600">إجمالي الرحلات</p>
                   </div>
                 </div>
                 {tco.breakdown && (
@@ -752,7 +752,7 @@ export default function VehicleDetail() {
                             <div className={cn("h-full rounded-full", item.color)} style={{ width: `${pct}%` }} />
                           </div>
                           <span className="w-24 text-xs font-bold text-left">{formatCurrency(Number(item.value))}</span>
-                          <span className="w-10 text-[10px] text-muted-foreground text-left">{pct}%</span>
+                          <span className="w-10 text-2xs text-muted-foreground text-left">{pct}%</span>
                         </div>
                       );
                     })}

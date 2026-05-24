@@ -65,7 +65,7 @@ export function UpcomingEventsWidget({ days = 14, limit = 6, title = "الأحد
         </CardTitle>
         <Link href="/calendar">
           <Button variant="ghost" size="sm" className="text-xs h-7">
-            عرض الكل {total > 0 && <Badge variant="secondary" className="ms-1 h-4 px-1.5 text-[10px]">{total}</Badge>}
+            عرض الكل {total > 0 && <Badge variant="secondary" className="ms-1 h-4 px-1.5 text-2xs">{total}</Badge>}
             <ChevronLeft className="h-3 w-3 ms-1" />
           </Button>
         </Link>
@@ -86,10 +86,10 @@ export function UpcomingEventsWidget({ days = 14, limit = 6, title = "الأحد
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{event.title}</p>
                     {event.context && (
-                      <p className="text-[11px] text-muted-foreground truncate">{event.context}</p>
+                      <p className="text-2xs text-muted-foreground truncate">{event.context}</p>
                     )}
                   </div>
-                  <Badge variant="outline" className="text-[10px] h-5 px-1.5 flex-none">
+                  <Badge variant="outline" className="text-2xs h-5 px-1.5 flex-none">
                     {dayLabel(event.date)}
                   </Badge>
                 </div>

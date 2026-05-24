@@ -237,7 +237,7 @@ export function GlobalSearch() {
                           <Icon className="w-3 h-3" />
                         </div>
                         {category}
-                        <Badge variant="secondary" className="text-[10px] px-1 py-0">{(items as any[]).length}</Badge>
+                        <Badge variant="secondary" className="text-2xs px-1 py-0">{(items as any[]).length}</Badge>
                       </div>
                       {(items as any[]).map((item: any, idx: number) => (
                         <button
@@ -257,7 +257,7 @@ export function GlobalSearch() {
                             </p>
                           </div>
                           {item.status && (
-                            <Badge className={cn("text-[10px] shrink-0 font-normal", getStatusColor(item.status))} variant="outline">
+                            <Badge className={cn("text-2xs shrink-0 font-normal", getStatusColor(item.status))} variant="outline">
                               {STATUSES[item.status] || item.status}
                             </Badge>
                           )}
@@ -269,7 +269,7 @@ export function GlobalSearch() {
               </div>
             )}
           </div>
-          <div className="border-t px-3 py-1.5 text-[10px] text-muted-foreground text-center shrink-0">
+          <div className="border-t px-3 py-1.5 text-2xs text-muted-foreground text-center shrink-0">
             {results.length} نتيجة — اضغط Ctrl+K للبحث السريع
           </div>
         </div>

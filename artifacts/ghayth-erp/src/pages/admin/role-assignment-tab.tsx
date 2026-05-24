@@ -104,12 +104,12 @@ export function RoleAssignmentTab() {
                           <span className="font-medium text-sm">{role.label}</span>
                           <div className="flex flex-wrap gap-1 mt-1">
                             {(role.modules || []).slice(0, 6).map((m: string) => (
-                              <Badge key={m} variant="outline" className="text-[10px] px-1.5 py-0">
+                              <Badge key={m} variant="outline" className="text-2xs px-1.5 py-0">
                                 {MODULE_LABELS[m] || m}
                               </Badge>
                             ))}
                             {(role.modules || []).length > 6 && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                              <Badge variant="outline" className="text-2xs px-1.5 py-0">
                                 +{(role.modules || []).length - 6}
                               </Badge>
                             )}
@@ -147,7 +147,7 @@ export function RoleAssignmentTab() {
                     </div>
                     <div className="min-w-0">
                       <span className="text-sm font-medium block">{role.label}</span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-2xs text-muted-foreground">
                         {role.modules.slice(0, 4).map(m => MODULE_LABELS[m] || m).join("، ")}
                         {role.modules.length > 4 && ` +${role.modules.length - 4}`}
                       </span>

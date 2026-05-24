@@ -266,7 +266,7 @@ export default function UmrahImportWizard() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 rounded-lg border border-muted/40 bg-muted/10">
                 <div>
                   <Label className="text-xs">الخزنة (الصندوق النقدي)</Label>
-                  <p className="text-[11px] text-muted-foreground mb-1">حساب الأصول الذي ستُسحب منه دفعات نسك. اختياري — اتركه فارغًا لتأجيل الربط.</p>
+                  <p className="text-2xs text-muted-foreground mb-1">حساب الأصول الذي ستُسحب منه دفعات نسك. اختياري — اتركه فارغًا لتأجيل الربط.</p>
                   <Select value={treasuryId} onValueChange={setTreasuryId}>
                     <SelectTrigger><SelectValue placeholder="اختر الخزنة" /></SelectTrigger>
                     <SelectContent>
@@ -279,7 +279,7 @@ export default function UmrahImportWizard() {
                 </div>
                 <div>
                   <Label className="text-xs">حساب المشتريات (تجاوز الافتراضي)</Label>
-                  <p className="text-[11px] text-muted-foreground mb-1">رمز حساب المصاريف الذي سيُحمَّل بتكلفة هذه الدُفعة. اختياري — يستخدم الافتراضي (٥٢٠١) إن تُرك فارغًا.</p>
+                  <p className="text-2xs text-muted-foreground mb-1">رمز حساب المصاريف الذي سيُحمَّل بتكلفة هذه الدُفعة. اختياري — يستخدم الافتراضي (٥٢٠١) إن تُرك فارغًا.</p>
                   <Select value={purchaseAccountCode} onValueChange={setPurchaseAccountCode}>
                     <SelectTrigger><SelectValue placeholder="افتراضي النظام (٥٢٠١)" /></SelectTrigger>
                     <SelectContent>

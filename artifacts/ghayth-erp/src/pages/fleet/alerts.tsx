@@ -98,12 +98,12 @@ export default function FleetAlerts() {
       render: (a) => (
         <div className="inline-flex items-center gap-1">
           {a.status === "active" && (
-            <GuardedButton perm="fleet.vehicles:update" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" disabled={ackMut.isPending} onClick={() => ackMut.mutate({ id: a.id })}>
+            <GuardedButton perm="fleet.vehicles:update" variant="ghost" size="sm" className="h-7 px-2 text-2xs" disabled={ackMut.isPending} onClick={() => ackMut.mutate({ id: a.id })}>
               <CheckCircle className="h-3 w-3 ml-1" /> معاينة
             </GuardedButton>
           )}
           {a.status !== "dismissed" && (
-            <GuardedButton perm="fleet.vehicles:update" variant="ghost" size="sm" className="h-7 px-2 text-[11px] text-muted-foreground" disabled={dismissMut.isPending} onClick={() => dismissMut.mutate({ id: a.id })}>
+            <GuardedButton perm="fleet.vehicles:update" variant="ghost" size="sm" className="h-7 px-2 text-2xs text-muted-foreground" disabled={dismissMut.isPending} onClick={() => dismissMut.mutate({ id: a.id })}>
               <BellOff className="h-3 w-3 ml-1" /> تجاهل
             </GuardedButton>
           )}

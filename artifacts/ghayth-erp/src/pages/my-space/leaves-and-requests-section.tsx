@@ -87,7 +87,7 @@ export function LeavesAndRequestsSection({ leaveBalances, openRequests }: Leaves
                     </p>
                     <p className="text-xs text-muted-foreground">{r.createdAt ? formatTimeAgo(r.createdAt) : ""}</p>
                   </div>
-                  <PageStatusBadge status={r.status} className="text-[10px] shrink-0" />
+                  <PageStatusBadge status={r.status} className="text-2xs shrink-0" />
                 </div>
               ))}
             </div>

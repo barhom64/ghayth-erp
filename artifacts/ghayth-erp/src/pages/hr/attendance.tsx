@@ -74,7 +74,7 @@ function PenaltyChain({ record }: { record: any }) {
           <div className="flex items-center gap-1.5 text-xs">
             <AlertTriangle className="w-3.5 h-3.5 text-status-error" />
             <span className="text-muted-foreground">العقوبة:</span>
-            <Badge className={cn("text-[10px]", penalty.bg, penalty.color)}>{penalty.label}</Badge>
+            <Badge className={cn("text-2xs", penalty.bg, penalty.color)}>{penalty.label}</Badge>
           </div>
         )}
         {deduction > 0 && (
@@ -103,7 +103,7 @@ function PenaltyChain({ record }: { record: any }) {
               {Number(lvl) < 5 && <div className={cn("w-4 h-0.5", Number(lvl) < penaltyLevel ? "bg-red-300" : "bg-gray-200")} />}
             </div>
           ))}
-          <span className="text-[10px] text-muted-foreground ms-1">مستوى {penaltyLevel}/5</span>
+          <span className="text-2xs text-muted-foreground ms-1">مستوى {penaltyLevel}/5</span>
         </div>
       )}
     </div>

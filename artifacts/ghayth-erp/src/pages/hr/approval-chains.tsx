@@ -221,7 +221,7 @@ export default function ApprovalChainsPage() {
                 <div key={i} className="flex items-end gap-2 p-2 rounded border bg-card">
                   <span className="text-xs text-muted-foreground pb-2">#{i + 1}</span>
                   <div className="flex-1">
-                    <Label className="text-[10px]">الدور المعتمد</Label>
+                    <Label className="text-2xs">الدور المعتمد</Label>
                     <Select
                       value={step.requiredRole}
                       onValueChange={(v) => setSteps((s) => s.map((x, j) => (j === i ? { ...x, requiredRole: v } : x)))}
@@ -235,7 +235,7 @@ export default function ApprovalChainsPage() {
                     </Select>
                   </div>
                   <div className="w-28">
-                    <Label className="text-[10px]">المهلة (ساعات)</Label>
+                    <Label className="text-2xs">المهلة (ساعات)</Label>
                     <Input
                       type="number"
                       value={step.timeoutHours}
@@ -292,7 +292,7 @@ export default function ApprovalChainsPage() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-sm">{d.name}</span>
-                    <Badge variant="outline" className="text-[10px]">{CHAIN_TYPES[d.chainType] || d.chainType}</Badge>
+                    <Badge variant="outline" className="text-2xs">{CHAIN_TYPES[d.chainType] || d.chainType}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {dSteps.length} مرحلة
@@ -300,7 +300,7 @@ export default function ApprovalChainsPage() {
                   </p>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {dSteps.map((s: any) => (
-                      <Badge key={s.id} variant="secondary" className="text-[10px]">
+                      <Badge key={s.id} variant="secondary" className="text-2xs">
                         {s.stepOrder}. {APPROVAL_ROLES[s.requiredRole] || s.requiredRole}
                       </Badge>
                     ))}

@@ -163,7 +163,7 @@ export default function AdminMonitoring() {
                 </div>
                 {job.lastError && (
                   <div className="mt-2 bg-status-error-surface border border-status-error-surface rounded p-2">
-                    <p className="text-[10px] font-medium text-status-error-foreground mb-0.5">تفاصيل الخطأ:</p>
+                    <p className="text-2xs font-medium text-status-error-foreground mb-0.5">تفاصيل الخطأ:</p>
                     <pre className="text-xs text-status-error-foreground whitespace-pre-wrap break-words font-mono leading-relaxed">
                       {job.lastError}
                     </pre>

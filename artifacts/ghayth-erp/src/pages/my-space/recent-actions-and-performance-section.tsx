@@ -92,7 +92,7 @@ export function RecentActionsAndPerformanceSection({ recentActions, performanceR
                         <Star className="w-3 h-3" />
                         {score.toFixed(1)}/5
                       </div>
-                      <PageStatusBadge status={r.status} className="text-[10px]" />
+                      <PageStatusBadge status={r.status} className="text-2xs" />
                     </div>
                   </div>
                 );

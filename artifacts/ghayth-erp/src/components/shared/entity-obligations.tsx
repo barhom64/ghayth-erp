@@ -75,7 +75,7 @@ export function EntityObligations({ entityType, entityId, hideWhenEmpty }: Props
           الالتزامات الزمنية
           <Badge variant="outline" className="text-xs">{list.length}</Badge>
           {overdue.length > 0 && (
-            <Badge className="bg-status-error-surface text-status-error-foreground text-[10px] gap-1">
+            <Badge className="bg-status-error-surface text-status-error-foreground text-2xs gap-1">
               <AlertTriangle className="h-3 w-3" /> {overdue.length} متأخر
             </Badge>
           )}
@@ -90,12 +90,12 @@ export function EntityObligations({ entityType, entityId, hideWhenEmpty }: Props
               <div className="flex-1 min-w-0">
                 <p className="font-medium truncate">{o.title}</p>
                 {o.dueAt && (
-                  <p className={`text-[10px] ${isOverdue ? "text-status-error-foreground" : "text-muted-foreground"}`}>
+                  <p className={`text-2xs ${isOverdue ? "text-status-error-foreground" : "text-muted-foreground"}`}>
                     استحقاق: {formatDateAr(o.dueAt)}
                   </p>
                 )}
               </div>
-              <Badge className={`text-[10px] ${STATUS_COLORS[o.status] || "bg-gray-100"}`}>
+              <Badge className={`text-2xs ${STATUS_COLORS[o.status] || "bg-gray-100"}`}>
                 {STATUS_LABELS[o.status] || o.status}
               </Badge>
             </div>

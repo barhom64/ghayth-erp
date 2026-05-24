@@ -148,22 +148,22 @@ export default function FiscalPeriodsPage() {
           const mut = confirming.action === "close" ? closeMut : reopenMut;
           return (
             <div className="inline-flex items-center gap-1">
-              <Button size="sm" variant={confirming.action === "close" ? "destructive" : "default"} className="h-7 px-2 text-[11px]" disabled={mut.isPending} onClick={() => mut.mutate({ id: v2.id })}>
+              <Button size="sm" variant={confirming.action === "close" ? "destructive" : "default"} className="h-7 px-2 text-2xs" disabled={mut.isPending} onClick={() => mut.mutate({ id: v2.id })}>
                 {mut.isPending ? "..." : "تأكيد"}
               </Button>
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setConfirming(null)}>إلغاء</Button>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-2xs" onClick={() => setConfirming(null)}>إلغاء</Button>
             </div>
           );
         }
         if (v2.status === "open") {
           return (
-            <GuardedButton perm="finance.hardening:create" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setConfirming({ id: v2.id, action: "close" })}>
+            <GuardedButton perm="finance.hardening:create" variant="ghost" size="sm" className="h-7 px-2 text-2xs" onClick={() => setConfirming({ id: v2.id, action: "close" })}>
               <Lock className="h-3 w-3 ml-1" /> إقفال
             </GuardedButton>
           );
         }
         return (
-          <GuardedButton perm="finance.hardening:create" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setConfirming({ id: v2.id, action: "reopen" })}>
+          <GuardedButton perm="finance.hardening:create" variant="ghost" size="sm" className="h-7 px-2 text-2xs" onClick={() => setConfirming({ id: v2.id, action: "reopen" })}>
             <Unlock className="h-3 w-3 ml-1" /> إعادة فتح
           </GuardedButton>
         );

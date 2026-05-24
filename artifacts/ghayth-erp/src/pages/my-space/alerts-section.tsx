@@ -36,7 +36,7 @@ export function AlertsSection({ overdueItems, expiringSoon }: AlertsSectionProps
                       </p>
                     </div>
                     {item.priority && (
-                      <Badge className={cn("text-[10px] shrink-0",
+                      <Badge className={cn("text-2xs shrink-0",
                         item.priority === "high" || item.priority === "urgent" ? "bg-status-error-surface text-status-error-foreground" : "bg-status-warning-surface text-status-warning-foreground"
                       )}>
                         {item.priority === "high" ? "عاجل" : item.priority === "urgent" ? "طارئ" : "متوسط"}
@@ -71,7 +71,7 @@ export function AlertsSection({ overdueItems, expiringSoon }: AlertsSectionProps
                       <p className="text-sm font-medium text-status-neutral-foreground truncate">{item.name || item.title}</p>
                       <p className="text-xs text-muted-foreground">{categoryLabels[item.category] || item.category}</p>
                     </div>
-                    <Badge className={cn("text-[10px] shrink-0",
+                    <Badge className={cn("text-2xs shrink-0",
                       daysLeft <= 7 ? "bg-status-error-surface text-status-error-foreground" : "bg-status-warning-surface text-status-warning-foreground"
                     )}>
                       {daysLeft <= 0 ? "منتهي" : `${daysLeft} يوم`}

@@ -165,10 +165,10 @@ export function AttachmentPreview({ attachment, open, onOpenChange }: Attachment
                     <span className="truncate">{attachment.fileName}</span>
                   )}
                   {attachment.fileSize && <span>· {formatSize(attachment.fileSize)}</span>}
-                  {attachment.mimeType && <Badge variant="outline" className="text-[10px] h-4">{attachment.mimeType}</Badge>}
+                  {attachment.mimeType && <Badge variant="outline" className="text-2xs h-4">{attachment.mimeType}</Badge>}
                 </div>
                 {(attachment.uploaderName || attachment.uploadedAt) && (
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                  <p className="text-2xs text-muted-foreground mt-0.5">
                     {attachment.uploaderName && <span>بواسطة {attachment.uploaderName}</span>}
                     {attachment.uploaderName && attachment.uploadedAt && <span> · </span>}
                     {attachment.uploadedAt && <span>{formatDateAr(attachment.uploadedAt)}</span>}

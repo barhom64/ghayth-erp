@@ -454,7 +454,7 @@ export default function ProjectDetail() {
                   <CardTitle className="text-base flex items-center gap-2">
                     <ShieldAlert className="w-4 h-4 text-orange-500" /> المخاطر ({openRisks.length})
                     {criticalRisks.length > 0 && (
-                      <Badge className="bg-status-error-surface text-status-error-foreground text-[10px]">{criticalRisks.length} حرج</Badge>
+                      <Badge className="bg-status-error-surface text-status-error-foreground text-2xs">{criticalRisks.length} حرج</Badge>
                     )}
                   </CardTitle>
                   <Link href={`/projects/risks?projectId=${id}`}><Button variant="ghost" size="sm" className="text-xs">إدارة</Button></Link>

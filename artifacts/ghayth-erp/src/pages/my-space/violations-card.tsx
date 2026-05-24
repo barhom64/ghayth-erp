@@ -31,7 +31,7 @@ export function ViolationsCard({ violations }: ViolationsCardProps) {
                 {v.deduction > 0 && (
                   <span className="text-xs text-status-error-foreground font-medium">-{formatCurrency(Number(v.deduction))}</span>
                 )}
-                <Badge className={cn("text-[10px]", severityColors[v.severity] || "bg-surface-subtle text-status-neutral-foreground")}>
+                <Badge className={cn("text-2xs", severityColors[v.severity] || "bg-surface-subtle text-status-neutral-foreground")}>
                   {v.severity === "low" ? "منخفض" : v.severity === "medium" ? "متوسط" : "عالي"}
                 </Badge>
               </div>

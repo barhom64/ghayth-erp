@@ -114,9 +114,9 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {cat && <Badge variant="outline" className="text-[10px]">{cat.label}</Badge>}
-                    <Badge className={cn("text-[10px]", st.color)}>{st.label}</Badge>
-                    {d.currentVersion > 1 && <Badge variant="secondary" className="text-[10px]">v{d.currentVersion}</Badge>}
+                    {cat && <Badge variant="outline" className="text-2xs">{cat.label}</Badge>}
+                    <Badge className={cn("text-2xs", st.color)}>{st.label}</Badge>
+                    {d.currentVersion > 1 && <Badge variant="secondary" className="text-2xs">v{d.currentVersion}</Badge>}
                     {d.storageKey && (
                       <>
                         <Button
