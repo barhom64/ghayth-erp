@@ -29,6 +29,7 @@ import {
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
+import { PrintButton } from "@/components/shared/print-button";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Car },
@@ -800,7 +801,12 @@ export default function VehicleDetail() {
       createdAt={vehicle?.createdAt}
       updatedAt={vehicle?.updatedAt}
       overview={overview}
-      actions={actions}
+      actions={
+        <div className="flex items-center gap-2">
+          actions
+          <PrintButton entityType="vehicle" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
       hideTabs={[...registryHideTabs, "tasks"]}
     />
   );

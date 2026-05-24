@@ -13,6 +13,7 @@ import {
   ListChecks, History,
 } from "lucide-react";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { PrintButton } from "@/components/shared/print-button";
 
 const FREQUENCY_LABEL: Record<string, string> = {
   daily: "يومي",
@@ -127,6 +128,7 @@ export default function RecurringJournalDetailPage() {
 
   return (
     <DetailPageLayout
+      actions={<PrintButton entityType="recurring_journal" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
       title={rj?.name ? `قيد دوري: ${rj.name}` : "القيد الدوري"}
       subtitle={rj?.description}
       backPath="/finance/recurring-journals"
