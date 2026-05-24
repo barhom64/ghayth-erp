@@ -1579,6 +1579,11 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
   const startDate = `${year}-01-01`;
   const endDate = `${year}-12-31`;
 
+  // Use journal_entries.date (the accounting date) rather than
+  // createdAt (the insertion timestamp). A JE backdated to 2025-12-31
+  // but inserted on 2026-01-02 must still belong to 2025's year-end
+  // closing. createdAt was the wrong filter — it bucketed late-inserted
+  // entries into the wrong year's P&L.
   const revenues = await rawQuery<Record<string, unknown>>(
     `SELECT coa.code, coa.name,
             COALESCE(SUM(jl.credit), 0) - COALESCE(SUM(jl.debit), 0) AS balance
@@ -1586,7 +1591,8 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
      LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
      LEFT JOIN journal_entries je ON je.id = jl."journalId"
           AND je."companyId" = $1 AND je."deletedAt" IS NULL
-          AND je."createdAt" >= $2 AND je."createdAt" <= ($3::date + INTERVAL '1 day')
+          AND je."balancesApplied" = true AND je."reversedById" IS NULL
+          AND je.date >= $2 AND je.date <= $3::date
      WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL
      GROUP BY coa.code, coa.name
      HAVING COALESCE(SUM(jl.credit), 0) - COALESCE(SUM(jl.debit), 0) <> 0
@@ -1600,7 +1606,8 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
      LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
      LEFT JOIN journal_entries je ON je.id = jl."journalId"
           AND je."companyId" = $1 AND je."deletedAt" IS NULL
-          AND je."createdAt" >= $2 AND je."createdAt" <= ($3::date + INTERVAL '1 day')
+          AND je."balancesApplied" = true AND je."reversedById" IS NULL
+          AND je.date >= $2 AND je.date <= $3::date
      WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL
      GROUP BY coa.code, coa.name
      HAVING COALESCE(SUM(jl.debit), 0) - COALESCE(SUM(jl.credit), 0) <> 0
