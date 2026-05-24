@@ -123,6 +123,12 @@ const createCreditMemoSchema = z.object({
   memoDate: z.string().optional(),
 });
 
+// Preview-time schema — same shape, but `reason` is optional since the
+// operator may not have settled on a justification yet when previewing.
+const previewCreditMemoSchema = createCreditMemoSchema.omit({ reason: true }).extend({
+  reason: z.string().optional(),
+});
+
 const createCustomerAdvanceSchema = z.object({
   clientId: z.coerce.number({ required_error: "العميل مطلوب" }),
   amount: z.coerce.number().positive("المبلغ مطلوب"),
@@ -2159,6 +2165,144 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action:
 //   CR 4000 revenue  (additional charge)
 //   CR 2300 VAT payable
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Credit-memo PREVIEW (audit follow-up to #1017).
+//
+// Mirrors the GL + COGS-reversal math the /credit-memo handler runs
+// at commit time, but writes nothing. Lets the UI show:
+//
+//   * the full JE that WILL post (contra-revenue + VAT reversal + AR
+//     credit + DR Inventory / CR COGS),
+//   * blockers (closed period, amount over open balance, …) so the
+//     "Create Memo" button is grey BEFORE the user clicks,
+//   * the per-line COGS-reversal snapshot so the operator can see
+//     exactly which lots will be restocked at what cost.
+//
+// Read-only, no transaction, no idempotency token.
+invoicesRouter.post("/invoices/:id/credit-memo/preview", authorize({
+  feature: "finance.invoices",
+  action: "view",
+  resource: { table: "invoices", idParam: "id", columns: ['"companyId"', '"branchId"'] },
+}), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { amount, vatIncluded = true, memoDate } = zodParse(previewCreditMemoSchema.safeParse(req.body));
+
+    const creditAmount = roundTo2(Number(amount));
+    const memoDateStr = memoDate ? toDateISO(memoDate) : todayISO();
+
+    const blockers: { field: string; message: string }[] = [];
+    const warnings: { field: string; message: string }[] = [];
+
+    const [invoice] = await rawQuery<{
+      id: number; ref: string; total: string | number;
+      paidAmount: string | number; vatRate: string | number | null;
+      branchId: number | null; clientId: number | null;
+    }>(
+      `SELECT id, ref, total, "paidAmount", "vatRate", "branchId", "clientId"
+         FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
+
+    // Period gate — same as the commit-time check.
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, memoDateStr);
+    if (!periodCheck.open) {
+      blockers.push({
+        field: "memoDate",
+        message: `الفترة المالية مغلقة (${periodCheck.periodName ?? memoDateStr}) — لا يمكن إصدار إشعار دائن`,
+      });
+    }
+
+    // Cap-gate — credit can't exceed remaining open balance.
+    const openBalance = roundTo2(Number(invoice.total) - Number(invoice.paidAmount));
+    if (creditAmount > openBalance + 0.01) {
+      blockers.push({
+        field: "amount",
+        message: `المبلغ (${creditAmount}) يتجاوز الرصيد المفتوح (${openBalance})`,
+      });
+    }
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [previewSalesReturnsCode, previewVatPayableCode, previewArCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4100"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "debit", "2300"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1200"),
+    ]);
+
+    const vatRate = Number(invoice.vatRate ?? await getCompanyVatRate(scope.companyId));
+    const previewNet = vatIncluded ? extractBaseFromGross(creditAmount, vatRate) : creditAmount;
+    const previewVat = roundTo2(creditAmount - previewNet);
+
+    // Plan the COGS reversal via the SAME helper /credit-memo uses, so
+    // the preview reflects whatever the commit would do — including
+    // the "remaining unreversed COGS" cap (a third 0.5-memo can't
+    // restock anything).
+    const { planCogsReversal } = await import("../lib/inventory/cogsPosting.js");
+    const { pool: cogsPool } = await import("../lib/rawdb.js");
+    const invoiceTotal = Number(invoice.total) || 0;
+    const reversalRatio = invoiceTotal > 0 ? creditAmount / invoiceTotal : 0;
+    let cogsReversalPreview: Awaited<ReturnType<typeof planCogsReversal>> = {
+      journalLines: [], stockMovements: [], lineUpdates: [], totalReversed: 0,
+    };
+    try {
+      cogsReversalPreview = await planCogsReversal(cogsPool as never, {
+        companyId: scope.companyId,
+        invoiceId: id,
+        ratio: reversalRatio,
+        memoId: 0, // preview only — no memo row yet
+      });
+    } catch (err) {
+      logger.warn({ err, invoiceId: id }, "credit-memo preview: COGS plan failed");
+      warnings.push({
+        field: "cogs",
+        message: "تعذّر حساب عكس تكلفة البضاعة في المعاينة — راجع المخزون قبل الإصدار",
+      });
+    }
+
+    const previewLines = [
+      { accountCode: previewSalesReturnsCode, debit: previewNet, credit: 0,
+        description: `مرتجع مبيعات — فاتورة ${invoice.ref}` },
+      ...(previewVat > 0
+        ? [{ accountCode: previewVatPayableCode, debit: previewVat, credit: 0,
+             description: `استرداد ضريبة قيمة مضافة — فاتورة ${invoice.ref}` }]
+        : []),
+      { accountCode: previewArCode, debit: 0, credit: creditAmount,
+        description: `إشعار دائن — فاتورة ${invoice.ref}` },
+      ...cogsReversalPreview.journalLines,
+    ];
+    const totalDebit = roundTo2(previewLines.reduce((s, l) => s + l.debit, 0));
+    const totalCredit = roundTo2(previewLines.reduce((s, l) => s + l.credit, 0));
+    const isBalanced = Math.abs(totalDebit - totalCredit) < 0.005;
+
+    res.json({
+      invoiceId: id,
+      invoiceRef: invoice.ref,
+      canIssue: blockers.length === 0 && isBalanced,
+      blockers,
+      warnings,
+      memoDate: memoDateStr,
+      creditAmount,
+      netAmount: previewNet,
+      vatAmount: previewVat,
+      reversalRatio: roundTo2(Math.min(reversalRatio, 1)),
+      cogsTotal: cogsReversalPreview.totalReversed,
+      // Per-line snapshot so the UI can show the operator EXACTLY which
+      // lots will be restocked + at what unit cost.
+      cogsLineSnapshots: cogsReversalPreview.lineUpdates.map((u) => ({
+        invoiceLineId: u.invoiceLineId,
+        newReversedAmount: u.newReversedAmount,
+        cogsReversed: u.snapshot.cogsReversed,
+        allocations: u.snapshot.allocations,
+      })),
+      journalLines: previewLines,
+      totals: { debit: totalDebit, credit: totalCredit, balanced: isBalanced },
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Credit memo preview error:");
+  }
+});
 
 invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.invoices", action: "create" }), async (req, res) => {
   try {
