@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { PrintButton } from "@/components/shared/print-button";
 
 function ScoreCircle({ score, label, color = "blue" }: { score: number | null; label: string; color?: string }) {
   const colorMap: Record<string, string> = {
@@ -473,7 +474,12 @@ export default function Evaluation360DetailPage() {
       error={isError || (!isLoading && !data?.cycle) ? true : undefined}
      
       overview={overview}
-      actions={actions}
+      actions={
+        <div className="flex items-center gap-2">
+          actions
+          <PrintButton entityType="evaluation_360" entityId={params?.id ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
       createdAt={cycle?.createdAt}
       updatedAt={cycle?.updatedAt}
     />

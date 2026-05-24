@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { SEVERITY_LEVELS, INCIDENT_LABELS } from "@/lib/hr-type-maps";
+import { PrintButton } from "@/components/shared/print-button";
 
 const VIOLATION_LIFECYCLE = [
   { key: "draft",               label: "مسودة" },
@@ -220,7 +221,10 @@ export default function ViolationDetail() {
       createdAt={item?.createdAt}
       overview={overviewContent}
       actions={
-        <Badge className={cn("text-sm px-3 py-1", severity.color)}>{severity.label}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge className={cn("text-sm px-3 py-1", severity.color)}>{severity.label}</Badge>
+          <PrintButton entityType="discipline_memo" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
       }
     />
   );

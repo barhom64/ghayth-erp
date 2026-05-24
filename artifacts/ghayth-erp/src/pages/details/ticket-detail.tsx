@@ -18,6 +18,7 @@ import { ApprovalActions } from "@workspace/workflow-kit";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { PrintButton } from "@/components/shared/print-button";
 
 // SUP-006 — mirror of the support_tickets state machine in
 // lib/lifecycleEngine.ts. The status selector must offer only the
@@ -237,6 +238,7 @@ export default function TicketDetail() {
       overview={overview}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton entityType="support_ticket" entityId={id ?? 0} formats={["a4"]} label="طباعة" />
           {deleting ? (
             <div className="flex gap-2">
               <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
