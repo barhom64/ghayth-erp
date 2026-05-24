@@ -59,7 +59,7 @@ function PaymentSchedulePanel({ contractId }: { contractId: number }) {
         <Badge variant="outline" className="gap-1">
           <Banknote className="h-3 w-3" /> الإجمالي: {formatCurrency(totalDue)}
         </Badge>
-        <Badge className="bg-emerald-100 text-emerald-700 gap-1">
+        <Badge className="bg-status-success-surface text-status-success-foreground gap-1">
           <CheckCircle2 className="h-3 w-3" /> المدفوع: {formatCurrency(totalPaid)}
         </Badge>
         <Badge className="bg-status-warning-surface text-status-warning-foreground gap-1">
@@ -92,7 +92,7 @@ function PaymentSchedulePanel({ contractId }: { contractId: number }) {
               const isPaid = inst.status === "paid";
               const isOverdue = !isPaid && new Date(inst.dueDate) < new Date();
               return isPaid ? (
-                <Badge className="bg-emerald-100 text-emerald-700 text-[10px] gap-1 px-1"><CheckCircle2 className="h-2.5 w-2.5" /> مدفوعة</Badge>
+                <PageStatusBadge status="paid" domain="installment" />
               ) : isOverdue ? (
                 <Badge className="bg-status-error-surface text-status-error-foreground text-[10px] gap-1 px-1"><AlertTriangle className="h-2.5 w-2.5" /> متأخرة</Badge>
               ) : (
@@ -205,7 +205,7 @@ function ContractDetailPanel({ contract }: { contract: any }) {
         <div className="flex items-center gap-2">
           <RefreshCw className="h-4 w-4 text-muted-foreground" />
           <span className="text-xs text-muted-foreground">التجديد التلقائي:</span>
-          <Badge className={c.autoRenewal ? "bg-emerald-100 text-emerald-700 text-[10px]" : "bg-surface-subtle text-muted-foreground text-[10px]"}>
+          <Badge className={c.autoRenewal ? "bg-status-success-surface text-status-success-foreground text-[10px]" : "bg-surface-subtle text-muted-foreground text-[10px]"}>
             {c.autoRenewal ? "مفعّل" : "غير مفعّل"}
           </Badge>
         </div>

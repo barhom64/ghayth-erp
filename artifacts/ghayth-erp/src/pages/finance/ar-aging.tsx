@@ -73,9 +73,9 @@ export default function ArAgingPage() {
     },
     { key: "current", header: "حالي", sortable: true, render: (c) => c.current > 0 ? <Badge className="bg-status-success-surface text-status-success-foreground">{formatCurrency(c.current)}</Badge> : "—" },
     { key: "1_30", header: "1-30 يوم", sortable: true, render: (c) => c["1_30"] > 0 ? <Badge className="bg-status-warning-surface text-status-warning-foreground">{formatCurrency(c["1_30"])}</Badge> : "—" },
-    { key: "31_60", header: "31-60 يوم", sortable: true, render: (c) => c["31_60"] > 0 ? <Badge className="bg-orange-100 text-orange-700">{formatCurrency(c["31_60"])}</Badge> : "—" },
+    { key: "31_60", header: "31-60 يوم", sortable: true, render: (c) => c["31_60"] > 0 ? <Badge className="bg-status-warning-surface text-status-warning-foreground">{formatCurrency(c["31_60"])}</Badge> : "—" },
     { key: "61_90", header: "61-90 يوم", sortable: true, render: (c) => c["61_90"] > 0 ? <Badge className="bg-status-error-surface text-status-error-foreground">{formatCurrency(c["61_90"])}</Badge> : "—" },
-    { key: "over90", header: "+90 يوم", sortable: true, render: (c) => c.over90 > 0 ? <Badge className="bg-red-200 text-status-error-foreground">{formatCurrency(c.over90)}</Badge> : "—" },
+    { key: "over90", header: "+90 يوم", sortable: true, render: (c) => c.over90 > 0 ? <Badge className="bg-status-error-surface text-status-error-foreground font-bold">{formatCurrency(c.over90)}</Badge> : "—" },
     { key: "total", header: "الإجمالي", sortable: true, className: "font-bold text-orange-600", render: (c) => formatCurrency(c.total) },
   ];
 

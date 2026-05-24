@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import {
   PageShell,
+  PageStatusBadge,
   DataTable,
   type DataTableColumn,
 } from "@workspace/ui-core";
@@ -379,7 +380,7 @@ export default function ManagerBoard() {
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Clock className="w-5 h-5 text-orange-500" />
             جميع الطلبات المعلقة
-            <Badge className="text-xs bg-orange-100 text-orange-700">{allPending.length}</Badge>
+            <Badge variant="secondary" className="text-xs">{allPending.length}</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -432,7 +433,7 @@ function DelegationBoard({ delegationsData }: { delegationsData: any }) {
           <UserCog className="w-5 h-5 text-indigo-500" />
           لوحة التفويض
           {activeDelegations.length > 0 && (
-            <Badge className="text-xs bg-indigo-100 text-indigo-700">{activeDelegations.length} نشط</Badge>
+            <Badge variant="secondary" className="text-xs">{activeDelegations.length} نشط</Badge>
           )}
         </CardTitle>
       </CardHeader>
@@ -465,7 +466,7 @@ function DelegationBoard({ delegationsData }: { delegationsData: any }) {
                           {d.endDate && <> إلى {formatDateAr(d.endDate)}</>}
                         </p>
                       </div>
-                      <Badge className="text-[10px] bg-indigo-100 text-indigo-700 shrink-0">نشط</Badge>
+                      <PageStatusBadge status="active" domain="shared" />
                     </div>
                   ))}
                 </div>

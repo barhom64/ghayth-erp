@@ -386,6 +386,58 @@ const RULES = [
     // Hardened from ratchet → hard rule.
     message: `PrintActions / PrintDocument / LetterheadHeader imported from the legacy path. ${kitRatchetHint("report-kit")}`,
   },
+
+  // ─── Design-system tokens — Status badges with literal colors ────────
+  //
+  // Every status that the user reads ("معتمد", "مرفوض", "بانتظار", …)
+  // must render through <PageStatusBadge status=... domain=...> so the
+  // color + label come from the canonical STATUS_MAP. A raw <Badge> with
+  // `bg-amber-100 text-amber-700` (or any other literal color class)
+  // bypasses STATUS_MAP — the same status then renders different colors
+  // on different pages.
+  //
+  // Two specific patterns are caught:
+  //   <Badge className="bg-amber-100 text-amber-700 ...">معتمد</Badge>
+  //   <Badge className={cn("text-xs", st.color)}> where st.color
+  //   carries a literal `bg-amber-100`.
+  //
+  // Tokenised classes (`bg-status-success-surface`, `text-status-warning-foreground`)
+  // are NOT caught — those are the design-system tokens this rule wants
+  // pages to use (directly or via PageStatusBadge).
+  //
+  // countBaseline drops as offenders migrate to PageStatusBadge; rule
+  // becomes a hard fail when it reaches 0.
+  {
+    id: "badge-with-literal-status-color",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
+    extensions: [".tsx"],
+    skip: (file) =>
+      // Shadcn primitive — `<Badge>` is defined here, may use any color.
+      file.endsWith("/components/ui/badge.tsx") ||
+      // Data-table primitive — owns the count-badge that the table draws
+      // around bulk-select chips; not a status badge surface.
+      file.endsWith("/components/ui/data-table.tsx") ||
+      // ApprovalActions (workflow-kit) renders explanatory chips for the
+      // permission state, not the entity's lifecycle status.
+      file.endsWith("/components/approval-actions.tsx") ||
+      // PageStatusBadge itself shadows the rule (it composes <Badge>
+      // internally — caught by the rule but exempt by definition).
+      file.endsWith("/components/page-status-badge.tsx"),
+    // `[^>]` excludes `>` so the match stops at the closing bracket of
+    // the opening Badge tag; this catches multi-line attributes too.
+    regex: /<Badge\b[^>]*\bbg-(?:amber|green|red|blue|orange|purple|yellow|pink|cyan|teal|emerald|rose|indigo)-(?:50|100|200|300|600|700|800)\b/,
+    multiline: true,
+    countBaseline: 30,
+    message:
+      "Raw <Badge> with literal color classes (bg-amber-100 / bg-green-700 / …) " +
+      "is forbidden for status surfaces. Use <PageStatusBadge status={...} " +
+      "domain={...}> from @workspace/ui-core so the color + Arabic label " +
+      "come from STATUS_MAP and stay consistent across the system. The " +
+      "countBaseline is a ratchet — it never goes up. When you migrate a " +
+      "page off the literal-color pattern, drop the corresponding " +
+      "`countBaseline` in scripts/src/lint-patterns.mjs by the same number; " +
+      "the rule then prevents future regression to the new lower count.",
+  },
 ];
 
 // ─── Pure matchers (exported for self-tests) ─────────────────────────────

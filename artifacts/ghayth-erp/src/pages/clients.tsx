@@ -1,6 +1,7 @@
 import { useState, useEffect, Fragment } from "react";
 import {
   PageShell,
+  PageStatusBadge,
   DataTable,
   type DataTableColumn,
   AdvancedFilters,
@@ -69,17 +70,9 @@ export default function Clients() {
     { key: "classification", label: "التصنيف", type: "select" as const, options: Object.entries(CLASSIFICATIONS).map(([k, v]) => ({ value: k, label: v })) },
   ];
 
-  const getClassificationBadge = (cls: string) => {
-    const label = CLASSIFICATIONS[cls] || cls;
-    switch (cls) {
-      case "vip": return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-400">{label}</Badge>;
-      case "premium": return <Badge className="bg-status-info-surface text-status-info-foreground hover:bg-status-info-surface dark:bg-blue-900/30 dark:text-blue-400">{label}</Badge>;
-      case "regular": return <Badge className="bg-slate-100 text-slate-800 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-400">{label}</Badge>;
-      case "prospect": return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400">{label}</Badge>;
-      case "churned": return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-100 dark:bg-rose-900/30 dark:text-rose-400">{label}</Badge>;
-      default: return <Badge variant="outline">{label}</Badge>;
-    }
-  };
+  const getClassificationBadge = (cls: string) => (
+    <PageStatusBadge status={cls} domain="client_classification" />
+  );
 
   const columns: DataTableColumn<any>[] = [
     {

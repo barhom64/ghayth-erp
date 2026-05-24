@@ -431,6 +431,17 @@ export const STATUS_MAP = {
     cancelled:            { label: "ملغي",             tone: "danger"   },
   },
 
+  // ── CRM — Client classifications ─────────────────────────────────────
+  // These are tier categories, not lifecycle statuses, but they share
+  // the same "colored chip" surface so they live under the same map.
+  client_classification: {
+    vip:                  { label: "VIP",              tone: "info"     },
+    premium:              { label: "بريميوم",          tone: "info"     },
+    regular:              { label: "اعتيادي",          tone: "neutral"  },
+    prospect:             { label: "محتمل",            tone: "success"  },
+    churned:              { label: "متسرّب",           tone: "danger"   },
+  },
+
   // ── HR — Overtime + violations ───────────────────────────────────────
   overtime: {
     pending:              { label: "بانتظار الموافقة", tone: "warning"  },

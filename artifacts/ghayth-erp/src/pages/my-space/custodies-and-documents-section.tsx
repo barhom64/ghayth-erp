@@ -20,7 +20,7 @@ export function CustodiesAndDocumentsSection({ custodies, documents }: Custodies
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <KeyRound className="w-5 h-5 text-indigo-500" />
             العُهد المسلمة لي
-            {custodies.length > 0 && <Badge className="text-xs bg-indigo-100 text-indigo-700">{custodies.length}</Badge>}
+            {custodies.length > 0 && <Badge variant="secondary" className="text-xs">{custodies.length}</Badge>}
           </CardTitle>
           <Link href="/finance/custodies">
             <Button variant="ghost" size="sm" className="text-xs gap-1">
@@ -52,7 +52,7 @@ export function CustodiesAndDocumentsSection({ custodies, documents }: Custodies
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <FileText className="w-5 h-5 text-cyan-500" />
             مستنداتي
-            {documents.length > 0 && <Badge className="text-xs bg-cyan-100 text-cyan-700">{documents.length}</Badge>}
+            {documents.length > 0 && <Badge variant="secondary" className="text-xs">{documents.length}</Badge>}
           </CardTitle>
         </CardHeader>
         <CardContent>

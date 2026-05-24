@@ -38,9 +38,9 @@ function exportCSV(data: any[], filename: string) {
 const BUCKETS = [
   { key: "current", label: "حالي", color: "bg-status-success-surface text-status-success-foreground" },
   { key: "1_30", label: "1-30 يوم", color: "bg-status-warning-surface text-status-warning-foreground" },
-  { key: "31_60", label: "31-60 يوم", color: "bg-orange-100 text-orange-700" },
+  { key: "31_60", label: "31-60 يوم", color: "bg-status-warning-surface text-status-warning-foreground" },
   { key: "61_90", label: "61-90 يوم", color: "bg-status-error-surface text-status-error-foreground" },
-  { key: "over90", label: "+90 يوم", color: "bg-red-200 text-status-error-foreground" },
+  { key: "over90", label: "+90 يوم", color: "bg-status-error-surface text-status-error-foreground font-bold" },
 ];
 
 export default function ApAgingPage() {
@@ -73,9 +73,9 @@ export default function ApAgingPage() {
     },
     { key: "current", header: "حالي", sortable: true, render: (s) => s.current > 0 ? <Badge className="bg-status-success-surface text-status-success-foreground">{formatCurrency(s.current)}</Badge> : "—" },
     { key: "1_30", header: "1-30 يوم", sortable: true, render: (s) => s["1_30"] > 0 ? <Badge className="bg-status-warning-surface text-status-warning-foreground">{formatCurrency(s["1_30"])}</Badge> : "—" },
-    { key: "31_60", header: "31-60 يوم", sortable: true, render: (s) => s["31_60"] > 0 ? <Badge className="bg-orange-100 text-orange-700">{formatCurrency(s["31_60"])}</Badge> : "—" },
+    { key: "31_60", header: "31-60 يوم", sortable: true, render: (s) => s["31_60"] > 0 ? <Badge className="bg-status-warning-surface text-status-warning-foreground">{formatCurrency(s["31_60"])}</Badge> : "—" },
     { key: "61_90", header: "61-90 يوم", sortable: true, render: (s) => s["61_90"] > 0 ? <Badge className="bg-status-error-surface text-status-error-foreground">{formatCurrency(s["61_90"])}</Badge> : "—" },
-    { key: "over90", header: "+90 يوم", sortable: true, render: (s) => s.over90 > 0 ? <Badge className="bg-red-200 text-status-error-foreground">{formatCurrency(s.over90)}</Badge> : "—" },
+    { key: "over90", header: "+90 يوم", sortable: true, render: (s) => s.over90 > 0 ? <Badge className="bg-status-error-surface text-status-error-foreground font-bold">{formatCurrency(s.over90)}</Badge> : "—" },
     { key: "total", header: "الإجمالي", sortable: true, className: "font-bold text-status-info-foreground", render: (s) => formatCurrency(s.total) },
   ];
 
