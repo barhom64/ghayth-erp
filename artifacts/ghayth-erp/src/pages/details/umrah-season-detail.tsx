@@ -227,6 +227,9 @@ export default function UmrahSeasonDetail() {
               ref={`SN-${id}`}
               date={formatDateAr(new Date().toISOString())}
               sections={printSections}
+              entityType="umrah_season"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           }
         />

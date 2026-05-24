@@ -460,6 +460,9 @@ export default function RiskDetail() {
               ref={`RISK-${id}`}
               date={formatDateAr(risk.createdAt)}
               sections={printSections}
+              entityType="risk"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           )}
           <GuardedButton

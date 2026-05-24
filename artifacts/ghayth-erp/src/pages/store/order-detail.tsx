@@ -1,10 +1,8 @@
-import { useState, useRef } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@workspace/report-kit";
-import { extractBranchFromResponse } from "@/lib/branch-utils";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ShoppingCart, User, Phone, Calendar, Package } from "lucide-react";
 import { DetailPageLayout } from "@workspace/entity-kit";
@@ -17,10 +15,7 @@ export default function StoreOrderDetailPage() {
   const { extraTabs, hideTabs } = useRegistryTabs("store_order", id ?? "");
 
   const { data: order, isLoading, isError, refetch } = useApiQuery<any>(["store-order-detail", id || ""], `/store/orders/${id}`, !!id);
-  const [showPreview, setShowPreview] = useState(false);
-  const printContainerRef = useRef<HTMLDivElement>(null);
 
-  const branch = order ? extractBranchFromResponse(order) : undefined;
   const items = (() => {
     try { return typeof order?.items === "string" ? JSON.parse(order.items) : (order?.items || []); }
     catch { return []; }
@@ -81,96 +76,6 @@ export default function StoreOrderDetailPage() {
           <CardContent><p className="text-muted-foreground">{order.notes}</p></CardContent>
         </Card>
       )}
-
-      <PrintPreviewModal
-        open={showPreview}
-        onClose={() => setShowPreview(false)}
-        branch={branch}
-        documentTitle="طلب متجر"
-        documentRef={order?.orderNumber || `#${order?.id}`}
-        documentDate={docDate}
-      >
-        <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-          <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>العميل:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{order?.customerName || "-"}</span>
-          </div>
-          <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>الهاتف:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{order?.customerPhone || "-"}</span>
-          </div>
-          <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{order?.status || "-"}</span>
-          </div>
-        </div>
-
-        {items.length > 0 && (
-          <table>
-            <thead><tr>
-              <th>#</th>
-              <th>المنتج</th>
-              <th>الكمية</th>
-              <th>السعر</th>
-              <th>الإجمالي</th>
-            </tr></thead>
-            <tbody>
-              {items.map((item: any, i: number) => (
-                <tr key={i}>
-                  <td>{i + 1}</td>
-                  <td>{item.name || item.description || "-"}</td>
-                  <td>{item.quantity || 1}</td>
-                  <td>{formatCurrency(Number(item.price || item.unitPrice || 0))}</td>
-                  <td style={{ fontWeight: "bold" }}>{formatCurrency(Number(item.total || (item.quantity || 1) * (item.price || item.unitPrice || 0)))}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
-          <tbody>
-            <tr>
-              <td className="label" style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(order?.totalAmount || 0))}</td>
-            </tr>
-          </tbody>
-        </table>
-      </PrintPreviewModal>
-
-      <div ref={printContainerRef} style={{ position: "absolute", left: "-9999px", top: 0 }}>
-        <PrintDocument branch={branch} documentTitle="طلب متجر" documentRef={order?.orderNumber || `#${order?.id}`} documentDate={docDate}>
-          <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-            <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>العميل:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{order?.customerName || "-"}</span>
-            </div>
-            <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>الهاتف:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{order?.customerPhone || "-"}</span>
-            </div>
-            <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{order?.status || "-"}</span>
-            </div>
-          </div>
-          {items.length > 0 && (
-            <table>
-              <thead><tr><th>#</th><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead>
-              <tbody>
-                {items.map((item: any, i: number) => (
-                  <tr key={i}><td>{i + 1}</td><td>{item.name || item.description || "-"}</td><td>{item.quantity || 1}</td><td>{formatCurrency(Number(item.price || item.unitPrice || 0))}</td><td style={{ fontWeight: "bold" }}>{formatCurrency(Number(item.total || (item.quantity || 1) * (item.price || item.unitPrice || 0)))}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
-            <tbody>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(order?.totalAmount || 0))}</td></tr>
-            </tbody>
-          </table>
-        </PrintDocument>
-      </div>
     </div>
   );
 
@@ -179,12 +84,14 @@ export default function StoreOrderDetailPage() {
     : order?.status === "pending" ? "warning" as const
     : "info" as const;
 
-  const actions = (
-    <PrintActions
-      onPreview={() => setShowPreview(true)}
-      onPrint={() => directPrint(printContainerRef.current, `طلب ${order?.orderNumber || order?.id}`)}
+  const actions = order ? (
+    <PrintButton
+      entityType="store_order"
+      entityId={order.id ?? params?.id ?? 0}
+      formats={["a4"]}
+      label="طباعة"
     />
-  );
+  ) : undefined;
 
   return (
     <DetailPageLayout

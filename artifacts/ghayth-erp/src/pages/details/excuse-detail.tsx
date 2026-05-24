@@ -248,6 +248,9 @@ export default function ExcuseDetail() {
               ref={`EXC-${id}`}
               date={formatDateAr(excuse.date || excuse.createdAt)}
               sections={printSections}
+              entityType="excuse"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           )}
           <GuardedButton

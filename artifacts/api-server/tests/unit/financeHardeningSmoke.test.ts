@@ -45,6 +45,43 @@ describe("finance-hardening — fiscal periods v2", () => {
     expect(block).toContain("lockReason:");
   });
 
+  // Intercompany — from-leg JE, to-leg JE, and the parent
+  // intercompany_transactions row must commit or roll back together.
+  // The earlier shape used a compensating-reversal pattern on to-leg
+  // failure but the subsequent intercompany_transactions INSERT lived
+  // bare-outside-any-txn — a constraint violation there left BOTH
+  // legs orphaned with no parent row.
+  it("POST /intercompany wraps both legs + parent INSERT in one withTransaction (atomicity)", () => {
+    const idx = SRC.indexOf('financeHardeningRouter.post("/intercompany"');
+    expect(idx).toBeGreaterThan(-1);
+    const block = SRC.slice(idx, idx + 6500);
+    // Outer withTransaction wraps the whole atomic block.
+    const txnStart = block.indexOf("withTransaction(async ()");
+    expect(txnStart).toBeGreaterThan(-1);
+    // Both engine posts AND the intercompany_transactions INSERT live
+    // inside that outer txn. Locate each and assert ordering.
+    const fromPostIdx = block.indexOf("financialEngine.postJournalEntry", txnStart);
+    const toPostIdx = block.indexOf("financialEngine.postJournalEntry", fromPostIdx + 1);
+    const insertIdx = block.indexOf("INSERT INTO intercompany_transactions", toPostIdx);
+    const txnCloseIdx = block.indexOf("\n    });", insertIdx);
+    expect(fromPostIdx).toBeGreaterThan(txnStart);
+    expect(toPostIdx).toBeGreaterThan(fromPostIdx);
+    expect(insertIdx).toBeGreaterThan(toPostIdx);
+    expect(txnCloseIdx).toBeGreaterThan(insertIdx);
+  });
+
+  it("POST /intercompany no longer needs compensating reverseAccountBalances (txn rollback handles it)", () => {
+    const idx = SRC.indexOf('financeHardeningRouter.post("/intercompany"');
+    const block = SRC.slice(idx, idx + 6500);
+    // The old compensating reversal called reverseAccountBalances on
+    // the from-leg journalId. With the outer-txn rollback, that explicit
+    // call is no longer needed — Postgres rolls the from-leg SAVEPOINT
+    // back automatically. Guard against a regression that re-introduces
+    // the manual reversal (which would double-reverse if the txn
+    // already rolled back).
+    expect(block).not.toContain("reverseAccountBalances");
+  });
+
   it("no /fiscal-periods-v2/:id/unlock route exists (locked is intentionally terminal)", () => {
     // PER-3 contract: a locked period stays locked. The platform has
     // a `reopen` route for `closed → open`, but not for `locked → *`.
