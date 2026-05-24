@@ -314,6 +314,9 @@ export default function OwnerDetail() {
                   ref={owner.ref || `OWN-${id}`}
                   date={formatDateAr(owner.createdAt)}
                   sections={printSections}
+                  entityType="owner"
+                  entityId={id ?? 0}
+                  formats={["a4"]}
                 />
               ) : null
             }

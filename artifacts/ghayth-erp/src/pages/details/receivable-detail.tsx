@@ -405,6 +405,9 @@ export default function ReceivableDetail() {
                 ref={receivable.ref || `AR-${id}`}
                 date={formatDateAr(receivable.createdAt)}
                 sections={printSections}
+                entityType="receivable"
+                entityId={id ?? 0}
+                formats={["a4"]}
               />
             )}
             <GuardedButton

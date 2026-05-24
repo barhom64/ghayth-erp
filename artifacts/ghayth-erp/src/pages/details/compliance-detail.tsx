@@ -293,6 +293,9 @@ export default function ComplianceDetail() {
               ref={`CMP-${id}`}
               date={formatDateAr(compliance.createdAt)}
               sections={printSections}
+              entityType="compliance"
+              entityId={id ?? 0}
+              formats={["a4"]}
             />
           )}
           <GuardedButton

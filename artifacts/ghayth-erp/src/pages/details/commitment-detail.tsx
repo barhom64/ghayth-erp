@@ -355,6 +355,9 @@ export default function CommitmentDetail() {
                 ref={commitment.ref || `COM-${id}`}
                 date={formatDateAr(commitment.createdAt)}
                 sections={printSections}
+                entityType="commitment"
+                entityId={id ?? 0}
+                formats={["a4"]}
               />
             )}
             <GuardedButton

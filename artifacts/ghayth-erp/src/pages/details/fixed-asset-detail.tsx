@@ -274,6 +274,9 @@ export default function FixedAssetDetail() {
             ref={item?.ref || `FA-${id}`}
             date={formatDateAr(item?.purchaseDate || item?.createdAt)}
             sections={printSections}
+            entityType="fixed_asset"
+            entityId={id ?? 0}
+            formats={["a4"]}
           />
           <GuardedButton
             perm="finance:update"
