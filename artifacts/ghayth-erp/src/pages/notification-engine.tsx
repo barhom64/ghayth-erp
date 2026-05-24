@@ -245,7 +245,7 @@ function RoutingRulesTab() {
                       </div>
                       <Badge variant="outline" className="text-xs">{String(rule.priority)}</Badge>
                       {!!rule.fallbackChainName && (
-                        <Badge variant="outline" className="text-xs bg-orange-50">
+                        <Badge variant="outline" className="text-xs bg-status-warning-surface text-status-warning-foreground">
                           <ArrowRight className="h-3 w-3 ml-1" />{String(rule.fallbackChainName)}
                         </Badge>
                       )}

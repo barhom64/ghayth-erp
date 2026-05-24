@@ -264,6 +264,72 @@ check(
   ),
 );
 
+// ─── badge-with-literal-status-color rule (design-unification §1) ───────
+//
+// Hard rule that catches any <Badge> rendered with a literal-color
+// tailwind class. Status surfaces must route through PageStatusBadge
+// (which composes <Badge> internally with STATUS_MAP tones); decorative
+// chips must use design tokens (`bg-status-success-surface` etc.). The
+// regex is multiline-aware so multi-line attribute blocks are caught.
+
+console.log("badge-with-literal-status-color rule");
+
+check(
+  "Badge with bg-amber-100 IS flagged",
+  fires(
+    "badge-with-literal-status-color",
+    `<Badge className="bg-amber-100 text-amber-700">معتمد</Badge>`,
+  ),
+);
+check(
+  "Badge with bg-emerald-700 IS flagged",
+  fires(
+    "badge-with-literal-status-color",
+    `<Badge className="bg-emerald-700 text-white">نشط</Badge>`,
+  ),
+);
+check(
+  "Badge with multi-line attributes + bg-orange-100 IS flagged",
+  fires(
+    "badge-with-literal-status-color",
+    `<Badge
+       variant="outline"
+       className="bg-orange-100 text-orange-700"
+     >تنبيه</Badge>`,
+  ),
+);
+check(
+  "Badge with bg-status-success-surface (design token) is NOT flagged",
+  !fires(
+    "badge-with-literal-status-color",
+    `<Badge className="bg-status-success-surface text-status-success-foreground">معتمد</Badge>`,
+  ),
+);
+check(
+  "Badge with variant=secondary + no color class is NOT flagged",
+  !fires(
+    "badge-with-literal-status-color",
+    `<Badge variant="secondary" className="text-xs">{count}</Badge>`,
+  ),
+);
+check(
+  "PageStatusBadge (different element) is NOT flagged",
+  !fires(
+    "badge-with-literal-status-color",
+    `<PageStatusBadge status="active" domain="shared" />`,
+  ),
+);
+check(
+  "Badge with bg-amber-400 (literal but unlisted shade) is NOT flagged",
+  // Rule lists 50/100/200/300/600/700/800. 400 not in list. The intent
+  // is to catch the chip-style shades used for status surfaces; 400/500
+  // shades are typically icon/illustration use.
+  !fires(
+    "badge-with-literal-status-color",
+    `<Badge className="bg-amber-400">شارة أيقونة</Badge>`,
+  ),
+);
+
 // ─── Ratchet structural invariant ───────────────────────────────────────
 //
 // All 15 kit rules were intentionally hardened — none of them should
@@ -288,6 +354,9 @@ const kitRuleIds = [
   "entity-documents-from-legacy-path",
   "approval-actions-from-legacy-path",
   "print-layout-from-legacy-path",
+  // Design-unification pass §1 — hardened after the badge baseline
+  // reached 0 in the first sprint (commits 28ca74f4 → present).
+  "badge-with-literal-status-color",
 ];
 for (const id of kitRuleIds) {
   const rule = ruleById(id);

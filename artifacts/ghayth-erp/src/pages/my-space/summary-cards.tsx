@@ -51,8 +51,8 @@ export function SummaryCards({ attendance, monthlyStats, currentShift, lastPaysl
               )}
               <Badge className={cn("text-xs",
                 attendance.status === "present" ? "bg-status-success-surface text-status-success-foreground" :
-                attendance.status === "present_out_of_range" ? "bg-orange-100 text-orange-700" :
-                attendance.status === "present_off_day" ? "bg-purple-100 text-purple-700" :
+                attendance.status === "present_out_of_range" ? "bg-status-warning-surface text-status-warning-foreground" :
+                attendance.status === "present_off_day" ? "bg-status-info-surface text-status-info-foreground" :
                 "bg-status-warning-surface text-status-warning-foreground"
               )}>
                 {attendance.status === "present" ? "حاضر" :

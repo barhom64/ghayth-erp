@@ -68,7 +68,7 @@ export function LeavesAndRequestsSection({ leaveBalances, openRequests }: Leaves
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <ClipboardList className="w-5 h-5 text-orange-500" />
             طلباتي المفتوحة
-            {openRequests.length > 0 && <Badge className="text-xs bg-orange-100 text-orange-700">{openRequests.length}</Badge>}
+            {openRequests.length > 0 && <Badge variant="secondary" className="text-xs">{openRequests.length}</Badge>}
           </CardTitle>
         </CardHeader>
         <CardContent>

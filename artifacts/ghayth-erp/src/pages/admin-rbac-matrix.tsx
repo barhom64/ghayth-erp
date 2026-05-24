@@ -129,7 +129,7 @@ export default function AdminRbacMatrix() {
                       <Shield className="w-4 h-4" />
                       {ROLE_LABELS[selectedRole] || selectedRole}
                       {isWildcard && <Badge className="bg-status-warning-surface text-status-warning-foreground">صلاحية كاملة (*)</Badge>}
-                      {customForRole.length > 0 && <Badge className="bg-purple-100 text-purple-800">{customForRole.length} تخصيص</Badge>}
+                      {customForRole.length > 0 && <Badge variant="secondary">{customForRole.length} تخصيص</Badge>}
                     </span>
                   ) : "اختر دوراً لعرض صلاحياته"}
                 </CardTitle>

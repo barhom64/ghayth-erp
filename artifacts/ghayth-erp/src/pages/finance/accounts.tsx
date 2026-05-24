@@ -66,7 +66,7 @@ function AccountNode({ node, level = 0, highlightIds, onEdit, onDelete }: { node
 
         <div className="w-16 flex-shrink-0 flex justify-center">
           {node.isAnalytical
-            ? <Badge className="bg-indigo-100 text-indigo-700 text-xs">تحليلي</Badge>
+            ? <Badge className="bg-status-info-surface text-status-info-foreground text-xs">تحليلي</Badge>
             : !node.allowPosting
               ? <Badge className="bg-surface-subtle text-muted-foreground text-xs">تجميعي</Badge>
               : <span className="text-gray-300 text-xs">—</span>}

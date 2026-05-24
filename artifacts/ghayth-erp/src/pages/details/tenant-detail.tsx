@@ -265,7 +265,7 @@ export default function TenantDetail() {
   ];
 
   const tenantActionsExtra = activeContract ? (
-    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">مستأجر نشط</Badge>
+    <Badge className="bg-status-success-surface text-status-success-foreground border-status-success-surface">مستأجر نشط</Badge>
   ) : null;
 
   return (

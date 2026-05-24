@@ -396,7 +396,7 @@ function MemosTab({ memos }: { memos: any[] }) {
       sortable: true,
       render: (v) => {
         if (v.terminationDecided) {
-          return <Badge className="bg-red-600 text-white text-xs">فصل</Badge>;
+          return <Badge variant="destructive" className="text-xs">فصل</Badge>;
         }
         return <span className="text-sm">{v.appliedPenaltyLabel || "-"}</span>;
       },

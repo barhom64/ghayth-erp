@@ -778,7 +778,7 @@ function SimulateDialog({ open, onClose, features }: { open: boolean; onClose: (
               <Card className={result.result?.allowed ? "border-status-success-surface bg-status-success-surface" : "border-status-error-surface bg-status-error-surface"}>
                 <CardContent className="p-4 text-sm space-y-2">
                   <div className="flex items-center gap-2">
-                    <Badge className={result.result?.allowed ? "bg-green-600" : "bg-red-600"}>
+                    <Badge variant={result.result?.allowed ? "default" : "destructive"} className={result.result?.allowed ? "bg-status-success-foreground" : undefined}>
                       {result.result?.allowed ? "مسموح" : "ممنوع"}
                     </Badge>
                     <span className="font-medium">{result.target?.userName}</span>

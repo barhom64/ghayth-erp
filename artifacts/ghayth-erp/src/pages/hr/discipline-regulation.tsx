@@ -125,7 +125,7 @@ export default function DisciplineRegulationPage() {
             <Badge variant="outline" className="font-mono">#{a.articleNumber}</Badge>
             <Badge className={SEVERITY_STYLES[a.severity] ?? ""}>{a.severity}</Badge>
             {a.isTermination && (
-              <Badge className="bg-red-600 text-white gap-1">
+              <Badge variant="destructive" className="gap-1">
                 <AlertTriangle className="w-3 h-3" /> تؤدي إلى الفصل
               </Badge>
             )}

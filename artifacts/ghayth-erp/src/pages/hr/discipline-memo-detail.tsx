@@ -170,7 +170,7 @@ export default function DisciplineMemoDetailPage() {
                   </div>
                 </div>
                 {memo.terminationDecided && (
-                  <Badge className="bg-red-600 text-white w-full justify-center">
+                  <Badge variant="destructive" className="w-full justify-center">
                     تقرّر الفصل
                   </Badge>
                 )}

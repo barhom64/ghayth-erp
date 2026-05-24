@@ -427,16 +427,16 @@ const RULES = [
     // the opening Badge tag; this catches multi-line attributes too.
     regex: /<Badge\b[^>]*\bbg-(?:amber|green|red|blue|orange|purple|yellow|pink|cyan|teal|emerald|rose|indigo)-(?:50|100|200|300|600|700|800)\b/,
     multiline: true,
-    countBaseline: 30,
+    // Hardened from ratchet → hard rule (baseline reached 0 after the
+    // first design-unification sprint migrated 45 violations across
+    // HR/Finance/Properties/CRM). Any new offender now fails CI.
     message:
       "Raw <Badge> with literal color classes (bg-amber-100 / bg-green-700 / …) " +
       "is forbidden for status surfaces. Use <PageStatusBadge status={...} " +
-      "domain={...}> from @workspace/ui-core so the color + Arabic label " +
-      "come from STATUS_MAP and stay consistent across the system. The " +
-      "countBaseline is a ratchet — it never goes up. When you migrate a " +
-      "page off the literal-color pattern, drop the corresponding " +
-      "`countBaseline` in scripts/src/lint-patterns.mjs by the same number; " +
-      "the rule then prevents future regression to the new lower count.",
+      "domain={...}> from @workspace/ui-core so the color + Arabic label come " +
+      "from STATUS_MAP and stay consistent across the system. For non-status " +
+      "decorative chips, use a design-token surface (`bg-status-success-surface " +
+      "text-status-success-foreground`, etc.) instead of literal colors.",
   },
 ];
 

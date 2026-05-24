@@ -99,7 +99,7 @@ export default function Notifications() {
                         <Badge variant="outline" className="bg-status-info-surface text-status-info-foreground dark:bg-blue-900/30">طلب إجازة</Badge>
                       )}
                       {notification.type === 'invoice' && (
-                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30">فاتورة</Badge>
+                        <Badge variant="outline" className="bg-status-success-surface text-status-success-foreground">فاتورة</Badge>
                       )}
                     </div>
                   </div>

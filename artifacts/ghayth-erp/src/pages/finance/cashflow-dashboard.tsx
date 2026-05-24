@@ -288,7 +288,7 @@ export default function CashflowDashboard() {
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-muted-foreground">{formatCurrency(actual_amount)} / {formatCurrency(budget_amount)}</span>
                               {isOver && <Badge className="text-[10px] bg-status-error-surface text-status-error-foreground">تجاوز!</Badge>}
-                              {isCritical && <Badge className="text-[10px] bg-orange-100 text-orange-700">95%+ حرج</Badge>}
+                              {isCritical && <Badge className="text-[10px] bg-status-error-surface text-status-error-foreground">95%+ حرج</Badge>}
                               {isHigh && <Badge className="text-[10px] bg-status-warning-surface text-status-warning-foreground">80%+ تنبيه</Badge>}
                             </div>
                           </div>

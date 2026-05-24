@@ -72,7 +72,7 @@ function DeadlineBar({ sessions }: { sessions: any[] }) {
                   <ChevronRight className="h-4 w-4 text-status-warning" />
                   <span className="text-status-warning-foreground">{formatDateAr(s.sessionDate)} — {s.location || "محكمة"}</span>
                 </div>
-                <Badge className={cn("text-xs", daysLeft <= 3 ? "bg-status-error-surface text-status-error-foreground" : daysLeft <= 7 ? "bg-orange-100 text-orange-700" : "bg-status-warning-surface text-status-warning-foreground")}>
+                <Badge className={cn("text-xs", daysLeft <= 3 ? "bg-status-error-surface text-status-error-foreground" : "bg-status-warning-surface text-status-warning-foreground")}>
                   {daysLeft} أيام
                 </Badge>
               </div>

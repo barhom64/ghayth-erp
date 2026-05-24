@@ -133,7 +133,7 @@ function VehiclesTab() {
           {v.insuranceExpiry ? (() => {
             const daysLeft = Math.ceil((new Date(v.insuranceExpiry).getTime() - Date.now()) / 86400000);
             return daysLeft <= 0 ? <Badge variant="destructive" className="text-xs gap-1"><ShieldAlert className="h-3 w-3" />تأمين منتهٍ</Badge>
-              : daysLeft <= 30 ? <Badge className="text-xs gap-1 bg-orange-100 text-orange-700 hover:bg-orange-100"><ShieldAlert className="h-3 w-3" />تأمين: {daysLeft} يوم</Badge>
+              : daysLeft <= 30 ? <Badge className="text-xs gap-1 bg-status-warning-surface text-status-warning-foreground hover:bg-status-warning-surface"><ShieldAlert className="h-3 w-3" />تأمين: {daysLeft} يوم</Badge>
               : null;
           })() : null}
           {v.govLinkCount > 0 && <Badge variant="secondary" className="text-xs gap-1"><Link2 className="h-3 w-3" />مرتبط ({v.govLinkCount})</Badge>}

@@ -94,7 +94,7 @@ export default function PropertiesOwners() {
       header: "العقود النشطة",
       sortable: true,
       render: (o) => Number(o.activeContracts) > 0 ? (
-        <Badge className="bg-emerald-100 text-emerald-700 text-[10px] px-1">{o.activeContracts} نشط</Badge>
+        <Badge className="bg-status-success-surface text-status-success-foreground text-[10px] px-1">{o.activeContracts} نشط</Badge>
       ) : <span className="text-muted-foreground text-xs">—</span>,
     },
     {

@@ -203,7 +203,7 @@ export default function RisksPage() {
       actions={
         <>
           {criticalCount > 0 && <Badge className="bg-status-error-surface text-status-error-foreground">{criticalCount} حرج</Badge>}
-          {highCount > 0 && <Badge className="bg-orange-100 text-orange-700">{highCount} عالٍ</Badge>}
+          {highCount > 0 && <Badge className="bg-status-warning-surface text-status-warning-foreground">{highCount} عالٍ</Badge>}
           <GuardedButton perm="projects:create" onClick={() => setShowForm(!showForm)} size="sm" disabled={!projectId}>
             <Plus className="w-4 h-4 me-1" /> إضافة مخاطرة
           </GuardedButton>

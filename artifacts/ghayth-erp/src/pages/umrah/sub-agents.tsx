@@ -130,7 +130,7 @@ export default function UmrahSubAgents() {
       header: "العميل المرتبط",
       render: (s) =>
         s.clientId ? (
-          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200" variant="outline">
+          <Badge className="bg-status-success-surface text-status-success-foreground border-status-success-surface" variant="outline">
             {s.clientName ?? `#${s.clientId}`}
           </Badge>
         ) : (

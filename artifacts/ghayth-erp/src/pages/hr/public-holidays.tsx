@@ -200,7 +200,7 @@ export default function PublicHolidaysPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge className={HOLIDAY_COLORS[h.type] || "bg-surface-subtle text-status-neutral-foreground"}>{HOLIDAY_TYPES[h.type] || h.type}</Badge>
-                      {h.isRecurring && <Badge className="bg-orange-100 text-orange-700">سنوي</Badge>}
+                      {h.isRecurring && <Badge variant="secondary">سنوي</Badge>}
                       <button onClick={() => handleEdit(h)} className="p-1 text-muted-foreground hover:text-primary"><Edit2 className="w-3.5 h-3.5" /></button>
                       <button onClick={() => openDeleteDialog(h)} className="p-1 text-muted-foreground hover:text-status-error"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>

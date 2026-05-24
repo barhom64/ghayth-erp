@@ -284,7 +284,7 @@ export function WorkflowDefinitionsTab() {
                   <Badge variant={def.isActive ? "default" : "secondary"} className="text-xs">
                     {def.isActive ? "مفعّل" : "معطّل"}
                   </Badge>
-                  {def.enableEscalation && <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700">تصعيد</Badge>}
+                  {def.enableEscalation && <Badge variant="outline" className="text-xs bg-status-warning-surface text-status-warning-foreground">تصعيد</Badge>}
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={() => handleEdit(def)}><Pencil className="h-4 w-4" /></Button>

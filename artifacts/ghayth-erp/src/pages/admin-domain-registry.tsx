@@ -115,7 +115,7 @@ export default function AdminDomainRegistry() {
                         </p>
                         <div className="flex flex-wrap gap-1">
                           {domain.lifecycleEntities.map((e: string) => (
-                            <Badge key={e} className="bg-purple-100 text-purple-800 text-[10px]">{e}</Badge>
+                            <Badge key={e} variant="secondary" className="text-[10px]">{e}</Badge>
                           ))}
                         </div>
                       </div>

@@ -211,8 +211,8 @@ export default function OperationsCenter() {
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         <Badge variant="outline" className={cn("text-[10px]",
-                          item.escalationStatus === "critical_escalation" ? "bg-red-200 text-status-error-foreground border-status-error-surface" :
-                          item.escalationStatus === "escalated" ? "bg-orange-100 text-orange-700 border-orange-200" :
+                          item.escalationStatus === "critical_escalation" ? "bg-status-error-surface text-status-error-foreground border-status-error-surface font-bold" :
+                          item.escalationStatus === "escalated" ? "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface" :
                           "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface"
                         )}>
                           {item.escalationStatus === "critical_escalation" ? "تصعيد حرج" :
@@ -221,7 +221,7 @@ export default function OperationsCenter() {
                         {item.priority && (
                           <Badge variant="outline" className={cn("text-[10px]",
                             item.priority === "critical" || item.priority === "urgent" ? "bg-status-error-surface text-status-error-foreground" :
-                            item.priority === "high" ? "bg-orange-100 text-orange-700" : ""
+                            item.priority === "high" ? "bg-status-warning-surface text-status-warning-foreground" : ""
                           )}>
                             {item.priority}
                           </Badge>

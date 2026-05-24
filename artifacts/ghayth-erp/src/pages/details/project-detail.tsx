@@ -242,7 +242,7 @@ export default function ProjectDetail() {
         </Badge>
       )}
       {criticalRisks.length > 0 && (
-        <Badge className="bg-orange-100 text-orange-700 flex items-center gap-1">
+        <Badge className="bg-status-warning-surface text-status-warning-foreground flex items-center gap-1">
           <ShieldAlert className="h-3 w-3" /> {criticalRisks.length} مخاطر حرجة
         </Badge>
       )}
@@ -467,7 +467,7 @@ export default function ProjectDetail() {
                     <span className="text-sm font-medium truncate flex-1">{r.title}</span>
                     <Badge className={
                       r.riskLevel === "critical" ? "bg-status-error-surface text-status-error-foreground" :
-                      r.riskLevel === "high" ? "bg-orange-100 text-orange-700" :
+                      r.riskLevel === "high" ? "bg-status-warning-surface text-status-warning-foreground font-bold" :
                       r.riskLevel === "medium" ? "bg-status-warning-surface text-status-warning-foreground" :
                       "bg-status-success-surface text-status-success-foreground"
                     }>{r.riskLevel === "critical" ? "حرج" : r.riskLevel === "high" ? "عالٍ" : r.riskLevel === "medium" ? "متوسط" : "منخفض"}</Badge>

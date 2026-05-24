@@ -223,7 +223,7 @@ export function UserRoleAssignmentTab() {
                         <div className="flex items-center gap-2">
                           <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: b.color }} />
                           <span className="font-medium text-sm">{b.label_ar}</span>
-                          {b.is_primary && <Badge className="text-xs bg-blue-600">رئيسي</Badge>}
+                          {b.is_primary && <Badge variant="default" className="text-xs">رئيسي</Badge>}
                           <Badge variant="outline" className="text-xs">المستوى {b.level}</Badge>
                           {b.expires_at && (
                             <Badge variant="outline" className="text-xs bg-status-warning-surface text-status-warning-foreground">

@@ -75,7 +75,7 @@ export function EntityObligations({ entityType, entityId, hideWhenEmpty }: Props
           الالتزامات الزمنية
           <Badge variant="outline" className="text-xs">{list.length}</Badge>
           {overdue.length > 0 && (
-            <Badge className="bg-red-100 text-status-error-foreground text-[10px] gap-1">
+            <Badge className="bg-status-error-surface text-status-error-foreground text-[10px] gap-1">
               <AlertTriangle className="h-3 w-3" /> {overdue.length} متأخر
             </Badge>
           )}

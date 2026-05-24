@@ -192,7 +192,7 @@ function OverviewTab() {
                     </div>
                     <Badge className={
                       r.riskLevel === "critical" ? "bg-status-error-surface text-status-error-foreground" :
-                      r.riskLevel === "high" ? "bg-orange-100 text-orange-700" :
+                      r.riskLevel === "high" ? "bg-status-warning-surface text-status-warning-foreground font-bold" :
                       r.riskLevel === "medium" ? "bg-status-warning-surface text-status-warning-foreground" :
                       "bg-status-success-surface text-status-success-foreground"
                     }>{r.riskLevel === "critical" ? "حرج" : r.riskLevel === "high" ? "عالٍ" : r.riskLevel === "medium" ? "متوسط" : "منخفض"}</Badge>
