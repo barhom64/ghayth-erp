@@ -52,6 +52,17 @@ interface VendorPaymentRow {
 }
 
 // ── Zod schemas ──────────────────────────────────────────────────────────────
+// WHT (Withholding Tax) fields per ZATCA Income Tax Law Article 68.
+// Residency status decides whether withholding applies at payment time;
+// the (optional) default rate / category override the per-call resolution
+// in computeWHT() — see src/lib/withholdingTax.ts.
+const whtResidencyEnum = z.enum([
+  "resident",
+  "non_resident_gcc",
+  "non_resident_treaty",
+  "non_resident_other",
+]);
+
 const createVendorSchema = z.object({
   name: z.string().min(1, "اسم المورد مطلوب"),
   contactPerson: z.string().optional(),
@@ -61,6 +72,10 @@ const createVendorSchema = z.object({
   address: z.string().optional(),
   paymentTerms: z.string().optional(),
   category: z.string().optional(),
+  residencyStatus: whtResidencyEnum.optional(),
+  taxResidenceCountry: z.string().length(2).optional(),
+  defaultWhtRate: z.coerce.number().min(0).max(100).optional(),
+  whtCategoryDefault: z.string().max(20).optional(),
 });
 
 const updateVendorSchema = z.object({
@@ -70,6 +85,10 @@ const updateVendorSchema = z.object({
   email: z.string().optional(),
   taxNumber: z.string().optional(),
   category: z.string().optional(),
+  residencyStatus: whtResidencyEnum.optional(),
+  taxResidenceCountry: z.string().length(2).nullable().optional(),
+  defaultWhtRate: z.coerce.number().min(0).max(100).nullable().optional(),
+  whtCategoryDefault: z.string().max(20).nullable().optional(),
 });
 
 const approvalSchema = z.object({
@@ -101,11 +120,22 @@ vendorsRouter.get("/vendors", authorize({ feature: "finance.vendors", action: "l
 vendorsRouter.post("/vendors", authorize({ feature: "finance.vendors", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { name, contactPerson, phone, email, taxNumber, address, paymentTerms, category } = zodParse(createVendorSchema.safeParse(req.body ?? {}));
+    const {
+      name, contactPerson, phone, email, taxNumber, address, paymentTerms, category,
+      residencyStatus, taxResidenceCountry, defaultWhtRate, whtCategoryDefault,
+    } = zodParse(createVendorSchema.safeParse(req.body ?? {}));
     const { insertId } = await rawExecute(
-      `INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms", category)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null, address || null, paymentTerms || null, category || null]
+      `INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms", category,
+                              "residencyStatus", "taxResidenceCountry", "defaultWhtRate", "whtCategoryDefault")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [
+        scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null,
+        address || null, paymentTerms || null, category || null,
+        residencyStatus ?? "resident",
+        taxResidenceCountry ? taxResidenceCountry.toUpperCase() : null,
+        defaultWhtRate ?? null,
+        whtCategoryDefault || null,
+      ]
     );
     assertInsert(insertId, "suppliers");
 
@@ -138,7 +168,10 @@ vendorsRouter.patch("/vendors/:id", authorize({ feature: "finance.vendors", acti
   try {
     const scope = req.scope!;
     const vendorId = parseId(req.params.id, "id");
-    const { name, contactPerson, phone, email, taxNumber, category } = zodParse(updateVendorSchema.safeParse(req.body ?? {}));
+    const {
+      name, contactPerson, phone, email, taxNumber, category,
+      residencyStatus, taxResidenceCountry, defaultWhtRate, whtCategoryDefault,
+    } = zodParse(updateVendorSchema.safeParse(req.body ?? {}));
     const sets: string[] = [];
     const params: unknown[] = [];
     let idx = 1;
@@ -148,6 +181,13 @@ vendorsRouter.patch("/vendors/:id", authorize({ feature: "finance.vendors", acti
     if (email !== undefined) { sets.push(`email = $${idx++}`); params.push(email); }
     if (taxNumber !== undefined) { sets.push(`"taxNumber" = $${idx++}`); params.push(taxNumber); }
     if (category !== undefined) { sets.push(`category = $${idx++}`); params.push(category); }
+    if (residencyStatus !== undefined) { sets.push(`"residencyStatus" = $${idx++}`); params.push(residencyStatus); }
+    if (taxResidenceCountry !== undefined) {
+      sets.push(`"taxResidenceCountry" = $${idx++}`);
+      params.push(taxResidenceCountry ? taxResidenceCountry.toUpperCase() : null);
+    }
+    if (defaultWhtRate !== undefined) { sets.push(`"defaultWhtRate" = $${idx++}`); params.push(defaultWhtRate); }
+    if (whtCategoryDefault !== undefined) { sets.push(`"whtCategoryDefault" = $${idx++}`); params.push(whtCategoryDefault || null); }
     if (sets.length === 0) {
       throw new ValidationError("لا توجد بيانات للتحديث", {
         field: "body",

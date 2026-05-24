@@ -813,6 +813,166 @@ accountsRouter.delete("/tax-codes/:id", authorize({ feature: "finance.accounts",
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// WHT CATEGORIES — Migration 208 (Saudi Withholding Tax).
+//
+// Per-company registry of WHT rates. Each row maps a ZATCA category
+// (royalties / technical_services / management_fees / etc.) to a
+// rate + a payable account. The defaults are seeded for every
+// company by migration 208; tenants edit them when treaty (DTAA)
+// rates apply or to point at their own GL accounts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WHT_APPLIES_TO = [
+  "royalties", "technical_services", "management_fees",
+  "dividends", "interest", "rent_movable",
+  "telecommunications", "air_tickets", "freight",
+  "insurance_premium", "other",
+] as const;
+
+const upsertWhtCategorySchema = z.object({
+  code: z.string().min(1).max(20),
+  name: z.string().min(1).max(100),
+  nameEn: z.string().max(100).optional().nullable(),
+  rate: z.coerce.number().min(0).max(100),
+  appliesTo: z.enum(WHT_APPLIES_TO),
+  payableAccountId: z.coerce.number().optional().nullable(),
+  description: z.string().optional().nullable(),
+  isActive: z.coerce.boolean().optional().default(true),
+});
+
+accountsRouter.get("/wht-categories", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { appliesTo, isActive } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let where = `"companyId" = $1 AND "deletedAt" IS NULL`;
+    if (appliesTo) { params.push(appliesTo); where += ` AND "appliesTo" = $${params.length}`; }
+    if (isActive === "true" || isActive === "false") {
+      params.push(isActive === "true");
+      where += ` AND "isActive" = $${params.length}`;
+    }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM wht_categories WHERE ${where} ORDER BY "appliesTo", rate DESC, code LIMIT 500`,
+      params
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "List WHT categories error:");
+  }
+});
+
+accountsRouter.get("/wht-categories/:id", authorize({ feature: "finance.accounts", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM wht_categories WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("فئة الاستقطاع غير موجودة");
+    res.json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Get WHT category error:");
+  }
+});
+
+accountsRouter.post("/wht-categories", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const p = zodParse(upsertWhtCategorySchema.safeParse(req.body));
+    const insRes = await rawExecute(
+      `INSERT INTO wht_categories (
+         "companyId", code, name, "nameEn", rate, "appliesTo",
+         "payableAccountId", description, "isActive"
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [scope.companyId, p.code, p.name, p.nameEn ?? null, p.rate, p.appliesTo,
+       p.payableAccountId ?? null, p.description ?? null, p.isActive ?? true]
+    );
+    const newId = insRes.insertId;
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM wht_categories WHERE id = $1`, [newId]);
+
+    const { clearWhtCache } = await import("../lib/withholdingTax.js");
+    clearWhtCache(scope.companyId);
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "wht_categories", entityId: Number(newId),
+      after: { code: p.code, rate: p.rate, appliesTo: p.appliesTo },
+    }).catch((e) => logger.error(e, "WHT category audit failed"));
+
+    res.status(201).json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Create WHT category error:");
+  }
+});
+
+accountsRouter.patch("/wht-categories/:id", authorize({ feature: "finance.accounts", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const p = zodParse(upsertWhtCategorySchema.partial().safeParse(req.body));
+
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    const push = (col: string, val: unknown) => {
+      values.push(val); fields.push(`"${col}" = $${values.length}`);
+    };
+    if (p.code !== undefined) push("code", p.code);
+    if (p.name !== undefined) push("name", p.name);
+    if (p.nameEn !== undefined) push("nameEn", p.nameEn ?? null);
+    if (p.rate !== undefined) push("rate", p.rate);
+    if (p.appliesTo !== undefined) push("appliesTo", p.appliesTo);
+    if (p.payableAccountId !== undefined) push("payableAccountId", p.payableAccountId ?? null);
+    if (p.description !== undefined) push("description", p.description ?? null);
+    if (p.isActive !== undefined) push("isActive", p.isActive);
+    if (fields.length === 0) throw new ValidationError("لا تغييرات لتطبيقها");
+    fields.push(`"updatedAt" = NOW()`);
+
+    values.push(id, scope.companyId);
+    const updRes = await rawExecute(
+      `UPDATE wht_categories SET ${fields.join(", ")}
+        WHERE id = $${values.length - 1} AND "companyId" = $${values.length} AND "deletedAt" IS NULL`,
+      values
+    );
+    if (updRes.affectedRows === 0) throw new NotFoundError("فئة الاستقطاع غير موجودة");
+
+    const { clearWhtCache } = await import("../lib/withholdingTax.js");
+    clearWhtCache(scope.companyId);
+
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM wht_categories WHERE id = $1`, [id]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "wht_categories", entityId: id, after: row,
+    }).catch((e) => logger.error(e, "WHT category audit failed"));
+    res.json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Update WHT category error:");
+  }
+});
+
+accountsRouter.delete("/wht-categories/:id", authorize({ feature: "finance.accounts", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const updRes = await rawExecute(
+      `UPDATE wht_categories SET "deletedAt" = NOW(), "isActive" = false
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (updRes.affectedRows === 0) throw new NotFoundError("فئة الاستقطاع غير موجودة");
+    const { clearWhtCache } = await import("../lib/withholdingTax.js");
+    clearWhtCache(scope.companyId);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "wht_categories", entityId: id,
+    }).catch((e) => logger.error(e, "WHT category audit failed"));
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "Delete WHT category error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ACCOUNTING ALLOCATION RULES — Finance Line-Level Allocation Phase 6.
 //
 // REST CRUD over accounting_allocation_rules (migration 203). Drives the
