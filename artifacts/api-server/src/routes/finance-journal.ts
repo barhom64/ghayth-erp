@@ -1253,10 +1253,28 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
       return;
     }
 
-    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: advanceDescription, type: "salary_advance", sourceType: "salary_advance", sourceId: 0, sourceKey: `finance:salary_advance:${idempotencyToken}`, lines: advanceLines });
+    // Atomicity guarantee: salary-advance JE post, approval-chain init,
+    // and the pending_approval status flip all commit or roll back
+    // together. The earlier shape ran them sequentially — a throw on
+    // initiateApprovalChain (FK / chain definition / amount tier) left
+    // the JE committed without an approval chain (the C3 silent-
+    // corruption pattern that #885 closed on /expenses and #1021
+    // closed on /custodies). Same fix pattern. The engine's internal
+    // withTransaction joins this outer one reentrantly via SAVEPOINT
+    // (rawdb.ts:108).
+    let journalId!: number;
+    let alreadyExists = false;
+    await withTransaction(async () => {
+      const posted = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: advanceDescription, type: "salary_advance", sourceType: "salary_advance", sourceId: 0, sourceKey: `finance:salary_advance:${idempotencyToken}`, lines: advanceLines });
+      journalId = posted.journalId;
+      alreadyExists = posted.alreadyExists;
+      const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "advances", refType: "salary_advance", refId: journalId, amount: Number(amount) });
+      if (approvalResult.requiresApproval) {
+        const { affectedRows } = await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`, [journalId, scope.companyId]);
+        if (!affectedRows) throw new NotFoundError("القيد غير موجود");
+      }
+    });
     markIdempotencyReplay(req, res, alreadyExists);
-    const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "advances", refType: "salary_advance", refId: journalId, amount: Number(amount) });
-    if (approvalResult.requiresApproval) { const { affectedRows } = await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`, [journalId, scope.companyId]); if (!affectedRows) throw new NotFoundError("القيد غير موجود"); }
     const [createdAdvance] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
        FROM journal_entries je
