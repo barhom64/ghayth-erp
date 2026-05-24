@@ -345,3 +345,28 @@ describe("VL-1 — PATCH /vouchers/:id guards", () => {
     expect(block).toContain("checkFinancialPeriodOpen(scope.companyId, existing.entryDate)");
   });
 });
+
+// ─── PATCH /invoices/:id — ZATCA-submission immutability ────────────────────
+// finance-zatca.ts uses invoice.description as the line-description
+// fallback when invoice_lines are missing one. Once an invoice has been
+// submitted to ZATCA (zatcaStatus IS NOT NULL — accepted / submitted /
+// rejected), editing the description locally creates an audit-trail
+// divergence: the regulator's record shows the original text, the local
+// DB shows the new one. The sanctioned correction is a credit memo +
+// re-issue, not an in-place rewrite. Lock the guard in so a future
+// refactor that drops the check is caught immediately.
+
+describe("PATCH /invoices/:id — ZATCA-submission immutability", () => {
+  it("rejects description edits when zatcaStatus is set", () => {
+    const idx = INV_ROUTE.indexOf('invoicesRouter.patch("/invoices/:id"');
+    expect(idx).toBeGreaterThan(-1);
+    const block = INV_ROUTE.slice(idx, idx + 4500);
+    // The guard sits inside the `description !== undefined` branch so
+    // edits to OTHER fields (dueDate, status via state machine) still
+    // work post-submission — only the ZATCA-material description is
+    // locked.
+    expect(block).toContain("existing.zatcaStatus");
+    expect(block).toContain("ConflictError");
+    expect(block).toMatch(/credit memo|إشعار دائن/);
+  });
+});
