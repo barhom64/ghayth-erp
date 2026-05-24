@@ -100,6 +100,15 @@ const createInvoiceSchema = z.object({
   taxCategoryCode: z.string().optional(),
   exemptionReason: z.string().optional(),
   costCenter: z.string().optional(),
+  // Header-level discount — choose ONE of:
+  //   discountAmount: flat reduction off subtotal
+  //   discountPercent: percentage of subtotal
+  // Mutually exclusive; both → 422. Discount applies BEFORE VAT
+  // (the standard Saudi ZATCA invoice flow). The result lands on
+  // invoices.discountAmount / invoices.discountPercent (schema
+  // columns since invoices_pre.sql line 22-23).
+  discountAmount: z.coerce.number().min(0).optional(),
+  discountPercent: z.coerce.number().min(0).max(100).optional(),
 });
 
 const createPaymentSchema = z.object({
@@ -357,6 +366,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       vatRate: rawVatRate, taxCode: headerTaxCode, taxInclusive: headerTaxInclusive,
       dueDate, date: invoiceBodyDate, paymentTermsDays, branchId, companyId: bodyCompanyId, notes,
       isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason,
+      discountAmount: rawDiscountAmount, discountPercent: rawDiscountPercent,
       // as-any-reason: justified-pragmatic - destructuring on zodParse inferred type whose property names are not directly indexable at the call site
     } = parsed as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
@@ -589,10 +599,49 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
     const month = currentMonthPadded();
     const ref = `INV-${year}${month}-${String(seqNum).padStart(4, "0")}`;
 
-    const vatAmount = validatedLines.length > 0
-      ? roundTo2(validatedLines.reduce((sum, l) => sum + l.vatAmount, 0))
-      : computeVat(baseAmount, Number(vatRate));
-    const total = roundTo2(baseAmount + vatAmount);
+    // Header-level discount (applied to subtotal BEFORE VAT — Saudi
+    // ZATCA convention). discountAmount and discountPercent are
+    // mutually exclusive; if both are supplied → 422.
+    if (rawDiscountAmount != null && rawDiscountPercent != null) {
+      throw new ValidationError(
+        "لا يمكن إدخال نسبة وقيمة خصم معاً — اختر واحدة فقط",
+        { field: "discount", fix: "أدخل discountAmount (قيمة ثابتة) أو discountPercent (نسبة) لا كليهما" }
+      );
+    }
+    let discountAmount = 0;
+    let discountPercent = 0;
+    if (rawDiscountPercent != null) {
+      discountPercent = roundTo2(Number(rawDiscountPercent));
+      discountAmount = roundTo2(baseAmount * (discountPercent / 100));
+    } else if (rawDiscountAmount != null) {
+      discountAmount = roundTo2(Number(rawDiscountAmount));
+      discountPercent = baseAmount > 0 ? roundTo2((discountAmount / baseAmount) * 100) : 0;
+    }
+    if (discountAmount > baseAmount + 0.005) {
+      throw new ValidationError(
+        `قيمة الخصم (${discountAmount.toFixed(2)}) تتجاوز المبلغ قبل الضريبة (${baseAmount.toFixed(2)})`,
+        { field: "discountAmount", fix: "قلّل قيمة الخصم أو راجع بنود الفاتورة" }
+      );
+    }
+    const discountedSubtotal = roundTo2(baseAmount - discountAmount);
+
+    // VAT now computed against the DISCOUNTED net. Per-line VAT was
+    // calculated against gross-of-discount line totals so it needs
+    // adjustment: scale by (discountedSubtotal / baseAmount) so the
+    // line-level breakdown stays proportional to the new total.
+    let vatAmount: number;
+    if (validatedLines.length > 0) {
+      const grossVat = roundTo2(validatedLines.reduce((sum, l) => sum + l.vatAmount, 0));
+      vatAmount = baseAmount > 0
+        ? roundTo2(grossVat * (discountedSubtotal / baseAmount))
+        : 0;
+    } else {
+      vatAmount = computeVat(discountedSubtotal, Number(vatRate));
+    }
+    const total = roundTo2(discountedSubtotal + vatAmount);
+    // The "subtotal" persisted on the invoice header is the DISCOUNTED
+    // net so downstream reports compute revenue net of discount.
+    baseAmount = discountedSubtotal;
 
     let finalDueDate = dueDate ?? null;
     if (!finalDueDate && parsedTerms != null) {
@@ -607,8 +656,8 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
         `INSERT INTO invoices ("companyId","branchId","clientId",ref,description,
                 subtotal,"vatRate","vatAmount",total,"paidAmount",status,"dueDate","createdBy",notes,
                 "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason","costCenter",
-                "taxCode","taxInclusive")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
+                "taxCode","taxInclusive","discountAmount","discountPercent")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id`,
         [effectiveCompanyId, branchId ?? scope.branchId, clientId ?? null, ref, description ?? null,
           baseAmount, Number(vatRate), vatAmount, total, finalDueDate, scope.activeAssignmentId, notes ?? null,
           isTaxLinked ? true : false, invoiceTypeCode ?? "388", taxCategoryCode ?? "S", exemptionReason ?? null,
@@ -616,6 +665,8 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
           (req.body as any).costCenter ?? null,
           defaultTaxCode ?? null,
           defaultTaxInclusive,
+          discountAmount,
+          discountPercent,
         ]
       );
       insertId = invResult.rows[0].id;
