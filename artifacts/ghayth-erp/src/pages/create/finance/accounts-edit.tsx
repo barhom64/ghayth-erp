@@ -1,63 +1,57 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useLocation, useRoute } from "wouter";
+import { z } from "zod";
+import { useFormContext } from "react-hook-form";
 import { useApiQuery, apiPatch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useFieldErrors } from "@/hooks/use-field-errors";
-import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useQueryClient } from "@tanstack/react-query";
-import { CreatePageLayout } from "@workspace/ui-core";
-import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import {
+  CreatePageLayout,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormSelectField,
+} from "@workspace/ui-core";
 
+const TYPE_OPTIONS = [
+  { value: "asset", label: "أصول" },
+  { value: "liability", label: "خصوم" },
+  { value: "equity", label: "حقوق ملكية" },
+  { value: "revenue", label: "إيرادات" },
+  { value: "expense", label: "مصروفات" },
+];
 
-const typeMap: Record<string, string> = {
-  asset: "أصول", liability: "خصوم", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات"
-};
+const schema = z.object({
+  name: z.string().min(1, "اسم الحساب مطلوب"),
+  code: z.string(),
+  type: z.string(),
+});
+
+function HydrateFromAccount({ account }: { account: any }) {
+  const { reset } = useFormContext();
+  useEffect(() => {
+    if (account) {
+      reset({
+        name: account.name || "",
+        code: account.code || "",
+        type: account.type || "asset",
+      });
+    }
+  }, [account, reset]);
+  return null;
+}
 
 export default function AccountsEdit() {
   const [, params] = useRoute("/finance/accounts/:id/edit");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [saving, setSaving] = useState(false);
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_accounts_edit", { name: "", code: "", type: "" });
-  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   const { data, isLoading, isError } = useApiQuery<any>(["accounts"], "/finance/accounts");
   const items = data?.data || [];
   const account = items.find((a: any) => String(a.id) === params?.id);
-
-  useEffect(() => {
-    if (account) {
-      setForm({ name: account.name || "", code: account.code || "", type: account.type || "asset" });
-    }
-  }, [account]);
-
-  const handleSave = async () => {
-    const firstError = validate({
-      name: form.name ? null : "اسم الحساب مطلوب",
-    });
-    if (firstError) {
-      toast({ variant: "destructive", title: firstError });
-      return;
-    }
-    setSaving(true);
-    try {
-      await apiPatch(`/finance/accounts/${params?.id}`, { name: form.name, type: form.type });
-      clearDraft();
-      toast({ title: "تم تحديث الحساب" });
-      qc.invalidateQueries({ queryKey: ["accounts"] });
-      setLocation("/finance/accounts");
-    } catch (err: any) {
-      setApiError(err);
-      toast({ variant: "destructive", title: "حدث خطأ أثناء التحديث", description: err?.fix ?? err?.message });
-    }
-    finally { setSaving(false); }
-  };
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -69,35 +63,33 @@ export default function AccountsEdit() {
       subtitle="تعديل بيانات الحساب في شجرة الحسابات"
       backPath="/finance/accounts"
     >
-      {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
-          <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
-        </div>
-      )}
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <TextField label="اسم الحساب" required value={form.name} onChange={(v) => setForm({ ...form, name: v })} error={fieldErrors.name} />
-          <FormFieldWrapper label="رمز الحساب" hint="رمز الحساب غير قابل للتعديل بعد الإنشاء">
-            <Input value={form.code} disabled />
-          </FormFieldWrapper>
-          <FormFieldWrapper label="النوع">
-            <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(typeMap).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-3 pt-6">
-        <Button variant="outline" onClick={() => setLocation("/finance/accounts")}>إلغاء</Button>
-        <Button onClick={handleSave} disabled={saving} className="gap-2" rateLimitAware>
-          <Save className="h-4 w-4" /> {saving ? "جاري الحفظ..." : "حفظ التعديلات"}
-        </Button>
-      </div>
+      <FormShell
+        schema={schema}
+        defaultValues={{
+          name: account.name || "",
+          code: account.code || "",
+          type: account.type || "asset",
+        }}
+        submitLabel="حفظ التعديلات"
+        secondaryActions={
+          <Button type="button" variant="outline" onClick={() => setLocation("/finance/accounts")}>
+            إلغاء
+          </Button>
+        }
+        onSubmit={async (values) => {
+          await apiPatch(`/finance/accounts/${params?.id}`, { name: values.name, type: values.type });
+          toast({ title: "تم تحديث الحساب" });
+          qc.invalidateQueries({ queryKey: ["accounts"] });
+          setLocation("/finance/accounts");
+        }}
+      >
+        <HydrateFromAccount account={account} />
+        <FormGrid cols={2}>
+          <FormTextField name="name" label="اسم الحساب" required />
+          <FormTextField name="code" label="رمز الحساب" disabled description="رمز الحساب غير قابل للتعديل بعد الإنشاء" />
+          <FormSelectField name="type" label="النوع" options={TYPE_OPTIONS} />
+        </FormGrid>
+      </FormShell>
     </CreatePageLayout>
   );
 }
