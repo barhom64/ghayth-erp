@@ -9,6 +9,8 @@
 // - عرض ثنائي بسهولة: نفس التاريخ بالميلادي والهجري في آنٍ واحد.
 // ============================================================================
 
+import { currentYearRiyadh } from "./formatters";
+
 // ── أرقام عربية ↔ غربية ───────────────────────────────────────────
 const ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
 const PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
@@ -438,8 +440,8 @@ export const RANGE_PRESETS: DatePreset[] = [
     key: "this_year",
     label: "هذه السنة",
     getDate: (): [Date, Date] => {
-      const now = new Date();
-      return [new Date(now.getFullYear(), 0, 1), new Date(now.getFullYear(), 11, 31)];
+      const y = currentYearRiyadh();
+      return [new Date(y, 0, 1), new Date(y, 11, 31)];
     },
   },
 ];

@@ -1,5 +1,5 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
-import { createNotification, getManagerAssignmentId, currentYear, toDateISO } from "./businessHelpers.js";
+import { createNotification, getManagerAssignmentId, currentYear, currentMonthPadded, toDateISO } from "./businessHelpers.js";
 import { eventBus } from "./eventBus.js";
 import { logger } from "./logger.js";
 
@@ -404,7 +404,7 @@ export async function proactiveRentalContractExpiry(): Promise<string> {
 export async function proactiveAnnualPerformanceReview(): Promise<string> {
   const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
   let created = 0;
-  const currentMonth = new Date().getMonth() + 1;
+  const currentMonth = Number(currentMonthPadded());
   const curYear = currentYear();
   if (currentMonth !== 1 && currentMonth !== 7) return "Not review month (Jan/Jul)";
   for (const company of companies) {
