@@ -4332,7 +4332,9 @@ CREATE TABLE public.credit_memos (
     "createdBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
     "taxCode" character varying(20),
-    "taxInclusive" boolean DEFAULT false
+    "taxInclusive" boolean DEFAULT false,
+    "cogsReversedTotal" numeric(18,2) DEFAULT 0,
+    "cogsJournalEntryId" integer
 );
 
 
@@ -8881,7 +8883,10 @@ CREATE TABLE public.invoice_lines (
     "cogsAmount" numeric(18,4) DEFAULT 0,
     "cogsUnitCost" numeric(14,4),
     "cogsPostedAt" timestamp with time zone,
-    "cogsAllocationJson" jsonb
+    "cogsAllocationJson" jsonb,
+    "cogsReversedAmount" numeric(18,4) DEFAULT 0,
+    "cogsReversedAt" timestamp with time zone,
+    "cogsReversalJson" jsonb
 );
 
 
