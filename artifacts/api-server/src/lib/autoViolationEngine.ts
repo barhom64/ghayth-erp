@@ -19,7 +19,7 @@
 
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { ensureInquiryMemoForViolation, type IncidentType } from "./disciplineEngine.js";
-import { createNotification, getManagerAssignmentId, emitEvent, todayISO } from "./businessHelpers.js";
+import { createNotification, getManagerAssignmentId, emitEvent, todayISO, combineDateAndShiftTime } from "./businessHelpers.js";
 import { eventBus } from "./eventBus.js";
 import { logger } from "./logger.js";
 
@@ -256,9 +256,7 @@ export async function runAutoDetection(
     for (const rec of checkouts) {
       if (!rec.checkOut || !rec.shiftEndTime) continue;
       const checkoutTime = new Date(rec.checkOut as string | Date);
-      const [endH, endM] = String(rec.shiftEndTime).split(":").map(Number);
-      const shiftEnd = new Date(date + "T00:00:00");
-      shiftEnd.setHours(endH, endM, 0, 0);
+      const shiftEnd = combineDateAndShiftTime(date, String(rec.shiftEndTime));
       const diffMs = shiftEnd.getTime() - checkoutTime.getTime();
       if (diffMs <= 0) continue; // ليس مغادرة مبكرة
       const earlyMinutes = Math.floor(diffMs / 60000);

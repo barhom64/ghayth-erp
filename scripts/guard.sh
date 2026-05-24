@@ -78,6 +78,14 @@ run_step "check:duplicate-migrations" node scripts/src/check-duplicate-migration
 # guards the guard itself (same pattern as check:ghost-rows:tests above).
 run_step "check:migration-policy:tests" node scripts/src/check-migration-policy.test.mjs
 run_step "check:migration-policy" node scripts/src/check-migration-policy.mjs
+# Two previously-dormant guards now activated after main was brought
+# clean against them (PR #574 originally proposed activating all four;
+# this PR activates the two that pass today and leaves the remaining
+# two — `check-finance-period-drift` and `check-workflow-silent-failures`
+# — dormant until their separate cleanup PRs land, since each still has
+# real findings unrelated to the guard wiring itself).
+run_step "check:utc-time-drift" node scripts/src/check-utc-time-drift.mjs
+run_step "check:workflow-pnpm-filters" node scripts/src/check-workflow-pnpm-filters.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test
 
 END=$(date +%s)
