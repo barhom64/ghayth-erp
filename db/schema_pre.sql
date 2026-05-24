@@ -8877,7 +8877,11 @@ CREATE TABLE public.invoice_lines (
     "allocationRuleId" integer,
     "allocationStatus" character varying(20) DEFAULT 'unmapped'::character varying,
     "dimensionJson" jsonb,
-    "manualOverrideReason" text
+    "manualOverrideReason" text,
+    "cogsAmount" numeric(18,4) DEFAULT 0,
+    "cogsUnitCost" numeric(14,4),
+    "cogsPostedAt" timestamp with time zone,
+    "cogsAllocationJson" jsonb
 );
 
 
@@ -9009,6 +9013,8 @@ CREATE TABLE public.invoices (
     "zatcaLastError" text,
     "taxCode" character varying(20),
     "taxInclusive" boolean DEFAULT false,
+    "cogsTotal" numeric(18,2) DEFAULT 0,
+    "cogsJournalEntryId" integer,
     CONSTRAINT chk_invoices_status CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('pending_approval'::character varying)::text, ('approved'::character varying)::text, ('sent'::character varying)::text, ('partially_paid'::character varying)::text, ('paid'::character varying)::text, ('overdue'::character varying)::text, ('void'::character varying)::text, ('rejected'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
