@@ -370,6 +370,12 @@ export async function applyStockMovements(
   companyId: number,
   movements: StockMovementInput[],
   createdBy: number,
+  /** Stamped onto warehouse_movements.journalEntryId so auditors can
+   *  jump from a stock OUT row directly to the JE that booked the
+   *  matching DR COGS / CR Inventory pair. Optional for callers that
+   *  apply movements before the JE id is known (the route handler
+   *  passes the result.journalId from postJournalEntry). */
+  journalEntryId?: number,
 ): Promise<void> {
   for (const mv of movements) {
     // 1. Decrement the lot quantity.
@@ -392,15 +398,16 @@ export async function applyStockMovements(
       [Math.ceil(mv.quantity), mv.productId, companyId],
     );
 
-    // 3. Insert the audit row.
+    // 3. Insert the audit row (journalEntryId nullable — see migration 211).
     await client.query(
       `INSERT INTO warehouse_movements
          ("companyId","productId",type,quantity,"unitCost",reference,notes,
-          "createdBy","branchId","lotId","glStatus")
-       VALUES ($1,$2,'out',$3,$4,$5,$6,$7,NULL,$8,'posted')`,
+          "createdBy","branchId","lotId","glStatus","journalEntryId")
+       VALUES ($1,$2,'out',$3,$4,$5,$6,$7,NULL,$8,'posted',$9)`,
       [
         companyId, mv.productId, mv.quantity, mv.unitCost,
         mv.reference, mv.notes, createdBy, mv.lotId,
+        journalEntryId ?? null,
       ],
     );
   }
@@ -641,6 +648,11 @@ export async function applyStockReversals(
   companyId: number,
   movements: StockMovementInput[],
   createdBy: number,
+  /** Stamped onto warehouse_movements.journalEntryId so the type='return'
+   *  rows point at the credit-memo JE that booked the inventory
+   *  restoration. Optional for callers that don't know the JE id at
+   *  call-time — they can update later by reference. */
+  journalEntryId?: number,
 ): Promise<void> {
   for (const mv of movements) {
     // 1. Restore the lot quantity.
@@ -664,11 +676,12 @@ export async function applyStockReversals(
     await client.query(
       `INSERT INTO warehouse_movements
          ("companyId","productId",type,quantity,"unitCost",reference,notes,
-          "createdBy","branchId","lotId","glStatus")
-       VALUES ($1,$2,'return',$3,$4,$5,$6,$7,NULL,$8,'posted')`,
+          "createdBy","branchId","lotId","glStatus","journalEntryId")
+       VALUES ($1,$2,'return',$3,$4,$5,$6,$7,NULL,$8,'posted',$9)`,
       [
         companyId, mv.productId, mv.quantity, mv.unitCost,
         mv.reference, mv.notes, createdBy, mv.lotId,
+        journalEntryId ?? null,
       ],
     );
   }

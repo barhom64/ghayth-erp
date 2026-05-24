@@ -16110,6 +16110,7 @@ CREATE TABLE public.warehouse_movements (
     "glStatus" character varying(20),
     "lotId" integer,
     "serialId" integer,
+    "journalEntryId" integer,
     CONSTRAINT warehouse_movements_gl_status_chk CHECK ((("glStatus" IS NULL) OR (("glStatus")::text = ANY ((ARRAY['pending'::character varying, 'posted'::character varying, 'failed'::character varying, 'skipped'::character varying])::text[]))))
 );
 

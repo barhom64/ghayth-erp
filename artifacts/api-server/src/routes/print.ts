@@ -21,6 +21,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError, NotFoundError, zodParse } from "../lib/errorHandler.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import {
   renderPrint,
   PrintApprovalRequiredError,
@@ -33,6 +34,28 @@ import { fetchPrintArtifact } from "../lib/print/printStorage.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
+
+// Each call to /render synthesises a PDF/HTML payload, persists it to
+// object-storage, and writes an audit row. Without a per-user cap a
+// runaway loop in a browser tab (or a malicious actor) could fill the
+// print_jobs table and burn storage quota inside a minute. 30/min is
+// generous for human users — re-prints, re-tries, multiple receipts —
+// while staying well below a DoS threshold.
+const renderLimiter = createPerUserLimiter({
+  prefix: "print:render",
+  windowMs: 60 * 1000,
+  max: 30,
+  message: "تم تجاوز الحد الأقصى للطباعة (30/دقيقة). يرجى المحاولة بعد قليل",
+  skip: () => false,
+});
+
+const previewLimiter = createPerUserLimiter({
+  prefix: "print:preview",
+  windowMs: 60 * 1000,
+  max: 60,
+  message: "تم تجاوز الحد الأقصى للمعاينة. يرجى الانتظار قليلاً",
+  skip: () => false,
+});
 
 function scopeFromReq(req: Request): PrintScope {
   const s = req.scope;
@@ -50,7 +73,7 @@ function scopeFromReq(req: Request): PrintScope {
 
 const renderBody = z.object({
   entityType: z.string().min(1),
-  entityId: z.union([z.string(), z.number()]).transform((v) => String(v)),
+  entityId: z.union([z.string(), z.number()]).transform((v) => String(v)).refine((v) => v.length > 0 && v !== "0", { message: "entityId must reference a real record" }),
   format: z.enum(["a4", "thermal_80", "thermal_58", "label", "excel"]).optional(),
   paperSize: z
     .enum(["A4", "A5", "THERMAL_80", "THERMAL_58", "LABEL_50x30", "LABEL_100x50"])
@@ -62,7 +85,7 @@ const renderBody = z.object({
   inline: z.boolean().optional(),
 });
 
-router.post("/render", requirePermission("print:create"), async (req: Request, res: Response) => {
+router.post("/render", renderLimiter, requirePermission("print:create"), async (req: Request, res: Response) => {
   try {
     const body = zodParse(renderBody.safeParse(req.body));
     const scope = scopeFromReq(req);
@@ -113,7 +136,7 @@ router.post("/render", requirePermission("print:create"), async (req: Request, r
 
 const previewBody = z.object({
   entityType: z.string().min(1),
-  entityId: z.union([z.string(), z.number()]).transform((v) => String(v)).optional(),
+  entityId: z.union([z.string(), z.number()]).transform((v) => String(v)).refine((v) => v.length > 0 && v !== "0", { message: "entityId must reference a real record" }).optional(),
   templateId: z.number().int().positive().optional(),
   format: z.enum(["a4", "thermal_80", "thermal_58", "label", "excel"]).optional(),
   payload: z.record(z.any()).optional(),
@@ -121,6 +144,7 @@ const previewBody = z.object({
 
 router.post(
   "/preview",
+  previewLimiter,
   requirePermission("templates:read"),
   async (req: Request, res: Response) => {
     try {
@@ -449,6 +473,13 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       const scope = scopeFromReq(req);
+      // jobId is bound as UUID in print_jobs.jobId. Validate up-front so an
+      // unparseable input (e.g. /jobs/foo/download) returns a clean 400
+      // instead of triggering "invalid input syntax for uuid" deep in pg.
+      const jobId = String(req.params.jobId);
+      if (!/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(jobId)) {
+        throw new ValidationError("invalid jobId");
+      }
       const rows = await rawQuery<{
         format: string;
         pdfStorageKey: string | null;
@@ -457,7 +488,7 @@ router.get(
       }>(
         `SELECT format, "pdfStorageKey", "entityType", "entityId"
          FROM print_jobs WHERE "jobId" = $1 AND "companyId" = $2 LIMIT 1`,
-        [req.params.jobId, scope.companyId]
+        [jobId, scope.companyId]
       );
       if (!rows[0]) throw new NotFoundError("print_job");
       const key = rows[0].pdfStorageKey;
@@ -490,7 +521,7 @@ router.get(
 
 const reprintBody = z.object({
   entityType: z.string().min(1),
-  entityId: z.union([z.string(), z.number()]).transform((v) => String(v)),
+  entityId: z.union([z.string(), z.number()]).transform((v) => String(v)).refine((v) => v.length > 0 && v !== "0", { message: "entityId must reference a real record" }),
   reason: z.string().min(1),
 });
 

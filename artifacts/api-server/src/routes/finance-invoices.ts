@@ -158,6 +158,12 @@ const createDebitMemoSchema = z.object({
   memoDate: z.string().optional(),
 });
 
+// Preview-time schema — same shape, but `reason` is optional since the
+// operator may not have settled on a justification yet when previewing.
+const previewDebitMemoSchema = createDebitMemoSchema.omit({ reason: true }).extend({
+  reason: z.string().optional(),
+});
+
 const badDebtPostSchema = z.object({
   period: z.string().optional(),
   asOf: z.string().optional(),
@@ -1155,9 +1161,13 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       // failure rolls everything back. Skip on idempotent replay since
       // the lots were already decremented + snapshots written.
       if (!alreadyExists && cogsPlan.journalLines.length > 0) {
+        // journalId is already known here — the JE was just posted
+        // above. Pass it so warehouse_movements.journalEntryId carries
+        // the link the auditor needs.
         await applyStockMovements(
           client as any, scope.companyId,
           cogsPlan.stockMovements, scope.activeAssignmentId ?? 0,
+          journalId,
         );
         for (const snap of cogsPlan.lineSnapshots) {
           await client.query(
@@ -2615,6 +2625,24 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
           `UPDATE credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
           [memoJournalResult.journalId, memoId, scope.companyId]
         );
+
+        // Retroactively stamp the JE id onto the warehouse_movements
+        // rows we wrote above (applyStockReversals runs BEFORE the JE
+        // post, so it couldn't pass the id at insert-time). Match by
+        // (companyId, reference, type='return', journalEntryId IS NULL)
+        // — the reference is unique-per-memo so this targets exactly
+        // the rows from this run. Migration 211 added the column.
+        if (cogsReversalPlan.lineUpdates.length > 0) {
+          await client.query(
+            `UPDATE warehouse_movements
+                SET "journalEntryId" = $1
+              WHERE "companyId" = $2
+                AND reference = $3
+                AND type = 'return'
+                AND "journalEntryId" IS NULL`,
+            [memoJournalResult.journalId, scope.companyId, `CM-${memoId}`],
+          );
+        }
       }
     });
 
@@ -2634,6 +2662,91 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     res.status(201).json(memo || { memoId, journalId, invoiceId: id, amount: creditAmount, netAmount: net, vatAmount: vat, reason, memoDate: memoDateStr });
   } catch (err) {
     handleRouteError(err, res, "Credit memo error:");
+  }
+});
+
+// Debit-memo PREVIEW (audit follow-up to #1024).
+//
+// AR-side mirror of /credit-memo/preview. Lets the UI render the GL
+// that WILL post + raise period/scope blockers BEFORE the operator
+// commits. No inventory side-effect — a debit memo charges the
+// customer extra; nothing leaves the warehouse.
+//
+// Read-only, no transaction, no idempotency token.
+invoicesRouter.post("/invoices/:id/debit-memo/preview", authorize({
+  feature: "finance.invoices",
+  action: "view",
+  resource: { table: "invoices", idParam: "id", columns: ['"companyId"', '"branchId"'] },
+}), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { amount, vatIncluded = true, memoDate } = zodParse(previewDebitMemoSchema.safeParse(req.body ?? {}));
+
+    const chargeAmount = roundTo2(Number(amount));
+    const memoDateStr = memoDate ? toDateISO(memoDate) : todayISO();
+
+    const blockers: { field: string; message: string }[] = [];
+    const warnings: { field: string; message: string }[] = [];
+
+    const [invoice] = await rawQuery<{
+      id: number; ref: string; vatRate: string | number | null;
+      branchId: number | null; clientId: number | null;
+    }>(
+      `SELECT id, ref, "vatRate", "branchId", "clientId"
+         FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
+
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, memoDateStr);
+    if (!periodCheck.open) {
+      blockers.push({
+        field: "memoDate",
+        message: `الفترة المالية مغلقة (${periodCheck.periodName ?? memoDateStr}) — لا يمكن إصدار إشعار مدين`,
+      });
+    }
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [arCode, revenueCode, vatPayableCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1200"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+    ]);
+
+    const vatRate = Number(invoice.vatRate ?? await getCompanyVatRate(scope.companyId));
+    const previewNet = vatIncluded ? extractBaseFromGross(chargeAmount, vatRate) : chargeAmount;
+    const previewVat = roundTo2(chargeAmount - previewNet);
+
+    const previewLines = [
+      { accountCode: arCode, debit: chargeAmount, credit: 0,
+        description: `إشعار مدين — فاتورة ${invoice.ref}` },
+      { accountCode: revenueCode, debit: 0, credit: previewNet,
+        description: `إيرادات إضافية — فاتورة ${invoice.ref}` },
+      ...(previewVat > 0
+        ? [{ accountCode: vatPayableCode, debit: 0, credit: previewVat,
+             description: `ضريبة قيمة مضافة — إشعار مدين ${invoice.ref}` }]
+        : []),
+    ];
+    const totalDebit = roundTo2(previewLines.reduce((s, l) => s + l.debit, 0));
+    const totalCredit = roundTo2(previewLines.reduce((s, l) => s + l.credit, 0));
+    const isBalanced = Math.abs(totalDebit - totalCredit) < 0.005;
+
+    res.json({
+      invoiceId: id,
+      invoiceRef: invoice.ref,
+      canIssue: blockers.length === 0 && isBalanced,
+      blockers,
+      warnings,
+      memoDate: memoDateStr,
+      chargeAmount,
+      netAmount: previewNet,
+      vatAmount: previewVat,
+      journalLines: previewLines,
+      totals: { debit: totalDebit, credit: totalCredit, balanced: isBalanced },
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Debit memo preview error:");
   }
 });
 
