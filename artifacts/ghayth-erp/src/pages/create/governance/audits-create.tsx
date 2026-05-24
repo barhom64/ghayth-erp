@@ -1,89 +1,94 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { z } from "zod";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
+import {
+  CreatePageLayout,
+  CreationDateField,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormTextareaField,
+  FormSelectField,
+  FormDateField,
+} from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
-import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { DatePicker } from "@/components/ui/date-picker";
-import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
-const DRAFT_KEY = "governance_audits_create";
-const INITIAL = { title: "", status: "planned", auditorName: "", startDate: "", endDate: "", scope: "", findings: "" };
+const schema = z
+  .object({
+    title: z.string().min(1, "يرجى إدخال عنوان التدقيق"),
+    status: z.enum(["planned", "in_progress", "completed"]),
+    auditorName: z.string().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    scope: z.string().optional(),
+    findings: z.string().optional(),
+  })
+  .refine(
+    (v) => !v.startDate || !v.endDate || v.endDate >= v.startDate,
+    { message: "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء", path: ["endDate"] },
+  );
+
+const STATUS_OPTIONS = [
+  { value: "planned", label: "مخطط" },
+  { value: "in_progress", label: "قيد التنفيذ" },
+  { value: "completed", label: "مكتمل" },
+];
 
 export default function AuditsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const createMut = useApiMutation<unknown, Record<string, string | Attachment[]>>("/governance/audits", "POST", [["governance-audits"]]);
+  const createMut = useApiMutation<unknown, Record<string, string | Attachment[]>>(
+    "/governance/audits",
+    "POST",
+    [["governance-audits"]],
+  );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
-  const { fieldErrors, validate, setApiError } = useFieldErrors();
-
-  const handleSubmit = async () => {
-    const firstError = validate({
-      title: form.title ? null : "يرجى إدخال عنوان التدقيق",
-      endDate: form.startDate && form.endDate && form.endDate < form.startDate
-        ? "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء"
-        : null,
-    });
-    if (firstError) {
-      toast({ variant: "destructive", title: firstError });
-      return;
-    }
-    try {
-      await createMut.mutateAsync({ ...form, ...(attachments.length > 0 ? { attachments } : {}) });
-      clearDraft();
-      toast({ title: "تم إنشاء التدقيق بنجاح" });
-      setLocation("/governance/audits");
-    } catch (err: any) {
-      setApiError(err);
-      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء التدقيق", description: err?.fix ?? err?.message });
-    }
-  };
 
   return (
     <CreatePageLayout title="تدقيق جديد" backPath="/governance/audits">
-      {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
-          <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
-        </div>
-      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <CreationDateField />
       </div>
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <TextField label="عنوان التدقيق" required value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} placeholder="عنوان التدقيق" error={fieldErrors.title} />
-          <FormFieldWrapper label="الحالة">
-            <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="planned">مخطط</SelectItem>
-                <SelectItem value="in_progress">قيد التنفيذ</SelectItem>
-                <SelectItem value="completed">مكتمل</SelectItem>
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
-          <TextField label="المدقق" value={form.auditorName} onChange={(v) => setForm((f) => ({ ...f, auditorName: v }))} placeholder="اسم المدقق" />
-          <FormFieldWrapper label="تاريخ البدء">
-            <DatePicker value={form.startDate} onChange={(v) => setForm((f) => ({ ...f, startDate: v }))} />
-          </FormFieldWrapper>
-          <FormFieldWrapper label="تاريخ الانتهاء" error={fieldErrors.endDate}>
-            <DatePicker value={form.endDate} onChange={(v) => setForm((f) => ({ ...f, endDate: v }))} />
-          </FormFieldWrapper>
-        </div>
-        <TextAreaField label="نطاق التدقيق" value={form.scope} onChange={(v) => setForm((f) => ({ ...f, scope: v }))} placeholder="نطاق وأهداف التدقيق..." />
-        <TextAreaField label="النتائج" value={form.findings} onChange={(v) => setForm((f) => ({ ...f, findings: v }))} placeholder="نتائج التدقيق..." />
+      <FormShell
+        schema={schema}
+        defaultValues={{
+          title: "",
+          status: "planned",
+          auditorName: "",
+          startDate: "",
+          endDate: "",
+          scope: "",
+          findings: "",
+        }}
+        submitLabel={createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}
+        secondaryActions={
+          <Button type="button" variant="outline" onClick={() => setLocation("/governance/audits")}>
+            إلغاء
+          </Button>
+        }
+        onSubmit={async (values) => {
+          await createMut.mutateAsync({
+            ...values,
+            ...(attachments.length > 0 ? { attachments } : {}),
+          });
+          toast({ title: "تم إنشاء التدقيق بنجاح" });
+          setLocation("/governance/audits");
+        }}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="title" label="عنوان التدقيق" required placeholder="عنوان التدقيق" />
+          <FormSelectField name="status" label="الحالة" options={STATUS_OPTIONS} />
+          <FormTextField name="auditorName" label="المدقق" placeholder="اسم المدقق" />
+          <FormDateField name="startDate" label="تاريخ البدء" />
+          <FormDateField name="endDate" label="تاريخ الانتهاء" />
+        </FormGrid>
+        <FormTextareaField name="scope" label="نطاق التدقيق" placeholder="نطاق وأهداف التدقيق..." />
+        <FormTextareaField name="findings" label="النتائج" placeholder="نتائج التدقيق..." />
         <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات التدقيق" />
-        <div className="flex justify-end gap-3 pt-4">
-          <Button variant="outline" onClick={() => setLocation("/governance/audits")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>{createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}</Button>
-        </div>
-      </div>
+      </FormShell>
     </CreatePageLayout>
   );
 }
