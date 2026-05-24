@@ -87,13 +87,43 @@ export async function loadEntityData(args: LoaderArgs): Promise<Record<string, u
     case "employee_contract":
       return await loadEmployeeContract(companyId, entityId);
     default:
-      if (profile?.table) {
-        const raw = await loadByTable(profile.table, entityId, companyId);
+      // 1. Entity is in entityRegistry → use its declared table.
+      // 2. Otherwise fall back to the static map below for entities the
+      //    registry doesn't cover yet (added when wiring the 73-page
+      //    universal print coverage). Returning just `{ entity: { id } }`
+      //    leaves the printed doc almost empty, which the user sees as
+      //    "the print button doesn't work" even though it does.
+      const table = profile?.table ?? FALLBACK_TABLE_MAP[entityType];
+      if (table) {
+        const raw = await loadByTable(table, entityId, companyId);
         return raw ? { entity: raw } : { entity: { id: entityId } };
       }
       return { entity: { id: entityId } };
   }
 }
+
+/** Static entityType → table map used by the default case when the
+ *  registry doesn't list the entity. Keep entries pointing at tables
+ *  that exist in db/schema_pre.sql.
+ */
+const FALLBACK_TABLE_MAP: Record<string, string> = {
+  // HR
+  evaluation_360: "evaluation_cycles",
+  training: "training_courses",
+  job: "job_postings",
+  // Finance
+  project_costing: "project_costs",
+  account_statement: "gl_accounts",
+  // Property / CRM
+  tenant: "tenants",
+  // Inventory / Store
+  warehouse_category: "warehouse_categories",
+  store_product: "warehouse_products",
+  // Umrah
+  umrah_sub_agent: "umrah_sub_agents",
+  umrah_transport: "umrah_transport",
+  umrah_violation: "umrah_violations",
+};
 
 // ─── Focused loaders ────────────────────────────────────────────────────────
 // Each loader returns the shape consumed by the seeded preset templates.

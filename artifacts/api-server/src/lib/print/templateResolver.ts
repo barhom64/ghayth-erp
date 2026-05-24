@@ -112,7 +112,43 @@ export async function resolveTemplate(opts: {
   );
   if (preset[0]) return toTemplate(preset[0]);
 
-  return null;
+  // 5: synthesized universal fallback — every entityType prints something
+  // even if nobody seeded or designed a template for it. Renders the branch
+  // letterhead, a sensible title, the entity fields as an info-grid, the
+  // items table if present, and the branch footer.
+  return universalFallback(entityType);
+}
+
+/** In-memory template that works for any entityType. */
+function universalFallback(entityType: string): PrintTemplate {
+  return {
+    id: -1,
+    name: `Universal fallback — ${entityType}`,
+    entityType,
+    branchId: null,
+    companyId: null,
+    paperSize: "A4",
+    mode: "preset",
+    presetKey: "universal",
+    htmlContent: `<div class="print-doc">
+{{branch.letterhead}}
+<h2 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">${entityType}</h2>
+<div class="meta-grid">
+  <div><strong>المرجع:</strong> {{entity.ref}}</div>
+  <div><strong>التاريخ:</strong> {{entity.date}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>المعرّف:</strong> {{entity.id}}</div>
+</div>
+{{entity.itemsTable}}
+{{branch.footer}}
+</div>`,
+    layoutJson: null,
+    cssOverrides: null,
+    headerOverride: null,
+    footerOverride: null,
+    isThermal: false,
+    version: 1,
+  };
 }
 
 export async function listTemplates(opts: {
