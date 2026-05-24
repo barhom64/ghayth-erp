@@ -404,28 +404,51 @@ async function detectAndApplyBaselineIfNeeded(client: any): Promise<void> {
   await loadHalf(prePath);
   await loadHalf(postPath);
 
-  // Pre-mark every committed migration as applied so the runner's
-  // delta loop walks zero new files on top of the freshly-loaded
-  // baseline. Mirrors db/bootstrap.sh step 8. MUST run only after
-  // both halves apply successfully — if schema_post.sql throws, the
-  // exception propagates and this block is skipped, so the next boot
+  // Pre-mark migrations baked into the dump as applied. Migrations
+  // ADDED AFTER the dump was generated are intentionally left unmarked
+  // so the delta loop below picks them up and applies them. The
+  // cutoff filename lives in db/.baseline-cutoff (version-controlled,
+  // bumped manually when the dump is regenerated). Without this gate
+  // every migration added after the dump silently fails to run on
+  // fresh bootstraps. Mirrors db/bootstrap.sh step 8.
+  //
+  // MUST run only after both halves apply successfully — if
+  // schema_post.sql throws, this block is skipped, so the next boot
   // sees an empty schema_migrations and the partial-DB gate above
   // refuses to retry on the partly-loaded schema.
   const migrationsDir = resolve(__dirname, "./migrations");
   const migrationFiles = readdirSync(migrationsDir)
     .filter((f) => f.endsWith(".sql"))
     .sort(compareMigrationFiles);
+
+  const cutoffPath = resolve(__dirname, "../../../../db/.baseline-cutoff");
+  let cutoff = "";
+  try {
+    cutoff = readFileSync(cutoffPath, "utf8")
+      .split("\n")
+      .find((l) => l.trim() && !l.startsWith("#"))?.trim() ?? "";
+  } catch {
+    logger.warn(`db/.baseline-cutoff missing — pre-marking ALL migrations (legacy behaviour)`);
+  }
+
+  let marked = 0;
+  let skipped = 0;
   for (const file of migrationFiles) {
+    if (cutoff && compareMigrationFiles(file, cutoff) > 0) {
+      skipped++;
+      continue;
+    }
     await client.query(
       `INSERT INTO schema_migrations (filename) VALUES ($1)
          ON CONFLICT (filename) DO NOTHING`,
       [file]
     );
+    marked++;
   }
 
   logger.info(
-    { migrations: migrationFiles.length },
-    `baseline loaded from schema_pre + schema_post; ${migrationFiles.length} migrations pre-marked`
+    { marked, skipped, cutoff: cutoff || "(none)" },
+    `baseline loaded; ${marked} migrations pre-marked, ${skipped} left for delta loop`
   );
 }
 
