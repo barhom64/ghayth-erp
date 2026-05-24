@@ -6,7 +6,7 @@ import { handleRouteError, ValidationError, ConflictError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, todayISO, currentYear, currentMonthPadded, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -591,10 +591,15 @@ router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }
     const scope = req.scope!;
     const cid = scope.companyId;
 
-    const now = new Date();
-    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    // Riyadh-anchored "this month" / "last month" boundaries (Task #438):
+    // `currentYear()` and `currentMonthPadded()` both compute against Asia/Riyadh,
+    // so the JS `Date` objects we then construct represent the right wall-clock
+    // month boundary even when the server clock is UTC.
+    const ryYear = currentYear();
+    const ryMonth = Number(currentMonthPadded()) - 1; // 0-indexed for Date ctor
+    const thisMonthStart = new Date(ryYear, ryMonth, 1);
+    const lastMonthStart = new Date(ryYear, ryMonth - 1, 1);
+    const lastMonthEnd = new Date(ryYear, ryMonth, 0);
     const fmt = toDateISO;
 
     const buildMonthStats = async (startDate: string, endDate: string) => {
@@ -696,12 +701,12 @@ router.get("/admin-reports/monthly", authorize({ feature: "bi", action: "list" }
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
 
     const [current, previous] = await Promise.all([
-      buildMonthStats(fmt(thisMonthStart), fmt(now)),
+      buildMonthStats(fmt(thisMonthStart), todayISO()),
       buildMonthStats(fmt(lastMonthStart), fmt(lastMonthEnd)),
     ]);
 
     res.json({
-      period: { from: fmt(thisMonthStart), to: fmt(now) },
+      period: { from: fmt(thisMonthStart), to: todayISO() },
       previousPeriod: { from: fmt(lastMonthStart), to: fmt(lastMonthEnd) },
       current,
       previous,
@@ -721,10 +726,12 @@ router.get("/ceo-dashboard", authorize({ feature: "bi", action: "list" }), async
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
-    const now = new Date();
-    const thisMonthStart = toDateISO(new Date(now.getFullYear(), now.getMonth(), 1));
-    const lastMonthStart = toDateISO(new Date(now.getFullYear(), now.getMonth() - 1, 1));
-    const lastMonthEnd = toDateISO(new Date(now.getFullYear(), now.getMonth(), 0));
+    // Riyadh-anchored boundaries — see L595-L600 for rationale.
+    const ryYear = currentYear();
+    const ryMonth = Number(currentMonthPadded()) - 1;
+    const thisMonthStart = toDateISO(new Date(ryYear, ryMonth, 1));
+    const lastMonthStart = toDateISO(new Date(ryYear, ryMonth - 1, 1));
+    const lastMonthEnd = toDateISO(new Date(ryYear, ryMonth, 0));
 
     const [financial] = await rawQuery<Record<string, unknown>>(
       `SELECT
@@ -848,7 +855,7 @@ router.get("/reports/branch-performance", authorize({ feature: "bi", action: "li
     const scope = req.scope!;
     const cid = scope.companyId;
     const { from, to } = req.query as Record<string, string | undefined>;
-    const dateFrom = from || toDateISO(new Date(currentYear(), new Date().getMonth(), 1));
+    const dateFrom = from || toDateISO(new Date(currentYear(), Number(currentMonthPadded()) - 1, 1));
     const dateTo = to || todayISO();
 
     const branches = await rawQuery<Record<string, unknown>>(

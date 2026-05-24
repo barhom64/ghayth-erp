@@ -31,7 +31,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
-import { emitEvent, createAuditLog, currentPeriod, currentYear, toDateISO, roundTo2, validateBudget } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog, currentPeriod, currentYear, currentMonthPadded, toDateISO, roundTo2, validateBudget } from "../lib/businessHelpers.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
@@ -151,21 +151,29 @@ budgetRouter.get("/budget-vs-actual", authorize({ feature: "finance.budget", act
   try {
     const scope = req.scope!;
     const { period } = req.query as { period?: string };
-    const now = new Date();
+    // Riyadh-anchored period boundaries (Task #438). All callers below
+    // build YYYY-MM-DD strings that go straight into a date-bounded SQL
+    // query, so the year/month they reference must be the Riyadh-zone
+    // value — `currentYear()` + `currentMonthPadded()` both compute
+    // against Asia/Riyadh.
+    const ryYear = currentYear();
+    const ryMonth = Number(currentMonthPadded()); // 1-12
     let startDate: string, endDate: string;
     if (period === "year") {
-      startDate = `${now.getFullYear()}-01-01`;
-      endDate = `${now.getFullYear()}-12-31`;
+      startDate = `${ryYear}-01-01`;
+      endDate = `${ryYear}-12-31`;
     } else if (period === "quarter") {
-      const q = Math.floor(now.getMonth() / 3);
-      startDate = `${now.getFullYear()}-${String(q * 3 + 1).padStart(2, "0")}-01`;
+      const q = Math.floor((ryMonth - 1) / 3); // 0..3
+      const sm = q * 3 + 1;
       const em = q * 3 + 3;
-      const qLastDay = new Date(now.getFullYear(), em, 0).getDate();
-      endDate = `${now.getFullYear()}-${String(em).padStart(2, "0")}-${String(qLastDay).padStart(2, "0")}`;
+      startDate = `${ryYear}-${String(sm).padStart(2, "0")}-01`;
+      const qLastDay = new Date(ryYear, em, 0).getDate();
+      endDate = `${ryYear}-${String(em).padStart(2, "0")}-${String(qLastDay).padStart(2, "0")}`;
     } else {
-      startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-      endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+      const mm = String(ryMonth).padStart(2, "0");
+      startDate = `${ryYear}-${mm}-01`;
+      const lastDay = new Date(ryYear, ryMonth, 0).getDate();
+      endDate = `${ryYear}-${mm}-${String(lastDay).padStart(2, "0")}`;
     }
     interface BudgetVsActualRow {
       accountCode: string;
@@ -683,7 +691,7 @@ budgetRouter.get("/fiscal-periods", authorize({ feature: "finance.budget", actio
   try {
     const scope = req.scope!;
     const thisYear = currentYear();
-    const currentMonth = new Date().getMonth() + 1;
+    const currentMonth = Number(currentMonthPadded());
 
     const monthRows = await rawQuery<{ period: string; entries: string | number; totalDebit: string | number }>(
       `SELECT to_char(je."createdAt", 'YYYY-MM') AS period,

@@ -11,7 +11,7 @@ import {
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, currentPeriodRiyadh } from "@/lib/formatters";
 import { AlertCircle, Play } from "lucide-react";
 
 /**
@@ -40,8 +40,7 @@ interface AccrualPreview {
 }
 
 function defaultPeriod(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  return currentPeriodRiyadh();
 }
 
 export default function AccrualsPage() {
