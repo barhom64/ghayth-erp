@@ -1693,3 +1693,210 @@ reportsRouter.get(
   },
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Inventory valuation report — audit follow-up to the COGS campaign.
+//
+// Σ (lot.quantity × lot.unitCost) over every ACTIVE, qc-APPROVED lot
+// owned by the company — i.e. the on-hand stock-asset book value. This
+// is the number the period-end balance sheet's Inventory line should
+// match, and the figure ZATCA expects in the annual return.
+//
+// Why not read warehouse_products.lastWaCost × currentStock?
+//   * lastWaCost is denormalised — a partial recall / write-off that
+//     bypassed the WA recompute leaves it stale.
+//   * currentStock is INT (legacy column) while lots carry NUMERIC(14,3).
+//   * Lots carry the originalQuantity history so a future "as-of" cut
+//     (?asOf=2026-04-30) becomes a one-line WHERE addition.
+//
+// Read-only, no transaction.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/inventory-valuation",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const {
+        warehouseId, categoryId, productId,
+        includeZeroStock,
+      } = req.query as Record<string, string | undefined>;
+
+      const params: unknown[] = [scope.companyId];
+      let whereExtra = "";
+      if (warehouseId) {
+        const wid = Number(warehouseId);
+        if (Number.isFinite(wid) && wid > 0) {
+          params.push(wid);
+          whereExtra += ` AND l."warehouseId" = $${params.length}`;
+        }
+      }
+      if (categoryId) {
+        const cid = Number(categoryId);
+        if (Number.isFinite(cid) && cid > 0) {
+          params.push(cid);
+          whereExtra += ` AND p."categoryId" = $${params.length}`;
+        }
+      }
+      if (productId) {
+        const pid = Number(productId);
+        if (Number.isFinite(pid) && pid > 0) {
+          params.push(pid);
+          whereExtra += ` AND p.id = $${params.length}`;
+        }
+      }
+      // Branch scope honoured via the warehouse it belongs to.
+      const branchFilter = getBranchCondition(scope, undefined, params, "w");
+
+      // Per-product roll-up. Zero-stock products are excluded by default
+      // (their book value is 0 and the list would balloon to thousands
+      // of dormant SKUs); pass ?includeZeroStock=true to surface them
+      // for reorder-alert dashboards.
+      const havingClause = includeZeroStock === "true" ? "" : `HAVING SUM(COALESCE(l.quantity, 0)) > 0`;
+
+      interface ProductRow {
+        productId: number;
+        sku: string | null;
+        name: string;
+        categoryId: number | null;
+        categoryName: string | null;
+        warehouseId: number | null;
+        warehouseName: string | null;
+        warehouseCode: string | null;
+        costingMethod: string | null;
+        lastWaCost: string | number | null;
+        onHandQty: string | number;
+        lotCount: string | number;
+        valuation: string | number;
+        weightedAvgCost: string | number;
+      }
+
+      const rows = await rawQuery<ProductRow>(
+        `SELECT p.id              AS "productId",
+                p.sku,
+                p.name,
+                p."categoryId",
+                cat.name          AS "categoryName",
+                l."warehouseId",
+                w.name            AS "warehouseName",
+                w.code            AS "warehouseCode",
+                p."costingMethod",
+                p."lastWaCost"::float8           AS "lastWaCost",
+                SUM(COALESCE(l.quantity, 0))::float8   AS "onHandQty",
+                COUNT(l.id) FILTER (WHERE l.quantity > 0)::int  AS "lotCount",
+                SUM(COALESCE(l.quantity, 0) * COALESCE(l."unitCost", 0))::float8 AS valuation,
+                CASE WHEN SUM(COALESCE(l.quantity, 0)) > 0
+                     THEN SUM(COALESCE(l.quantity, 0) * COALESCE(l."unitCost", 0))
+                          / SUM(COALESCE(l.quantity, 0))
+                     ELSE 0
+                END::float8       AS "weightedAvgCost"
+           FROM warehouse_products p
+           LEFT JOIN warehouse_stock_lots l
+             ON l."productId" = p.id
+            AND l."companyId" = p."companyId"
+            AND l.status = 'active'
+            AND l."qualityControlStatus" = 'approved'
+            AND l."deletedAt" IS NULL
+           LEFT JOIN warehouses w
+             ON w.id = l."warehouseId"
+            AND w."deletedAt" IS NULL
+           LEFT JOIN warehouse_categories cat
+             ON cat.id = p."categoryId"
+            AND cat."deletedAt" IS NULL
+          WHERE p."companyId" = $1
+            AND p."deletedAt" IS NULL
+            AND COALESCE(p.status, 'active') = 'active'
+            ${whereExtra}${branchFilter}
+          GROUP BY p.id, p.sku, p.name, p."categoryId", cat.name,
+                   l."warehouseId", w.name, w.code,
+                   p."costingMethod", p."lastWaCost"
+          ${havingClause}
+          ORDER BY valuation DESC, p.name ASC
+          LIMIT 10000`,
+        params,
+      );
+
+      // Per-warehouse + per-category rollups (JS keeps the SQL single
+      // round-trip; product-level rows in the response already carry
+      // both keys for client-side regrouping if they want a different cut).
+      const byWarehouse = new Map<number, {
+        warehouseId: number;
+        warehouseName: string | null;
+        warehouseCode: string | null;
+        valuation: number;
+        onHandQty: number;
+        productCount: number;
+        lotCount: number;
+      }>();
+      const byCategory = new Map<number | "_uncat", {
+        categoryId: number | null;
+        categoryName: string | null;
+        valuation: number;
+        onHandQty: number;
+        productCount: number;
+      }>();
+      let totalValuation = 0;
+      let totalOnHandQty = 0;
+      let totalLots = 0;
+
+      for (const r of rows) {
+        const val = Number(r.valuation ?? 0);
+        const qty = Number(r.onHandQty ?? 0);
+        const lots = Number(r.lotCount ?? 0);
+        totalValuation += val;
+        totalOnHandQty += qty;
+        totalLots += lots;
+
+        if (r.warehouseId != null) {
+          const w = byWarehouse.get(r.warehouseId) ?? {
+            warehouseId: r.warehouseId,
+            warehouseName: r.warehouseName,
+            warehouseCode: r.warehouseCode,
+            valuation: 0, onHandQty: 0, productCount: 0, lotCount: 0,
+          };
+          w.valuation += val;
+          w.onHandQty += qty;
+          w.productCount += 1;
+          w.lotCount += lots;
+          byWarehouse.set(r.warehouseId, w);
+        }
+
+        const catKey = r.categoryId ?? "_uncat";
+        const cat = byCategory.get(catKey) ?? {
+          categoryId: r.categoryId,
+          categoryName: r.categoryName,
+          valuation: 0, onHandQty: 0, productCount: 0,
+        };
+        cat.valuation += val;
+        cat.onHandQty += qty;
+        cat.productCount += 1;
+        byCategory.set(catKey, cat);
+      }
+
+      res.json(maskFields(req, {
+        filters: { warehouseId, categoryId, productId, includeZeroStock: includeZeroStock === "true" },
+        summary: {
+          totalValuation: roundTo2(totalValuation),
+          totalOnHandQty: roundTo2(totalOnHandQty),
+          totalLots,
+          productRows: rows.length,
+        },
+        byWarehouse: Array.from(byWarehouse.values())
+          .map((w) => ({ ...w, valuation: roundTo2(w.valuation), onHandQty: roundTo2(w.onHandQty) }))
+          .sort((a, b) => b.valuation - a.valuation),
+        byCategory: Array.from(byCategory.values())
+          .map((c) => ({ ...c, valuation: roundTo2(c.valuation), onHandQty: roundTo2(c.onHandQty) }))
+          .sort((a, b) => b.valuation - a.valuation),
+        data: rows.map((r) => ({
+          ...r,
+          onHandQty: roundTo2(Number(r.onHandQty ?? 0)),
+          valuation: roundTo2(Number(r.valuation ?? 0)),
+          weightedAvgCost: roundTo2(Number(r.weightedAvgCost ?? 0)),
+          lastWaCost: r.lastWaCost == null ? null : roundTo2(Number(r.lastWaCost)),
+        })),
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "Inventory valuation report error:");
+    }
+  },
+);
+
