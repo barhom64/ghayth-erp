@@ -598,9 +598,57 @@ journalRouter.delete("/expenses/:id", authorize({ feature: "finance.journal", ac
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status = 'draft' RETURNING id`, [id, scope.companyId]);
-    if (!row) throw new NotFoundError("المصروف غير موجود");
-    await reverseAccountBalances(scope.companyId, row.id as number);
+    // Wrap the soft-delete + ledger reversal + budget release in ONE
+    // transaction so a partial failure rolls all three back. Without
+    // this, a release that crashed mid-flight could leave the expense
+    // marked deleted but budgets.used still inflated by its amount.
+    const result = await withTransaction(async (client) => {
+      const { rows } = await client.query(
+        `UPDATE journal_entries SET "deletedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status = 'draft'
+          RETURNING id`,
+        [id, scope.companyId]
+      );
+      if (rows.length === 0) return null;
+      const expenseId = Number(rows[0].id);
+
+      // reverseAccountBalances is a no-op on drafts (balancesApplied=false),
+      // so this is belt + braces against a future caller that flips the
+      // status before calling DELETE.
+      await reverseAccountBalances(scope.companyId, expenseId);
+
+      // Budget-release: the CREATE path (finance-journal.ts:474) bumps
+      // `budgets.used` by the expense amount BEFORE the JE is even posted,
+      // so every draft holds a soft reservation. The reject/return path
+      // (finance-journal.ts:672) releases that reservation; DELETE was the
+      // only sibling path that didn't, leaving budgets.used permanently
+      // inflated by the deleted draft's amount. Mirrors the reject-path
+      // SQL exactly so a single bug fix here doesn't drift from there.
+      // GREATEST() floors at zero, matching the reject path's defensive
+      // shape.
+      await client.query(
+        `UPDATE budgets b
+            SET used = GREATEST(0, b.used - sub.total)
+           FROM (
+             SELECT jl."accountCode",
+                    to_char(je."createdAt", 'YYYY-MM') AS period,
+                    SUM(jl.debit) AS total
+               FROM journal_lines jl
+               JOIN journal_entries je ON je.id = jl."journalId"
+              WHERE jl."journalId" = $1
+                AND jl.debit > 0
+                AND jl."deletedAt" IS NULL
+              GROUP BY jl."accountCode", to_char(je."createdAt", 'YYYY-MM')
+           ) sub
+          WHERE b."companyId" = $2
+            AND b."accountCode" = sub."accountCode"
+            AND b.period = sub.period
+            AND b."deletedAt" IS NULL`,
+        [expenseId, scope.companyId]
+      );
+      return expenseId;
+    });
+    if (result === null) throw new NotFoundError("المصروف غير موجود");
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Finance journal error:");
@@ -869,6 +917,55 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     const cashAcct = sourceAccountCode || "1100";
     const outputVatCode = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2300") : "2300";
     const inputVatCode2 = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1400") : "1400";
+
+    // ── WHT computation for payment vouchers w/ purchase-order allocations ──
+    // Walk every allocation pointing at a purchase_order, look up the
+    // PO's supplier, and run computeWHT on the allocation amount (NOT
+    // the PO total — partial payments must withhold proportionally).
+    // Resident suppliers short-circuit inside computeWHT → applies=false.
+    // Receipts (RV-…) never withhold; they're the AR side, not AP.
+    interface AllocWht { wht: number; net: number; rate: number; category: string | null; payableAccountCode: string | null }
+    const allocWht: (AllocWht | null)[] = (allocations ?? []).map(() => null);
+    let totalWht = 0;
+    const whtCreditByAccount = new Map<string, number>();
+    let whtPayableFallback = "2330";
+    if (!isReceipt && allocations && allocations.length > 0) {
+      const { computeWHT } = await import("../lib/withholdingTax.js");
+      whtPayableFallback = await financialEngine.resolveAccountCode(
+        scope.companyId, "wht_payable", "credit", "2330",
+      );
+      for (let i = 0; i < allocations.length; i++) {
+        const a = allocations[i];
+        if (a.obligationType !== "purchase_order") continue;
+        const [po] = await rawQuery<{ supplierId: number | null }>(
+          `SELECT "supplierId" FROM purchase_orders
+            WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+          [a.obligationId, scope.companyId]
+        );
+        if (!po?.supplierId) continue;
+        const split = await computeWHT({
+          companyId: scope.companyId,
+          supplierId: Number(po.supplierId),
+          grossAmount: Number(a.amount),
+        });
+        if (!split.applies || split.wht <= 0) continue;
+        allocWht[i] = {
+          wht: split.wht, net: split.net, rate: split.rate,
+          category: split.category, payableAccountCode: split.payableAccountCode,
+        };
+        totalWht = roundTo2(totalWht + split.wht);
+        const code = split.payableAccountCode || whtPayableFallback;
+        whtCreditByAccount.set(code, roundTo2((whtCreditByAccount.get(code) ?? 0) + split.wht));
+      }
+    }
+
+    // Net cash leaving the company = totalWithVat − totalWht. The
+    // withheld portion sits in WHT Payable until the next ZATCA filing.
+    const netCashOut = roundTo2(totalWithVat - totalWht);
+    const whtCreditLines = Array.from(whtCreditByAccount.entries()).map(
+      ([accountCode, amount]) => ({ accountCode, debit: 0, credit: amount })
+    );
+
     const journalLines: { accountCode: string; debit: number; credit: number }[] = isReceipt
       ? [
           { accountCode: cashAcct, debit: totalWithVat, credit: 0 },
@@ -878,7 +975,8 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
       : [
           { accountCode: subAccountCode || accountCode, debit: baseAmount, credit: 0 },
           ...(computedVat > 0 ? [{ accountCode: inputVatCode2, debit: computedVat, credit: 0 }] : []),
-          { accountCode: cashAcct, debit: 0, credit: totalWithVat },
+          ...whtCreditLines,
+          { accountCode: cashAcct, debit: 0, credit: netCashOut },
         ];
 
     if (isDryRun(req)) {
@@ -894,6 +992,8 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
           baseAmount,
           vatAmount: computedVat,
           totalWithVat,
+          whtAmount: totalWht,
+          netCashOut,
         },
       });
       return;
@@ -914,14 +1014,22 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     // C4 + C5 — link the voucher to the AP obligation(s) it pays. Skip on
     // idempotent replay (rows already exist from the original insert).
     if (allocations && allocations.length > 0 && !alreadyExists) {
-      for (const a of allocations) {
+      for (let i = 0; i < allocations.length; i++) {
+        const a = allocations[i];
+        const wht = allocWht[i];
         const allocAmt = roundTo2(Number(a.amount));
+        // The obligation is discharged by the FULL gross — the
+        // supplier sees the buyer paid 100K (85K cash + 15K to ZATCA
+        // on its behalf). So `amount` (= cash to supplier) stays net
+        // and the gross-discharged is `allocAmt + wht.wht`.
+        const grossDischarged = roundTo2(allocAmt + (wht?.wht ?? 0));
 
         // #901 cap: Σ existing allocations to this obligation + the new
         // amount must not exceed the obligation's total. Without this
         // check, two vouchers each ≤ their own amount can still
-        // over-allocate a PO/Nusk invoice (e.g. PO=50K → V1 allocates
-        // 40K, V2 allocates 30K → vendor shows -20K outstanding).
+        // over-allocate a PO/Nusk invoice. Σ must include withheld
+        // amounts on previous allocations (gross discharged), so the
+        // SUM picks up amount + whtAmount.
         let obligationCap: number | null = null;
         if (a.obligationType === "purchase_order") {
           const [po] = await rawQuery<{ totalAmount: string | number }>(
@@ -940,7 +1048,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
         }
         if (obligationCap !== null) {
           const [{ already }] = await rawQuery<{ already: string | number }>(
-            `SELECT COALESCE(SUM(amount), 0) AS already
+            `SELECT COALESCE(SUM(amount + COALESCE("whtAmount", 0)), 0) AS already
                FROM supplier_payment_allocations
               WHERE "companyId" = $1
                 AND "obligationType" = $2
@@ -949,9 +1057,9 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
             [scope.companyId, a.obligationType, a.obligationId]
           );
           const alreadyAllocated = Number(already);
-          if (alreadyAllocated + allocAmt > roundTo2(obligationCap) + 0.005) {
+          if (alreadyAllocated + grossDischarged > roundTo2(obligationCap) + 0.005) {
             throw new ValidationError(
-              `إجمالي التخصيصات (${roundTo2(alreadyAllocated + allocAmt)}) يتجاوز قيمة الالتزام (${roundTo2(obligationCap)})`,
+              `إجمالي التخصيصات (${roundTo2(alreadyAllocated + grossDischarged)}) يتجاوز قيمة الالتزام (${roundTo2(obligationCap)})`,
               {
                 field: "allocations",
                 fix: `الالتزام (${a.obligationType} #${a.obligationId}) قُيِّد له ${roundTo2(alreadyAllocated)} سابقًا. خفّض المبلغ.`,
@@ -963,17 +1071,21 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
         await rawExecute(
           `INSERT INTO supplier_payment_allocations
              ("companyId", "branchId", "journalEntryId",
-              "obligationType", "obligationId", amount, notes, "createdBy")
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+              "obligationType", "obligationId", amount, notes, "createdBy",
+              "whtAmount", "whtRate", "whtCategory")
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
           [
             scope.companyId,
             branchId ?? scope.branchId ?? null,
             journalId,
             a.obligationType,
             a.obligationId,
-            allocAmt,
+            allocAmt,                              // comment-anchor: amount = net
             a.notes ?? null,
             scope.activeAssignmentId ?? null,
+            wht?.wht ?? 0,
+            wht?.rate ?? null,
+            wht?.category ?? null,
           ]
         );
       }
