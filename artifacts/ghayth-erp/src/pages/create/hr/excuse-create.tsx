@@ -1,130 +1,107 @@
 import { useLocation } from "wouter";
-import { useApiMutation, useApiQuery } from "@/lib/api";
+import { z } from "zod";
+import { useApiMutation } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Input } from "@/components/ui/input";
-import { CreatePageLayout, AutoField, CreationDateField } from "@workspace/ui-core";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { useToast } from "@/hooks/use-toast";
-import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { useFieldErrors } from "@/hooks/use-field-errors";
+import {
+  CreatePageLayout,
+  AutoField,
+  CreationDateField,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormTextareaField,
+  FormNumberField,
+  FormSelectField,
+  FormDateField,
+} from "@workspace/ui-core";
 import { LogOut } from "lucide-react";
-import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
-const DRAFT_KEY = "hr_excuse_create";
+const schema = z
+  .object({
+    excuseDate: z.string().min(1, "تاريخ الاستئذان مطلوب"),
+    excuseType: z.enum(["early_leave", "late_arrival", "personal"]),
+    startTime: z.string().optional(),
+    endTime: z.string().optional(),
+    estimatedMinutes: z.string().optional(),
+    reason: z.string().optional(),
+  })
+  .refine(
+    (v) => !v.startTime || !v.endTime || v.endTime > v.startTime,
+    { message: "وقت الانتهاء يجب أن يكون بعد وقت البدء", path: ["endTime"] },
+  );
+
+const EXCUSE_TYPE_OPTIONS = [
+  { value: "early_leave", label: "خروج مبكر" },
+  { value: "late_arrival", label: "تأخر عن الحضور" },
+  { value: "personal", label: "استئذان شخصي" },
+];
 
 export default function ExcuseCreate() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  const { toast } = useToast();
   const createMut = useApiMutation("/hr/excuse-requests", "POST", [["excuse-requests"]], {
     successMessage: "تم تقديم طلب الاستئذان بنجاح",
   });
-  const { isLoading, isError } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
-
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
-    excuseDate: "",
-    excuseType: "early_leave",
-    startTime: "",
-    endTime: "",
-    estimatedMinutes: "",
-    reason: "",
-    assignmentId: "",
-  });
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
-  const { fieldErrors, validate, setApiError } = useFieldErrors();
-
-  const handleSubmit = () => {
-    const firstError = validate({
-      excuseDate: form.excuseDate ? null : "تاريخ الاستئذان مطلوب",
-      endTime: form.startTime && form.endTime && form.endTime <= form.startTime
-        ? "وقت الانتهاء يجب أن يكون بعد وقت البدء"
-        : null,
-    });
-    if (firstError) {
-      toast({ variant: "destructive", title: firstError });
-      return;
-    }
-    createMut.mutate(
-      {
-        excuseDate: form.excuseDate,
-        excuseType: form.excuseType,
-        startTime: form.startTime || undefined,
-        endTime: form.endTime || undefined,
-        estimatedMinutes: form.estimatedMinutes ? Number(form.estimatedMinutes) : undefined,
-        reason: form.reason || undefined,
-        assignmentId: form.assignmentId ? Number(form.assignmentId) : undefined,
-      },
-      {
-        onSuccess: () => {
-          clearDraft();
-          setLocation("/hr/excuse-requests");
-        },
-        onError: (err: any) => {
-          setApiError(err);
-        },
-      },
-    );
-  };
 
   return (
     <CreatePageLayout title="طلب استئذان" backPath="/hr/excuse-requests">
-      {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
-          <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
-        </div>
-      )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <AutoField label="الموظف" value={user?.name || "-"} />
         <AutoField label="الرقم الوظيفي" value={user?.empNumber || "-"} />
         <CreationDateField />
       </div>
 
-      <div className="space-y-6">
-        <div>
-          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
-            <LogOut className="w-4 h-4" />
-            تفاصيل الاستئذان
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormFieldWrapper label="تاريخ الاستئذان" required error={fieldErrors.excuseDate}>
-              <DatePicker value={form.excuseDate} onChange={(v) => setForm((f) => ({ ...f, excuseDate: v }))} />
-            </FormFieldWrapper>
-            <FormFieldWrapper label="نوع الاستئذان">
-              <Select value={form.excuseType} onValueChange={(v) => setForm((f) => ({ ...f, excuseType: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="early_leave">خروج مبكر</SelectItem>
-                  <SelectItem value="late_arrival">تأخر عن الحضور</SelectItem>
-                  <SelectItem value="personal">استئذان شخصي</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormFieldWrapper>
-            <FormFieldWrapper label="وقت البدء">
-              <Input type="time" value={form.startTime} onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))} dir="ltr" />
-            </FormFieldWrapper>
-            <FormFieldWrapper label="وقت الانتهاء" error={fieldErrors.endTime}>
-              <Input type="time" value={form.endTime} onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))} dir="ltr" />
-            </FormFieldWrapper>
-            <NumberField label="المدة التقديرية (دقائق)" value={form.estimatedMinutes} onChange={(v) => setForm((f) => ({ ...f, estimatedMinutes: v }))} placeholder="60" min={0} />
-          </div>
-        </div>
-
-        <TextAreaField label="السبب" value={form.reason} onChange={(v) => setForm((f) => ({ ...f, reason: v }))} placeholder="سبب طلب الاستئذان..." />
-      </div>
-
-      <div className="flex justify-end gap-3 pt-6">
-        <Button variant="outline" onClick={() => setLocation("/hr/excuse-requests")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.excuseDate || createMut.isPending} size="lg" rateLimitAware>
-          {createMut.isPending ? "جاري الإرسال..." : "تقديم الطلب"}
-        </Button>
-      </div>
+      <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
+        <LogOut className="w-4 h-4" /> تفاصيل الاستئذان
+      </h3>
+      <FormShell
+        schema={schema}
+        defaultValues={{
+          excuseDate: "",
+          excuseType: "early_leave",
+          startTime: "",
+          endTime: "",
+          estimatedMinutes: "",
+          reason: "",
+        }}
+        submitLabel={createMut.isPending ? "جاري الإرسال..." : "تقديم الطلب"}
+        secondaryActions={
+          <Button type="button" variant="outline" onClick={() => setLocation("/hr/excuse-requests")}>
+            إلغاء
+          </Button>
+        }
+        onSubmit={async (values) => {
+          await new Promise<void>((resolve, reject) =>
+            createMut.mutate(
+              {
+                excuseDate: values.excuseDate,
+                excuseType: values.excuseType,
+                startTime: values.startTime || undefined,
+                endTime: values.endTime || undefined,
+                estimatedMinutes: values.estimatedMinutes ? Number(values.estimatedMinutes) : undefined,
+                reason: values.reason || undefined,
+              },
+              {
+                onSuccess: () => {
+                  setLocation("/hr/excuse-requests");
+                  resolve();
+                },
+                onError: (err) => reject(err),
+              },
+            ),
+          );
+        }}
+      >
+        <FormGrid cols={2}>
+          <FormDateField name="excuseDate" label="تاريخ الاستئذان" required />
+          <FormSelectField name="excuseType" label="نوع الاستئذان" options={EXCUSE_TYPE_OPTIONS} />
+          <FormTextField name="startTime" label="وقت البدء" type="time" />
+          <FormTextField name="endTime" label="وقت الانتهاء" type="time" />
+          <FormNumberField name="estimatedMinutes" label="المدة التقديرية (دقائق)" placeholder="60" min="0" />
+        </FormGrid>
+        <FormTextareaField name="reason" label="السبب" placeholder="سبب طلب الاستئذان..." />
+      </FormShell>
     </CreatePageLayout>
   );
 }
