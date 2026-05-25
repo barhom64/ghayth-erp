@@ -9,6 +9,15 @@
 
 import { rawQuery } from "../rawdb.js";
 import { getEntity } from "../entityRegistry.js";
+import {
+  loadTrialBalance,
+  loadIncomeStatement,
+  loadInvoicesReport,
+  loadPayrollReport,
+  loadAttendanceReport,
+  loadFleetReport,
+  loadFleetTripsReport,
+} from "./reportLoaders.js";
 
 interface LoaderArgs {
   companyId: number;
@@ -93,6 +102,21 @@ export async function loadEntityData(args: LoaderArgs): Promise<Record<string, u
       return await loadOfficialLetter(companyId, entityId);
     case "employee_contract":
       return await loadEmployeeContract(companyId, entityId);
+    // ─── Batch reports (no single row — synthetic entityId encodes filters) ──
+    case "report_trial_balance":
+      return await loadTrialBalance(companyId, entityId);
+    case "report_income_statement":
+      return await loadIncomeStatement(companyId, entityId);
+    case "report_invoices":
+      return await loadInvoicesReport(companyId, entityId);
+    case "report_payroll":
+      return await loadPayrollReport(companyId, entityId);
+    case "report_attendance":
+      return await loadAttendanceReport(companyId, entityId);
+    case "report_fleet":
+      return await loadFleetReport(companyId, entityId);
+    case "report_fleet_trips":
+      return await loadFleetTripsReport(companyId, entityId);
     default:
       // 1. Entity is in entityRegistry → use its declared table.
       // 2. Otherwise fall back to the static map below for entities the
