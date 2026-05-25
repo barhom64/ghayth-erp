@@ -194,7 +194,7 @@ async function loadInvoice(companyId: number, id: string) {
   );
   if (!invoice) return { entity: { id } };
   const items = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM invoice_items WHERE "invoiceId" = $1`,
+    `SELECT * FROM invoice_lines WHERE "invoiceId" = $1`,
     [id]
   );
   const client = invoice.clientId
@@ -248,9 +248,9 @@ async function loadPurchaseOrder(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   if (!po) return { entity: { id } };
-  const items = await rawQuery(`SELECT * FROM purchase_order_items WHERE "poId" = $1`, [id]).catch(() => []);
+  const items = await rawQuery(`SELECT * FROM purchase_order_lines WHERE "purchaseOrderId" = $1`, [id]).catch(() => []);
   const vendor = po.vendorId
-    ? (await rawQuery(`SELECT id, name FROM vendors WHERE id = $1`, [po.vendorId]))[0]
+    ? (await rawQuery(`SELECT id, name FROM suppliers WHERE id = $1`, [po.vendorId]))[0]
     : null;
   return { entity: po, items, vendor };
 }
@@ -288,7 +288,7 @@ async function loadJournalEntry(companyId: number, id: string) {
 
 async function loadAccountStatement(companyId: number, id: string) {
   const [account] = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM gl_accounts WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    `SELECT * FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
     [id, companyId]
   ).catch(() => [null]);
   if (!account) return { entity: { id } };
@@ -325,7 +325,7 @@ async function loadLeaveRequest(companyId: number, id: string) {
 
 async function loadLoanRequest(companyId: number, id: string) {
   const [loan] = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM hr_loans WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    `SELECT * FROM hr_employee_loans WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
     [id, companyId]
   ).catch(() => [null]);
   if (!loan) return { entity: { id } };
