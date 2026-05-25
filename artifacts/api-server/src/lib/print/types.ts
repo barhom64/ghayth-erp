@@ -90,6 +90,17 @@ export interface RenderContext {
   paperSize: PaperSize;
   copyNumber: number;
   watermark?: string;
+  /** Allocated UPFRONT (before render) by printService so the QR can encode
+   *  the verify URL into the document itself. UUID. Null for ephemeral
+   *  previews where no audit row will be written. */
+  jobId?: string | null;
+  /** Public URL that clicking the printed QR resolves to — typically the
+   *  /api/print/verify/:jobId endpoint, optionally a public-facing path
+   *  configured via config.publicBaseUrl. */
+  verifyUrl?: string | null;
+  /** data:image/png;base64,... — pre-computed at render time so adapters
+   *  can drop it into an <img> without async work. */
+  verifyQrDataUrl?: string | null;
 }
 
 export interface FormatAdapter {

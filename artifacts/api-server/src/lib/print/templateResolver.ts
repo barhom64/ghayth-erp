@@ -307,6 +307,7 @@ function buildInvoicePreset(): PrintTemplate {
   <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">المدفوع</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.paidAmount}} {{entity.currency}}</td></tr>
 </table>
 <div style="margin-top:18px;font-size:10pt;color:#475569">{{entity.notes}}</div>
+{{system.verifyBlock}}
 {{branch.footer}}
 </div>`,
     layoutJson: null,

@@ -126,6 +126,32 @@ function buildMovementsTable(movements: unknown): string {
   return buildItemsTable(movements);
 }
 
+/** Phase 6 — a small bottom-corner block with the QR + verify URL +
+ *  jobId for scanners. Designed to be dropped via `{{system.verifyBlock}}`
+ *  in any preset that wants the verification badge. Renders nothing for
+ *  ephemeral previews (no jobId allocated). */
+function buildVerifyBlock(opts: {
+  verifyUrl?: string | null;
+  verifyQrDataUrl?: string | null;
+  jobId?: string | null;
+}): string {
+  if (!opts.jobId) return "";
+  const qr = opts.verifyQrDataUrl
+    ? `<img src="${opts.verifyQrDataUrl}" alt="QR" style="width:80px;height:80px;display:block;"/>`
+    : "";
+  const url = opts.verifyUrl ? escapeHtml(opts.verifyUrl) : "";
+  const jid = escapeHtml(opts.jobId);
+  return `<div style="margin-top:14px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;display:flex;align-items:center;gap:10px;font-size:9pt;background:#f8fafc">
+    ${qr}
+    <div style="flex:1;line-height:1.5">
+      <div style="font-weight:bold;color:#0f172a">للتحقق من صحة المستند</div>
+      <div style="color:#64748b">امسح الرمز أو افتح:</div>
+      <div dir="ltr" style="font-family:monospace;font-size:8pt;color:#334155;word-break:break-all">${url}</div>
+      <div style="color:#94a3b8;margin-top:2px">رقم المرجع: <span dir="ltr" style="font-family:monospace">${jid}</span></div>
+    </div>
+  </div>`;
+}
+
 /** Expand simple {{#each}} blocks. */
 function expandEach(template: string, data: Record<string, unknown>): string {
   const re = /\{\{#each ([\w.]+)\}\}([\s\S]*?)\{\{\/each\}\}/g;
@@ -152,10 +178,16 @@ export interface SubstitutionInput {
   branch: BranchLetterhead;
   isThermal: boolean;
   watermark?: string;
+  /** Phase 6 verify context — when present, templates can use
+   *  {{system.verifyUrl}} (text) or {{system.verifyQr}} (img src).
+   *  Allocated upfront by printService so the URL matches the audit row. */
+  verifyUrl?: string | null;
+  verifyQrDataUrl?: string | null;
+  jobId?: string | null;
 }
 
 export function substitute(input: SubstitutionInput): string {
-  const { data, branch, isThermal, watermark } = input;
+  const { data, branch, isThermal, watermark, verifyUrl, verifyQrDataUrl, jobId } = input;
   let html = input.template ?? "";
 
   // Auto-tokens
@@ -164,6 +196,14 @@ export function substitute(input: SubstitutionInput): string {
     "branch.letterheadThermal": buildLetterheadThermal(branch),
     "branch.footer": buildFooter(branch, false),
     "branch.footerThermal": buildFooter(branch, true),
+    // Phase 6 verify tokens — templates can reference these to show a QR
+    // and a verify URL on every printed page. Empty strings when this is
+    // an ephemeral preview (no audit row, nothing to verify against).
+    "system.verifyUrl": verifyUrl ?? "",
+    "system.verifyQr": verifyQrDataUrl
+      ? `<img src="${verifyQrDataUrl}" alt="verify QR" style="width:90px;height:90px;display:block;"/>`
+      : "",
+    "system.verifyBlock": buildVerifyBlock({ verifyUrl, verifyQrDataUrl, jobId }),
     "entity.itemsTable": buildItemsTable((data as { items?: unknown }).items),
     "entity.linesTable": buildLinesTable((data as { lines?: unknown }).lines),
     "entity.movementsTable": buildMovementsTable((data as { movements?: unknown }).movements),
@@ -228,5 +268,8 @@ export function renderContextToHtml(ctx: RenderContext): string {
     branch: mergedBranch,
     isThermal: ctx.template.isThermal || ctx.format.startsWith("thermal"),
     watermark: ctx.watermark,
+    verifyUrl: ctx.verifyUrl ?? null,
+    verifyQrDataUrl: ctx.verifyQrDataUrl ?? null,
+    jobId: ctx.jobId ?? null,
   });
 }
