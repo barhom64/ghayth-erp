@@ -4,6 +4,7 @@ import {
   BookOpen, FileText, ScrollText, Wallet, ShoppingCart, Receipt,
   Building2, BarChart3, CreditCard, Banknote, HandCoins, ClipboardList,
   Box, Landmark, BadgeDollarSign, Repeat, FileSpreadsheet,
+  Percent, Boxes,
 } from "lucide-react";
 
 const TABS = [
@@ -23,6 +24,10 @@ const TABS = [
   { href: "/finance/vendors", label: "الموردون", icon: Building2, match: ["/finance/vendors"] },
   { href: "/finance/payments", label: "المدفوعات", icon: Banknote, match: ["/finance/payments"] },
   { href: "/finance/tax", label: "الزكاة والضريبة", icon: Repeat, match: ["/finance/tax"] },
+  // الـ tabs الجديدة من حملة الإصلاح المالي (هـ سعادة المحامي إبراهيم):
+  { href: "/finance/tax-codes", label: "رموز الضريبة", icon: Percent, match: ["/finance/tax-codes"] },
+  { href: "/finance/wht-categories", label: "فئات الاستقطاع", icon: Receipt, match: ["/finance/wht-categories"] },
+  { href: "/finance/reports/zatca", label: "تقارير زاتكا والمخزون", icon: Boxes, match: ["/finance/reports/zatca", "/finance/reports/vat-reconciliation", "/finance/reports/wht-summary", "/finance/reports/cogs-summary", "/finance/reports/inventory-valuation", "/finance/reports/inventory-turnover", "/finance/reports/lot-expiry-alerts", "/finance/reports/negative-stock", "/finance/reports/gl-integrity-gaps"] },
   { href: "/finance/reports", label: "التقارير", icon: BarChart3, match: ["/finance/reports"] },
 ];
 

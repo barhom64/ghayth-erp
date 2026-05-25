@@ -18,10 +18,6 @@ export type {
 // ─── Entity-aware print ───────────────────────────────────────────────
 export {
   EntityPrintButton,
-  PrintSections,
-} from "../../../artifacts/ghayth-erp/src/components/shared/entity-print";
-export type {
-  PrintSection,
 } from "../../../artifacts/ghayth-erp/src/components/shared/entity-print";
 
 // ─── Export buttons ───────────────────────────────────────────────────

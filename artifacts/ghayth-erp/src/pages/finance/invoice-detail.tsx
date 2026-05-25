@@ -18,6 +18,7 @@ import {
   Copy,
   Zap,
   Send,
+  FileText,
 } from "lucide-react";
 import {
   DataTable,
@@ -39,6 +40,7 @@ import {
   DetailActionButtons,
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
+import { CreditMemoDialog } from "@/components/shared/credit-memo-dialog";
 
 /**
  * Invoice detail page — migrated to DetailPageLayout which provides
@@ -118,6 +120,7 @@ export default function InvoiceDetailPage() {
     !!id,
   );
   const [showPayment, setShowPayment] = useState(false);
+  const [showCreditMemo, setShowCreditMemo] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
 
   // R.4 iter 4 — both mutations now flow through useApiMutation so
@@ -200,6 +203,12 @@ export default function InvoiceDetailPage() {
         <GuardedButton perm="finance:create" variant="outline" size="sm" onClick={() => setShowPayment(!showPayment)}>
           <Banknote className="h-4 w-4 me-1" />
           تسجيل دفعة
+        </GuardedButton>
+      )}
+      {invoice && invoice.status !== "draft" && invoice.status !== "cancelled" && remaining > 0 && (
+        <GuardedButton perm="finance:create" variant="outline" size="sm" onClick={() => setShowCreditMemo(true)}>
+          <FileText className="h-4 w-4 me-1" />
+          إصدار إشعار دائن
         </GuardedButton>
       )}
       {invoice && (
@@ -467,25 +476,37 @@ export default function InvoiceDetailPage() {
   ) : null;
 
   return (
-    <DetailPageLayout
-      title={invoice?.ref ? `فاتورة ${invoice.ref}` : "فاتورة"}
-      subtitle={invoice?.clientName || undefined}
-      backPath="/finance/invoices"
-      backLabel="العودة للفواتير"
-      status={statusToDetailStatus(invoice?.status)}
-      refNumber={invoice?.ref}
-      createdAt={invoice?.createdAt}
-      updatedAt={invoice?.updatedAt}
-      entityType="invoice"
-      entityId={id || ""}
-      isLoading={isLoading}
-      error={isError && !invoice ? "تعذر تحميل بيانات الفاتورة" : undefined}
-      onRetry={refetch}
-      actions={actions}
-      overview={overview}
-      extraTabs={registryExtraTabs}
-      hideTabs={registryHideTabs}
-    />
+    <>
+      <DetailPageLayout
+        title={invoice?.ref ? `فاتورة ${invoice.ref}` : "فاتورة"}
+        subtitle={invoice?.clientName || undefined}
+        backPath="/finance/invoices"
+        backLabel="العودة للفواتير"
+        status={statusToDetailStatus(invoice?.status)}
+        refNumber={invoice?.ref}
+        createdAt={invoice?.createdAt}
+        updatedAt={invoice?.updatedAt}
+        entityType="invoice"
+        entityId={id || ""}
+        isLoading={isLoading}
+        error={isError && !invoice ? "تعذر تحميل بيانات الفاتورة" : undefined}
+        onRetry={refetch}
+        actions={actions}
+        overview={overview}
+        extraTabs={registryExtraTabs}
+        hideTabs={registryHideTabs}
+      />
+      {invoice && (
+        <CreditMemoDialog
+          invoiceId={Number(id)}
+          invoiceRef={invoice.ref}
+          openBalance={remaining}
+          open={showCreditMemo}
+          onOpenChange={setShowCreditMemo}
+          onIssued={refetch}
+        />
+      )}
+    </>
   );
 }
 

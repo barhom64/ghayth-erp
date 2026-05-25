@@ -39,7 +39,7 @@ export const labelAdapter: FormatAdapter = {
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8"/>
-  <title>label-${ctx.entityType}-${ctx.entityId}</title>
+  <title>label-${`${ctx.entityType}-${ctx.entityId}`.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]!))}</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Barcode+128&display=swap"/>
   <style>${LABEL_CSS(w, h)}${overrides}</style>
 </head>
