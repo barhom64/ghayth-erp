@@ -8,15 +8,21 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { z } from "zod";
 import {
   PageStatusBadge,
   DataTable,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormSelectField,
+  FormDateField,
 } from "@workspace/ui-core";
 import {
   User, Phone, Mail, Briefcase, Calendar, Building, CreditCard,
   ListTodo, Clock, BookOpen, DollarSign, AlertTriangle, Printer,
   FileText, TrendingUp, Award, Activity, CheckCircle2,
-  XCircle, AlertCircle, ChevronDown, ChevronUp, Pencil, Check, X
+  XCircle, AlertCircle, ChevronDown, ChevronUp, Pencil, X
 } from "lucide-react";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
@@ -24,14 +30,11 @@ import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateAr, formatTimeAr, formatCurrency } from "@/lib/formatters";
 import { PrintPreviewModal } from "@workspace/report-kit";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
 import { EmployeeDisciplineSummary } from "@/components/shared/employee-discipline-summary";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 
 type OperationalStatus = {
@@ -40,6 +43,32 @@ type OperationalStatus = {
   color: string;
   reason: string;
 };
+
+const govSchema = z.object({
+  borderNumber: z.string().optional(),
+  visaNumber: z.string().optional(),
+  visaType: z.string().optional(),
+  visaExpiry: z.string().optional(),
+  sponsorNumber: z.string().optional(),
+  workPermitNumber: z.string().optional(),
+  workPermitExpiry: z.string().optional(),
+  iqamaStatus: z.string(),
+});
+
+const VISA_TYPE_OPTIONS = [
+  { value: "work", label: "عمل" },
+  { value: "visit", label: "زيارة" },
+  { value: "transit", label: "مرور" },
+  { value: "hajj", label: "حج" },
+  { value: "umrah", label: "عمرة" },
+];
+
+const IQAMA_STATUS_OPTIONS = [
+  { value: "active", label: "سارية" },
+  { value: "expired", label: "منتهية" },
+  { value: "renewal_pending", label: "قيد التجديد" },
+  { value: "cancelled", label: "ملغاة" },
+];
 
 function OperationalStatusBar({ employeeId }: { employeeId: string }) {
   const [opStatus, setOpStatus] = useState<OperationalStatus | null>(null);
@@ -247,21 +276,6 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const { data: templatesResp } = useApiQuery<any>(["doc-templates"], "/documents/templates");
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [govEditing, setGovEditing] = useState(false);
-  const [govForm, setGovForm] = useState<Record<string, string>>({});
-
-  const govStartEdit = () => {
-    setGovForm({
-      borderNumber: employee?.borderNumber || "",
-      visaNumber: employee?.visaNumber || "",
-      visaType: employee?.visaType || "",
-      visaExpiry: employee?.visaExpiry ? employee.visaExpiry.split("T")[0] : "",
-      sponsorNumber: employee?.sponsorNumber || "",
-      workPermitNumber: employee?.workPermitNumber || "",
-      workPermitExpiry: employee?.workPermitExpiry ? employee.workPermitExpiry.split("T")[0] : "",
-      iqamaStatus: employee?.iqamaStatus || "active",
-    });
-    setGovEditing(true);
-  };
 
   const govSaveMut = useApiMutation<any, Record<string, string>>(
     `/employees/${id}`,
@@ -272,9 +286,6 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
       onSuccess: () => setGovEditing(false),
     }
   );
-  const govSaveEdit = () => {
-    govSaveMut.mutate(govForm);
-  };
   const hrTemplates = asList<any>(templatesResp).filter((t: any) => t.category === "hr" && t.isActive !== false);
 
   const handlePrintTemplate = async (template: any) => {
@@ -474,75 +485,46 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 بيانات الإقامة والتأشيرة — الربط الحكومي (مقيم)
               </CardTitle>
               {!govEditing && (
-                <GuardedButton perm="hr:create" variant="ghost" size="sm" onClick={govStartEdit}>
+                <GuardedButton perm="hr:create" variant="ghost" size="sm" onClick={() => setGovEditing(true)}>
                   <Pencil className="h-4 w-4 me-1" />تعديل
                 </GuardedButton>
               )}
             </CardHeader>
             <CardContent>
               {govEditing ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">رقم الحدود</p>
-                      <Input value={govForm.borderNumber} onChange={e => setGovForm(f => ({ ...f, borderNumber: e.target.value }))} />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">رقم التأشيرة</p>
-                      <Input value={govForm.visaNumber} onChange={e => setGovForm(f => ({ ...f, visaNumber: e.target.value }))} />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">نوع التأشيرة</p>
-                      <Select value={govForm.visaType || "_none"} onValueChange={(v) => setGovForm(f => ({ ...f, visaType: v === "_none" ? "" : v }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="_none">—</SelectItem>
-                          <SelectItem value="work">عمل</SelectItem>
-                          <SelectItem value="visit">زيارة</SelectItem>
-                          <SelectItem value="transit">مرور</SelectItem>
-                          <SelectItem value="hajj">حج</SelectItem>
-                          <SelectItem value="umrah">عمرة</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">انتهاء التأشيرة</p>
-                      <UnifiedDateInput value={govForm.visaExpiry} onChange={(iso) => setGovForm(f => ({ ...f, visaExpiry: iso }))} />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">رقم الكفيل / المنشأة</p>
-                      <Input value={govForm.sponsorNumber} onChange={e => setGovForm(f => ({ ...f, sponsorNumber: e.target.value }))} />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">رقم رخصة العمل</p>
-                      <Input value={govForm.workPermitNumber} onChange={e => setGovForm(f => ({ ...f, workPermitNumber: e.target.value }))} />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">انتهاء رخصة العمل</p>
-                      <UnifiedDateInput value={govForm.workPermitExpiry} onChange={(iso) => setGovForm(f => ({ ...f, workPermitExpiry: iso }))} />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">حالة الإقامة</p>
-                      <Select value={govForm.iqamaStatus} onValueChange={(v) => setGovForm(f => ({ ...f, iqamaStatus: v }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="active">سارية</SelectItem>
-                          <SelectItem value="expired">منتهية</SelectItem>
-                          <SelectItem value="renewal_pending">قيد التجديد</SelectItem>
-                          <SelectItem value="cancelled">ملغاة</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 justify-end">
-                    <GuardedButton perm="hr:create" size="sm" onClick={govSaveEdit}>
-                      <Check className="h-4 w-4 me-1" />حفظ
-                    </GuardedButton>
-                    <Button variant="outline" size="sm" onClick={() => setGovEditing(false)}>
+                <FormShell
+                  schema={govSchema}
+                  defaultValues={{
+                    borderNumber: employee?.borderNumber || "",
+                    visaNumber: employee?.visaNumber || "",
+                    visaType: employee?.visaType || "",
+                    visaExpiry: employee?.visaExpiry ? employee.visaExpiry.split("T")[0] : "",
+                    sponsorNumber: employee?.sponsorNumber || "",
+                    workPermitNumber: employee?.workPermitNumber || "",
+                    workPermitExpiry: employee?.workPermitExpiry ? employee.workPermitExpiry.split("T")[0] : "",
+                    iqamaStatus: employee?.iqamaStatus || "active",
+                  }}
+                  submitLabel="حفظ"
+                  secondaryActions={
+                    <Button type="button" variant="outline" size="sm" onClick={() => setGovEditing(false)}>
                       <X className="h-4 w-4 me-1" />إلغاء
                     </Button>
-                  </div>
-                </div>
+                  }
+                  onSubmit={async (values) => {
+                    await govSaveMut.mutateAsync(values);
+                  }}
+                >
+                  <FormGrid cols={4}>
+                    <FormTextField name="borderNumber" label="رقم الحدود" />
+                    <FormTextField name="visaNumber" label="رقم التأشيرة" />
+                    <FormSelectField name="visaType" label="نوع التأشيرة" options={VISA_TYPE_OPTIONS} placeholder="—" />
+                    <FormDateField name="visaExpiry" label="انتهاء التأشيرة" />
+                    <FormTextField name="sponsorNumber" label="رقم الكفيل / المنشأة" />
+                    <FormTextField name="workPermitNumber" label="رقم رخصة العمل" />
+                    <FormDateField name="workPermitExpiry" label="انتهاء رخصة العمل" />
+                    <FormSelectField name="iqamaStatus" label="حالة الإقامة" options={IQAMA_STATUS_OPTIONS} />
+                  </FormGrid>
+                </FormShell>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">رقم الإقامة</p><p className="font-mono text-sm">{employee.iqamaNumber || "-"}</p></div>
