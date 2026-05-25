@@ -1,0 +1,20 @@
+{
+  "code": "finance.payment-voucher",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "payment_voucher",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": false,
+  "qr": true,
+  "status": "published",
+  "domain": "finance",
+  "title": "سند صرف",
+  "implementation": {
+    "kind": "universal-fallback",
+    "key": "—"
+  },
+  "ownerTeam": "finance"
+}
