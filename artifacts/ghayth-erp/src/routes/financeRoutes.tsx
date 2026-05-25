@@ -15,6 +15,8 @@ const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
 const TaxCodesCreate = lazy(() => import("@/pages/create/finance/tax-codes-create"));
 const WhtCategories = lazy(() => import("@/pages/finance/wht-categories"));
 const WhtCategoriesCreate = lazy(() => import("@/pages/create/finance/wht-categories-create"));
+const TaxCodesEdit = lazy(() => import("@/pages/create/finance/tax-codes-edit"));
+const WhtCategoriesEdit = lazy(() => import("@/pages/create/finance/wht-categories-edit"));
 const LotExpiryAlerts = lazy(() => import("@/pages/finance/lot-expiry-alerts"));
 const CogsSummary = lazy(() => import("@/pages/finance/cogs-summary"));
 const InventoryValuation = lazy(() => import("@/pages/finance/inventory-valuation"));
@@ -38,6 +40,7 @@ const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
 const Vendors = lazy(() => import("@/pages/finance/vendors"));
 const VendorsCreate = lazy(() => import("@/pages/create/finance/vendors-create"));
+const VendorsEdit = lazy(() => import("@/pages/create/finance/vendors-edit"));
 const VendorDetail = lazy(() => import("@/pages/finance/vendor-detail"));
 const PurchaseOrders = lazy(() => import("@/pages/finance/purchase-orders"));
 const PurchaseOrdersCreate = lazy(() => import("@/pages/create/finance/purchase-orders-create"));
@@ -100,8 +103,10 @@ export const financeRoutes = [
   // as accounts.tsx; create pages mirror accounts-create.tsx.
   { path: "/finance/tax-codes", component: TaxCodes },
   { path: "/finance/tax-codes/create", component: TaxCodesCreate },
+  { path: "/finance/tax-codes/:id/edit", component: TaxCodesEdit },
   { path: "/finance/wht-categories", component: WhtCategories },
   { path: "/finance/wht-categories/create", component: WhtCategoriesCreate },
+  { path: "/finance/wht-categories/:id/edit", component: WhtCategoriesEdit },
   // GL integrity gaps — period-close pre-flight (#1043).
   { path: "/finance/reports/gl-integrity-gaps", component: GlIntegrityGaps },
   // ZATCA & inventory reports hub — landing page (#1059).
@@ -132,6 +137,7 @@ export const financeRoutes = [
   { path: "/finance/budget/:id", component: BudgetDetail },
   { path: "/finance/vendors", component: Vendors },
   { path: "/finance/vendors/create", component: VendorsCreate },
+  { path: "/finance/vendors/:id/edit", component: VendorsEdit, subKey: "vendors" },
   { path: "/finance/vendors/:id", component: VendorDetail, subKey: "vendors" },
   { path: "/finance/purchase-orders", component: PurchaseOrders },
   { path: "/finance/purchase-orders/create", component: PurchaseOrdersCreate },
