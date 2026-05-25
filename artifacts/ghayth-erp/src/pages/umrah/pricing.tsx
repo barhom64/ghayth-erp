@@ -1,19 +1,24 @@
 import { useMemo, useState } from "react";
+import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useFormContext } from "react-hook-form";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { PageShell } from "@workspace/ui-core";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  PageShell,
+  FormShell,
+  FormGrid,
+  FormTextareaField,
+  FormNumberField,
+  FormSelectField,
+  FormDateField,
+  FormCheckboxField,
+} from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Plus, Pencil, Trash2, AlertTriangle, Tag, Hotel, Bus } from "lucide-react";
 
@@ -33,6 +38,55 @@ interface PricingRow {
   notes?: string;
 }
 
+const pricingSchema = z
+  .object({
+    agentId: z.string().min(1, "الوكيل الرئيسي مطلوب"),
+    subAgentId: z.string().optional(),
+    seasonId: z.string().min(1, "الموسم مطلوب"),
+    pricePerMutamer: z.string().refine((v) => Number(v) > 0, "السعر مطلوب"),
+    validFrom: z.string().min(1, "تاريخ السريان مطلوب"),
+    validTo: z.string().min(1, "تاريخ الانتهاء مطلوب"),
+    includesHotel: z.boolean(),
+    includesTransport: z.boolean(),
+    notes: z.string().optional(),
+  })
+  .refine(
+    (v) => !v.validFrom || !v.validTo || v.validTo >= v.validFrom,
+    { message: "تاريخ الانتهاء يجب أن يكون بعد تاريخ السريان", path: ["validTo"] },
+  );
+type PricingForm = z.infer<typeof pricingSchema>;
+
+const PRICING_EMPTY: PricingForm = {
+  agentId: "",
+  subAgentId: "",
+  seasonId: "",
+  pricePerMutamer: "",
+  validFrom: "",
+  validTo: "",
+  includesHotel: false,
+  includesTransport: false,
+  notes: "",
+};
+
+/**
+ * Sub-agent picker that filters by the currently-selected agentId. Lives
+ * inside FormShell so it can read agentId via useFormContext.watch().
+ */
+function SubAgentPicker({ subAgents }: { subAgents: any[] }) {
+  const { watch } = useFormContext();
+  const agentId = watch("agentId") as string;
+  const filtered = subAgents.filter(
+    (s: any) => !agentId || s.agentId === Number(agentId),
+  );
+  return (
+    <FormSelectField
+      name="subAgentId"
+      label="الوكيل الفرعي (اختياري)"
+      options={filtered.map((s: any) => ({ value: String(s.id), label: s.name }))}
+      placeholder="بدون وكيل فرعي"
+    />
+  );
+}
 
 export default function UmrahPricing() {
   const pricingQ = useApiQuery<{ data: PricingRow[] }>(["umrah-pricing"], "/umrah/pricing");
@@ -48,22 +102,59 @@ export default function UmrahPricing() {
 
   const activeSeason = seasons.find((s: any) => s.status === "open") ?? seasons[0];
 
-  const [editing, setEditing] = useState<Partial<PricingRow> | null>(null);
+  // editingId discriminator: null = closed, "new" = create, number = edit row
+  const [editingId, setEditingId] = useState<null | "new" | number>(null);
+  const [editingDefaults, setEditingDefaults] = useState<PricingForm>(PRICING_EMPTY);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+
+  const closeEditor = () => setEditingId(null);
 
   const createMut = useApiMutation<any, Partial<PricingRow>>(
     "/umrah/pricing",
     "POST",
     [["umrah-pricing"]],
-    { successMessage: "تم حفظ التسعيرة", onSuccess: () => setEditing(null) },
+    { successMessage: "تم حفظ التسعيرة", onSuccess: closeEditor },
   );
   const updateMut = useApiMutation<any, Partial<PricingRow>>(
     (body) => `/umrah/pricing/${body.id}`,
     "PATCH",
     [["umrah-pricing"]],
-    { successMessage: "تم تحديث التسعيرة", onSuccess: () => setEditing(null) },
+    { successMessage: "تم تحديث التسعيرة", onSuccess: closeEditor },
   );
-  const saveMut = { isPending: createMut.isPending || updateMut.isPending, mutate: (body: Partial<PricingRow>) => body.id ? updateMut.mutate(body) : createMut.mutate(body) };
+
+  const openCreate = () => {
+    setEditingDefaults(PRICING_EMPTY);
+    setEditingId("new");
+  };
+  const openEdit = (r: PricingRow) => {
+    setEditingDefaults({
+      agentId: String(r.agentId),
+      subAgentId: r.subAgentId ? String(r.subAgentId) : "",
+      seasonId: String(r.seasonId),
+      pricePerMutamer: String(r.pricePerMutamer),
+      validFrom: r.validFrom,
+      validTo: r.validTo,
+      includesHotel: r.includesHotel,
+      includesTransport: r.includesTransport,
+      notes: r.notes ?? "",
+    });
+    setEditingId(r.id);
+  };
+  const handleSave = async (values: PricingForm) => {
+    const payload: Partial<PricingRow> = {
+      agentId: Number(values.agentId),
+      subAgentId: values.subAgentId ? Number(values.subAgentId) : null,
+      seasonId: Number(values.seasonId),
+      pricePerMutamer: Number(values.pricePerMutamer),
+      validFrom: values.validFrom,
+      validTo: values.validTo,
+      includesHotel: values.includesHotel,
+      includesTransport: values.includesTransport,
+      notes: values.notes || undefined,
+    };
+    if (typeof editingId === "number") await updateMut.mutateAsync({ ...payload, id: editingId });
+    else await createMut.mutateAsync(payload);
+  };
 
   const deleteMut = useApiMutation<any, { id: number }>(
     (body) => `/umrah/pricing/${body.id}`,
@@ -140,11 +231,14 @@ export default function UmrahPricing() {
       actions={
         <GuardedButton
           perm="umrah:write"
-          onClick={() => setEditing({
-            includesHotel: true,
-            includesTransport: false,
-            seasonId: activeSeason?.id,
-          })}
+          onClick={() => {
+            setEditingDefaults({
+              ...PRICING_EMPTY,
+              includesHotel: true,
+              seasonId: activeSeason?.id ? String(activeSeason.id) : "",
+            });
+            setEditingId("new");
+          }}
           className="gap-2"
         >
           <Plus className="h-4 w-4" />
@@ -237,7 +331,7 @@ export default function UmrahPricing() {
                                 perm="umrah:write"
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => setEditing(r)}
+                                onClick={() => openEdit(r)}
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                               </GuardedButton>
@@ -263,119 +357,47 @@ export default function UmrahPricing() {
       </PageStateWrapper>
 
       {/* Create / edit dialog */}
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+      <Dialog open={editingId !== null} onOpenChange={(o) => !o && closeEditor()}>
         <DialogContent className="max-w-2xl" dir="rtl">
           <DialogHeader>
-            <DialogTitle>{editing?.id ? "تعديل تسعيرة" : "تسعيرة جديدة"}</DialogTitle>
+            <DialogTitle>{typeof editingId === "number" ? "تعديل تسعيرة" : "تسعيرة جديدة"}</DialogTitle>
           </DialogHeader>
-          {editing && (
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>الوكيل الرئيسي *</Label>
-                <Select
-                  value={editing.agentId ? String(editing.agentId) : ""}
-                  onValueChange={(v) => setEditing({ ...editing, agentId: Number(v) })}
-                >
-                  <SelectTrigger><SelectValue placeholder="اختر الوكيل" /></SelectTrigger>
-                  <SelectContent>
-                    {agents.map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>الوكيل الفرعي (اختياري)</Label>
-                <Select
-                  value={editing.subAgentId ? String(editing.subAgentId) : "none"}
-                  onValueChange={(v) => setEditing({ ...editing, subAgentId: v === "none" ? null : Number(v) })}
-                >
-                  <SelectTrigger><SelectValue placeholder="بدون وكيل فرعي" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">بدون وكيل فرعي</SelectItem>
-                    {subAgents
-                      .filter((s: any) => !editing.agentId || s.agentId === editing.agentId)
-                      .map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>الموسم *</Label>
-                <Select
-                  value={editing.seasonId ? String(editing.seasonId) : ""}
-                  onValueChange={(v) => setEditing({ ...editing, seasonId: Number(v) })}
-                >
-                  <SelectTrigger><SelectValue placeholder="اختر الموسم" /></SelectTrigger>
-                  <SelectContent>
-                    {seasons.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.title}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>السعر للمعتمر *</Label>
-                <Input
-                  type="number"
-                  value={editing.pricePerMutamer ?? ""}
-                  onChange={(e) => setEditing({ ...editing, pricePerMutamer: Number(e.target.value) })}
-                />
-              </div>
-              <div>
-                <Label>ساري من *</Label>
-                <UnifiedDateInput
-                  required
-                  value={editing.validFrom ?? ""}
-                  onChange={(iso) => setEditing({ ...editing, validFrom: iso })}
-                />
-              </div>
-              <div>
-                <Label>ساري إلى *</Label>
-                <UnifiedDateInput
-                  required
-                  value={editing.validTo ?? ""}
-                  onChange={(iso) => setEditing({ ...editing, validTo: iso })}
-                />
-              </div>
-              <div className="flex items-center gap-2 pt-5">
-                <Checkbox
-                  id="price-hotel"
-                  checked={!!editing.includesHotel}
-                  onCheckedChange={(c) => setEditing({ ...editing, includesHotel: !!c })}
-                />
-                <Label htmlFor="price-hotel" className="cursor-pointer">يشمل الفندق</Label>
-              </div>
-              <div className="flex items-center gap-2 pt-5">
-                <Checkbox
-                  id="price-transport"
-                  checked={!!editing.includesTransport}
-                  onCheckedChange={(c) => setEditing({ ...editing, includesTransport: !!c })}
-                />
-                <Label htmlFor="price-transport" className="cursor-pointer">يشمل النقل</Label>
-              </div>
-              <div className="col-span-2">
-                <Label>ملاحظات</Label>
-                <Textarea
-                  value={editing.notes ?? ""}
-                  onChange={(e) => setEditing({ ...editing, notes: e.target.value })}
-                  rows={2}
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>إلغاء</Button>
-            <GuardedButton
-              perm="umrah:write"
-              disabled={
-                saveMut.isPending ||
-                !editing?.agentId ||
-                !editing?.seasonId ||
-                !editing?.pricePerMutamer ||
-                !editing?.validFrom ||
-                !editing?.validTo
-              }
-              onClick={() => editing && saveMut.mutate(editing)}
-            >
-              {saveMut.isPending ? "جاري الحفظ..." : "حفظ"}
-            </GuardedButton>
-          </DialogFooter>
+          <FormShell
+            key={String(editingId ?? "closed")}
+            schema={pricingSchema}
+            defaultValues={editingDefaults}
+            submitLabel={
+              createMut.isPending || updateMut.isPending ? "جاري الحفظ..." : "حفظ"
+            }
+            secondaryActions={
+              <Button type="button" variant="outline" onClick={closeEditor}>إلغاء</Button>
+            }
+            onSubmit={handleSave}
+          >
+            <FormGrid cols={2}>
+              <FormSelectField
+                name="agentId"
+                label="الوكيل الرئيسي"
+                required
+                options={agents.map((a: any) => ({ value: String(a.id), label: a.name }))}
+                placeholder="اختر الوكيل"
+              />
+              <SubAgentPicker subAgents={subAgents} />
+              <FormSelectField
+                name="seasonId"
+                label="الموسم"
+                required
+                options={seasons.map((s: any) => ({ value: String(s.id), label: s.title }))}
+                placeholder="اختر الموسم"
+              />
+              <FormNumberField name="pricePerMutamer" label="السعر للمعتمر" required />
+              <FormDateField name="validFrom" label="ساري من" required />
+              <FormDateField name="validTo" label="ساري إلى" required />
+              <FormCheckboxField name="includesHotel" label="يشمل الفندق" className="pt-5" />
+              <FormCheckboxField name="includesTransport" label="يشمل النقل" className="pt-5" />
+              <FormTextareaField name="notes" label="ملاحظات" rows={2} className="md:col-span-2" />
+            </FormGrid>
+          </FormShell>
         </DialogContent>
       </Dialog>
 
@@ -388,7 +410,7 @@ export default function UmrahPricing() {
           <p className="text-sm text-muted-foreground">
             هل أنت متأكد من حذف هذه التسعيرة؟ لا يمكن التراجع عن هذا الإجراء.
           </p>
-          <DialogFooter>
+          <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={() => setDeleteId(null)}>إلغاء</Button>
             <GuardedButton
               perm="umrah:write"
@@ -398,7 +420,7 @@ export default function UmrahPricing() {
             >
               {deleteMut.isPending ? "جاري الحذف..." : "حذف"}
             </GuardedButton>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </PageShell>
