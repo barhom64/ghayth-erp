@@ -1,15 +1,26 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { GuardedButton } from "@/components/shared/permission-gate";
+import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  FormShell,
+  FormGrid,
+  FormSelectField,
+  FormDateField,
+} from "@workspace/ui-core";
 import { Search, UserPlus, X, Calendar, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+
+const assignRoleSchema = z.object({
+  roleId: z.string().min(1, "اختر دوراً"),
+  expiry: z.string(),
+});
 
 interface UserRow {
   userId: number;
@@ -50,8 +61,7 @@ export function UserRoleAssignmentTab() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
-  const [pickRole, setPickRole] = useState<string>("");
-  const [pickExpiry, setPickExpiry] = useState<string>("");
+  const canAssign = usePermission("admin:create");
 
   const { data: usersData, isLoading: usersLoading } = useApiQuery<{ users: UserRow[] }>(
     ["rbac-users", search],
@@ -72,20 +82,18 @@ export function UserRoleAssignmentTab() {
   const bindings = bindingsData?.roles || [];
   const selectedUser = users.find((u) => u.userId === selectedUserId);
 
-  const assign = async () => {
-    if (!selectedUserId || !pickRole) return;
+  const assign = async (values: { roleId: string; expiry: string }) => {
+    if (!selectedUserId) return;
     try {
       await apiFetch(`/rbac/v2/users/${selectedUserId}/roles`, {
         method: "POST",
         body: JSON.stringify({
-          roleId: Number(pickRole),
+          roleId: Number(values.roleId),
           isPrimary: bindings.length === 0,
-          expiresAt: pickExpiry || null,
+          expiresAt: values.expiry || null,
         }),
       });
       toast({ title: "تم الإسناد", description: "تم منح الدور للمستخدم" });
-      setPickRole("");
-      setPickExpiry("");
       refetchBindings();
       qc.invalidateQueries({ queryKey: ["rbac-users"] });
     } catch (err: any) {
@@ -243,33 +251,28 @@ export function UserRoleAssignmentTab() {
 
               <div className="border-t pt-3">
                 <p className="text-xs font-semibold text-muted-foreground mb-2">إسناد دور جديد</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <Select value={pickRole} onValueChange={setPickRole}>
-                    <SelectTrigger className="h-9 text-sm col-span-2">
-                      <SelectValue placeholder="اختر دوراً..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {roles
+                <FormShell
+                  key={String(selectedUserId)}
+                  schema={assignRoleSchema}
+                  defaultValues={{ roleId: "", expiry: "" }}
+                  submitLabel="إسناد"
+                  disabled={!canAssign}
+                  onSubmit={async (values) => {
+                    await assign(values);
+                  }}
+                >
+                  <FormGrid cols={2}>
+                    <FormSelectField
+                      name="roleId"
+                      label="الدور"
+                      placeholder="اختر دوراً..."
+                      options={roles
                         .filter((r) => !bindings.find((b) => b.role_id === r.id))
-                        .map((r) => (
-                          <SelectItem key={r.id} value={String(r.id)} className="text-sm">
-                            {r.label_ar}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="date"
-                    value={pickExpiry}
-                    onChange={(e) => setPickExpiry(e.target.value)}
-                    className="h-9 text-sm"
-                    placeholder="تاريخ انتهاء (اختياري)"
-                  />
-                </div>
-                <GuardedButton perm="admin:create" onClick={assign} disabled={!pickRole} className="w-full mt-2" size="sm">
-                  <UserPlus className="h-4 w-4 me-1" />
-                  إسناد
-                </GuardedButton>
+                        .map((r) => ({ value: String(r.id), label: r.label_ar }))}
+                    />
+                    <FormDateField name="expiry" label="تاريخ انتهاء (اختياري)" />
+                  </FormGrid>
+                </FormShell>
               </div>
             </CardContent>
           </Card>
