@@ -19,7 +19,7 @@
 | DLQ | موجود + مفهرس | `migrations/110_event_dlq_table.sql` |
 | Cron + listeners | داخل HTTP process | `index.ts:129-144` يبدأ السيرفر ثم cron داخل نفس العملية |
 | Finance regression suite | متفرّق | golden path test واحد + 14 ملف finance منفصل، بلا scenario harness موحّد |
-| UI standardization | منخفض | 429 page · 282 استدعاء FormShell · 499 استدعاء DataTable · 18 صفحة لا تزال تستخدم `<table>` خام · 251 صفحة فيها `useState` (forms غير مهاجَرة) |
+| UI standardization | متوسط — يتقدّم باطّراد | 431 page · 223/431 (51.7%) على FormShell · 10 shared/embedded components ينشرون FormShell عبر detail/approval pages · 18 صفحة لا تزال تستخدم `<table>` خام · 208 صفحة لم تنتقل بعد (معظمها dashboards/filters لا تحتاج FormShell). راجع `docs/forms-migration-report.md` للتفاصيل الحيّة |
 
 النظام دخل مرحلة **Enterprise Hardening**؛ هذا المستند يقسّمها إلى أربع
 حُزم متوازية، كل واحدة لها مالك وقابلة للتقطيع إلى PRs.
@@ -168,13 +168,14 @@ P0..P7؛ كل مُمكِّن مُعلَّم برقم phase في docstring الك
 
 | المُمكِّن | الموقع | تبنّي |
 | --- | --- | --- |
-| `PageShell` (P1.1) | `components/page-shell.tsx` | 179/429 (41.7%) |
-| `FormShell` (P1.2) | `components/form-shell.tsx` | 55/429 (12.8%) |
+| `PageShell` (P1.1) | `components/page-shell.tsx` | 179/431 (41.5%) |
+| `FormShell` (P1.2) | `components/form-shell.tsx` | 223/431 (51.7%) — `forms-migration-report.md` is authoritative |
 | `ApiError` + typed pipeline (P1.3) | `lib/api.ts` | عالمي |
 | DataTable presets (P1.4) | `components/data-table-presets.tsx` | اختياري |
 | `useLifecycleAction` (P1.5) | `hooks/use-lifecycle-action.tsx` | عالمي |
 | `PageStatusBadge` + STATUS_MAP (P1.6) | `components/page-status-badge.tsx` | تدريجي |
-| `DetailPageLayout` | `components/shared/detail-page-layout.tsx` | 79/429 (18.4%) |
+| `DetailPageLayout` | `components/shared/detail-page-layout.tsx` | 79/431 (18.3%) |
+| `useDirtyGuard` (2026-05-25) | `hooks/use-dirty-guard.tsx` | shared replacement for `window.confirm` on Dialog close |
 
 **الفجوة الحقيقية** (لم تكن واضحة في الـ roadmap السابق):
 
@@ -183,11 +184,17 @@ P0..P7؛ كل مُمكِّن مُعلَّم برقم phase في docstring الك
    غير المُهاجَرة.
 2. لا `<ListPage>` ولا `<CreateEditPage>` composites — كل صفحة list
    تُكوّن `PageShell + DataTable + Pagination` يدويًا (107 صفحة).
-3. لا lint guards — `scripts/src/lint-patterns.mjs` فيه 8 قواعد لكن
-   لا واحدة على UI patterns (`<table>` خام، `useState` في create
-   pages، إلخ).
-4. 18 صفحة raw `<table>` · 196 صفحة create/edit بـ `useState` بلا
-   `FormShell` · 250 صفحة بلا `PageShell`.
+3. ~~لا lint guards على UI patterns~~ — `scripts/src/lint-patterns.mjs`
+   يحوي الآن 15+ قاعدة صلبة على UI: 15 ratchet rules لمسارات legacy
+   UI kit (page-shell, form-shell, data-table, …) + قاعدة
+   `manual-form-instead-of-formshell` تمنع إعادة `useAutoDraft` /
+   `useFieldErrors` + قاعدة `save-button-missing-rateLimitAware` +
+   قاعدة `native-confirm-or-prompt` (2026-05-25) تمنع
+   `window.confirm`/`prompt`. يبقى من الفجوة فقط قاعدة على `<table>`
+   خام.
+4. 18 صفحة raw `<table>` · ~~196~~ ≈208 صفحة create/edit بـ `useState`
+   بلا `FormShell` (الـ create-* كلها مكتملة 76/76؛ البقايا
+   dashboards/filter pages) · 252 صفحة بلا `PageShell`.
 
 ### المخرج (مُحدَّث)
 
@@ -203,8 +210,9 @@ P0..P7؛ كل مُمكِّن مُعلَّم برقم phase في docstring الك
 | B3 | بناء `<ListPage>` composite (P7) — يستهلك PageShell + DataTable + presets؛ يصبح القاعدة لصفحات list الجديدة | غير منجَز |
 | B4 | بناء `<CreateEditPage>` composite (P7) — PageShell + FormShell + dirty-guard | غير منجَز |
 | B5 | إضافة أوّل lint rule في `scripts/src/lint-patterns.mjs`: `raw-table-in-page` (يفترض إكمال migration لـ 18 صفحة قائمة أولًا، أو bootstrap بـ skip-list) | غير منجَز |
-| B6 | sweep تدريجي للـ 250 صفحة الخالية من `<PageShell>` (دومين بدومين، نفس نمط P4.1-P4.9) | تدريجي طويل المدى |
-| B7 | sweep `useState` → `FormShell` للـ 196 صفحة create/edit | تدريجي طويل المدى |
+| B5+ (2026-05-25) | hard lint rule `native-confirm-or-prompt` يمنع `window.confirm`/`prompt` على كل صفحات + components، مع 5 fixtures في `lint-patterns.test.mjs` و useDirtyGuard كبديل canonical | ✅ منجَز |
+| B6 | sweep تدريجي للـ 252 صفحة الخالية من `<PageShell>` (دومين بدومين، نفس نمط P4.1-P4.9) | تدريجي طويل المدى |
+| B7 | sweep `useState` → `FormShell` للـ create/edit | ✅ 223/431 (51.7%) — كل صفحات `pages/create/*` مكتملة (76/76)، باقي الصفحات إما dashboards/filters أو UI patterns لا تنطبق عليها (multi-checkbox toggles، polymorphic builders). راجع `docs/forms-migration-report.md` |
 
 ### ملاحظة scope
 
