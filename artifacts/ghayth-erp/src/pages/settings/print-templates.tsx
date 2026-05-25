@@ -11,6 +11,8 @@
  */
 
 import { useState, useMemo, useRef } from "react";
+import { z } from "zod";
+import { useFormContext } from "react-hook-form";
 import { useLocation } from "wouter";
 import { useApiQuery, apiFetch, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -29,7 +31,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Save, Eye, Trash2, Pencil, FileText, Receipt, Tag, Layers } from "lucide-react";
-import { PageHeader } from "@workspace/ui-core";
+import { PageHeader, FormShell } from "@workspace/ui-core";
 
 const PRINTABLE_ENTITIES = [
   { id: "invoice", label: "فاتورة" },
@@ -260,19 +262,157 @@ interface TemplateEditorProps {
   onClose: () => void;
 }
 
+const templateSchema = z.object({
+  name: z.string().min(1, "مطلوب"),
+  entityType: z.string(),
+  branchId: z.number().nullable(),
+  paperSize: z.string(),
+  mode: z.enum(["preset", "html", "visual"]),
+  presetKey: z.string(),
+  htmlContent: z.string(),
+  isDefault: z.boolean(),
+});
+type TemplateForm = z.infer<typeof templateSchema>;
+
+function EditorHeaderActions({
+  templateId,
+  onClose,
+  onDelete,
+}: {
+  templateId: number | null;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  const { formState, watch } = useFormContext<TemplateForm>();
+  const name = watch("name");
+  return (
+    <div className="flex gap-2">
+      <Button type="button" variant="outline" onClick={onClose}>إلغاء</Button>
+      {templateId && (
+        <Button type="button" variant="destructive" onClick={onDelete} className="gap-1">
+          <Trash2 className="h-4 w-4" /> حذف
+        </Button>
+      )}
+      <Button type="submit" rateLimitAware disabled={formState.isSubmitting || !name} className="gap-1">
+        <Save className="h-4 w-4" /> حفظ
+      </Button>
+    </div>
+  );
+}
+
+function EntityTypeSelect() {
+  const { watch, setValue } = useFormContext<TemplateForm>();
+  const value = watch("entityType");
+  return (
+    <Select value={value} onValueChange={(v) => setValue("entityType", v, { shouldDirty: true })}>
+      <SelectTrigger><SelectValue /></SelectTrigger>
+      <SelectContent className="max-h-72">
+        {PRINTABLE_ENTITIES.map((e) => (
+          <SelectItem key={e.id} value={e.id}>{e.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function BranchSelect({ branches }: { branches: Array<{ id: number; name: string }> }) {
+  const { watch, setValue } = useFormContext<TemplateForm>();
+  const branchId = watch("branchId");
+  return (
+    <Select
+      value={branchId === null ? "all" : String(branchId)}
+      onValueChange={(v) => setValue("branchId", v === "all" ? null : Number(v), { shouldDirty: true })}
+    >
+      <SelectTrigger><SelectValue /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">كل الفروع (افتراضي الشركة)</SelectItem>
+        {branches.map((b) => (
+          <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function PaperSizeSelect() {
+  const { watch, setValue } = useFormContext<TemplateForm>();
+  const value = watch("paperSize");
+  return (
+    <Select value={value} onValueChange={(v) => setValue("paperSize", v, { shouldDirty: true })}>
+      <SelectTrigger><SelectValue /></SelectTrigger>
+      <SelectContent>
+        {PAPER_SIZES.map((p) => (
+          <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function IsDefaultSelect() {
+  const { watch, setValue } = useFormContext<TemplateForm>();
+  const value = watch("isDefault");
+  return (
+    <Select value={value ? "1" : "0"} onValueChange={(v) => setValue("isDefault", v === "1", { shouldDirty: true })}>
+      <SelectTrigger><SelectValue /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value="1">نعم (يستخدم تلقائياً)</SelectItem>
+        <SelectItem value="0">لا</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
+function ModeAndContentTabs({ layout, setLayout }: { layout: VisualBlock[]; setLayout: (next: VisualBlock[]) => void }) {
+  const { watch, setValue, register } = useFormContext<TemplateForm>();
+  const mode = watch("mode");
+  const presetKey = watch("presetKey");
+  return (
+    <Tabs value={mode} onValueChange={(v) => setValue("mode", v as TemplateForm["mode"], { shouldDirty: true })}>
+      <TabsList className="grid grid-cols-3 mb-3">
+        <TabsTrigger value="preset" className="gap-1"><FileText className="h-3 w-3" /> قالب جاهز</TabsTrigger>
+        <TabsTrigger value="html" className="gap-1"><Pencil className="h-3 w-3" /> HTML</TabsTrigger>
+        <TabsTrigger value="visual" className="gap-1"><Layers className="h-3 w-3" /> مرئي</TabsTrigger>
+      </TabsList>
+      <TabsContent value="preset" className="space-y-3">
+        <Label>اختر النمط</Label>
+        <Select value={presetKey} onValueChange={(v) => setValue("presetKey", v, { shouldDirty: true })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="classic">كلاسيكي</SelectItem>
+            <SelectItem value="modern">عصري</SelectItem>
+            <SelectItem value="compact">مدمج</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          ترويسة الفرع وتذييله يأتيان تلقائياً من إعدادات الفرع. تخصيص الرأس/التذييل المتقدم متاح بعد الحفظ.
+        </p>
+      </TabsContent>
+      <TabsContent value="html" className="space-y-2">
+        <Label>محتوى HTML (يدعم {`{{path.to.value}}`} و {`{{branch.letterhead}}`} و {`{{entity.itemsTable}}`})</Label>
+        <Textarea
+          {...register("htmlContent")}
+          rows={14}
+          className="font-mono text-xs"
+          dir="ltr"
+          placeholder="<div>{{branch.letterhead}}<h2>{{entity.title}}</h2>{{entity.itemsTable}}{{branch.footer}}</div>"
+        />
+        <p className="text-xs text-muted-foreground">
+          متغيرات تلقائية: <code>{`{{branch.letterhead}}`}</code>, <code>{`{{branch.footer}}`}</code>, <code>{`{{entity.itemsTable}}`}</code>, <code>{`{{date.today}}`}</code>
+        </p>
+      </TabsContent>
+      <TabsContent value="visual">
+        <VisualBuilder layout={layout} onChange={setLayout} />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
 function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEditorProps) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const existing = templateId ? templates.find((t) => t.id === templateId) : null;
 
-  const [name, setName] = useState(existing?.name ?? "");
-  const [entityType, setEntityType] = useState(existing?.entityType ?? "invoice");
-  const [branchId, setBranchId] = useState<number | null>(existing?.branchId ?? null);
-  const [paperSize, setPaperSize] = useState(existing?.paperSize ?? "A4");
-  const [mode, setMode] = useState<"preset" | "html" | "visual">(existing?.mode ?? "preset");
-  const [presetKey, setPresetKey] = useState(existing?.presetKey ?? "classic");
-  const [htmlContent, setHtmlContent] = useState(existing?.htmlContent ?? "");
-  const [isDefault, setIsDefault] = useState(existing?.isDefault ?? false);
   const [layout, setLayout] = useState<VisualBlock[]>(() => {
     const initial = existing?.layoutJson;
     return Array.isArray(initial) ? (initial as VisualBlock[]) : [
@@ -286,9 +426,19 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
     ];
   });
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
 
-  async function preview() {
+  const defaultValues: TemplateForm = {
+    name: existing?.name ?? "",
+    entityType: existing?.entityType ?? "invoice",
+    branchId: existing?.branchId ?? null,
+    paperSize: existing?.paperSize ?? "A4",
+    mode: existing?.mode ?? "preset",
+    presetKey: existing?.presetKey ?? "classic",
+    htmlContent: existing?.htmlContent ?? "",
+    isDefault: existing?.isDefault ?? false,
+  };
+
+  async function preview(entityType: string) {
     try {
       const blob = await apiFetch<Blob>(`/print/preview`, {
         method: "POST",
@@ -307,20 +457,12 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
     }
   }
 
-  async function save() {
-    setSaving(true);
+  async function save(values: TemplateForm) {
     try {
       const body = {
-        name,
-        entityType,
-        branchId,
-        paperSize,
-        mode,
-        presetKey,
-        htmlContent,
-        layoutJson: mode === "visual" ? layout : null,
-        isDefault,
-        isThermal: paperSize.startsWith("THERMAL"),
+        ...values,
+        layoutJson: values.mode === "visual" ? layout : null,
+        isThermal: values.paperSize.startsWith("THERMAL"),
       };
       if (templateId) {
         await apiFetch(`/print/templates/${templateId}`, {
@@ -338,8 +480,7 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
       onClose();
     } catch (err) {
       toast({ title: "فشل الحفظ", description: (err as ApiError).message, variant: "destructive" });
-    } finally {
-      setSaving(false);
+      throw err;
     }
   }
 
@@ -357,22 +498,16 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
   }
 
   return (
-    <div className="space-y-4 p-4">
+    <FormShell
+      schema={templateSchema}
+      defaultValues={defaultValues}
+      hideSubmit
+      className="space-y-4 p-4"
+      onSubmit={save}
+    >
       <PageHeader
         title={templateId ? "تعديل قالب طباعة" : "قالب طباعة جديد"}
-        action={
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>إلغاء</Button>
-            {templateId && (
-              <Button variant="destructive" onClick={remove} className="gap-1">
-                <Trash2 className="h-4 w-4" /> حذف
-              </Button>
-            )}
-            <Button onClick={save} disabled={saving || !name} className="gap-1">
-              <Save className="h-4 w-4" /> حفظ
-            </Button>
-          </div>
-        }
+        action={<EditorHeaderActions templateId={templateId} onClose={onClose} onDelete={remove} />}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -381,59 +516,25 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
             <CardTitle className="text-base">الإعدادات الأساسية</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="space-y-1">
-              <Label>اسم القالب</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثلاً: فاتورة فرع جدة الكلاسيكية" />
-            </div>
+            <NameField />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>الكيان</Label>
-                <Select value={entityType} onValueChange={setEntityType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    {PRINTABLE_ENTITIES.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>{e.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <EntityTypeSelect />
               </div>
               <div className="space-y-1">
                 <Label>الفرع</Label>
-                <Select
-                  value={branchId === null ? "all" : String(branchId)}
-                  onValueChange={(v) => setBranchId(v === "all" ? null : Number(v))}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">كل الفروع (افتراضي الشركة)</SelectItem>
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <BranchSelect branches={branches} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>حجم الورق</Label>
-                <Select value={paperSize} onValueChange={setPaperSize}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PAPER_SIZES.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <PaperSizeSelect />
               </div>
               <div className="space-y-1">
                 <Label>افتراضي</Label>
-                <Select value={isDefault ? "1" : "0"} onValueChange={(v) => setIsDefault(v === "1")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">نعم (يستخدم تلقائياً)</SelectItem>
-                    <SelectItem value="0">لا</SelectItem>
-                  </SelectContent>
-                </Select>
+                <IsDefaultSelect />
               </div>
             </div>
           </CardContent>
@@ -444,70 +545,50 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
             <CardTitle className="text-base">طريقة البناء</CardTitle>
           </CardHeader>
           <CardContent>
-            {/* as-any-reason: justified-jsx-generic - Tabs onValueChange yields string; mode state is a literal-union; runtime values are guaranteed to be one of the three TabsTrigger values below */}
-            <Tabs value={mode} onValueChange={(v) => setMode(v as any)}>
-              <TabsList className="grid grid-cols-3 mb-3">
-                <TabsTrigger value="preset" className="gap-1"><FileText className="h-3 w-3" /> قالب جاهز</TabsTrigger>
-                <TabsTrigger value="html" className="gap-1"><Pencil className="h-3 w-3" /> HTML</TabsTrigger>
-                <TabsTrigger value="visual" className="gap-1"><Layers className="h-3 w-3" /> مرئي</TabsTrigger>
-              </TabsList>
-              <TabsContent value="preset" className="space-y-3">
-                <Label>اختر النمط</Label>
-                <Select value={presetKey} onValueChange={setPresetKey}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="classic">كلاسيكي</SelectItem>
-                    <SelectItem value="modern">عصري</SelectItem>
-                    <SelectItem value="compact">مدمج</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  ترويسة الفرع وتذييله يأتيان تلقائياً من إعدادات الفرع. تخصيص الرأس/التذييل المتقدم متاح بعد الحفظ.
-                </p>
-              </TabsContent>
-              <TabsContent value="html" className="space-y-2">
-                <Label>محتوى HTML (يدعم {`{{path.to.value}}`} و {`{{branch.letterhead}}`} و {`{{entity.itemsTable}}`})</Label>
-                <Textarea
-                  value={htmlContent}
-                  onChange={(e) => setHtmlContent(e.target.value)}
-                  rows={14}
-                  className="font-mono text-xs"
-                  dir="ltr"
-                  placeholder="<div>{{branch.letterhead}}<h2>{{entity.title}}</h2>{{entity.itemsTable}}{{branch.footer}}</div>"
-                />
-                <p className="text-xs text-muted-foreground">
-                  متغيرات تلقائية: <code>{`{{branch.letterhead}}`}</code>, <code>{`{{branch.footer}}`}</code>, <code>{`{{entity.itemsTable}}`}</code>, <code>{`{{date.today}}`}</code>
-                </p>
-              </TabsContent>
-              <TabsContent value="visual">
-                <VisualBuilder layout={layout} onChange={setLayout} />
-              </TabsContent>
-            </Tabs>
+            <ModeAndContentTabs layout={layout} setLayout={setLayout} />
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2 flex flex-row items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2"><Eye className="h-4 w-4" /> المعاينة</CardTitle>
-          <Button size="sm" variant="outline" onClick={preview}>توليد المعاينة</Button>
-        </CardHeader>
-        <CardContent>
-          {previewHtml ? (
-            <iframe
-              srcDoc={previewHtml}
-              title="preview"
-              className="w-full border rounded bg-white"
-              style={{ minHeight: 600 }}
-            />
-          ) : (
-            <div className="p-8 text-center text-sm text-muted-foreground border border-dashed rounded">
-              اضغط "توليد المعاينة" لرؤية شكل القالب ببيانات تجريبية.
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <PreviewCard previewHtml={previewHtml} onGenerate={preview} />
+    </FormShell>
+  );
+}
+
+function NameField() {
+  const { register } = useFormContext<TemplateForm>();
+  return (
+    <div className="space-y-1">
+      <Label>اسم القالب</Label>
+      <Input {...register("name")} placeholder="مثلاً: فاتورة فرع جدة الكلاسيكية" />
     </div>
+  );
+}
+
+function PreviewCard({ previewHtml, onGenerate }: { previewHtml: string | null; onGenerate: (entityType: string) => void }) {
+  const { watch } = useFormContext<TemplateForm>();
+  const entityType = watch("entityType");
+  return (
+    <Card>
+      <CardHeader className="pb-2 flex flex-row items-center justify-between">
+        <CardTitle className="text-base flex items-center gap-2"><Eye className="h-4 w-4" /> المعاينة</CardTitle>
+        <Button type="button" size="sm" variant="outline" onClick={() => onGenerate(entityType)}>توليد المعاينة</Button>
+      </CardHeader>
+      <CardContent>
+        {previewHtml ? (
+          <iframe
+            srcDoc={previewHtml}
+            title="preview"
+            className="w-full border rounded bg-white"
+            style={{ minHeight: 600 }}
+          />
+        ) : (
+          <div className="p-8 text-center text-sm text-muted-foreground border border-dashed rounded">
+            اضغط "توليد المعاينة" لرؤية شكل القالب ببيانات تجريبية.
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
