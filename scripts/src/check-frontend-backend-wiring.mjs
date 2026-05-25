@@ -33,12 +33,16 @@
 //        - dynamic:  too dynamic to match statically (skipped)
 //
 // What it does NOT do (deliberately):
-//   - Does NOT fail CI. Exit code is always 0. The goal here is to make
-//     the wiring gap visible first; gating comes after the baseline is
-//     understood (same staged approach the OpenAPI guard followed).
 //   - Does NOT verify method matching (just path). A follow-up could
 //     read the HTTP verb argument of useApiMutation and cross-check.
 //   - Does NOT walk the api-server itself. Frontend wiring only.
+//
+// Failure mode:
+//   - exit 0: every frontend call resolves to a real backend route
+//   - exit 1: at least one orphan exists
+//   The baseline today is 0 orphans (see forms-migration-report.md), so
+//   the guard is hard from the start. Any commit that introduces an
+//   unmatched apiFetch URL fails the build.
 //
 // Output: stdout. Pipe to a file if you want to track the baseline.
 
@@ -407,7 +411,12 @@ function urlsMatch(fe, be) {
 
 // ---------- step 4: report ----------
 
-function main() {
+/**
+ * Run the audit and return { resolved, orphans, backendPaths }. Pure
+ * function over the filesystem — split out so the test harness can
+ * exercise the pieces (normalise/match) without going through main().
+ */
+export function runAudit() {
   const backend = buildBackendRoutes();
   const backendPaths = new Set(backend.map((r) => normaliseBackendUrl(r.path)));
   const frontend = extractFrontendCalls();
@@ -430,6 +439,17 @@ function main() {
     }
     (hit ? resolved : orphans).push({ ...c, normalised: fe });
   }
+
+  return { resolved, orphans, backendPaths, frontend };
+}
+
+// Test-only exports — the .test.mjs sibling exercises each piece
+// independently so future regex/heuristic tweaks can't silently
+// re-break the audit. Don't import these from non-test code.
+export { normaliseFrontendUrl, urlsMatch, readString };
+
+function main() {
+  const { resolved, orphans, backendPaths, frontend } = runAudit();
 
   console.log(`# frontend ↔ backend route wiring audit\n`);
   console.log(`backend routes (mounted):         ${backendPaths.size}`);
@@ -456,7 +476,22 @@ function main() {
     if (sorted.length > 30) {
       console.log(`(${sorted.length - 30} more files with orphans, truncated)`);
     }
+    console.log(
+      `\n✗ wiring audit: ${orphans.length} orphan frontend call(s).\n` +
+        `Each one is an apiFetch/useApi* URL that no backend route serves —\n` +
+        `either the backend was renamed/deleted, the URL has a typo, or the\n` +
+        `feature was sketched on one side without the other. Fix the URL or\n` +
+        `add the route.`,
+    );
+    process.exit(1);
   }
+  console.log(
+    `✓ wiring audit: every frontend API call resolves to a real backend route.`,
+  );
 }
 
-main();
+// Only run main() when invoked directly via `node …` — keeps the test
+// harness import from triggering the full audit + exit().
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}

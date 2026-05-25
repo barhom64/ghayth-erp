@@ -9,6 +9,7 @@
 #   1. Broken imports / missing functions       → typecheck
 #   2. Banned legacy patterns                   → lint:patterns
 #   3. Pages built but never wired to a route   → audit:routes
+#   3b. Frontend apiFetch URL → real backend route → audit:wiring
 #   4. Raw SQL referencing dropped/typo columns → audit:schema
 #   5. Route identifiers vs live DB columns     → check:schema-drift
 #   6. Soft-delete tables read w/o IS NULL      → check:ghost-rows
@@ -53,6 +54,13 @@ run_step "typecheck"          pnpm -s run typecheck
 run_step "lint:patterns:tests" node scripts/src/lint-patterns.test.mjs
 run_step "lint:patterns"      pnpm -s run lint:patterns
 run_step "audit:routes"       node scripts/src/audit-routes.mjs
+# Pure-logic fixtures for the wiring audit's string-literal reader,
+# URL normaliser, and segment matcher — runs before the audit itself
+# so a broken heuristic fails with a precise diff rather than a
+# misleading orphan list. Includes an end-to-end check that the
+# 0-orphan baseline still holds.
+run_step "audit:wiring:tests" node scripts/src/check-frontend-backend-wiring.test.mjs
+run_step "audit:wiring"       node scripts/src/check-frontend-backend-wiring.mjs
 run_step "audit:schema"       node scripts/src/audit-schema-drift.mjs
 # Pure-logic fixtures for the ghost-row predicates — no DB needed, so
 # this runs in every environment to guard the guard itself.
