@@ -13,10 +13,20 @@ import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NumberField } from "@/components/shared/form-field-wrapper";
+import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 
-type JournalLine = { accountCode: string; description: string; debit: number; credit: number };
+type JournalLine = {
+  accountCode: string;
+  description: string;
+  debit: number;
+  credit: number;
+  allocation?: LineAllocation;
+};
 
-const emptyLine = (): JournalLine => ({ accountCode: "", description: "", debit: 0, credit: 0 });
+const emptyLine = (): JournalLine => ({
+  accountCode: "", description: "", debit: 0, credit: 0,
+  allocation: {} as LineAllocation,
+});
 
 export default function JournalManualCreatePage() {
   const { toast } = useToast();
@@ -79,7 +89,17 @@ export default function JournalManualCreatePage() {
       balance: !isBalanced ? "القيد غير متوازن — يجب أن يتساوى مجموع المدين والدائن" : null,
     });
     if (firstError) { toast({ variant: "destructive", title: firstError }); return; }
-    createMutation.mutate({ ...form, date: form.date || undefined });
+    createMutation.mutate({
+      ...form,
+      date: form.date || undefined,
+      lines: form.lines.map((l) => ({
+        accountCode: l.accountCode,
+        description: l.description,
+        debit: l.debit,
+        credit: l.credit,
+        ...buildAllocationPayload(l.allocation ?? {}),
+      })),
+    });
   }
 
   return (
@@ -125,31 +145,42 @@ export default function JournalManualCreatePage() {
                 </thead>
                 <tbody>
                   {form.lines.map((line, i) => (
-                    <tr key={i} className="border-t">
-                      <td className="px-2 py-1">
-                        <Input
-                          list={`coa-list-${i}`}
-                          value={line.accountCode}
-                          onChange={e => updateLine(i, "accountCode", e.target.value)}
-                          placeholder="الحساب"
-                        />
-                        <datalist id={`coa-list-${i}`}>
-                          {(Array.isArray(coa) ? coa : []).map((a: any) => <option key={a.code} value={a.code}>{a.code} - {a.name}</option>)}
-                        </datalist>
-                      </td>
-                      <td className="px-2 py-1">
-                        <Input value={line.description} onChange={e => updateLine(i, "description", e.target.value)} placeholder="البيان" />
-                      </td>
-                      <td className="px-2 py-1">
-                        <NumberField label="مدين" className="w-24" min={0} value={line.debit || ""} onChange={v => updateLine(i, "debit", v)} placeholder="0" />
-                      </td>
-                      <td className="px-2 py-1">
-                        <NumberField label="دائن" className="w-24" min={0} value={line.credit || ""} onChange={v => updateLine(i, "credit", v)} placeholder="0" />
-                      </td>
-                      <td className="px-2 py-1">
-                        <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-status-error-foreground text-lg leading-none">&times;</button>
-                      </td>
-                    </tr>
+                    <>
+                      <tr key={`row-${i}`} className="border-t">
+                        <td className="px-2 py-1">
+                          <Input
+                            list={`coa-list-${i}`}
+                            value={line.accountCode}
+                            onChange={e => updateLine(i, "accountCode", e.target.value)}
+                            placeholder="الحساب"
+                          />
+                          <datalist id={`coa-list-${i}`}>
+                            {(Array.isArray(coa) ? coa : []).map((a: any) => <option key={a.code} value={a.code}>{a.code} - {a.name}</option>)}
+                          </datalist>
+                        </td>
+                        <td className="px-2 py-1">
+                          <Input value={line.description} onChange={e => updateLine(i, "description", e.target.value)} placeholder="البيان" />
+                        </td>
+                        <td className="px-2 py-1">
+                          <NumberField label="مدين" className="w-24" min={0} value={line.debit || ""} onChange={v => updateLine(i, "debit", v)} placeholder="0" />
+                        </td>
+                        <td className="px-2 py-1">
+                          <NumberField label="دائن" className="w-24" min={0} value={line.credit || ""} onChange={v => updateLine(i, "credit", v)} placeholder="0" />
+                        </td>
+                        <td className="px-2 py-1">
+                          <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-status-error-foreground text-lg leading-none">&times;</button>
+                        </td>
+                      </tr>
+                      <tr key={`alloc-${i}`}>
+                        <td colSpan={5} className="px-2 pb-2">
+                          <LineAllocationPanel
+                            value={line.allocation ?? {}}
+                            onChange={(next) => updateLine(i, "allocation" as any, next as any)}
+                            status={deriveAllocationStatus(line.allocation ?? {})}
+                          />
+                        </td>
+                      </tr>
+                    </>
                   ))}
                 </tbody>
                 <tfoot className="bg-surface-subtle font-semibold">
