@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatNumber } from "@/lib/formatters";
-import { Plus, Workflow, AlertTriangle } from "lucide-react";
+import { Plus, Workflow, AlertTriangle, Pencil } from "lucide-react";
 import { Link } from "wouter";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
@@ -131,6 +131,14 @@ export default function AllocationRulesPage() {
       render: (r) => r.isActive
         ? <Badge className="bg-emerald-100 text-emerald-800 text-xs">نشطة</Badge>
         : <Badge variant="outline" className="text-xs">معطّلة</Badge> },
+    { key: "_actions", header: "تعديل",
+      render: (r) => (
+        <Link href={`/finance/allocation-rules/${r.id}/edit`}>
+          <Button variant="ghost" size="sm" className="h-7 px-2" title="تعديل القاعدة">
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+        </Link>
+      ) },
   ];
 
   return (
