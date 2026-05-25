@@ -13,6 +13,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, generateRef } from "../lib/businessHelpers.js";
+import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { logger } from "../lib/logger.js";
 
 const contractsRouter = Router();
@@ -54,20 +55,34 @@ contractsRouter.get("/", authorize({ feature: "hr.contracts", action: "list" }),
   try {
     const scope = req.scope!;
     const { status, employeeId, search } = req.query as Record<string, string>;
-    const params: unknown[] = [scope.companyId];
-    let where = `ec."companyId" = $1 AND ec."deletedAt" IS NULL`;
+    // Honor multi-company + branch picker via buildScopedWhere; ec.branchId is
+    // the branch the contract was signed at, so enforceBranchScope keeps
+    // branch_managers limited to their assigned branches.
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      parseScopeFilters(req),
+      {
+        companyColumn: 'ec."companyId"',
+        branchColumn: 'ec."branchId"',
+        enforceBranchScope: true,
+        softDeleteColumn: 'ec."deletedAt"',
+      },
+    );
+    let where = baseWhere;
+    let paramIdx = nextParamIndex;
 
     if (status) {
       params.push(status);
-      where += ` AND ec."approvalStatus" = $${params.length}`;
+      where += ` AND ec."approvalStatus" = $${paramIdx++}`;
     }
     if (employeeId) {
       params.push(Number(employeeId));
-      where += ` AND ec."employeeId" = $${params.length}`;
+      where += ` AND ec."employeeId" = $${paramIdx++}`;
     }
     if (search?.trim()) {
       params.push(`%${search.trim()}%`);
-      where += ` AND (e.name ILIKE $${params.length} OR ec.ref ILIKE $${params.length})`;
+      where += ` AND (e.name ILIKE $${paramIdx} OR ec.ref ILIKE $${paramIdx})`;
+      paramIdx++;
     }
 
     const rows = await rawQuery<Record<string, unknown>>(

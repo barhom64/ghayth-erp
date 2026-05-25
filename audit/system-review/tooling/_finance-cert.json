@@ -2,13 +2,13 @@
   "results": [
     {
       "file": "artifacts/api-server/src/routes/finance-accounts.ts",
-      "endpointCount": 10,
-      "writeEndpoints": 4,
+      "endpointCount": 26,
+      "writeEndpoints": 13,
       "dimAgg": {
         "rbac": "PASS",
         "scope": "PARTIAL",
         "audit": "PASS",
-        "event": "PASS",
+        "event": "PARTIAL",
         "lifecycle": "SKIP",
         "glBridge": "PASS"
       },
@@ -16,7 +16,7 @@
         {
           "method": "GET",
           "path": "/chart-of-accounts",
-          "line": 130,
+          "line": 181,
           "checks": {
             "rbac": true,
             "scopeParseFilters": true,
@@ -40,7 +40,7 @@
         {
           "method": "GET",
           "path": "/accounts",
-          "line": 148,
+          "line": 199,
           "checks": {
             "rbac": true,
             "scopeParseFilters": true,
@@ -64,7 +64,7 @@
         {
           "method": "POST",
           "path": "/accounts",
-          "line": 178,
+          "line": 229,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -88,7 +88,7 @@
         {
           "method": "PATCH",
           "path": "/accounts/:id",
-          "line": 226,
+          "line": 291,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -98,7 +98,7 @@
             "event": true,
             "applyTransition": false,
             "directStatusUpdate": false,
-            "glPosting": false
+            "glPosting": true
           },
           "dims": {
             "rbac": "PASS",
@@ -106,13 +106,13 @@
             "audit": "PASS",
             "event": "PASS",
             "lifecycle": "SKIP",
-            "glBridge": "SKIP"
+            "glBridge": "PASS"
           }
         },
         {
           "method": "DELETE",
           "path": "/accounts/:id",
-          "line": 270,
+          "line": 377,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -136,7 +136,7 @@
         {
           "method": "GET",
           "path": "/journal",
-          "line": 328,
+          "line": 435,
           "checks": {
             "rbac": true,
             "scopeParseFilters": true,
@@ -160,7 +160,7 @@
         {
           "method": "POST",
           "path": "/journal",
-          "line": 348,
+          "line": 455,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -184,7 +184,7 @@
         {
           "method": "GET",
           "path": "/ledger/:accountCode",
-          "line": 440,
+          "line": 547,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -208,7 +208,7 @@
         {
           "method": "GET",
           "path": "/stats",
-          "line": 485,
+          "line": 592,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -232,7 +232,7 @@
         {
           "method": "GET",
           "path": "/summary",
-          "line": 500,
+          "line": 607,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -243,6 +243,390 @@
             "applyTransition": false,
             "directStatusUpdate": false,
             "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/tax-codes",
+          "line": 666,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/tax-codes/:id",
+          "line": 690,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/tax-codes",
+          "line": 705,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/tax-codes/:id",
+          "line": 743,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/tax-codes/:id",
+          "line": 792,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/wht-categories",
+          "line": 843,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/wht-categories/:id",
+          "line": 864,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/wht-categories",
+          "line": 879,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/wht-categories/:id",
+          "line": 909,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/wht-categories/:id",
+          "line": 953,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/allocation-rules",
+          "line": 1023,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/allocation-rules/:id",
+          "line": 1051,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/allocation-rules",
+          "line": 1068,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "PATCH",
+          "path": "/allocation-rules/:id",
+          "line": 1128,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/allocation-rules/:id",
+          "line": 1191,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/allocation-results",
+          "line": 1216,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
           },
           "dims": {
             "rbac": "PASS",
@@ -607,7 +991,7 @@
         {
           "method": "POST",
           "path": "/fixed-assets/depreciate-all",
-          "line": 1030,
+          "line": 1043,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -631,7 +1015,7 @@
         {
           "method": "GET",
           "path": "/inventory-costing",
-          "line": 1133,
+          "line": 1152,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -655,7 +1039,7 @@
         {
           "method": "GET",
           "path": "/inventory-costing/:productId",
-          "line": 1161,
+          "line": 1180,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -679,7 +1063,7 @@
         {
           "method": "GET",
           "path": "/rounding-account",
-          "line": 1229,
+          "line": 1248,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -703,7 +1087,7 @@
         {
           "method": "POST",
           "path": "/rounding-account/setup",
-          "line": 1242,
+          "line": 1261,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -727,7 +1111,7 @@
         {
           "method": "POST",
           "path": "/rounding-differences/apply",
-          "line": 1291,
+          "line": 1310,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -751,7 +1135,7 @@
         {
           "method": "GET",
           "path": "/fx/rates",
-          "line": 1391,
+          "line": 1410,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -775,7 +1159,7 @@
         {
           "method": "POST",
           "path": "/fx/rates",
-          "line": 1412,
+          "line": 1431,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -799,7 +1183,7 @@
         {
           "method": "GET",
           "path": "/fx/revaluation/preview",
-          "line": 1452,
+          "line": 1475,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -823,7 +1207,7 @@
         {
           "method": "POST",
           "path": "/fx/revaluation/post",
-          "line": 1578,
+          "line": 1601,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -847,7 +1231,7 @@
         {
           "method": "GET",
           "path": "/fx/revaluation",
-          "line": 1768,
+          "line": 1802,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -871,7 +1255,7 @@
         {
           "method": "GET",
           "path": "/treasury",
-          "line": 1786,
+          "line": 1820,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -895,7 +1279,7 @@
         {
           "method": "GET",
           "path": "/entity-financial-profile",
-          "line": 1892,
+          "line": 1926,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -928,13 +1312,13 @@
         "audit": "PARTIAL",
         "event": "PARTIAL",
         "lifecycle": "SKIP",
-        "glBridge": "PASS"
+        "glBridge": "SKIP"
       },
       "endpoints": [
         {
           "method": "GET",
           "path": "/budget",
-          "line": 114,
+          "line": 131,
           "checks": {
             "rbac": true,
             "scopeParseFilters": true,
@@ -958,7 +1342,7 @@
         {
           "method": "GET",
           "path": "/budget-vs-actual",
-          "line": 133,
+          "line": 150,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -982,7 +1366,7 @@
         {
           "method": "POST",
           "path": "/budget",
-          "line": 176,
+          "line": 201,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1006,7 +1390,7 @@
         {
           "method": "POST",
           "path": "/budget/validate",
-          "line": 215,
+          "line": 240,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1030,7 +1414,7 @@
         {
           "method": "PATCH",
           "path": "/budget/:id",
-          "line": 256,
+          "line": 281,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1054,7 +1438,7 @@
         {
           "method": "DELETE",
           "path": "/budget/:id",
-          "line": 300,
+          "line": 325,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1078,7 +1462,7 @@
         {
           "method": "POST",
           "path": "/budget/approval-requests",
-          "line": 403,
+          "line": 428,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1102,7 +1486,7 @@
         {
           "method": "GET",
           "path": "/budget/approval-requests",
-          "line": 472,
+          "line": 497,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1126,7 +1510,7 @@
         {
           "method": "POST",
           "path": "/budget/approval-requests/:id/decide",
-          "line": 492,
+          "line": 517,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1150,7 +1534,7 @@
         {
           "method": "GET",
           "path": "/budget/variance",
-          "line": 564,
+          "line": 589,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1174,7 +1558,7 @@
         {
           "method": "GET",
           "path": "/budget/:id",
-          "line": 649,
+          "line": 674,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1198,7 +1582,7 @@
         {
           "method": "GET",
           "path": "/fiscal-periods",
-          "line": 665,
+          "line": 690,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1222,25 +1606,25 @@
         {
           "method": "POST",
           "path": "/fiscal-periods/:period/close",
-          "line": 703,
+          "line": 739,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
-            "scopeManualCompany": true,
+            "scopeManualCompany": false,
             "audit": false,
             "event": false,
             "applyTransition": false,
             "directStatusUpdate": false,
-            "glPosting": true
+            "glPosting": false
           },
           "dims": {
             "rbac": "PASS",
-            "scope": "PASS",
+            "scope": "FAIL",
             "audit": "FAIL",
             "event": "FAIL",
             "lifecycle": "SKIP",
-            "glBridge": "PASS"
+            "glBridge": "SKIP"
           }
         }
       ]
@@ -1251,7 +1635,7 @@
       "writeEndpoints": 1,
       "dimAgg": {
         "rbac": "PASS",
-        "scope": "PARTIAL",
+        "scope": "PASS",
         "audit": "PASS",
         "event": "PASS",
         "lifecycle": "PASS",
@@ -1312,9 +1696,9 @@
           "line": 219,
           "checks": {
             "rbac": true,
-            "scopeParseFilters": false,
-            "scopeBuildWhere": false,
-            "scopeManualCompany": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
             "audit": false,
             "event": false,
             "applyTransition": false,
@@ -1323,7 +1707,7 @@
           },
           "dims": {
             "rbac": "PASS",
-            "scope": "PARTIAL",
+            "scope": "PASS",
             "audit": "SKIP",
             "event": "SKIP",
             "lifecycle": "SKIP",
@@ -1338,7 +1722,7 @@
       "writeEndpoints": 3,
       "dimAgg": {
         "rbac": "PASS",
-        "scope": "PARTIAL",
+        "scope": "PASS",
         "audit": "PASS",
         "event": "PASS",
         "lifecycle": "FAIL",
@@ -1348,12 +1732,12 @@
         {
           "method": "GET",
           "path": "/cost-centers",
-          "line": 57,
+          "line": 58,
           "checks": {
             "rbac": true,
-            "scopeParseFilters": false,
-            "scopeBuildWhere": false,
-            "scopeManualCompany": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
             "audit": false,
             "event": false,
             "applyTransition": false,
@@ -1362,7 +1746,7 @@
           },
           "dims": {
             "rbac": "PASS",
-            "scope": "PARTIAL",
+            "scope": "PASS",
             "audit": "SKIP",
             "event": "SKIP",
             "lifecycle": "SKIP",
@@ -1372,7 +1756,7 @@
         {
           "method": "GET",
           "path": "/cost-centers/:id",
-          "line": 79,
+          "line": 94,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1396,7 +1780,7 @@
         {
           "method": "POST",
           "path": "/cost-centers",
-          "line": 92,
+          "line": 107,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1420,7 +1804,7 @@
         {
           "method": "PATCH",
           "path": "/cost-centers/:id",
-          "line": 121,
+          "line": 136,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1444,7 +1828,7 @@
         {
           "method": "DELETE",
           "path": "/cost-centers/:id",
-          "line": 159,
+          "line": 174,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1507,7 +1891,7 @@
         {
           "method": "GET",
           "path": "/custodies/report",
-          "line": 272,
+          "line": 273,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1531,7 +1915,7 @@
         {
           "method": "GET",
           "path": "/custodies/summary",
-          "line": 370,
+          "line": 372,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1555,7 +1939,7 @@
         {
           "method": "GET",
           "path": "/custodies/:id",
-          "line": 416,
+          "line": 418,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1579,7 +1963,7 @@
         {
           "method": "POST",
           "path": "/custodies",
-          "line": 517,
+          "line": 519,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1603,7 +1987,7 @@
         {
           "method": "POST",
           "path": "/custodies/settle",
-          "line": 647,
+          "line": 666,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1627,7 +2011,7 @@
         {
           "method": "POST",
           "path": "/custodies/:id/settle",
-          "line": 787,
+          "line": 806,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1651,7 +2035,7 @@
         {
           "method": "PATCH",
           "path": "/custodies/:id/approve",
-          "line": 932,
+          "line": 951,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1690,7 +2074,7 @@
         {
           "method": "GET",
           "path": "/gl-helpers/mudad-salary/pending",
-          "line": 96,
+          "line": 101,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1714,7 +2098,7 @@
         {
           "method": "GET",
           "path": "/gl-helpers/fx-revaluation/pending",
-          "line": 133,
+          "line": 138,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1738,7 +2122,7 @@
         {
           "method": "GET",
           "path": "/gl-helpers/cycle-count/pending",
-          "line": 170,
+          "line": 175,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1762,7 +2146,7 @@
         {
           "method": "GET",
           "path": "/gl-helpers/realized-fx/history",
-          "line": 213,
+          "line": 218,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1786,7 +2170,7 @@
         {
           "method": "GET",
           "path": "/gl-helpers/lot-writeoff/pending",
-          "line": 250,
+          "line": 255,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1810,7 +2194,7 @@
         {
           "method": "POST",
           "path": "/gl-helpers/fx-revaluation/:revaluationLogId",
-          "line": 292,
+          "line": 297,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1834,7 +2218,7 @@
         {
           "method": "POST",
           "path": "/gl-helpers/realized-fx/:invoiceId",
-          "line": 326,
+          "line": 331,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1858,7 +2242,7 @@
         {
           "method": "POST",
           "path": "/gl-helpers/cycle-count/:cycleCountId",
-          "line": 362,
+          "line": 368,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1882,7 +2266,7 @@
         {
           "method": "POST",
           "path": "/gl-helpers/lot-writeoff/:lotId",
-          "line": 396,
+          "line": 402,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1906,7 +2290,7 @@
         {
           "method": "POST",
           "path": "/gl-helpers/mudad-salary/:settlementId",
-          "line": 430,
+          "line": 436,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1931,8 +2315,8 @@
     },
     {
       "file": "artifacts/api-server/src/routes/finance-hardening.ts",
-      "endpointCount": 28,
-      "writeEndpoints": 16,
+      "endpointCount": 29,
+      "writeEndpoints": 17,
       "dimAgg": {
         "rbac": "PASS",
         "scope": "PARTIAL",
@@ -1945,7 +2329,7 @@
         {
           "method": "GET",
           "path": "/fiscal-periods-v2",
-          "line": 132,
+          "line": 151,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1969,7 +2353,7 @@
         {
           "method": "POST",
           "path": "/fiscal-periods-v2",
-          "line": 152,
+          "line": 171,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1993,7 +2377,7 @@
         {
           "method": "POST",
           "path": "/fiscal-periods-v2/:id/close",
-          "line": 189,
+          "line": 208,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2017,7 +2401,7 @@
         {
           "method": "POST",
           "path": "/fiscal-periods-v2/:id/reopen",
-          "line": 259,
+          "line": 282,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2040,8 +2424,32 @@
         },
         {
           "method": "POST",
+          "path": "/fiscal-periods-v2/:id/lock",
+          "line": 339,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "POST",
           "path": "/journal-manual",
-          "line": 309,
+          "line": 475,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2065,7 +2473,7 @@
         {
           "method": "GET",
           "path": "/journal-manual",
-          "line": 396,
+          "line": 583,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2089,7 +2497,7 @@
         {
           "method": "GET",
           "path": "/journal-manual/:id",
-          "line": 428,
+          "line": 615,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2113,7 +2521,7 @@
         {
           "method": "PATCH",
           "path": "/journal-manual/:id/submit",
-          "line": 463,
+          "line": 650,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2137,7 +2545,7 @@
         {
           "method": "PATCH",
           "path": "/journal-manual/:id/review",
-          "line": 500,
+          "line": 687,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2161,7 +2569,7 @@
         {
           "method": "PATCH",
           "path": "/journal-manual/:id/approve",
-          "line": 564,
+          "line": 751,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2185,7 +2593,7 @@
         {
           "method": "PATCH",
           "path": "/journal-manual/:id/post",
-          "line": 616,
+          "line": 803,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2209,7 +2617,7 @@
         {
           "method": "GET",
           "path": "/bank-guarantees",
-          "line": 666,
+          "line": 890,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2233,7 +2641,7 @@
         {
           "method": "POST",
           "path": "/bank-guarantees",
-          "line": 699,
+          "line": 923,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2257,7 +2665,7 @@
         {
           "method": "PATCH",
           "path": "/bank-guarantees/:id",
-          "line": 736,
+          "line": 960,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2281,7 +2689,7 @@
         {
           "method": "DELETE",
           "path": "/bank-guarantees/:id",
-          "line": 785,
+          "line": 1009,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2305,7 +2713,7 @@
         {
           "method": "POST",
           "path": "/bank-guarantees/:id/cancel",
-          "line": 855,
+          "line": 1079,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2329,7 +2737,7 @@
         {
           "method": "POST",
           "path": "/bank-guarantees/:id/release",
-          "line": 902,
+          "line": 1126,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2353,7 +2761,7 @@
         {
           "method": "GET",
           "path": "/intercompany",
-          "line": 951,
+          "line": 1175,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2377,7 +2785,7 @@
         {
           "method": "POST",
           "path": "/intercompany",
-          "line": 971,
+          "line": 1195,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2401,7 +2809,7 @@
         {
           "method": "GET",
           "path": "/intercompany/consolidation",
-          "line": 1099,
+          "line": 1358,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2425,7 +2833,7 @@
         {
           "method": "GET",
           "path": "/projects",
-          "line": 1150,
+          "line": 1409,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2449,7 +2857,7 @@
         {
           "method": "POST",
           "path": "/projects",
-          "line": 1172,
+          "line": 1431,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2473,7 +2881,7 @@
         {
           "method": "GET",
           "path": "/projects/:id",
-          "line": 1210,
+          "line": 1472,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2497,7 +2905,7 @@
         {
           "method": "GET",
           "path": "/projects/:id/costs",
-          "line": 1227,
+          "line": 1489,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2521,7 +2929,7 @@
         {
           "method": "GET",
           "path": "/cash-flow-forecast",
-          "line": 1264,
+          "line": 1526,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2545,7 +2953,7 @@
         {
           "method": "GET",
           "path": "/cost-center-report",
-          "line": 1348,
+          "line": 1610,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2569,7 +2977,7 @@
         {
           "method": "GET",
           "path": "/posting-failures",
-          "line": 1393,
+          "line": 1655,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2593,7 +3001,7 @@
         {
           "method": "PATCH",
           "path": "/posting-failures/:id/resolve",
-          "line": 1409,
+          "line": 1671,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2618,8 +3026,8 @@
     },
     {
       "file": "artifacts/api-server/src/routes/finance-invoices.ts",
-      "endpointCount": 26,
-      "writeEndpoints": 17,
+      "endpointCount": 29,
+      "writeEndpoints": 20,
       "dimAgg": {
         "rbac": "PASS",
         "scope": "PARTIAL",
@@ -2632,7 +3040,7 @@
         {
           "method": "POST",
           "path": "/invoices/impact-preview",
-          "line": 163,
+          "line": 223,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2656,7 +3064,7 @@
         {
           "method": "GET",
           "path": "/invoices",
-          "line": 253,
+          "line": 317,
           "checks": {
             "rbac": true,
             "scopeParseFilters": true,
@@ -2680,7 +3088,7 @@
         {
           "method": "POST",
           "path": "/invoices",
-          "line": 307,
+          "line": 371,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2704,7 +3112,7 @@
         {
           "method": "POST",
           "path": "/invoices/:id/send",
-          "line": 500,
+          "line": 755,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2728,7 +3136,7 @@
         {
           "method": "POST",
           "path": "/invoices/:id/approve",
-          "line": 570,
+          "line": 825,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2751,8 +3159,32 @@
         },
         {
           "method": "POST",
+          "path": "/invoices/:id/preview-posting",
+          "line": 1267,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "POST",
           "path": "/invoices/:id/post",
-          "line": 665,
+          "line": 1636,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2776,7 +3208,7 @@
         {
           "method": "POST",
           "path": "/invoices/:id/payment",
-          "line": 704,
+          "line": 1675,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2800,7 +3232,7 @@
         {
           "method": "GET",
           "path": "/invoices/:id",
-          "line": 808,
+          "line": 1791,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2824,7 +3256,7 @@
         {
           "method": "PATCH",
           "path": "/invoices/:id",
-          "line": 834,
+          "line": 1817,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2848,7 +3280,7 @@
         {
           "method": "DELETE",
           "path": "/invoices/:id",
-          "line": 924,
+          "line": 1926,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2872,7 +3304,7 @@
         {
           "method": "PATCH",
           "path": "/invoices/:id/approve",
-          "line": 1073,
+          "line": 2167,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2896,7 +3328,7 @@
         {
           "method": "PATCH",
           "path": "/invoices/:id/reject",
-          "line": 1074,
+          "line": 2168,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2920,7 +3352,7 @@
         {
           "method": "PATCH",
           "path": "/invoices/:id/return",
-          "line": 1075,
+          "line": 2169,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2944,7 +3376,7 @@
         {
           "method": "GET",
           "path": "/tax/summary",
-          "line": 1077,
+          "line": 2171,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2967,8 +3399,32 @@
         },
         {
           "method": "POST",
+          "path": "/invoices/:id/credit-memo/preview",
+          "line": 2273,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "POST",
           "path": "/invoices/:id/credit-memo",
-          "line": 1107,
+          "line": 2398,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -2991,8 +3447,32 @@
         },
         {
           "method": "POST",
+          "path": "/invoices/:id/debit-memo/preview",
+          "line": 2676,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "FAIL",
+            "event": "FAIL",
+            "lifecycle": "SKIP",
+            "glBridge": "PARTIAL"
+          }
+        },
+        {
+          "method": "POST",
           "path": "/invoices/:id/debit-memo",
-          "line": 1246,
+          "line": 2753,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3016,7 +3496,7 @@
         {
           "method": "GET",
           "path": "/invoices/:id/memos",
-          "line": 1369,
+          "line": 2922,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3040,7 +3520,7 @@
         {
           "method": "GET",
           "path": "/bad-debt/preview",
-          "line": 1404,
+          "line": 2957,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3064,7 +3544,7 @@
         {
           "method": "POST",
           "path": "/bad-debt/post",
-          "line": 1456,
+          "line": 3009,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3088,7 +3568,7 @@
         {
           "method": "POST",
           "path": "/customer-advances",
-          "line": 1579,
+          "line": 3132,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3112,7 +3592,7 @@
         {
           "method": "POST",
           "path": "/customer-advances/:id/apply",
-          "line": 1680,
+          "line": 3233,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3136,7 +3616,7 @@
         {
           "method": "GET",
           "path": "/customer-advances",
-          "line": 1774,
+          "line": 3327,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3160,7 +3640,7 @@
         {
           "method": "GET",
           "path": "/dunning/preview",
-          "line": 1879,
+          "line": 3432,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3184,7 +3664,7 @@
         {
           "method": "POST",
           "path": "/dunning/send",
-          "line": 1957,
+          "line": 3510,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3208,7 +3688,7 @@
         {
           "method": "GET",
           "path": "/dunning/history",
-          "line": 2029,
+          "line": 3582,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3232,7 +3712,7 @@
         {
           "method": "GET",
           "path": "/tax/declarations",
-          "line": 2055,
+          "line": 3608,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3242,7 +3722,7 @@
             "event": false,
             "applyTransition": false,
             "directStatusUpdate": false,
-            "glPosting": false
+            "glPosting": true
           },
           "dims": {
             "rbac": "PASS",
@@ -3257,8 +3737,8 @@
     },
     {
       "file": "artifacts/api-server/src/routes/finance-journal.ts",
-      "endpointCount": 23,
-      "writeEndpoints": 15,
+      "endpointCount": 25,
+      "writeEndpoints": 17,
       "dimAgg": {
         "rbac": "PASS",
         "scope": "PARTIAL",
@@ -3271,7 +3751,7 @@
         {
           "method": "GET",
           "path": "/expenses",
-          "line": 233,
+          "line": 242,
           "checks": {
             "rbac": true,
             "scopeParseFilters": true,
@@ -3295,7 +3775,7 @@
         {
           "method": "POST",
           "path": "/expenses/impact-preview",
-          "line": 267,
+          "line": 276,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3319,7 +3799,7 @@
         {
           "method": "POST",
           "path": "/expenses",
-          "line": 373,
+          "line": 382,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3343,7 +3823,7 @@
         {
           "method": "PATCH",
           "path": "/expenses/:id",
-          "line": 546,
+          "line": 569,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3367,7 +3847,7 @@
         {
           "method": "DELETE",
           "path": "/expenses/:id",
-          "line": 566,
+          "line": 597,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3391,7 +3871,7 @@
         {
           "method": "PATCH",
           "path": "/expenses/:id/approve",
-          "line": 579,
+          "line": 658,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3415,7 +3895,7 @@
         {
           "method": "GET",
           "path": "/vouchers",
-          "line": 653,
+          "line": 758,
           "checks": {
             "rbac": true,
             "scopeParseFilters": true,
@@ -3439,7 +3919,7 @@
         {
           "method": "GET",
           "path": "/vouchers/:id",
-          "line": 680,
+          "line": 785,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3463,7 +3943,7 @@
         {
           "method": "POST",
           "path": "/vouchers",
-          "line": 702,
+          "line": 807,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3487,7 +3967,7 @@
         {
           "method": "PATCH",
           "path": "/vouchers/:id",
-          "line": 838,
+          "line": 1110,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3511,7 +3991,7 @@
         {
           "method": "DELETE",
           "path": "/vouchers/:id",
-          "line": 851,
+          "line": 1171,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3535,7 +4015,7 @@
         {
           "method": "GET",
           "path": "/salary-advances",
-          "line": 864,
+          "line": 1184,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3559,7 +4039,7 @@
         {
           "method": "GET",
           "path": "/salary-advances/:id",
-          "line": 874,
+          "line": 1194,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3583,7 +4063,7 @@
         {
           "method": "POST",
           "path": "/salary-advances",
-          "line": 894,
+          "line": 1214,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3607,7 +4087,7 @@
         {
           "method": "PATCH",
           "path": "/salary-advances/:id/approve",
-          "line": 954,
+          "line": 1292,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3631,7 +4111,7 @@
         {
           "method": "GET",
           "path": "/journal",
-          "line": 1014,
+          "line": 1359,
           "checks": {
             "rbac": true,
             "scopeParseFilters": true,
@@ -3655,7 +4135,7 @@
         {
           "method": "POST",
           "path": "/journal",
-          "line": 1036,
+          "line": 1381,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3679,11 +4159,11 @@
         {
           "method": "GET",
           "path": "/journal/:id",
-          "line": 1105,
+          "line": 1481,
           "checks": {
             "rbac": true,
-            "scopeParseFilters": false,
-            "scopeBuildWhere": false,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
             "scopeManualCompany": true,
             "audit": false,
             "event": false,
@@ -3702,12 +4182,60 @@
         },
         {
           "method": "POST",
-          "path": "/journal/:id/reverse",
-          "line": 1145,
+          "path": "/journal/:id/approve",
+          "line": 1531,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
             "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/journal/:id/post",
+          "line": 1566,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": true,
+            "event": true,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "PASS",
+            "event": "PASS",
+            "lifecycle": "SKIP",
+            "glBridge": "PASS"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/journal/:id/reverse",
+          "line": 1603,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
             "scopeManualCompany": true,
             "audit": true,
             "event": true,
@@ -3727,7 +4255,7 @@
         {
           "method": "POST",
           "path": "/fiscal-periods/:period/year-end-close",
-          "line": 1331,
+          "line": 1891,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3751,7 +4279,7 @@
         {
           "method": "GET",
           "path": "/opening-balances",
-          "line": 1478,
+          "line": 2047,
           "checks": {
             "rbac": true,
             "scopeParseFilters": true,
@@ -3775,7 +4303,7 @@
         {
           "method": "POST",
           "path": "/opening-balances",
-          "line": 1592,
+          "line": 2172,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3799,7 +4327,7 @@
         {
           "method": "POST",
           "path": "/opening-balances/import-csv",
-          "line": 1608,
+          "line": 2188,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3838,7 +4366,7 @@
         {
           "method": "POST",
           "path": "/purchase-requests/impact-preview",
-          "line": 123,
+          "line": 153,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3862,7 +4390,7 @@
         {
           "method": "GET",
           "path": "/purchase-requests",
-          "line": 211,
+          "line": 241,
           "checks": {
             "rbac": true,
             "scopeParseFilters": true,
@@ -3886,7 +4414,7 @@
         {
           "method": "POST",
           "path": "/purchase-requests",
-          "line": 254,
+          "line": 284,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3910,7 +4438,7 @@
         {
           "method": "PATCH",
           "path": "/purchase-requests/:id/submit",
-          "line": 373,
+          "line": 435,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3934,7 +4462,7 @@
         {
           "method": "PATCH",
           "path": "/purchase-requests/:id/approve",
-          "line": 398,
+          "line": 460,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3958,7 +4486,7 @@
         {
           "method": "POST",
           "path": "/purchase-requests/:id/convert",
-          "line": 456,
+          "line": 518,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3982,7 +4510,7 @@
         {
           "method": "GET",
           "path": "/purchase-orders",
-          "line": 531,
+          "line": 625,
           "checks": {
             "rbac": true,
             "scopeParseFilters": true,
@@ -4006,7 +4534,7 @@
         {
           "method": "POST",
           "path": "/purchase-orders",
-          "line": 570,
+          "line": 664,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4030,7 +4558,7 @@
         {
           "method": "PATCH",
           "path": "/purchase-orders/:id/approve",
-          "line": 677,
+          "line": 805,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4054,7 +4582,7 @@
         {
           "method": "PATCH",
           "path": "/purchase-orders/:id/reject",
-          "line": 678,
+          "line": 806,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4078,7 +4606,7 @@
         {
           "method": "PATCH",
           "path": "/purchase-orders/:id/return",
-          "line": 679,
+          "line": 807,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4102,7 +4630,7 @@
         {
           "method": "PATCH",
           "path": "/purchase-orders/:id/receive",
-          "line": 688,
+          "line": 816,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4126,7 +4654,7 @@
         {
           "method": "GET",
           "path": "/purchase-orders/:id/receipts",
-          "line": 900,
+          "line": 1327,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4150,7 +4678,7 @@
         {
           "method": "GET",
           "path": "/purchase-orders/:id/match",
-          "line": 929,
+          "line": 1356,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4174,7 +4702,7 @@
         {
           "method": "GET",
           "path": "/payment-run/pending",
-          "line": 984,
+          "line": 1411,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4198,7 +4726,7 @@
         {
           "method": "POST",
           "path": "/payment-run/execute",
-          "line": 1027,
+          "line": 1454,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4222,7 +4750,7 @@
         {
           "method": "GET",
           "path": "/payment-run",
-          "line": 1191,
+          "line": 1711,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4246,7 +4774,7 @@
         {
           "method": "POST",
           "path": "/purchase-requests/:id/convert-to-po",
-          "line": 1213,
+          "line": 1733,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4270,7 +4798,7 @@
         {
           "method": "GET",
           "path": "/purchase-orders/pending-grn",
-          "line": 1319,
+          "line": 1839,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4294,7 +4822,7 @@
         {
           "method": "GET",
           "path": "/purchase-orders/:id",
-          "line": 1336,
+          "line": 1856,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4318,7 +4846,7 @@
         {
           "method": "PATCH",
           "path": "/purchase-orders/:id/vendor-confirm",
-          "line": 1368,
+          "line": 1888,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4342,7 +4870,7 @@
         {
           "method": "POST",
           "path": "/purchase-orders/:id/match-invoice",
-          "line": 1408,
+          "line": 1928,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4352,7 +4880,7 @@
             "event": false,
             "applyTransition": true,
             "directStatusUpdate": false,
-            "glPosting": false
+            "glPosting": true
           },
           "dims": {
             "rbac": "PASS",
@@ -4360,13 +4888,13 @@
             "audit": "PASS",
             "event": "PASS",
             "lifecycle": "PASS",
-            "glBridge": "PARTIAL"
+            "glBridge": "PASS"
           }
         },
         {
           "method": "POST",
           "path": "/purchase-orders/:id/schedule-payment",
-          "line": 1510,
+          "line": 2074,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4550,7 +5078,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/finance-reports.ts",
-      "endpointCount": 14,
+      "endpointCount": 26,
       "writeEndpoints": 0,
       "dimAgg": {
         "rbac": "PASS",
@@ -4660,7 +5188,7 @@
         {
           "method": "GET",
           "path": "/reports/cash-flow",
-          "line": 191,
+          "line": 243,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4684,7 +5212,7 @@
         {
           "method": "GET",
           "path": "/subsidiary-ledger/:entityType/:entityId",
-          "line": 363,
+          "line": 431,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4708,7 +5236,7 @@
         {
           "method": "GET",
           "path": "/reports/customer-statement/:clientId",
-          "line": 493,
+          "line": 561,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4732,7 +5260,7 @@
         {
           "method": "GET",
           "path": "/reports/vendor-statement/:supplierId",
-          "line": 621,
+          "line": 707,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4742,7 +5270,7 @@
             "event": false,
             "applyTransition": false,
             "directStatusUpdate": false,
-            "glPosting": false
+            "glPosting": true
           },
           "dims": {
             "rbac": "PASS",
@@ -4756,7 +5284,7 @@
         {
           "method": "GET",
           "path": "/reports/entity-statement",
-          "line": 728,
+          "line": 873,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4780,7 +5308,7 @@
         {
           "method": "GET",
           "path": "/reports/custody-advances",
-          "line": 808,
+          "line": 953,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4804,7 +5332,7 @@
         {
           "method": "GET",
           "path": "/reports/expenses-analysis",
-          "line": 867,
+          "line": 1012,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4828,7 +5356,7 @@
         {
           "method": "GET",
           "path": "/reports/revenue-analysis",
-          "line": 913,
+          "line": 1058,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4852,7 +5380,7 @@
         {
           "method": "GET",
           "path": "/reports/budget-variance",
-          "line": 958,
+          "line": 1103,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4876,7 +5404,7 @@
         {
           "method": "GET",
           "path": "/reports/cash-bank-statement",
-          "line": 1002,
+          "line": 1147,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -4887,6 +5415,294 @@
             "applyTransition": false,
             "directStatusUpdate": false,
             "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/profitability/vehicle/:vehicleId",
+          "line": 1217,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/profitability/property/:propertyId",
+          "line": 1254,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/profitability/project/:projectId",
+          "line": 1291,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/profitability/umrah-agent/:umrahAgentId",
+          "line": 1328,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PASS",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/revenue-by-activity-type",
+          "line": 1365,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/expenses-by-cost-center",
+          "line": 1396,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/unmapped-lines",
+          "line": 1435,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/wht-summary",
+          "line": 1519,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": true
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/inventory-turnover",
+          "line": 1712,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/inventory-valuation",
+          "line": 1902,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/cogs-summary",
+          "line": 2112,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/reports/negative-stock",
+          "line": 2346,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
           },
           "dims": {
             "rbac": "PASS",
@@ -5036,7 +5852,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/finance-vendors.ts",
-      "endpointCount": 19,
+      "endpointCount": 18,
       "writeEndpoints": 8,
       "dimAgg": {
         "rbac": "PASS",
@@ -5050,7 +5866,7 @@
         {
           "method": "GET",
           "path": "/vendors",
-          "line": 86,
+          "line": 105,
           "checks": {
             "rbac": true,
             "scopeParseFilters": true,
@@ -5074,7 +5890,7 @@
         {
           "method": "POST",
           "path": "/vendors",
-          "line": 101,
+          "line": 120,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5098,7 +5914,7 @@
         {
           "method": "PATCH",
           "path": "/vendors/:id",
-          "line": 137,
+          "line": 167,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5122,7 +5938,7 @@
         {
           "method": "DELETE",
           "path": "/vendors/:id",
-          "line": 188,
+          "line": 228,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5145,32 +5961,8 @@
         },
         {
           "method": "GET",
-          "path": "/stats",
-          "line": 253,
-          "checks": {
-            "rbac": true,
-            "scopeParseFilters": true,
-            "scopeBuildWhere": true,
-            "scopeManualCompany": false,
-            "audit": false,
-            "event": false,
-            "applyTransition": false,
-            "directStatusUpdate": false,
-            "glPosting": false
-          },
-          "dims": {
-            "rbac": "PASS",
-            "scope": "PASS",
-            "audit": "SKIP",
-            "event": "SKIP",
-            "lifecycle": "SKIP",
-            "glBridge": "SKIP"
-          }
-        },
-        {
-          "method": "GET",
           "path": "/receivables",
-          "line": 289,
+          "line": 293,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5194,7 +5986,7 @@
         {
           "method": "GET",
           "path": "/payables",
-          "line": 327,
+          "line": 338,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5204,7 +5996,7 @@
             "event": false,
             "applyTransition": false,
             "directStatusUpdate": false,
-            "glPosting": false
+            "glPosting": true
           },
           "dims": {
             "rbac": "PASS",
@@ -5218,7 +6010,7 @@
         {
           "method": "GET",
           "path": "/receivables/:id",
-          "line": 409,
+          "line": 445,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5242,7 +6034,7 @@
         {
           "method": "GET",
           "path": "/payments",
-          "line": 426,
+          "line": 462,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5266,7 +6058,7 @@
         {
           "method": "GET",
           "path": "/commitments",
-          "line": 454,
+          "line": 494,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5290,7 +6082,7 @@
         {
           "method": "GET",
           "path": "/commitments/:id",
-          "line": 484,
+          "line": 528,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5314,7 +6106,7 @@
         {
           "method": "GET",
           "path": "/financial-requests/:id",
-          "line": 501,
+          "line": 545,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5338,7 +6130,7 @@
         {
           "method": "GET",
           "path": "/financial-requests",
-          "line": 519,
+          "line": 563,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5362,7 +6154,7 @@
         {
           "method": "GET",
           "path": "/vendors/:id",
-          "line": 551,
+          "line": 600,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5386,7 +6178,7 @@
         {
           "method": "PATCH",
           "path": "/commitments/:id/approve",
-          "line": 586,
+          "line": 635,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5410,7 +6202,7 @@
         {
           "method": "PATCH",
           "path": "/receivables/:id/approve",
-          "line": 613,
+          "line": 662,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5434,7 +6226,7 @@
         {
           "method": "PATCH",
           "path": "/vouchers/:id/approve",
-          "line": 640,
+          "line": 689,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5458,7 +6250,7 @@
         {
           "method": "PATCH",
           "path": "/financial-requests/:id/approve",
-          "line": 667,
+          "line": 728,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5482,7 +6274,7 @@
         {
           "method": "PATCH",
           "path": "/budgets/:id/approve",
-          "line": 693,
+          "line": 757,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5741,13 +6533,13 @@
     "directStatusUpdate": [
       {
         "file": "artifacts/api-server/src/routes/finance-algorithms.ts",
-        "line": 450,
+        "line": 464,
         "table": "bank_statements",
         "snippet": "`UPDATE bank_statements SET \"matchStatus\" = 'matched', \"matchedJournalLineId\" = $1 WHERE id = $2 AND \"companyId\" = $3`,"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-algorithms.ts",
-        "line": 539,
+        "line": 566,
         "table": "bank_statements",
         "snippet": "`UPDATE bank_statements SET \"matchStatus\"='matched', \"matchedJournalLineId\"=$1 WHERE id=$2 AND \"companyId\"=$3`,"
       },
@@ -5816,18 +6608,6 @@
         "line": 528,
         "table": "journal_entries",
         "snippet": "if (approvalResult.requiresApproval) { await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND \"companyId"
-      },
-      {
-        "file": "artifacts/api-server/src/routes/finance-journal.ts",
-        "line": 570,
-        "table": "journal_entries",
-        "snippet": "const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET \"deletedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND"
-      },
-      {
-        "file": "artifacts/api-server/src/routes/finance-journal.ts",
-        "line": 855,
-        "table": "journal_entries",
-        "snippet": "const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET \"deletedAt\" = NOW() WHERE id = $1 AND \"companyId\" = $2 AND"
       },
       {
         "file": "artifacts/api-server/src/routes/finance-journal.ts",
