@@ -142,8 +142,11 @@ describe("handleRouteError (P0.3)", () => {
     // the "كل إجراء يرد 'حدث خطأ'" UX complaint.
     handleRouteError(new Error("something weird"), res, "misc");
     expect(res.status).toHaveBeenCalledWith(500);
+    // The fallback now appends a short hint from the actual error so support
+    // tickets carry diagnostic context without needing server logs. The
+    // contract still includes the canonical prefix and SERVER_ERROR code.
     expect(res.json).toHaveBeenCalledWith({
-      error: "حدث خطأ غير متوقع، يرجى المحاولة لاحقاً",
+      error: expect.stringMatching(/^حدث خطأ غير متوقع.*، يرجى المحاولة لاحقاً$/),
       code: "SERVER_ERROR",
     });
   });

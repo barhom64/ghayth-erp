@@ -88,13 +88,23 @@ function buildItemsTable(items: unknown): string {
   if (!Array.isArray(items) || items.length === 0) {
     return `<div class="empty">لا توجد بنود</div>`;
   }
-  const sample = items[0] as Record<string, unknown>;
+  // Find the first row that's actually a non-null object — protects against
+  // weird shapes (a column with NULL JSONB, a row that came back as a
+  // primitive) so Object.keys() can't blow up on null/undefined.
+  const sample = items.find((r) => r && typeof r === "object") as Record<string, unknown> | undefined;
+  if (!sample) {
+    return `<div class="empty">لا توجد بنود</div>`;
+  }
   const cols = Object.keys(sample).filter(
     (k) => !["id", "createdAt", "updatedAt"].includes(k) && !k.endsWith("Id")
   ).slice(0, 6);
+  if (cols.length === 0) {
+    return `<div class="empty">لا توجد بنود</div>`;
+  }
   const head = cols.map((c) => `<th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;font-size:10pt">${escapeHtml(c)}</th>`).join("");
   const body = items
     .map((r) => {
+      if (!r || typeof r !== "object") return "";
       const row = r as Record<string, unknown>;
       const cells = cols
         .map(

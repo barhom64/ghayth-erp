@@ -6,7 +6,7 @@ import {
   type RelatedEntity,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -93,39 +93,6 @@ export default function LegalContractDetail() {
     return out;
   }, [contract]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!contract) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم العقد", value: contract.contractNumber || `LC-${id}` },
-          { label: "نوع العقد", value: CONTRACT_TYPE_LABELS[contract.type] || contract.type || "-" },
-          { label: "الطرف الأول", value: contract.partyA || "-" },
-          { label: "الطرف الثاني", value: contract.partyB || "-" },
-          { label: "تاريخ البداية", value: formatDateAr(contract.startDate) },
-          { label: "تاريخ النهاية", value: formatDateAr(contract.endDate) },
-          { label: "القيمة", value: formatCurrency(contract.value || 0) },
-          { label: "شروط الدفع", value: contract.paymentTerms || "-" },
-          { label: "الحالة", value: STATUS_LABELS[contract.status] || contract.status || "-" },
-        ],
-      },
-    ];
-    if (contract.scope || contract.description) {
-      sections.push({ kind: "text", title: "نطاق العقد", body: contract.scope || contract.description });
-    }
-    if (contract.specialClauses) {
-      sections.push({ kind: "text", title: "بنود خاصة", body: contract.specialClauses });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "الطرف الأول", name: contract.partyA || "" },
-        { label: "الطرف الثاني", name: contract.partyB || "" },
-      ],
-    });
-    return sections;
-  }, [contract, id]);
 
   const { extraTabs, hideTabs } = useRegistryTabs("legal_contract", id ?? 0);
 
@@ -301,15 +268,9 @@ export default function LegalContractDetail() {
         <>
           {contract && (
             <EntityPrintButton
-              branchId={contract.branchId}
-              title={contract.title || "عقد"}
-              ref={contract.contractNumber || `LC-${id}`}
-              date={formatDateAr(contract.createdAt)}
-              sections={printSections}
               entityType="legal_contract"
               entityId={contract.id ?? id}
-              formats={["a4"]}
-            />
+              formats={["a4"]}/>
           )}
           <GuardedButton
             perm="legal:update"
