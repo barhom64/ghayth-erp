@@ -559,3 +559,20 @@ describe("POST /fx/revaluation/post — atomic JE + fx_revaluations audit", () =
     expect(fxInsertIdx).toBeGreaterThan(enginePostIdx);
   });
 });
+
+// ─── POST /vouchers — atomic JE + metadata + allocations ───────────────────
+describe("POST /vouchers — atomic JE + metadata + allocations", () => {
+  it("wraps engine post, metadata UPDATE, and allocations loop in one withTransaction", () => {
+    const idx = JRN_ROUTE.indexOf('journalRouter.post("/vouchers"');
+    expect(idx).toBeGreaterThan(-1);
+    const block = JRN_ROUTE.slice(idx, idx + 12000);
+    const txnStart = block.indexOf("withTransaction(async ()");
+    expect(txnStart).toBeGreaterThan(-1);
+    const enginePostIdx = block.indexOf("financialEngine.postJournalEntry({", txnStart);
+    const metadataUpdateIdx = block.indexOf('UPDATE journal_entries SET "paymentMethod"', txnStart);
+    const allocsLoopIdx = block.indexOf("for (let i = 0; i < allocations.length", txnStart);
+    expect(enginePostIdx).toBeGreaterThan(txnStart);
+    expect(metadataUpdateIdx).toBeGreaterThan(enginePostIdx);
+    expect(allocsLoopIdx).toBeGreaterThan(metadataUpdateIdx);
+  });
+});

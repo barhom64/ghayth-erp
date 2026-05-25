@@ -1003,93 +1003,110 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     // account balances; balances are applied only when the voucher is
     // approved (PATCH /vouchers/:id/approve). A rejected voucher therefore
     // never touches the ledger.
-    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, sourceType: "voucher", sourceId: 0, sourceKey: `finance:voucher:${idempotencyToken}`, lines: journalLines, deferBalances: true });
-    markIdempotencyReplay(req, res, alreadyExists);
+    // Atomicity guarantee: voucher JE, metadata UPDATE, and N
+    // supplier_payment_allocations inserts (with their per-row cap
+    // validation) commit or roll back together. The earlier shape ran
+    // the engine post, then the metadata UPDATE (with .catch logging),
+    // then the allocations loop with per-row throws — so a Validation
+    // Error on allocation #N left allocations #1..#N-1 + the JE
+    // committed, with the route returning 4xx. The voucher then
+    // existed in a partial state: idempotency replay (sourceKey match)
+    // returns alreadyExists=true and SKIPS the allocations loop
+    // entirely (line below), so the missing allocations stay missing
+    // forever. financialEngine.postJournalEntry's internal
+    // withTransaction joins this outer one reentrantly via SAVEPOINT
+    // (rawdb.ts:108).
+    const { journalId, alreadyExists } = await withTransaction(async () => {
+      const posted = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, sourceType: "voucher", sourceId: 0, sourceKey: `finance:voucher:${idempotencyToken}`, lines: journalLines, deferBalances: true });
 
-    await rawExecute(
-      `UPDATE journal_entries SET "paymentMethod" = $1, reference = $2, "attachmentUrl" = $3, "attachmentType" = $4, "relatedEntityType" = $5, "relatedEntityId" = $6, "operationType" = $7, "departmentId" = $8 WHERE id = $9 AND "companyId" = $10 AND "deletedAt" IS NULL`,
-      [method ?? "cash", reference ?? null, attachmentUrl ?? null, attachmentType ?? null, relatedEntityType ?? null, relatedEntityId ?? null, operationType ?? type, departmentId ?? null, journalId, scope.companyId]
-    ).catch((err) => logger.error(err, "Failed to update voucher metadata:"));
+      await rawExecute(
+        `UPDATE journal_entries SET "paymentMethod" = $1, reference = $2, "attachmentUrl" = $3, "attachmentType" = $4, "relatedEntityType" = $5, "relatedEntityId" = $6, "operationType" = $7, "departmentId" = $8 WHERE id = $9 AND "companyId" = $10 AND "deletedAt" IS NULL`,
+        [method ?? "cash", reference ?? null, attachmentUrl ?? null, attachmentType ?? null, relatedEntityType ?? null, relatedEntityId ?? null, operationType ?? type, departmentId ?? null, posted.journalId, scope.companyId]
+      );
 
-    // C4 + C5 — link the voucher to the AP obligation(s) it pays. Skip on
-    // idempotent replay (rows already exist from the original insert).
-    if (allocations && allocations.length > 0 && !alreadyExists) {
-      for (let i = 0; i < allocations.length; i++) {
-        const a = allocations[i];
-        const wht = allocWht[i];
-        const allocAmt = roundTo2(Number(a.amount));
-        // The obligation is discharged by the FULL gross — the
-        // supplier sees the buyer paid 100K (85K cash + 15K to ZATCA
-        // on its behalf). So `amount` (= cash to supplier) stays net
-        // and the gross-discharged is `allocAmt + wht.wht`.
-        const grossDischarged = roundTo2(allocAmt + (wht?.wht ?? 0));
+      // C4 + C5 — link the voucher to the AP obligation(s) it pays. Skip
+      // on idempotent replay (rows already exist from the original insert).
+      if (allocations && allocations.length > 0 && !posted.alreadyExists) {
+        for (let i = 0; i < allocations.length; i++) {
+          const a = allocations[i];
+          const wht = allocWht[i];
+          const allocAmt = roundTo2(Number(a.amount));
+          // The obligation is discharged by the FULL gross — the
+          // supplier sees the buyer paid 100K (85K cash + 15K to ZATCA
+          // on its behalf). So `amount` (= cash to supplier) stays net
+          // and the gross-discharged is `allocAmt + wht.wht`.
+          const grossDischarged = roundTo2(allocAmt + (wht?.wht ?? 0));
 
-        // #901 cap: Σ existing allocations to this obligation + the new
-        // amount must not exceed the obligation's total. Without this
-        // check, two vouchers each ≤ their own amount can still
-        // over-allocate a PO/Nusk invoice. Σ must include withheld
-        // amounts on previous allocations (gross discharged), so the
-        // SUM picks up amount + whtAmount.
-        let obligationCap: number | null = null;
-        if (a.obligationType === "purchase_order") {
-          const [po] = await rawQuery<{ totalAmount: string | number }>(
-            `SELECT "totalAmount" FROM purchase_orders
-              WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-            [a.obligationId, scope.companyId]
-          );
-          if (po) obligationCap = Number(po.totalAmount);
-        } else if (a.obligationType === "nusk_invoice") {
-          const [ni] = await rawQuery<{ totalAmount: string | number; refundAmount: string | number }>(
-            `SELECT "totalAmount", "refundAmount" FROM umrah_nusk_invoices
-              WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-            [a.obligationId, scope.companyId]
-          );
-          if (ni) obligationCap = Number(ni.totalAmount) - Number(ni.refundAmount ?? 0);
-        }
-        if (obligationCap !== null) {
-          const [{ already }] = await rawQuery<{ already: string | number }>(
-            `SELECT COALESCE(SUM(amount + COALESCE("whtAmount", 0)), 0) AS already
-               FROM supplier_payment_allocations
-              WHERE "companyId" = $1
-                AND "obligationType" = $2
-                AND "obligationId" = $3
-                AND "deletedAt" IS NULL`,
-            [scope.companyId, a.obligationType, a.obligationId]
-          );
-          const alreadyAllocated = Number(already);
-          if (alreadyAllocated + grossDischarged > roundTo2(obligationCap) + 0.005) {
-            throw new ValidationError(
-              `إجمالي التخصيصات (${roundTo2(alreadyAllocated + grossDischarged)}) يتجاوز قيمة الالتزام (${roundTo2(obligationCap)})`,
-              {
-                field: "allocations",
-                fix: `الالتزام (${a.obligationType} #${a.obligationId}) قُيِّد له ${roundTo2(alreadyAllocated)} سابقًا. خفّض المبلغ.`,
-              }
+          // #901 cap: Σ existing allocations to this obligation + the new
+          // amount must not exceed the obligation's total. Without this
+          // check, two vouchers each ≤ their own amount can still
+          // over-allocate a PO/Nusk invoice. Σ must include withheld
+          // amounts on previous allocations (gross discharged), so the
+          // SUM picks up amount + whtAmount.
+          let obligationCap: number | null = null;
+          if (a.obligationType === "purchase_order") {
+            const [po] = await rawQuery<{ totalAmount: string | number }>(
+              `SELECT "totalAmount" FROM purchase_orders
+                WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+              [a.obligationId, scope.companyId]
             );
+            if (po) obligationCap = Number(po.totalAmount);
+          } else if (a.obligationType === "nusk_invoice") {
+            const [ni] = await rawQuery<{ totalAmount: string | number; refundAmount: string | number }>(
+              `SELECT "totalAmount", "refundAmount" FROM umrah_nusk_invoices
+                WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+              [a.obligationId, scope.companyId]
+            );
+            if (ni) obligationCap = Number(ni.totalAmount) - Number(ni.refundAmount ?? 0);
           }
-        }
+          if (obligationCap !== null) {
+            const [{ already }] = await rawQuery<{ already: string | number }>(
+              `SELECT COALESCE(SUM(amount + COALESCE("whtAmount", 0)), 0) AS already
+                 FROM supplier_payment_allocations
+                WHERE "companyId" = $1
+                  AND "obligationType" = $2
+                  AND "obligationId" = $3
+                  AND "deletedAt" IS NULL`,
+              [scope.companyId, a.obligationType, a.obligationId]
+            );
+            const alreadyAllocated = Number(already);
+            if (alreadyAllocated + grossDischarged > roundTo2(obligationCap) + 0.005) {
+              throw new ValidationError(
+                `إجمالي التخصيصات (${roundTo2(alreadyAllocated + grossDischarged)}) يتجاوز قيمة الالتزام (${roundTo2(obligationCap)})`,
+                {
+                  field: "allocations",
+                  fix: `الالتزام (${a.obligationType} #${a.obligationId}) قُيِّد له ${roundTo2(alreadyAllocated)} سابقًا. خفّض المبلغ.`,
+                }
+              );
+            }
+          }
 
-        await rawExecute(
-          `INSERT INTO supplier_payment_allocations
-             ("companyId", "branchId", "journalEntryId",
-              "obligationType", "obligationId", amount, notes, "createdBy",
-              "whtAmount", "whtRate", "whtCategory")
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-          [
-            scope.companyId,
-            branchId ?? scope.branchId ?? null,
-            journalId,
-            a.obligationType,
-            a.obligationId,
-            allocAmt,                              // comment-anchor: amount = net
-            a.notes ?? null,
-            scope.activeAssignmentId ?? null,
-            wht?.wht ?? 0,
-            wht?.rate ?? null,
-            wht?.category ?? null,
-          ]
-        );
+          await rawExecute(
+            `INSERT INTO supplier_payment_allocations
+               ("companyId", "branchId", "journalEntryId",
+                "obligationType", "obligationId", amount, notes, "createdBy",
+                "whtAmount", "whtRate", "whtCategory")
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            [
+              scope.companyId,
+              branchId ?? scope.branchId ?? null,
+              posted.journalId,
+              a.obligationType,
+              a.obligationId,
+              allocAmt,                              // comment-anchor: amount = net
+              a.notes ?? null,
+              scope.activeAssignmentId ?? null,
+              wht?.wht ?? 0,
+              wht?.rate ?? null,
+              wht?.category ?? null,
+            ]
+          );
+        }
       }
-    }
+
+      return { journalId: posted.journalId, alreadyExists: posted.alreadyExists };
+    });
+    markIdempotencyReplay(req, res, alreadyExists);
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `voucher.${type}`, entity: "vouchers", entityId: journalId, details: JSON.stringify({ ref, type, amount: baseAmount, vatAmount: computedVat, totalWithVat, accountCode, payee, method }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
