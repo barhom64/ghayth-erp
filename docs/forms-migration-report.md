@@ -1,18 +1,25 @@
 # Forms Migration Verification Report
 
 > **Generated**: 2026-05-13
+> **Last update**: 2026-05-25 — enterprise-hardening sweep on `claude/enterprise-hardening-roadmap-AOfO7`
 > **Scope**: All `useState` form patterns migrated to `FormShell + zod` across the ghayth-erp frontend.
-> **Status**: 59 of ~280 forms migrated, 100% present on `main`, 42 smoke tests green (389/389 assertions).
+> **Status**: 144 of 431 pages on FormShell (33.4%); all 75 pages/create/* migrated; legacy `useAutoDraft` + `useFieldErrors` hooks deleted; hard lint rule `manual-form-instead-of-formshell` blocks regression.
 
 ---
 
 ## TL;DR
 
-| Item | Count | Verified On Main |
+| Item | Count | Verified On Branch |
 |------|-------|------------------|
-| Migrated form files | **29** | ✅ all contain `FormShell` import |
-| Smoke test files | **42** | ✅ `tests/unit/formMigrationBatch{2,3,…,43}Smoke.test.ts` |
+| Pages using FormShell directly | **127** | ✅ `grep -lr FormShell artifacts/ghayth-erp/src/pages` |
+| Pages using InlineEditForm (FormShell-backed) | **22** | ✅ `grep -lr InlineEditForm artifacts/ghayth-erp/src/pages` |
+| **Total pages on FormShell (direct + indirect)** | **144** | — |
+| Legacy `useAutoDraft` / `useFieldErrors` callers | **0** | ✅ both hook files deleted from src/hooks/ |
+| Hard lint rule blocking regression | **active** | ✅ `manual-form-instead-of-formshell` in scripts/src/lint-patterns.mjs |
+| Lint-pattern test fixtures for the rule | **4** | ✅ scripts/src/lint-patterns.test.mjs |
+| Smoke test files (legacy batch) | **42** | ✅ `tests/unit/formMigrationBatch{2,3,…,43}Smoke.test.ts` |
 | Smoke test assertions | **389/389 pass** | ✅ `pnpm vitest run formMigrationBatch` |
+| Full test suite | **4288/4288 pass** | ✅ on every commit via pre-commit hook |
 | Architectural patterns documented | **18** | ✅ as smoke-test fixtures |
 | RBAC: `GuardedButton` hides by default | **yes** | ✅ `permission-gate.tsx:66` |
 
