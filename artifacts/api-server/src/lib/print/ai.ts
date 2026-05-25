@@ -92,7 +92,17 @@ let activeClient: AiClient = new NoopAiClient();
 
 export function setAiClient(client: AiClient): void {
   activeClient = client;
-  logger.info(`[print/ai] client set to ${client.name}`);
+  logger.info(`[print/ai] client set to ${client.name} (available=${client.isAvailable()})`);
+}
+
+/**
+ * Boot-time registration. Reads the same env vars aiEngine.ts uses so
+ * a deployment that has Anthropic configured for OTHER AI features
+ * gets the print-AI helpers for free.
+ */
+export async function registerDefaultAiClient(): Promise<void> {
+  const { anthropicClientFromConfig } = await import("./ai/anthropicClient.js");
+  setAiClient(await anthropicClientFromConfig());
 }
 
 export function getAiClient(): AiClient {

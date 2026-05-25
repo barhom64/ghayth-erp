@@ -244,6 +244,25 @@ export async function renderPrint(
       jobIdOverride: verifyCtx.jobId ?? undefined,
     });
     jobId = row?.jobId ?? null;
+
+    // Phase 7 — auto-index into documents so the entity-detail
+    // "Documents" tab surfaces every printed copy. Soft-fail: if the
+    // documents table isn't migrated yet, the print still succeeds and
+    // print_jobs remains the source of truth.
+    if (jobId) {
+      const { linkPrintToDocuments } = await import("./archive.js");
+      await linkPrintToDocuments({
+        companyId: scope.companyId,
+        jobId,
+        entityType: req.entityType,
+        entityId: req.entityId,
+        filename,
+        mime,
+        bytes: bytes.byteLength,
+        storageKey,
+        uploadedBy: scope.userId,
+      });
+    }
   }
 
   return {

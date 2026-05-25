@@ -687,4 +687,168 @@ router.post(
   }
 );
 
+// ─── Phase 7 — Archive history per entity ──────────────────────────────────
+// Returns every document auto-archived from prints of the given
+// (entityType, entityId). Powers the "Documents" tab on entity-detail
+// pages so users see the printed copy alongside their uploads.
+router.get(
+  "/archive/:entityType/:entityId",
+  requirePermission("print_jobs:read"),
+  async (req: Request, res: Response) => {
+    try {
+      const scope = scopeFromReq(req);
+      const entityType = String(req.params.entityType ?? "");
+      const entityId = String(req.params.entityId ?? "");
+      if (!/^[a-z][a-z0-9_]*$/.test(entityType) || !/^[A-Za-z0-9_\-./]+$/.test(entityId)) {
+        throw new ValidationError("invalid entity reference");
+      }
+      const { listEntityPrints } = await import("../lib/print/archive.js");
+      const items = await listEntityPrints(scope.companyId, entityType, entityId);
+      res.json({ items });
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  },
+);
+
+// ─── Phase 9 — Delivery (one-shot send) ────────────────────────────────────
+// Re-renders the document then dispatches via the chosen channel. The
+// SPA already has the bytes from /render, but the server-side path lets
+// scheduled jobs and the AI letter-drafting flow trigger a send without
+// the SPA ever touching the document.
+const deliveryBody = z.object({
+  entityType: zEntityType,
+  entityId: zEntityId,
+  format: z.enum(["a4", "thermal_80", "thermal_58", "label", "excel"]).optional(),
+  channel: z.enum(["download", "email", "whatsapp", "sms", "internal_inbox", "webhook"]),
+  to: z.array(z.object({ address: z.string().min(1).max(500), name: z.string().max(120).optional() })).min(1).max(20),
+  subject: z.string().max(500).optional(),
+  body: z.string().max(10_000).optional(),
+  locale: z.enum(["ar", "en"]).optional(),
+  templateCode: z.string().max(120).optional(),
+});
+
+router.post(
+  "/deliver",
+  renderLimiter,
+  requirePermission("print:create"),
+  async (req: Request, res: Response) => {
+    try {
+      const body = zodParse(deliveryBody.safeParse(req.body));
+      const scope = scopeFromReq(req);
+      const result = await renderPrint(
+        scope,
+        {
+          entityType: body.entityType,
+          entityId: body.entityId,
+          format: body.format,
+        },
+        { ipAddress: req.ip, userAgent: req.get("user-agent") ?? undefined },
+      );
+      const { sendDocument } = await import("../lib/print/delivery.js");
+      const deliveryResult = await sendDocument({
+        channel: body.channel,
+        to: body.to,
+        document: {
+          bytes: result.bytes,
+          mime: result.mime,
+          filename: result.filename,
+          jobId: result.jobId,
+        },
+        subject: body.subject,
+        body: body.body,
+        locale: body.locale,
+        templateCode: body.templateCode,
+      });
+      res.json({
+        jobId: result.jobId,
+        delivery: deliveryResult,
+      });
+    } catch (err) {
+      if (err instanceof PrintPermissionError) return res.status(err.status).json({ error: err.message });
+      if (err instanceof PrintApprovalRequiredError)
+        return res.status(err.status).json({ error: err.message, copyNumber: err.copyNumber });
+      if (err instanceof PrintTemplateMissingError)
+        return res.status(err.status).json({ error: err.message });
+      return handleRouteError(err, res, "print");
+    }
+  },
+);
+
+// ─── Phase 10 — Queue inspection ───────────────────────────────────────────
+router.get(
+  "/queue/:id",
+  requirePermission("print_jobs:read"),
+  async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id ?? "");
+      if (!/^[a-z0-9.\-]+$/i.test(id)) throw new ValidationError("invalid queue id");
+      const { getBackend } = await import("../lib/print/queue.js");
+      const job = await getBackend().getJob(id);
+      if (!job) return res.status(404).json({ error: "not_found" });
+      res.json({ job, backend: getBackend().name });
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  },
+);
+
+// ─── Phase 11 — AI helpers ─────────────────────────────────────────────────
+// Behind RBAC because each call hits the configured LLM provider and
+// therefore costs money. Limit to template-editor users.
+const aiSuggestBody = z.object({
+  entityType: zEntityType,
+  sampleData: z.record(z.any()).optional(),
+  locale: z.enum(["ar", "en"]).default("ar"),
+});
+
+router.post(
+  "/ai/suggest-template",
+  requirePermission("templates:write"),
+  async (req: Request, res: Response) => {
+    try {
+      const body = zodParse(aiSuggestBody.safeParse(req.body));
+      const { trySuggestTemplate } = await import("../lib/print/ai.js");
+      const result = await trySuggestTemplate({
+        entityType: body.entityType,
+        sampleData: body.sampleData ?? {},
+        locale: body.locale,
+      });
+      if (!result.ok) return res.status(503).json({ error: result.error });
+      res.json(result.result);
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  },
+);
+
+router.post(
+  "/ai/draft-letter",
+  requirePermission("templates:write"),
+  async (req: Request, res: Response) => {
+    try {
+      const draftBody = z.object({
+        purpose: z.string().min(1).max(2000),
+        addressee: z.string().min(1).max(500),
+        facts: z.record(z.any()).optional(),
+        locale: z.enum(["ar", "en"]).default("ar"),
+        tone: z.enum(["formal", "warm", "stern"]).optional(),
+      });
+      const body = zodParse(draftBody.safeParse(req.body));
+      const { tryDraftLetter } = await import("../lib/print/ai.js");
+      const result = await tryDraftLetter({
+        purpose: body.purpose,
+        addressee: body.addressee,
+        facts: body.facts ?? {},
+        locale: body.locale,
+        tone: body.tone,
+      });
+      if (!result.ok) return res.status(503).json({ error: result.error });
+      res.json(result.result);
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  },
+);
+
 export default router;
