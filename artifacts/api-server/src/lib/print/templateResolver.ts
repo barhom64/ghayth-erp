@@ -281,10 +281,10 @@ function buildInvoicePreset(): PrintTemplate {
     <tr style="background:#f1f5f9">
       <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:32px">#</th>
       <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:right">البيان</th>
-      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:60px">الكمية</th>
-      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:60px">الوحدة</th>
-      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">سعر الوحدة</th>
-      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">الإجمالي</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:70px">الكمية</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:100px">سعر الوحدة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">الضريبة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:110px">الإجمالي</th>
     </tr>
   </thead>
   <tbody>
@@ -293,8 +293,8 @@ function buildInvoicePreset(): PrintTemplate {
       <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{@index}}</td>
       <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt">{{this.description}}</td>
       <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{this.quantity}}</td>
-      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{this.unit}}</td>
       <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.unitPrice}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.vatAmount}}</td>
       <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.totalPrice}}</td>
     </tr>
     {{/each}}
