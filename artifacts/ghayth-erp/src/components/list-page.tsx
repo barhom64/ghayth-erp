@@ -456,10 +456,10 @@ function ListPageExportMenu<T>(props: {
   const [busy, setBusy] = useState(false);
 
   async function runPrint() {
-    // Sales report / list rendering. The synthetic entityId "_list" tells
-    // the universal-fallback loader to use the registry-declared table
-    // and the default columns; the items table auto-builds from the
-    // returned rows.
+    // Pass the visible rows as `payload` so /render skips the dataLoader
+    // (which can't resolve the synthetic entityId "_list") and uses the
+    // page's current data directly. The universal-fallback template's
+    // `{{entity.itemsTable}}` auto-builds the table from `data.items`.
     setBusy(true);
     const w = window.open("", "_blank");
     if (w) {
@@ -468,7 +468,12 @@ function ListPageExportMenu<T>(props: {
       );
     }
     try {
-      const resp = await renderDocument({ entityType, entityId: "_list", format: "a4" });
+      const resp = await renderDocument({
+        entityType,
+        entityId: "list",
+        format: "a4",
+        payload: { entity: { id: "list", ref: "قائمة", status: "current" }, items: props.rows },
+      });
       const html = decodeRenderResponse(resp);
       if (w) {
         w.document.open();
@@ -487,7 +492,12 @@ function ListPageExportMenu<T>(props: {
   async function runExcel() {
     setBusy(true);
     try {
-      await downloadDocument({ entityType, entityId: "_list", format: "excel" });
+      await downloadDocument({
+        entityType,
+        entityId: "list",
+        format: "excel",
+        payload: { entity: { id: "list" }, items: props.rows },
+      });
     } catch (err) {
       toast({ title: "فشل تصدير Excel", description: (err as { message?: string })?.message ?? "—", variant: "destructive" });
     } finally {

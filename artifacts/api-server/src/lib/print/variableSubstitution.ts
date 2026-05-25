@@ -239,9 +239,35 @@ export function substitute(input: SubstitutionInput): string {
 export function renderContextToHtml(ctx: RenderContext): string {
   // Visual-mode templates store a block tree in layoutJson; convert it to the
   // same {{token}} HTML shape the preset templates use, then run substitution.
-  const baseTemplate = ctx.template.mode === "visual" && ctx.template.layoutJson
+  let baseTemplate = ctx.template.mode === "visual" && ctx.template.layoutJson
     ? renderLayoutToHtml(ctx.template.layoutJson)
     : ctx.template.htmlContent ?? "";
+  // BLANK-PAGE GUARD: a template can resolve to an empty body when the user
+  // saves a draft with no htmlContent, or when a visual layout serialises
+  // to an empty tree, or when a stub loader returns nothing for the items
+  // table. Rendering empty bytes shows up as a fully-blank popup in the
+  // browser — the SPA can't tell that apart from "popup-blocked" or
+  // "Arabic mojibake", so users report "ما طبع شي".
+  //
+  // Fall back to a synthetic universal block: letterhead + meta-grid built
+  // from whatever `data.entity` actually has + items table + footer. This
+  // guarantees every render produces at least the branch header, the
+  // entity id, and the verify block on the page.
+  if (!baseTemplate.trim()) {
+    baseTemplate = `<div class="print-doc">
+{{branch.letterhead}}
+<h2 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">${escapeHtml(ctx.entityType)}</h2>
+<div class="meta-grid">
+  <div><strong>المرجع:</strong> {{entity.ref}}</div>
+  <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>المعرّف:</strong> {{entity.id}}</div>
+</div>
+{{entity.itemsTable}}
+{{system.verifyBlock}}
+{{branch.footer}}
+</div>`;
+  }
   // Template-level overrides — the cliché editor lets users upload a custom
   // logo, override the company/branch header text, set a custom footer, and
   // attach a signature image per template. These win over the branch's
