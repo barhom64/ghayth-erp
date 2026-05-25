@@ -3,7 +3,7 @@
 > **Generated**: 2026-05-13
 > **Last update**: 2026-05-25 — enterprise-hardening sweep on `claude/enterprise-hardening-roadmap-AOfO7`
 > **Scope**: All `useState` form patterns migrated to `FormShell + zod` across the ghayth-erp frontend.
-> **Status**: 166 of 431 pages on FormShell (38.5%); all 75 pages/create/* migrated; many detail-page inline edit forms migrated; legacy `useAutoDraft` + `useFieldErrors` hooks deleted; hard lint rule `manual-form-instead-of-formshell` blocks regression.
+> **Status**: 169 of 431 pages on FormShell (39.2%); all 75 pages/create/* migrated; many detail-page inline edit forms migrated; reason-prompt AlertDialogs consolidated to shared PromptDialog (8 callsites); legacy `useAutoDraft` + `useFieldErrors` hooks deleted; hard lint rule `manual-form-instead-of-formshell` blocks regression.
 
 ---
 
@@ -11,9 +11,10 @@
 
 | Item | Count | Verified On Branch |
 |------|-------|------------------|
-| Pages using FormShell directly | **144** | ✅ `grep -lr FormShell artifacts/ghayth-erp/src/pages` |
+| Pages using FormShell directly | **147** | ✅ `grep -lr FormShell artifacts/ghayth-erp/src/pages` |
 | Pages using InlineEditForm (FormShell-backed) | **22** | ✅ `grep -lr InlineEditForm artifacts/ghayth-erp/src/pages` |
-| **Total pages on FormShell (direct + indirect)** | **166** | — |
+| **Total pages on FormShell (direct + indirect)** | **169** | — |
+| Pages using shared PromptDialog | **8** | ✅ `grep -lr PromptDialog artifacts/ghayth-erp/src/pages` |
 | Legacy `useAutoDraft` / `useFieldErrors` callers | **0** | ✅ both hook files deleted from src/hooks/ |
 | Hard lint rule blocking regression | **active** | ✅ `manual-form-instead-of-formshell` in scripts/src/lint-patterns.mjs |
 | Lint-pattern test fixtures for the rule | **4** | ✅ scripts/src/lint-patterns.test.mjs |
