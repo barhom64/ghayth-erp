@@ -208,8 +208,22 @@ async function loadInvoice(companyId: number, id: string) {
     [id, companyId]
   );
   if (!invoice) return { entity: { id } };
+  // Select with stable aliases so the invoice template's {{this.totalPrice}}
+  // works regardless of which schema the underlying table uses. invoice_lines
+  // (the canonical table) stores the per-line total as "lineTotal" but the
+  // ZATCA / legacy templates reference "totalPrice" — alias here so we don't
+  // have to fork the preset per table.
   const items = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM invoice_lines WHERE "invoiceId" = $1`,
+    `SELECT
+       id,
+       "invoiceId",
+       description,
+       quantity,
+       "unitPrice",
+       "lineTotal"  AS "totalPrice",
+       "vatAmount",
+       "lineGross"
+     FROM invoice_lines WHERE "invoiceId" = $1`,
     [id]
   );
   const client = invoice.clientId
@@ -234,7 +248,10 @@ async function loadDeliveryNote(companyId: number, id: string) {
 }
 
 async function loadCreditNote(companyId: number, id: string) {
-  return await loadGeneric("credit_notes", id, companyId);
+  // The canonical table is `credit_memos` — `credit_notes` was used in an
+  // older migration sketch and never created. Without this alias every
+  // credit-note print resolved to the empty stub.
+  return await loadGeneric("credit_memos", id, companyId);
 }
 
 async function loadGeneric(table: string, id: string, companyId: number) {
