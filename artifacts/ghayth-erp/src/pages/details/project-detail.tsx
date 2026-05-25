@@ -58,7 +58,7 @@ import {
   ArrowRight, FolderKanban, Calendar, DollarSign, ListTodo,
   CheckCircle2, Pencil, Trash2, X, Check, AlertTriangle,
   BookOpen, FileText, Clock, Plus, Flag,
-  BarChart2, ShieldAlert, Users2, Mail, Lock,
+  BarChart2, ShieldAlert, Users2, Mail, Lock, TrendingUp,
 } from "lucide-react";
 import { formatDateAr, getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { EntityObligations } from "@/components/shared/entity-obligations";
@@ -732,7 +732,12 @@ export default function ProjectDetail() {
       overview={overview}
       actions={
         <div className="flex items-center gap-2">
-          actions
+          {actions}
+          <Link href={`/finance/profitability/project/${id}`}>
+            <Button variant="outline" size="sm" className="gap-1">
+              <TrendingUp className="h-4 w-4" /> الربحية
+            </Button>
+          </Link>
           <PrintButton entityType="project" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
         </div>
       }
