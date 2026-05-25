@@ -15,6 +15,7 @@ const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
 const TaxCodesCreate = lazy(() => import("@/pages/create/finance/tax-codes-create"));
 const WhtCategories = lazy(() => import("@/pages/finance/wht-categories"));
 const WhtCategoriesCreate = lazy(() => import("@/pages/create/finance/wht-categories-create"));
+const CogsSummary = lazy(() => import("@/pages/finance/cogs-summary"));
 const InventoryValuation = lazy(() => import("@/pages/finance/inventory-valuation"));
 const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
 const VouchersCreate = lazy(() => import("@/pages/create/finance/vouchers-create"));
@@ -98,6 +99,8 @@ export const financeRoutes = [
   { path: "/finance/wht-categories/create", component: WhtCategoriesCreate },
   // Inventory valuation report — consumes /reports/inventory-valuation (#1033).
   { path: "/finance/reports/inventory-valuation", component: InventoryValuation },
+  // COGS / margin summary — consumes /reports/cogs-summary (#1034).
+  { path: "/finance/reports/cogs-summary", component: CogsSummary },
   { path: "/finance/vouchers", component: Vouchers },
   { path: "/finance/vouchers/create", component: VouchersCreate },
   { path: "/finance/vouchers/:id", component: VoucherDetail },
