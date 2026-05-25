@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { z } from "zod";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -6,6 +7,11 @@ import {
   PageShell,
   DataTable,
   type DataTableColumn,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormSelectField,
+  FormTextareaField,
 } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -272,16 +278,20 @@ function RoutingRulesTab() {
   );
 }
 
+const templateSchema = z.object({
+  templateKey: z.string().min(1, "مطلوب"),
+  channel: z.string().min(1, "مطلوب"),
+  titleTemplate: z.string(),
+  bodyTemplate: z.string().min(1, "مطلوب"),
+});
+type TemplateForm = z.infer<typeof templateSchema>;
+
 function TemplatesTab() {
   const { data: templatesData, isLoading, isError } = useApiQuery(["notif-templates"], "/notification-engine/templates");
   const [editId, setEditId] = useState<number | null>(null);
   const [editBody, setEditBody] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [showNew, setShowNew] = useState(false);
-  const [newKey, setNewKey] = useState("");
-  const [newChannel, setNewChannel] = useState("sms");
-  const [newTitle, setNewTitle] = useState("");
-  const [newBody, setNewBody] = useState("");
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -309,13 +319,7 @@ function TemplatesTab() {
     [["notif-templates"]],
     {
       successMessage: "تم إنشاء القالب",
-      onSuccess: () => {
-        setShowNew(false);
-        setNewKey("");
-        setNewChannel("sms");
-        setNewTitle("");
-        setNewBody("");
-      },
+      onSuccess: () => setShowNew(false),
     }
   );
   const deleteMut = useApiMutation<any, { id: number }>(
@@ -328,10 +332,6 @@ function TemplatesTab() {
   const saveEdit = () => {
     if (!editId) return;
     saveEditMut.mutate({ id: editId, titleTemplate: editTitle || null, bodyTemplate: editBody });
-  };
-  const createTemplate = () => {
-    if (!newKey || !newBody) return;
-    createMut.mutate({ templateKey: newKey, channel: newChannel, titleTemplate: newTitle || null, bodyTemplate: newBody });
   };
   const deleteTemplate = (id: number) => {
     deleteMut.mutate({ id });
@@ -348,37 +348,41 @@ function TemplatesTab() {
 
       {showNew && (
         <Card>
-          <CardContent className="p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>مفتاح القالب</Label>
-                <Input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="invoice_reminder" />
-              </div>
-              <div>
-                <Label>القناة</Label>
-                <Select value={newChannel} onValueChange={setNewChannel}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ALL_CHANNELS.map((ch) => (
-                      <SelectItem key={ch} value={ch}>{CHANNEL_LABELS[ch]?.label ?? ch}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div>
-              <Label>عنوان القالب (اختياري)</Label>
-              <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="{{ref}} — تذكير" />
-            </div>
-            <div>
-              <Label>نص القالب</Label>
-              <Textarea value={newBody} onChange={(e) => setNewBody(e.target.value)} rows={4}
-                placeholder="عزيزي {{clientName}}، لديك فاتورة رقم {{ref}}..." />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button size="sm" variant="outline" onClick={() => setShowNew(false)}>إلغاء</Button>
-              <GuardedButton perm="settings:create" size="sm" onClick={createTemplate}><Save className="h-3 w-3 ml-1" /> إنشاء</GuardedButton>
-            </div>
+          <CardContent className="p-4">
+            <FormShell
+              schema={templateSchema}
+              defaultValues={{ templateKey: "", channel: "sms", titleTemplate: "", bodyTemplate: "" }}
+              submitLabel="إنشاء"
+              secondaryActions={
+                <Button type="button" size="sm" variant="outline" onClick={() => setShowNew(false)}>إلغاء</Button>
+              }
+              onSubmit={(values: TemplateForm) => {
+                createMut.mutate({
+                  templateKey: values.templateKey,
+                  channel: values.channel,
+                  titleTemplate: values.titleTemplate || null,
+                  bodyTemplate: values.bodyTemplate,
+                });
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormTextField name="templateKey" label="مفتاح القالب" required placeholder="invoice_reminder" />
+                <FormSelectField
+                  name="channel"
+                  label="القناة"
+                  required
+                  options={ALL_CHANNELS.map((ch) => ({ value: ch, label: CHANNEL_LABELS[ch]?.label ?? ch }))}
+                />
+              </FormGrid>
+              <FormTextField name="titleTemplate" label="عنوان القالب (اختياري)" placeholder="{{ref}} — تذكير" />
+              <FormTextareaField
+                name="bodyTemplate"
+                label="نص القالب"
+                required
+                rows={4}
+                placeholder="عزيزي {{clientName}}، لديك فاتورة رقم {{ref}}..."
+              />
+            </FormShell>
           </CardContent>
         </Card>
       )}
@@ -612,13 +616,17 @@ function FallbackChainsTab() {
   );
 }
 
+const webhookSchema = z.object({
+  name: z.string().min(1, "مطلوب"),
+  url: z.string().min(1, "مطلوب"),
+  secret: z.string(),
+  events: z.string(),
+});
+type WebhookForm = z.infer<typeof webhookSchema>;
+
 function WebhooksTab() {
   const { data: webhooksData, isLoading, isError } = useApiQuery(["notif-webhooks"], "/notification-engine/webhooks");
   const [showNew, setShowNew] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newUrl, setNewUrl] = useState("");
-  const [newSecret, setNewSecret] = useState("");
-  const [newEvents, setNewEvents] = useState("*");
 
   const createMut = useApiMutation<any, { name: string; url: string; secret: string | null; events: string[] }>(
     "/notification-engine/webhooks",
@@ -626,13 +634,7 @@ function WebhooksTab() {
     [["notif-webhooks"]],
     {
       successMessage: "تم إنشاء خطاف الاستدعاء",
-      onSuccess: () => {
-        setShowNew(false);
-        setNewName("");
-        setNewUrl("");
-        setNewSecret("");
-        setNewEvents("*");
-      },
+      onSuccess: () => setShowNew(false),
     }
   );
   const deleteMut = useApiMutation<any, { id: number }>(
@@ -651,11 +653,6 @@ function WebhooksTab() {
   if (isError) return <ErrorState />;
 
   const webhooks = asList(webhooksData);
-  const createWebhook = () => {
-    if (!newName || !newUrl) return;
-    const events = newEvents.split(",").map((e) => e.trim()).filter(Boolean);
-    createMut.mutate({ name: newName, url: newUrl, secret: newSecret || null, events });
-  };
   const deleteWebhook = (id: number) => {
     deleteMut.mutate({ id });
   };
@@ -677,31 +674,33 @@ function WebhooksTab() {
 
       {showNew && (
         <Card>
-          <CardContent className="p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>الاسم</Label>
-                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="ربط سلاك" />
-              </div>
-              <div>
-                <Label>الرابط</Label>
-                <Input value={newUrl} onChange={(e) => setNewUrl(e.target.value)} placeholder="https://hooks.slack.com/..." dir="ltr" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>المفتاح السري (تشفير HMAC-SHA256)</Label>
-                <Input value={newSecret} onChange={(e) => setNewSecret(e.target.value)} type="password" dir="ltr" />
-              </div>
-              <div>
-                <Label>الأحداث (فاصلة بين كل حدث)</Label>
-                <Input value={newEvents} onChange={(e) => setNewEvents(e.target.value)} placeholder="* , invoice, leave" dir="ltr" />
-              </div>
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button size="sm" variant="outline" onClick={() => setShowNew(false)}>إلغاء</Button>
-              <GuardedButton perm="settings:create" size="sm" onClick={createWebhook}><Save className="h-3 w-3 ml-1" /> إنشاء</GuardedButton>
-            </div>
+          <CardContent className="p-4">
+            <FormShell
+              schema={webhookSchema}
+              defaultValues={{ name: "", url: "", secret: "", events: "*" }}
+              submitLabel="إنشاء"
+              secondaryActions={
+                <Button type="button" size="sm" variant="outline" onClick={() => setShowNew(false)}>إلغاء</Button>
+              }
+              onSubmit={(values: WebhookForm) => {
+                const events = values.events.split(",").map((e) => e.trim()).filter(Boolean);
+                createMut.mutate({
+                  name: values.name,
+                  url: values.url,
+                  secret: values.secret || null,
+                  events,
+                });
+              }}
+            >
+              <FormGrid cols={2}>
+                <FormTextField name="name" label="الاسم" required placeholder="ربط سلاك" />
+                <FormTextField name="url" label="الرابط" required placeholder="https://hooks.slack.com/..." />
+              </FormGrid>
+              <FormGrid cols={2}>
+                <FormTextField name="secret" label="المفتاح السري (تشفير HMAC-SHA256)" type="password" />
+                <FormTextField name="events" label="الأحداث (فاصلة بين كل حدث)" placeholder="* , invoice, leave" />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}
