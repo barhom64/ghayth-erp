@@ -1,16 +1,27 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormSelectField,
+  FormTextareaField,
+} from "@workspace/ui-core";
 import { Plus, ExternalLink, Trash2, Paperclip } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
-import { useToast } from "@/hooks/use-toast";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+
+const attachmentSchema = z.object({
+  type: z.string(),
+  title: z.string().min(1, "العنوان مطلوب"),
+  fileUrl: z.string().optional(),
+  notes: z.string().optional(),
+});
 
 // Reusable attachments panel — backs GET/POST/DELETE /api/umrah/attachments
 // (PR #312). Drop this into any umrah detail page with the right
@@ -65,12 +76,7 @@ interface Props {
 }
 
 export function UmrahAttachmentsPanel({ entityType, entityId }: Props) {
-  const { toast } = useToast();
   const [adding, setAdding] = useState(false);
-  const [type, setType] = useState<string>("other");
-  const [title, setTitle] = useState("");
-  const [notes, setNotes] = useState("");
-  const [fileUrl, setFileUrl] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
 
   // queryKey must be string[] for the useApiQuery + invalidate APIs;
@@ -89,31 +95,23 @@ export function UmrahAttachmentsPanel({ entityType, entityId }: Props) {
     { successMessage: "تمت إضافة المرفق" },
   );
 
-  const resetForm = () => {
-    setTitle(""); setNotes(""); setFileUrl(""); setType("other");
-  };
-
-  const handleAdd = () => {
-    if (!title.trim()) {
-      toast({ variant: "destructive", title: "العنوان مطلوب" });
-      return;
-    }
-    createMut.mutate(
-      {
-        entityType,
-        entityId,
-        type,
-        title: title.trim(),
-        notes: notes.trim() || undefined,
-        fileUrl: fileUrl.trim() || undefined,
-      },
-      {
-        onSuccess: () => {
-          resetForm();
-          setAdding(false);
+  const handleAdd = async (values: z.infer<typeof attachmentSchema>) => {
+    await new Promise<void>((resolve, reject) => {
+      createMut.mutate(
+        {
+          entityType,
+          entityId,
+          type: values.type,
+          title: values.title.trim(),
+          notes: values.notes?.trim() || undefined,
+          fileUrl: values.fileUrl?.trim() || undefined,
         },
-      },
-    );
+        {
+          onSuccess: () => { setAdding(false); resolve(); },
+          onError: () => reject(),
+        },
+      );
+    });
   };
 
   const columns: DataTableColumn<UmrahAttachment>[] = [
@@ -174,45 +172,29 @@ export function UmrahAttachmentsPanel({ entityType, entityId }: Props) {
         </div>
 
         {adding && (
-          <div className="rounded-md border bg-muted/30 p-3 space-y-3">
-            <div className="grid gap-3 md:grid-cols-2">
-              <div>
-                <Label htmlFor="att-type">النوع</Label>
-                <Select value={type} onValueChange={setType}>
-                  <SelectTrigger id="att-type"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ATTACH_TYPES.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="att-title">العنوان <span className="text-status-error-foreground">*</span></Label>
-                <Input id="att-title" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={255} />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="att-url">رابط الملف (اختياري)</Label>
-              <Input
-                id="att-url"
-                value={fileUrl}
-                onChange={(e) => setFileUrl(e.target.value)}
+          <div className="rounded-md border bg-muted/30 p-3">
+            <FormShell
+              schema={attachmentSchema}
+              defaultValues={{ type: "other", title: "", fileUrl: "", notes: "" }}
+              submitLabel="إضافة"
+              secondaryActions={
+                <Button type="button" variant="ghost" size="sm" onClick={() => setAdding(false)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={handleAdd}
+            >
+              <FormGrid cols={2}>
+                <FormSelectField name="type" label="النوع" options={ATTACH_TYPES} />
+                <FormTextField name="title" label="العنوان" required />
+              </FormGrid>
+              <FormTextField
+                name="fileUrl"
+                label="رابط الملف (اختياري)"
                 placeholder="https://… أو storageKey"
               />
-            </div>
-            <div>
-              <Label htmlFor="att-notes">ملاحظات (اختياري)</Label>
-              <Textarea id="att-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={() => { resetForm(); setAdding(false); }}>
-                إلغاء
-              </Button>
-              <Button size="sm" onClick={handleAdd} disabled={createMut.isPending} rateLimitAware>
-                إضافة
-              </Button>
-            </div>
+              <FormTextareaField name="notes" label="ملاحظات (اختياري)" rows={2} />
+            </FormShell>
           </div>
         )}
 
