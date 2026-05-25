@@ -84,7 +84,7 @@ export default function AccountStatementPage({ entityType }: Props) {
 
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
-    d.setMonth(d.getMonth() - 3);
+    d.setMonth(d.getMonth() - 3); // utc-ok: UI default range only; user picker is authoritative
     return d.toISOString().slice(0, 10);
   });
   const [endDate, setEndDate] = useState(todayLocal());
