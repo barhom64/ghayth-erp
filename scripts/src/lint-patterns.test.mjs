@@ -348,6 +348,44 @@ check(
   ),
 );
 
+// ─── raw-table-in-page (ratchet) ───────────────────────────────────────────
+//
+// 30 raw <table>/<thead>/<tbody> occurrences across 17 pages — mostly
+// invoice/voucher print views and umrah wizard summary blocks. The
+// ratchet baseline prevents net-new raw tables; once a file is migrated
+// off raw <table>, the baseline drops by that file's table count.
+
+console.log("raw-table-in-page rule");
+
+check(
+  "bare <table> IS flagged",
+  fires(
+    "raw-table-in-page",
+    `<table><thead><tr><th>الاسم</th></tr></thead></table>`,
+  ),
+);
+check(
+  "<table className=\"…\"> IS flagged",
+  fires(
+    "raw-table-in-page",
+    `<table className="w-full text-sm"><tbody><tr><td>x</td></tr></tbody></table>`,
+  ),
+);
+check(
+  "<DataTable> import is NOT flagged",
+  !fires(
+    "raw-table-in-page",
+    `import { DataTable } from "@workspace/ui-core";`,
+  ),
+);
+check(
+  "<tr>/<td> on their own are NOT flagged (only <table> opener)",
+  !fires(
+    "raw-table-in-page",
+    `<tr><td>row inside DataTable render() callback</td></tr>`,
+  ),
+);
+
 // ─── Ratchet structural invariant ───────────────────────────────────────
 //
 // All 15 kit rules were intentionally hardened — none of them should

@@ -228,6 +228,32 @@ const RULES = [
       "instead. fiscal-periods-v2's `useDirtyGuard` is a worked example " +
       "of the AlertDialog discard pattern.",
   },
+  {
+    // Raw <table> ratchet. 17 pages still build their tables out of
+    // <table>/<thead>/<tbody> directly instead of going through
+    // <DataTable> (list pages) or <PrintLayout>'s line-item table
+    // (invoice/voucher print views). Most of the remaining ones are
+    // genuinely print/static and would lose UX by being forced through
+    // DataTable, so this is a ratchet — new raw tables fail the build,
+    // existing ones stay until a future PR replaces them. See the
+    // discussion in docs/forms-migration-report.md for the per-file
+    // status.
+    id: "raw-table-in-page",
+    scan: [ERP_PAGES_DIR],
+    extensions: [".tsx"],
+    regex: /<table\b/,
+    // Baseline counts <table> occurrences, not files. An invoice/voucher
+    // detail page typically holds 2-4 tables (line items + totals + tax
+    // breakdown), so the per-file count understates the live state.
+    countBaseline: 30,
+    message:
+      "Raw <table> element in a page. Use `<DataTable>` from " +
+      "`@workspace/ui-core` for list data (search/sort/pagination), or " +
+      "`<PrintLayout>` from `@workspace/report-kit` for print-formatted " +
+      "tables (invoice line items, vouchers, statements). Raw <table> " +
+      "skips both stacks and loses RTL header alignment, sticky headers, " +
+      "and the existing column-preset library.",
+  },
 
   // ─── UI-kit adoption ratchet (UNIFICATION_PLAN §P8) ──────────────────
   //
