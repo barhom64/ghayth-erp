@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { z } from "zod";
+import { useFormContext } from "react-hook-form";
 import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -11,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { CheckCircle, XCircle, RotateCcw, MessageSquare, ChevronDown, ChevronUp, History, ArrowLeftRight, ArrowUpCircle } from "lucide-react";
 import { ImpactCard } from "@/components/impact-card";
 import { actionLabel } from "@/lib/action-labels";
+import { FormShell } from "@workspace/ui-core";
 
 export type ApprovalActionType = "approve" | "reject" | "return" | "refer" | "escalate";
 
@@ -64,25 +67,12 @@ export function ApprovalActions({
   invalidateKeys,
 }: ApprovalActionsProps) {
   const [action, setAction] = useState<ApprovalActionType | null>(null);
-  const [notes, setNotes] = useState("");
-  const [referredTo, setReferredTo] = useState("");
-  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   if (!pendingStatuses.includes(currentStatus)) return null;
 
-  const handleAction = async (actionType: ApprovalActionType) => {
-    if ((actionType === "reject" || actionType === "return" || actionType === "escalate") && !notes.trim()) {
-      const labels: Record<string, string> = { reject: "يجب ذكر سبب الرفض", return: "يجب ذكر سبب الإرجاع", escalate: "يجب ذكر سبب التصعيد" };
-      toast({ variant: "destructive", title: labels[actionType] });
-      return;
-    }
-    if (actionType === "refer" && !referredTo.trim()) {
-      toast({ variant: "destructive", title: "يجب تحديد الشخص المحال إليه" });
-      return;
-    }
-    setLoading(true);
+  const handleAction = async (actionType: ApprovalActionType, notes: string, referredTo: string) => {
     try {
       let endpoint = "";
       let method = "POST";
@@ -125,16 +115,13 @@ export function ApprovalActions({
       };
       toast({ title: labels[actionType] });
       setAction(null);
-      setNotes("");
-      setReferredTo("");
       if (invalidateKeys) {
         invalidateKeys.forEach((key) => queryClient.invalidateQueries({ queryKey: key }));
       }
       onDone?.();
     } catch (err: any) {
       toast({ variant: "destructive", title: err?.message || "حدث خطأ" });
-    } finally {
-      setLoading(false);
+      throw err;
     }
   };
 
@@ -175,7 +162,6 @@ export function ApprovalActions({
     refer: "bg-indigo-600 hover:bg-indigo-700",
     escalate: "bg-purple-600 hover:bg-purple-700",
   };
-  const notesRequired = action === "reject" || action === "return" || action === "escalate";
   const notesPlaceholders: Record<ApprovalActionType, string> = {
     approve: "ملاحظات (اختياري)...",
     reject: "سبب الرفض (مطلوب)...",
@@ -184,40 +170,78 @@ export function ApprovalActions({
     escalate: "سبب التصعيد (مطلوب)...",
   };
 
+  // Schema flips per action: notes is required only when the verb
+  // *needs* a reason, and referredTo is required only for refer.
+  const notesRequired = action === "reject" || action === "return" || action === "escalate";
+  const referRequired = action === "refer";
+  const schema = z.object({
+    notes: notesRequired ? z.string().trim().min(1, "السبب مطلوب") : z.string(),
+    referredTo: referRequired
+      ? z.string().trim().min(1, "يجب تحديد الشخص المحال إليه")
+      : z.string(),
+  });
+  type FormValues = z.infer<typeof schema>;
+
   return (
-    <div className="bg-surface-subtle rounded-lg p-3 space-y-2 border">
+    <FormShell
+      // Remount on each action switch so the schema/defaults re-seed
+      // without an explicit reset call.
+      key={action}
+      schema={schema}
+      defaultValues={{ notes: "", referredTo: "" } as FormValues}
+      hideSubmit
+      className="bg-surface-subtle rounded-lg p-3 border"
+      onSubmit={(values) => handleAction(action, values.notes, values.referredTo)}
+    >
       <ImpactCard entityType={entityType} entityId={entityId} action={action} />
       <div className="flex items-center gap-2 text-sm font-medium">
         <MessageSquare className="h-4 w-4" />
         {actionLabel(action)}
       </div>
-      {action === "refer" && (
-        <div>
-          <Label className="text-xs mb-1">المحال إليه *</Label>
-          <Input
-            className="h-8 text-sm"
-            placeholder="اسم الشخص أو الجهة المحال إليها..."
-            value={referredTo}
-            onChange={(e) => setReferredTo(e.target.value)}
-            autoFocus
-          />
-        </div>
-      )}
-      <textarea
-        className="w-full border rounded-md p-2 text-sm resize-none"
-        rows={2}
-        placeholder={notesPlaceholders[action]}
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        autoFocus={action !== "refer"}
-      />
+      {action === "refer" && <ReferredToField />}
+      <NotesField placeholder={notesPlaceholders[action]} autoFocus={action !== "refer"} />
       <div className="flex gap-2">
-        <Button size="sm" className={actionColors[action]} onClick={() => handleAction(action)} disabled={loading}>
-          {loading ? "جارٍ..." : "تأكيد"}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => { setAction(null); setNotes(""); setReferredTo(""); }}>إلغاء</Button>
+        <ApprovalSubmitButton className={actionColors[action]} />
+        <Button type="button" size="sm" variant="ghost" onClick={() => setAction(null)}>إلغاء</Button>
       </div>
+    </FormShell>
+  );
+}
+
+function ReferredToField() {
+  const { register } = useFormContext<{ notes: string; referredTo: string }>();
+  return (
+    <div>
+      <Label className="text-xs mb-1">المحال إليه *</Label>
+      <Input
+        className="h-8 text-sm"
+        placeholder="اسم الشخص أو الجهة المحال إليها..."
+        autoFocus
+        {...register("referredTo")}
+      />
     </div>
+  );
+}
+
+function NotesField({ placeholder, autoFocus }: { placeholder: string; autoFocus: boolean }) {
+  const { register } = useFormContext<{ notes: string; referredTo: string }>();
+  return (
+    <textarea
+      className="w-full border rounded-md p-2 text-sm resize-none"
+      rows={2}
+      placeholder={placeholder}
+      autoFocus={autoFocus}
+      {...register("notes")}
+    />
+  );
+}
+
+function ApprovalSubmitButton({ className }: { className: string }) {
+  const { formState } = useFormContext();
+  return (
+    <Button type="submit" size="sm" className={className} rateLimitAware disabled={formState.isSubmitting}>
+      {formState.isSubmitting ? "جارٍ..." : "تأكيد"}
+    </Button>
   );
 }
 

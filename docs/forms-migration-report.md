@@ -3,7 +3,7 @@
 > **Generated**: 2026-05-13
 > **Last update**: 2026-05-25 — enterprise-hardening sweep on `claude/enterprise-hardening-roadmap-AOfO7`
 > **Scope**: All `useState` form patterns migrated to `FormShell + zod` across the ghayth-erp frontend.
-> **Status**: 198 of 431 pages on FormShell (45.9%); 9 shared/embedded components on FormShell that fan out across many detail pages (incl. `entity-comments` add-comment row, `entity-selects` QuickCreateDialog used by 10+ entity pickers, and `detail-edit-delete-actions` InlineEditCard used by 18 detail pages); all 76 pages/create/* migrated; complex editors (documents/templates, year-end-close, evaluation-360, login, change-password, umrah/sales-wizard, notification-engine templates+webhooks tabs, settings/print-templates) and many detail-page inline edits migrated; reason-prompt AlertDialogs consolidated to shared PromptDialog (12 callsites); all `window.prompt()` page-level calls eliminated; FormShell gains `hideSubmit` to let pages keep custom save-button placement; legacy `useAutoDraft` + `useFieldErrors` hooks deleted; hard lint rule `manual-form-instead-of-formshell` blocks regression.
+> **Status**: 223 of 431 pages on FormShell (51.7%); 10 shared/embedded components on FormShell that fan out across many detail pages (incl. `entity-comments` add-comment row, `entity-selects` QuickCreateDialog used by 10+ entity pickers, `detail-edit-delete-actions` InlineEditCard used by 18 detail pages, and `approval-actions` ApprovalActions used by 33 approval-bearing pages); all 76 pages/create/* migrated; complex editors (documents/templates, year-end-close, evaluation-360, login, change-password, umrah/sales-wizard, notification-engine templates+webhooks tabs, settings/print-templates) and many detail-page inline edits migrated; reason-prompt AlertDialogs consolidated to shared PromptDialog (12 callsites); all `window.prompt()` page-level calls eliminated; FormShell gains `hideSubmit` to let pages keep custom save-button placement; legacy `useAutoDraft` + `useFieldErrors` hooks deleted; hard lint rule `manual-form-instead-of-formshell` blocks regression.
 
 ---
 
@@ -14,8 +14,9 @@
 | Pages using FormShell directly | **159** | ✅ `grep -lr FormShell artifacts/ghayth-erp/src/pages` |
 | Pages using InlineEditForm (FormShell-backed) | **22** | ✅ `grep -lr InlineEditForm artifacts/ghayth-erp/src/pages` |
 | Detail pages using useDetailEditDelete (FormShell-backed via InlineEditCard) | **17** | ✅ `grep -lr useDetailEditDelete artifacts/ghayth-erp/src/pages` (excluding those already counted) |
-| **Total pages on FormShell (direct + indirect)** | **198** | — |
-| Shared components using FormShell | **9** | ✅ `grep -lr FormShell artifacts/ghayth-erp/src/components` |
+| Approval-bearing pages using ApprovalActions (FormShell-backed approve/reject/return/refer/escalate form) | **25** | ✅ `grep -lr ApprovalActions artifacts/ghayth-erp/src/pages` (excluding those already counted) |
+| **Total pages on FormShell (direct + indirect)** | **223** | — |
+| Shared components using FormShell | **10** | ✅ `grep -lr FormShell artifacts/ghayth-erp/src/components` |
 | Pages using shared PromptDialog | **12** | ✅ `grep -lr PromptDialog artifacts/ghayth-erp/src/pages` |
 | Page-level `window.prompt()` callers | **0** | ✅ `grep -rn 'window\.prompt' artifacts/ghayth-erp/src/pages` |
 | Legacy `useAutoDraft` / `useFieldErrors` callers | **0** | ✅ both hook files deleted from src/hooks/ |
