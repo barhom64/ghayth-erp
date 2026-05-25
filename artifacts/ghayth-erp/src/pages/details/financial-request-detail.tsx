@@ -1,19 +1,15 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import {
-  DetailPageLayout,
-  type RelatedEntity,
-  EntityComments,
-} from "@workspace/entity-kit";
+import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, FileText } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -94,32 +90,6 @@ export default function FinancialRequestDetail() {
     return out;
   }, [item]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!item) return [];
-    return [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "نوع الطلب", value: TYPE_LABELS[item.type] || item.type || "-" },
-          { label: "المبلغ", value: formatCurrency(amount) },
-          { label: "طالب الصرف", value: item.employeeName || item.requesterName || "-" },
-          { label: "الغرض", value: item.purpose || "-" },
-          { label: "تاريخ الطلب", value: formatDateAr(item.createdAt) },
-          { label: "الحالة", value: STATUS_LABELS[item.status] || item.status || "-" },
-          ...(item.approvedAt ? [{ label: "تاريخ الاعتماد", value: formatDateAr(item.approvedAt) }] : []),
-          ...(item.disbursedAt ? [{ label: "تاريخ الصرف", value: formatDateAr(item.disbursedAt) }] : []),
-        ],
-      },
-      ...(item.description ? [{ kind: "text" as const, title: "تفاصيل الطلب", body: item.description }] : []),
-      {
-        kind: "signature",
-        parties: [
-          { label: "طالب الصرف", name: item.employeeName || item.createdByName || "" },
-          { label: "المعتمد", name: item.approvedByName || "" },
-        ],
-      },
-    ];
-  }, [item, amount]);
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -252,15 +222,9 @@ export default function FinancialRequestDetail() {
       actions={
         <>
           <EntityPrintButton
-            branchId={item?.branchId}
-            title="طلب مالي"
-            ref={item?.ref || `FR-${id}`}
-            date={formatDateAr(item?.createdAt)}
-            sections={printSections}
             entityType="purchase_request"
             entityId={item?.id ?? id}
-            formats={["a4"]}
-          />
+            formats={["a4"]}/>
           <GuardedButton
             perm="finance:update"
             variant="outline"

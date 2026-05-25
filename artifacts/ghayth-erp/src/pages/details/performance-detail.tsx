@@ -12,7 +12,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ActionHistory } from "@workspace/workflow-kit";
@@ -153,62 +153,6 @@ export default function PerformanceDetail() {
     return out;
   }, [review]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!review) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: review.ref || `PERF-${id}` },
-          { label: "الموظف", value: review.employeeName || "-" },
-          ...(review.reviewerName
-            ? [{ label: "المُقيِّم", value: review.reviewerName }]
-            : []),
-          ...(review.reviewPeriod
-            ? [{ label: "فترة التقييم", value: review.reviewPeriod }]
-            : []),
-          ...(review.overallRating
-            ? [
-                {
-                  label: "التقييم العام",
-                  value: RATING_LABELS[review.overallRating] || review.overallRating,
-                },
-              ]
-            : []),
-          { label: "الحالة", value: STATUS_LABELS[review.status] || review.status || "-" },
-          { label: "تاريخ الإنشاء", value: formatDateAr(review.createdAt) },
-        ],
-      },
-    ];
-    if (review.strengths) {
-      sections.push({ kind: "text", title: "نقاط القوة", body: review.strengths });
-    }
-    if (review.improvements) {
-      sections.push({
-        kind: "text",
-        title: "مجالات التحسين",
-        body: review.improvements,
-      });
-    }
-    if (review.goals) {
-      sections.push({ kind: "text", title: "الأهداف", body: review.goals });
-    }
-    if (review.developmentPlan) {
-      sections.push({
-        kind: "text",
-        title: "خطة التطوير",
-        body: review.developmentPlan,
-      });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "الموظف", name: review.employeeName || "" },
-        { label: "المُقيِّم", name: review.reviewerName || "" },
-      ],
-    });
-    return sections;
-  }, [review, id]);
 
   const editDelete = useDetailEditDelete({
     entityLabel: "تقييم الأداء",
@@ -455,15 +399,9 @@ export default function PerformanceDetail() {
         <>
           {review && (
             <EntityPrintButton
-              branchId={review.branchId}
-              title={review.ref ? `تقييم ${review.ref}` : "تقييم أداء"}
-              ref={review.ref || `PERF-${id}`}
-              date={formatDateAr(review.createdAt)}
-              sections={printSections}
               entityType="performance_review"
               entityId={id ?? 0}
-              formats={["a4"]}
-            />
+              formats={["a4"]}/>
           )}
           <DetailActionButtons hook={editDelete} editPerm="hr:update" deletePerm="hr:delete" />
         </>

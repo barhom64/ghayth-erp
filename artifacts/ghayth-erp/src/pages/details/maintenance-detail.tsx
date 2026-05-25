@@ -12,7 +12,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Wrench, Car, User } from "lucide-react";
@@ -91,32 +91,6 @@ export default function MaintenanceDetail() {
     return out;
   }, [maintenance]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!maintenance) return [];
-    const items: Array<{ label: string; value: string }> = [
-      { label: "رقم المرجع", value: `MNT-${id}` },
-      { label: "المركبة", value: maintenance.vehiclePlateNumber || maintenance.plateNumber || "-" },
-      { label: "نوع الصيانة", value: MAINTENANCE_TYPE_LABELS[maintenance.maintenanceType || maintenance.type] || maintenance.maintenanceType || maintenance.type || "-" },
-      { label: "التكلفة", value: formatCurrency(maintenance.cost || maintenance.amount || 0) },
-      { label: "الورشة / المورد", value: maintenance.vendorName || maintenance.workshop || "-" },
-      { label: "التاريخ المجدول", value: formatDateAr(maintenance.scheduledDate || maintenance.date) },
-    ];
-    if (maintenance.completionDate || maintenance.completedAt) {
-      items.push({ label: "تاريخ الإنجاز", value: formatDateAr(maintenance.completionDate || maintenance.completedAt) });
-    }
-    if (maintenance.mileage || maintenance.mileageAtService) {
-      items.push({ label: "الكيلومترات عند الصيانة", value: `${maintenance.mileage || maintenance.mileageAtService} كم` });
-    }
-    if (maintenance.nextServiceMileage) {
-      items.push({ label: "الصيانة القادمة عند", value: `${maintenance.nextServiceMileage} كم` });
-    }
-    items.push({ label: "الحالة", value: STATUS_LABELS[maintenance.status] || maintenance.status || "-" });
-    const sections: PrintSection[] = [{ kind: "info-grid", items }];
-    if (maintenance.description || maintenance.notes) {
-      sections.push({ kind: "text", title: "وصف الصيانة", body: maintenance.description || maintenance.notes });
-    }
-    return sections;
-  }, [maintenance, id]);
 
   const editDelete = useDetailEditDelete({
     entityLabel: "الصيانة",
@@ -292,15 +266,9 @@ export default function MaintenanceDetail() {
         <>
           {maintenance && (
             <EntityPrintButton
-              branchId={maintenance.branchId}
-              title={`صيانة MNT-${id}`}
-              ref={`MNT-${id}`}
-              date={formatDateAr(maintenance.scheduledDate || maintenance.date || maintenance.createdAt)}
-              sections={printSections}
               entityType="maintenance_request"
               entityId={maintenance.id ?? id}
-              formats={["a4"]}
-            />
+              formats={["a4"]}/>
           )}
           <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>

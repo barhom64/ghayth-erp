@@ -1,13 +1,9 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import {
-  DetailPageLayout,
-  type RelatedEntity,
-  EntityComments,
-} from "@workspace/entity-kit";
+import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@workspace/workflow-kit";
@@ -16,7 +12,6 @@ import { AttachmentPreview, type PreviewableAttachment } from "@/components/shar
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Edit, Paperclip, Eye } from "lucide-react";
-import { formatDateAr } from "@/lib/formatters";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -113,40 +108,6 @@ export default function RequestDetail() {
     return out;
   }, [request]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!request) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "عنوان الطلب", value: request.title },
-          { label: "نوع الطلب", value: request.typeName || requestType?.name || "-" },
-          { label: "التصنيف", value: CATEGORY_LABELS[request.category] || request.category || "-" },
-          { label: "الأولوية", value: PRIORITY_LABELS[request.priority] || request.priority || "-" },
-          { label: "الحالة", value: STATUS_LABELS[request.status] || request.status },
-          { label: "تاريخ التقديم", value: formatDateAr(request.createdAt) },
-          ...(request.reviewedAt ? [{ label: "تاريخ المراجعة", value: formatDateAr(request.reviewedAt) }] : []),
-        ],
-      },
-    ];
-    if (request.description) {
-      sections.push({ kind: "text", title: "تفاصيل الطلب", body: request.description });
-    }
-    if (request.notes) {
-      sections.push({ kind: "text", title: "الملاحظات", body: request.notes });
-    }
-    if (request.returnReason) {
-      sections.push({ kind: "text", title: "سبب الإرجاع", body: request.returnReason });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "مقدم الطلب", name: request.createdByName },
-        { label: "المعتمد", name: request.reviewedByName || "" },
-      ],
-    });
-    return sections;
-  }, [request, requestType]);
 
   const handleEdit = () => {
     setLocation(`/requests/${id}/edit`);
@@ -313,15 +274,9 @@ export default function RequestDetail() {
           <>
             {request?.branchId && (
               <EntityPrintButton
-                branchId={request.branchId}
-                title={request.title || "طلب"}
-                ref={request.ref || `REQ-${id}`}
-                date={formatDateAr(request.createdAt)}
-                sections={printSections}
                 entityType="request"
                 entityId={id ?? 0}
-                formats={["a4"]}
-              />
+                formats={["a4"]}/>
             )}
             <GuardedButton
               perm="requests:write"

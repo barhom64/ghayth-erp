@@ -1,20 +1,16 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import {
-  DetailPageLayout,
-  type RelatedEntity,
-  EntityComments,
-} from "@workspace/entity-kit";
+import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, Wallet } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityTags } from "@/components/shared/entity-tags";
 
@@ -69,37 +65,6 @@ export default function SalaryAdvanceDetail() {
     return out;
   }, [item]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!item) return [];
-    return [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "الموظف", value: item.employeeName || "-" },
-          { label: "المبلغ", value: formatCurrency(amount) },
-          { label: "عدد الأقساط", value: item.installments ? String(item.installments) : "-" },
-          { label: "قسط الشهر", value: item.monthlyDeduction ? formatCurrency(item.monthlyDeduction) : "-" },
-          { label: "تاريخ الطلب", value: formatDateAr(item.createdAt) },
-          { label: "الحالة", value: STATUS_LABELS[item.status] || item.status || "-" },
-        ],
-      },
-      {
-        kind: "summary",
-        items: [
-          { label: "إجمالي السلفة", value: formatCurrency(amount) },
-          { label: "المبلغ المسدد", value: formatCurrency(repaid) },
-          { label: "المتبقي", value: formatCurrency(remaining), bold: true },
-        ],
-      },
-      {
-        kind: "signature",
-        parties: [
-          { label: "الموظف", name: item.employeeName || "" },
-          { label: "المعتمد", name: item.approvedByName || "" },
-        ],
-      },
-    ];
-  }, [item, amount, repaid, remaining]);
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -255,15 +220,9 @@ export default function SalaryAdvanceDetail() {
       actions={
         <>
           <EntityPrintButton
-            branchId={item?.branchId}
-            title="سلفة راتب"
-            ref={item?.ref || `SA-${id}`}
-            date={formatDateAr(item?.createdAt)}
-            sections={printSections}
             entityType="loan_request"
             entityId={item?.id ?? id}
-            formats={["a4"]}
-          />
+            formats={["a4"]}/>
           <GuardedButton
             perm="finance:update"
             variant="outline"
