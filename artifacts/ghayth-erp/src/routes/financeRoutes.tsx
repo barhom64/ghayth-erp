@@ -24,6 +24,7 @@ const NegativeStock = lazy(() => import("@/pages/finance/negative-stock"));
 const InventoryTurnover = lazy(() => import("@/pages/finance/inventory-turnover"));
 const GlIntegrityGaps = lazy(() => import("@/pages/finance/gl-integrity-gaps"));
 const UnmappedLines = lazy(() => import("@/pages/finance/unmapped-lines"));
+const WhtSummary = lazy(() => import("@/pages/finance/wht-summary"));
 const ZatcaReportsHub = lazy(() => import("@/pages/finance/zatca-reports-hub"));
 const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
 const VouchersCreate = lazy(() => import("@/pages/create/finance/vouchers-create"));
@@ -116,6 +117,7 @@ export const financeRoutes = [
   // GL integrity gaps — period-close pre-flight (#1043).
   { path: "/finance/reports/gl-integrity-gaps", component: GlIntegrityGaps },
   { path: "/finance/reports/unmapped-lines", component: UnmappedLines },
+  { path: "/finance/reports/wht-summary", component: WhtSummary },
   // ZATCA & inventory reports hub — landing page (#1059).
   { path: "/finance/reports/zatca", component: ZatcaReportsHub },
   // Lot expiry alerts — consumes /reports/lot-expiry-alerts (#1042).
