@@ -77,6 +77,8 @@ interface TemplateRow {
   presetKey: string | null;
   htmlContent: string | null;
   layoutJson: unknown;
+  headerOverride: Record<string, string> | null;
+  footerOverride: Record<string, string> | null;
   isThermal: boolean;
   isDefault: boolean;
   isActive: boolean;
@@ -273,6 +275,16 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
   const [presetKey, setPresetKey] = useState(existing?.presetKey ?? "classic");
   const [htmlContent, setHtmlContent] = useState(existing?.htmlContent ?? "");
   const [isDefault, setIsDefault] = useState(existing?.isDefault ?? false);
+
+  // Cliché overrides — when set, these win over the branch's letterhead so a
+  // single branch can host multiple template "looks" (ZATCA invoice with
+  // company logo vs internal voucher with a personalised header).
+  const initialHeaderOv = (existing?.headerOverride as Record<string, string> | undefined) ?? {};
+  const initialFooterOv = (existing?.footerOverride as Record<string, string> | undefined) ?? {};
+  const [overrideLogoUrl, setOverrideLogoUrl] = useState(initialHeaderOv.logoUrl ?? "");
+  const [overrideCompanyName, setOverrideCompanyName] = useState(initialHeaderOv.companyName ?? "");
+  const [overrideTaxNumber, setOverrideTaxNumber] = useState(initialHeaderOv.taxNumber ?? "");
+  const [overrideFooterText, setOverrideFooterText] = useState(initialFooterOv.text ?? "");
   const [layout, setLayout] = useState<VisualBlock[]>(() => {
     const initial = existing?.layoutJson;
     return Array.isArray(initial) ? (initial as VisualBlock[]) : [
@@ -319,6 +331,14 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
         presetKey,
         htmlContent,
         layoutJson: mode === "visual" ? layout : null,
+        headerOverride: (overrideLogoUrl || overrideCompanyName || overrideTaxNumber)
+          ? {
+              ...(overrideLogoUrl && { logoUrl: overrideLogoUrl }),
+              ...(overrideCompanyName && { companyName: overrideCompanyName }),
+              ...(overrideTaxNumber && { taxNumber: overrideTaxNumber }),
+            }
+          : null,
+        footerOverride: overrideFooterText ? { text: overrideFooterText } : null,
         isDefault,
         isThermal: paperSize.startsWith("THERMAL"),
       };
@@ -486,6 +506,77 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
           </CardContent>
         </Card>
       </div>
+
+      {/* كليشة مخصصة — تتجاوز إعدادات الفرع لهذا القالب فقط */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            كليشتك المخصصة (اختيارية)
+          </CardTitle>
+          <p className="text-xs text-muted-foreground pt-1">
+            عند تعبئة أي حقل هنا، يتجاوز إعدادات الفرع الافتراضية لهذا القالب فقط.
+            اتركها فارغة لاستخدام كليشة فرعك الحالية.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">رابط الشعار (Logo URL)</Label>
+              <Input
+                value={overrideLogoUrl}
+                onChange={(e) => setOverrideLogoUrl(e.target.value)}
+                placeholder="https://example.com/logo.png أو /uploads/logo.png"
+                dir="ltr"
+                className="text-xs"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                ارفع الشعار من إعدادات → ملف الفروع → الشعار. أو الصق رابط مباشر.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">اسم الجهة في الترويسة</Label>
+              <Input
+                value={overrideCompanyName}
+                onChange={(e) => setOverrideCompanyName(e.target.value)}
+                placeholder={"مثلاً: مؤسسة الدور التجارية (يتجاوز اسم الفرع)"}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">الرقم الضريبي (يظهر في الترويسة)</Label>
+              <Input
+                value={overrideTaxNumber}
+                onChange={(e) => setOverrideTaxNumber(e.target.value)}
+                placeholder="300000000000003"
+                dir="ltr"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">نص التذييل</Label>
+              <Input
+                value={overrideFooterText}
+                onChange={(e) => setOverrideFooterText(e.target.value)}
+                placeholder={"مثلاً: شكراً لتعاملكم معنا — للاستفسار: 920000000"}
+              />
+            </div>
+          </div>
+          {overrideLogoUrl && (
+            <div className="border rounded p-3 bg-muted/30">
+              <Label className="text-xs">معاينة الشعار:</Label>
+              <div className="mt-2 flex items-center justify-center bg-white border rounded p-2">
+                <img
+                  src={overrideLogoUrl}
+                  alt="معاينة الشعار"
+                  style={{ maxHeight: 80, maxWidth: 240 }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2 flex flex-row items-center justify-between">
