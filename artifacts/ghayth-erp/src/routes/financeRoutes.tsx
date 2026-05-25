@@ -38,6 +38,7 @@ const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
 const Vendors = lazy(() => import("@/pages/finance/vendors"));
 const VendorsCreate = lazy(() => import("@/pages/create/finance/vendors-create"));
+const VendorsEdit = lazy(() => import("@/pages/create/finance/vendors-edit"));
 const VendorDetail = lazy(() => import("@/pages/finance/vendor-detail"));
 const PurchaseOrders = lazy(() => import("@/pages/finance/purchase-orders"));
 const PurchaseOrdersCreate = lazy(() => import("@/pages/create/finance/purchase-orders-create"));
@@ -132,6 +133,7 @@ export const financeRoutes = [
   { path: "/finance/budget/:id", component: BudgetDetail },
   { path: "/finance/vendors", component: Vendors },
   { path: "/finance/vendors/create", component: VendorsCreate },
+  { path: "/finance/vendors/:id/edit", component: VendorsEdit, subKey: "vendors" },
   { path: "/finance/vendors/:id", component: VendorDetail, subKey: "vendors" },
   { path: "/finance/purchase-orders", component: PurchaseOrders },
   { path: "/finance/purchase-orders/create", component: PurchaseOrdersCreate },
