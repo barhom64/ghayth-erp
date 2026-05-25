@@ -39,7 +39,14 @@ function wrapHtml(body: string, ctx: RenderContext): string {
   // Self-XSS only (their own session), but cheap to plug.
   const title = `${ctx.entityType}-${ctx.entityId}`
     .replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]!));
-  const cssOverrides = ctx.template.cssOverrides ?? "";
+  // cssOverrides comes from a template stored by an authenticated user with
+  // templates:write. Even so, anything that closes the <style> tag would
+  // break out into the document and execute as HTML (think "</style><script>
+  // alert(1)</script>" pasted into the custom-CSS field). Strip any closing
+  // </style> sequence — a real stylesheet has no use for one.
+  const cssOverrides = typeof ctx.template.cssOverrides === "string"
+    ? ctx.template.cssOverrides.replace(/<\s*\/\s*style/gi, "")
+    : "";
   return `<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
