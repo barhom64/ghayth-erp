@@ -327,7 +327,7 @@ $ pnpm --filter api-server test  → 3040 tests passing (77 files)
 - `docs/KNOWN_ISSUES.md` — Phase 1-9 (السياق التاريخي الكامل)
 - `docs/PERMISSION_AUDIT_2026-05-09.md` — تدقيق RBAC السابق
 - `docs/TRANSACTION_SAFETY_AUDIT_2026-05-09.md` — تدقيق المعاملات
-- `docs/forms-migration-report.md` — توحيد النماذج (59 forms على FormShell + zod)
+- `docs/forms-migration-report.md` — توحيد النماذج (223 صفحة / 431 على FormShell + zod = 51.7%)
 - `docs/CATALOG_RULES.md` — قواعد الكتالوج (موجود مسبقًا)
 - `audit/system-review/INDEX.md` — مراجعة شاملة للنظام
 - `GHAYTH_AUDIT_INDEX.md` — فهرس كل التدقيقات السابقة
