@@ -101,7 +101,15 @@ const renderBody = z.object({
   // on insert. 99999 is more than enough for any real-world reprint chain.
   copyNumber: z.number().int().positive().max(99999).optional(),
   isReprint: z.boolean().optional(),
-  reprintApprovedBy: z.number().int().positive().nullable().optional(),
+  // NOTE: reprintApprovedBy is NOT accepted from the public /render body.
+  // Previously the schema allowed any caller to send `reprintApprovedBy: 123`
+  // and the approval check at printService.ts:110 would be bypassed
+  // (`!req.reprintApprovedBy` evaluates to false for any truthy number),
+  // writing a fabricated approval row with arbitrary approverId.
+  // The legitimate path: caller hits /reprint-requests, an approver hits
+  // /reprint-requests/:id/approve which internally calls renderPrint with
+  // reprintApprovedBy = scope.userId. That flow stays intact via the
+  // dedicated approve route.
   /** When set, returns the bytes inline instead of a JSON pointer. */
   inline: z.boolean().optional(),
 });
@@ -119,7 +127,10 @@ router.post("/render", renderLimiter, requirePermission("print:create"), async (
         paperSize: body.paperSize,
         copyNumber: body.copyNumber,
         isReprint: body.isReprint,
-        reprintApprovedBy: body.reprintApprovedBy ?? null,
+        // reprintApprovedBy never sourced from the public body — see schema
+        // comment above. The internal /reprint-requests/:id/approve handler
+        // calls renderPrint() directly with scope.userId.
+        reprintApprovedBy: null,
       },
       { ipAddress: req.ip, userAgent: req.get("user-agent") ?? undefined }
     );
