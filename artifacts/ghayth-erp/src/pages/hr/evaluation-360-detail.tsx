@@ -476,7 +476,7 @@ export default function Evaluation360DetailPage() {
       overview={overview}
       actions={
         <div className="flex items-center gap-2">
-          actions
+          {actions}
           <PrintButton entityType="evaluation_360" entityId={params?.id ?? 0} formats={["a4"]} label="طباعة" />
         </div>
       }
