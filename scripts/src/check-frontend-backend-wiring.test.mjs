@@ -15,7 +15,9 @@
 import {
   normaliseFrontendUrl,
   urlsMatch,
+  methodsMatch,
   readString,
+  inferMethod,
   runAudit,
 } from "./check-frontend-backend-wiring.mjs";
 
@@ -114,6 +116,93 @@ check(
   "both sides param: matches",
   urlsMatch("/api/x/:param/:param", "/api/x/:foo/:bar") === true,
 );
+check(
+  "frontend :param does NOT match backend literal (regression guard)",
+  // The original bug: `:param` would match `/impact-preview` and route
+  // a `/projects/:id`-style frontend call to the wrong backend method.
+  urlsMatch("/api/projects/:param", "/api/projects/impact-preview") === false,
+);
+check(
+  "backend :id matches frontend literal numeric segment",
+  urlsMatch("/api/users/42", "/api/users/:id") === true,
+);
+
+// ─── methodsMatch + inferMethod: HTTP-verb extraction ─────────────────────
+
+console.log("methodsMatch — HTTP verb compatibility");
+
+check(
+  "exact verb match",
+  methodsMatch("POST", "POST") === true,
+);
+check(
+  "mismatched verbs fail",
+  methodsMatch("POST", "GET") === false,
+);
+check(
+  "'?' frontend wildcards match anything (apiFetch with spread options)",
+  methodsMatch("?", "POST") === true,
+);
+
+console.log("inferMethod — verb extraction from each helper");
+
+check(
+  "apiPatch → PATCH",
+  inferMethod("apiPatch", `apiPatch("/x", body);`, 0) === "PATCH",
+);
+check(
+  "apiPost → POST",
+  inferMethod("apiPost", `apiPost("/x", body);`, 0) === "POST",
+);
+check(
+  "apiPut → PUT",
+  inferMethod("apiPut", `apiPut("/x", body);`, 0) === "PUT",
+);
+check(
+  "apiDelete → DELETE",
+  inferMethod("apiDelete", `apiDelete("/x");`, 0) === "DELETE",
+);
+check(
+  "useApiQuery → GET",
+  inferMethod("useApiQuery", `useApiQuery([], "/x");`, 0) === "GET",
+);
+{
+  const src = `apiFetch("/x", { method: "DELETE" })`;
+  const afterUrl = src.indexOf(`",`) + 2; // just past the URL literal
+  check(
+    "apiFetch with method:DELETE in options → DELETE",
+    inferMethod("apiFetch", src, afterUrl) === "DELETE",
+  );
+}
+{
+  const src = `apiFetch("/x")`;
+  const afterUrl = src.indexOf(`")`) + 1;
+  check(
+    "apiFetch without options → GET (default)",
+    inferMethod("apiFetch", src, afterUrl) === "GET",
+  );
+}
+{
+  const src = `useApiMutation("/x", "POST", […])`;
+  const afterUrl = src.indexOf(`",`) + 2;
+  check(
+    "useApiMutation second arg → POST",
+    inferMethod("useApiMutation", src, afterUrl) === "POST",
+  );
+}
+
+// ─── normaliser: ternary value-substitution is NOT a QS suffix ────────────
+
+console.log("normaliseFrontendUrl — ternary value substitution");
+
+check(
+  "ternary returning a path-segment value: /x/${editingId : \"\"} → /api/x/:param",
+  // The ternary `editingId : ""` reads as "this segment or no segment".
+  // Earlier the audit's QS heuristic was too greedy and stripped it,
+  // turning a PATCH /x/:id call into a GET /x mismatch.
+  normaliseFrontendUrl(`/x/\${typeof editingId === "number" ? editingId : ""}`) ===
+    "/api/x/:param",
+);
 
 // ─── end-to-end: baseline must stay at zero orphans ────────────────────────
 //
@@ -124,18 +213,22 @@ check(
 
 console.log("end-to-end audit — baseline invariant");
 
-const { resolved, orphans, frontend } = runAudit();
+const { resolved, orphans, methodMismatches, frontend } = runAudit();
 check(
   `every scanned frontend call resolves to a real backend route (got ${orphans.length} orphan(s))`,
   orphans.length === 0,
+);
+check(
+  `every resolved call uses a method the backend serves (got ${methodMismatches.length} method mismatch(es))`,
+  methodMismatches.length === 0,
 );
 check(
   `scan picks up a meaningful number of call-sites (>= 500, got ${frontend.length})`,
   frontend.length >= 500,
 );
 check(
-  `resolved + orphans accounts for the whole scan`,
-  resolved.length + orphans.length === frontend.length,
+  `resolved + orphans + methodMismatches accounts for the whole scan`,
+  resolved.length + orphans.length + methodMismatches.length === frontend.length,
 );
 
 // ─── summary ───────────────────────────────────────────────────────────────

@@ -20,8 +20,8 @@
 | Pages using shared PromptDialog | **12** | ✅ `grep -lr PromptDialog artifacts/ghayth-erp/src/pages` |
 | Page-level `window.prompt()` callers | **0** | ✅ `grep -rn 'window\.prompt' artifacts/ghayth-erp/src/pages` |
 | Page-level `window.confirm()` / `confirm()` callers | **0** | ✅ `grep -rn 'window\.confirm\|\bconfirm(' artifacts/ghayth-erp/src/pages` |
-| Frontend API calls resolving to real backend routes | **728/728 (100%)** | ✅ `pnpm run audit:wiring` (hard gate in `scripts/guard.sh` — any orphan fails the build) |
-| Wiring-audit fixture tests | **20/20 pass** | ✅ `scripts/src/check-frontend-backend-wiring.test.mjs` (readString, normaliseFrontendUrl, urlsMatch, end-to-end invariant) |
+| Frontend API calls resolving to real backend routes (path + HTTP method) | **728/728 (100%)** | ✅ `pnpm run audit:wiring` (hard gate in `scripts/guard.sh` — any orphan OR method mismatch fails the build) |
+| Wiring-audit fixture tests | **35/35 pass** | ✅ `scripts/src/check-frontend-backend-wiring.test.mjs` (readString, normaliseFrontendUrl, urlsMatch + regression guards, methodsMatch, inferMethod for all 7 helpers, end-to-end invariant) |
 | Raw `<table>` ratchet baseline | **30 occurrences across 17 pages** (locked) | ✅ `raw-table-in-page` rule in `scripts/src/lint-patterns.mjs` — net-new raw `<table>` fails the build; existing ones (mostly print views) stay until per-file migration |
 | Legacy `useAutoDraft` / `useFieldErrors` callers | **0** | ✅ both hook files deleted from src/hooks/ |
 | Hard lint rule blocking regression | **active** | ✅ `manual-form-instead-of-formshell` in scripts/src/lint-patterns.mjs |

@@ -307,10 +307,67 @@ function extractFrontendCalls() {
       const lit = readString(src, i);
       if (!lit) continue;
       if (!lit.value.startsWith("/")) continue;
-      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index) });
+      // Pull the HTTP method off the call. Each helper signals it
+      // differently:
+      //   apiPatch/apiPost/apiPut/apiDelete : method is in the name
+      //   apiFetch                          : method is in the options
+      //                                       object's `method` key
+      //   useApiQuery                       : always GET
+      //   useApiMutation                    : method is the SECOND arg,
+      //                                       a string literal
+      const method = inferMethod(helper, src, lit.end);
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method });
     }
   }
   return calls;
+}
+
+/**
+ * Walk past a URL arg to extract the HTTP method the call uses. Returns
+ * an uppercased method string ("GET" / "POST" / …) or "?" when the
+ * call's method can't be resolved statically (e.g. apiFetch with an
+ * options spread). "?" means "skip the method match, fall back to
+ * path-only".
+ */
+function inferMethod(helper, src, afterUrlEnd) {
+  // 1. apiPatch/apiPost/apiPut/apiDelete name encodes the method.
+  if (helper === "apiPatch") return "PATCH";
+  if (helper === "apiPost") return "POST";
+  if (helper === "apiPut") return "PUT";
+  if (helper === "apiDelete") return "DELETE";
+  // 2. useApiQuery is always GET (no options to override).
+  if (helper === "useApiQuery") return "GET";
+  // 3. apiFetch: default GET; explicit method lives inside the
+  // options object's `method` key. Walk to the next arg, find the
+  // method literal inside an object literal if present.
+  if (helper === "apiFetch") {
+    let i = afterUrlEnd;
+    while (i < src.length && /[\s,]/.test(src[i])) i++;
+    if (src[i] !== "{") return "GET"; // no options bag → default
+    // Walk the object literal until the matching `}`, scanning for a
+    // `method: "X"` key. We don't need a full JSON parser — just look
+    // for the literal `method:` followed by a string.
+    let depth = 1;
+    i++;
+    const start = i;
+    while (i < src.length && depth > 0) {
+      if (src[i] === "{") depth++;
+      else if (src[i] === "}") depth--;
+      i++;
+    }
+    const body = src.slice(start, i - 1);
+    const mm = body.match(/\bmethod\s*:\s*["']([A-Z]+)["']/);
+    return mm ? mm[1].toUpperCase() : "GET";
+  }
+  // 4. useApiMutation: the second arg is the method literal.
+  if (helper === "useApiMutation") {
+    let i = afterUrlEnd;
+    while (i < src.length && /[\s,]/.test(src[i])) i++;
+    const lit = readString(src, i);
+    if (!lit) return "?";
+    return lit.value.toUpperCase();
+  }
+  return "?";
 }
 
 function lineOf(src, idx) {
@@ -365,9 +422,11 @@ function normaliseFrontendUrl(url) {
       // Already a literal query string inside: `?key=…`
       /\?\s*[\w]+\s*=/.test(body) ||
       // Conditional QS suffix: `X ? "?…" : ""`  or  `X ? \`?${…}\` : ""`
-      /\?\s*[`"']\s*\?/.test(body) ||
-      // Conditional that bottoms out to "" — strong signal of QS
-      /:\s*""\s*$/.test(body);
+      // The opening `?` of the value (after the ternary's `?`) is the
+      // signal that this is a query string, not a path-segment value.
+      // `X ? editingId : ""` doesn't match because the value side has
+      // no leading `?` — it's a numeric ID substitution.
+      /\?\s*[`"']\s*\?/.test(body);
     if (inQueryString || looksLikeQs) {
       u = u.slice(0, start) + u.slice(end + 1);
     } else {
@@ -395,18 +454,41 @@ function normaliseBackendUrl(url) {
  */
 function urlsMatch(fe, be) {
   if (fe === be) return true;
-  const fs2 = fe.split("/");
-  const bs = be.split("/");
-  if (fs2.length !== bs.length) return false;
-  for (let i = 0; i < fs2.length; i++) {
-    const a = fs2[i];
-    const b = bs[i];
+  const feSegs = fe.split("/");
+  const beSegs = be.split("/");
+  if (feSegs.length !== beSegs.length) return false;
+  for (let i = 0; i < feSegs.length; i++) {
+    const a = feSegs[i];
+    const b = beSegs[i];
     if (a === b) continue;
-    if (a === ":param" || b === ":param") continue;
-    if (a.startsWith(":") || b.startsWith(":")) continue;
+    // Frontend `:param` is what the normaliser produces for any `${…}`
+    // interpolation — it represents a runtime ID slot. The backend
+    // counterpart MUST also be a placeholder segment (`:id`, `:phaseId`,
+    // …). Letting `:param` match an arbitrary literal segment is what
+    // made the original urlsMatch route `/projects/:param` to
+    // `/projects/impact-preview` and miss the real `/projects/:id`
+    // → POST mismatch.
+    if (a === ":param" && b.startsWith(":")) continue;
+    if (b === ":param" && a.startsWith(":")) continue;
+    // Both sides bare placeholders — `:x` matches `:y`.
+    if (a.startsWith(":") && b.startsWith(":")) continue;
+    // Literal-vs-placeholder when the placeholder lives on the BACKEND
+    // (frontend wrote out a numeric ID directly, e.g. `/api/users/42`).
+    // Frontend-side literal can fill a backend placeholder slot.
+    if (b.startsWith(":") && !a.startsWith(":")) continue;
     return false;
   }
   return true;
+}
+
+/**
+ * Returns true if a frontend method matches a backend route's method.
+ * Frontend "?" (unresolved) matches anything — we already gave up on
+ * statically resolving the method, so don't force a mismatch.
+ */
+function methodsMatch(feMethod, beMethod) {
+  if (feMethod === "?" || beMethod === "?") return true;
+  return feMethod === beMethod;
 }
 
 // ---------- step 4: report ----------
@@ -418,46 +500,76 @@ function urlsMatch(fe, be) {
  */
 export function runAudit() {
   const backend = buildBackendRoutes();
-  const backendPaths = new Set(backend.map((r) => normaliseBackendUrl(r.path)));
+  // Group backend routes by normalised path → set of methods served
+  // there. A route file usually serves several methods per path
+  // (GET/POST/PATCH for the collection, GET/PATCH/DELETE for the
+  // resource), so a path-only match isn't enough — we also need to
+  // confirm the method.
+  const backendPaths = new Map(); // path -> Set<method>
+  for (const r of backend) {
+    const p = normaliseBackendUrl(r.path);
+    if (!backendPaths.has(p)) backendPaths.set(p, new Set());
+    backendPaths.get(p).add(r.method);
+  }
   const frontend = extractFrontendCalls();
 
   const resolved = [];
   const orphans = [];
+  const methodMismatches = [];
 
   for (const c of frontend) {
     const fe = normaliseFrontendUrl(c.url);
-    let hit = false;
+    // Find a backend path that matches segment-by-segment.
+    let beMethods = null;
     if (backendPaths.has(fe)) {
-      hit = true;
+      beMethods = backendPaths.get(fe);
     } else {
-      for (const be of backendPaths) {
+      for (const [be, methods] of backendPaths) {
         if (urlsMatch(fe, be)) {
-          hit = true;
+          beMethods = methods;
           break;
         }
       }
     }
-    (hit ? resolved : orphans).push({ ...c, normalised: fe });
+    if (!beMethods) {
+      orphans.push({ ...c, normalised: fe });
+      continue;
+    }
+    // Path matched — check method. "?" (unresolved) is allowed through.
+    if (c.method === "?" || beMethods.has(c.method)) {
+      resolved.push({ ...c, normalised: fe });
+    } else {
+      methodMismatches.push({
+        ...c,
+        normalised: fe,
+        wantedMethod: c.method,
+        actualMethods: [...beMethods].sort(),
+      });
+    }
   }
 
-  return { resolved, orphans, backendPaths, frontend };
+  return { resolved, orphans, methodMismatches, backendPaths, frontend };
 }
 
 // Test-only exports — the .test.mjs sibling exercises each piece
 // independently so future regex/heuristic tweaks can't silently
 // re-break the audit. Don't import these from non-test code.
-export { normaliseFrontendUrl, urlsMatch, readString };
+export { normaliseFrontendUrl, urlsMatch, methodsMatch, readString, inferMethod };
 
 function main() {
-  const { resolved, orphans, backendPaths, frontend } = runAudit();
+  const { resolved, orphans, methodMismatches, backendPaths, frontend } = runAudit();
 
   console.log(`# frontend ↔ backend route wiring audit\n`);
   console.log(`backend routes (mounted):         ${backendPaths.size}`);
   console.log(`frontend API call-sites scanned:  ${frontend.length}`);
   console.log(`resolved → real backend route:    ${resolved.length}`);
-  console.log(`orphan (no backend match):        ${orphans.length}\n`);
+  console.log(`orphan (no backend match):        ${orphans.length}`);
+  console.log(`method mismatch (path ok, verb wrong): ${methodMismatches.length}\n`);
+
+  let failed = false;
 
   if (orphans.length > 0) {
+    failed = true;
     console.log(`## orphan frontend calls (top by file)\n`);
     const byFile = new Map();
     for (const o of orphans) {
@@ -476,17 +588,39 @@ function main() {
     if (sorted.length > 30) {
       console.log(`(${sorted.length - 30} more files with orphans, truncated)`);
     }
+  }
+
+  if (methodMismatches.length > 0) {
+    failed = true;
+    console.log(`## method mismatches (path resolves but verb doesn't)\n`);
+    for (const m of methodMismatches) {
+      console.log(
+        `  ${m.file}:L${m.line}  ${m.wantedMethod} ${m.url}` +
+          `\n    → backend serves: ${m.actualMethods.join(", ")}`,
+      );
+    }
+    console.log();
+  }
+
+  if (failed) {
+    const lines = [];
+    if (orphans.length > 0) {
+      lines.push(
+        `${orphans.length} orphan frontend call(s) — apiFetch/useApi* URL with no backend match.`,
+      );
+    }
+    if (methodMismatches.length > 0) {
+      lines.push(
+        `${methodMismatches.length} method mismatch(es) — path exists but the verb the frontend uses isn't served (e.g. POST against a GET-only endpoint).`,
+      );
+    }
     console.log(
-      `\n✗ wiring audit: ${orphans.length} orphan frontend call(s).\n` +
-        `Each one is an apiFetch/useApi* URL that no backend route serves —\n` +
-        `either the backend was renamed/deleted, the URL has a typo, or the\n` +
-        `feature was sketched on one side without the other. Fix the URL or\n` +
-        `add the route.`,
+      `\n✗ wiring audit:\n  ${lines.join("\n  ")}\nFix the URL/method or add the route.`,
     );
     process.exit(1);
   }
   console.log(
-    `✓ wiring audit: every frontend API call resolves to a real backend route.`,
+    `✓ wiring audit: every frontend API call resolves to a real backend route with a matching HTTP method.`,
   );
 }
 
