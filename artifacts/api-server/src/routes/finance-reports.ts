@@ -1694,6 +1694,188 @@ reportsRouter.get(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Lot expiry alerts — FIFO + waste management.
+//
+// Lists active qc-approved lots whose expiryDate falls inside the
+// requested look-ahead window (default 90 days). Each row carries
+// the days-until-expiry, on-hand quantity, exposure value
+// (quantity × unitCost), and the per-warehouse alert thresholds
+// from warehouses.expiryAlertDays so the operator can see whether
+// a row should fire the 30-day / 60-day / 90-day alert.
+//
+// Why operators need this:
+//   * FIFO compliance — sell oldest first or write off.
+//   * Cash exposure — every day past expiry is potential write-off.
+//   * Procurement planning — over-stocked perishables get reorder
+//     paused; under-stocked SKUs surface as well via daysUntil < 0.
+//
+// Already-expired lots (lot.status='expired') are EXCLUDED — those
+// belong on the negative-stock / write-off reports, not the
+// pre-expiry alert. Pass ?includeExpired=true to override.
+//
+// Read-only, no transaction.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/lot-expiry-alerts",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { warehouseId, productId, daysAhead, includeExpired } =
+        req.query as Record<string, string | undefined>;
+
+      // Default look-ahead = 90 days; cap at 365 so a typo doesn't
+      // scan the entire inventory + emit megabytes.
+      const aheadParsed = Number(daysAhead ?? "90");
+      const aheadDays = Number.isFinite(aheadParsed) && aheadParsed > 0
+        ? Math.min(Math.floor(aheadParsed), 365)
+        : 90;
+
+      const params: unknown[] = [scope.companyId, aheadDays];
+      let whereExtra = "";
+      if (warehouseId) {
+        const wid = Number(warehouseId);
+        if (Number.isFinite(wid) && wid > 0) {
+          params.push(wid);
+          whereExtra += ` AND l."warehouseId" = $${params.length}`;
+        }
+      }
+      if (productId) {
+        const pid = Number(productId);
+        if (Number.isFinite(pid) && pid > 0) {
+          params.push(pid);
+          whereExtra += ` AND l."productId" = $${params.length}`;
+        }
+      }
+      // Default: hide already-expired lots — they need a different
+      // workflow (write-off, not pre-expiry alert).
+      const expiredFilter = includeExpired === "true"
+        ? ""
+        : ` AND l.status != 'expired'`;
+      // Branch scope via the warehouse.
+      const branchFilter = getBranchCondition(scope, undefined, params, "w");
+
+      interface ExpiryRow {
+        lotId: number;
+        productId: number;
+        sku: string | null;
+        productName: string;
+        warehouseId: number;
+        warehouseName: string | null;
+        warehouseCode: string | null;
+        expiryAlertDays: number[] | null;
+        lotNumber: string;
+        quantity: string | number;
+        unitCost: string | number;
+        exposureValue: string | number;
+        expiryDate: string;
+        daysUntil: string | number;
+        status: string;
+      }
+
+      const rows = await rawQuery<ExpiryRow>(
+        `SELECT l.id                            AS "lotId",
+                l."productId",
+                p.sku,
+                p.name                          AS "productName",
+                l."warehouseId",
+                w.name                          AS "warehouseName",
+                w.code                          AS "warehouseCode",
+                w."expiryAlertDays"             AS "expiryAlertDays",
+                l."lotNumber",
+                l.quantity::float8              AS quantity,
+                l."unitCost"::float8            AS "unitCost",
+                (l.quantity * l."unitCost")::float8 AS "exposureValue",
+                l."expiryDate"::text            AS "expiryDate",
+                (l."expiryDate" - CURRENT_DATE)::int AS "daysUntil",
+                l.status
+           FROM warehouse_stock_lots l
+           LEFT JOIN warehouses w
+             ON w.id = l."warehouseId" AND w."deletedAt" IS NULL
+           LEFT JOIN warehouse_products p
+             ON p.id = l."productId" AND p."deletedAt" IS NULL
+          WHERE l."companyId" = $1
+            AND l."deletedAt" IS NULL
+            AND l.quantity > 0
+            AND l."qualityControlStatus" = 'approved'
+            AND l."expiryDate" IS NOT NULL
+            AND l."expiryDate" <= (CURRENT_DATE + ($2 || ' days')::interval)
+            ${expiredFilter}${whereExtra}${branchFilter}
+          ORDER BY l."expiryDate" ASC, l.id ASC
+          LIMIT 2000`,
+        params,
+      );
+
+      // Bucket each row into the WORST alert threshold it crosses,
+      // using the warehouse's own expiryAlertDays array (default
+      // seeded with [30, 60, 90] in migration; falls back to that
+      // when the column is null). The "bucket" is the lowest
+      // threshold that the row's daysUntil meets or exceeds — i.e.
+      // a row 25 days out lands in the "30" bucket, a row 55 days
+      // out lands in the "60" bucket, …
+      const DEFAULT_BUCKETS = [30, 60, 90];
+      const bucketCounts = new Map<string, { threshold: number | "overdue"; lotCount: number; exposureValue: number }>();
+
+      let totalExposure = 0;
+      const out = rows.map((r) => {
+        const daysUntil = Number(r.daysUntil ?? 0);
+        const exposure = Number(r.exposureValue ?? 0);
+        totalExposure += exposure;
+        const wbuckets = Array.isArray(r.expiryAlertDays) && r.expiryAlertDays.length > 0
+          ? [...r.expiryAlertDays].sort((a, b) => a - b)
+          : DEFAULT_BUCKETS;
+
+        let bucketLabel: number | "overdue";
+        if (daysUntil < 0) {
+          bucketLabel = "overdue";
+        } else {
+          // Pick the smallest threshold ≥ daysUntil; fall back to the
+          // largest configured threshold if none fits (row still
+          // surfaces but in the "loosest" bucket).
+          const fit = wbuckets.find((t) => daysUntil <= t);
+          bucketLabel = fit ?? wbuckets[wbuckets.length - 1];
+        }
+        const key = String(bucketLabel);
+        const b = bucketCounts.get(key) ?? {
+          threshold: bucketLabel, lotCount: 0, exposureValue: 0,
+        };
+        b.lotCount += 1;
+        b.exposureValue += exposure;
+        bucketCounts.set(key, b);
+        return {
+          ...r,
+          quantity: roundTo2(Number(r.quantity ?? 0)),
+          unitCost: roundTo2(Number(r.unitCost ?? 0)),
+          exposureValue: roundTo2(exposure),
+          daysUntil,
+          alertBucket: bucketLabel,
+        };
+      });
+
+      res.json(maskFields(req, {
+        filters: { warehouseId, productId, daysAhead: aheadDays, includeExpired: includeExpired === "true" },
+        summary: {
+          lotCount: rows.length,
+          totalExposureValue: roundTo2(totalExposure),
+          windowDays: aheadDays,
+        },
+        byBucket: Array.from(bucketCounts.values())
+          .map((b) => ({ ...b, exposureValue: roundTo2(b.exposureValue) }))
+          .sort((a, b) => {
+            // "overdue" first, then ascending threshold (most-urgent first)
+            if (a.threshold === "overdue") return -1;
+            if (b.threshold === "overdue") return 1;
+            return (a.threshold as number) - (b.threshold as number);
+          }),
+        data: out,
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "Lot expiry alerts error:");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Inventory turnover ratio — companion to #1033 (inventory valuation)
 // and the COGS summary endpoint.
 //

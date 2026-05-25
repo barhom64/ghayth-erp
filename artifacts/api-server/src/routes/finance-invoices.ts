@@ -2336,6 +2336,7 @@ invoicesRouter.post("/invoices/:id/credit-memo/preview", authorize({
     const reversalRatio = invoiceTotal > 0 ? creditAmount / invoiceTotal : 0;
     let cogsReversalPreview: Awaited<ReturnType<typeof planCogsReversal>> = {
       journalLines: [], stockMovements: [], lineUpdates: [], totalReversed: 0,
+      warnings: [],
     };
     try {
       cogsReversalPreview = await planCogsReversal(cogsPool as never, {
@@ -2387,6 +2388,10 @@ invoicesRouter.post("/invoices/:id/credit-memo/preview", authorize({
         cogsReversed: u.snapshot.cogsReversed,
         allocations: u.snapshot.allocations,
       })),
+      // Lot-status warnings (quarantine / recalled / expired / disposed /
+      // qc-rejected / lot deleted) so the UI can show "review before
+      // approval" BEFORE the operator commits the memo.
+      cogsReversalWarnings: cogsReversalPreview.warnings,
       journalLines: previewLines,
       totals: { debit: totalDebit, credit: totalCredit, balanced: isBalanced },
     });
@@ -2431,6 +2436,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     type CogsReversalPlanT = import("../lib/inventory/cogsPosting.js").CogsReversalPlan;
     let cogsReversalPlan: CogsReversalPlanT = {
       journalLines: [], stockMovements: [], lineUpdates: [], totalReversed: 0,
+      warnings: [],
     };
     // Atomicity guarantee: credit_memos INSERT, invoice paidAmount/status
     // bump, clients.totalRevenue reversal, budgets.used decrement, AND the
@@ -2659,7 +2665,14 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     const [memo] = await rawQuery<Record<string, unknown>>(`SELECT * FROM credit_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
-    res.status(201).json(memo || { memoId, journalId, invoiceId: id, amount: creditAmount, netAmount: net, vatAmount: vat, reason, memoDate: memoDateStr });
+    // cogsReversalWarnings is non-fatal — flagged when a restored lot's
+    // status drifted between sale and return (quarantine / recalled /
+    // expired / disposed / qc-rejected / lot deleted). UI should
+    // surface these for QC review without blocking the refund.
+    const responsePayload: Record<string, unknown> = memo
+      ? { ...memo, cogsReversalWarnings: cogsReversalPlan.warnings }
+      : { memoId, journalId, invoiceId: id, amount: creditAmount, netAmount: net, vatAmount: vat, reason, memoDate: memoDateStr, cogsReversalWarnings: cogsReversalPlan.warnings };
+    res.status(201).json(responsePayload);
   } catch (err) {
     handleRouteError(err, res, "Credit memo error:");
   }
