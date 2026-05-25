@@ -1,192 +1,47 @@
-import { useState, type ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import { Printer } from "lucide-react";
-import { PrintPreviewModal } from "@/components/print-layout";
-import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
-import { PrintButton, type PrintFormat } from "@/components/shared/print-button";
-
 /**
- * Structured print section — caller composes a document from these blocks
- * so every entity's print output has the same rhythm: meta grid on top,
- * then sections (info/items/summary/text), then signature block.
- */
-export type PrintSection =
-  | { kind: "info-grid"; items: Array<{ label: string; value: ReactNode }> }
-  | { kind: "table"; columns: string[]; rows: ReactNode[][]; title?: string }
-  | { kind: "summary"; items: Array<{ label: string; value: ReactNode; bold?: boolean }> }
-  | { kind: "text"; title?: string; body: ReactNode }
-  | { kind: "signature"; parties: Array<{ label: string; name?: string }> }
-  | { kind: "divider" };
-
-/**
- * EntityPrintButton — drop-in trigger for any detail page. Handles the
- * open/close state + fetches the branch letterhead automatically.
+ * EntityPrintButton — thin compatibility wrapper around <PrintButton/>.
+ *
+ * Originally it composed a local print modal from `sections=[...]`. Every
+ * detail page now supplies `entityType + entityId` and the Print Engine v2
+ * server templates own the layout end-to-end (branch letterhead, audit row,
+ * reprint detection, thermal/excel formats). The legacy modal branch is
+ * gone; this file stays only because 54 callsites still import the name.
  *
  *   <EntityPrintButton
- *     branchId={invoice.branchId}
- *     title="فاتورة ضريبية"
- *     ref={invoice.invoiceNumber}
- *     date={invoice.issueDate}
- *     sections={[
- *       { kind: "info-grid", items: [
- *         { label: "العميل", value: invoice.clientName },
- *         { label: "المشروع", value: invoice.projectName },
- *       ]},
- *       { kind: "table", title: "البنود", columns: ["الصنف", "الكمية", "السعر", "الإجمالي"], rows: ... },
- *       { kind: "summary", items: [
- *         { label: "الإجمالي الفرعي", value: "10,000 ر.س" },
- *         { label: "الضريبة 15%", value: "1,500 ر.س" },
- *         { label: "الإجمالي النهائي", value: "11,500 ر.س", bold: true },
- *       ]},
- *     ]}
+ *     entityType="invoice"
+ *     entityId={invoice.id}
+ *     formats={["a4", "thermal_80"]}
  *   />
  */
 
+import { PrintButton, type PrintFormat } from "@/components/shared/print-button";
+
 interface EntityPrintButtonProps {
-  branchId?: number;
-  title: string;
-  ref?: string;
-  date?: string;
-  sections: PrintSection[];
-  /** Pre-sections content (e.g. an arabic cover letter). */
-  preamble?: ReactNode;
-  /** Button label override. */
+  entityType: string;
+  entityId: string | number;
+  /** Output formats supported by the entity. */
+  formats?: PrintFormat[];
   label?: string;
   variant?: "default" | "outline" | "ghost";
   size?: "default" | "sm" | "lg";
-  /** When set, the new Print Engine v2 is used instead of the local sections. */
-  entityType?: string;
-  entityId?: string | number;
-  /** Output formats supported by the entity (only used in v2 mode). */
-  formats?: PrintFormat[];
 }
 
 export function EntityPrintButton({
-  branchId,
-  title,
-  ref,
-  date,
-  sections,
-  preamble,
-  label = "طباعة / معاينة",
-  variant = "outline",
-  size = "sm",
   entityType,
   entityId,
   formats,
+  label = "طباعة / معاينة",
+  variant = "outline",
+  size = "sm",
 }: EntityPrintButtonProps) {
-  const [open, setOpen] = useState(false);
-  const letterhead = useBranchLetterhead(branchId);
-
-  // Print Engine v2 — when entityType + entityId are supplied, delegate to the
-  // unified <PrintButton/> so this entity uses branch-aware templates, gets a
-  // print_jobs audit row, and supports thermal/label/excel formats.
-  if (entityType && entityId !== undefined && entityId !== null) {
-    return (
-      <PrintButton
-        entityType={entityType}
-        entityId={entityId}
-        formats={formats}
-        label={label}
-        variant={variant === "ghost" ? "ghost" : variant}
-        size={size}
-      />
-    );
-  }
-
   return (
-    <>
-      <Button variant={variant} size={size} onClick={() => setOpen(true)} className="gap-1">
-        <Printer className="h-4 w-4" />
-        {label}
-      </Button>
-      <PrintPreviewModal
-        open={open}
-        onClose={() => setOpen(false)}
-        branch={letterhead}
-        documentTitle={title}
-        documentRef={ref}
-        documentDate={date}
-      >
-        {preamble}
-        <PrintSections sections={sections} />
-      </PrintPreviewModal>
-    </>
-  );
-}
-
-/** Render a list of structured sections into print-friendly HTML. */
-export function PrintSections({ sections }: { sections: PrintSection[] }) {
-  return (
-    <div className="space-y-5">
-      {sections.map((s, i) => {
-        switch (s.kind) {
-          case "info-grid":
-            return (
-              <div key={i} className="info-grid">
-                {s.items.map((it, j) => (
-                  <div key={j} className="info-item">
-                    <span className="info-label">{it.label}:</span>
-                    <span className="info-value">{it.value ?? "-"}</span>
-                  </div>
-                ))}
-              </div>
-            );
-          case "table":
-            return (
-              <div key={i}>
-                {s.title && <h3 className="text-sm font-bold mb-1">{s.title}</h3>}
-                <table className="w-full">
-                  <thead>
-                    <tr>
-                      {s.columns.map((c, j) => <th key={j}>{c}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {s.rows.map((row, r) => (
-                      <tr key={r}>
-                        {row.map((cell, c) => <td key={c}>{cell ?? "-"}</td>)}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          case "summary":
-            return (
-              <table key={i} className="summary-table mt-2">
-                <tbody>
-                  {s.items.map((it, j) => (
-                    <tr key={j}>
-                      <td className="label w-1/2">{it.label}:</td>
-                      <td className={`value ${it.bold ? "font-bold text-base" : ""}`}>{it.value}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            );
-          case "text":
-            return (
-              <div key={i}>
-                {s.title && <h3 className="text-sm font-bold mb-2">{s.title}</h3>}
-                <div className="letter-body">{s.body}</div>
-              </div>
-            );
-          case "signature":
-            return (
-              <div key={i} className="signature-area">
-                {s.parties.map((p, j) => (
-                  <div key={j} className="signature-box">
-                    <p className="text-xs text-muted-foreground">{p.label}</p>
-                    <p className="signature-line">{p.name ?? ""}</p>
-                  </div>
-                ))}
-              </div>
-            );
-          case "divider":
-            return <hr key={i} className="border-t border-border my-3" />;
-        }
-      })}
-    </div>
+    <PrintButton
+      entityType={entityType}
+      entityId={entityId}
+      formats={formats}
+      label={label}
+      variant={variant === "ghost" ? "ghost" : variant}
+      size={size}
+    />
   );
 }

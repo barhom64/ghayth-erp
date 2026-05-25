@@ -13,7 +13,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -119,52 +119,6 @@ export default function CorrespondenceDetail() {
     return out;
   }, [item]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!item) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "الرقم المرجعي", value: item.ref || "-" },
-          { label: "الاتجاه", value: DIRECTION_LABELS[item.direction] || item.direction },
-          { label: "الموضوع", value: item.subject || "-" },
-          { label: "القناة", value: CHANNEL_LABELS[item.channel] || item.channel || "-" },
-          { label: "الحالة", value: STATUS_LABELS[item.status] || item.status },
-          ...(item.direction === "outgoing"
-            ? [
-                { label: "المرسل", value: item.senderName || "-" },
-                ...(item.senderOrg ? [{ label: "جهة المرسل", value: item.senderOrg }] : []),
-                { label: "المستلم", value: item.recipientName || "-" },
-                ...(item.recipientOrg ? [{ label: "جهة المستلم", value: item.recipientOrg }] : []),
-              ]
-            : [
-                { label: "المرسل", value: item.senderName || "-" },
-                ...(item.senderOrg ? [{ label: "جهة المرسل", value: item.senderOrg }] : []),
-                { label: "المستلم", value: item.recipientName || "-" },
-                ...(item.recipientOrg ? [{ label: "جهة المستلم", value: item.recipientOrg }] : []),
-              ]),
-          { label: "تاريخ الإنشاء", value: formatDateAr(item.createdAt) },
-          ...(item.sentAt ? [{ label: "تاريخ الإرسال", value: formatDateAr(item.sentAt) }] : []),
-          ...(item.receivedAt ? [{ label: "تاريخ الاستلام", value: formatDateAr(item.receivedAt) }] : []),
-          ...(item.respondedAt ? [{ label: "تاريخ الرد", value: formatDateAr(item.respondedAt) }] : []),
-        ],
-      },
-    ];
-    if (item.content) {
-      sections.push({ kind: "text", title: "المحتوى", body: item.content });
-    }
-    if (item.notes) {
-      sections.push({ kind: "text", title: "ملاحظات داخلية", body: item.notes });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: item.direction === "outgoing" ? "المرسل" : "المستلم", name: item.createdByName || "" },
-        { label: "المعتمد", name: "" },
-      ],
-    });
-    return sections;
-  }, [item]);
 
   const handleEdit = () => {
     setLocation(`/correspondence/${id}/edit`);
@@ -351,15 +305,9 @@ export default function CorrespondenceDetail() {
           <>
             {item && (
               <EntityPrintButton
-                branchId={item.branchId}
-                title={item.subject || "مراسلة"}
-                ref={item.ref || `CORR-${id}`}
-                date={formatDateAr(item.createdAt)}
-                sections={printSections}
                 entityType="official_letter"
                 entityId={item.id ?? id}
-                formats={["a4"]}
-              />
+                formats={["a4"]}/>
             )}
             <GuardedButton
               perm="comms:update"

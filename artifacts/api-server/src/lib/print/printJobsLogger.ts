@@ -108,11 +108,21 @@ export async function countCopies(opts: {
   entityType: string;
   entityId: string;
 }): Promise<number> {
-  const rows = await rawQuery<{ c: string }>(
-    `SELECT COUNT(*)::text AS c FROM print_jobs
-     WHERE "companyId" = $1 AND "entityType" = $2 AND "entityId" = $3
-       AND "status" = 'done'`,
-    [opts.companyId, opts.entityType, opts.entityId]
-  );
-  return rows[0] ? Number(rows[0].c) : 0;
+  // Reprint detection is a nice-to-have, not a precondition for printing.
+  // If the print_jobs table is missing (fresh install before migration) or
+  // the query fails for any other reason, default to 0 so the user still
+  // gets their document. The audit row in writePrintJob is the source of
+  // truth for "did this print happen"; counting copies is just decoration.
+  try {
+    const rows = await rawQuery<{ c: string }>(
+      `SELECT COUNT(*)::text AS c FROM print_jobs
+       WHERE "companyId" = $1 AND "entityType" = $2 AND "entityId" = $3
+         AND "status" = 'done'`,
+      [opts.companyId, opts.entityType, opts.entityId]
+    );
+    return rows[0] ? Number(rows[0].c) : 0;
+  } catch (err) {
+    logger.warn(err as Error, "[print/countCopies] query failed, defaulting to 0");
+    return 0;
+  }
 }

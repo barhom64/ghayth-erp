@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Clock, MapPin, AlertTriangle } from "lucide-react";
@@ -69,38 +69,6 @@ export default function AttendanceDetail() {
     return out;
   }, [record]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!record) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: `ATT-${id}` },
-          { label: "الموظف", value: record.employeeName || "-" },
-          { label: "التاريخ", value: formatDateAr(record.date) },
-          { label: "وقت الحضور", value: record.checkIn || "-" },
-          { label: "وقت الانصراف", value: record.checkOut || "-" },
-          { label: "إجمالي الساعات", value: record.totalHours ? `${record.totalHours} ساعة` : "-" },
-          { label: "الحالة", value: STATUS_LABELS[record.status] || record.status || "-" },
-          ...(record.overtimeHours ? [{ label: "ساعات إضافية", value: `${record.overtimeHours} ساعة` }] : []),
-          ...(record.lateMinutes ? [{ label: "دقائق التأخير", value: `${record.lateMinutes} دقيقة` }] : []),
-          ...(record.earlyMinutes ? [{ label: "دقائق الانصراف المبكر", value: `${record.earlyMinutes} دقيقة` }] : []),
-          ...(record.method ? [{ label: "طريقة التسجيل", value: METHOD_LABELS[record.method] || record.method }] : []),
-        ],
-      },
-    ];
-    if (record.notes) {
-      sections.push({ kind: "text", title: "ملاحظات", body: record.notes });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "الموظف", name: record.employeeName || "" },
-        { label: "المسؤول", name: record.createdByName || "" },
-      ],
-    });
-    return sections;
-  }, [record, id]);
 
   const handleEdit = () => {
     setLocation(`/hr/attendance/${id}/edit`);
@@ -270,15 +238,9 @@ export default function AttendanceDetail() {
         <>
           {record && (
             <EntityPrintButton
-              branchId={record.branchId}
-              title={`سجل حضور ATT-${id}`}
-              ref={`ATT-${id}`}
-              date={formatDateAr(record.date || record.createdAt)}
-              sections={printSections}
               entityType="attendance"
               entityId={id ?? 0}
-              formats={["a4"]}
-            />
+              formats={["a4"]}/>
           )}
           <GuardedButton
             perm="hr:update"
