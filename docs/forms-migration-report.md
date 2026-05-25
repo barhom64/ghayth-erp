@@ -3,7 +3,7 @@
 > **Generated**: 2026-05-13
 > **Last update**: 2026-05-25 — enterprise-hardening sweep on `claude/enterprise-hardening-roadmap-AOfO7`
 > **Scope**: All `useState` form patterns migrated to `FormShell + zod` across the ghayth-erp frontend.
-> **Status**: 176 of 431 pages on FormShell (40.8%); 6 shared/embedded components on FormShell that fan out across many detail pages; all 75 pages/create/* migrated; complex editors (documents/templates, year-end-close, evaluation-360, login, change-password) and many detail-page inline edits migrated; reason-prompt AlertDialogs consolidated to shared PromptDialog (12 callsites); all `window.prompt()` page-level calls eliminated; FormShell gains `hideSubmit` to let pages keep custom save-button placement; legacy `useAutoDraft` + `useFieldErrors` hooks deleted; hard lint rule `manual-form-instead-of-formshell` blocks regression.
+> **Status**: 177 of 431 pages on FormShell (41.1%); 6 shared/embedded components on FormShell that fan out across many detail pages; all 75 pages/create/* migrated; complex editors (documents/templates, year-end-close, evaluation-360, login, change-password, umrah/sales-wizard) and many detail-page inline edits migrated; reason-prompt AlertDialogs consolidated to shared PromptDialog (12 callsites); all `window.prompt()` page-level calls eliminated; FormShell gains `hideSubmit` to let pages keep custom save-button placement; legacy `useAutoDraft` + `useFieldErrors` hooks deleted; hard lint rule `manual-form-instead-of-formshell` blocks regression.
 
 ---
 
@@ -11,9 +11,9 @@
 
 | Item | Count | Verified On Branch |
 |------|-------|------------------|
-| Pages using FormShell directly | **154** | ✅ `grep -lr FormShell artifacts/ghayth-erp/src/pages` |
+| Pages using FormShell directly | **155** | ✅ `grep -lr FormShell artifacts/ghayth-erp/src/pages` |
 | Pages using InlineEditForm (FormShell-backed) | **22** | ✅ `grep -lr InlineEditForm artifacts/ghayth-erp/src/pages` |
-| **Total pages on FormShell (direct + indirect)** | **176** | — |
+| **Total pages on FormShell (direct + indirect)** | **177** | — |
 | Shared components using FormShell | **6** | ✅ `grep -lr FormShell artifacts/ghayth-erp/src/components` |
 | Pages using shared PromptDialog | **12** | ✅ `grep -lr PromptDialog artifacts/ghayth-erp/src/pages` |
 | Page-level `window.prompt()` callers | **0** | ✅ `grep -rn 'window\.prompt' artifacts/ghayth-erp/src/pages` |
