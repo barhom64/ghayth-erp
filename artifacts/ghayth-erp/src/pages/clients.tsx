@@ -220,9 +220,8 @@ export default function Clients() {
             return (
               <InlineEditForm
                 fields={editFields}
-                form={editForm}
-                setForm={setEditForm}
-                onSave={() => handleSave(client.id, editForm)}
+                initialValues={editForm}
+                onSave={(values) => handleSave(client.id, values)}
                 onCancel={cancelEdit}
                 isPending={isPending}
               />

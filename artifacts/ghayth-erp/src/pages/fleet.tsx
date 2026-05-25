@@ -216,7 +216,7 @@ function VehiclesTab() {
             onPageChange={setPage}
             renderRowExtras={(v) => {
               if (editingId === v.id) {
-                return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(v.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+                return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(v.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               }
               if (deletingId === v.id) {
                 return <InlineDeleteConfirm onConfirm={() => handleDelete(v.id)} onCancel={cancelDelete} isPending={isPending} itemName={v.plateNumber} entityType="vehicle" entityId={v.id} />;
@@ -322,7 +322,7 @@ function DriversTab() {
             noToolbar
             renderRowExtras={(d) => {
               if (editingId === d.id) {
-                return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(d.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+                return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(d.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               }
               if (deletingId === d.id) {
                 return <InlineDeleteConfirm onConfirm={() => handleDelete(d.id)} onCancel={cancelDelete} isPending={isPending} itemName={d.name} entityType="driver" entityId={d.id} />;
