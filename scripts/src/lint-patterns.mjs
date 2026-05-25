@@ -179,6 +179,42 @@ const RULES = [
       "explicit locale string if you need a non-default behaviour.",
   },
   {
+    id: "direct-pdf-generation",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    // The legitimate entry point — print-button.tsx opens window.open() +
+    // document.write() to drop a server-rendered HTML doc into a popup
+    // for the browser print dialog. That's the architecturally allowed
+    // use of window.print(); it does NOT generate the document, the
+    // Print Engine v2 does. All other pages must call apiFetch("/print/render").
+    skip: (file) =>
+      file.endsWith("/components/shared/print-button.tsx")
+      || file.endsWith("/components/shared/entity-print.tsx")
+      || file.includes("/components/print-layout") // legacy, type-only export
+      || file.endsWith("/components/page-shell.tsx") // imports types from print-layout
+      || file.endsWith("/lib/branch-utils.ts"),
+    // Match direct PDF/print generation calls that should go through
+    // the Print Engine instead. The Print Platform decision (Phase 0 of
+    // docs/architecture/print-platform.md) requires that every PDF,
+    // Excel, or printable HTML document be rendered server-side by
+    // /api/print/render — the SPA must never generate documents itself.
+    regex: /\bwindow\.print\(|\bjsPDF\b|\bhtml2pdf\b|\bhtml2canvas\b|\bpdfMake\b|\bpdfmake\b|\bnew\s+jsPDF|\bfrom\s+["']jspdf["']|\bfrom\s+["']html2pdf[^"']*["']|\bfrom\s+["']pdfmake[^"']*["']/,
+    // Ratchet: 9 pre-existing pages still call window.print() directly
+    // (BI dashboards, finance reports, my-payslip). New violations are
+    // blocked; existing ones drop the baseline as they migrate to
+    // <PrintButton entityType="..." entityId={...} />.
+    countBaseline: 9,
+    message:
+      "Direct PDF/print generation in the SPA is forbidden (Ghaith Print Platform, " +
+      "Phase 0 architecture lock). Document generation must go through the server: " +
+      "call `apiFetch(\"/print/render\", { method: \"POST\", body: ... })` (or use " +
+      "<PrintButton entityType=\"...\" entityId={...} />) and let the Print Engine v2 " +
+      "produce the bytes. Direct `window.print()` / `jsPDF` / `html2pdf` / `pdfmake` " +
+      "calls bypass: audit logging (print_jobs), reprint detection, watermarks, " +
+      "RBAC checks, branch letterhead, and ZATCA-compliant invoice rendering. " +
+      "See docs/architecture/print-platform.md for the contract.",
+  },
+  {
     id: "direct-process-env-read",
     scan: [API_SRC_DIR],
     // lib/config.ts is the ONE module allowed to touch process.env — it
