@@ -66,6 +66,7 @@ import umrahEntitiesRouter from "./umrah-entities.js";
 import operationsCenterRouter from "./operationsCenter.js";
 import notificationEngineRouter from "./notification-engine.js";
 import printRouter from "./print.js";
+import printVerifyRouter from "./printVerify.js";
 import { requireModule, requireMinLevel } from "../middlewares/roleGuard.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { csrfMiddleware } from "../middlewares/csrfMiddleware.js";
@@ -143,6 +144,12 @@ router.use("/portal", clientPortalRouter);
 router.use("/careers", careersPortalRouter);
 // /public is fully anonymous → per-IP cap is correct here.
 router.use("/public", anonymousIpLimiter, publicDataRouter);
+// Print verify is anonymous so couriers/customers can scan a printed
+// QR without an ERP account. Mounted as /print/verify (before the
+// authMiddleware below) so the URL embedded in QRs stays
+// /api/print/verify/:jobId. The authenticated printRouter mounts later
+// and never sees these requests.
+router.use("/print/verify", printVerifyRouter);
 // /pdpl mixes anonymous /privacy-notice with authenticated endpoints.
 // Limiters live inside pdpl.ts: per-IP on /privacy-notice, per-user
 // (pdplUserLimiter) on the authenticated routes.

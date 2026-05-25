@@ -1,0 +1,20 @@
+{
+  "code": "umrah.runsheet",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "umrah_runsheet",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": false,
+  "qr": true,
+  "status": "published",
+  "domain": "umrah",
+  "title": "كشف اليوم التشغيلي",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "umrah_runsheet"
+  },
+  "ownerTeam": "umrah"
+}

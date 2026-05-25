@@ -12,6 +12,7 @@
  */
 
 import { logger } from "../logger.js";
+import { config } from "../config.js";
 import { userHasPermission } from "../../middlewares/permissionMiddleware.js";
 import { getEntityPrintProfile } from "../entityRegistry.js";
 import { resolveTemplate } from "./templateResolver.js";
@@ -21,6 +22,7 @@ import { getAdapter } from "./adapters/index.js";
 import { makeWatermark } from "./watermark.js";
 import { writePrintJob, countCopies } from "./printJobsLogger.js";
 import { storePrintArtifact } from "./printStorage.js";
+import { buildVerifyContext } from "./verify.js";
 import type {
   AuditContext,
   PaperSize,
@@ -139,6 +141,16 @@ export async function renderPrint(
   const watermark = makeWatermark(copyNumber, isReprint);
   const paperSize: PaperSize = (req.paperSize ?? template.paperSize) as PaperSize;
 
+  // Allocate the audit jobId BEFORE we render — so the QR/verify URL we
+  // embed in the document points at the exact same row that
+  // writePrintJob() will insert below. For ephemeral previews we just
+  // pass null and the adapter skips QR rendering. The DB column has a
+  // gen_random_uuid() default, but we override it from JS so the
+  // bytes-on-the-page match the audit row.
+  const verifyCtx = req.ephemeral
+    ? { jobId: null, verifyUrl: null, verifyQrDataUrl: null }
+    : await buildVerifyContext({ baseUrl: config.publicBaseUrl ?? "" });
+
   const ctx: RenderContext = {
     companyId: scope.companyId,
     branchId: scope.branchId,
@@ -158,6 +170,9 @@ export async function renderPrint(
     paperSize,
     copyNumber,
     watermark,
+    jobId: verifyCtx.jobId,
+    verifyUrl: verifyCtx.verifyUrl,
+    verifyQrDataUrl: verifyCtx.verifyQrDataUrl,
   };
 
   // 6. Render
@@ -198,9 +213,12 @@ export async function renderPrint(
   let storageKey: string | null = null;
   let jobId: string | null = null;
   if (!req.ephemeral) {
+    // Use the pre-allocated jobId from verifyCtx — the QR that's now baked
+    // into `bytes` points at /print/verify/<verifyCtx.jobId>, so the audit
+    // row MUST share the same UUID for verification to resolve correctly.
     storageKey = await storePrintArtifact({
       companyId: scope.companyId,
-      jobId: cryptoUuid(),
+      jobId: verifyCtx.jobId ?? cryptoUuid(),
       format,
       bytes,
       mime,
@@ -223,6 +241,7 @@ export async function renderPrint(
       approvedBy: req.reprintApprovedBy ?? null,
       ipAddress: audit.ipAddress,
       userAgent: audit.userAgent,
+      jobIdOverride: verifyCtx.jobId ?? undefined,
     });
     jobId = row?.jobId ?? null;
   }
