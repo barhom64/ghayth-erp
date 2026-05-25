@@ -3424,7 +3424,7 @@
         {
           "method": "POST",
           "path": "/invoices/:id/credit-memo",
-          "line": 2398,
+          "line": 2403,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3448,7 +3448,7 @@
         {
           "method": "POST",
           "path": "/invoices/:id/debit-memo/preview",
-          "line": 2676,
+          "line": 2689,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3472,7 +3472,7 @@
         {
           "method": "POST",
           "path": "/invoices/:id/debit-memo",
-          "line": 2753,
+          "line": 2766,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3496,7 +3496,7 @@
         {
           "method": "GET",
           "path": "/invoices/:id/memos",
-          "line": 2922,
+          "line": 2935,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3520,7 +3520,7 @@
         {
           "method": "GET",
           "path": "/bad-debt/preview",
-          "line": 2957,
+          "line": 2970,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3544,7 +3544,7 @@
         {
           "method": "POST",
           "path": "/bad-debt/post",
-          "line": 3009,
+          "line": 3022,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3568,7 +3568,7 @@
         {
           "method": "POST",
           "path": "/customer-advances",
-          "line": 3132,
+          "line": 3145,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3592,7 +3592,7 @@
         {
           "method": "POST",
           "path": "/customer-advances/:id/apply",
-          "line": 3233,
+          "line": 3246,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3616,7 +3616,7 @@
         {
           "method": "GET",
           "path": "/customer-advances",
-          "line": 3327,
+          "line": 3340,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3640,7 +3640,7 @@
         {
           "method": "GET",
           "path": "/dunning/preview",
-          "line": 3432,
+          "line": 3445,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3664,7 +3664,7 @@
         {
           "method": "POST",
           "path": "/dunning/send",
-          "line": 3510,
+          "line": 3523,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3688,7 +3688,7 @@
         {
           "method": "GET",
           "path": "/dunning/history",
-          "line": 3582,
+          "line": 3595,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -3712,7 +3712,7 @@
         {
           "method": "GET",
           "path": "/tax/declarations",
-          "line": 3608,
+          "line": 3621,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5078,7 +5078,7 @@
     },
     {
       "file": "artifacts/api-server/src/routes/finance-reports.ts",
-      "endpointCount": 26,
+      "endpointCount": 27,
       "writeEndpoints": 0,
       "dimAgg": {
         "rbac": "PASS",
@@ -5619,8 +5619,32 @@
         },
         {
           "method": "GET",
+          "path": "/reports/lot-expiry-alerts",
+          "line": 1718,
+          "checks": {
+            "rbac": true,
+            "scopeParseFilters": false,
+            "scopeBuildWhere": false,
+            "scopeManualCompany": true,
+            "audit": false,
+            "event": false,
+            "applyTransition": false,
+            "directStatusUpdate": false,
+            "glPosting": false
+          },
+          "dims": {
+            "rbac": "PASS",
+            "scope": "PARTIAL",
+            "audit": "SKIP",
+            "event": "SKIP",
+            "lifecycle": "SKIP",
+            "glBridge": "SKIP"
+          }
+        },
+        {
+          "method": "GET",
           "path": "/reports/inventory-turnover",
-          "line": 1712,
+          "line": 1894,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5644,7 +5668,7 @@
         {
           "method": "GET",
           "path": "/reports/inventory-valuation",
-          "line": 1902,
+          "line": 2084,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5668,7 +5692,7 @@
         {
           "method": "GET",
           "path": "/reports/cogs-summary",
-          "line": 2112,
+          "line": 2294,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -5692,7 +5716,7 @@
         {
           "method": "GET",
           "path": "/reports/negative-stock",
-          "line": 2346,
+          "line": 2528,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -6303,7 +6327,7 @@
       "writeEndpoints": 6,
       "dimAgg": {
         "rbac": "PASS",
-        "scope": "PARTIAL",
+        "scope": "PASS",
         "audit": "PARTIAL",
         "event": "PARTIAL",
         "lifecycle": "FAIL",
@@ -6313,12 +6337,12 @@
         {
           "method": "GET",
           "path": "/zatca/settings",
-          "line": 347,
+          "line": 348,
           "checks": {
             "rbac": true,
-            "scopeParseFilters": false,
-            "scopeBuildWhere": false,
-            "scopeManualCompany": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
             "audit": false,
             "event": false,
             "applyTransition": false,
@@ -6327,7 +6351,7 @@
           },
           "dims": {
             "rbac": "PASS",
-            "scope": "PARTIAL",
+            "scope": "PASS",
             "audit": "SKIP",
             "event": "SKIP",
             "lifecycle": "SKIP",
@@ -6337,7 +6361,7 @@
         {
           "method": "PUT",
           "path": "/zatca/settings",
-          "line": 370,
+          "line": 378,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -6361,7 +6385,7 @@
         {
           "method": "POST",
           "path": "/zatca/test-connection",
-          "line": 467,
+          "line": 475,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -6385,11 +6409,11 @@
         {
           "method": "GET",
           "path": "/zatca/invoice/:id/xml",
-          "line": 503,
+          "line": 511,
           "checks": {
             "rbac": true,
-            "scopeParseFilters": false,
-            "scopeBuildWhere": false,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
             "scopeManualCompany": true,
             "audit": false,
             "event": false,
@@ -6399,7 +6423,7 @@
           },
           "dims": {
             "rbac": "PASS",
-            "scope": "PARTIAL",
+            "scope": "PASS",
             "audit": "SKIP",
             "event": "SKIP",
             "lifecycle": "SKIP",
@@ -6409,7 +6433,7 @@
         {
           "method": "POST",
           "path": "/zatca/invoice/:id/submit",
-          "line": 591,
+          "line": 609,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -6433,7 +6457,7 @@
         {
           "method": "POST",
           "path": "/zatca/expense/:id/submit",
-          "line": 722,
+          "line": 740,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -6457,12 +6481,12 @@
         {
           "method": "GET",
           "path": "/zatca/submissions",
-          "line": 802,
+          "line": 820,
           "checks": {
             "rbac": true,
-            "scopeParseFilters": false,
-            "scopeBuildWhere": false,
-            "scopeManualCompany": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
             "audit": false,
             "event": false,
             "applyTransition": false,
@@ -6471,7 +6495,7 @@
           },
           "dims": {
             "rbac": "PASS",
-            "scope": "PARTIAL",
+            "scope": "PASS",
             "audit": "SKIP",
             "event": "SKIP",
             "lifecycle": "SKIP",
@@ -6481,7 +6505,7 @@
         {
           "method": "PATCH",
           "path": "/zatca/invoice/:id",
-          "line": 869,
+          "line": 898,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -6505,7 +6529,7 @@
         {
           "method": "PATCH",
           "path": "/zatca/expense/:id",
-          "line": 900,
+          "line": 929,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,

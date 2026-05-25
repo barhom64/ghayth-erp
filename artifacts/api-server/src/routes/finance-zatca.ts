@@ -14,6 +14,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
+import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { resolveZatcaSettings } from "../lib/zatca/settingsResolver.js";
 import crypto from "node:crypto";
 import QRCode from "qrcode";
@@ -347,7 +348,14 @@ function computeInvoiceHash(xmlContent: string): string {
 zatcaRouter.get("/zatca/settings", authorize({ feature: "finance.zatca", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-
+    // zatca_settings is a per-company singleton; disableBranchScope because
+    // ZATCA registration is per-company, not per-branch. LIMIT 1 keeps the
+    // single-row return shape stable even when a multi-company picker is on.
+    const { where: scopeWhere, params } = buildScopedWhere(
+      scope,
+      parseScopeFilters(req),
+      { companyColumn: '"companyId"', disableBranchScope: true },
+    );
     const [settings] = await rawQuery<ZatcaSettingsRow>(
       `SELECT id, "companyId", enabled, environment, "vatRegistrationNumber", "crNumber",
               "organizationName", "organizationNameEn", "streetName", "buildingNumber",
@@ -358,8 +366,8 @@ zatcaRouter.get("/zatca/settings", authorize({ feature: "finance.zatca", action:
               CASE WHEN "pihKey" IS NOT NULL THEN '****' ELSE NULL END AS "pihKey",
               "lastConnectionTest", "connectionTestStatus", "connectionTestMessage",
               "createdAt", "updatedAt"
-       FROM zatca_settings WHERE "companyId" = $1`,
-      [scope.companyId]
+       FROM zatca_settings WHERE ${scopeWhere} LIMIT 1`,
+      params,
     );
     res.json(maskFields(req, { data: settings || null }));
   } catch (err) {
@@ -506,19 +514,29 @@ zatcaRouter.get("/zatca/invoice/:id/xml", authorize({ feature: "finance.zatca", 
 
     const id = parseId(req.params.id, "id");
 
+    // Build a shared scope predicate once for both lookups (settings + invoice).
+    const filters = parseScopeFilters(req);
+    const settingsScope = buildScopedWhere(
+      scope, filters,
+      { companyColumn: '"companyId"', disableBranchScope: true },
+    );
     const [settings] = await rawQuery<ZatcaSettingsRow>(
-      `SELECT * FROM zatca_settings WHERE "companyId" = $1`,
-      [scope.companyId]
+      `SELECT * FROM zatca_settings WHERE ${settingsScope.where} LIMIT 1`,
+      settingsScope.params,
     );
 
+    const invoiceScope = buildScopedWhere(
+      scope, filters,
+      { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true, softDeleteColumn: 'i."deletedAt"' },
+    );
     const [invoice] = await rawQuery<ZatcaInvoiceRow>(
       `SELECT i.*, c.name AS "clientName", NULL AS "clientVat",
               b.name AS "branchName", b."taxNumber" AS "branchVat"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
        LEFT JOIN branches b ON b.id = i."branchId"
-       WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
-      [id, scope.companyId]
+       WHERE i.id = $${invoiceScope.nextParamIndex} AND ${invoiceScope.where}`,
+      [...invoiceScope.params, id],
     );
 
     if (!invoice) {
@@ -807,43 +825,54 @@ zatcaRouter.get("/zatca/submissions", authorize({ feature: "finance.zatca", acti
     const safeLim = Math.min(Number(lim) || 50, 500);
     const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
 
+    // ZATCA submissions are company-scoped (per-CR filings); branchId not meaningful.
+    const filters = parseScopeFilters(req);
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(
+      scope, filters,
+      { companyColumn: 'l."companyId"', disableBranchScope: true },
+    );
     let whereExtra = "";
-    const params: unknown[] = [scope.companyId];
+    let idx = nextParamIndex;
     if (status) {
       params.push(status);
-      whereExtra = ` AND l.status = $${params.length}`;
+      whereExtra = ` AND l.status = $${idx++}`;
     }
 
     params.push(safeLim);
-    const limitIdx = params.length;
+    const limitIdx = idx++;
     params.push(offset);
-    const offsetIdx = params.length;
+    const offsetIdx = idx++;
 
     const logs = await rawQuery<ZatcaLogRow>(
       `SELECT l.id, l."entityType", l."entityId", l."invoiceRef",
               l.status, l.environment, l."submittedAt", l."respondedAt",
               l."errorMessage", l."zatcaUuid"
        FROM zatca_submission_log l
-       WHERE l."companyId" = $1${whereExtra}
+       WHERE ${baseWhere}${whereExtra}
        ORDER BY l."createdAt" DESC
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
-      params
+      params,
     );
 
     const countParams = params.slice(0, params.length - 2);
     const [countRow] = await rawQuery<CountTotalRow>(
-      `SELECT COUNT(*) AS total FROM zatca_submission_log l WHERE l."companyId" = $1${whereExtra}`,
-      countParams
+      `SELECT COUNT(*) AS total FROM zatca_submission_log l WHERE ${baseWhere}${whereExtra}`,
+      countParams,
     );
 
+    // Stats reuse the scope predicate without alias prefix (no JOIN here).
+    const statsScope = buildScopedWhere(
+      scope, filters,
+      { companyColumn: '"companyId"', disableBranchScope: true },
+    );
     const [stats] = await rawQuery<ZatcaStatsRow>(
       `SELECT
         COUNT(*) FILTER (WHERE status = 'accepted') AS accepted,
         COUNT(*) FILTER (WHERE status = 'rejected') AS rejected,
         COUNT(*) FILTER (WHERE status IN ('pending','submitted')) AS pending,
         COUNT(*) AS total
-       FROM zatca_submission_log WHERE "companyId" = $1`,
-      [scope.companyId]
+       FROM zatca_submission_log WHERE ${statsScope.where}`,
+      statsScope.params,
     );
 
     res.json(maskFields(req, {
