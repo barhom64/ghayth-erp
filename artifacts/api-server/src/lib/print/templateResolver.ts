@@ -129,8 +129,115 @@ export async function resolveTemplate(opts: {
   // even if nobody seeded or designed a template for it. Renders the branch
   // letterhead, a sensible title, the entity fields as an info-grid, the
   // items table if present, and the branch footer.
-  return universalFallback(entityType);
+  return BESPOKE_PRESETS[entityType]?.() ?? universalFallback(entityType);
 }
+
+// ─── Bespoke in-memory presets ──────────────────────────────────────────────
+// A few entity shapes need richer HTML than the universal fallback can give —
+// official letters need a freeform body, Umrah statement needs a ledger table
+// with closing-balance footer, the daily run-sheet has three independent
+// sections. We keep them inline (no DB row required) so the engine always has
+// something tasteful to render even on a fresh install.
+
+const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
+  official_letter: () => ({
+    id: -2,
+    name: "Letterhead — official letter",
+    entityType: "official_letter",
+    branchId: null,
+    companyId: null,
+    paperSize: "A4",
+    mode: "preset",
+    presetKey: "letter_classic",
+    htmlContent: `<div class="print-doc">
+{{branch.letterhead}}
+<h2 style="text-align:center;margin:16px 0 8px 0">{{entity.subject}}</h2>
+<div class="meta-grid">
+  <div><strong>رقم الخطاب:</strong> {{entity.id}}</div>
+  <div><strong>التاريخ:</strong> {{entity.date}}</div>
+  <div><strong>النوع:</strong> {{entity.type}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<div style="margin:18px 0;font-size:11pt;line-height:1.9;white-space:pre-wrap">{{entity.content}}</div>
+<div class="signatures">
+  <div>التوقيع<br/>____________________</div>
+  <div>الختم الرسمي<br/>____________________</div>
+</div>
+{{branch.footer}}
+</div>`,
+    layoutJson: null,
+    cssOverrides: null,
+    headerOverride: null,
+    footerOverride: null,
+    isThermal: false,
+    version: 1,
+  }),
+  umrah_statement: () => ({
+    id: -3,
+    name: "Umrah — sub-agent statement",
+    entityType: "umrah_statement",
+    branchId: null,
+    companyId: null,
+    paperSize: "A4",
+    mode: "preset",
+    presetKey: "umrah_statement_classic",
+    htmlContent: `<div class="print-doc">
+{{branch.letterhead}}
+<h2 style="text-align:center;margin:16px 0 4px 0">كشف حساب وكيل فرعي — عمرة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:12px">{{entity.subAgentName}} · {{entity.nuskCode}} · {{entity.rangeText}}</div>
+<div class="meta-grid">
+  <div><strong>الوكيل الفرعي:</strong> {{entity.subAgentName}}</div>
+  <div><strong>رمز نسك:</strong> {{entity.nuskCode}}</div>
+  <div><strong>شروط الدفع:</strong> {{entity.paymentTermsLabel}}</div>
+  <div><strong>الرصيد الافتتاحي:</strong> {{entity.openingBalance}}</div>
+</div>
+{{entity.linesTable}}
+<div class="totals">
+  <div><strong>إجمالي المدين:</strong> {{entity.totalDebit}}</div>
+  <div><strong>إجمالي الدائن:</strong> {{entity.totalCredit}}</div>
+  <div class="grand"><strong>{{entity.closingBalanceLabel}}:</strong> {{entity.closingBalance}}</div>
+</div>
+{{branch.footer}}
+</div>`,
+    layoutJson: null,
+    cssOverrides: null,
+    headerOverride: null,
+    footerOverride: null,
+    isThermal: false,
+    version: 1,
+  }),
+  umrah_runsheet: () => ({
+    id: -4,
+    name: "Umrah — daily run-sheet",
+    entityType: "umrah_runsheet",
+    branchId: null,
+    companyId: null,
+    paperSize: "A4",
+    mode: "preset",
+    presetKey: "umrah_runsheet_classic",
+    htmlContent: `<div class="print-doc">
+{{branch.letterhead}}
+<h2 style="text-align:center;margin:16px 0 4px 0">كشف اليوم التشغيلي — عمرة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:12px">تاريخ التشغيل: {{entity.date}}</div>
+<div style="background:#f1f5f9;padding:8px 12px;border-radius:6px;margin-bottom:14px;text-align:center">
+  وصول: {{entity.arrivalsCount}} &nbsp;|&nbsp; مغادرة: {{entity.departuresCount}} &nbsp;|&nbsp; متجاوزون: {{entity.overstaysCount}}
+</div>
+<h3 style="margin-top:14px">الوصول اليوم ({{entity.arrivalsCount}})</h3>
+{{entity.arrivalsTable}}
+<h3 style="margin-top:14px">المغادرة اليوم ({{entity.departuresCount}})</h3>
+{{entity.departuresTable}}
+<h3 style="margin-top:14px">المتجاوزون حالياً ({{entity.overstaysCount}})</h3>
+{{entity.overstaysTable}}
+{{branch.footer}}
+</div>`,
+    layoutJson: null,
+    cssOverrides: null,
+    headerOverride: null,
+    footerOverride: null,
+    isThermal: false,
+    version: 1,
+  }),
+};
 
 /** In-memory template that works for any entityType. */
 function universalFallback(entityType: string): PrintTemplate {
