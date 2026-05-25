@@ -15,6 +15,13 @@ const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
 const TaxCodesCreate = lazy(() => import("@/pages/create/finance/tax-codes-create"));
 const WhtCategories = lazy(() => import("@/pages/finance/wht-categories"));
 const WhtCategoriesCreate = lazy(() => import("@/pages/create/finance/wht-categories-create"));
+const LotExpiryAlerts = lazy(() => import("@/pages/finance/lot-expiry-alerts"));
+const CogsSummary = lazy(() => import("@/pages/finance/cogs-summary"));
+const InventoryValuation = lazy(() => import("@/pages/finance/inventory-valuation"));
+const NegativeStock = lazy(() => import("@/pages/finance/negative-stock"));
+const InventoryTurnover = lazy(() => import("@/pages/finance/inventory-turnover"));
+const GlIntegrityGaps = lazy(() => import("@/pages/finance/gl-integrity-gaps"));
+const ZatcaReportsHub = lazy(() => import("@/pages/finance/zatca-reports-hub"));
 const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
 const VouchersCreate = lazy(() => import("@/pages/create/finance/vouchers-create"));
 const VoucherDetail = lazy(() => import("@/pages/details/voucher-detail"));
@@ -95,6 +102,20 @@ export const financeRoutes = [
   { path: "/finance/tax-codes/create", component: TaxCodesCreate },
   { path: "/finance/wht-categories", component: WhtCategories },
   { path: "/finance/wht-categories/create", component: WhtCategoriesCreate },
+  // GL integrity gaps — period-close pre-flight (#1043).
+  { path: "/finance/reports/gl-integrity-gaps", component: GlIntegrityGaps },
+  // ZATCA & inventory reports hub — landing page (#1059).
+  { path: "/finance/reports/zatca", component: ZatcaReportsHub },
+  // Lot expiry alerts — consumes /reports/lot-expiry-alerts (#1042).
+  { path: "/finance/reports/lot-expiry-alerts", component: LotExpiryAlerts },
+  // Inventory valuation report — consumes /reports/inventory-valuation (#1033).
+  { path: "/finance/reports/inventory-valuation", component: InventoryValuation },
+  // Negative-stock outliers — consumes /reports/negative-stock (#1035).
+  { path: "/finance/reports/negative-stock", component: NegativeStock },
+  // Inventory turnover ratio — consumes /reports/inventory-turnover (#1036).
+  { path: "/finance/reports/inventory-turnover", component: InventoryTurnover },
+  // COGS / margin summary — consumes /reports/cogs-summary (#1034).
+  { path: "/finance/reports/cogs-summary", component: CogsSummary },
   { path: "/finance/vouchers", component: Vouchers },
   { path: "/finance/vouchers/create", component: VouchersCreate },
   { path: "/finance/vouchers/:id", component: VoucherDetail },

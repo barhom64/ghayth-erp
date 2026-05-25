@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { todayLocal } from "@/lib/formatters";
 import { useLocation } from "wouter";
-import { useApiMutation } from "@/lib/api";
+import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -17,8 +18,37 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
+/**
+ * WHT residency options — drives whether the payment-run / voucher
+ * handlers withhold tax at payment time (Income Tax Law Art. 68).
+ * Backend stored in suppliers.residencyStatus (#999 migration 208).
+ */
+const RESIDENCY_OPTIONS = [
+  { value: "resident", label: "مقيم — لا استقطاع" },
+  { value: "non_resident_gcc", label: "غير مقيم — دول الخليج" },
+  { value: "non_resident_treaty", label: "غير مقيم — معاهدة (DTAA)" },
+  { value: "non_resident_other", label: "غير مقيم — أخرى" },
+];
+
+interface WhtCategory {
+  id: number;
+  code: string;
+  name: string;
+  rate: number | string;
+  appliesTo: string;
+  isActive: boolean;
+}
+
 const DRAFT_KEY = "finance_vendors_create";
-const INITIAL = { name: "", contactPerson: "", phone: "", email: "", taxNumber: "", address: "", paymentTerms: "", category: "", date: todayLocal() };
+const INITIAL = {
+  name: "", contactPerson: "", phone: "", email: "", taxNumber: "",
+  address: "", paymentTerms: "", category: "", date: todayLocal(),
+  // WHT fields (#999 backend + #1006/#1010 wiring)
+  residencyStatus: "resident",
+  taxResidenceCountry: "",
+  defaultWhtRate: "" as string,       // numeric or empty
+  whtCategoryDefault: "" as string,
+};
 
 export default function VendorsCreate() {
   const [, setLocation] = useLocation();
@@ -28,19 +58,45 @@ export default function VendorsCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
+  // Load WHT categories for the default-category dropdown.
+  const { data: whtData } = useApiQuery<{ data: WhtCategory[] }>(
+    ["wht-categories"],
+    "/finance/accounts/wht-categories",
+  );
+  const whtCategories = useMemo(
+    () => (whtData?.data ?? []).filter((c) => c.isActive),
+    [whtData],
+  );
+
+  const isNonResident = form.residencyStatus !== "resident";
+
   const handleSubmit = async () => {
+    const rateNum = form.defaultWhtRate ? Number(form.defaultWhtRate) : null;
     const firstError = validate({
       name: form.name ? null : "اسم المورد مطلوب",
       email: form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) ? "صيغة البريد الإلكتروني غير صحيحة" : null,
       phone: form.phone && form.phone.replace(/\D/g, "").length < 9 ? "رقم الهاتف يجب أن يكون 9 أرقام على الأقل" : null,
       taxNumber: form.taxNumber && !/^\d{15}$/.test(form.taxNumber.replace(/\s/g, "")) ? "الرقم الضريبي يجب أن يكون 15 رقماً" : null,
+      taxResidenceCountry: isNonResident && !form.taxResidenceCountry.trim()
+        ? "بلد الإقامة الضريبية مطلوب للموردين غير المقيمين" : null,
+      defaultWhtRate: rateNum != null && (rateNum < 0 || rateNum > 100)
+        ? "النسبة يجب أن تكون بين 0 و 100" : null,
     });
     if (firstError) {
       toast({ variant: "destructive", title: firstError });
       return;
     }
     try {
-      await createMut.mutateAsync({ ...form, date: form.date || undefined });
+      await createMut.mutateAsync({
+        ...form,
+        date: form.date || undefined,
+        // Normalise ISO-2 country code to upper-case (matches backend).
+        taxResidenceCountry: form.taxResidenceCountry
+          ? form.taxResidenceCountry.toUpperCase().slice(0, 2)
+          : undefined,
+        defaultWhtRate: rateNum != null ? rateNum : undefined,
+        whtCategoryDefault: form.whtCategoryDefault || undefined,
+      });
       clearDraft();
       toast({ title: "تم إضافة المورد بنجاح" });
       setLocation("/finance/vendors");
@@ -85,6 +141,101 @@ export default function VendorsCreate() {
           </Select>
         </FormFieldWrapper>
       </div>
+      {/* ── WHT (Income Tax Law Art. 68) ──────────────────────────────── */}
+      <div className="mt-6 border rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-sm">
+            استقطاع ضريبة الدخل (WHT) — وفق نظام ضريبة الدخل السعودي (المادة 68)
+          </h3>
+          {isNonResident && (
+            <Badge className="bg-amber-100 text-amber-800">
+              سيتم استقطاع الضريبة عند الدفع
+            </Badge>
+          )}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <FormFieldWrapper label="حالة الإقامة الضريبية" required>
+            <Select
+              value={form.residencyStatus}
+              onValueChange={(v) => setForm((f) => ({ ...f, residencyStatus: v }))}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {RESIDENCY_OPTIONS.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormFieldWrapper>
+
+          {isNonResident && (
+            <>
+              <TextField
+                label="بلد الإقامة الضريبية (ISO-2)"
+                required
+                dir="ltr"
+                value={form.taxResidenceCountry}
+                onChange={(v) => setForm((f) => ({ ...f, taxResidenceCountry: v.toUpperCase().slice(0, 2) }))}
+                placeholder="AE"
+                error={fieldErrors.taxResidenceCountry}
+              />
+
+              <FormFieldWrapper label="فئة الاستقطاع الافتراضية">
+                <Select
+                  value={form.whtCategoryDefault || "_none"}
+                  onValueChange={(v) => {
+                    const code = v === "_none" ? "" : v;
+                    const cat = whtCategories.find((c) => c.code === code);
+                    setForm((f) => ({
+                      ...f,
+                      whtCategoryDefault: code,
+                      // Snap rate to match the picked category if any.
+                      defaultWhtRate: cat ? String(Number(cat.rate)) : f.defaultWhtRate,
+                    }));
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر فئة..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— بدون فئة محددة —</SelectItem>
+                    {whtCategories.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.code} ({Number(c.rate).toFixed(0)}%) — {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormFieldWrapper>
+
+              <FormFieldWrapper
+                label="نسبة استقطاع افتراضية % (تتجاوز الفئة)"
+                error={fieldErrors.defaultWhtRate}
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" min={0} max={100} step={0.01}
+                    value={form.defaultWhtRate}
+                    onChange={(e) => setForm((f) => ({ ...f, defaultWhtRate: e.target.value }))}
+                    placeholder="15"
+                    dir="ltr"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  />
+                  <span className="text-muted-foreground text-sm">%</span>
+                </div>
+              </FormFieldWrapper>
+            </>
+          )}
+        </div>
+        {isNonResident && (
+          <p className="text-xs text-muted-foreground mt-2">
+            ⓘ عند دفع هذا المورد، سيقوم النظام تلقائياً بـ:
+            خصم النسبة الافتراضية من المبلغ، إرسال الصافي للمورد، وقيد المستقطع
+            على حساب "زاتكا — ضريبة استقطاع" (افتراضي 2330) ليُسدّد في الإقرار الشهري.
+          </p>
+        )}
+      </div>
+
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/finance/vendors")}>إلغاء</Button>
