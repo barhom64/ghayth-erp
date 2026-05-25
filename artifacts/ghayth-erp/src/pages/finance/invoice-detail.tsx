@@ -1,11 +1,10 @@
 import { useState, useRef } from "react";
+import { z } from "zod";
 import { useRoute, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@workspace/report-kit";
 import { PrintButton } from "@/components/shared/print-button";
 import { extractBranchFromResponse } from "@/lib/branch-utils";
@@ -26,6 +25,10 @@ import {
   type DataTableColumn,
   PageStatusBadge,
   resolveStatus,
+  FormShell,
+  FormGrid,
+  FormNumberField,
+  FormSelectField,
 } from "@workspace/ui-core";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
@@ -113,6 +116,18 @@ function statusToDetailStatus(status: string | undefined): DetailStatus | undefi
   return map[status] ?? { label: status, tone: "default" };
 }
 
+const paymentFormSchema = z.object({
+  amount: z.string().refine((v) => Number(v) > 0, "المبلغ مطلوب"),
+  method: z.enum(["bank_transfer", "cash", "card", "cheque"]),
+});
+
+const PAYMENT_METHOD_OPTIONS = [
+  { value: "bank_transfer", label: "حوالة بنكية" },
+  { value: "cash", label: "نقداً" },
+  { value: "card", label: "بطاقة" },
+  { value: "cheque", label: "شيك" },
+];
+
 export default function InvoiceDetailPage() {
   const [, params] = useRoute("/finance/invoices/:id");
   const id = params?.id;
@@ -123,7 +138,6 @@ export default function InvoiceDetailPage() {
   );
   const [showPayment, setShowPayment] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
   const printContainerRef = useRef<HTMLDivElement>(null);
 
   // R.4 iter 4 — both mutations now flow through useApiMutation so
@@ -165,14 +179,6 @@ export default function InvoiceDetailPage() {
   const branch = invoice ? extractBranchFromResponse(invoice) ?? undefined : undefined;
   const docDate = invoice?.createdAt ? formatDateAr(invoice.createdAt) : "";
   const lifecycleSteps = buildLifecycleSteps(invoice?.status);
-
-  const handleRecordPayment = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const amount = parseFloat(fd.get("amount") as string);
-    if (!amount || !paymentMethod) return;
-    paymentMut.mutate({ amount, method: paymentMethod });
-  };
 
   const handleZatcaSubmit = () => {
     zatcaMut.mutate({});
@@ -351,31 +357,32 @@ export default function InvoiceDetailPage() {
         <Card>
           <CardHeader><CardTitle>تسجيل دفعة</CardTitle></CardHeader>
           <CardContent>
-            <form onSubmit={handleRecordPayment} className="flex gap-4 items-end">
-              <div className="flex-1">
-                <label className="text-sm font-medium">المبلغ</label>
-                <Input name="amount" type="number" step="0.01" max={remaining} required dir="ltr" className="text-start mt-1" />
-                <p className="text-xs text-muted-foreground mt-1">المتبقي: {formatCurrency(remaining)}</p>
-              </div>
-              <div className="w-48">
-                <label className="text-sm font-medium">طريقة الدفع</label>
-                <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v)}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bank_transfer">حوالة بنكية</SelectItem>
-                    <SelectItem value="cash">نقداً</SelectItem>
-                    <SelectItem value="card">بطاقة</SelectItem>
-                    <SelectItem value="cheque">شيك</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <GuardedButton perm="finance:create" type="submit" disabled={paymentMut.isPending} rateLimitAware>
-                {paymentMut.isPending ? "جاري التسجيل..." : "تسجيل"}
-              </GuardedButton>
-              <Button type="button" variant="outline" onClick={() => setShowPayment(false)}>
-                إلغاء
-              </Button>
-            </form>
+            <FormShell
+              schema={paymentFormSchema}
+              defaultValues={{ amount: "", method: "bank_transfer" }}
+              submitLabel={paymentMut.isPending ? "جاري التسجيل..." : "تسجيل"}
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setShowPayment(false)}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={async (values) => {
+                const amt = parseFloat(values.amount);
+                if (!amt) return;
+                await paymentMut.mutateAsync({ amount: amt, method: values.method });
+              }}
+            >
+              <FormGrid cols={3}>
+                <FormNumberField
+                  name="amount"
+                  label={`المبلغ (المتبقي: ${formatCurrency(remaining)})`}
+                  step="0.01"
+                  max={String(remaining)}
+                  required
+                />
+                <FormSelectField name="method" label="طريقة الدفع" options={PAYMENT_METHOD_OPTIONS} />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}
