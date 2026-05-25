@@ -10,7 +10,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Box } from "lucide-react";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { Edit, Box, TrendingDown } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -241,6 +242,8 @@ export default function FixedAssetDetail() {
         )}
       </div>
 
+      {id && <DepreciationScheduleCard assetId={Number(id)} />}
+
       {id && <EntityComments entityType="fixed-asset" entityId={id} />}
       {id && <EntityTags entityType="fixed-asset" entityId={id} />}
     </div>
@@ -291,5 +294,96 @@ export default function FixedAssetDetail() {
         </>
       }
     />
+  );
+}
+
+interface ScheduleRow {
+  period: string;
+  depreciationAmount: number;
+  accumulatedDepreciation: number;
+  bookValue: number;
+}
+
+interface ScheduleResponse {
+  assetId: number;
+  assetName: string;
+  method?: string;
+  schedule: ScheduleRow[];
+  totalDepreciable: number;
+  note?: string;
+}
+
+function DepreciationScheduleCard({ assetId }: { assetId: number }) {
+  const { data, isLoading, isError, error } = useApiQuery<ScheduleResponse>(
+    ["fixed-asset-schedule", String(assetId)],
+    `/finance/fixed-assets/${assetId}/schedule`,
+    !!assetId,
+  );
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-4 text-xs text-muted-foreground">جاري حساب جدول الإهلاك...</CardContent>
+      </Card>
+    );
+  }
+  if (isError) {
+    const msg = (error as any)?.message ?? "تعذّر حساب جدول الإهلاك";
+    return (
+      <Card className="border-amber-200 bg-amber-50/40">
+        <CardContent className="p-4 text-xs text-amber-800 flex items-center gap-2">
+          <TrendingDown className="h-4 w-4" /> {msg}
+        </CardContent>
+      </Card>
+    );
+  }
+  if (!data) return null;
+
+  if (data.note && data.schedule.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <TrendingDown className="h-4 w-4" /> جدول الإهلاك
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="text-xs text-muted-foreground">{data.note}</CardContent>
+      </Card>
+    );
+  }
+
+  const cols: DataTableColumn<ScheduleRow>[] = [
+    { key: "period", header: "الفترة",
+      render: (r) => <span className="font-mono text-xs">{r.period}</span> },
+    { key: "depreciationAmount", header: "إهلاك الفترة",
+      render: (r) => <span className="font-mono">{formatCurrency(Number(r.depreciationAmount))}</span> },
+    { key: "accumulatedDepreciation", header: "الإهلاك المتراكم",
+      render: (r) => <span className="font-mono text-status-error-foreground">{formatCurrency(Number(r.accumulatedDepreciation))}</span> },
+    { key: "bookValue", header: "القيمة الدفترية",
+      render: (r) => <span className="font-mono font-bold text-emerald-700">{formatCurrency(Number(r.bookValue))}</span> },
+  ];
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <TrendingDown className="h-4 w-4" /> جدول الإهلاك
+          </span>
+          <div className="flex items-center gap-2 text-xs font-normal">
+            <Badge variant="outline">{data.schedule.length} فترة</Badge>
+            <span className="text-muted-foreground">
+              قابل للإهلاك: <span className="font-mono font-bold">{formatCurrency(data.totalDepreciable)}</span>
+            </span>
+          </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <DataTable
+          columns={cols} data={data.schedule}
+          pageSize={24} emptyMessage="لا يوجد جدول إهلاك"
+        />
+      </CardContent>
+    </Card>
   );
 }
