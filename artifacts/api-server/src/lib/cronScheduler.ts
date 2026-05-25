@@ -2284,26 +2284,36 @@ async function runScheduledReports(): Promise<string> {
       const recipients: string[] = (report.recipients as string[] | null) || [];
       const params = (report.params as { startDate?: string; endDate?: string; period?: string }) || {};
 
-      const { exportTrialBalanceExcel, exportIncomeStatementExcel, exportPayrollExcel, exportAttendanceExcel } = await import("./excelExport.js");
-      const { exportTrialBalancePdf } = await import("./pdfExport.js");
+      // Scheduled reports run through Print Engine v2 like everything else.
+      // System scope (isOwner=true) bypasses RBAC since scheduled_reports
+      // already gates which reports a company sees.
+      const { renderPrint } = await import("./print/printService.js");
+      const sysScope = {
+        companyId: report.companyId as number,
+        branchId: null,
+        userId: 0,
+        role: "system",
+        isOwner: true,
+      };
+      const synthId = params.period
+        ? params.period
+        : (params.startDate || params.endDate)
+          ? `${params.startDate ?? ""}..${params.endDate ?? ""}`
+          : "all";
 
       let attachment: { filename: string; content: Buffer; contentType: string } | undefined;
 
-      if (report.reportType === "trial-balance") {
-        const buf = await exportTrialBalanceExcel(report.companyId as number, params.startDate, params.endDate);
-        attachment = { filename: "trial-balance.xlsx", content: buf, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
-      } else if (report.reportType === "income-statement") {
-        const buf = await exportIncomeStatementExcel(report.companyId as number, params.startDate, params.endDate);
-        attachment = { filename: "income-statement.xlsx", content: buf, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
-      } else if (report.reportType === "payroll") {
-        const buf = await exportPayrollExcel(report.companyId as number, params.period);
-        attachment = { filename: "payroll.xlsx", content: buf, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
-      } else if (report.reportType === "attendance") {
-        const buf = await exportAttendanceExcel(report.companyId as number, params.startDate, params.endDate);
-        attachment = { filename: "attendance.xlsx", content: buf, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
-      } else if (report.reportType === "trial-balance-pdf") {
-        const buf = await exportTrialBalancePdf(report.companyId as number, params.startDate, params.endDate);
-        attachment = { filename: "trial-balance.pdf", content: buf, contentType: "application/pdf" };
+      const REPORT_MAP: Record<string, { entityType: string; format: "excel" | "a4"; filename: string; contentType: string }> = {
+        "trial-balance":     { entityType: "report_trial_balance",   format: "excel", filename: "trial-balance.xlsx",   contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+        "income-statement":  { entityType: "report_income_statement", format: "excel", filename: "income-statement.xlsx", contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+        "payroll":           { entityType: "report_payroll",          format: "excel", filename: "payroll.xlsx",          contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+        "attendance":        { entityType: "report_attendance",       format: "excel", filename: "attendance.xlsx",       contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+        "trial-balance-pdf": { entityType: "report_trial_balance",    format: "a4",    filename: "trial-balance.pdf",     contentType: "application/pdf" },
+      };
+      const cfg = REPORT_MAP[report.reportType as string];
+      if (cfg) {
+        const out = await renderPrint(sysScope, { entityType: cfg.entityType, entityId: synthId, format: cfg.format });
+        attachment = { filename: cfg.filename, content: out.bytes, contentType: cfg.contentType };
       }
 
       if (attachment) {

@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
@@ -91,32 +91,6 @@ export default function FixedAssetDetail() {
     return out;
   }, [item]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!item) return [];
-    return [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "اسم الأصل", value: item.name || "-" },
-          { label: "الفئة", value: item.category || "-" },
-          { label: "رقم الأصل", value: item.assetNumber || item.serialNumber || "-" },
-          { label: "تاريخ الشراء", value: formatDateAr(item.purchaseDate) },
-          { label: "العمر الافتراضي", value: item.usefulLife ? `${item.usefulLife} سنة` : "-" },
-          { label: "طريقة الاستهلاك", value: DEPRECIATION_METHODS[item.depreciationMethod] || item.depreciationMethod || "-" },
-          { label: "الموقع", value: item.location || "-" },
-          { label: "الحالة", value: STATUS_LABELS[item.status] || item.status || "-" },
-        ],
-      },
-      {
-        kind: "summary",
-        items: [
-          { label: "تكلفة الشراء", value: formatCurrency(cost) },
-          { label: "الاستهلاك المتراكم", value: formatCurrency(accumulated) },
-          { label: "القيمة الدفترية", value: formatCurrency(netBook), bold: true },
-        ],
-      },
-    ];
-  }, [item, cost, accumulated, netBook]);
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -272,15 +246,9 @@ export default function FixedAssetDetail() {
       actions={
         <>
           <EntityPrintButton
-            branchId={item?.branchId}
-            title="أصل ثابت"
-            ref={item?.ref || `FA-${id}`}
-            date={formatDateAr(item?.purchaseDate || item?.createdAt)}
-            sections={printSections}
             entityType="fixed_asset"
             entityId={id ?? 0}
-            formats={["a4"]}
-          />
+            formats={["a4"]}/>
           <GuardedButton
             perm="finance:update"
             variant="outline"

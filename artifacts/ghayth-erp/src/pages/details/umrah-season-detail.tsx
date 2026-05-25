@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
@@ -11,7 +10,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Calendar, Users, TrendingUp } from "lucide-react";
@@ -48,21 +47,6 @@ export default function UmrahSeasonDetail() {
     !!id
   );
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!season) return [];
-    const items: Array<{ label: string; value: string }> = [
-      { label: "رقم المرجع", value: `SN-${id}` },
-      { label: "اسم الموسم", value: season.title || "-" },
-      { label: "السنة", value: String(season.hijriYear ?? "-") },
-      { label: "تاريخ البداية", value: season.startDate ? formatDateAr(season.startDate) : "-" },
-      { label: "تاريخ النهاية", value: season.endDate ? formatDateAr(season.endDate) : "-" },
-      { label: "السعة", value: String(season.capacity ?? "-") },
-      { label: "المعتمرون المسجلون", value: String(season.registeredPilgrims ?? season.pilgrimsCount ?? 0) },
-      { label: "الإيرادات", value: formatCurrency(Number(season.revenue ?? 0)) },
-      { label: "الحالة", value: STATUS_LABELS[season.status] || season.status || "-" },
-    ];
-    return [{ kind: "info-grid", items }];
-  }, [season, id]);
 
   const editDelete = useDetailEditDelete({
     entityLabel: "الموسم",
@@ -222,15 +206,9 @@ export default function UmrahSeasonDetail() {
           deletePerm="umrah:delete"
           extra={
             <EntityPrintButton
-              branchId={season?.branchId}
-              title={`الموسم — ${season?.title || ""}`}
-              ref={`SN-${id}`}
-              date={formatDateAr(new Date().toISOString())}
-              sections={printSections}
               entityType="umrah_season"
               entityId={id ?? 0}
-              formats={["a4"]}
-            />
+              formats={["a4"]}/>
           }
         />
       }
