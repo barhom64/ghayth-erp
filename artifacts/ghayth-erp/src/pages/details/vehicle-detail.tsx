@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useRoute, Link, useLocation } from "wouter";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -6,14 +7,17 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import {
   PageStatusBadge,
   DataTable,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormSelectField,
+  FormDateField,
 } from "@workspace/ui-core";
-import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText } from "lucide-react";
+import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText } from "lucide-react";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +32,6 @@ import {
 } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { EntityTags } from "@/components/shared/entity-tags";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Car },
@@ -49,6 +52,33 @@ const VEHICLE_STATUS_OPTIONS = [
   { value: "maintenance", label: "في الصيانة" },
   { value: "out_of_service", label: "خارج الخدمة" },
 ];
+
+const VEHICLE_EDIT_STATUS_OPTIONS = [
+  { value: "available", label: "متاحة" },
+  { value: "in_use", label: "قيد الاستخدام" },
+  { value: "maintenance", label: "في الصيانة" },
+];
+
+const PLATE_TYPE_OPTIONS = [
+  { value: "private", label: "خاصة" },
+  { value: "commercial", label: "تجارية" },
+  { value: "government", label: "حكومية" },
+  { value: "diplomatic", label: "دبلوماسية" },
+  { value: "motorcycle", label: "دراجة نارية" },
+];
+
+const vehicleEditSchema = z.object({
+  plateNumber: z.string(),
+  status: z.string(),
+  color: z.string(),
+  notes: z.string(),
+  registrationNumber: z.string(),
+  registrationExpiry: z.string(),
+  inspectionDate: z.string(),
+  nextInspectionDate: z.string(),
+  plateType: z.string(),
+  sequenceNumber: z.string(),
+});
 
 const IMPACT_ICONS = {
   financial: Banknote,
@@ -83,8 +113,6 @@ export default function VehicleDetail() {
   const { data: tco } = useApiQuery<any>(["vehicle-tco", id || ""], `/fleet/vehicles/${id}/tco`, !!id);
   const { hideTabs: registryHideTabs } = useRegistryTabs("vehicle", id || "");
 
-  const [editForm, setEditForm] = useState<Record<string, string>>({});
-
   const vehicleStatusTone = (s: string): "success" | "warning" | "info" | "muted" | "destructive" | "default" => {
     switch (s) {
       case "available": return "success";
@@ -102,48 +130,6 @@ export default function VehicleDetail() {
 
   const totalFuelCost = fuelLogs.reduce((s: number, f: any) => s + (Number(f.totalCost) || 0), 0);
   const totalMaintenanceCost = maintenance.reduce((s: number, m: any) => s + (Number(m.cost) || 0), 0);
-
-  const startEdit = () => {
-    setEditForm({
-      plateNumber: vehicle?.plateNumber || "",
-      status: vehicle?.status || "available",
-      color: vehicle?.color || "",
-      notes: vehicle?.notes || "",
-      registrationNumber: vehicle?.registrationNumber || "",
-      registrationExpiry: vehicle?.registrationExpiry ? vehicle.registrationExpiry.split("T")[0] : "",
-      inspectionDate: vehicle?.inspectionDate ? vehicle.inspectionDate.split("T")[0] : "",
-      nextInspectionDate: vehicle?.nextInspectionDate ? vehicle.nextInspectionDate.split("T")[0] : "",
-      plateType: vehicle?.plateType || "",
-      sequenceNumber: vehicle?.sequenceNumber || "",
-    });
-    setEditing(true);
-  };
-
-  const saveEdit = async () => {
-    try {
-      await apiFetch(`/fleet/vehicles/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          plateNumber: editForm.plateNumber,
-          status: editForm.status,
-          color: editForm.color,
-          notes: editForm.notes,
-          registrationNumber: editForm.registrationNumber,
-          registrationExpiry: editForm.registrationExpiry,
-          inspectionDate: editForm.inspectionDate,
-          nextInspectionDate: editForm.nextInspectionDate,
-          plateType: editForm.plateType,
-          sequenceNumber: editForm.sequenceNumber,
-        }),
-      });
-      toast({ title: "تم تحديث المركبة" });
-      setEditing(false);
-      qc.invalidateQueries({ queryKey: ["vehicle-detail", id] });
-      qc.invalidateQueries({ queryKey: ["vehicles"] });
-    } catch (err) {
-      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
-    }
-  };
 
   const handleDelete = async () => {
     try {
@@ -164,7 +150,7 @@ export default function VehicleDetail() {
           <Pencil className="h-4 w-4" />تغيير الحالة
         </Button>
       </Link>
-      <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
+      <Button variant="outline" size="sm" onClick={() => setEditing(true)}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
       {deleting ? (
         <div className="flex gap-2">
           <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
@@ -184,74 +170,57 @@ export default function VehicleDetail() {
         <Card>
           <CardHeader><CardTitle className="text-base">تعديل المركبة</CardTitle></CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="text-sm font-medium">رقم اللوحة</label>
-                <Input value={editForm.plateNumber} onChange={e => setEditForm(f => ({...f, plateNumber: e.target.value}))} className="mt-1" />
+            <FormShell
+              schema={vehicleEditSchema}
+              defaultValues={{
+                plateNumber: vehicle?.plateNumber || "",
+                status: vehicle?.status || "available",
+                color: vehicle?.color || "",
+                notes: vehicle?.notes || "",
+                registrationNumber: vehicle?.registrationNumber || "",
+                registrationExpiry: vehicle?.registrationExpiry ? vehicle.registrationExpiry.split("T")[0] : "",
+                inspectionDate: vehicle?.inspectionDate ? vehicle.inspectionDate.split("T")[0] : "",
+                nextInspectionDate: vehicle?.nextInspectionDate ? vehicle.nextInspectionDate.split("T")[0] : "",
+                plateType: vehicle?.plateType || "",
+                sequenceNumber: vehicle?.sequenceNumber || "",
+              }}
+              submitLabel="حفظ"
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setEditing(false)}>إلغاء</Button>
+              }
+              onSubmit={async (values) => {
+                try {
+                  await apiFetch(`/fleet/vehicles/${id}`, {
+                    method: "PATCH",
+                    body: JSON.stringify(values),
+                  });
+                  toast({ title: "تم تحديث المركبة" });
+                  setEditing(false);
+                  qc.invalidateQueries({ queryKey: ["vehicle-detail", id] });
+                  qc.invalidateQueries({ queryKey: ["vehicles"] });
+                } catch (err) {
+                  toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+                }
+              }}
+            >
+              <FormGrid cols={4}>
+                <FormTextField name="plateNumber" label="رقم اللوحة" />
+                <FormSelectField name="status" label="الحالة" options={VEHICLE_EDIT_STATUS_OPTIONS} />
+                <FormTextField name="color" label="اللون" />
+                <FormTextField name="notes" label="ملاحظات" />
+              </FormGrid>
+              <div className="pt-4 border-t">
+                <p className="text-sm font-medium text-muted-foreground mb-3">بيانات التسجيل الحكومية (تم)</p>
+                <FormGrid cols={3}>
+                  <FormTextField name="registrationNumber" label="رقم الاستمارة" />
+                  <FormDateField name="registrationExpiry" label="انتهاء الاستمارة" />
+                  <FormSelectField name="plateType" label="نوع اللوحة" options={PLATE_TYPE_OPTIONS} placeholder="اختر" />
+                  <FormTextField name="sequenceNumber" label="رقم التسلسل" />
+                  <FormDateField name="inspectionDate" label="تاريخ آخر فحص" />
+                  <FormDateField name="nextInspectionDate" label="الفحص القادم" />
+                </FormGrid>
               </div>
-              <div>
-                <label className="text-sm font-medium">الحالة</label>
-                <Select value={editForm.status} onValueChange={(v) => setEditForm(f => ({...f, status: v}))}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="available">متاحة</SelectItem>
-                    <SelectItem value="in_use">قيد الاستخدام</SelectItem>
-                    <SelectItem value="maintenance">في الصيانة</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">اللون</label>
-                <Input value={editForm.color} onChange={e => setEditForm(f => ({...f, color: e.target.value}))} className="mt-1" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">ملاحظات</label>
-                <Input value={editForm.notes} onChange={e => setEditForm(f => ({...f, notes: e.target.value}))} className="mt-1" />
-              </div>
-            </div>
-            <div className="mt-4 pt-4 border-t">
-              <p className="text-sm font-medium text-muted-foreground mb-3">بيانات التسجيل الحكومية (تم)</p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-sm font-medium">رقم الاستمارة</label>
-                  <Input value={editForm.registrationNumber} onChange={e => setEditForm(f => ({...f, registrationNumber: e.target.value}))} className="mt-1" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">انتهاء الاستمارة</label>
-                  <UnifiedDateInput value={editForm.registrationExpiry} onChange={(iso) => setEditForm(f => ({...f, registrationExpiry: iso}))} className="mt-1" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">نوع اللوحة</label>
-                  <Select value={editForm.plateType || "_none"} onValueChange={(v) => setEditForm(f => ({...f, plateType: v === "_none" ? "" : v}))}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">اختر</SelectItem>
-                      <SelectItem value="private">خاصة</SelectItem>
-                      <SelectItem value="commercial">تجارية</SelectItem>
-                      <SelectItem value="government">حكومية</SelectItem>
-                      <SelectItem value="diplomatic">دبلوماسية</SelectItem>
-                      <SelectItem value="motorcycle">دراجة نارية</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">رقم التسلسل</label>
-                  <Input value={editForm.sequenceNumber} onChange={e => setEditForm(f => ({...f, sequenceNumber: e.target.value}))} className="mt-1" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">تاريخ آخر فحص</label>
-                  <UnifiedDateInput value={editForm.inspectionDate} onChange={(iso) => setEditForm(f => ({...f, inspectionDate: iso}))} className="mt-1" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">الفحص القادم</label>
-                  <UnifiedDateInput value={editForm.nextInspectionDate} onChange={(iso) => setEditForm(f => ({...f, nextInspectionDate: iso}))} className="mt-1" />
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4 justify-end">
-              <Button onClick={saveEdit}><Check className="h-4 w-4 me-1" />حفظ</Button>
-              <Button variant="outline" onClick={() => setEditing(false)}><X className="h-4 w-4 me-1" />إلغاء</Button>
-            </div>
+            </FormShell>
           </CardContent>
         </Card>
       )}
