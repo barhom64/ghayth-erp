@@ -17,6 +17,20 @@ import { useAppContext } from "@/contexts/app-context";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
+import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
+import { Select as LineTreatmentSelect, SelectContent as LTSC, SelectItem as LTSI, SelectTrigger as LTST, SelectValue as LTSV } from "@/components/ui/select";
+
+const LINE_TREATMENTS = [
+  { value: "inventory",            label: "مخزون (Inventory)" },
+  { value: "expense",              label: "مصروف (Expense)" },
+  { value: "fixed_asset",          label: "أصل ثابت (Fixed Asset)" },
+  { value: "project_cost",         label: "تكلفة مشروع (Project Cost)" },
+  { value: "vehicle_cost",         label: "تكلفة مركبة (Vehicle Cost)" },
+  { value: "property_maintenance", label: "صيانة عقار (Property Maintenance)" },
+  { value: "custody",              label: "عهدة موظف (Custody)" },
+  { value: "prepayment",           label: "دفعة مقدمة (Prepayment)" },
+  { value: "service",              label: "خدمة (Service)" },
+];
 
 const DRAFT_KEY = "finance_purchase_orders_create";
 
@@ -34,7 +48,11 @@ export default function PurchaseOrdersCreate() {
   const INITIAL = { supplierId: "", notes: "", branchId: selectedBranchId ? String(selectedBranchId) : "", companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "", costCenter: "", expectedDelivery: "", date: todayLocal() };
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [items, setItems] = useState([{ productId: "", quantity: "1", unitPrice: "" }]);
+  const [items, setItems] = useState([{
+    productId: "", quantity: "1", unitPrice: "",
+    lineTreatment: "inventory" as string,
+    allocation: {} as LineAllocation,
+  }]);
   const [copied, setCopied] = useState(false);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
@@ -59,7 +77,11 @@ export default function PurchaseOrdersCreate() {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
-  const addItem = () => setItems([...items, { productId: "", quantity: "1", unitPrice: "" }]);
+  const addItem = () => setItems([...items, {
+    productId: "", quantity: "1", unitPrice: "",
+    lineTreatment: "inventory",
+    allocation: {} as LineAllocation,
+  }]);
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
   const updateItem = (idx: number, field: string, value: string) => {
     const updated = [...items];
@@ -94,6 +116,8 @@ export default function PurchaseOrdersCreate() {
           productId: i.productId ? Number(i.productId) : undefined,
           quantity: Number(i.quantity),
           unitPrice: Number(i.unitPrice),
+          lineTreatment: i.lineTreatment || undefined,
+          ...buildAllocationPayload(i.allocation ?? {}),
         })),
       });
       clearDraft();
@@ -154,22 +178,48 @@ export default function PurchaseOrdersCreate() {
       <div className="mb-4">
         <Label className="text-base font-semibold">البنود</Label>
         {items.map((item, idx) => (
-          <div key={idx} className="grid grid-cols-4 gap-2 mt-2 items-end">
-            <div>
-              <Label className="text-xs">المنتج</Label>
-              <Select value={item.productId || "_none"} onValueChange={(v) => updateItem(idx, "productId", v === "_none" ? "" : v)}>
-                <SelectTrigger className="text-sm">
-                  <SelectValue placeholder="اختر من المخزون" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">اختر من المخزون</SelectItem>
-                  {products.map((p: any) => <SelectItem key={p.id} value={String(p.id)}>{p.sku ? `${p.sku} - ` : ""}{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+          <div key={idx} className="border rounded-lg p-3 mt-2">
+            <div className="grid grid-cols-4 gap-2 items-end">
+              <div>
+                <Label className="text-xs">المنتج</Label>
+                <Select value={item.productId || "_none"} onValueChange={(v) => updateItem(idx, "productId", v === "_none" ? "" : v)}>
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="اختر من المخزون" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">اختر من المخزون</SelectItem>
+                    {products.map((p: any) => <SelectItem key={p.id} value={String(p.id)}>{p.sku ? `${p.sku} - ` : ""}{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <NumberField label="الكمية" value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} placeholder="1" />
+              <NumberField label="سعر الوحدة" value={item.unitPrice} onChange={(v) => updateItem(idx, "unitPrice", v)} placeholder="0.00" />
+              <Button type="button" variant="destructive" size="sm" onClick={() => removeItem(idx)} disabled={items.length <= 1}>حذف</Button>
             </div>
-            <NumberField label="الكمية" value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} placeholder="1" />
-            <NumberField label="سعر الوحدة" value={item.unitPrice} onChange={(v) => updateItem(idx, "unitPrice", v)} placeholder="0.00" />
-            <Button type="button" variant="destructive" size="sm" onClick={() => removeItem(idx)} disabled={items.length <= 1}>حذف</Button>
+            <div className="mt-2">
+              <Label className="text-xs">معالجة البند (Line Treatment)</Label>
+              <LineTreatmentSelect value={item.lineTreatment} onValueChange={(v) => updateItem(idx, "lineTreatment", v)}>
+                <LTST className="text-sm"><LTSV /></LTST>
+                <LTSC>
+                  {LINE_TREATMENTS.map((t) => (
+                    <LTSI key={t.value} value={t.value}>{t.label}</LTSI>
+                  ))}
+                </LTSC>
+              </LineTreatmentSelect>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                ⓘ يحدد كيف يوجَّه البند عند الـ GRN: مخزون / مصروف / أصل ثابت / تكلفة مشروع / إلخ.
+              </p>
+            </div>
+            <LineAllocationPanel
+              value={item.allocation ?? {}}
+              onChange={(next) => {
+                const updated = [...items];
+                (updated[idx] as any).allocation = next;
+                setItems(updated);
+              }}
+              status={deriveAllocationStatus(item.allocation ?? {})}
+              required={false}
+            />
           </div>
         ))}
         <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addItem}>+ إضافة بند</Button>
