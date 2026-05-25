@@ -37,15 +37,23 @@ export interface PrintJobRow extends PrintJobInput {
 export async function writePrintJob(input: PrintJobInput): Promise<PrintJobRow | null> {
   try {
     const rows = await rawQuery<PrintJobRow>(
+      // Every nullable parameter needs an explicit cast — pg's parameter
+      // inference fails with "could not determine data type of parameter $N"
+      // when a NULL is passed without a type hint AND the same param appears
+      // in multiple expression positions (the approvedAt CASE below used $15
+      // both as value and as predicate, which broke type resolution and
+      // silently dropped every print_jobs row → audit trail blank).
       `INSERT INTO print_jobs (
          "companyId", "branchId", "userId", "entityType", "entityId", "templateId",
          "format", "paperSize", "copyNumber", "isReprint", "watermark",
          "pdfStorageKey", "pdfBytes", "status", "approvedBy", "approvedAt",
          "errorMessage", "ipAddress", "userAgent"
        )
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-               CASE WHEN $15 IS NOT NULL THEN NOW() ELSE NULL END,
-               $16,$17,$18)
+       VALUES ($1::integer,$2::integer,$3::integer,$4::varchar,$5::varchar,$6::integer,
+               $7::varchar,$8::varchar,$9::integer,$10::boolean,$11::varchar,
+               $12::text,$13::integer,$14::varchar,$15::integer,
+               CASE WHEN $15::integer IS NOT NULL THEN NOW() ELSE NULL END,
+               $16::text,$17::varchar,$18::text)
        RETURNING id, "jobId", "createdAt", *`,
       [
         input.companyId,
