@@ -57,6 +57,25 @@ const previewLimiter = createPerUserLimiter({
   skip: () => false,
 });
 
+// ─── Shared validators ──────────────────────────────────────────────────────
+// Every print endpoint that takes an entityType or entityId from the request
+// body uses these — keeps the bounds consistent (DB column widths,
+// XSS-safe charset, snake_case) instead of drifting between routes. The
+// /render schema in #1081 had hardened these inline; we extract them here
+// so /preview, /templates, /assignments, and /reprint-requests all share
+// the same gates.
+const zEntityType = z.string().min(1).max(60).regex(/^[a-z][a-z0-9_]*$/, {
+  message: "entityType must be a snake_case identifier",
+});
+const zEntityId = z.union([z.string(), z.number()])
+  .transform((v) => String(v))
+  .refine((v) => v.length > 0 && v.length <= 64 && v !== "0", {
+    message: "entityId must reference a real record (1–64 chars)",
+  })
+  .refine((v) => /^[A-Za-z0-9_\-./]+$/.test(v), {
+    message: "entityId contains invalid characters",
+  });
+
 function scopeFromReq(req: Request): PrintScope {
   const s = req.scope;
   if (!s) throw new ValidationError("missing scope");
@@ -72,21 +91,8 @@ function scopeFromReq(req: Request): PrintScope {
 // ─── Render ─────────────────────────────────────────────────────────────────
 
 const renderBody = z.object({
-  // Capped at 60 chars (matches print_jobs."entityType" varchar(60)) and
-  // restricted to snake_case identifiers — every registered entityType
-  // follows this shape, and rejecting weird chars here gives defense in
-  // depth against template-key spoofing and SQL/HTML reflection attempts.
-  entityType: z.string().min(1).max(60).regex(/^[a-z][a-z0-9_]*$/, {
-    message: "entityType must be a snake_case identifier",
-  }),
-  // Capped at 64 chars to match print_jobs."entityId" varchar(64), and
-  // restricted to a conservative charset to head off XSS attempts via the
-  // entityId being echoed into <title>, filenames, etc. Real ids are
-  // numerics, UUIDs, or short refs — none need < > & " ' or newlines.
-  entityId: z.union([z.string(), z.number()])
-    .transform((v) => String(v))
-    .refine((v) => v.length > 0 && v.length <= 64 && v !== "0", { message: "entityId must reference a real record (1–64 chars)" })
-    .refine((v) => /^[A-Za-z0-9_\-./]+$/.test(v), { message: "entityId contains invalid characters" }),
+  entityType: zEntityType,
+  entityId: zEntityId,
   format: z.enum(["a4", "thermal_80", "thermal_58", "label", "excel"]).optional(),
   paperSize: z
     .enum(["A4", "A5", "THERMAL_80", "THERMAL_58", "LABEL_50x30", "LABEL_100x50"])
@@ -161,16 +167,8 @@ router.post("/render", renderLimiter, requirePermission("print:create"), async (
 // ─── Preview (ephemeral, no audit) ──────────────────────────────────────────
 
 const previewBody = z.object({
-  // Same bounds as /render (above) — preview shares the same render pipeline
-  // and the same downstream tokens, so identical validation applies.
-  entityType: z.string().min(1).max(60).regex(/^[a-z][a-z0-9_]*$/, {
-    message: "entityType must be a snake_case identifier",
-  }),
-  entityId: z.union([z.string(), z.number()])
-    .transform((v) => String(v))
-    .refine((v) => v.length > 0 && v.length <= 64 && v !== "0", { message: "entityId must reference a real record (1–64 chars)" })
-    .refine((v) => /^[A-Za-z0-9_\-./]+$/.test(v), { message: "entityId contains invalid characters" })
-    .optional(),
+  entityType: zEntityType,
+  entityId: zEntityId.optional(),
   templateId: z.number().int().positive().optional(),
   format: z.enum(["a4", "thermal_80", "thermal_58", "label", "excel"]).optional(),
   payload: z.record(z.any()).optional(),
@@ -232,18 +230,22 @@ router.get("/templates", requirePermission("templates:read"), async (req: Reques
 });
 
 const templateCreateBody = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  entityType: z.string().min(1),
+  // Length caps mirror the DB columns: name is varchar(120),
+  // description text but reasonable max, htmlContent/cssOverrides text but
+  // capped to head off accidental megabyte uploads + denial-of-service via
+  // template-table bloat.
+  name: z.string().min(1).max(120),
+  description: z.string().max(2000).optional(),
+  entityType: zEntityType,
   branchId: z.number().int().positive().nullable().optional(),
   paperSize: z
     .enum(["A4", "A5", "THERMAL_80", "THERMAL_58", "LABEL_50x30", "LABEL_100x50"])
     .default("A4"),
   mode: z.enum(["preset", "html", "visual"]).default("preset"),
-  presetKey: z.string().optional(),
-  htmlContent: z.string().optional(),
+  presetKey: z.string().max(60).optional(),
+  htmlContent: z.string().max(500_000).optional(),
   layoutJson: z.unknown().optional(),
-  cssOverrides: z.string().optional(),
+  cssOverrides: z.string().max(100_000).optional(),
   headerOverride: z.unknown().optional(),
   footerOverride: z.unknown().optional(),
   isThermal: z.boolean().optional(),
@@ -387,7 +389,7 @@ router.get(
 );
 
 const assignBody = z.object({
-  entityType: z.string().min(1),
+  entityType: zEntityType,
   branchId: z.number().int().positive().nullable().optional(),
   templateId: z.number().int().positive(),
   isDefault: z.boolean().default(true),
@@ -554,9 +556,12 @@ router.get(
 // ─── Reprint requests ────────────────────────────────────────────────────────
 
 const reprintBody = z.object({
-  entityType: z.string().min(1),
-  entityId: z.union([z.string(), z.number()]).transform((v) => String(v)).refine((v) => v.length > 0 && v !== "0", { message: "entityId must reference a real record" }),
-  reason: z.string().min(1),
+  entityType: zEntityType,
+  entityId: zEntityId,
+  // Reason is shown in the approver's queue + stored in the audit table —
+  // 4000 chars is plenty for "العميل طلب نسخة لأن..." without letting an
+  // attacker cram megabytes into print_reprint_requests.reason.
+  reason: z.string().min(1).max(4000),
 });
 
 router.post("/reprint-requests", requirePermission("print:reprint:create"), async (req: Request, res: Response) => {
