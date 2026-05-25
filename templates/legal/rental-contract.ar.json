@@ -1,0 +1,20 @@
+{
+  "code": "legal.rental-contract",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "rental_contract",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": false,
+  "qr": true,
+  "status": "published",
+  "domain": "legal",
+  "title": "عقد إيجار",
+  "implementation": {
+    "kind": "universal-fallback",
+    "key": "—"
+  },
+  "ownerTeam": "legal"
+}

@@ -1,0 +1,40 @@
+{
+  "code": "finance.invoice",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "invoice",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": false,
+  "qr": true,
+  "status": "published",
+  "domain": "finance",
+  "title": "فاتورة ضريبية",
+  "description": "ZATCA-aligned tax invoice — branch letterhead, buyer block, six-column items table (#, description, qty, unit price, vat, total), totals box with currency, optional notes, verify QR + jobId footer.",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "invoice"
+  },
+  "tokens": [
+    "branch.letterhead",
+    "client.name",
+    "client.taxNumber",
+    "entity.ref",
+    "entity.createdAt",
+    "entity.dueDate",
+    "entity.status",
+    "{{#each items}} this.description / quantity / unitPrice / vatAmount / totalPrice",
+    "entity.subtotal",
+    "entity.vatRate",
+    "entity.vatAmount",
+    "entity.total",
+    "entity.paidAmount",
+    "entity.currency",
+    "entity.notes",
+    "system.verifyBlock",
+    "branch.footer"
+  ],
+  "ownerTeam": "finance"
+}

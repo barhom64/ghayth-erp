@@ -100,6 +100,12 @@ const EnvSchema = z.object({
   CORS_ORIGIN: optStr(),
   REPLIT_DEV_DOMAIN: optStr(),
   REPLIT_DEPLOYMENT_URL: optStr(),
+  // Public origin used when embedding URLs inside generated documents
+  // (Print Platform QR verify URLs, email links, etc.). Falls back to
+  // the Replit deployment URL when set, otherwise to an empty string
+  // — in which case the QR encodes a relative path /api/print/verify/:id
+  // that still works for scans within the same browser session.
+  PUBLIC_BASE_URL: optStr(),
 
   // -- bootstrap / seed ----------------------------------------------------
   ADMIN_EMAIL: optStr(),
@@ -205,6 +211,12 @@ export interface AppConfig {
 
   /** Raw REPLIT_DEV_DOMAIN — used to whitelist Replit preview subdomains in dev. */
   readonly replitDevDomain: string | undefined;
+
+  /** Public origin embedded into URLs that leave the server — Print Platform
+   *  QR verify links, outbound emails, etc. Defaults to REPLIT_DEPLOYMENT_URL
+   *  when set, otherwise empty (in which case relative `/api/...` paths are
+   *  used and only work for scans from the same host). */
+  readonly publicBaseUrl: string;
 
   readonly redis: {
     readonly url: string | undefined;
@@ -347,6 +359,7 @@ function buildConfig(env: RawEnv): AppConfig {
 
     corsOrigins,
     replitDevDomain: env.REPLIT_DEV_DOMAIN,
+    publicBaseUrl: (env.PUBLIC_BASE_URL || env.REPLIT_DEPLOYMENT_URL || "").replace(/\/$/, ""),
 
     redis: {
       url: env.REDIS_URL,
