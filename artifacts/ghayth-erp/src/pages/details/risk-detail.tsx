@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -151,43 +151,6 @@ export default function RiskDetail() {
     return out;
   }, [risk]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!risk) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: `RISK-${id}` },
-          { label: "العنوان", value: risk.title || "-" },
-          { label: "التصنيف", value: risk.category || "-" },
-          { label: "المسؤول", value: risk.owner || risk.ownerName || "-" },
-          { label: "الاحتمالية", value: LIKELIHOOD_LABELS[risk.likelihood] || risk.likelihood || "-" },
-          { label: "الأثر", value: SEVERITY_LABELS[risk.impact] || risk.impact || "-" },
-          { label: "درجة المخاطرة", value: String(riskScore || "-") },
-          { label: "تاريخ المراجعة", value: formatDateAr(risk.reviewDate) },
-          { label: "القسم", value: risk.department || risk.departmentName || "-" },
-          { label: "الحالة", value: STATUS_LABELS[risk.status] || risk.status || "-" },
-        ],
-      },
-    ];
-    if (risk.description) {
-      sections.push({ kind: "text", title: "وصف المخاطرة", body: risk.description });
-    }
-    if (risk.mitigationPlan) {
-      sections.push({ kind: "text", title: "خطة التخفيف", body: risk.mitigationPlan });
-    }
-    if (risk.residualRisk) {
-      sections.push({ kind: "text", title: "المخاطر المتبقية", body: risk.residualRisk });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "المسؤول", name: risk.owner || risk.ownerName || "" },
-        { label: "المعتمد", name: risk.approvedByName || "" },
-      ],
-    });
-    return sections;
-  }, [risk, id, riskScore]);
 
   const handleEdit = () => {
     setLocation(`/governance/risks/${id}/edit`);
@@ -455,15 +418,9 @@ export default function RiskDetail() {
         <>
           {risk && (
             <EntityPrintButton
-              branchId={risk.branchId}
-              title={risk.title || "مخاطرة"}
-              ref={`RISK-${id}`}
-              date={formatDateAr(risk.createdAt)}
-              sections={printSections}
               entityType="risk"
               entityId={id ?? 0}
-              formats={["a4"]}
-            />
+              formats={["a4"]}/>
           )}
           <GuardedButton
             perm="governance:update"

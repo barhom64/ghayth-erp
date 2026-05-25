@@ -1,17 +1,13 @@
-import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import {
-  DetailPageLayout,
-  EntityComments,
-} from "@workspace/entity-kit";
+import { DetailPageLayout, EntityComments } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Truck, Star, Phone, Mail, MapPin } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 
 /**
@@ -52,39 +48,6 @@ export default function WarehouseSupplierDetail() {
   const totalPurchased = Number(supplier?.totalPurchased ?? 0);
   const rating = Number(supplier?.rating ?? 0);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!supplier) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "اسم المورد", value: supplier.name || "-" },
-          ...(supplier.contactPerson ? [{ label: "مسؤول التواصل", value: supplier.contactPerson }] : []),
-          ...(supplier.phone ? [{ label: "الهاتف", value: supplier.phone }] : []),
-          ...(supplier.email ? [{ label: "البريد الإلكتروني", value: supplier.email }] : []),
-          ...(supplier.address ? [{ label: "العنوان", value: supplier.address }] : []),
-          ...(supplier.taxNumber ? [{ label: "الرقم الضريبي", value: supplier.taxNumber }] : []),
-          ...(supplier.paymentTerms ? [{ label: "شروط الدفع", value: supplier.paymentTerms }] : []),
-          { label: "عدد الأصناف الموردة", value: String(productsCount) },
-          { label: "إجمالي المشتريات", value: formatCurrency(totalPurchased) },
-          ...(rating ? [{ label: "التقييم", value: `${rating} / 5` }] : []),
-          { label: "الحالة", value: STATUS_LABELS[supplier.status] || supplier.status || "-" },
-          { label: "تاريخ الإنشاء", value: formatDateAr(supplier.createdAt) },
-        ],
-      },
-    ];
-    if (supplier.notes) {
-      sections.push({ kind: "text", title: "ملاحظات", body: supplier.notes });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "المدير", name: "" },
-        { label: "المسؤول المالي", name: "" },
-      ],
-    });
-    return sections;
-  }, [supplier, productsCount, totalPurchased, rating]);
 
   const handleEdit = () => {
     setLocation(`/warehouse/suppliers/${id}/edit`);
@@ -226,15 +189,9 @@ export default function WarehouseSupplierDetail() {
         <>
           {supplier && (
             <EntityPrintButton
-              branchId={supplier.branchId}
-              title={supplier.name ? `مورد ${supplier.name}` : "مورد"}
-              ref={`SUP-${id}`}
-              date={formatDateAr(supplier.createdAt)}
-              sections={printSections}
               entityType="vendor"
               entityId={id ?? 0}
-              formats={["a4"]}
-            />
+              formats={["a4"]}/>
           )}
           <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!supplier}>
             <Edit className="h-4 w-4 ms-1" />

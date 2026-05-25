@@ -72,13 +72,28 @@ function scopeFromReq(req: Request): PrintScope {
 // ─── Render ─────────────────────────────────────────────────────────────────
 
 const renderBody = z.object({
-  entityType: z.string().min(1),
-  entityId: z.union([z.string(), z.number()]).transform((v) => String(v)).refine((v) => v.length > 0 && v !== "0", { message: "entityId must reference a real record" }),
+  // Capped at 60 chars (matches print_jobs."entityType" varchar(60)) and
+  // restricted to snake_case identifiers — every registered entityType
+  // follows this shape, and rejecting weird chars here gives defense in
+  // depth against template-key spoofing and SQL/HTML reflection attempts.
+  entityType: z.string().min(1).max(60).regex(/^[a-z][a-z0-9_]*$/, {
+    message: "entityType must be a snake_case identifier",
+  }),
+  // Capped at 64 chars to match print_jobs."entityId" varchar(64), and
+  // restricted to a conservative charset to head off XSS attempts via the
+  // entityId being echoed into <title>, filenames, etc. Real ids are
+  // numerics, UUIDs, or short refs — none need < > & " ' or newlines.
+  entityId: z.union([z.string(), z.number()])
+    .transform((v) => String(v))
+    .refine((v) => v.length > 0 && v.length <= 64 && v !== "0", { message: "entityId must reference a real record (1–64 chars)" })
+    .refine((v) => /^[A-Za-z0-9_\-./]+$/.test(v), { message: "entityId contains invalid characters" }),
   format: z.enum(["a4", "thermal_80", "thermal_58", "label", "excel"]).optional(),
   paperSize: z
     .enum(["A4", "A5", "THERMAL_80", "THERMAL_58", "LABEL_50x30", "LABEL_100x50"])
     .optional(),
-  copyNumber: z.number().int().positive().optional(),
+  // Cap at 99999 — print_jobs."copyNumber" is INT4; anything > 2^31-1 errors
+  // on insert. 99999 is more than enough for any real-world reprint chain.
+  copyNumber: z.number().int().positive().max(99999).optional(),
   isReprint: z.boolean().optional(),
   reprintApprovedBy: z.number().int().positive().nullable().optional(),
   /** When set, returns the bytes inline instead of a JSON pointer. */
@@ -146,8 +161,16 @@ router.post("/render", renderLimiter, requirePermission("print:create"), async (
 // ─── Preview (ephemeral, no audit) ──────────────────────────────────────────
 
 const previewBody = z.object({
-  entityType: z.string().min(1),
-  entityId: z.union([z.string(), z.number()]).transform((v) => String(v)).refine((v) => v.length > 0 && v !== "0", { message: "entityId must reference a real record" }).optional(),
+  // Same bounds as /render (above) — preview shares the same render pipeline
+  // and the same downstream tokens, so identical validation applies.
+  entityType: z.string().min(1).max(60).regex(/^[a-z][a-z0-9_]*$/, {
+    message: "entityType must be a snake_case identifier",
+  }),
+  entityId: z.union([z.string(), z.number()])
+    .transform((v) => String(v))
+    .refine((v) => v.length > 0 && v.length <= 64 && v !== "0", { message: "entityId must reference a real record (1–64 chars)" })
+    .refine((v) => /^[A-Za-z0-9_\-./]+$/.test(v), { message: "entityId contains invalid characters" })
+    .optional(),
   templateId: z.number().int().positive().optional(),
   format: z.enum(["a4", "thermal_80", "thermal_58", "label", "excel"]).optional(),
   payload: z.record(z.any()).optional(),

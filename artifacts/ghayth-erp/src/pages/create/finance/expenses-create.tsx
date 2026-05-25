@@ -23,6 +23,41 @@ import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+
+interface TaxCodeOption {
+  id: number;
+  code: string;
+  name: string;
+  rate: number | string;
+  taxType: "standard" | "zero" | "exempt" | "out_of_scope" | "reverse_charge";
+  zatcaCategoryCode: string | null;
+  isInclusiveDefault: boolean;
+  isActive: boolean;
+}
+
+function roundMoney(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function expenseTaxSplit(amount: number, rate: number, inclusive: boolean) {
+  if (!amount || !rate) return { net: amount || 0, vat: 0, gross: amount || 0 };
+  if (inclusive) {
+    const net = roundMoney(amount / (1 + rate / 100));
+    return { net, vat: roundMoney(amount - net), gross: amount };
+  }
+  const vat = roundMoney(amount * (rate / 100));
+  return { net: amount, vat, gross: roundMoney(amount + vat) };
+}
+
+const TAX_TYPE_TO_CATEGORY: Record<string, string> = {
+  standard: "standard",
+  reverse_charge: "standard",
+  zero: "zero_rated",
+  exempt: "exempt",
+  out_of_scope: "",
+};
 
 const OPERATION_TYPES = [
   { value: "expense", label: "مصروف عام" },
@@ -163,6 +198,11 @@ export default function ExpensesCreate() {
   const createMut = useApiMutation("/finance/expenses", "POST", [["expenses"]]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { data: accountsData, isLoading: accountsLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
+  const { data: taxCodesData } = useApiQuery<{ data: TaxCodeOption[] }>(
+    ["tax-codes", "active"],
+    "/finance/accounts/tax-codes?active=true",
+  );
+  const activeTaxCodes = (taxCodesData?.data ?? []).filter((t) => t.isActive !== false);
   const { data: govIntegrationsData } = useApiQuery<{ data: any[] }>(["gov-integrations"], "/gov-integrations");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const { data: vehiclesData } = useApiQuery<{ data: any[] }>(["fleet-vehicles"], "/fleet/vehicles");
@@ -198,6 +238,8 @@ export default function ExpensesCreate() {
     expenseType: "operational",
     paymentMethod: "cash",
     vatRate: "",
+    taxCodeId: "",
+    taxInclusive: false,
     reference: "",
     costCenter: "",
     branchId: selectedBranchId ? String(selectedBranchId) : "",
@@ -245,8 +287,30 @@ export default function ExpensesCreate() {
   if (accountsLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
-  const vatAmount = form.vatRate ? Math.round(Number(form.amount) * (Number(form.vatRate) / 100) * 100) / 100 : 0;
-  const totalWithVat = Number(form.amount) + vatAmount;
+  const selectedTaxCode = form.taxCodeId
+    ? activeTaxCodes.find((t) => String(t.id) === String(form.taxCodeId))
+    : null;
+  const effectiveRate = selectedTaxCode ? Number(selectedTaxCode.rate) : Number(form.vatRate) || 0;
+  const taxSplit = expenseTaxSplit(Number(form.amount) || 0, effectiveRate, form.taxInclusive);
+  const vatAmount = taxSplit.vat;
+  const totalWithVat = taxSplit.gross;
+
+  const handleTaxCodeChange = (val: string) => {
+    if (val === "_none") {
+      setForm({ ...form, taxCodeId: "", vatRate: "" });
+      return;
+    }
+    const tc = activeTaxCodes.find((t) => String(t.id) === val);
+    if (!tc) return;
+    setForm({
+      ...form,
+      taxCodeId: val,
+      vatRate: String(Number(tc.rate) || 0),
+      taxInclusive: tc.isInclusiveDefault ?? form.taxInclusive,
+      taxCategory: TAX_TYPE_TO_CATEGORY[tc.taxType] ?? form.taxCategory,
+      taxCategoryCode: tc.zatcaCategoryCode ?? form.taxCategoryCode,
+    });
+  };
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -272,6 +336,8 @@ export default function ExpensesCreate() {
         expenseType: form.expenseType,
         paymentMethod: form.paymentMethod,
         vatRate: form.vatRate ? Number(form.vatRate) : undefined,
+        taxCodeId: form.taxCodeId ? Number(form.taxCodeId) : undefined,
+        taxInclusive: form.taxCodeId ? form.taxInclusive : undefined,
         reference: form.reference || undefined,
         costCenter: form.costCenter || undefined,
         branchId: form.branchId ? Number(form.branchId) : undefined,
@@ -383,19 +449,35 @@ export default function ExpensesCreate() {
         </div>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
-          <h3 className="font-semibold text-sm text-muted-foreground">المبالغ</h3>
+          <h3 className="font-semibold text-sm text-muted-foreground">المبالغ والضريبة</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <NumberField label="المبلغ (ريال)" required value={form.amount}
               onChange={(v) => setForm({ ...form, amount: v })} min={0} step={0.01} placeholder="0.00" />
-            <FormFieldWrapper label="نسبة ضريبة القيمة المضافة (%)">
-              <Select value={form.vatRate || "_none"} onValueChange={(v) => setForm({ ...form, vatRate: v === "_none" ? "" : v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+            <FormFieldWrapper label="رمز الضريبة">
+              <Select value={form.taxCodeId || "_none"} onValueChange={handleTaxCodeChange}>
+                <SelectTrigger><SelectValue placeholder="— بدون ضريبة —" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_none">بدون ضريبة</SelectItem>
-                  <SelectItem value="5">5%</SelectItem>
-                  <SelectItem value="15">15%</SelectItem>
+                  <SelectItem value="_none">— بدون ضريبة —</SelectItem>
+                  {activeTaxCodes.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.code} — {t.name} ({Number(t.rate)}%)
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="نمط المبلغ">
+              <div className="flex items-center gap-2 h-10">
+                <Switch
+                  id="expTaxInclusive"
+                  checked={form.taxInclusive}
+                  onCheckedChange={(v) => setForm({ ...form, taxInclusive: v })}
+                  disabled={!form.taxCodeId || effectiveRate === 0}
+                />
+                <Label htmlFor="expTaxInclusive" className="text-sm">
+                  {form.taxInclusive ? "شامل الضريبة" : "غير شامل"}
+                </Label>
+              </div>
             </FormFieldWrapper>
             <FormFieldWrapper label="التصنيف الضريبي">
               <Select value={form.taxCategory || "_none"} onValueChange={(v) => setForm({ ...form, taxCategory: v === "_none" ? "" : v })}>
@@ -405,14 +487,25 @@ export default function ExpensesCreate() {
                 </SelectContent>
               </Select>
             </FormFieldWrapper>
-            <FormFieldWrapper label="الإجمالي مع الضريبة">
-              <div className="p-2 bg-muted rounded-md text-sm font-medium">
-                {vatAmount > 0
-                  ? `${formatCurrency(totalWithVat)} (ضريبة: ${formatCurrency(vatAmount)})`
-                  : formatCurrency(Number(form.amount || 0))}
-              </div>
-            </FormFieldWrapper>
           </div>
+          {effectiveRate > 0 && Number(form.amount) > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <span className="px-2 py-1 rounded bg-muted">
+                صافي: <span className="font-mono">{formatCurrency(taxSplit.net)}</span>
+              </span>
+              <span className="px-2 py-1 rounded bg-status-info-surface text-status-info-foreground">
+                ضريبة {effectiveRate}%: <span className="font-mono">{formatCurrency(taxSplit.vat)}</span>
+              </span>
+              <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                الإجمالي: <span className="font-mono">{formatCurrency(taxSplit.gross)}</span>
+              </span>
+              {selectedTaxCode && (
+                <span className="text-muted-foreground">
+                  — {selectedTaxCode.code} ({selectedTaxCode.taxType})
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">

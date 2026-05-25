@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Users, Package, Calendar, Wallet } from "lucide-react";
@@ -97,54 +97,6 @@ export default function UmrahInvoiceDetail() {
     return out;
   }, [invoice]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!invoice) return [];
-    const items: Array<{ label: string; value: string }> = [
-      { label: "رقم الفاتورة", value: invoice.invoiceNumber || `INV-${id}` },
-      { label: "المعتمر", value: invoice.pilgrimName || "-" },
-      { label: "الباقة", value: invoice.packageName || "-" },
-      ...(invoice.seasonName
-        ? [{ label: "الموسم", value: invoice.seasonName }]
-        : []),
-      { label: "المبلغ الإجمالي", value: formatCurrency(amount) },
-      { label: "المبلغ المدفوع", value: formatCurrency(paidAmount) },
-      { label: "المبلغ المتبقي", value: formatCurrency(remainingAmount) },
-      ...(invoice.dueDate
-        ? [{ label: "تاريخ الاستحقاق", value: formatDateAr(invoice.dueDate) }]
-        : []),
-      { label: "الحالة", value: STATUS_LABELS[invoice.status] || invoice.status || "-" },
-      { label: "تاريخ الإنشاء", value: formatDateAr(invoice.createdAt) },
-    ];
-    const sections: PrintSection[] = [{ kind: "info-grid", items }];
-
-    if (payments.length > 0) {
-      sections.push({
-        kind: "text",
-        title: "سجل الدفعات",
-        body: payments
-          .map(
-            (p: any, idx: number) =>
-              `${idx + 1}. ${formatDateAr(p.date || p.paidAt || p.createdAt)} — ${formatCurrency(
-                Number(p.amount || 0)
-              )}${p.method ? ` (${p.method})` : ""}`
-          )
-          .join("\n"),
-      });
-    }
-
-    if (invoice.notes) {
-      sections.push({ kind: "text", title: "ملاحظات", body: invoice.notes });
-    }
-
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "المحاسب", name: invoice.createdByName || "" },
-        { label: "المعتمد", name: invoice.approvedByName || "" },
-      ],
-    });
-    return sections;
-  }, [invoice, amount, paidAmount, remainingAmount, payments, id]);
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -312,19 +264,9 @@ export default function UmrahInvoiceDetail() {
         <>
           {invoice && (
             <EntityPrintButton
-              branchId={invoice.branchId}
-              title={
-                invoice.invoiceNumber
-                  ? `فاتورة ${invoice.invoiceNumber}`
-                  : "فاتورة عمرة"
-              }
-              ref={invoice.invoiceNumber || `INV-${id}`}
-              date={formatDateAr(invoice.createdAt)}
-              sections={printSections}
               entityType="umrah_invoice"
               entityId={invoice.id ?? id}
-              formats={["a4"]}
-            />
+              formats={["a4"]}/>
           )}
         </>
       }

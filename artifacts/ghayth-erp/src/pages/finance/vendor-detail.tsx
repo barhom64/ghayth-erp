@@ -164,6 +164,19 @@ export default function VendorDetailPage() {
          defaultWhtRate, whtCategoryDefault, taxResidenceCountry). Only
          shown when the vendor is non-resident — for resident vendors
          we hide the section to keep the overview clean. */}
+      {vendor && (vendor.residencyStatus === "resident" || !vendor.residencyStatus) && (
+        <Card className="border-muted">
+          <CardContent className="p-4 flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">
+              ⓘ هذا المورد مُسجَّل كـ <strong className="text-foreground">مقيم</strong> — لا استقطاع ضريبة دخل عند الدفع.
+            </span>
+            <Button size="sm" variant="outline" onClick={() => navigate(`/finance/vendors/${id}/edit`)}>
+              <Pencil className="h-3.5 w-3.5 me-1" /> تعديل إعدادات الإقامة الضريبية
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {vendor?.residencyStatus && vendor.residencyStatus !== "resident" && (
         <Card className="border-amber-200 bg-amber-50/40">
           <CardContent className="p-6 space-y-3">
@@ -172,9 +185,14 @@ export default function VendorDetailPage() {
                 <span className="text-amber-700">💰</span>
                 إعدادات استقطاع ضريبة الدخل (WHT)
               </h3>
-              <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
-                مورد غير مقيم — يُستقطع منه ضريبة عند الدفع
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
+                  مورد غير مقيم — يُستقطع منه ضريبة عند الدفع
+                </span>
+                <Button size="sm" variant="outline" onClick={() => navigate(`/finance/vendors/${id}/edit`)}>
+                  <Pencil className="h-3.5 w-3.5 me-1" /> تعديل
+                </Button>
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-amber-200">
               <InfoRow label="حالة الإقامة الضريبية"
