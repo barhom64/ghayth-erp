@@ -96,6 +96,9 @@ const ProfitabilityVehicle = lazy(() => import("@/pages/finance/profitability-ve
 const ProfitabilityProperty = lazy(() => import("@/pages/finance/profitability-property"));
 const ProfitabilityProject = lazy(() => import("@/pages/finance/profitability-project"));
 const ProfitabilityUmrahAgent = lazy(() => import("@/pages/finance/profitability-umrah-agent"));
+const CustomerAdvances = lazy(() => import("@/pages/finance/customer-advances"));
+const CustomerAdvancesCreate = lazy(() => import("@/pages/create/finance/customer-advances-create"));
+const CustomerAdvancesApply = lazy(() => import("@/pages/create/finance/customer-advances-apply"));
 
 export const financeRoutes = [
   // /finance → the new dashboard (R.1.5). The chart of accounts moves
@@ -157,6 +160,9 @@ export const financeRoutes = [
   { path: "/finance/profitability/property/:id", component: ProfitabilityProperty },
   { path: "/finance/profitability/project/:id", component: ProfitabilityProject },
   { path: "/finance/profitability/umrah-agent/:id", component: ProfitabilityUmrahAgent },
+  { path: "/finance/customer-advances", component: CustomerAdvances },
+  { path: "/finance/customer-advances/create", component: CustomerAdvancesCreate },
+  { path: "/finance/customer-advances/:id/apply", component: CustomerAdvancesApply },
   { path: "/finance/reports", component: FinancialReports },
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },

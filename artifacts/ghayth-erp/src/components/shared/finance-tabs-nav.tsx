@@ -4,7 +4,7 @@ import {
   BookOpen, FileText, ScrollText, Wallet, ShoppingCart, Receipt,
   Building2, BarChart3, CreditCard, Banknote, HandCoins, ClipboardList,
   Box, Landmark, BadgeDollarSign, Repeat, FileSpreadsheet,
-  Percent, Boxes,
+  Percent, Boxes, Coins,
 } from "lucide-react";
 
 const TABS = [
@@ -16,6 +16,7 @@ const TABS = [
   { href: "/finance/budget", label: "الميزانية", icon: Wallet, match: ["/finance/budget"] },
   { href: "/finance/purchase-orders", label: "المشتريات", icon: ShoppingCart, match: ["/finance/purchase-orders", "/finance/purchase-requests"] },
   { href: "/finance/receivables", label: "التحصيل", icon: Receipt, match: ["/finance/receivables"] },
+  { href: "/finance/customer-advances", label: "دفعات مقدمة", icon: Coins, match: ["/finance/customer-advances"] },
   { href: "/finance/commitments", label: "الالتزامات", icon: ClipboardList, match: ["/finance/commitments"] },
   { href: "/finance/financial-requests", label: "الطلبات المالية", icon: HandCoins, match: ["/finance/financial-requests"] },
   { href: "/finance/salary-advances", label: "السلف", icon: BadgeDollarSign, match: ["/finance/salary-advances"] },
