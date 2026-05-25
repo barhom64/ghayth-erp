@@ -11,7 +11,20 @@
  */
 
 import { rawQuery } from "../rawdb.js";
+import { logger } from "../logger.js";
 import type { PaperSize, PrintTemplate, TemplateMode } from "./types.js";
+
+/** Safe wrapper — returns [] when the underlying query throws (table missing,
+ *  column missing, etc). Lets resolveTemplate fall through to the next layer
+ *  instead of bubbling a DB error to the caller. */
+async function safeQuery<T>(sql: string, params: unknown[]): Promise<T[]> {
+  try {
+    return await rawQuery<T>(sql, params);
+  } catch (err) {
+    logger.warn(err as Error, "[print/resolveTemplate] query failed, falling through");
+    return [];
+  }
+}
 
 interface TemplateRow {
   id: number;
@@ -60,7 +73,7 @@ export async function resolveTemplate(opts: {
   const { companyId, branchId, entityType, templateId } = opts;
 
   if (templateId) {
-    const rows = await rawQuery<TemplateRow>(
+    const rows = await safeQuery<TemplateRow>(
       `SELECT id, name, "entityType", "branchId", "companyId", "paperSize", "mode",
               "presetKey", "htmlContent", "layoutJson", "cssOverrides",
               "headerOverride", "footerOverride", "isThermal", "version"
@@ -71,7 +84,7 @@ export async function resolveTemplate(opts: {
   }
 
   // 1 & 2: assignments table (branch-specific, then company-wide)
-  const assignment = await rawQuery<TemplateRow>(
+  const assignment = await safeQuery<TemplateRow>(
     `SELECT t.id, t.name, t."entityType", t."branchId", t."companyId", t."paperSize", t."mode",
             t."presetKey", t."htmlContent", t."layoutJson", t."cssOverrides",
             t."headerOverride", t."footerOverride", t."isThermal", t."version"
@@ -88,7 +101,7 @@ export async function resolveTemplate(opts: {
   if (assignment[0]) return toTemplate(assignment[0]);
 
   // 3: company default in document_templates
-  const companyDefault = await rawQuery<TemplateRow>(
+  const companyDefault = await safeQuery<TemplateRow>(
     `SELECT id, name, "entityType", "branchId", "companyId", "paperSize", "mode",
             "presetKey", "htmlContent", "layoutJson", "cssOverrides",
             "headerOverride", "footerOverride", "isThermal", "version"
@@ -101,7 +114,7 @@ export async function resolveTemplate(opts: {
   if (companyDefault[0]) return toTemplate(companyDefault[0]);
 
   // 4: seeded preset (companyId IS NULL)
-  const preset = await rawQuery<TemplateRow>(
+  const preset = await safeQuery<TemplateRow>(
     `SELECT id, name, "entityType", "branchId", "companyId", "paperSize", "mode",
             "presetKey", "htmlContent", "layoutJson", "cssOverrides",
             "headerOverride", "footerOverride", "isThermal", "version"
@@ -170,7 +183,7 @@ export async function listTemplates(opts: {
       where.push(`("branchId" = $${params.length} OR "branchId" IS NULL)`);
     }
   }
-  const rows = await rawQuery<TemplateRow>(
+  const rows = await safeQuery<TemplateRow>(
     `SELECT id, name, "entityType", "branchId", "companyId", "paperSize", "mode",
             "presetKey", "htmlContent", "layoutJson", "cssOverrides",
             "headerOverride", "footerOverride", "isThermal", "version"
