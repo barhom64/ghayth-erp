@@ -151,7 +151,20 @@ export function PrintButton({
         // Arabic / emoji / any non-ASCII content survives the round-trip.
         const bytes = base64ToUint8Array(resp.base64);
         const html = new TextDecoder("utf-8").decode(bytes);
+        // Blank-page guard: an empty-ish HTML response (no <body> content
+        // would explain "تطلع صفحة بيضاء" reports). Show a clear message
+        // in the popup instead of just writing nothing — much easier to
+        // diagnose from the user side.
+        const hasBody = /<body[^>]*>([\s\S]*?)<\/body>/i.test(html)
+          && !/(<body[^>]*>\s*<\/body>)/i.test(html);
         if (previewWindow) {
+          if (!hasBody || html.length < 200) {
+            const diag = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"/><title>وثيقة فارغة</title></head><body style="font-family:Tahoma,sans-serif;padding:40px;color:#475569"><h2>تعذّر بناء الوثيقة</h2><p>الخادم أعاد رداً صحيحاً ولكن محتوى الوثيقة فارغ.</p><p>الأسباب المحتملة: نوع الكيان (<code>${entityType}</code>) ليس له بيانات في هذا السجل (<code>${entityId}</code>)، أو القالب المُسند له htmlContent فارغ.</p><p>أرسل لقطة لهذه الصفحة + <code>jobId=${resp.jobId ?? "—"}</code> للدعم الفني.</p></body></html>`;
+            previewWindow.document.open();
+            previewWindow.document.write(diag);
+            previewWindow.document.close();
+            return;
+          }
           previewWindow.document.open();
           previewWindow.document.write(html);
           previewWindow.document.close();
