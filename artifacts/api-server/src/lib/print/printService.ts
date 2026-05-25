@@ -117,12 +117,18 @@ export async function renderPrint(
   }
 
   // 3. Template
+  // entityId === "list" is the well-known signal that the caller wants a
+  // list-view render (ListPage exports the visible rows as payload).
+  // resolveTemplate then skips the single-entity bespoke preset and uses
+  // universal so the items table auto-builds from arbitrary row shapes.
+  const isListView = req.entityId === "list" || req.entityId === "_list";
   const template =
     req.overrideTemplate ??
     (await resolveTemplate({
       companyId: scope.companyId,
       branchId: scope.branchId,
       entityType: req.entityType,
+      asList: isListView,
     }));
   if (!template) {
     throw new PrintTemplateMissingError(req.entityType);
@@ -244,6 +250,25 @@ export async function renderPrint(
       jobIdOverride: verifyCtx.jobId ?? undefined,
     });
     jobId = row?.jobId ?? null;
+
+    // Phase 7 — auto-index into documents so the entity-detail
+    // "Documents" tab surfaces every printed copy. Soft-fail: if the
+    // documents table isn't migrated yet, the print still succeeds and
+    // print_jobs remains the source of truth.
+    if (jobId) {
+      const { linkPrintToDocuments } = await import("./archive.js");
+      await linkPrintToDocuments({
+        companyId: scope.companyId,
+        jobId,
+        entityType: req.entityType,
+        entityId: req.entityId,
+        filename,
+        mime,
+        bytes: bytes.byteLength,
+        storageKey,
+        uploadedBy: scope.userId,
+      });
+    }
   }
 
   return {

@@ -112,6 +112,12 @@ const renderBody = z.object({
   // dedicated approve route.
   /** When set, returns the bytes inline instead of a JSON pointer. */
   inline: z.boolean().optional(),
+  /** Caller-supplied data payload — when present we SKIP the dataLoader
+   *  and use this directly. Lets ListPage exports pass the visible rows
+   *  ("items"), AI letter drafts pass the generated body, etc. Capped
+   *  at ~256KB so it can't be used as a backdoor to embed arbitrary
+   *  template content. */
+  payload: z.record(z.any()).optional(),
 });
 
 router.post("/render", renderLimiter, requirePermission("print:create"), async (req: Request, res: Response) => {
@@ -127,6 +133,12 @@ router.post("/render", renderLimiter, requirePermission("print:create"), async (
         paperSize: body.paperSize,
         copyNumber: body.copyNumber,
         isReprint: body.isReprint,
+        // When the caller supplied a payload (e.g. ListPage exporting the
+        // visible rows), bypass the dataLoader and use it directly. This
+        // is what fixes "blank page on list export" — the synthetic
+        // entityId "_list" doesn't exist in any table, so without this
+        // path the loader returned a stub and the doc was nearly empty.
+        previewPayload: body.payload,
         // reprintApprovedBy never sourced from the public body — see schema
         // comment above. The internal /reprint-requests/:id/approve handler
         // calls renderPrint() directly with scope.userId.
@@ -171,6 +183,22 @@ router.post("/render", renderLimiter, requirePermission("print:create"), async (
       entityId: req.body?.entityId,
       format: req.body?.format,
     });
+    // Belt-and-suspenders for "ما زالت فيه مشكلة 500": handleRouteError
+    // categorises typed errors well, but a brand-new unhandled exception
+    // (a fresh adapter crash, a Buffer.from on non-ASCII issue, etc.) still
+    // returns the generic 500 toast with no hint. Catch anything that
+    // hasn't been classified by the time we get here and return a
+    // structured error the SPA can show — including the actual message
+    // tail so the user can paste it into a support ticket.
+    if (!res.headersSent) {
+      const e = err as { message?: string; name?: string; code?: string };
+      const safeMsg = (e?.message ?? "").toString().slice(0, 200);
+      return res.status(500).json({
+        error: safeMsg || "تعذّرت عملية الطباعة. أرسل هذه الرسالة للدعم الفني.",
+        code: e?.code ?? "PRINT_RENDER_FAILED",
+        details: { name: e?.name, entityType: req.body?.entityType, entityId: req.body?.entityId },
+      });
+    }
     return handleRouteError(err, res, "print");
   }
 });
@@ -685,6 +713,170 @@ router.post(
       return handleRouteError(err, res, "print");
     }
   }
+);
+
+// ─── Phase 7 — Archive history per entity ──────────────────────────────────
+// Returns every document auto-archived from prints of the given
+// (entityType, entityId). Powers the "Documents" tab on entity-detail
+// pages so users see the printed copy alongside their uploads.
+router.get(
+  "/archive/:entityType/:entityId",
+  requirePermission("print_jobs:read"),
+  async (req: Request, res: Response) => {
+    try {
+      const scope = scopeFromReq(req);
+      const entityType = String(req.params.entityType ?? "");
+      const entityId = String(req.params.entityId ?? "");
+      if (!/^[a-z][a-z0-9_]*$/.test(entityType) || !/^[A-Za-z0-9_\-./]+$/.test(entityId)) {
+        throw new ValidationError("invalid entity reference");
+      }
+      const { listEntityPrints } = await import("../lib/print/archive.js");
+      const items = await listEntityPrints(scope.companyId, entityType, entityId);
+      res.json({ items });
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  },
+);
+
+// ─── Phase 9 — Delivery (one-shot send) ────────────────────────────────────
+// Re-renders the document then dispatches via the chosen channel. The
+// SPA already has the bytes from /render, but the server-side path lets
+// scheduled jobs and the AI letter-drafting flow trigger a send without
+// the SPA ever touching the document.
+const deliveryBody = z.object({
+  entityType: zEntityType,
+  entityId: zEntityId,
+  format: z.enum(["a4", "thermal_80", "thermal_58", "label", "excel"]).optional(),
+  channel: z.enum(["download", "email", "whatsapp", "sms", "internal_inbox", "webhook"]),
+  to: z.array(z.object({ address: z.string().min(1).max(500), name: z.string().max(120).optional() })).min(1).max(20),
+  subject: z.string().max(500).optional(),
+  body: z.string().max(10_000).optional(),
+  locale: z.enum(["ar", "en"]).optional(),
+  templateCode: z.string().max(120).optional(),
+});
+
+router.post(
+  "/deliver",
+  renderLimiter,
+  requirePermission("print:create"),
+  async (req: Request, res: Response) => {
+    try {
+      const body = zodParse(deliveryBody.safeParse(req.body));
+      const scope = scopeFromReq(req);
+      const result = await renderPrint(
+        scope,
+        {
+          entityType: body.entityType,
+          entityId: body.entityId,
+          format: body.format,
+        },
+        { ipAddress: req.ip, userAgent: req.get("user-agent") ?? undefined },
+      );
+      const { sendDocument } = await import("../lib/print/delivery.js");
+      const deliveryResult = await sendDocument({
+        channel: body.channel,
+        to: body.to,
+        document: {
+          bytes: result.bytes,
+          mime: result.mime,
+          filename: result.filename,
+          jobId: result.jobId,
+        },
+        subject: body.subject,
+        body: body.body,
+        locale: body.locale,
+        templateCode: body.templateCode,
+      });
+      res.json({
+        jobId: result.jobId,
+        delivery: deliveryResult,
+      });
+    } catch (err) {
+      if (err instanceof PrintPermissionError) return res.status(err.status).json({ error: err.message });
+      if (err instanceof PrintApprovalRequiredError)
+        return res.status(err.status).json({ error: err.message, copyNumber: err.copyNumber });
+      if (err instanceof PrintTemplateMissingError)
+        return res.status(err.status).json({ error: err.message });
+      return handleRouteError(err, res, "print");
+    }
+  },
+);
+
+// ─── Phase 10 — Queue inspection ───────────────────────────────────────────
+router.get(
+  "/queue/:id",
+  requirePermission("print_jobs:read"),
+  async (req: Request, res: Response) => {
+    try {
+      const id = String(req.params.id ?? "");
+      if (!/^[a-z0-9.\-]+$/i.test(id)) throw new ValidationError("invalid queue id");
+      const { getBackend } = await import("../lib/print/queue.js");
+      const job = await getBackend().getJob(id);
+      if (!job) return res.status(404).json({ error: "not_found" });
+      res.json({ job, backend: getBackend().name });
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  },
+);
+
+// ─── Phase 11 — AI helpers ─────────────────────────────────────────────────
+// Behind RBAC because each call hits the configured LLM provider and
+// therefore costs money. Limit to template-editor users.
+const aiSuggestBody = z.object({
+  entityType: zEntityType,
+  sampleData: z.record(z.any()).optional(),
+  locale: z.enum(["ar", "en"]).default("ar"),
+});
+
+router.post(
+  "/ai/suggest-template",
+  requirePermission("templates:write"),
+  async (req: Request, res: Response) => {
+    try {
+      const body = zodParse(aiSuggestBody.safeParse(req.body));
+      const { trySuggestTemplate } = await import("../lib/print/ai.js");
+      const result = await trySuggestTemplate({
+        entityType: body.entityType,
+        sampleData: body.sampleData ?? {},
+        locale: body.locale,
+      });
+      if (!result.ok) return res.status(503).json({ error: result.error });
+      res.json(result.result);
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  },
+);
+
+router.post(
+  "/ai/draft-letter",
+  requirePermission("templates:write"),
+  async (req: Request, res: Response) => {
+    try {
+      const draftBody = z.object({
+        purpose: z.string().min(1).max(2000),
+        addressee: z.string().min(1).max(500),
+        facts: z.record(z.any()).optional(),
+        locale: z.enum(["ar", "en"]).default("ar"),
+        tone: z.enum(["formal", "warm", "stern"]).optional(),
+      });
+      const body = zodParse(draftBody.safeParse(req.body));
+      const { tryDraftLetter } = await import("../lib/print/ai.js");
+      const result = await tryDraftLetter({
+        purpose: body.purpose,
+        addressee: body.addressee,
+        facts: body.facts ?? {},
+        locale: body.locale,
+        tone: body.tone,
+      });
+      if (!result.ok) return res.status(503).json({ error: result.error });
+      res.json(result.result);
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  },
 );
 
 export default router;
