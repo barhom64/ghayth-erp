@@ -104,3 +104,53 @@ describe("shared/* components on FormShell", () => {
     );
   });
 });
+
+describe("useDirtyGuard shared hook", () => {
+  const HOOK_SRC = readFileSync(
+    join(
+      import.meta.dirname!,
+      "../../../../artifacts/ghayth-erp/src/hooks/use-dirty-guard.tsx",
+    ),
+    "utf8",
+  );
+  function stripComments(src: string): string {
+    return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  }
+  const HOOK_CODE = stripComments(HOOK_SRC);
+
+  it("hook lives under src/hooks/ and uses AlertDialog primitives", () => {
+    // The hook is the canonical replacement for the OS-default
+    // window.confirm() that used to fire from Dialog onOpenChange
+    // handlers. The native-confirm-or-prompt lint rule is what blocks
+    // regressions; this fixture pins the actual AlertDialog wiring so
+    // the hook can't silently degrade back to window.confirm() the
+    // way the lint rule's skip-list might allow.
+    expect(HOOK_SRC).toContain('from "@/components/ui/alert-dialog"');
+    expect(HOOK_SRC).toMatch(/export function useDirtyGuard\b/);
+    expect(HOOK_SRC).toMatch(/guardedClose:\s*\(open:\s*boolean\)\s*=>\s*void/);
+    expect(HOOK_SRC).toMatch(/discardDialog:\s*ReactNode/);
+    // RTL + dark-mode wiring on the AlertDialog content
+    expect(HOOK_SRC).toContain('dir="rtl"');
+    // The hook itself must not CALL window.confirm — the lint rule
+    // exempts use-lifecycle-action but not this file. The docstring
+    // mentions "window.confirm(...)" in plain text to explain what
+    // the hook replaces, so we strip comments before checking.
+    expect(HOOK_CODE).not.toMatch(/window\.confirm\b/);
+  });
+
+  it("fiscal-periods-v2 imports the shared hook, not a local copy", () => {
+    const page = readFileSync(
+      join(
+        import.meta.dirname!,
+        "../../../../artifacts/ghayth-erp/src/pages/finance/fiscal-periods-v2.tsx",
+      ),
+      "utf8",
+    );
+    expect(page).toContain('from "@/hooks/use-dirty-guard"');
+    expect(page).toContain("useDirtyGuard");
+    // No leftover local definition of the same hook name.
+    expect(page).not.toMatch(/^function useDirtyGuard\b/m);
+    // And no leftover window.confirm — the migration is complete.
+    expect(page).not.toMatch(/window\.confirm/);
+  });
+});

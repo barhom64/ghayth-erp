@@ -24,8 +24,8 @@
 | Hard lint rule blocking regression | **active** | ✅ `manual-form-instead-of-formshell` in scripts/src/lint-patterns.mjs |
 | Lint-pattern test fixtures for the FormShell + native-dialog rules | **9** | ✅ scripts/src/lint-patterns.test.mjs (4 for `manual-form-instead-of-formshell`, 5 for `native-confirm-or-prompt`) |
 | Smoke test files (legacy batch) | **42** | ✅ `tests/unit/formMigrationBatch{2,3,…,43}Smoke.test.ts` |
-| Smoke test assertions (batch + shared) | **394/394 pass** | ✅ `pnpm vitest run formMigrationBatch` + `sharedFormShellComponentsSmoke` |
-| Shared-components smoke file | **1** | ✅ `tests/unit/sharedFormShellComponentsSmoke.test.ts` (5 fixtures pinning entity-comments / entity-selects / detail-edit-delete-actions / approval-actions / workflow-kit re-export) |
+| Smoke test assertions (batch + shared + hook) | **396/396 pass** | ✅ `pnpm vitest run formMigrationBatch` + `sharedFormShellComponentsSmoke` |
+| Shared-components smoke file | **1** | ✅ `tests/unit/sharedFormShellComponentsSmoke.test.ts` (7 fixtures: 5 pinning entity-comments / entity-selects / detail-edit-delete-actions / approval-actions / workflow-kit re-export, + 2 pinning the shared `useDirtyGuard` hook contract) |
 | Full test suite | **4288/4288 pass** | ✅ on every commit via pre-commit hook |
 | Architectural patterns documented | **18** | ✅ as smoke-test fixtures |
 | RBAC: `GuardedButton` hides by default | **yes** | ✅ `permission-gate.tsx:66` |
