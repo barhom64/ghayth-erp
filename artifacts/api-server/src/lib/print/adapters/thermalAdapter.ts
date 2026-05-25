@@ -37,7 +37,10 @@ th { border-bottom:1px solid #000; }
 function wrapHtml(body: string, ctx: RenderContext): string {
   const paper = (ctx.paperSize ?? (ctx.format === "thermal_58" ? "THERMAL_58" : "THERMAL_80")) as PaperSize;
   const css = thermalCss(paper);
-  const overrides = ctx.template.cssOverrides ?? "";
+  // Strip </style> from user-supplied overrides — see a4Adapter for context.
+  const overrides = typeof ctx.template.cssOverrides === "string"
+    ? ctx.template.cssOverrides.replace(/<\s*\/\s*style/gi, "")
+    : "";
   return `<!doctype html>
 <html lang="ar" dir="rtl">
 <head>

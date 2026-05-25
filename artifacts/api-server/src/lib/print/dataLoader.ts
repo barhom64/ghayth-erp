@@ -33,19 +33,34 @@ async function loadByTable(table: string, id: string, companyId: number) {
       [id, companyId]
     );
     if (rows[0]) return rows[0];
-  } catch {
-    // table may not have companyId — fall through to the bare query below.
+    // First query ran but found no row — return null instead of trying the
+    // unscoped fallback. Otherwise an entity that simply isn't in this
+    // tenant could leak data from another tenant.
+    return null;
+  } catch (err) {
+    // Only fall back to the unscoped query when the failure is "column
+    // companyId doesn't exist" (PG SQLSTATE 42703). For any other error
+    // — bad id syntax, table missing, permission denied — return null so
+    // we don't accidentally serve cross-tenant rows.
+    const e = err as { code?: string };
+    if (e?.code !== "42703") {
+      return null;
+    }
   }
   try {
+    // Tables without a companyId column are by definition global/shared
+    // (e.g., reference data, presets). Reaching this branch is rare and
+    // expected to be safe — but we still cap at LIMIT 1 and don't expose
+    // sensitive transactional tables here (the registry doesn't list any
+    // such tables for print).
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM ${table} WHERE id = $1 LIMIT 1`,
       [id]
     );
     return rows[0] ?? null;
   } catch {
-    // Table doesn't exist (migration missing) or id type mismatch — fall back
-    // to a synthetic stub so the print engine produces *something* instead of
-    // bubbling a 500 to the user.
+    // Table missing entirely (migration not applied) or id type mismatch.
+    // Return null and let the engine synthesise a stub document.
     return null;
   }
 }

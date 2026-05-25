@@ -34,7 +34,10 @@ export const labelAdapter: FormatAdapter = {
     const paper = (ctx.paperSize ?? (ctx.template.paperSize as PaperSize) ?? "LABEL_50x30") as PaperSize;
     const { w, h } = labelDimsMm(paper);
     const html = renderContextToHtml(ctx);
-    const overrides = ctx.template.cssOverrides ?? "";
+    // Strip </style> from user-supplied overrides — see a4Adapter for context.
+    const overrides = typeof ctx.template.cssOverrides === "string"
+      ? ctx.template.cssOverrides.replace(/<\s*\/\s*style/gi, "")
+      : "";
     const full = `<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
