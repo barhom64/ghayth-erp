@@ -157,6 +157,11 @@ export function substitute(input: SubstitutionInput): string {
     "entity.itemsTable": buildItemsTable((data as { items?: unknown }).items),
     "entity.linesTable": buildLinesTable((data as { lines?: unknown }).lines),
     "entity.movementsTable": buildMovementsTable((data as { movements?: unknown }).movements),
+    // Umrah daily run-sheet has three independent sections — generic table
+    // tokens so the same auto-builder handles them without bespoke code.
+    "entity.arrivalsTable": buildItemsTable((data as { arrivals?: unknown }).arrivals),
+    "entity.departuresTable": buildItemsTable((data as { departures?: unknown }).departures),
+    "entity.overstaysTable": buildItemsTable((data as { overstays?: unknown }).overstays),
     "date.today": new Date().toLocaleDateString("ar-SA"),
     "date.now": new Date().toLocaleString("ar-SA"),
     "watermark": watermark ?? "",

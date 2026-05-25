@@ -6,8 +6,8 @@ const root = join(import.meta.dirname!, "../../../../artifacts/api-server/src/li
 const read = (f: string) => readFileSync(join(root, f), "utf8");
 
 const SELF_AUDIT = read("selfAuditEngine.ts");
-const PDF = read("pdfExport.ts");
 const REPORT_LOADERS = read("print/reportLoaders.ts");
+const TEMPLATE_RESOLVER = read("print/templateResolver.ts");
 const EXPORT_ROUTES = readFileSync(
   join(import.meta.dirname!, "../../../../artifacts/api-server/src/routes/export.ts"),
   "utf8",
@@ -81,68 +81,32 @@ describe("selfAuditEngine — security", () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════
-// PDF EXPORT — only Umrah-specific generators remain. Every other entity
-// flows through Print Engine v2 via lib/print/printService.ts.
+// pdfExport.ts has been DELETED — every generator now flows through Print
+// Engine v2 (renderPrint). The 3 Umrah surfaces (statement / runsheet /
+// official-letter) print via bespoke in-memory presets in templateResolver.
 // ══════════════════════════════════════════════════════════════════════════
 
-describe("pdfExport — Umrah-only surface", () => {
-  it("exports exportOfficialLetterPdf", () => {
-    expect(PDF).toContain("export async function exportOfficialLetterPdf");
-  });
-
-  it("exports exportUmrahStatementPdf", () => {
-    expect(PDF).toContain("export async function exportUmrahStatementPdf");
-  });
-
-  it("exports exportUmrahDailyRunsheetPdf", () => {
-    expect(PDF).toContain("export async function exportUmrahDailyRunsheetPdf");
-  });
-
-  it("no longer exports the legacy single-entity generators (replaced by v2)", () => {
-    expect(PDF).not.toContain("export async function exportInvoicePdf");
-    expect(PDF).not.toContain("export async function exportPurchaseOrderPdf");
-    expect(PDF).not.toContain("export async function exportVoucherPdf");
-    expect(PDF).not.toContain("export async function exportPayrollSlipPdf");
-  });
-
-  it("no longer exports the legacy batch generators (replaced by v2)", () => {
-    expect(PDF).not.toContain("export async function exportTrialBalancePdf");
-    expect(PDF).not.toContain("export async function exportFleetTripsPdf");
+describe("pdfExport.ts removal", () => {
+  it("the legacy generator module no longer exists on disk", () => {
+    const fs = readFileSync;
+    const path = join(import.meta.dirname!, "../../../../artifacts/api-server/src/lib/pdfExport.ts");
+    let existed = false;
+    try {
+      fs(path);
+      existed = true;
+    } catch {
+      existed = false;
+    }
+    expect(existed).toBe(false);
   });
 });
 
-describe("pdfExport — internal helpers", () => {
-  it("has createDoc helper", () => {
-    expect(PDF).toContain("function createDoc");
-  });
-
-  it("has docToBuffer helper", () => {
-    expect(PDF).toContain("function docToBuffer");
-  });
-
-  it("has rtlText helper for Arabic", () => {
-    expect(PDF).toContain("function rtlText");
-  });
-
-  it("has drawHeader helper", () => {
-    expect(PDF).toContain("function drawHeader");
-  });
-
-  it("has drawTable helper", () => {
-    expect(PDF).toContain("function drawTable");
-  });
-});
-
-describe("pdfExport — security", () => {
-  it("uses parameterized queries", () => {
-    const params = [...PDF.matchAll(/\$\d/g)];
-    expect(params.length).toBeGreaterThan(3);
-  });
-
-  it("scopes by companyId", () => {
-    const matches = [...PDF.matchAll(/companyId/g)];
-    expect(matches.length).toBeGreaterThan(3);
-  });
+describe("Umrah bespoke presets — registered in templateResolver", () => {
+  for (const preset of ["official_letter", "umrah_statement", "umrah_runsheet"]) {
+    it(`has an in-memory preset for ${preset}`, () => {
+      expect(TEMPLATE_RESOLVER).toContain(`${preset}:`);
+    });
+  }
 });
 
 // ══════════════════════════════════════════════════════════════════════════
