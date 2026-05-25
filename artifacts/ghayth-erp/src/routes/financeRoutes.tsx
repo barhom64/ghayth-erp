@@ -105,6 +105,7 @@ const CustomerAdvances = lazy(() => import("@/pages/finance/customer-advances"))
 const CustomerAdvancesCreate = lazy(() => import("@/pages/create/finance/customer-advances-create"));
 const CustomerAdvancesApply = lazy(() => import("@/pages/create/finance/customer-advances-apply"));
 const Dunning = lazy(() => import("@/pages/finance/dunning"));
+const CollectionStages = lazy(() => import("@/pages/finance/collection-stages"));
 const BadDebt = lazy(() => import("@/pages/finance/bad-debt"));
 const AllocationRules = lazy(() => import("@/pages/finance/allocation-rules"));
 const OverridesReport = lazy(() => import("@/pages/finance/overrides-report"));
@@ -185,6 +186,7 @@ export const financeRoutes = [
   { path: "/finance/customer-advances/create", component: CustomerAdvancesCreate },
   { path: "/finance/customer-advances/:id/apply", component: CustomerAdvancesApply },
   { path: "/finance/dunning", component: Dunning },
+  { path: "/finance/collection", component: CollectionStages },
   { path: "/finance/bad-debt", component: BadDebt },
   { path: "/finance/allocation-rules", component: AllocationRules },
   { path: "/finance/allocation-rules/create", component: AllocationRuleCreate },
