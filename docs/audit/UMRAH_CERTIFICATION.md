@@ -1,6 +1,6 @@
 # Umrah Module Static Certification
 
-Generated: 2026-05-19
+Generated: 2026-05-25
 
 > **Read-only.** Regenerate with
 > `MODULE=umrah node audit/system-review/tooling/module-cert.mjs`.
@@ -29,8 +29,8 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 
 | File | Endpoints | RBAC | Scope | Audit | Events | Lifecycle | GL bridge |
 |---|---:|---|---|---|---|---|---|
-| `umrah-entities.ts` | 51 (27w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | 🟡 PARTIAL | ❌ FAIL | 🟡 PARTIAL |
-| `umrah.ts` | 49 (30w) | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL |
+| `umrah-entities.ts` | 51 (27w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
+| `umrah.ts` | 49 (30w) | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL |
 
 ## Module-level totals (files)
 
@@ -39,7 +39,7 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 | RBAC | 2 | 0 | 0 | 0 |
 | Scope | 0 | 2 | 0 | 0 |
 | Audit | 1 | 1 | 0 | 0 |
-| Events | 0 | 2 | 0 | 0 |
+| Events | 2 | 0 | 0 | 0 |
 | Lifecycle | 0 | 1 | 1 | 0 |
 | GL bridge | 0 | 2 | 0 | 0 |
 
@@ -60,7 +60,7 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 |---:|---|---|---|---|---|---|---|
 | 204 | `GET /sub-agents` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 | 221 | `POST /sub-agents` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 263 | `GET /sub-agents/unlinked` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 246 | `GET /sub-agents/unlinked` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 | 293 | `PATCH /sub-agents/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
 | 317 | `DELETE /sub-agents/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
 | 332 | `PUT /sub-agents/:id/link` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
@@ -72,38 +72,38 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 | 524 | `DELETE /pricing/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
 | 542 | `GET /groups` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 | 605 | `POST /groups` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 621 | `PATCH /groups/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 652 | `DELETE /groups/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 686 | `POST /groups/:id/split` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 772 | `POST /groups/merge` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 850 | `GET /nusk-invoices` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 930 | `POST /nusk-invoices` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 953 | `PATCH /nusk-invoices/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 987 | `DELETE /nusk-invoices/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1011 | `GET /employees/:employeeId/assignments` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1030 | `GET /commission-plans` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1074 | `POST /commission-plans` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1139 | `PATCH /commission-plans/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1198 | `POST /commission-plans/:id/simulate` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1211 | `POST /commission-plans/:id/calculate` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1224 | `GET /commission-calculations` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1249 | `GET /import/batches` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1264 | `GET /import/batches/:id/changes` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1285 | `GET /invoices` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1308 | `POST /invoices/generate` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1328 | `GET /sales-wizard/uninvoiced-groups` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1343 | `PATCH /invoices/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1376 | `GET /payments` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1396 | `POST /payments` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1442 | `GET /statements/:subAgentId/pdf` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1468 | `GET /letters/:id/pdf` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1493 | `POST /letters/:id/dispatch` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
-| 1583 | `GET /reports/daily-runsheet` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1592 | `GET /reports/daily-runsheet/pdf` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1649 | `GET /attachments` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1671 | `POST /attachments` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1707 | `DELETE /attachments/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 1740 | `GET /reports/reconciliation` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 621 | `PATCH /groups/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 653 | `DELETE /groups/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 688 | `POST /groups/:id/split` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 774 | `POST /groups/merge` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 852 | `GET /nusk-invoices` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 932 | `POST /nusk-invoices` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 955 | `PATCH /nusk-invoices/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 989 | `DELETE /nusk-invoices/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1013 | `GET /employees/:employeeId/assignments` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1032 | `GET /commission-plans` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1076 | `POST /commission-plans` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1141 | `PATCH /commission-plans/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1200 | `POST /commission-plans/:id/simulate` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1213 | `POST /commission-plans/:id/calculate` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1226 | `GET /commission-calculations` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1251 | `GET /import/batches` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1266 | `GET /import/batches/:id/changes` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1287 | `GET /invoices` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1310 | `POST /invoices/generate` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1330 | `GET /sales-wizard/uninvoiced-groups` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1345 | `PATCH /invoices/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1378 | `GET /payments` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1398 | `POST /payments` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1444 | `GET /statements/:subAgentId/pdf` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1470 | `GET /letters/:id/pdf` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1495 | `POST /letters/:id/dispatch` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
+| 1585 | `GET /reports/daily-runsheet` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1594 | `GET /reports/daily-runsheet/pdf` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1651 | `GET /attachments` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1673 | `POST /attachments` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1709 | `DELETE /attachments/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1743 | `GET /reports/reconciliation` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 
 ### `umrah.ts`
 
@@ -124,32 +124,32 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 | 646 | `POST /pilgrims` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
 | 730 | `PATCH /pilgrims/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
 | 823 | `DELETE /pilgrims/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 844 | `POST /import/preview` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 875 | `POST /import/mutamers` | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 887 | `POST /import/vouchers` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
-| 988 | `POST /import` | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 996 | `GET /dashboard` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1048 | `POST /run-daily-status` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
-| 1110 | `POST /run-penalty-engine` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
-| 1162 | `GET /penalties` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1198 | `PATCH /penalties/:id/waive` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
-| 1239 | `POST /penalties/waive-bulk` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
-| 1309 | `POST /agent-invoices/:id/record-payment` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
-| 1340 | `POST /agent-invoices/generate` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
-| 1429 | `GET /agent-invoices` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1474 | `GET /transport` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1511 | `DELETE /transport/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1527 | `POST /transport` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1579 | `PATCH /transport/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
-| 1641 | `POST /transport/:id/assign-pilgrims` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1672 | `GET /import-logs` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1680 | `GET /unassigned` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1692 | `POST /assign-bulk` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1711 | `GET /violations` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1752 | `POST /violations` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1767 | `PATCH /violations/:id` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 1790 | `DELETE /violations/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
-| 1809 | `POST /penalties` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 844 | `POST /import/preview` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 891 | `POST /import/mutamers` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 908 | `POST /import/vouchers` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
+| 1009 | `POST /import` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1024 | `GET /dashboard` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1076 | `POST /run-daily-status` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
+| 1138 | `POST /run-penalty-engine` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
+| 1208 | `GET /penalties` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1244 | `PATCH /penalties/:id/waive` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
+| 1285 | `POST /penalties/waive-bulk` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
+| 1355 | `POST /agent-invoices/:id/record-payment` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
+| 1386 | `POST /agent-invoices/generate` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
+| 1487 | `GET /agent-invoices` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1532 | `GET /transport` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1576 | `DELETE /transport/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1592 | `POST /transport` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1644 | `PATCH /transport/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL |
+| 1706 | `POST /transport/:id/assign-pilgrims` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1759 | `GET /import-logs` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1767 | `GET /unassigned` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1779 | `POST /assign-bulk` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1798 | `GET /violations` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1839 | `POST /violations` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1854 | `PATCH /violations/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1882 | `DELETE /violations/:id` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
+| 1901 | `POST /penalties` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | 🟡 PARTIAL |
 
 ## Reproducing this audit
 
