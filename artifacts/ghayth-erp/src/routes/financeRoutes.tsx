@@ -42,6 +42,7 @@ const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create
 const Budget = lazy(() => import("@/pages/finance/budget"));
 const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
+const BudgetVariance = lazy(() => import("@/pages/finance/budget-variance"));
 const Vendors = lazy(() => import("@/pages/finance/vendors"));
 const VendorsCreate = lazy(() => import("@/pages/create/finance/vendors-create"));
 const VendorsEdit = lazy(() => import("@/pages/create/finance/vendors-edit"));
@@ -164,6 +165,7 @@ export const financeRoutes = [
   { path: "/finance/budget", component: Budget },
   { path: "/finance/budget/create", component: BudgetCreate },
   { path: "/finance/budget/:id", component: BudgetDetail },
+  { path: "/finance/budget-variance", component: BudgetVariance },
   { path: "/finance/vendors", component: Vendors },
   { path: "/finance/vendors/create", component: VendorsCreate },
   { path: "/finance/vendors/:id/edit", component: VendorsEdit, subKey: "vendors" },
