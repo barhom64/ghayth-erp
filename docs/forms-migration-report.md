@@ -20,6 +20,7 @@
 | Pages using shared PromptDialog | **12** | ✅ `grep -lr PromptDialog artifacts/ghayth-erp/src/pages` |
 | Page-level `window.prompt()` callers | **0** | ✅ `grep -rn 'window\.prompt' artifacts/ghayth-erp/src/pages` |
 | Page-level `window.confirm()` / `confirm()` callers | **0** | ✅ `grep -rn 'window\.confirm\|\bconfirm(' artifacts/ghayth-erp/src/pages` |
+| Frontend API calls resolving to real backend routes | **728/728 (100%)** | ✅ `pnpm run audit:wiring` (`scripts/src/check-frontend-backend-wiring.mjs`) |
 | Legacy `useAutoDraft` / `useFieldErrors` callers | **0** | ✅ both hook files deleted from src/hooks/ |
 | Hard lint rule blocking regression | **active** | ✅ `manual-form-instead-of-formshell` in scripts/src/lint-patterns.mjs |
 | Lint-pattern test fixtures for the FormShell + native-dialog rules | **9** | ✅ scripts/src/lint-patterns.test.mjs (4 for `manual-form-instead-of-formshell`, 5 for `native-confirm-or-prompt`) |
