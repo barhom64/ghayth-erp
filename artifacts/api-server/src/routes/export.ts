@@ -1,25 +1,26 @@
+/**
+ * /export/* — every legacy batch endpoint now proxies to Print Engine v2.
+ *
+ * The bespoke generators that used to live alongside this router (one
+ * file per output format) have been deleted; their SQL now lives in
+ * lib/print/reportLoaders.ts and is consumed via the regular renderPrint()
+ * pipeline. That means each /export/excel/* and /export/pdf/* call now:
+ *   • picks the branch's cliché (logo / header / footer / tax number),
+ *   • writes a print_jobs row (visible in /reports/print-log),
+ *   • is gated by the same RBAC as v2 entities,
+ *   • produces the same artifact whether triggered from the UI or a cron.
+ *
+ * No legacy code path remains.
+ */
+
 import { Router } from "express";
+import type { Request, Response } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireModule } from "../middlewares/roleGuard.js";
-import { handleRouteError,
-  parseId,
-} from "../lib/errorHandler.js";
-import {
-  exportTrialBalanceExcel,
-  exportIncomeStatementExcel,
-  exportInvoicesExcel,
-  exportPayrollExcel,
-  exportAttendanceExcel,
-  exportFleetExcel,
-} from "../lib/excelExport.js";
-import {
-  exportTrialBalancePdf,
-  exportFleetTripsPdf,
-} from "../lib/pdfExport.js";
-
+import { handleRouteError, parseId } from "../lib/errorHandler.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { renderPrint } from "../lib/print/printService.js";
-import { withBatchAudit } from "../lib/print/batchAudit.js";
+import type { PrintFormat } from "../lib/print/types.js";
 
 export const exportRouter = Router();
 exportRouter.use(authMiddleware);
@@ -28,66 +29,49 @@ const financeGuard = requireModule("finance");
 const hrGuard = requireModule("hr");
 const fleetGuard = requireModule("fleet");
 
-const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const PDF = "application/pdf";
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-// ─── Excel batch reports ─────────────────────────────────────────────────────
-// Every batch export is wrapped in withBatchAudit() — each run writes a row
-// to print_jobs and shows up in /reports/print-log alongside v2 prints.
-// The report generators stay unchanged; this just adds the audit envelope.
+/** Build the synthetic entityId the report loaders parse:
+ *  range params → "YYYY-MM-DD..YYYY-MM-DD", monthly period → "YYYY-MM". */
+function synthEntityId(req: Request): string {
+  const q = req.query as Record<string, string | undefined>;
+  if (q.period) return q.period;
+  if (q.startDate || q.endDate) return `${q.startDate ?? ""}..${q.endDate ?? ""}`;
+  return "all";
+}
 
-exportRouter.get("/excel/trial-balance", financeGuard, authorize({ feature: "finance.reports", action: "export" }), (req, res) => {
-  const scope = req.scope!;
-  const { startDate, endDate } = req.query as Record<string, string | undefined>;
-  withBatchAudit(req, res, { entityType: "report_trial_balance", format: "excel", filename: "trial-balance.xlsx", mime: XLSX },
-    () => exportTrialBalanceExcel(scope.companyId, startDate, endDate),
-  ).catch((err) => handleRouteError(err, res, "Excel trial-balance error:"));
-});
+async function proxyReport(
+  req: Request,
+  res: Response,
+  entityType: string,
+  format: PrintFormat,
+  filename: string,
+) {
+  try {
+    const scope = req.scope!;
+    const result = await renderPrint(
+      {
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        userId: scope.userId,
+        role: scope.role,
+        isOwner: scope.isOwner,
+      },
+      { entityType, entityId: synthEntityId(req), format },
+      { ipAddress: req.ip, userAgent: req.get("user-agent") ?? undefined },
+    );
+    res.setHeader("Content-Type", result.mime);
+    res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+    if (result.jobId) res.setHeader("X-Print-Job-Id", result.jobId);
+    res.send(result.bytes);
+  } catch (err) {
+    handleRouteError(err, res, `[export] ${entityType} (${format}) failed:`);
+  }
+}
 
-exportRouter.get("/excel/income-statement", financeGuard, authorize({ feature: "finance.reports", action: "export" }), (req, res) => {
-  const scope = req.scope!;
-  const { startDate, endDate } = req.query as Record<string, string | undefined>;
-  withBatchAudit(req, res, { entityType: "report_income_statement", format: "excel", filename: "income-statement.xlsx", mime: XLSX },
-    () => exportIncomeStatementExcel(scope.companyId, startDate, endDate),
-  ).catch((err) => handleRouteError(err, res, "Excel income-statement error:"));
-});
-
-exportRouter.get("/excel/invoices", financeGuard, authorize({ feature: "finance.invoices", action: "export" }), (req, res) => {
-  const scope = req.scope!;
-  const { startDate, endDate } = req.query as Record<string, string | undefined>;
-  withBatchAudit(req, res, { entityType: "report_invoices", format: "excel", filename: "invoices.xlsx", mime: XLSX },
-    () => exportInvoicesExcel(scope.companyId, startDate, endDate),
-  ).catch((err) => handleRouteError(err, res, "Excel invoices error:"));
-});
-
-exportRouter.get("/excel/payroll", hrGuard, authorize({ feature: "hr.payroll", action: "export" }), (req, res) => {
-  const scope = req.scope!;
-  const { period } = req.query as Record<string, string | undefined>;
-  withBatchAudit(req, res, { entityType: "report_payroll", format: "excel", filename: "payroll.xlsx", mime: XLSX },
-    () => exportPayrollExcel(scope.companyId, period),
-  ).catch((err) => handleRouteError(err, res, "Excel payroll error:"));
-});
-
-exportRouter.get("/excel/attendance", hrGuard, authorize({ feature: "hr.attendance", action: "export" }), (req, res) => {
-  const scope = req.scope!;
-  const { startDate, endDate } = req.query as Record<string, string | undefined>;
-  withBatchAudit(req, res, { entityType: "report_attendance", format: "excel", filename: "attendance.xlsx", mime: XLSX },
-    () => exportAttendanceExcel(scope.companyId, startDate, endDate),
-  ).catch((err) => handleRouteError(err, res, "Excel attendance error:"));
-});
-
-exportRouter.get("/excel/fleet", fleetGuard, authorize({ feature: "fleet", action: "export" }), (req, res) => {
-  const scope = req.scope!;
-  withBatchAudit(req, res, { entityType: "report_fleet", format: "excel", filename: "fleet.xlsx", mime: XLSX },
-    () => exportFleetExcel(scope.companyId),
-  ).catch((err) => handleRouteError(err, res, "Excel fleet error:"));
-});
-
-// ─── Single-entity PDFs (proxied to Print Engine v2 in #1044) ────────────────
-
-async function proxyToPrintEngine(
-  req: import("express").Request,
-  res: import("express").Response,
+async function proxyEntity(
+  req: Request,
+  res: Response,
   entityType: string,
   filenamePrefix: string,
 ) {
@@ -113,40 +97,27 @@ async function proxyToPrintEngine(
     if (result.jobId) res.setHeader("X-Print-Job-Id", result.jobId);
     res.send(result.bytes);
   } catch (err) {
-    handleRouteError(err, res, `PDF ${entityType} (v2 proxy) error:`);
+    handleRouteError(err, res, `[export] ${entityType} pdf failed:`);
   }
 }
 
-exportRouter.get("/pdf/invoice/:id", financeGuard, authorize({ feature: "finance.invoices", action: "export" }), (req, res) =>
-  proxyToPrintEngine(req, res, "invoice", "invoice"),
-);
+// ─── Excel batch reports ─────────────────────────────────────────────────────
 
-exportRouter.get("/pdf/purchase-order/:id", financeGuard, authorize({ feature: "finance.purchase", action: "export" }), (req, res) =>
-  proxyToPrintEngine(req, res, "purchase_order", "purchase-order"),
-);
-
-exportRouter.get("/pdf/voucher/:id", financeGuard, authorize({ feature: "finance.reports", action: "export" }), (req, res) =>
-  proxyToPrintEngine(req, res, "payment_voucher", "voucher"),
-);
-
-exportRouter.get("/pdf/payroll/:id", hrGuard, authorize({ feature: "hr.payroll", action: "export" }), (req, res) =>
-  proxyToPrintEngine(req, res, "payroll", "payroll-slip"),
-);
+exportRouter.get("/excel/trial-balance",   financeGuard, authorize({ feature: "finance.reports",  action: "export" }), (req, res) => proxyReport(req, res, "report_trial_balance",   "excel", "trial-balance.xlsx"));
+exportRouter.get("/excel/income-statement", financeGuard, authorize({ feature: "finance.reports",  action: "export" }), (req, res) => proxyReport(req, res, "report_income_statement", "excel", "income-statement.xlsx"));
+exportRouter.get("/excel/invoices",         financeGuard, authorize({ feature: "finance.invoices", action: "export" }), (req, res) => proxyReport(req, res, "report_invoices",         "excel", "invoices.xlsx"));
+exportRouter.get("/excel/payroll",          hrGuard,      authorize({ feature: "hr.payroll",       action: "export" }), (req, res) => proxyReport(req, res, "report_payroll",          "excel", "payroll.xlsx"));
+exportRouter.get("/excel/attendance",       hrGuard,      authorize({ feature: "hr.attendance",    action: "export" }), (req, res) => proxyReport(req, res, "report_attendance",       "excel", "attendance.xlsx"));
+exportRouter.get("/excel/fleet",            fleetGuard,   authorize({ feature: "fleet",            action: "export" }), (req, res) => proxyReport(req, res, "report_fleet",            "excel", "fleet.xlsx"));
 
 // ─── Batch PDF reports ───────────────────────────────────────────────────────
 
-exportRouter.get("/pdf/trial-balance", financeGuard, authorize({ feature: "finance.reports", action: "export" }), (req, res) => {
-  const scope = req.scope!;
-  const { startDate, endDate } = req.query as Record<string, string | undefined>;
-  withBatchAudit(req, res, { entityType: "report_trial_balance", format: "pdf", filename: "trial-balance.pdf", mime: PDF },
-    () => exportTrialBalancePdf(scope.companyId, startDate, endDate),
-  ).catch((err) => handleRouteError(err, res, "PDF trial-balance error:"));
-});
+exportRouter.get("/pdf/trial-balance", financeGuard, authorize({ feature: "finance.reports", action: "export" }), (req, res) => proxyReport(req, res, "report_trial_balance", "a4", "trial-balance.pdf"));
+exportRouter.get("/pdf/fleet-trips",   fleetGuard,   authorize({ feature: "fleet",           action: "export" }), (req, res) => proxyReport(req, res, "report_fleet_trips",   "a4", "fleet-trips.pdf"));
 
-exportRouter.get("/pdf/fleet-trips", fleetGuard, authorize({ feature: "fleet", action: "export" }), (req, res) => {
-  const scope = req.scope!;
-  const { startDate, endDate } = req.query as Record<string, string | undefined>;
-  withBatchAudit(req, res, { entityType: "report_fleet_trips", format: "pdf", filename: "fleet-trips.pdf", mime: PDF },
-    () => exportFleetTripsPdf(scope.companyId, startDate, endDate),
-  ).catch((err) => handleRouteError(err, res, "PDF fleet-trips error:"));
-});
+// ─── Single-entity PDFs (proxied to Print Engine v2) ─────────────────────────
+
+exportRouter.get("/pdf/invoice/:id",        financeGuard, authorize({ feature: "finance.invoices", action: "export" }), (req, res) => proxyEntity(req, res, "invoice",         "invoice"));
+exportRouter.get("/pdf/purchase-order/:id", financeGuard, authorize({ feature: "finance.purchase", action: "export" }), (req, res) => proxyEntity(req, res, "purchase_order",  "purchase-order"));
+exportRouter.get("/pdf/voucher/:id",        financeGuard, authorize({ feature: "finance.reports",  action: "export" }), (req, res) => proxyEntity(req, res, "payment_voucher", "voucher"));
+exportRouter.get("/pdf/payroll/:id",        hrGuard,      authorize({ feature: "hr.payroll",       action: "export" }), (req, res) => proxyEntity(req, res, "payroll",         "payroll-slip"));
