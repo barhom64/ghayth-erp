@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
+import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -14,6 +14,12 @@ import {
   DataTable,
   type DataTableColumn,
   PageShell,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormTextareaField,
+  FormNumberField,
+  FormSelectField,
 } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
@@ -44,17 +50,18 @@ interface Violation {
   detectedAt: string;
 }
 
-interface ViolationForm {
-  type: ViolationType;
-  referenceType: string;
-  referenceNumber: string;
-  mutamerId: string;
-  agentId: string;
-  subAgentId: string;
-  penaltyAmount: string;
-  description: string;
-  status: ViolationStatus;
-}
+const violationFormSchema = z.object({
+  type: z.enum(["overstay", "absconded", "other"]),
+  referenceType: z.string(),
+  referenceNumber: z.string().optional(),
+  mutamerId: z.string().optional(),
+  agentId: z.string().optional(),
+  subAgentId: z.string().optional(),
+  penaltyAmount: z.string(),
+  description: z.string().optional(),
+  status: z.enum(["detected", "open", "invoiced", "paid", "disputed", "closed"]),
+});
+type ViolationForm = z.infer<typeof violationFormSchema>;
 
 const EMPTY_FORM: ViolationForm = {
   type: "overstay",
@@ -67,6 +74,27 @@ const EMPTY_FORM: ViolationForm = {
   description: "",
   status: "open",
 };
+
+const TYPE_OPTIONS = [
+  { value: "overstay", label: "تأخر مغادرة" },
+  { value: "absconded", label: "هروب" },
+  { value: "other", label: "أخرى" },
+];
+
+const STATUS_OPTIONS = [
+  { value: "detected", label: "مكتشفة" },
+  { value: "open", label: "مفتوحة" },
+  { value: "invoiced", label: "بفاتورة" },
+  { value: "disputed", label: "متنازع عليها" },
+  { value: "closed", label: "مغلقة" },
+];
+
+const REF_TYPE_OPTIONS = [
+  { value: "mutamer", label: "معتمر" },
+  { value: "group", label: "مجموعة" },
+  { value: "passport", label: "جواز سفر" },
+  { value: "border", label: "حدود" },
+];
 
 const TYPE_LABEL: Record<ViolationType, { label: string; cls: string; icon: React.ComponentType<{ className?: string }> }> = {
   overstay: { label: "تأخر مغادرة", cls: "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface", icon: Clock },
@@ -100,16 +128,19 @@ export default function UmrahViolations() {
   const [subAgentFilter, setSubAgentFilter] = useState("");
   const [seasonFilter, setSeasonFilter] = useState("");
 
-  const [editing, setEditing] = useState<(ViolationForm & { id?: number }) | null>(null);
+  // Editor state — `editingId` tracks open/closed + which row.
+  // `editingDefaults` carries the seed values for FormShell.
+  const [editingId, setEditingId] = useState<number | null | "new">(null);
+  const [editingDefaults, setEditingDefaults] = useState<ViolationForm>(EMPTY_FORM);
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const createMut = useApiMutation<any, any>(
     "/umrah/violations", "POST", [["umrah-violations"]],
-    { onSuccess: () => { violationsQ.refetch(); setEditing(null); toast({ title: "تم إنشاء المخالفة بنجاح" }); } }
+    { onSuccess: () => { violationsQ.refetch(); setEditingId(null); toast({ title: "تم إنشاء المخالفة بنجاح" }); } }
   );
   const updateMut = useApiMutation<any, any>(
-    () => `/umrah/violations/${editing?.id}`, "PATCH", [["umrah-violations"]],
-    { onSuccess: () => { violationsQ.refetch(); setEditing(null); toast({ title: "تم تحديث المخالفة" }); } }
+    () => `/umrah/violations/${editingId}`, "PATCH", [["umrah-violations"]],
+    { onSuccess: () => { violationsQ.refetch(); setEditingId(null); toast({ title: "تم تحديث المخالفة" }); } }
   );
   const deleteMut = useApiMutation<any, any>(
     () => `/umrah/violations/${deleteId}`, "DELETE", [["umrah-violations"]],
@@ -117,12 +148,12 @@ export default function UmrahViolations() {
   );
 
   function openCreate() {
-    setEditing({ ...EMPTY_FORM });
+    setEditingDefaults(EMPTY_FORM);
+    setEditingId("new");
   }
 
   function openEdit(v: Violation) {
-    setEditing({
-      id: v.id,
+    setEditingDefaults({
       type: v.type,
       referenceType: v.referenceType || "mutamer",
       referenceNumber: v.referenceNumber || "",
@@ -133,25 +164,25 @@ export default function UmrahViolations() {
       description: v.description || "",
       status: v.status,
     });
+    setEditingId(v.id);
   }
 
-  function handleSave() {
-    if (!editing) return;
+  async function handleSave(values: ViolationForm) {
     const payload = {
-      type: editing.type,
-      referenceType: editing.referenceType || null,
-      referenceNumber: editing.referenceNumber || null,
-      mutamerId: editing.mutamerId ? Number(editing.mutamerId) : null,
-      agentId: editing.agentId ? Number(editing.agentId) : null,
-      subAgentId: editing.subAgentId ? Number(editing.subAgentId) : null,
-      penaltyAmount: Number(editing.penaltyAmount) || 0,
-      description: editing.description || null,
-      status: editing.status,
+      type: values.type,
+      referenceType: values.referenceType || null,
+      referenceNumber: values.referenceNumber || null,
+      mutamerId: values.mutamerId ? Number(values.mutamerId) : null,
+      agentId: values.agentId ? Number(values.agentId) : null,
+      subAgentId: values.subAgentId ? Number(values.subAgentId) : null,
+      penaltyAmount: Number(values.penaltyAmount) || 0,
+      description: values.description || null,
+      status: values.status,
     };
-    if (editing.id) {
-      updateMut.mutate(payload);
+    if (typeof editingId === "number") {
+      await updateMut.mutateAsync(payload);
     } else {
-      createMut.mutate(payload);
+      await createMut.mutateAsync(payload);
     }
   }
 
@@ -397,110 +428,53 @@ export default function UmrahViolations() {
       </PageStateWrapper>
 
       {/* Create / Edit Dialog */}
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+      <Dialog open={editingId !== null} onOpenChange={(o) => !o && setEditingId(null)}>
         <DialogContent className="max-w-2xl" dir="rtl">
           <DialogHeader>
-            <DialogTitle>{editing?.id ? "تعديل مخالفة" : "مخالفة جديدة"}</DialogTitle>
+            <DialogTitle>{typeof editingId === "number" ? "تعديل مخالفة" : "مخالفة جديدة"}</DialogTitle>
           </DialogHeader>
-          {editing && (
-            <div className="grid gap-4 py-2">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs">نوع المخالفة *</Label>
-                  <Select value={editing.type} onValueChange={(v) => setEditing({ ...editing, type: v as ViolationType })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="overstay">تأخر مغادرة</SelectItem>
-                      <SelectItem value="absconded">هروب</SelectItem>
-                      <SelectItem value="other">أخرى</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">الحالة</Label>
-                  <Select value={editing.status} onValueChange={(v) => setEditing({ ...editing, status: v as ViolationStatus })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="detected">مكتشفة</SelectItem>
-                      <SelectItem value="open">مفتوحة</SelectItem>
-                      <SelectItem value="invoiced">بفاتورة</SelectItem>
-                      <SelectItem value="disputed">متنازع عليها</SelectItem>
-                      <SelectItem value="closed">مغلقة</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs">نوع المرجع</Label>
-                  <Select value={editing.referenceType} onValueChange={(v) => setEditing({ ...editing, referenceType: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="mutamer">معتمر</SelectItem>
-                      <SelectItem value="group">مجموعة</SelectItem>
-                      <SelectItem value="passport">جواز سفر</SelectItem>
-                      <SelectItem value="border">حدود</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">رقم المرجع</Label>
-                  <Input
-                    value={editing.referenceNumber}
-                    onChange={(e) => setEditing({ ...editing, referenceNumber: e.target.value })}
-                    placeholder="رقم المرجع"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs">الوكيل</Label>
-                  <Select value={editing.agentId || "none"} onValueChange={(v) => setEditing({ ...editing, agentId: v === "none" ? "" : v })}>
-                    <SelectTrigger><SelectValue placeholder="اختر الوكيل" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">بدون وكيل</SelectItem>
-                      {agents.map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">الوكيل الفرعي</Label>
-                  <Select value={editing.subAgentId || "none"} onValueChange={(v) => setEditing({ ...editing, subAgentId: v === "none" ? "" : v })}>
-                    <SelectTrigger><SelectValue placeholder="اختر الوكيل الفرعي" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">بدون وكيل فرعي</SelectItem>
-                      {subAgents.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs">مبلغ الغرامة (ريال)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={editing.penaltyAmount}
-                  onChange={(e) => setEditing({ ...editing, penaltyAmount: e.target.value })}
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">الوصف</Label>
-                <Textarea
-                  value={editing.description}
-                  onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-                  placeholder="تفاصيل المخالفة..."
-                  rows={3}
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>إلغاء</Button>
-            <GuardedButton perm="umrah:create" onClick={handleSave} disabled={isSaving || !editing?.type} rateLimitAware>
-              {isSaving ? "جاري الحفظ..." : editing?.id ? "حفظ التعديلات" : "إنشاء المخالفة"}
-            </GuardedButton>
-          </DialogFooter>
+          {/*
+            Key the FormShell by editingId so switching from "new" to a
+            specific row reseeds defaultValues even though the Dialog
+            stays mounted across opens.
+          */}
+          <FormShell
+            key={String(editingId ?? "closed")}
+            schema={violationFormSchema}
+            defaultValues={editingDefaults}
+            submitLabel={
+              isSaving
+                ? "جاري الحفظ..."
+                : typeof editingId === "number"
+                  ? "حفظ التعديلات"
+                  : "إنشاء المخالفة"
+            }
+            secondaryActions={
+              <Button type="button" variant="outline" onClick={() => setEditingId(null)}>إلغاء</Button>
+            }
+            onSubmit={handleSave}
+          >
+            <FormGrid cols={2}>
+              <FormSelectField name="type" label="نوع المخالفة" required options={TYPE_OPTIONS} />
+              <FormSelectField name="status" label="الحالة" options={STATUS_OPTIONS} />
+              <FormSelectField name="referenceType" label="نوع المرجع" options={REF_TYPE_OPTIONS} />
+              <FormTextField name="referenceNumber" label="رقم المرجع" placeholder="رقم المرجع" />
+              <FormSelectField
+                name="agentId"
+                label="الوكيل"
+                options={agents.map((a: any) => ({ value: String(a.id), label: a.name }))}
+                placeholder="بدون وكيل"
+              />
+              <FormSelectField
+                name="subAgentId"
+                label="الوكيل الفرعي"
+                options={subAgents.map((s: any) => ({ value: String(s.id), label: s.name }))}
+                placeholder="بدون وكيل فرعي"
+              />
+            </FormGrid>
+            <FormNumberField name="penaltyAmount" label="مبلغ الغرامة (ريال)" min="0" placeholder="0" />
+            <FormTextareaField name="description" label="الوصف" placeholder="تفاصيل المخالفة..." rows={3} />
+          </FormShell>
         </DialogContent>
       </Dialog>
 
