@@ -107,6 +107,7 @@ const AllocationResults = lazy(() => import("@/pages/finance/allocation-results"
 const AllocationRuleCreate = lazy(() => import("@/pages/create/finance/allocation-rule-create"));
 const ProductCatalog = lazy(() => import("@/pages/finance/product-catalog"));
 const FxRates = lazy(() => import("@/pages/finance/fx-rates"));
+const FxRevaluationHistory = lazy(() => import("@/pages/finance/fx-revaluation-history"));
 const SettingsHub = lazy(() => import("@/pages/finance/settings-hub"));
 
 export const financeRoutes = [
@@ -180,6 +181,7 @@ export const financeRoutes = [
   { path: "/finance/allocation-results", component: AllocationResults },
   { path: "/finance/product-catalog", component: ProductCatalog },
   { path: "/finance/fx-rates", component: FxRates },
+  { path: "/finance/fx-revaluation/history", component: FxRevaluationHistory },
   { path: "/finance/settings", component: SettingsHub },
   { path: "/finance/reports", component: FinancialReports },
   { path: "/finance/tax", component: TaxSystem },
