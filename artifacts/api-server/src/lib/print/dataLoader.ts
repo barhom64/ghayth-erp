@@ -25,13 +25,20 @@ async function loadByTable(table: string, id: string, companyId: number) {
     );
     if (rows[0]) return rows[0];
   } catch {
-    // table may not have companyId, retry without
+    // table may not have companyId — fall through to the bare query below.
   }
-  const rows = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM ${table} WHERE id = $1 LIMIT 1`,
-    [id]
-  );
-  return rows[0] ?? null;
+  try {
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM ${table} WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+    return rows[0] ?? null;
+  } catch {
+    // Table doesn't exist (migration missing) or id type mismatch — fall back
+    // to a synthetic stub so the print engine produces *something* instead of
+    // bubbling a 500 to the user.
+    return null;
+  }
 }
 
 export async function loadEntityData(args: LoaderArgs): Promise<Record<string, unknown>> {
