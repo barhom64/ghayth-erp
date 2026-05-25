@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
+import { useFormContext } from "react-hook-form";
+import { z } from "zod";
 import { Link, useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   DataTable,
   type DataTableColumn,
@@ -15,6 +14,11 @@ import {
   AdvancedFilters,
   useFilters,
   exportToCSV,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormNumberField,
+  FormSelectField,
 } from "@workspace/ui-core";
 // P4.9 — Warehouse sweep: shared header + status chips.
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
@@ -410,20 +414,45 @@ function SuppliersTab() {
 // dual-leg invariant. Dialog form: product picker, quantity, from
 // warehouse (string or id — backend accepts either), to warehouse,
 // notes.
+const transferSchema = z.object({
+  productId: z.string().min(1, "اختر منتجًا"),
+  quantity: z.string().refine((v) => Number(v) > 0, "الكمية مطلوبة"),
+  fromLocation: z.string().optional(),
+  toLocation: z.string().optional(),
+  notes: z.string().optional(),
+});
+type TransferForm = z.infer<typeof transferSchema>;
+
+const TRANSFER_EMPTY: TransferForm = {
+  productId: "",
+  quantity: "",
+  fromLocation: "",
+  toLocation: "",
+  notes: "",
+};
+
+function OverdrawWarning({ products }: { products: Array<{ id: number; name: string; currentStock?: number }> }) {
+  const { watch } = useFormContext<TransferForm>();
+  const productId = watch("productId");
+  const quantity = watch("quantity");
+  const selected = products.find((p) => String(p.id) === productId);
+  const overdraw = !!selected && Number(selected.currentStock ?? 0) < Number(quantity || 0);
+  if (!overdraw) return null;
+  return (
+    <p className="text-xs text-status-warning-foreground -mt-2">
+      ⚠ الكمية المطلوبة تتجاوز الرصيد الحالي ({selected?.currentStock})
+    </p>
+  );
+}
+
 function TransferDialog({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
-  const [productId, setProductId] = useState("");
-  const [quantity, setQuantity] = useState("");
-  const [fromLocation, setFromLocation] = useState("");
-  const [toLocation, setToLocation] = useState("");
-  const [notes, setNotes] = useState("");
 
   const { data: productsResp } = useApiQuery<any>(
     open ? ["warehouse-products-all"] : [""],
     open ? "/warehouse/products?limit=500" : "",
   );
   const products: Array<{ id: number; name: string; currentStock?: number }> = asList(productsResp);
-  const selectedProduct = products.find((p) => String(p.id) === productId);
 
   const transferMut = useApiMutation<unknown, { productId: number; quantity: number; fromLocation?: string; toLocation?: string; notes?: string }>(
     "/warehouse/transfers",
@@ -433,29 +462,15 @@ function TransferDialog({ onCreated }: { onCreated: () => void }) {
       successMessage: "تم تسجيل التحويل",
       onSuccess: () => {
         setOpen(false);
-        setProductId("");
-        setQuantity("");
-        setFromLocation("");
-        setToLocation("");
-        setNotes("");
         onCreated();
       },
     },
   );
 
-  const submit = () => {
-    const qty = Number(quantity);
-    if (!productId || !qty || qty <= 0) return;
-    transferMut.mutate({
-      productId: Number(productId),
-      quantity: qty,
-      fromLocation: fromLocation.trim() || undefined,
-      toLocation: toLocation.trim() || undefined,
-      notes: notes.trim() || undefined,
-    });
-  };
-
-  const overdraw = !!selectedProduct && Number(selectedProduct.currentStock ?? 0) < Number(quantity || 0);
+  const productOptions = products.map((p) => ({
+    value: String(p.id),
+    label: p.currentStock !== undefined ? `${p.name} (الرصيد: ${p.currentStock})` : p.name,
+  }));
 
   return (
     <>
@@ -471,55 +486,32 @@ function TransferDialog({ onCreated }: { onCreated: () => void }) {
               (`TRANSFER-…`).
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs">المنتج *</Label>
-              <Select value={productId} onValueChange={setProductId}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="اختر منتجًا" /></SelectTrigger>
-                <SelectContent>
-                  {products.map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>
-                      {p.name} {p.currentStock !== undefined && <span className="text-muted-foreground text-xs">(الرصيد: {p.currentStock})</span>}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs">الكمية *</Label>
-              <Input type="number" min={0} dir="ltr" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="mt-1" />
-              {overdraw && (
-                <p className="text-xs text-status-warning-foreground mt-1">
-                  ⚠ الكمية المطلوبة تتجاوز الرصيد الحالي ({selectedProduct?.currentStock})
-                </p>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">من موقع</Label>
-                <Input value={fromLocation} onChange={(e) => setFromLocation(e.target.value)} placeholder="المستودع المصدر" className="mt-1" />
-              </div>
-              <div>
-                <Label className="text-xs">إلى موقع</Label>
-                <Input value={toLocation} onChange={(e) => setToLocation(e.target.value)} placeholder="المستودع الهدف" className="mt-1" />
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs">ملاحظات</Label>
-              <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="اختياري" className="mt-1" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)}>إلغاء</Button>
-            <GuardedButton
-              perm="warehouse.transfers:create"
-              disabled={transferMut.isPending || !productId || !Number(quantity) || Number(quantity) <= 0}
-              onClick={submit}
-              rateLimitAware
-            >
-              {transferMut.isPending ? "جاري التحويل..." : "تأكيد التحويل"}
-            </GuardedButton>
-          </DialogFooter>
+          <FormShell
+            schema={transferSchema}
+            defaultValues={TRANSFER_EMPTY}
+            submitLabel={transferMut.isPending ? "جاري التحويل..." : "تأكيد التحويل"}
+            secondaryActions={
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>إلغاء</Button>
+            }
+            onSubmit={async (values) => {
+              await transferMut.mutateAsync({
+                productId: Number(values.productId),
+                quantity: Number(values.quantity),
+                fromLocation: values.fromLocation?.trim() || undefined,
+                toLocation: values.toLocation?.trim() || undefined,
+                notes: values.notes?.trim() || undefined,
+              });
+            }}
+          >
+            <FormSelectField name="productId" label="المنتج" options={productOptions} placeholder="اختر منتجًا" required />
+            <FormNumberField name="quantity" label="الكمية" min={0} required />
+            <OverdrawWarning products={products} />
+            <FormGrid cols={2}>
+              <FormTextField name="fromLocation" label="من موقع" placeholder="المستودع المصدر" />
+              <FormTextField name="toLocation" label="إلى موقع" placeholder="المستودع الهدف" />
+            </FormGrid>
+            <FormTextField name="notes" label="ملاحظات" placeholder="اختياري" />
+          </FormShell>
         </DialogContent>
       </Dialog>
     </>

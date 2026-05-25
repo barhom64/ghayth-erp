@@ -10,6 +10,7 @@
  */
 
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -23,16 +24,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Check, X, AlertTriangle, Repeat } from "lucide-react";
-import { PageHeader } from "@workspace/ui-core";
+import { PageHeader, FormShell, FormTextareaField } from "@workspace/ui-core";
 
 interface ReprintRequest {
   id: number;
@@ -50,12 +49,15 @@ interface ReprintRequest {
   createdAt: string;
 }
 
+const rejectSchema = z.object({
+  reason: z.string().min(1, "سبب الرفض مطلوب"),
+});
+
 export default function ReprintApprovalsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState("pending");
   const [rejecting, setRejecting] = useState<ReprintRequest | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const { data, isLoading } = useApiQuery<{ items: ReprintRequest[] }>(
@@ -79,18 +81,17 @@ export default function ReprintApprovalsPage() {
     }
   }
 
-  async function submitRejection() {
+  async function submitRejection(reason: string) {
     if (!rejecting) return;
     setBusyId(rejecting.id);
     try {
       await apiFetch(`/print/reprint-requests/${rejecting.id}/reject`, {
         method: "POST",
-        body: JSON.stringify({ reason: rejectReason }),
+        body: JSON.stringify({ reason }),
       });
       toast({ title: "تم الرفض" });
       qc.invalidateQueries({ queryKey: ["reprint-requests"] });
       setRejecting(null);
-      setRejectReason("");
     } catch (err: any) {
       toast({ title: "فشل الرفض", description: err.message, variant: "destructive" });
     } finally {
@@ -229,25 +230,26 @@ export default function ReprintApprovalsPage() {
           <DialogHeader>
             <DialogTitle>رفض طلب إعادة الطباعة</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label>سبب الرفض</Label>
-            <Textarea
+          <FormShell
+            schema={rejectSchema}
+            defaultValues={{ reason: "" }}
+            submitLabel={busyId !== null ? "جارٍ..." : "تأكيد الرفض"}
+            submitVariant="destructive"
+            secondaryActions={
+              <Button type="button" variant="outline" onClick={() => setRejecting(null)}>إلغاء</Button>
+            }
+            onSubmit={async (values) => {
+              await submitRejection(values.reason);
+            }}
+          >
+            <FormTextareaField
+              name="reason"
+              label="سبب الرفض"
               rows={4}
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
               placeholder="اشرح للموظف الطالب سبب الرفض ليتمكن من تصحيحه."
+              required
             />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRejecting(null)}>إلغاء</Button>
-            <Button
-              variant="destructive"
-              onClick={submitRejection}
-              disabled={!rejectReason || busyId !== null}
-            >
-              تأكيد الرفض
-            </Button>
-          </DialogFooter>
+          </FormShell>
         </DialogContent>
       </Dialog>
     </div>
