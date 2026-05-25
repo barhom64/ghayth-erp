@@ -188,15 +188,26 @@ export function PrintButton({
           /* ignore */
         }
       } else if (e.status === 403) {
+        // eslint-disable-next-line no-console
+        console.error("[PrintButton] forbidden", { msg: e.message, entityType, entityId });
         toast({
           title: "غير مصرح",
-          description: "لا تملك صلاحية طباعة هذه الوثيقة.",
+          description: e.message || "لا تملك صلاحية طباعة هذه الوثيقة.",
           variant: "destructive",
         });
       } else {
+        // Surface the actual server message + status so support tickets can
+        // pin down the real cause. Console.error too — anyone diagnosing
+        // "the print button doesn't work" can paste the browser-console line
+        // straight into a bug report.
+        const status = e.status ?? "?";
+        const code = e.code ?? "";
+        const msg = e.message || "حدث خطأ غير متوقع.";
+        // eslint-disable-next-line no-console
+        console.error("[PrintButton] render failed", { status, code, msg, entityType, entityId });
         toast({
-          title: "فشلت الطباعة",
-          description: e.message || "حدث خطأ غير متوقع.",
+          title: `فشلت الطباعة (${status}${code ? ` · ${code}` : ""})`,
+          description: msg,
           variant: "destructive",
         });
       }
