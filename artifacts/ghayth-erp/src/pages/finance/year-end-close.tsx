@@ -1,16 +1,23 @@
 import { useState } from "react";
+import { useFormContext } from "react-hook-form";
+import { z } from "zod";
 import { useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { EntityDetailPage, type EntityTab } from "@/components/shared/entity-detail-page";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/formatters";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import {
+  DataTable,
+  type DataTableColumn,
+  FormShell,
+  FormGrid,
+  FormNumberField,
+  FormTextField,
+  FormCheckboxField,
+} from "@workspace/ui-core";
 import { Archive, TrendingUp, TrendingDown, Calculator, CheckCircle } from "lucide-react";
 import {
   AlertDialog,
@@ -22,6 +29,30 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+const yearEndSchema = z.object({
+  year: z.string().min(1, "السنة المالية مطلوبة"),
+  retainedEarningsAccountCode: z.string().min(1, "الحساب مطلوب"),
+  force: z.boolean(),
+});
+type YearEndForm = z.infer<typeof yearEndSchema>;
+
+// Renders the "force=false + missingPeriods" hint that needs the live
+// checkbox value to know when to disappear.
+function ForceHint({ force }: { force: boolean }) {
+  if (force) return null;
+  return (
+    <p className="text-xs text-status-warning-foreground mt-2">
+      فعّل خيار "إقفال الفترات الشهرية المتبقية تلقائياً" للمتابعة
+    </p>
+  );
+}
+
+function ForceHintFromContext() {
+  const { watch } = useFormContext<YearEndForm>();
+  const force = watch("force");
+  return <ForceHint force={force} />;
+}
 
 interface YearEndPreview {
   dryRun?: boolean;
@@ -38,12 +69,34 @@ interface YearEndPreview {
   id?: number;
 }
 
+// Preview button lives inside FormShell so it can read getValues().
+// type="button" so it doesn't trigger the form's submit (which is wired
+// to the destructive close action).
+function PreviewButton({
+  pending,
+  onPreview,
+}: {
+  pending: boolean;
+  onPreview: (values: YearEndForm) => void;
+}) {
+  const { getValues } = useFormContext<YearEndForm>();
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      onClick={() => onPreview(getValues())}
+      disabled={pending}
+    >
+      <Calculator className="h-4 w-4 me-1" />
+      {pending ? "جاري الحساب..." : "معاينة"}
+    </Button>
+  );
+}
+
 export default function YearEndClosePage() {
   const { toast } = useToast();
   const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState<string>(String(currentYear));
-  const [retainedEarningsAccountCode, setRetainedEarningsAccountCode] = useState<string>("3300");
-  const [force, setForce] = useState(false);
+  const [activeYear, setActiveYear] = useState<string>(String(currentYear));
   const [preview, setPreview] = useState<YearEndPreview | null>(null);
   const [closed, setClosed] = useState(false);
   // Year-end close is the most destructive operation in the system —
@@ -51,9 +104,10 @@ export default function YearEndClosePage() {
   // Replaces a native confirm() with a proper AlertDialog so RTL +
   // dark mode + clear messaging all work.
   const [confirmingClose, setConfirmingClose] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<{ retainedEarningsAccountCode: string; force: boolean } | null>(null);
 
   const previewMut = useApiMutation<YearEndPreview, { retainedEarningsAccountCode: string; force: boolean }>(
-    () => `/finance/fiscal-periods/${year}/year-end-close?dryRun=true`,
+    () => `/finance/fiscal-periods/${activeYear}/year-end-close?dryRun=true`,
     "POST",
     undefined,
     {
@@ -65,17 +119,37 @@ export default function YearEndClosePage() {
   );
 
   const confirmMut = useApiMutation<YearEndPreview, { retainedEarningsAccountCode: string; force: boolean }>(
-    () => `/finance/fiscal-periods/${year}/year-end-close`,
+    () => `/finance/fiscal-periods/${activeYear}/year-end-close`,
     "POST",
     undefined,
     {
-      successMessage: `تم إقفال السنة ${year} بنجاح`,
+      successMessage: `تم إقفال السنة ${activeYear} بنجاح`,
       onSuccess: (data) => {
         setPreview(data);
         setClosed(true);
       },
     }
   );
+
+  const handlePreview = (values: YearEndForm) => {
+    setActiveYear(values.year);
+    previewMut.mutate({
+      retainedEarningsAccountCode: values.retainedEarningsAccountCode,
+      force: values.force,
+    });
+  };
+
+  const handleOpenConfirm = (values: YearEndForm) => {
+    if (!preview) {
+      toast({ variant: "destructive", title: "قم بالمعاينة أولاً" });
+      return;
+    }
+    setPendingPayload({
+      retainedEarningsAccountCode: values.retainedEarningsAccountCode,
+      force: values.force,
+    });
+    setConfirmingClose(true);
+  };
 
   const closingEntryColumns: DataTableColumn<YearEndPreview["lines"][number]>[] = [
     {
@@ -101,58 +175,25 @@ export default function YearEndClosePage() {
   ];
 
   const wizardTab = () => (
-    <div className="space-y-4">
+    <FormShell
+      schema={yearEndSchema}
+      defaultValues={{ year: String(currentYear), retainedEarningsAccountCode: "3300", force: false }}
+      submitLabel={confirmMut.isPending ? "جاري الإقفال..." : closed ? "تم الإقفال" : "تأكيد الإقفال"}
+      submitVariant="default"
+      disabled={!preview || confirmMut.isPending || closed}
+      secondaryActions={<PreviewButton pending={previewMut.isPending} onPreview={handlePreview} />}
+      className="space-y-4"
+      onSubmit={(values) => handleOpenConfirm(values)}
+    >
       <Card>
         <CardContent className="p-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>السنة المالية *</Label>
-              <Input
-                type="number"
-                className="mt-1"
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
-                min="2000"
-                max="2100"
-              />
-            </div>
-            <div>
-              <Label>حساب الأرباح المحتجزة *</Label>
-              <Input
-                className="mt-1"
-                value={retainedEarningsAccountCode}
-                onChange={(e) => setRetainedEarningsAccountCode(e.target.value)}
-                placeholder="3300"
-              />
-            </div>
+          <FormGrid cols={3}>
+            <FormNumberField name="year" label="السنة المالية" min={2000} max={2100} required />
+            <FormTextField name="retainedEarningsAccountCode" label="حساب الأرباح المحتجزة" placeholder="3300" required />
             <div className="flex items-end">
-              <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
-                <Checkbox checked={force} onCheckedChange={(v) => setForce(v === true)} />
-                إقفال الفترات الشهرية المتبقية تلقائياً
-              </label>
+              <FormCheckboxField name="force" label="إقفال الفترات الشهرية المتبقية تلقائياً" />
             </div>
-          </div>
-
-          <div className="flex gap-3 pt-4 border-t">
-            <Button variant="outline" onClick={() => previewMut.mutate({ retainedEarningsAccountCode, force })} disabled={previewMut.isPending}>
-              <Calculator className="h-4 w-4 me-1" />
-              {previewMut.isPending ? "جاري الحساب..." : "معاينة"}
-            </Button>
-            <GuardedButton
-              perm="finance:approve"
-              onClick={() => {
-                if (!preview) {
-                  toast({ variant: "destructive", title: "قم بالمعاينة أولاً" });
-                  return;
-                }
-                setConfirmingClose(true);
-              }}
-              disabled={!preview || confirmMut.isPending || closed}
-            >
-              <CheckCircle className="h-4 w-4 me-1" />
-              {confirmMut.isPending ? "جاري الإقفال..." : closed ? "تم الإقفال" : "تأكيد الإقفال"}
-            </GuardedButton>
-          </div>
+          </FormGrid>
         </CardContent>
       </Card>
 
@@ -169,11 +210,7 @@ export default function YearEndClosePage() {
                     <Badge key={p} className="bg-status-warning-surface text-status-warning-foreground">{p}</Badge>
                   ))}
                 </div>
-                {!force && (
-                  <p className="text-xs text-status-warning-foreground mt-2">
-                    فعّل خيار "إقفال الفترات الشهرية المتبقية تلقائياً" للمتابعة
-                  </p>
-                )}
+                <ForceHintFromContext />
               </CardContent>
             </Card>
           )}
@@ -240,7 +277,7 @@ export default function YearEndClosePage() {
           </Card>
         </>
       )}
-    </div>
+    </FormShell>
   );
 
   const tabs: EntityTab[] = [
@@ -255,7 +292,7 @@ export default function YearEndClosePage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد إقفال السنة المالية {year}</AlertDialogTitle>
+            <AlertDialogTitle>تأكيد إقفال السنة المالية {activeYear}</AlertDialogTitle>
             <AlertDialogDescription>
               سيتم نقل أرصدة الإيرادات والمصروفات إلى الأرباح المحتجزة وقفل السنة.
               <strong className="block mt-2">لا يمكن التراجع عن هذه العملية.</strong>
@@ -266,7 +303,7 @@ export default function YearEndClosePage() {
             <AlertDialogAction
               onClick={() => {
                 setConfirmingClose(false);
-                confirmMut.mutate({ retainedEarningsAccountCode, force });
+                if (pendingPayload) confirmMut.mutate(pendingPayload);
               }}
             >
               تأكيد الإقفال
