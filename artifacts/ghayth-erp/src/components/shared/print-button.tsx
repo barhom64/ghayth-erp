@@ -142,7 +142,15 @@ export function PrintButton({
         // the embedded auto-print script run in the same-origin context the
         // window inherited from this page — blob:// iframes were getting
         // blocked from calling window.print() in Chrome/Firefox.
-        const html = atob(resp.base64);
+        //
+        // BUG: `atob(base64)` returns a binary string where each char is a
+        // single byte (0-255). document.write() then interprets that string
+        // as Latin-1, which mangles every multi-byte UTF-8 char — the entire
+        // Arabic invoice rendered as `Ù‚Ø³Ø®Ø© Ù…ÙƒØ±Ø±Ø©` glyphs (see user
+        // report). Decode the bytes as UTF-8 explicitly via TextDecoder so
+        // Arabic / emoji / any non-ASCII content survives the round-trip.
+        const bytes = base64ToUint8Array(resp.base64);
+        const html = new TextDecoder("utf-8").decode(bytes);
         if (previewWindow) {
           previewWindow.document.open();
           previewWindow.document.write(html);
@@ -151,8 +159,11 @@ export function PrintButton({
         } else {
           // Popup blocker stopped us — fall back to a Blob link click so the
           // user can at least see the document. They'll need to print manually.
-          const bytes = base64ToUint8Array(resp.base64);
-          const blob = new Blob([bytes.buffer as ArrayBuffer], { type: resp.mime });
+          // Use the already-decoded bytes; explicit charset on the blob mime
+          // type so the browser doesn't guess wrong on the fallback path.
+          const blob = new Blob([bytes.buffer as ArrayBuffer], {
+            type: `${resp.mime.split(";")[0]};charset=utf-8`,
+          });
           const url = URL.createObjectURL(blob);
           window.location.href = url;
         }
