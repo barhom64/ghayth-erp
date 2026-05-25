@@ -139,6 +139,7 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "maintenance_request":
       return await loadMaintenanceRequest(companyId, entityId);
     case "payroll":
+      return await loadPayrollRun(companyId, entityId);
     case "payslip":
       return await loadPayslip(companyId, entityId);
     case "official_letter":
@@ -187,7 +188,11 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   job: "job_postings",
   // Finance
   project_costing: "project_costs",
-  account_statement: "gl_accounts",
+  // account_statement was already moved off gl_accounts in #1084 (its
+  // dedicated loader uses chart_of_accounts directly). This fallback entry
+  // points to the canonical name so any code path that hits the default
+  // branch still finds a real table.
+  account_statement: "chart_of_accounts",
   // Property / CRM
   tenant: "tenants",
   // Inventory / Store
@@ -376,8 +381,15 @@ async function loadMaintenanceRequest(companyId: number, id: string) {
 }
 
 async function loadPayslip(companyId: number, id: string) {
+  // entityType "payslip" → single payroll_lines row (one employee, one period).
+  // payroll_lines is keyed by id; the join to payroll_runs gives the period
+  // and the company scope (lines themselves don't carry companyId).
   const [ps] = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM payroll_slips WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    `SELECT pl.*, pr."period", pr."status" AS "runStatus", pr."companyId" AS "_runCompanyId"
+       FROM payroll_lines pl
+       JOIN payroll_runs pr ON pr.id = pl."runId"
+      WHERE pl.id = $1 AND pr."companyId" = $2 AND pl."deletedAt" IS NULL
+      LIMIT 1`,
     [id, companyId]
   ).catch(() => [null]);
   if (!ps) return { entity: { id } };
@@ -385,6 +397,28 @@ async function loadPayslip(companyId: number, id: string) {
     ? (await rawQuery(`SELECT id, name, "empNumber" FROM employees WHERE id = $1`, [ps.employeeId]))[0]
     : null;
   return { entity: ps, employee };
+}
+
+async function loadPayrollRun(companyId: number, id: string) {
+  // entityType "payroll" → the payroll_runs row + all its payroll_lines.
+  // The frontend opens /finance/payroll/:id where id is a payroll_runs.id.
+  // Before this loader existed, the old loadPayslip queried payroll_slips
+  // (a table that was never created) so every payroll print rendered as
+  // an empty stub.
+  const [run] = await rawQuery<Record<string, unknown>>(
+    `SELECT * FROM payroll_runs WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!run) return { entity: { id } };
+  const items = await rawQuery<Record<string, unknown>>(
+    `SELECT pl.*, e.name AS "employeeName", e."empNumber"
+       FROM payroll_lines pl
+       LEFT JOIN employees e ON e.id = pl."employeeId"
+      WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL
+      ORDER BY e."empNumber" NULLS LAST, pl.id`,
+    [id]
+  ).catch(() => []);
+  return { entity: run, items };
 }
 
 async function loadOfficialLetter(companyId: number, id: string) {
