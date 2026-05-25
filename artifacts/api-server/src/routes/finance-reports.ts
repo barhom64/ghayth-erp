@@ -2821,3 +2821,195 @@ reportsRouter.get(
     }
   },
 );
+// ─────────────────────────────────────────────────────────────────────────────
+// GL integrity gaps — period-close pre-flight check.
+//
+// Surfaces business entities whose canonical journal-entry linkage
+// is broken. The kinds of bugs we catch:
+//
+//   1. invoices.status = 'approved' but journalEntryId IS NULL
+//      → the FIN-007 invariant from the COGS campaign — every
+//        approved invoice MUST point at its JE for VAT-return
+//        and tax-summary queries to find the revenue.
+//   2. credit_memos / debit_memos with journalId IS NULL after
+//      atomic-post wiring (#1015) — should be impossible going
+//      forward, but legacy rows from before #1015 are flagged
+//      here for one-time backfill.
+//   3. payment_runs with journalId IS NULL after #1006 / #1010
+//      payment-run wiring.
+//   4. supplier_payment_allocations pointing at a journal_entry
+//      that's been hard-deleted (FK is soft).
+//
+// Operators run this before period close + before any month-end
+// VAT/WHT filing — anything in the report is a "must reconcile"
+// before close. Read-only.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/gl-integrity-gaps",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { startDate, endDate } =
+        req.query as Record<string, string | undefined>;
+
+      // Each section filters on its own date column so the operator
+      // can scope to a closing window. Defaults: no date filter →
+      // since-opening (necessary for the one-time legacy backfill).
+      interface GapRow {
+        section: string;
+        entityId: number;
+        ref: string | null;
+        gap: string;
+        amount: string | number | null;
+        createdAt: string | null;
+      }
+      const sections: { source: string; rows: GapRow[] }[] = [];
+
+      // ── 1. invoices approved without JE ──────────────────────────────
+      {
+        const params: unknown[] = [scope.companyId];
+        let extra = "";
+        if (startDate) { params.push(startDate); extra += ` AND i."createdAt" >= $${params.length}`; }
+        if (endDate)   { params.push(endDate);   extra += ` AND i."createdAt" < ($${params.length}::date + 1)`; }
+        const rows = await rawQuery<GapRow>(
+          `SELECT 'invoice'::text AS section,
+                  i.id            AS "entityId",
+                  i.ref,
+                  'invoice approved without journalEntryId'::text AS gap,
+                  i.total::float8  AS amount,
+                  i."createdAt"::text AS "createdAt"
+             FROM invoices i
+            WHERE i."companyId" = $1
+              AND i."deletedAt" IS NULL
+              AND i.status IN ('approved','sent','partial','partially_paid','paid','overdue')
+              AND i."journalEntryId" IS NULL
+              ${extra}
+            ORDER BY i."createdAt" DESC NULLS LAST, i.id DESC
+            LIMIT 500`,
+          params,
+        );
+        sections.push({ source: "invoices_missing_je", rows });
+      }
+
+      // ── 2. credit_memos with NULL journalId ──────────────────────────
+      {
+        const params: unknown[] = [scope.companyId];
+        let extra = "";
+        if (startDate) { params.push(startDate); extra += ` AND cm."createdAt" >= $${params.length}`; }
+        if (endDate)   { params.push(endDate);   extra += ` AND cm."createdAt" < ($${params.length}::date + 1)`; }
+        const rows = await rawQuery<GapRow>(
+          `SELECT 'credit_memo'::text AS section,
+                  cm.id               AS "entityId",
+                  NULL::text          AS ref,
+                  'credit memo without journalId'::text AS gap,
+                  cm.amount::float8   AS amount,
+                  cm."createdAt"::text AS "createdAt"
+             FROM credit_memos cm
+            WHERE cm."companyId" = $1
+              AND cm."journalId" IS NULL
+              ${extra}
+            ORDER BY cm."createdAt" DESC NULLS LAST, cm.id DESC
+            LIMIT 500`,
+          params,
+        );
+        sections.push({ source: "credit_memos_missing_je", rows });
+      }
+
+      // ── 3. debit_memos with NULL journalId ───────────────────────────
+      {
+        const params: unknown[] = [scope.companyId];
+        let extra = "";
+        if (startDate) { params.push(startDate); extra += ` AND dm."createdAt" >= $${params.length}`; }
+        if (endDate)   { params.push(endDate);   extra += ` AND dm."createdAt" < ($${params.length}::date + 1)`; }
+        const rows = await rawQuery<GapRow>(
+          `SELECT 'debit_memo'::text  AS section,
+                  dm.id               AS "entityId",
+                  NULL::text          AS ref,
+                  'debit memo without journalId'::text AS gap,
+                  dm.amount::float8   AS amount,
+                  dm."createdAt"::text AS "createdAt"
+             FROM debit_memos dm
+            WHERE dm."companyId" = $1
+              AND dm."journalId" IS NULL
+              ${extra}
+            ORDER BY dm."createdAt" DESC NULLS LAST, dm.id DESC
+            LIMIT 500`,
+          params,
+        );
+        sections.push({ source: "debit_memos_missing_je", rows });
+      }
+
+      // ── 4. payment_runs with NULL journalId (executed but unposted) ──
+      // Table is created lazily by the payment-run handler so we
+      // tolerate it being absent on tenants that never ran one.
+      try {
+        const params: unknown[] = [scope.companyId];
+        let extra = "";
+        if (startDate) { params.push(startDate); extra += ` AND pr."createdAt" >= $${params.length}`; }
+        if (endDate)   { params.push(endDate);   extra += ` AND pr."createdAt" < ($${params.length}::date + 1)`; }
+        const rows = await rawQuery<GapRow>(
+          `SELECT 'payment_run'::text AS section,
+                  pr.id               AS "entityId",
+                  pr.ref,
+                  'payment run executed without journalId'::text AS gap,
+                  pr."totalAmount"::float8 AS amount,
+                  pr."createdAt"::text AS "createdAt"
+             FROM payment_runs pr
+            WHERE pr."companyId" = $1
+              AND pr.status = 'executed'
+              AND pr."journalId" IS NULL
+              ${extra}
+            ORDER BY pr."createdAt" DESC NULLS LAST, pr.id DESC
+            LIMIT 500`,
+          params,
+        );
+        sections.push({ source: "payment_runs_missing_je", rows });
+      } catch (e: any) {
+        // 42P01 — table doesn't exist on this tenant. Emit an empty
+        // section so the response shape stays consistent.
+        if (e?.code !== "42P01") throw e;
+        sections.push({ source: "payment_runs_missing_je", rows: [] });
+      }
+
+      // ── 5. supplier_payment_allocations pointing at deleted JE ───────
+      {
+        const rows = await rawQuery<GapRow>(
+          `SELECT 'spa_orphan'::text  AS section,
+                  spa.id              AS "entityId",
+                  NULL::text          AS ref,
+                  ('allocation points at JE #' || spa."journalEntryId" || ' that no longer exists')::text AS gap,
+                  spa.amount::float8  AS amount,
+                  spa."createdAt"::text AS "createdAt"
+             FROM supplier_payment_allocations spa
+             LEFT JOIN journal_entries je
+               ON je.id = spa."journalEntryId"
+              AND je."deletedAt" IS NULL
+            WHERE spa."companyId" = $1
+              AND spa."deletedAt" IS NULL
+              AND spa."journalEntryId" IS NOT NULL
+              AND je.id IS NULL
+            ORDER BY spa."createdAt" DESC NULLS LAST, spa.id DESC
+            LIMIT 500`,
+          [scope.companyId],
+        );
+        sections.push({ source: "spa_orphans", rows });
+      }
+
+      const totalGaps = sections.reduce((s, x) => s + x.rows.length, 0);
+      const summary = {
+        totalGaps,
+        bySection: sections.map((s) => ({ source: s.source, count: s.rows.length })),
+        isClean: totalGaps === 0,
+      };
+
+      res.json(maskFields(req, {
+        filters: { startDate, endDate },
+        summary,
+        sections,
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "GL integrity gaps error:");
+    }
+  },
+);
