@@ -645,6 +645,7 @@ router.patch("/groups/:id", authorize({ feature: "umrah", action: "update" }), a
     const [row] = await rawQuery(`SELECT * FROM umrah_groups WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المجموعة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_groups", entityId: id }).catch((e) => logger.error(e, "umrah groups bg"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.group.updated", entity: "umrah_groups", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah groups bg"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update group"); }
 });
@@ -664,6 +665,7 @@ router.delete("/groups/:id", authorize({ feature: "umrah", action: "delete" }), 
       [id, scope.companyId, scope.userId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_groups", entityId: id }).catch((e) => logger.error(e, "umrah groups bg"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.group.deleted", entity: "umrah_groups", entityId: id, details: "{}" }).catch((e) => logger.error(e, "umrah groups bg"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete group"); }
 });
@@ -1718,6 +1720,7 @@ router.delete("/attachments/:id", authorize({ feature: "umrah", action: "delete"
       [id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_attachments", entityId: id }).catch((e) => logger.error(e, "umrah attachments bg"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.attachment.deleted", entity: "umrah_attachments", entityId: id, details: "{}" }).catch((e) => logger.error(e, "umrah attachments bg"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete attachment"); }
 });
