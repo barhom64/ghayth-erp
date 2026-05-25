@@ -286,8 +286,11 @@ async function loadPurchaseOrder(companyId: number, id: string) {
   ).catch(() => [null]);
   if (!po) return { entity: { id } };
   const items = await rawQuery(`SELECT * FROM purchase_order_lines WHERE "purchaseOrderId" = $1`, [id]).catch(() => []);
-  const vendor = po.vendorId
-    ? (await rawQuery(`SELECT id, name FROM suppliers WHERE id = $1`, [po.vendorId]))[0]
+  // The column on purchase_orders is "supplierId" (it was renamed from
+  // "vendorId" before #1084 but the loader never caught up). Reading
+  // `po.vendorId` returned undefined so the supplier name never loaded.
+  const vendor = po.supplierId
+    ? (await rawQuery(`SELECT id, name FROM suppliers WHERE id = $1`, [po.supplierId]))[0]
     : null;
   return { entity: po, items, vendor };
 }
