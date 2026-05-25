@@ -105,6 +105,19 @@ const RULES = [
       "removed in Phase 5c — only the `ValidationError` class is exported now.",
   },
   {
+    id: "manual-form-instead-of-formshell",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    regex: /\buseAutoDraft\b|\buseFieldErrors\b/,
+    message:
+      "The legacy `useAutoDraft` / `useFieldErrors` manual-form pattern was " +
+      "fully retired. Build the form on FormShell + zod from @workspace/ui-core: " +
+      "<FormShell schema={zod} defaultValues={...} onSubmit={...}>...</FormShell>. " +
+      "Validation runs through zodResolver; ApiError(VALIDATION_ERROR, field) " +
+      "auto-routes to the right field. The two helper hooks were deleted along " +
+      "with the last create-page migration.",
+  },
+  {
     id: "direct-gl-import-in-domain-route",
     scan: [ROUTES_DIR],
     skip: (file) => {
