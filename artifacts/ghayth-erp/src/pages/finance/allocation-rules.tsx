@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatNumber } from "@/lib/formatters";
 import { Plus, Workflow, AlertTriangle } from "lucide-react";
+import { Link } from "wouter";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 interface AllocationRule {
@@ -142,9 +143,11 @@ export default function AllocationRulesPage() {
         { label: "قواعد التوجيه" },
       ]}
       actions={
-        <GuardedButton perm="finance:create" disabled>
-          <Plus className="h-4 w-4 me-1" /> قاعدة جديدة (قريباً)
-        </GuardedButton>
+        <Link href="/finance/allocation-rules/create">
+          <GuardedButton perm="finance:create">
+            <Plus className="h-4 w-4 me-1" /> قاعدة جديدة
+          </GuardedButton>
+        </Link>
       }
     >
       <FinanceTabsNav />
