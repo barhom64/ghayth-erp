@@ -5372,7 +5372,10 @@ CREATE TABLE public.documents (
     "ocrError" text,
     "ocrLanguage" character varying(10),
     "ocrCompletedAt" timestamp with time zone,
-    "ocrEngine" character varying(40)
+    "ocrEngine" character varying(40),
+    "printJobId" uuid,
+    "linkedEntityType" character varying(60),
+    "linkedEntityId" character varying(64)
 );
 
 

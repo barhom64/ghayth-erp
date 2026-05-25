@@ -136,6 +136,23 @@ async function start() {
       logger.error({ err: cronErr }, "Failed to start cron scheduler");
     }
 
+    // Print Platform — Phase 9 (delivery channels) + Phase 11 (AI client).
+    // Both register their default implementations; channels whose creds
+    // aren't present advertise isAvailable=false and the sendDocument
+    // path falls through to CHANNEL_NOT_CONFIGURED.
+    try {
+      const { registerDefaultChannels } = await import("./lib/print/delivery.js");
+      await registerDefaultChannels();
+    } catch (err) {
+      logger.error({ err }, "[print/delivery] failed to register default channels");
+    }
+    try {
+      const { registerDefaultAiClient } = await import("./lib/print/ai.js");
+      await registerDefaultAiClient();
+    } catch (err) {
+      logger.error({ err }, "[print/ai] failed to register default AI client");
+    }
+
     startRuntimeTelemetry();
     logger.info("Runtime telemetry sampler started");
 
