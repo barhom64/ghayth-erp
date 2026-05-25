@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useFormContext, Controller } from "react-hook-form";
+import { z } from "zod";
 import { useLocation } from "wouter";
 import "@/styles/login.css";
 import { useAuth } from "@/lib/auth";
@@ -9,6 +11,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FormShell } from "@workspace/ui-core";
 import {
   Loader2, CloudRain, User, Lock, AlertCircle, Eye, EyeOff,
   KeyRound, ArrowRight, ShieldCheck, Layers, BarChart3,
@@ -43,22 +46,201 @@ const MONTH_NAMES = [
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+const loginSchema = z.object({
+  email: z.string().email("بريد إلكتروني غير صالح"),
+  password: z.string().min(1, "كلمة المرور مطلوبة"),
+});
+type LoginForm = z.infer<typeof loginSchema>;
+
+const forgotSchema = z.object({
+  email: z.string().email("الرجاء إدخال بريد إلكتروني صحيح"),
+});
+type ForgotForm = z.infer<typeof forgotSchema>;
+
+// Login form fields — emit a styled gradient button via hideSubmit so
+// the legacy visual stays intact while RHF owns the keystroke state.
+function LoginFields({
+  isCoolingDown,
+  cooldownLabel,
+}: {
+  isCoolingDown: boolean;
+  cooldownLabel: string;
+}) {
+  const { control, formState } = useFormContext<LoginForm>();
+  const [showPassword, setShowPassword] = useState(false);
+  return (
+    <>
+      <div className="space-y-1.5">
+        <Label htmlFor="email" className="text-status-neutral-foreground font-medium text-sm">البريد الإلكتروني</Label>
+        <div className="relative">
+          <User className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Controller
+            control={control}
+            name="email"
+            render={({ field }) => (
+              <Input
+                id="email"
+                type="email"
+                placeholder="example@company.com"
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                className="ps-10 h-11 border-border bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                autoComplete="email"
+                disabled={formState.isSubmitting}
+                dir="ltr"
+              />
+            )}
+          />
+        </div>
+        {formState.errors.email && (
+          <p className="text-xs text-status-error-foreground">{formState.errors.email.message}</p>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="password" className="text-status-neutral-foreground font-medium text-sm">كلمة المرور</Label>
+        <div className="relative">
+          <Lock className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Controller
+            control={control}
+            name="password"
+            render={({ field }) => (
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                className="ps-10 pe-10 h-11 border-border bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                autoComplete="current-password"
+                disabled={formState.isSubmitting}
+                dir="ltr"
+              />
+            )}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground transition-colors"
+            aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
+        {formState.errors.password && (
+          <p className="text-xs text-status-error-foreground">{formState.errors.password.message}</p>
+        )}
+      </div>
+
+      <button
+        type="submit"
+        disabled={formState.isSubmitting || isCoolingDown}
+        className="w-full h-11 rounded-lg text-white font-semibold text-sm shadow-md hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+        style={{ background: (formState.isSubmitting || isCoolingDown) ? "#64748b" : "linear-gradient(135deg,#1565c0,#0d47a1)" }}
+      >
+        {formState.isSubmitting ? (
+          <span className="flex items-center justify-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            جاري تسجيل الدخول...
+          </span>
+        ) : isCoolingDown ? (
+          <span className="flex items-center justify-center gap-2">
+            <Clock className="h-4 w-4" />
+            {cooldownLabel}
+          </span>
+        ) : (
+          "تسجيل الدخول"
+        )}
+      </button>
+    </>
+  );
+}
+
+function ForgotFields({
+  isCoolingDown,
+  cooldownLabel,
+  onBack,
+}: {
+  isCoolingDown: boolean;
+  cooldownLabel: string;
+  onBack: () => void;
+}) {
+  const { control, formState } = useFormContext<ForgotForm>();
+  return (
+    <>
+      <div className="space-y-1.5">
+        <Label htmlFor="forgot-email" className="text-status-neutral-foreground font-medium text-sm">البريد الإلكتروني</Label>
+        <div className="relative">
+          <Mail className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Controller
+            control={control}
+            name="email"
+            render={({ field }) => (
+              <Input
+                id="forgot-email"
+                type="email"
+                placeholder="example@company.com"
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                className="ps-10 h-11 border-border bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                autoComplete="email"
+                disabled={formState.isSubmitting}
+                dir="ltr"
+              />
+            )}
+          />
+        </div>
+        {formState.errors.email && (
+          <p className="text-xs text-status-error-foreground">{formState.errors.email.message}</p>
+        )}
+      </div>
+
+      <button
+        type="submit"
+        disabled={formState.isSubmitting || isCoolingDown}
+        className="w-full h-11 rounded-lg text-white font-semibold text-sm shadow-md hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+        style={{ background: (formState.isSubmitting || isCoolingDown) ? "#64748b" : "linear-gradient(135deg,#d97706,#b45309)" }}
+      >
+        {formState.isSubmitting ? (
+          <span className="flex items-center justify-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            جاري إرسال الطلب...
+          </span>
+        ) : isCoolingDown ? (
+          <span className="flex items-center justify-center gap-2">
+            <Clock className="h-4 w-4" />
+            {cooldownLabel}
+          </span>
+        ) : (
+          "إرسال طلب الاستعادة"
+        )}
+      </button>
+
+      <button
+        type="button"
+        onClick={onBack}
+        className="w-full h-11 rounded-lg border border-border bg-white text-status-neutral-foreground font-medium text-sm hover:bg-surface-subtle hover:border-border transition-all flex items-center justify-center gap-2 shadow-sm"
+      >
+        <ArrowRight className="h-4 w-4" />
+        العودة لتسجيل الدخول
+      </button>
+    </>
+  );
+}
+
 export default function Login() {
   const { login, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [currentView, setCurrentView] = useState<ViewType>("login");
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
 
   const cooldown = useRateLimitCooldown();
 
-  const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotLoading, setForgotLoading] = useState(false);
-  const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [forgotSuccessEmail, setForgotSuccessEmail] = useState<string | null>(null);
   const [forgotError, setForgotError] = useState("");
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -82,45 +264,26 @@ export default function Login() {
       .catch(() => {});
   }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (values: LoginForm) => {
     setLoginError("");
-
-    if (!email || !password) {
-      setLoginError("الرجاء إدخال البريد الإلكتروني وكلمة المرور");
-      return;
-    }
-
-    setIsLoading(true);
     try {
       const data = await apiFetch("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: values.email, password: values.password }),
       });
       login(data.assignments);
     } catch (err: any) {
       setLoginError(err.message || "بيانات الدخول غير صحيحة");
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleForgotPassword = async (values: ForgotForm) => {
     setForgotError("");
-    setForgotSuccess(false);
-
-    if (!forgotEmail || !forgotEmail.includes("@")) {
-      setForgotError("الرجاء إدخال بريد إلكتروني صحيح");
-      return;
-    }
-
-    setForgotLoading(true);
     try {
       const res = await fetch(`${BASE}/api/public/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: forgotEmail }),
+        body: JSON.stringify({ email: values.email }),
       });
       if (res.status === 429) {
         // Surface the live cooldown on the forgot-password button too.
@@ -129,11 +292,9 @@ export default function Login() {
       }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "حدث خطأ");
-      setForgotSuccess(true);
+      setForgotSuccessEmail(values.email);
     } catch (err: any) {
       setForgotError(err.message || "حدث خطأ أثناء إرسال الطلب");
-    } finally {
-      setForgotLoading(false);
     }
   };
 
@@ -302,7 +463,13 @@ export default function Login() {
                   <p className="text-muted-foreground text-sm mt-1">أدخل بياناتك للدخول إلى النظام</p>
                 </div>
 
-                <form onSubmit={handleLogin} className="space-y-5">
+                <FormShell
+                  schema={loginSchema}
+                  defaultValues={{ email: "", password: "" }}
+                  hideSubmit
+                  className="space-y-5"
+                  onSubmit={handleLogin}
+                >
                   {loginError && (
                     <Alert className="border-status-error-surface bg-status-error-surface text-right">
                       <AlertCircle className="h-4 w-4 text-status-error" />
@@ -310,81 +477,18 @@ export default function Login() {
                     </Alert>
                   )}
 
-                  <div className="space-y-1.5">
-                    <Label htmlFor="email" className="text-status-neutral-foreground font-medium text-sm">البريد الإلكتروني</Label>
-                    <div className="relative">
-                      <User className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="example@company.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="ps-10 h-11 border-border bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                        autoComplete="email"
-                        disabled={isLoading}
-                        dir="ltr"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="password" className="text-status-neutral-foreground font-medium text-sm">كلمة المرور</Label>
-                    <div className="relative">
-                      <Lock className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                      <Input
-                        id="password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="ps-10 pe-10 h-11 border-border bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                        autoComplete="current-password"
-                        disabled={isLoading}
-                        dir="ltr"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground transition-colors"
-                        aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
+                  <LoginFields isCoolingDown={cooldown.isCoolingDown} cooldownLabel={cooldown.label} />
 
                   <div className="flex justify-start">
                     <button
                       type="button"
-                      onClick={() => { setCurrentView("forgot"); setLoginError(""); setForgotSuccess(false); setForgotError(""); setForgotEmail(""); }}
+                      onClick={() => { setCurrentView("forgot"); setLoginError(""); setForgotSuccessEmail(null); setForgotError(""); }}
                       className="text-sm text-status-info-foreground hover:text-status-info-foreground hover:underline transition-colors"
                     >
                       نسيت كلمة المرور؟
                     </button>
                   </div>
-
-                  <button
-                    type="submit"
-                    disabled={isLoading || cooldown.isCoolingDown}
-                    className="w-full h-11 rounded-lg text-white font-semibold text-sm shadow-md hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                    style={{ background: (isLoading || cooldown.isCoolingDown) ? "#64748b" : "linear-gradient(135deg,#1565c0,#0d47a1)" }}
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        جاري تسجيل الدخول...
-                      </span>
-                    ) : cooldown.isCoolingDown ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <Clock className="h-4 w-4" />
-                        {cooldown.label}
-                      </span>
-                    ) : (
-                      "تسجيل الدخول"
-                    )}
-                  </button>
-                </form>
+                </FormShell>
               </>
             ) : (
               <>
@@ -396,18 +500,18 @@ export default function Login() {
                   <p className="text-muted-foreground text-sm mt-1">أدخل بريدك الإلكتروني وسنرسل طلب الاستعادة لمدير النظام</p>
                 </div>
 
-                {forgotSuccess ? (
+                {forgotSuccessEmail ? (
                   <div className="space-y-5">
                     <div className="p-6 bg-emerald-50 rounded-2xl border border-emerald-100 text-center space-y-3">
                       <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto" />
                       <h3 className="text-lg font-semibold text-emerald-800">تم إرسال الطلب بنجاح</h3>
                       <p className="text-sm text-emerald-700 leading-relaxed">
-                        تم تسجيل طلب استعادة كلمة المرور للبريد <strong dir="ltr">{forgotEmail}</strong>. سيقوم مدير النظام بمراجعة طلبك والتواصل معك.
+                        تم تسجيل طلب استعادة كلمة المرور للبريد <strong dir="ltr">{forgotSuccessEmail}</strong>. سيقوم مدير النظام بمراجعة طلبك والتواصل معك.
                       </p>
                     </div>
                     <button
                       type="button"
-                      onClick={() => { setCurrentView("login"); setForgotSuccess(false); setForgotEmail(""); }}
+                      onClick={() => { setCurrentView("login"); setForgotSuccessEmail(null); }}
                       className="w-full h-11 rounded-lg border border-border bg-white text-status-neutral-foreground font-medium text-sm hover:bg-surface-subtle hover:border-border transition-all flex items-center justify-center gap-2 shadow-sm"
                     >
                       <ArrowRight className="h-4 w-4" />
@@ -415,7 +519,13 @@ export default function Login() {
                     </button>
                   </div>
                 ) : (
-                  <form onSubmit={handleForgotPassword} className="space-y-5">
+                  <FormShell
+                    schema={forgotSchema}
+                    defaultValues={{ email: "" }}
+                    hideSubmit
+                    className="space-y-5"
+                    onSubmit={handleForgotPassword}
+                  >
                     {forgotError && (
                       <Alert className="border-status-error-surface bg-status-error-surface text-right">
                         <AlertCircle className="h-4 w-4 text-status-error" />
@@ -423,54 +533,12 @@ export default function Login() {
                       </Alert>
                     )}
 
-                    <div className="space-y-1.5">
-                      <Label htmlFor="forgot-email" className="text-status-neutral-foreground font-medium text-sm">البريد الإلكتروني</Label>
-                      <div className="relative">
-                        <Mail className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                        <Input
-                          id="forgot-email"
-                          type="email"
-                          placeholder="example@company.com"
-                          value={forgotEmail}
-                          onChange={(e) => setForgotEmail(e.target.value)}
-                          className="ps-10 h-11 border-border bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-                          autoComplete="email"
-                          disabled={forgotLoading}
-                          dir="ltr"
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={forgotLoading || cooldown.isCoolingDown}
-                      className="w-full h-11 rounded-lg text-white font-semibold text-sm shadow-md hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                      style={{ background: (forgotLoading || cooldown.isCoolingDown) ? "#64748b" : "linear-gradient(135deg,#d97706,#b45309)" }}
-                    >
-                      {forgotLoading ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          جاري إرسال الطلب...
-                        </span>
-                      ) : cooldown.isCoolingDown ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          {cooldown.label}
-                        </span>
-                      ) : (
-                        "إرسال طلب الاستعادة"
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => { setCurrentView("login"); setForgotError(""); setForgotEmail(""); }}
-                      className="w-full h-11 rounded-lg border border-border bg-white text-status-neutral-foreground font-medium text-sm hover:bg-surface-subtle hover:border-border transition-all flex items-center justify-center gap-2 shadow-sm"
-                    >
-                      <ArrowRight className="h-4 w-4" />
-                      العودة لتسجيل الدخول
-                    </button>
-                  </form>
+                    <ForgotFields
+                      isCoolingDown={cooldown.isCoolingDown}
+                      cooldownLabel={cooldown.label}
+                      onBack={() => { setCurrentView("login"); setForgotError(""); }}
+                    />
+                  </FormShell>
                 )}
               </>
             )}
