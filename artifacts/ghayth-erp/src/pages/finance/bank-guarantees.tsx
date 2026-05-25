@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
@@ -9,7 +9,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -23,9 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
 import {
@@ -41,8 +38,14 @@ import {
   type DataTableColumn,
   PageShell,
   PageStatusBadge,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormTextareaField,
+  FormNumberField,
+  FormSelectField,
+  FormDateField,
 } from "@workspace/ui-core";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { cn } from "@/lib/utils";
 
@@ -132,17 +135,18 @@ const ALERT_RENDER: Record<
   expiring_30:  { statusKey: "pending",   label: "ينتهي خلال 30 يوم" },
 };
 
-type FormState = {
-  ref: string;
-  bank: string;
-  beneficiary: string;
-  amount: string;
-  issueDate: string;
-  expiryDate: string;
-  guaranteeType: string;
-  notes: string;
-  status?: string;
-};
+const guaranteeFormSchema = z.object({
+  ref: z.string().min(1, "رقم الضمان مطلوب"),
+  bank: z.string().min(1, "البنك المُصدر مطلوب"),
+  beneficiary: z.string().min(1, "الجهة المستفيدة مطلوبة"),
+  amount: z.string().refine((v) => Number(v) > 0, "المبلغ يجب أن يكون أكبر من صفر"),
+  issueDate: z.string().min(1, "تاريخ الإصدار مطلوب"),
+  expiryDate: z.string().min(1, "تاريخ الانتهاء مطلوب"),
+  guaranteeType: z.string(),
+  notes: z.string().optional(),
+  status: z.string().optional(),
+});
+type FormState = z.infer<typeof guaranteeFormSchema>;
 
 const EMPTY_FORM: FormState = {
   ref: "",
@@ -154,6 +158,13 @@ const EMPTY_FORM: FormState = {
   guaranteeType: "performance",
   notes: "",
 };
+
+const EDIT_STATUS_OPTIONS = [
+  { value: "active", label: "نشط" },
+  { value: "released", label: "مُحرَّر" },
+  { value: "renewed", label: "مُجدَّد" },
+  { value: "cancelled", label: "ملغى" },
+];
 
 // Action-modal shape for cancel / release. Both endpoints need a
 // reason (cancel) or optional notes (release) — we reuse one
@@ -167,7 +178,7 @@ export default function BankGuaranteesPage() {
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<BankGuarantee | null>(null);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [formDefaults, setFormDefaults] = useState<FormState>(EMPTY_FORM);
   const [deleting, setDeleting] = useState<BankGuarantee | null>(null);
   const [actionModal, setActionModal] = useState<ActionModal | null>(null);
   const [actionReason, setActionReason] = useState("");
@@ -198,7 +209,7 @@ export default function BankGuaranteesPage() {
       onSuccess: () => {
         setShowForm(false);
         setEditing(null);
-        setForm(EMPTY_FORM);
+        setFormDefaults(EMPTY_FORM);
       },
     },
   );
@@ -212,7 +223,7 @@ export default function BankGuaranteesPage() {
       onSuccess: () => {
         setShowForm(false);
         setEditing(null);
-        setForm(EMPTY_FORM);
+        setFormDefaults(EMPTY_FORM);
       },
     },
   );
@@ -269,13 +280,13 @@ export default function BankGuaranteesPage() {
 
   const openNew = () => {
     setEditing(null);
-    setForm(EMPTY_FORM);
+    setFormDefaults(EMPTY_FORM);
     setShowForm(true);
   };
 
   const openEdit = (row: BankGuarantee) => {
     setEditing(row);
-    setForm({
+    setFormDefaults({
       ref: row.ref,
       bank: row.bank,
       beneficiary: row.beneficiary,
@@ -289,13 +300,12 @@ export default function BankGuaranteesPage() {
     setShowForm(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const payload = { ...form, amount: Number(form.amount) };
+  const handleFormSubmit = async (values: FormState) => {
+    const payload = { ...values, amount: Number(values.amount) };
     if (editing) {
-      updateMutation.mutate({ ...payload, _editId: editing.id });
+      await updateMutation.mutateAsync({ ...payload, _editId: editing.id });
     } else {
-      saveMutation.mutate(payload);
+      await saveMutation.mutateAsync(payload);
     }
   };
 
@@ -559,118 +569,44 @@ export default function BankGuaranteesPage() {
               {editing ? "تعديل الضمان البنكي" : "إضافة ضمان بنكي جديد"}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="ref">رقم الضمان *</Label>
-                <Input
-                  id="ref"
-                  required
-                  value={form.ref}
-                  onChange={(e) => setForm((f) => ({ ...f, ref: e.target.value }))}
-                  placeholder="BG-2026-001"
-                />
-              </div>
-              <div>
-                <Label htmlFor="bank">البنك المُصدر *</Label>
-                <Input
-                  id="bank"
-                  required
-                  value={form.bank}
-                  onChange={(e) => setForm((f) => ({ ...f, bank: e.target.value }))}
-                  placeholder="البنك الأهلي"
-                />
-              </div>
-              <div>
-                <Label htmlFor="beneficiary">الجهة المستفيدة *</Label>
-                <Input
-                  id="beneficiary"
-                  required
-                  value={form.beneficiary}
-                  onChange={(e) => setForm((f) => ({ ...f, beneficiary: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="amount">المبلغ *</Label>
-                <Input
-                  id="amount"
-                  required
-                  type="number"
-                  min="0"
-                  value={form.amount}
-                  onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="issueDate">تاريخ الإصدار *</Label>
-                <UnifiedDateInput
-                  id="issueDate"
-                  required
-                  value={form.issueDate}
-                  onChange={(iso) => setForm((f) => ({ ...f, issueDate: iso }))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="expiryDate">تاريخ الانتهاء *</Label>
-                <UnifiedDateInput
-                  id="expiryDate"
-                  required
-                  value={form.expiryDate}
-                  onChange={(iso) => setForm((f) => ({ ...f, expiryDate: iso }))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="guaranteeType">نوع الضمان</Label>
-                <Select value={form.guaranteeType} onValueChange={(v) => setForm((f) => ({ ...f, guaranteeType: v }))}>
-                  <SelectTrigger id="guaranteeType"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {GUARANTEE_TYPES.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {editing && (
-                <div>
-                  <Label htmlFor="status">الحالة</Label>
-                  <Select value={form.status ?? "active"} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
-                    <SelectTrigger id="status"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">نشط</SelectItem>
-                      <SelectItem value="released">مُحرَّر</SelectItem>
-                      <SelectItem value="renewed">مُجدَّد</SelectItem>
-                      <SelectItem value="cancelled">ملغى</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className="col-span-2">
-                <Label htmlFor="notes">ملاحظات</Label>
-                <Textarea
-                  id="notes"
-                  rows={2}
-                  value={form.notes}
-                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                />
-              </div>
-            </div>
-            <DialogFooter className="flex-row justify-start gap-2 pt-2">
-              <Button
-                type="submit"
-                disabled={saveMutation.isPending || updateMutation.isPending}
-                rateLimitAware
-              >
-                {saveMutation.isPending || updateMutation.isPending
-                  ? "جاري الحفظ..."
-                  : editing
-                    ? "حفظ التعديلات"
-                    : "إضافة الضمان"}
-              </Button>
+          {/*
+            FormShell remounts when defaultValues identity changes — we
+            key by the editing row id (or "new") so openEdit/openNew
+            reseed the form even though the Dialog stays mounted across
+            opens.
+          */}
+          <FormShell
+            key={editing?.id ?? "new"}
+            schema={guaranteeFormSchema}
+            defaultValues={formDefaults}
+            submitLabel={
+              saveMutation.isPending || updateMutation.isPending
+                ? "جاري الحفظ..."
+                : editing
+                  ? "حفظ التعديلات"
+                  : "إضافة الضمان"
+            }
+            secondaryActions={
               <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
                 إلغاء
               </Button>
-            </DialogFooter>
-          </form>
+            }
+            onSubmit={handleFormSubmit}
+          >
+            <FormGrid cols={2}>
+              <FormTextField name="ref" label="رقم الضمان" required placeholder="BG-2026-001" />
+              <FormTextField name="bank" label="البنك المُصدر" required placeholder="البنك الأهلي" />
+              <FormTextField name="beneficiary" label="الجهة المستفيدة" required />
+              <FormNumberField name="amount" label="المبلغ" required min="0" />
+              <FormDateField name="issueDate" label="تاريخ الإصدار" required />
+              <FormDateField name="expiryDate" label="تاريخ الانتهاء" required />
+              <FormSelectField name="guaranteeType" label="نوع الضمان" options={GUARANTEE_TYPES} />
+              {editing && (
+                <FormSelectField name="status" label="الحالة" options={EDIT_STATUS_OPTIONS} />
+              )}
+              <FormTextareaField name="notes" label="ملاحظات" rows={2} className="md:col-span-2" />
+            </FormGrid>
+          </FormShell>
         </DialogContent>
       </Dialog>
 
