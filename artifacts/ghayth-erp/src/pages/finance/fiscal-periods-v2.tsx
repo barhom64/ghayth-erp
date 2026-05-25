@@ -28,16 +28,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { useDirtyGuard } from "@/hooks/use-dirty-guard";
 import { useApiQuery, useApiMutation, ApiError } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
@@ -255,60 +246,9 @@ function DirtyTracker({ onChange }: { onChange: (dirty: boolean) => void }) {
   return null;
 }
 
-/**
- * Hook + JSX pair that adds an RTL-friendly "discard changes?" guard to
- * any Dialog with a dirty form. Returns:
- *
- *   guardedClose(next)  — drop-in replacement for onOpenChange. When the
- *                         dialog is being closed with isDirty=true it
- *                         opens an AlertDialog instead of calling
- *                         onOpenChange straight through.
- *   discardDialog       — render once next to the parent Dialog. The
- *                         AlertDialog manages its own open state.
- *
- * Replaces the old `makeDirtyGuardedClose` helper that used
- * window.confirm() — that worked but didn't match RTL or dark mode.
- */
-function useDirtyGuard(
-  isDirty: boolean,
-  onClose: (open: boolean) => void,
-): {
-  guardedClose: (open: boolean) => void;
-  discardDialog: React.ReactNode;
-} {
-  const [showDiscard, setShowDiscard] = useState(false);
-  const guardedClose = (next: boolean) => {
-    if (!next && isDirty) {
-      setShowDiscard(true);
-      return;
-    }
-    onClose(next);
-  };
-  const discardDialog = (
-    <AlertDialog open={showDiscard} onOpenChange={setShowDiscard}>
-      <AlertDialogContent dir="rtl">
-        <AlertDialogHeader className="text-right">
-          <AlertDialogTitle>تغييرات لم تُحفظ</AlertDialogTitle>
-          <AlertDialogDescription>
-            هل تريد المغادرة وتجاهل التعديلات؟
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter className="flex-row justify-start gap-2">
-          <AlertDialogAction
-            onClick={() => {
-              setShowDiscard(false);
-              onClose(false);
-            }}
-          >
-            تجاهل التغييرات
-          </AlertDialogAction>
-          <AlertDialogCancel>إلغاء</AlertDialogCancel>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-  return { guardedClose, discardDialog };
-}
+// useDirtyGuard moved to src/hooks/use-dirty-guard.tsx so other pages
+// with Dialog + FormShell can adopt the same RTL-friendly discard
+// confirmation pattern.
 
 // ─── Create dialog ────────────────────────────────────────────────────
 
