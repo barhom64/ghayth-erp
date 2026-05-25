@@ -30,6 +30,7 @@ const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
 const VouchersCreate = lazy(() => import("@/pages/create/finance/vouchers-create"));
 const VoucherDetail = lazy(() => import("@/pages/details/voucher-detail"));
 const Journal = lazy(() => import("@/pages/finance/journal"));
+const JournalDetail = lazy(() => import("@/pages/finance/journal-detail"));
 const JournalCreate = lazy(() => import("@/pages/create/finance/journal-create"));
 const Invoices = lazy(() => import("@/pages/finance/invoices"));
 const InvoicesCreate = lazy(() => import("@/pages/create/finance/invoices-create"));
@@ -109,6 +110,7 @@ const AllocationRuleCreate = lazy(() => import("@/pages/create/finance/allocatio
 const AllocationRuleEdit = lazy(() => import("@/pages/create/finance/allocation-rule-edit"));
 const ProductCatalog = lazy(() => import("@/pages/finance/product-catalog"));
 const FxRates = lazy(() => import("@/pages/finance/fx-rates"));
+const FxRevaluationHistory = lazy(() => import("@/pages/finance/fx-revaluation-history"));
 const SettingsHub = lazy(() => import("@/pages/finance/settings-hub"));
 const FxRevaluation = lazy(() => import("@/pages/finance/fx-revaluation"));
 
@@ -150,6 +152,7 @@ export const financeRoutes = [
   { path: "/finance/vouchers/:id", component: VoucherDetail },
   { path: "/finance/journal", component: Journal },
   { path: "/finance/journal/create", component: JournalCreate },
+  { path: "/finance/journal/:id", component: JournalDetail },
   { path: "/finance/invoices", component: Invoices },
   { path: "/finance/invoices/create", component: InvoicesCreate },
   { path: "/finance/invoices/:id", component: InvoiceDetail },
@@ -185,6 +188,7 @@ export const financeRoutes = [
   { path: "/finance/allocation-results", component: AllocationResults },
   { path: "/finance/product-catalog", component: ProductCatalog },
   { path: "/finance/fx-rates", component: FxRates },
+  { path: "/finance/fx-revaluation/history", component: FxRevaluationHistory },
   { path: "/finance/settings", component: SettingsHub },
   { path: "/finance/fx-revaluation", component: FxRevaluation },
   { path: "/finance/reports", component: FinancialReports },

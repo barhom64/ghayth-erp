@@ -288,8 +288,7 @@ export function renderContextToHtml(ctx: RenderContext): string {
     crNumber: (headerOv.crNumber as string) || ctx.branch.crNumber,
     footerText: (footerOv.text as string) || ctx.branch.footerText,
   };
-  return substitute({
-    template: baseTemplate,
+  const subOpts = {
     data: ctx.data,
     branch: mergedBranch,
     isThermal: ctx.template.isThermal || ctx.format.startsWith("thermal"),
@@ -297,5 +296,51 @@ export function renderContextToHtml(ctx: RenderContext): string {
     verifyUrl: ctx.verifyUrl ?? null,
     verifyQrDataUrl: ctx.verifyQrDataUrl ?? null,
     jobId: ctx.jobId ?? null,
-  });
+  };
+  let rendered = substitute({ template: baseTemplate, ...subOpts });
+
+  // POST-SUBSTITUTION EMPTY-BODY GUARD: a template can be syntactically
+  // non-empty but render to nothing visible — every {{token}} resolves to
+  // an empty string because the data shape doesn't match the template's
+  // expectations, or because branchContext returned empty letterhead, or
+  // because a hand-saved template has bogus structure. The result is a
+  // page with only the watermark overlay (which is layered on top via the
+  // adapter wrapper, not from `rendered`) — users see a blank page and
+  // file "ما يطبع شي" tickets.
+  //
+  // Strip the rendered HTML down to what the user actually sees (no
+  // <style>, no <script>, no comments, no whitespace) and if the
+  // remaining text + meaningful tag count is suspiciously low, fall back
+  // to the universal preset. This is belt-and-suspenders on top of the
+  // pre-substitution empty-template guard above — that one caught
+  // `htmlContent=""`, this one catches `htmlContent="<div></div>"` and
+  // every other "syntactically present but visually empty" case.
+  const visibleLen = rendered
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, " ")
+    .trim().length;
+  if (visibleLen < 50) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[print/render] post-substitution body almost empty (visibleLen=${visibleLen}) — falling back to universal preset for ${ctx.entityType}/${ctx.entityId}`,
+    );
+    const universalTemplate = `<div class="print-doc">
+{{branch.letterhead}}
+<h2 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">${escapeHtml(ctx.entityType)} — ${escapeHtml(String(ctx.entityId))}</h2>
+<div class="meta-grid">
+  <div><strong>المرجع:</strong> {{entity.ref}}</div>
+  <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>المعرّف:</strong> {{entity.id}}</div>
+</div>
+{{entity.itemsTable}}
+{{system.verifyBlock}}
+{{branch.footer}}
+</div>`;
+    rendered = substitute({ template: universalTemplate, ...subOpts });
+  }
+  return rendered;
 }
