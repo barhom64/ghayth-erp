@@ -42,7 +42,7 @@ function wrapHtml(body: string, ctx: RenderContext): string {
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8"/>
-  <title>${ctx.entityType}-${ctx.entityId}</title>
+  <title>${`${ctx.entityType}-${ctx.entityId}`.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]!))}</title>
   <style>${css}${overrides}</style>
 </head>
 <body>
