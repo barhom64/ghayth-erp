@@ -20,6 +20,31 @@ import { ClientContextCard } from "@/components/shared/client-context-card";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { AccountSelect, BranchSelect, DepartmentSelect, CostCenterSelect, EmployeeSelect, ClientSelect, SupplierSelect } from "@/components/shared/entity-selects";
+import { Switch } from "@/components/ui/switch";
+
+interface TaxCodeOption {
+  id: number;
+  code: string;
+  name: string;
+  rate: number | string;
+  taxType: "standard" | "zero" | "exempt" | "out_of_scope" | "reverse_charge";
+  isInclusiveDefault: boolean;
+  isActive: boolean;
+}
+
+function roundMoney(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function voucherTaxSplit(amount: number, rate: number, inclusive: boolean) {
+  if (!amount || !rate) return { net: amount || 0, vat: 0, gross: amount || 0 };
+  if (inclusive) {
+    const net = roundMoney(amount / (1 + rate / 100));
+    return { net, vat: roundMoney(amount - net), gross: amount };
+  }
+  const vat = roundMoney(amount * (rate / 100));
+  return { net: amount, vat, gross: roundMoney(amount + vat) };
+}
 
 const OPERATION_TYPES_RECEIPT = [
   { value: "receipt", label: "قبض إيراد عام" },
@@ -77,6 +102,11 @@ export default function VouchersCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation("/finance/vouchers", "POST", [["vouchers"], ["vouchers-list"]]);
+  const { data: taxCodesData } = useApiQuery<{ data: TaxCodeOption[] }>(
+    ["tax-codes", "active"],
+    "/finance/accounts/tax-codes?active=true",
+  );
+  const activeTaxCodes = (taxCodesData?.data ?? []).filter((t) => t.isActive !== false);
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const { data: suppliersData } = useApiQuery<{ data: any[] }>(["suppliers-list"], "/warehouse/suppliers");
   const { data: clientsData } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
@@ -98,6 +128,8 @@ export default function VouchersCreate() {
     contractId: "",
     invoiceId: "",
     vatRate: "",
+    taxCodeId: "",
+    taxInclusive: false,
     attachmentUrl: "",
     attachmentType: "receipt",
     branchId: "",
@@ -135,14 +167,34 @@ export default function VouchersCreate() {
   }, [form.autoDescription, form.operationType, form.payee, form.relatedEntityName, form.amount, form.type]);
 
 
-  const vatAmount = form.vatRate ? Math.round(Number(form.amount) * (Number(form.vatRate) / 100) * 100) / 100 : 0;
-  const totalWithVat = Number(form.amount) + vatAmount;
+  const selectedTaxCode = form.taxCodeId
+    ? activeTaxCodes.find((t) => String(t.id) === String(form.taxCodeId))
+    : null;
+  const effectiveRate = selectedTaxCode ? Number(selectedTaxCode.rate) : Number(form.vatRate) || 0;
+  const taxSplit = voucherTaxSplit(Number(form.amount) || 0, effectiveRate, form.taxInclusive);
+  const vatAmount = taxSplit.vat;
+  const totalWithVat = taxSplit.gross;
 
   const requiresAttachment = (form.type === "payment" && Number(form.amount) >= HIGH_VALUE_THRESHOLD)
     || ["vendor_invoice", "legal_fee", "purchase", "custody"].includes(form.operationType);
 
   const setField = (field: string, val: any) => {
     setForm(prev => ({ ...prev, [field]: val }));
+  };
+
+  const handleTaxCodeChange = (val: string) => {
+    if (val === "_none") {
+      setForm(prev => ({ ...prev, taxCodeId: "", vatRate: "" }));
+      return;
+    }
+    const tc = activeTaxCodes.find((t) => String(t.id) === val);
+    if (!tc) return;
+    setForm(prev => ({
+      ...prev,
+      taxCodeId: val,
+      vatRate: String(Number(tc.rate) || 0),
+      taxInclusive: tc.isInclusiveDefault ?? prev.taxInclusive,
+    }));
   };
 
   const handleSubmit = async () => {
@@ -176,6 +228,8 @@ export default function VouchersCreate() {
         contractId: form.contractId ? Number(form.contractId) : undefined,
         invoiceId: form.invoiceId ? Number(form.invoiceId) : undefined,
         vatRate: form.vatRate ? Number(form.vatRate) : undefined,
+        taxCodeId: form.taxCodeId ? Number(form.taxCodeId) : undefined,
+        taxInclusive: form.taxCodeId ? form.taxInclusive : undefined,
         attachmentUrl: form.attachmentUrl || undefined,
         attachmentType: form.attachmentType || undefined,
         branchId: form.branchId ? Number(form.branchId) : undefined,
@@ -244,27 +298,54 @@ export default function VouchersCreate() {
       </div>
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">
-        <h3 className="font-semibold text-sm text-muted-foreground">المبالغ</h3>
+        <h3 className="font-semibold text-sm text-muted-foreground">المبالغ والضريبة</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <NumberField label="المبلغ (ريال)" required value={form.amount} onChange={(v) => setField("amount", v)} placeholder="0.00" step={0.01} min={0} error={fieldErrors.amount} />
-          <FormFieldWrapper label="ضريبة القيمة المضافة (%)">
-            <Select value={form.vatRate || "_none"} onValueChange={(v) => setField("vatRate", v === "_none" ? "" : v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+          <FormFieldWrapper label="رمز الضريبة">
+            <Select value={form.taxCodeId || "_none"} onValueChange={handleTaxCodeChange}>
+              <SelectTrigger><SelectValue placeholder="— بدون ضريبة —" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="_none">بدون ضريبة</SelectItem>
-                <SelectItem value="5">5%</SelectItem>
-                <SelectItem value="15">15%</SelectItem>
+                <SelectItem value="_none">— بدون ضريبة —</SelectItem>
+                {activeTaxCodes.map((t) => (
+                  <SelectItem key={t.id} value={String(t.id)}>
+                    {t.code} — {t.name} ({Number(t.rate)}%)
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </FormFieldWrapper>
-          <FormFieldWrapper label="الإجمالي">
-            <div className="p-2 bg-muted rounded-md text-sm font-medium">
-              {vatAmount > 0
-                ? `${formatCurrency(totalWithVat)} (ضريبة: ${formatCurrency(vatAmount)})`
-                : formatCurrency(Number(form.amount || 0))}
+          <FormFieldWrapper label="نمط المبلغ">
+            <div className="flex items-center gap-2 h-10">
+              <Switch
+                id="taxInclusive"
+                checked={form.taxInclusive}
+                onCheckedChange={(v) => setField("taxInclusive", v)}
+                disabled={!form.taxCodeId || effectiveRate === 0}
+              />
+              <Label htmlFor="taxInclusive" className="text-sm">
+                {form.taxInclusive ? "شامل الضريبة" : "غير شامل الضريبة"}
+              </Label>
             </div>
           </FormFieldWrapper>
         </div>
+        {effectiveRate > 0 && Number(form.amount) > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <span className="px-2 py-1 rounded bg-muted">
+              صافي: <span className="font-mono">{formatCurrency(taxSplit.net)}</span>
+            </span>
+            <span className="px-2 py-1 rounded bg-status-info-surface text-status-info-foreground">
+              ضريبة {effectiveRate}%: <span className="font-mono">{formatCurrency(taxSplit.vat)}</span>
+            </span>
+            <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+              الإجمالي: <span className="font-mono">{formatCurrency(taxSplit.gross)}</span>
+            </span>
+            {selectedTaxCode && (
+              <span className="text-muted-foreground">
+                — {selectedTaxCode.code} ({selectedTaxCode.taxType})
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="border rounded-lg p-4 mb-4 space-y-3">
