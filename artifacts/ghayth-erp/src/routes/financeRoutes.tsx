@@ -89,6 +89,10 @@ const RecurringJournalsCreate = lazy(() => import("@/pages/create/finance/recurr
 const RecurringJournalDetail = lazy(() => import("@/pages/finance/recurring-journal-detail"));
 const YearEndClose = lazy(() => import("@/pages/finance/year-end-close"));
 const Treasury = lazy(() => import("@/pages/finance/treasury"));
+const ProfitabilityVehicle = lazy(() => import("@/pages/finance/profitability-vehicle"));
+const ProfitabilityProperty = lazy(() => import("@/pages/finance/profitability-property"));
+const ProfitabilityProject = lazy(() => import("@/pages/finance/profitability-project"));
+const ProfitabilityUmrahAgent = lazy(() => import("@/pages/finance/profitability-umrah-agent"));
 
 export const financeRoutes = [
   // /finance → the new dashboard (R.1.5). The chart of accounts moves
@@ -143,6 +147,10 @@ export const financeRoutes = [
   { path: "/finance/purchase-orders/create", component: PurchaseOrdersCreate },
   { path: "/finance/payment-run", component: PaymentRun },
   { path: "/finance/purchase-orders/:id", component: PurchaseOrderDetail },
+  { path: "/finance/profitability/vehicle/:id", component: ProfitabilityVehicle },
+  { path: "/finance/profitability/property/:id", component: ProfitabilityProperty },
+  { path: "/finance/profitability/project/:id", component: ProfitabilityProject },
+  { path: "/finance/profitability/umrah-agent/:id", component: ProfitabilityUmrahAgent },
   { path: "/finance/reports", component: FinancialReports },
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },
