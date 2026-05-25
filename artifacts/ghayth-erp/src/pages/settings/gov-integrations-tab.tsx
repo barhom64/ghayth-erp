@@ -1,23 +1,33 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatDateAr } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
-import { GuardedButton } from "@/components/shared/permission-gate";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { usePermission } from "@/components/shared/permission-gate";
+import {
+  FormShell,
+  FormGrid,
+  FormTextField,
+} from "@workspace/ui-core";
 import {
   Link2,
   AlertTriangle,
   Pencil,
   Wifi,
   RefreshCw,
-  Key,
-  Save,
   ToggleLeft,
   ToggleRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+const integrationSchema = z.object({
+  apiKey: z.string().optional(),
+  baseUrl: z.string().optional(),
+  username: z.string().optional(),
+  subscriptionId: z.string().optional(),
+});
+type IntegrationForm = z.infer<typeof integrationSchema>;
 
 const GOV_SYSTEM_INFO: Record<string, { color: string; desc: string; icon: string }> = {
   muqeem: { color: "bg-status-success-surface border-status-success-surface", desc: "إدارة الإقامات وتصاريح العمل ومعلومات الموظفين الأجانب", icon: "🏛️" },
@@ -28,35 +38,23 @@ const GOV_SYSTEM_INFO: Record<string, { color: string; desc: string; icon: strin
 export function GovIntegrationsTab() {
   const { toast } = useToast();
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<Record<string, any>>({});
   const [testingId, setTestingId] = useState<number | null>(null);
+  const canSave = usePermission("settings:create");
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["gov-integrations"], "/gov-integrations");
 
   const integrations: any[] = data?.data || [];
 
-  const handleEdit = (item: any) => {
-    setEditingId(item.id);
-    const cfg = item.config || {};
-    setEditForm({
-      enabled: item.enabled,
-      apiKey: cfg.apiKey || "",
-      baseUrl: cfg.baseUrl || "",
-      username: cfg.username || "",
-      subscriptionId: cfg.subscriptionId || "",
-    });
-  };
-
-  const handleSave = async (id: number) => {
+  const handleSave = async (id: number, enabled: boolean, values: IntegrationForm) => {
     try {
       await apiFetch(`/gov-integrations/${id}`, {
         method: "PUT",
         body: JSON.stringify({
-          enabled: editForm.enabled,
+          enabled,
           config: {
-            apiKey: editForm.apiKey,
-            baseUrl: editForm.baseUrl,
-            username: editForm.username,
-            subscriptionId: editForm.subscriptionId,
+            apiKey: values.apiKey,
+            baseUrl: values.baseUrl,
+            username: values.username,
+            subscriptionId: values.subscriptionId,
           },
         }),
       });
@@ -171,7 +169,7 @@ export function GovIntegrationsTab() {
                       {item.enabled ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
                     </button>
                     <button
-                      onClick={() => (isEditing ? setEditingId(null) : handleEdit(item))}
+                      onClick={() => setEditingId(isEditing ? null : item.id)}
                       className="p-1.5 rounded-md text-status-info-foreground hover:bg-status-info-surface"
                       title="تعديل الإعدادات"
                     >
@@ -188,53 +186,54 @@ export function GovIntegrationsTab() {
                   </div>
                 </div>
 
-                {isEditing && (
-                  <div className="mt-4 pt-4 border-t space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs flex items-center gap-1"><Key className="h-3 w-3" />مفتاح الربط البرمجي</Label>
-                        <Input
-                          className="mt-1 text-sm font-mono"
-                          type="password"
-                          placeholder="أدخل مفتاح الربط"
-                          value={editForm.apiKey}
-                          onChange={(e) => setEditForm({ ...editForm, apiKey: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">رابط الخدمة</Label>
-                        <Input
-                          className="mt-1 text-sm"
-                          placeholder="https://api.gov.sa/..."
-                          value={editForm.baseUrl}
-                          onChange={(e) => setEditForm({ ...editForm, baseUrl: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">اسم المستخدم</Label>
-                        <Input
-                          className="mt-1 text-sm"
-                          placeholder="اسم المستخدم"
-                          value={editForm.username}
-                          onChange={(e) => setEditForm({ ...editForm, username: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">رقم الاشتراك</Label>
-                        <Input
-                          className="mt-1 text-sm"
-                          placeholder="رقم الاشتراك / المرجع"
-                          value={editForm.subscriptionId}
-                          onChange={(e) => setEditForm({ ...editForm, subscriptionId: e.target.value })}
-                        />
-                      </div>
+                {isEditing && (() => {
+                  const cfg = item.config || {};
+                  return (
+                    <div className="mt-4 pt-4 border-t">
+                      <FormShell
+                        schema={integrationSchema}
+                        defaultValues={{
+                          apiKey: cfg.apiKey || "",
+                          baseUrl: cfg.baseUrl || "",
+                          username: cfg.username || "",
+                          subscriptionId: cfg.subscriptionId || "",
+                        }}
+                        submitLabel="حفظ"
+                        disabled={!canSave}
+                        secondaryActions={
+                          <Button type="button" variant="outline" size="sm" onClick={() => setEditingId(null)}>إلغاء</Button>
+                        }
+                        onSubmit={async (values) => {
+                          await handleSave(item.id, item.enabled, values);
+                        }}
+                      >
+                        <FormGrid cols={2}>
+                          <FormTextField
+                            name="apiKey"
+                            label="مفتاح الربط البرمجي"
+                            type="password"
+                            placeholder="أدخل مفتاح الربط"
+                          />
+                          <FormTextField
+                            name="baseUrl"
+                            label="رابط الخدمة"
+                            placeholder="https://api.gov.sa/..."
+                          />
+                          <FormTextField
+                            name="username"
+                            label="اسم المستخدم"
+                            placeholder="اسم المستخدم"
+                          />
+                          <FormTextField
+                            name="subscriptionId"
+                            label="رقم الاشتراك"
+                            placeholder="رقم الاشتراك / المرجع"
+                          />
+                        </FormGrid>
+                      </FormShell>
                     </div>
-                    <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setEditingId(null)}>إلغاء</Button>
-                      <GuardedButton perm="settings:create" size="sm" onClick={() => handleSave(item.id)}><Save className="h-3.5 w-3.5 mr-1" />حفظ</GuardedButton>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })}
