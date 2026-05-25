@@ -204,6 +204,30 @@ const RULES = [
       "`AppConfig` shape, and read it through the typed `config` object. This " +
       "keeps validation, defaults and the startup fail-fast gate in one place.",
   },
+  {
+    id: "native-confirm-or-prompt",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
+    extensions: [".tsx", ".ts"],
+    // PromptDialog is the canonical replacement and is allowed to mention
+    // window.prompt in its docstring. The use-lifecycle-action hook owns
+    // its own AlertDialog and is the runtime replacement for the
+    // Promise-based reason-prompt flow.
+    skip: (file) =>
+      file.endsWith("/components/shared/prompt-dialog.tsx") ||
+      file.endsWith("/hooks/use-lifecycle-action.tsx"),
+    // Forbidden: window.confirm(, window.prompt(, bare confirm("..."),
+    // bare prompt("...") at call sites. The regex deliberately requires
+    // an opening string literal so we don't flag identifiers named
+    // `confirm` (e.g. ConfirmDeleteDialog props, `onConfirm`, etc.).
+    regex: /\b(?:window\.confirm|window\.prompt|confirm|prompt)\(\s*["'`]/,
+    message:
+      "Native window.confirm() / window.prompt() are forbidden — they " +
+      "ignore RTL, dark mode, and the rate-limit banner. Use " +
+      "`ConfirmDeleteDialog` (delete flows), `PromptDialog` (reason " +
+      "capture), or an inline AlertDialog (multi-button confirmations) " +
+      "instead. fiscal-periods-v2's `useDirtyGuard` is a worked example " +
+      "of the AlertDialog discard pattern.",
+  },
 
   // ─── UI-kit adoption ratchet (UNIFICATION_PLAN §P8) ──────────────────
   //

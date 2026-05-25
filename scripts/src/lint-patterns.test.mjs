@@ -302,6 +302,52 @@ check(
   ),
 );
 
+// ─── native-confirm-or-prompt (post-migration hard rule) ───────────────────
+//
+// The codebase used to scatter window.confirm() / window.prompt() across
+// list pages for "are you sure?" flows. They've all been replaced with
+// ConfirmDeleteDialog / PromptDialog / inline AlertDialogs so RTL + dark
+// mode + the rate-limit banner stay coherent. Any reintroduction of the
+// native bridges fails the build.
+
+console.log("native-confirm-or-prompt rule");
+
+check(
+  "window.confirm IS flagged",
+  fires(
+    "native-confirm-or-prompt",
+    `if (!window.confirm("حذف؟")) return;`,
+  ),
+);
+check(
+  "window.prompt IS flagged",
+  fires(
+    "native-confirm-or-prompt",
+    `const reason = window.prompt("السبب");`,
+  ),
+);
+check(
+  "bare confirm(\"...\") IS flagged",
+  fires(
+    "native-confirm-or-prompt",
+    `if (!confirm("هل أنت متأكد؟")) return;`,
+  ),
+);
+check(
+  "ConfirmDeleteDialog import is NOT flagged",
+  !fires(
+    "native-confirm-or-prompt",
+    `import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";`,
+  ),
+);
+check(
+  "onConfirm prop is NOT flagged",
+  !fires(
+    "native-confirm-or-prompt",
+    `<Dialog onConfirm={handleConfirm}>Are you sure?</Dialog>`,
+  ),
+);
+
 // ─── Ratchet structural invariant ───────────────────────────────────────
 //
 // All 15 kit rules were intentionally hardened — none of them should
