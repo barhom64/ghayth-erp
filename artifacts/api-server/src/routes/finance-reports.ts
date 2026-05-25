@@ -2656,3 +2656,168 @@ reportsRouter.get(
     }
   },
 );
+// ─────────────────────────────────────────────────────────────────────────────
+// VAT reconciliation report — companion to the WHT summary endpoint.
+//
+// Pre-filing sanity check for the monthly ZATCA VAT return. The
+// canonical numbers come from journal_lines:
+//
+//     outputVAT = Σ credit on vat_output account − Σ debit       (sales)
+//     inputVAT  = Σ debit  on vat_input  account − Σ credit       (purchases)
+//     netVATDue = outputVAT − inputVAT
+//
+// We THEN compare netVATDue against the LIVE balance on the vat_output
+// (typically 2300) and vat_input accounts since opening, to flag drift
+// the books vs. our period calculation. If the two disagree, a JE was
+// posted to a wrong account or a reversal escaped the period filter.
+//
+// Per-source breakdown (invoice / credit_memo / debit_memo / voucher)
+// so operators can see "X SAR came from sales invoices, Y from refunds".
+//
+// Read-only, no transaction.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/vat-reconciliation",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { startDate, endDate } =
+        req.query as Record<string, string | undefined>;
+
+      // Resolve canonical VAT accounts (operator may have overridden the
+      // 2300 / 1400 defaults via accounting_mappings).
+      const { financialEngine } = await import("../lib/engines/index.js");
+      const [outputVatCode, inputVatCode] = await Promise.all([
+        financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2300"),
+        financialEngine.resolveAccountCode(scope.companyId, "vat_input",  "debit",  "1400"),
+      ]);
+
+      const params: unknown[] = [scope.companyId, outputVatCode, inputVatCode];
+      let dateFilter = "";
+      if (startDate) { params.push(startDate); dateFilter += ` AND je."postingDate" >= $${params.length}`; }
+      if (endDate)   { params.push(endDate);   dateFilter += ` AND je."postingDate" < ($${params.length}::date + 1)`; }
+      const branchFilter = getBranchCondition(scope, undefined, params, "je");
+
+      // ── 1. Period movement on the two VAT accounts ──────────────────
+      interface SrcRow {
+        sourceType: string | null;
+        accountCode: string;
+        debit: string | number;
+        credit: string | number;
+      }
+      const rows = await rawQuery<SrcRow>(
+        `SELECT COALESCE(je."sourceType", 'other')::text AS "sourceType",
+                jl."accountCode",
+                SUM(COALESCE(jl.debit, 0))::float8  AS debit,
+                SUM(COALESCE(jl.credit, 0))::float8 AS credit
+           FROM journal_lines jl
+           JOIN journal_entries je
+             ON je.id = jl."journalId"
+            AND je."deletedAt" IS NULL
+            AND je."balancesApplied" = true
+            AND je."reversedById" IS NULL
+          WHERE je."companyId" = $1
+            AND jl."accountCode" IN ($2, $3)
+            AND jl."deletedAt" IS NULL
+            ${dateFilter}${branchFilter}
+          GROUP BY je."sourceType", jl."accountCode"`,
+        params,
+      );
+
+      // ── 2. Live ledger balance on each VAT account (since-opening) ──
+      // Same JE guards, NO date filter — the balance carry forward is
+      // what the trial balance shows today.
+      interface BalRow { accountCode: string; balance: string | number }
+      const balParams: unknown[] = [scope.companyId, outputVatCode, inputVatCode];
+      const balBranchFilter = getBranchCondition(scope, undefined, balParams, "je");
+      const balRows = await rawQuery<BalRow>(
+        `SELECT jl."accountCode",
+                SUM(COALESCE(jl.credit, 0) - COALESCE(jl.debit, 0))::float8 AS balance
+           FROM journal_lines jl
+           JOIN journal_entries je
+             ON je.id = jl."journalId"
+            AND je."deletedAt" IS NULL
+            AND je."balancesApplied" = true
+            AND je."reversedById" IS NULL
+          WHERE je."companyId" = $1
+            AND jl."accountCode" IN ($2, $3)
+            AND jl."deletedAt" IS NULL
+            ${balBranchFilter}
+          GROUP BY jl."accountCode"`,
+        balParams,
+      );
+
+      // ── 3. Aggregate ────────────────────────────────────────────────
+      let outputVatPeriod = 0;   // credit − debit on output account
+      let inputVatPeriod  = 0;   // debit  − credit on input  account
+      const bySource = new Map<string, {
+        sourceType: string;
+        outputVat: number;
+        inputVat: number;
+        netVat: number;
+      }>();
+      for (const r of rows) {
+        const debit  = Number(r.debit  ?? 0);
+        const credit = Number(r.credit ?? 0);
+        const src = r.sourceType ?? "other";
+        const bucket = bySource.get(src) ?? {
+          sourceType: src, outputVat: 0, inputVat: 0, netVat: 0,
+        };
+        if (r.accountCode === outputVatCode) {
+          const out = credit - debit;
+          outputVatPeriod += out;
+          bucket.outputVat += out;
+        } else if (r.accountCode === inputVatCode) {
+          const inp = debit - credit;
+          inputVatPeriod += inp;
+          bucket.inputVat += inp;
+        }
+        bucket.netVat = bucket.outputVat - bucket.inputVat;
+        bySource.set(src, bucket);
+      }
+      const netVatDue = outputVatPeriod - inputVatPeriod;
+
+      let outputVatLiveBalance = 0;
+      let inputVatLiveBalance  = 0;   // expressed as credit − debit so it's
+                                      // typically negative for an asset acct
+      for (const r of balRows) {
+        const b = Number(r.balance ?? 0);
+        if (r.accountCode === outputVatCode) outputVatLiveBalance = b;
+        else if (r.accountCode === inputVatCode) inputVatLiveBalance = b;
+      }
+
+      // Drift = (live VAT-payable balance) − (period netVAT due).
+      // A non-zero drift means a JE landed on the VAT account from a
+      // source other than the standard pipeline OR a period boundary
+      // was misposted.
+      const liveNetPayable = outputVatLiveBalance + inputVatLiveBalance;
+      const drift = roundTo2(liveNetPayable - netVatDue);
+
+      res.json(maskFields(req, {
+        filters: { startDate, endDate },
+        accounts: { outputVatCode, inputVatCode },
+        summary: {
+          outputVatPeriod: roundTo2(outputVatPeriod),
+          inputVatPeriod:  roundTo2(inputVatPeriod),
+          netVatDue:       roundTo2(netVatDue),
+          outputVatLiveBalance: roundTo2(outputVatLiveBalance),
+          inputVatLiveBalance:  roundTo2(inputVatLiveBalance),
+          liveNetPayable:       roundTo2(liveNetPayable),
+          drift,
+          driftIsClean: Math.abs(drift) < 0.005,
+        },
+        bySource: Array.from(bySource.values())
+          .map((s) => ({
+            ...s,
+            outputVat: roundTo2(s.outputVat),
+            inputVat:  roundTo2(s.inputVat),
+            netVat:    roundTo2(s.netVat),
+          }))
+          .sort((a, b) => Math.abs(b.netVat) - Math.abs(a.netVat)),
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "VAT reconciliation error:");
+    }
+  },
+);
