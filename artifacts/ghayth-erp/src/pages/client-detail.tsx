@@ -19,8 +19,9 @@ import {
   User, Phone, Mail, FileText, Target, Headphones, FolderKanban,
   Clock, DollarSign, MessageCircle, TrendingUp, AlertTriangle,
   CheckCircle, Activity, BookOpen, CheckSquare, Globe, Plane,
+  FileSpreadsheet,
 } from "lucide-react";
-import { useRoute } from "wouter";
+import { useRoute, Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { CLASSIFICATIONS } from "@/lib/constants";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
@@ -624,6 +625,11 @@ export default function ClientDetail() {
           {client?.isBlacklisted && (
             <Badge variant="destructive" className="text-sm px-3 py-1">قائمة سوداء</Badge>
           )}
+          <Link href={`/clients/${params?.id}/statement`}>
+            <Button size="sm" variant="outline" className="gap-1">
+              <FileSpreadsheet className="h-4 w-4" /> كشف حساب
+            </Button>
+          </Link>
         </>
       }
     />
