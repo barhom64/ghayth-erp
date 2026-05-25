@@ -4,7 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   BookOpen, Percent, Receipt, Workflow, Package, Eye, Globe, RefreshCw,
-  Calendar, Wallet, Settings as SettingsIcon,
+  Calendar, Wallet, Settings as SettingsIcon, Layers, Handshake, ClipboardList,
+  History,
 } from "lucide-react";
 
 /**
@@ -20,7 +21,7 @@ interface SettingsCard {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   iconClass: string;
-  group: "registries" | "allocation" | "currency" | "periods";
+  group: "registries" | "allocation" | "currency" | "periods" | "procurement";
 }
 
 const CARDS: SettingsCard[] = [
@@ -47,6 +48,14 @@ const CARDS: SettingsCard[] = [
     description: "10 فئات سعودية مبذورة (إتاوات 15% / خدمات فنية 15% / إدارة 20% / فوائد 5% / ...) قابلة للتعديل.",
     icon: Receipt,
     iconClass: "text-amber-700 bg-amber-50",
+    group: "registries",
+  },
+  {
+    href: "/finance/cost-centers",
+    title: "مراكز التكلفة (Cost Centers)",
+    description: "أبعاد محاسبية لكل بند JE — تحليل الأرباح حسب المشروع / المركبة / الإدارة. تستخدمها قواعد التوجيه عبر استراتيجيات from_*.",
+    icon: Layers,
+    iconClass: "text-purple-600 bg-purple-50",
     group: "registries",
   },
 
@@ -93,6 +102,32 @@ const CARDS: SettingsCard[] = [
     iconClass: "text-emerald-600 bg-emerald-50",
     group: "currency",
   },
+  {
+    href: "/finance/fx-revaluation/history",
+    title: "سجل إعادة التقييم",
+    description: "كل قيود FX revaluation اللي أُنشئت — الأثر التراكمي على الأرباح/الخسائر من تذبذب أسعار الصرف عبر الفترات.",
+    icon: History,
+    iconClass: "text-blue-700 bg-blue-50",
+    group: "currency",
+  },
+
+  // ── Procurement (Purchase Requests / Vendor Contracts) ───────
+  {
+    href: "/finance/purchase-requests",
+    title: "طلبات الشراء (Purchase Requests)",
+    description: "تدفّق طلب الشراء قبل إصدار PO — اعتماد ثم تحويل إلى أمر شراء رسمي. حوكمة مسبقة على الالتزامات.",
+    icon: ClipboardList,
+    iconClass: "text-blue-600 bg-blue-50",
+    group: "procurement",
+  },
+  {
+    href: "/finance/contracts",
+    title: "عقود الموردين (Vendor Contracts)",
+    description: "إدارة عقود الإطار مع الموردين، تنبيهات قبل انتهاء العقد بـ 30 يوم لتفادي انقطاع التوريد.",
+    icon: Handshake,
+    iconClass: "text-emerald-700 bg-emerald-50",
+    group: "procurement",
+  },
 
   // ── Periods & close ──────────────────────────────────────────
   {
@@ -138,9 +173,13 @@ const GROUP_INFO: Record<SettingsCard["group"], { label: string; description: st
     label: "📅 الفترات والإقفالات",
     description: "الفترات المالية + إقفال السنة + الأرصدة الافتتاحية",
   },
+  procurement: {
+    label: "🛒 المشتريات (Procurement)",
+    description: "طلبات الشراء + عقود الموردين",
+  },
 };
 
-const GROUP_ORDER: SettingsCard["group"][] = ["registries", "allocation", "currency", "periods"];
+const GROUP_ORDER: SettingsCard["group"][] = ["registries", "allocation", "currency", "periods", "procurement"];
 
 export default function FinanceSettingsHubPage() {
   const grouped = GROUP_ORDER.map((g) => ({
