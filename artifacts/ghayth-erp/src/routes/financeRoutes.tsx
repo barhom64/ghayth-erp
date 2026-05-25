@@ -15,6 +15,7 @@ const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
 const TaxCodesCreate = lazy(() => import("@/pages/create/finance/tax-codes-create"));
 const WhtCategories = lazy(() => import("@/pages/finance/wht-categories"));
 const WhtCategoriesCreate = lazy(() => import("@/pages/create/finance/wht-categories-create"));
+const LotExpiryAlerts = lazy(() => import("@/pages/finance/lot-expiry-alerts"));
 const CogsSummary = lazy(() => import("@/pages/finance/cogs-summary"));
 const InventoryValuation = lazy(() => import("@/pages/finance/inventory-valuation"));
 const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
@@ -97,6 +98,8 @@ export const financeRoutes = [
   { path: "/finance/tax-codes/create", component: TaxCodesCreate },
   { path: "/finance/wht-categories", component: WhtCategories },
   { path: "/finance/wht-categories/create", component: WhtCategoriesCreate },
+  // Lot expiry alerts — consumes /reports/lot-expiry-alerts (#1042).
+  { path: "/finance/reports/lot-expiry-alerts", component: LotExpiryAlerts },
   // Inventory valuation report — consumes /reports/inventory-valuation (#1033).
   { path: "/finance/reports/inventory-valuation", component: InventoryValuation },
   // COGS / margin summary — consumes /reports/cogs-summary (#1034).
