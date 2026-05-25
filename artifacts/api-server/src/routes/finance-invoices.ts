@@ -3260,6 +3260,16 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
 
     let advance: any;
     let invoice: any;
+    let applyResult: { journalId: number; alreadyExists: boolean } | null = null;
+    // Atomicity guarantee: customer_advances.appliedAmount, invoices.paidAmount,
+    // AND the GL posting all commit (or all roll back) together. The earlier
+    // shape did the counter updates inside a withTransaction and then called
+    // financialEngine.postJournalEntry OUTSIDE — so a JE post that threw
+    // (closed period, missing account, network blip during the engine's
+    // own period rawQuery) left counters inflated but no ledger movement.
+    // The engine's internal withTransaction joins this one reentrantly via
+    // SAVEPOINT (rawdb.ts:108), so commits / rollbacks remain atomic across
+    // both layers.
     await withTransaction(async (client: any) => {
       let advRes;
       try {
@@ -3310,26 +3320,35 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
          WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
         [applyAmt, Number(invoiceId), scope.companyId]
       );
+
+      // GL post lives INSIDE the same transaction so a throw here (closed
+      // period, missing account, etc.) rolls the counter updates back.
+      // financialEngine.postJournalEntry's internal withTransaction joins
+      // this one via SAVEPOINT (rawdb.ts:108 reentrant logic), so the
+      // nested call doesn't open a second connection.
+      applyResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: advance.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `ADV-APPLY-${advanceId}-${invoiceId}`,
+        description: `تطبيق دفعة مقدمة على الفاتورة ${invoice.ref}`,
+        sourceType: "advance_application",
+        sourceId: advanceId,
+        sourceKey: `finance:advance_apply:${advanceId}:${invoiceId}`,
+        lines: [
+          { accountCode: advLiabCode, debit: applyAmt, credit: 0, clientId: advance.clientId },
+          { accountCode: arCode, debit: 0, credit: applyAmt, clientId: advance.clientId },
+        ],
+        guardTable: "customer_advances",
+        guardId: advanceId,
+      });
     });
 
-    const applyResult = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: advance.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: `ADV-APPLY-${advanceId}-${invoiceId}`,
-      description: `تطبيق دفعة مقدمة على الفاتورة ${invoice.ref}`,
-      sourceType: "advance_application",
-      sourceId: advanceId,
-      sourceKey: `finance:advance_apply:${advanceId}:${invoiceId}`,
-      lines: [
-        { accountCode: advLiabCode, debit: applyAmt, credit: 0, clientId: advance.clientId },
-        { accountCode: arCode, debit: 0, credit: applyAmt, clientId: advance.clientId },
-      ],
-      guardTable: "customer_advances",
-      guardId: advanceId,
-    });
-    const journalId = applyResult.journalId;
-    markIdempotencyReplay(req, res, applyResult.alreadyExists);
+    // After-commit response wiring. `applyResult` is guaranteed non-null
+    // here — the transaction would have thrown otherwise (and the catch
+    // below would have responded with the error).
+    const journalId = applyResult!.journalId;
+    markIdempotencyReplay(req, res, applyResult!.alreadyExists);
 
     res.json({ advanceId, invoiceId: Number(invoiceId), amount: applyAmt, journalId });
   } catch (err) {

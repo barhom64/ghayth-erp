@@ -109,6 +109,7 @@ const ProductCatalog = lazy(() => import("@/pages/finance/product-catalog"));
 const FxRates = lazy(() => import("@/pages/finance/fx-rates"));
 const FxRevaluationHistory = lazy(() => import("@/pages/finance/fx-revaluation-history"));
 const SettingsHub = lazy(() => import("@/pages/finance/settings-hub"));
+const FxRevaluation = lazy(() => import("@/pages/finance/fx-revaluation"));
 
 export const financeRoutes = [
   // /finance → the new dashboard (R.1.5). The chart of accounts moves
@@ -183,6 +184,7 @@ export const financeRoutes = [
   { path: "/finance/fx-rates", component: FxRates },
   { path: "/finance/fx-revaluation/history", component: FxRevaluationHistory },
   { path: "/finance/settings", component: SettingsHub },
+  { path: "/finance/fx-revaluation", component: FxRevaluation },
   { path: "/finance/reports", component: FinancialReports },
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },

@@ -389,6 +389,48 @@ describe("DELETE /expenses/:id — budget reservation release", () => {
   });
 });
 
+// ─── POST /customer-advances/:id/apply — atomic counter + GL post ──────────
+// The apply flow updates THREE pieces of state: customer_advances.appliedAmount,
+// invoices.paidAmount, and a GL entry crediting AR / debiting advance-liability.
+// The earlier shape ran the first two inside withTransaction and the GL post
+// OUTSIDE — so an engine throw (closed period, missing account mapping,
+// engine sourceKey volatility check) left counters inflated with no ledger
+// movement. The fix moved the engine post INSIDE the same withTransaction;
+// financialEngine.postJournalEntry's internal withTransaction joins
+// reentrantly via SAVEPOINT.
+
+describe("POST /customer-advances/:id/apply — atomic counter + GL", () => {
+  it("posts the GL entry inside the same withTransaction as counter updates", () => {
+    const idx = INV_ROUTE.indexOf('"/customer-advances/:id/apply"');
+    expect(idx).toBeGreaterThan(-1);
+    const block = INV_ROUTE.slice(idx, idx + 6000);
+    // Locate the withTransaction block.
+    const txStart = block.indexOf("withTransaction(async (client");
+    expect(txStart).toBeGreaterThan(-1);
+    // Locate the engine post — it must be inside the same block, BEFORE
+    // the txn's closing `});`. We scan forward from txStart for the next
+    // top-level `});\n` that closes the withTransaction.
+    const enginePostIdx = block.indexOf("financialEngine.postJournalEntry", txStart);
+    expect(enginePostIdx).toBeGreaterThan(txStart);
+    // Heuristic: the engine post must come BEFORE the `});` that closes
+    // withTransaction. If the engine post had been moved back outside,
+    // there'd be a `});` between txStart and enginePostIdx that closes
+    // the withTransaction. Search for the FIRST closing pattern.
+    const closeTxnIdx = block.indexOf("\n    });", txStart);
+    expect(closeTxnIdx).toBeGreaterThan(enginePostIdx);
+  });
+
+  it("captures the engine result in a hoisted variable for the after-commit response", () => {
+    const idx = INV_ROUTE.indexOf('"/customer-advances/:id/apply"');
+    const block = INV_ROUTE.slice(idx, idx + 6000);
+    // The route declares `applyResult` before entering withTransaction
+    // and assigns to it inside. This is the only way to use the engine
+    // result (journalId, alreadyExists) after the transaction commits.
+    expect(block).toMatch(/let applyResult.*=\s*null/);
+    expect(block).toContain("applyResult!.journalId");
+  });
+});
+
 // ─── PATCH /invoices/:id — ZATCA-submission immutability ────────────────────
 // finance-zatca.ts uses invoice.description as the line-description
 // fallback when invoice_lines are missing one. Once an invoice has been
@@ -515,5 +557,22 @@ describe("POST /fx/revaluation/post — atomic JE + fx_revaluations audit", () =
     const fxInsertIdx = block.indexOf("INSERT INTO fx_revaluations", txnStart);
     expect(enginePostIdx).toBeGreaterThan(txnStart);
     expect(fxInsertIdx).toBeGreaterThan(enginePostIdx);
+  });
+});
+
+// ─── POST /vouchers — atomic JE + metadata + allocations ───────────────────
+describe("POST /vouchers — atomic JE + metadata + allocations", () => {
+  it("wraps engine post, metadata UPDATE, and allocations loop in one withTransaction", () => {
+    const idx = JRN_ROUTE.indexOf('journalRouter.post("/vouchers"');
+    expect(idx).toBeGreaterThan(-1);
+    const block = JRN_ROUTE.slice(idx, idx + 12000);
+    const txnStart = block.indexOf("withTransaction(async ()");
+    expect(txnStart).toBeGreaterThan(-1);
+    const enginePostIdx = block.indexOf("financialEngine.postJournalEntry({", txnStart);
+    const metadataUpdateIdx = block.indexOf('UPDATE journal_entries SET "paymentMethod"', txnStart);
+    const allocsLoopIdx = block.indexOf("for (let i = 0; i < allocations.length", txnStart);
+    expect(enginePostIdx).toBeGreaterThan(txnStart);
+    expect(metadataUpdateIdx).toBeGreaterThan(enginePostIdx);
+    expect(allocsLoopIdx).toBeGreaterThan(metadataUpdateIdx);
   });
 });
