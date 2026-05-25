@@ -138,6 +138,25 @@ class DownloadChannel implements DeliveryChannel {
 // Auto-register the DownloadChannel since it has no config.
 registerChannel(new DownloadChannel());
 
+/**
+ * Register the real channel implementations. Called once from index.ts
+ * at boot so the channels join the registry before any /print/render
+ * request can hit `sendDocument`. Channels whose config isn't present
+ * still register — they just answer `isAvailable() === false`.
+ */
+export async function registerDefaultChannels(): Promise<void> {
+  const { InternalInboxChannel } = await import("./delivery/internalInbox.js");
+  const { WebhookChannel } = await import("./delivery/webhook.js");
+  const { emailChannelFromConfig } = await import("./delivery/email.js");
+  const { config } = await import("../config.js");
+  registerChannel(new InternalInboxChannel());
+  registerChannel(new WebhookChannel({ signingSecret: config.print.webhookSigningSecret }));
+  registerChannel(emailChannelFromConfig());
+  logger.info(
+    `[print/delivery] channels registered: ${listAvailableChannels().join(", ") || "(only download)"}`,
+  );
+}
+
 // ─── Public API ──────────────────────────────────────────────────────────
 
 /**
