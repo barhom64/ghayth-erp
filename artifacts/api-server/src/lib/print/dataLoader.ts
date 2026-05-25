@@ -51,6 +51,34 @@ async function loadByTable(table: string, id: string, companyId: number) {
 }
 
 export async function loadEntityData(args: LoaderArgs): Promise<Record<string, unknown>> {
+  return safeLoad(args, () => dispatchLoad(args));
+}
+
+/** Wraps any loader so a DB error (bad ID syntax, missing table, …) becomes
+ *  a stub `{ entity: { id } }` payload instead of bubbling a 500 to the
+ *  user. The Print Engine prefers to render a near-empty document over
+ *  failing the click — universal fallback + auto-tokens will still produce
+ *  the branch letterhead, a title, and an empty "لا توجد بنود" message. */
+async function safeLoad(
+  args: LoaderArgs,
+  fn: () => Promise<Record<string, unknown>>,
+): Promise<Record<string, unknown>> {
+  try {
+    return await fn();
+  } catch (err) {
+    // Re-emit at warn so support can diagnose without it counting as an
+    // unhandled exception in alerting dashboards.
+    // eslint-disable-next-line no-console
+    console.warn("[print/dataLoader] load failed, returning stub", {
+      entityType: args.entityType,
+      entityId: args.entityId,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return { entity: { id: args.entityId } };
+  }
+}
+
+async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> {
   const { companyId, entityType, entityId } = args;
   const profile = getEntity(entityType);
 

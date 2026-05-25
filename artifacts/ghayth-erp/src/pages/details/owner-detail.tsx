@@ -1,26 +1,18 @@
 import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import {
-  DetailPageLayout,
-  type RelatedEntity,
-  EntityComments,
-} from "@workspace/entity-kit";
+import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, User, Phone, Mail, MapPin, Building2, Banknote, FileText } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import {
-  useDetailEditDelete,
-  DetailActionButtons,
-  InlineEditCard,
-} from "@/components/shared/detail-edit-delete-actions";
+import { useDetailEditDelete, DetailActionButtons, InlineEditCard } from "@/components/shared/detail-edit-delete-actions";
 
 /**
  * OwnerDetail — unified detail page for a single property owner.
@@ -95,42 +87,6 @@ export default function OwnerDetail() {
     return out;
   }, [owner, buildings]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!owner) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: owner.ref || `OWN-${id}` },
-          { label: "اسم المالك", value: owner.name || "-" },
-          ...(owner.nationalId
-            ? [{ label: "رقم الهوية", value: owner.nationalId }]
-            : []),
-          ...(owner.phone ? [{ label: "الهاتف", value: owner.phone }] : []),
-          ...(owner.email ? [{ label: "البريد الإلكتروني", value: owner.email }] : []),
-          ...(owner.address ? [{ label: "العنوان", value: owner.address }] : []),
-          { label: "إجمالي العقارات المملوكة", value: String(totalProperties) },
-          { label: "إجمالي دخل الإيجارات", value: formatCurrency(totalRentalIncome) },
-          ...(owner.bankAccount
-            ? [{ label: "الحساب البنكي للتحويلات", value: owner.bankAccount }]
-            : []),
-          { label: "الحالة", value: STATUS_LABELS[owner.status] || owner.status || "-" },
-          { label: "تاريخ الإنشاء", value: formatDateAr(owner.createdAt) },
-        ],
-      },
-    ];
-    if (owner.notes) {
-      sections.push({ kind: "text", title: "ملاحظات", body: owner.notes });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "المالك", name: owner.name || "" },
-        { label: "المسؤول", name: owner.createdByName || "" },
-      ],
-    });
-    return sections;
-  }, [owner, id, totalProperties, totalRentalIncome]);
 
   const editDelete = useDetailEditDelete({
     entityLabel: "المالك",
@@ -309,15 +265,9 @@ export default function OwnerDetail() {
             extra={
               owner ? (
                 <EntityPrintButton
-                  branchId={owner.branchId}
-                  title={owner.name ? `مالك: ${owner.name}` : "مالك"}
-                  ref={owner.ref || `OWN-${id}`}
-                  date={formatDateAr(owner.createdAt)}
-                  sections={printSections}
                   entityType="owner"
                   entityId={id ?? 0}
-                  formats={["a4"]}
-                />
+                  formats={["a4"]}/>
               ) : null
             }
           />

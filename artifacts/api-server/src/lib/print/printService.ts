@@ -74,8 +74,18 @@ export async function renderPrint(
     );
   }
 
-  // 1. RBAC
-  const permitted = await userHasPermission(scope, profile.permission);
+  // 1. RBAC — wrapped because role_permissions/user_permissions queries
+  // can fail on partial migrations and we'd rather show a clear 403 than
+  // bubble a generic 500. The route's own `requirePermission("print:create")`
+  // middleware has already gated the request; this inner check is the
+  // per-entity refinement.
+  let permitted = false;
+  try {
+    permitted = await userHasPermission(scope, profile.permission);
+  } catch (err) {
+    logger.warn(err as Error, "[print] userHasPermission failed — falling back to deny");
+    permitted = false;
+  }
   if (!permitted) {
     throw new PrintPermissionError(
       `missing permission ${profile.permission} for entity ${req.entityType}`

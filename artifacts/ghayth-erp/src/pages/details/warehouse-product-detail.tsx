@@ -1,17 +1,13 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import {
-  DetailPageLayout,
-  type RelatedEntity,
-  EntityComments,
-} from "@workspace/entity-kit";
+import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Package, AlertTriangle } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
@@ -98,40 +94,6 @@ export default function WarehouseProductDetail() {
     return out;
   }, [product]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!product) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "اسم الصنف", value: product.name || "-" },
-          { label: "الرمز (SKU)", value: product.sku || "-" },
-          ...(product.barcode ? [{ label: "الباركود", value: product.barcode }] : []),
-          ...(product.categoryName ? [{ label: "التصنيف", value: product.categoryName }] : []),
-          ...(product.supplierName ? [{ label: "المورد", value: product.supplierName }] : []),
-          ...(product.location ? [{ label: "الموقع في المستودع", value: product.location }] : []),
-          { label: "المخزون الحالي", value: String(currentStock) },
-          { label: "الحد الأدنى", value: String(minStock) },
-          { label: "الحد الأقصى", value: String(maxStock) },
-          { label: "تكلفة الوحدة", value: formatCurrency(unitCost) },
-          { label: "سعر البيع", value: formatCurrency(sellingPrice) },
-          { label: "الحالة", value: STATUS_LABELS[product.status] || product.status || "-" },
-          { label: "تاريخ الإنشاء", value: formatDateAr(product.createdAt) },
-        ],
-      },
-    ];
-    if (product.description) {
-      sections.push({ kind: "text", title: "الوصف", body: product.description });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "أمين المستودع", name: "" },
-        { label: "المدير", name: "" },
-      ],
-    });
-    return sections;
-  }, [product, currentStock, minStock, maxStock, unitCost, sellingPrice]);
 
   const handleEdit = () => {
     setLocation(`/warehouse/products/${id}/edit`);
@@ -281,16 +243,10 @@ export default function WarehouseProductDetail() {
         <>
           {product && (
             <EntityPrintButton
-              branchId={product.branchId}
-              title={product.name ? `صنف ${product.name}` : "صنف"}
-              ref={`PROD-${id}`}
-              date={formatDateAr(product.createdAt)}
-              sections={printSections}
               entityType="item_barcode_label"
               entityId={product.id ?? id}
               formats={["label", "a4"]}
-              label="طباعة ملصق / باركود"
-            />
+              label="طباعة ملصق / باركود"/>
           )}
           <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!product}>
             <Edit className="h-4 w-4 ms-1" />

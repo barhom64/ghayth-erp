@@ -12,7 +12,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2, Edit, Shield, Car } from "lucide-react";
@@ -86,25 +86,6 @@ export default function InsuranceDetail() {
     return out;
   }, [insurance]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!insurance) return [];
-    const items: Array<{ label: string; value: string }> = [
-      { label: "رقم المرجع", value: `INS-${id}` },
-      { label: "المركبة", value: insurance.vehiclePlateNumber || insurance.plateNumber || "-" },
-      { label: "شركة التأمين", value: insurance.insuranceCompany || insurance.company || "-" },
-      { label: "رقم الوثيقة", value: insurance.policyNumber || "-" },
-      { label: "نوع التأمين", value: INSURANCE_TYPE_LABELS[insurance.insuranceType || insurance.type] || insurance.insuranceType || insurance.type || "-" },
-      { label: "قسط التأمين", value: formatCurrency(insurance.premium || insurance.amount || 0) },
-      { label: "تاريخ البداية", value: formatDateAr(insurance.startDate) },
-      { label: "تاريخ الانتهاء", value: formatDateAr(insurance.endDate || insurance.expiryDate) },
-      { label: "الحالة", value: STATUS_LABELS[insurance.status] || insurance.status || "-" },
-    ];
-    if (insurance.coverageDetails || insurance.coverage) {
-      items.push({ label: "تفاصيل التغطية", value: insurance.coverageDetails || insurance.coverage });
-    }
-    const sections: PrintSection[] = [{ kind: "info-grid", items }];
-    return sections;
-  }, [insurance, id]);
 
   const editDelete = useDetailEditDelete({
     entityLabel: "التأمين",
@@ -293,15 +274,9 @@ export default function InsuranceDetail() {
         <>
           {insurance && (
             <EntityPrintButton
-              branchId={insurance.branchId}
-              title={`تأمين INS-${id}`}
-              ref={`INS-${id}`}
-              date={formatDateAr(insurance.startDate || insurance.createdAt)}
-              sections={printSections}
               entityType="insurance"
               entityId={id ?? 0}
-              formats={["a4"]}
-            />
+              formats={["a4"]}/>
           )}
           <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>
