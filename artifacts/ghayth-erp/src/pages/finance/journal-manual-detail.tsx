@@ -17,17 +17,7 @@ import { DetailPageLayout, ProcessStages, type StageStep } from "@workspace/enti
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Undo2, Send, CheckCircle, CheckCircle2, XCircle, Upload } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Textarea } from "@/components/ui/textarea";
+import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { useAuth } from "@/lib/auth";
@@ -88,9 +78,7 @@ export default function JournalManualDetailPage() {
   const { assignments } = useAuth();
   const myAssignmentIds = new Set(assignments.map((a) => a.id));
   const [reversalOpen, setReversalOpen] = useState(false);
-  const [reversalReason, setReversalReason] = useState("");
   const [rejectOpen, setRejectOpen] = useState(false);
-  const [rejectNotes, setRejectNotes] = useState("");
 
   const { data: journal, isLoading, isError, refetch } = useApiQuery<any>(
     ["journal-manual-detail", id],
@@ -115,7 +103,6 @@ export default function JournalManualDetailPage() {
       successMessage: "تم عكس القيد بنجاح",
       onSuccess: () => {
         setReversalOpen(false);
-        setReversalReason("");
         refetch();
       },
     },
@@ -155,7 +142,6 @@ export default function JournalManualDetailPage() {
     {
       onSuccess: () => {
         setRejectOpen(false);
-        setRejectNotes("");
         toast({ title: "تم رفض القيد" });
         refetch();
       },
@@ -382,96 +368,25 @@ export default function JournalManualDetailPage() {
       />
 
       {/* FIN-013 — reject dialog (peer reviewer rejects with required notes) */}
-      <AlertDialog
+      <PromptDialog
         open={rejectOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setRejectOpen(false);
-            setRejectNotes("");
-          }
-        }}
-      >
-        <AlertDialogContent dir="rtl">
-          <AlertDialogHeader className="text-right">
-            <AlertDialogTitle>رفض القيد {journal?.ref}</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيُحوَّل القيد إلى حالة "مرفوض" وسيرى المُنشئ سبب الرفض. لا يمكن
-              للمُنشئ مراجعة قيده الخاص — الزر متاح فقط لمحاسب آخر.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-2">
-            <label className="text-sm font-medium mb-1 block">سبب الرفض *</label>
-            <Textarea
-              value={rejectNotes}
-              onChange={(e) => setRejectNotes(e.target.value)}
-              placeholder="اكتب سبب رفض القيد لإفادة المنشئ..."
-              rows={3}
-            />
-          </div>
-          <AlertDialogFooter className="flex-row justify-start gap-2">
-            <AlertDialogAction
-              className="bg-status-error-foreground hover:opacity-90"
-              onClick={(e) => {
-                e.preventDefault();
-                if (!rejectNotes.trim()) {
-                  toast({ variant: "destructive", title: "سبب الرفض مطلوب" });
-                  return;
-                }
-                rejectMut.mutate({ approved: false, notes: rejectNotes });
-              }}
-              disabled={rejectMut.isPending}
-            >
-              {rejectMut.isPending ? "جارٍ الرفض…" : "تأكيد الرفض"}
-            </AlertDialogAction>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title={`رفض القيد ${journal?.ref ?? ""}`}
+        description='سيُحوَّل القيد إلى حالة "مرفوض" وسيرى المُنشئ سبب الرفض. لا يمكن للمُنشئ مراجعة قيده الخاص — الزر متاح فقط لمحاسب آخر.'
+        placeholder="اكتب سبب رفض القيد لإفادة المنشئ..."
+        confirmLabel="تأكيد الرفض"
+        onSubmit={(notes) => rejectMut.mutate({ approved: false, notes })}
+        onClose={() => setRejectOpen(false)}
+      />
 
-      <AlertDialog
+      <PromptDialog
         open={reversalOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setReversalOpen(false);
-            setReversalReason("");
-          }
-        }}
-      >
-        <AlertDialogContent dir="rtl">
-          <AlertDialogHeader className="text-right">
-            <AlertDialogTitle>عكس القيد {journal?.ref}</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم إنشاء قيد جديد بنفس البنود مع عكس المدين والدائن. هذا الإجراء لا يمكن التراجع عنه.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-2">
-            <label className="text-sm font-medium mb-1 block">سبب عكس القيد *</label>
-            <Textarea
-              value={reversalReason}
-              onChange={(e) => setReversalReason(e.target.value)}
-              placeholder="أدخل سبب عكس القيد..."
-              rows={3}
-            />
-          </div>
-          <AlertDialogFooter className="flex-row justify-start gap-2">
-            <AlertDialogAction
-              className="bg-amber-600 hover:bg-amber-700"
-              onClick={(e) => {
-                e.preventDefault();
-                if (!reversalReason.trim()) {
-                  toast({ variant: "destructive", title: "السبب مطلوب" });
-                  return;
-                }
-                reverseMut.mutate({ reason: reversalReason });
-              }}
-              disabled={reverseMut.isPending}
-            >
-              {reverseMut.isPending ? "جاري العكس..." : "تأكيد العكس"}
-            </AlertDialogAction>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title={`عكس القيد ${journal?.ref ?? ""}`}
+        description="سيتم إنشاء قيد جديد بنفس البنود مع عكس المدين والدائن. هذا الإجراء لا يمكن التراجع عنه."
+        placeholder="أدخل سبب عكس القيد..."
+        confirmLabel="تأكيد العكس"
+        onSubmit={(reason) => reverseMut.mutate({ reason })}
+        onClose={() => setReversalOpen(false)}
+      />
     </>
   );
 }
