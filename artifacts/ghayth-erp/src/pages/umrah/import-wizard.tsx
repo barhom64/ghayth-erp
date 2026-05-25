@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PageShell, FormShell } from "@workspace/ui-core";
+import { PageShell, FormShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -421,39 +421,33 @@ export default function UmrahImportWizard() {
                 <p className="text-xs text-muted-foreground mb-3">
                   الوكلاء الفرعيون التاليون موجودون في الملف ولكن غير مربوطين بعملاء في النظام. يمكنك ربطهم الآن قبل التأكيد.
                 </p>
-                <div className="rounded border overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/40">
-                      <tr>
-                        <th className="p-2 text-start font-medium">رمز نُسك</th>
-                        <th className="p-2 text-start font-medium">الاسم</th>
-                        <th className="p-2 text-start font-medium">عدد الصفوف</th>
-                        <th className="p-2 text-start font-medium"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {preview.unlinkedSubAgents.map((u) => (
-                        <tr key={u.nuskCode} className="border-t">
-                          <td className="p-2 font-mono text-xs" dir="ltr">{u.nuskCode}</td>
-                          <td className="p-2">{u.name}</td>
-                          <td className="p-2">{formatNumber(u.rowCount)}</td>
-                          <td className="p-2">
-                            <GuardedButton
-                              perm="umrah:write"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setLinkingSubAgent(u)}
-                              className="gap-1"
-                            >
-                              <Link2 className="h-3.5 w-3.5" />
-                              ربط الآن
-                            </GuardedButton>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable
+                  data={preview.unlinkedSubAgents}
+                  rowKey={(u) => u.nuskCode}
+                  noToolbar
+                  pageSize={0}
+                  columns={[
+                    { key: "nuskCode", header: "رمز نُسك", className: "font-mono text-xs", ltr: true },
+                    { key: "name", header: "الاسم" },
+                    { key: "rowCount", header: "عدد الصفوف", render: (u) => formatNumber(u.rowCount) },
+                    {
+                      key: "actions",
+                      header: "",
+                      render: (u) => (
+                        <GuardedButton
+                          perm="umrah:write"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setLinkingSubAgent(u)}
+                          className="gap-1"
+                        >
+                          <Link2 className="h-3.5 w-3.5" />
+                          ربط الآن
+                        </GuardedButton>
+                      ),
+                    },
+                  ] satisfies DataTableColumn<typeof preview.unlinkedSubAgents[number]>[]}
+                />
               </CardContent>
             </Card>
           )}
@@ -469,26 +463,23 @@ export default function UmrahImportWizard() {
                 <p className="text-xs text-muted-foreground mb-3">
                   الوكلاء التاليون مذكورون في الملف ولا يوجد لهم سجل في النظام. سيُنشأون تلقائياً عند التأكيد. راجع الأسماء قبل المتابعة لتجنّب إنشاء سجلات مكررة بفروق إملائية.
                 </p>
-                <div className="rounded border overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/40">
-                      <tr>
-                        <th className="p-2 text-start font-medium">رقم الوكيل</th>
-                        <th className="p-2 text-start font-medium">الاسم</th>
-                        <th className="p-2 text-start font-medium">عدد الصفوف</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {preview.newAgentsToCreate.map((a, idx) => (
-                        <tr key={`${a.nuskAgentNumber ?? "name"}-${idx}`} className="border-t">
-                          <td className="p-2 font-mono text-xs" dir="ltr">{a.nuskAgentNumber ?? "—"}</td>
-                          <td className="p-2">{a.agentName}</td>
-                          <td className="p-2">{formatNumber(a.rowCount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable
+                  data={preview.newAgentsToCreate}
+                  rowKey={(a, idx) => `${a.nuskAgentNumber ?? "name"}-${idx}`}
+                  noToolbar
+                  pageSize={0}
+                  columns={[
+                    {
+                      key: "nuskAgentNumber",
+                      header: "رقم الوكيل",
+                      className: "font-mono text-xs",
+                      ltr: true,
+                      render: (a) => a.nuskAgentNumber ?? "—",
+                    },
+                    { key: "agentName", header: "الاسم" },
+                    { key: "rowCount", header: "عدد الصفوف", render: (a) => formatNumber(a.rowCount) },
+                  ] satisfies DataTableColumn<typeof preview.newAgentsToCreate[number]>[]}
+                />
               </CardContent>
             </Card>
           )}

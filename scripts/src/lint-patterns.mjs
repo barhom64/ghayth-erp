@@ -245,7 +245,12 @@ const RULES = [
     // Baseline counts <table> occurrences, not files. An invoice/voucher
     // detail page typically holds 2-4 tables (line items + totals + tax
     // breakdown), so the per-file count understates the live state.
-    countBaseline: 30,
+    //
+    // History:
+    //   30 — initial ratchet baseline (2026-05-25)
+    //   28 — after import-wizard.tsx moved 2 of its preview tables to
+    //        <DataTable noToolbar> (unlinkedSubAgents + newAgentsToCreate)
+    countBaseline: 28,
     message:
       "Raw <table> element in a page. Use `<DataTable>` from " +
       "`@workspace/ui-core` for list data (search/sort/pagination), or " +

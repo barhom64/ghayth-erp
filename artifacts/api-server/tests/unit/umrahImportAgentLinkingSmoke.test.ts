@@ -77,7 +77,11 @@ describe("import-wizard UI — agent-linking banners", () => {
 
   it("renders a warning card for new agents to auto-create", () => {
     expect(WIZARD).toContain("وكلاء سيتم إنشاؤهم تلقائياً");
-    expect(WIZARD).toMatch(/preview\.newAgentsToCreate\.map\(/);
+    // The card now hands `preview.newAgentsToCreate` to <DataTable> as
+    // its `data` prop instead of mapping it inline — the old
+    // `preview.newAgentsToCreate.map(` shape disappeared when the table
+    // moved off raw <table> markup (raw-table ratchet 30→28).
+    expect(WIZARD).toMatch(/data=\{preview\.newAgentsToCreate\}/);
   });
 
   it("renders a warning banner for rows without any agent", () => {
