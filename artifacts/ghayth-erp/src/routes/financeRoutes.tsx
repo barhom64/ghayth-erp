@@ -102,6 +102,7 @@ const CustomerAdvancesApply = lazy(() => import("@/pages/create/finance/customer
 const Dunning = lazy(() => import("@/pages/finance/dunning"));
 const BadDebt = lazy(() => import("@/pages/finance/bad-debt"));
 const AllocationRules = lazy(() => import("@/pages/finance/allocation-rules"));
+const OverridesReport = lazy(() => import("@/pages/finance/overrides-report"));
 const AllocationResults = lazy(() => import("@/pages/finance/allocation-results"));
 
 export const financeRoutes = [
@@ -170,6 +171,7 @@ export const financeRoutes = [
   { path: "/finance/dunning", component: Dunning },
   { path: "/finance/bad-debt", component: BadDebt },
   { path: "/finance/allocation-rules", component: AllocationRules },
+  { path: "/finance/overrides-report", component: OverridesReport },
   { path: "/finance/allocation-results", component: AllocationResults },
   { path: "/finance/reports", component: FinancialReports },
   { path: "/finance/tax", component: TaxSystem },
