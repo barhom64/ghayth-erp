@@ -44,6 +44,26 @@ const journalLineSchema = z.object({
   credit: z.coerce.number().min(0).default(0),
   description: z.string().optional().default(""),
   costCenter: z.string().optional(),
+  // Dimensional allocation (#1090 line-level allocation — phase P0/P1
+  // brought dimensions to invoice + PO lines; this lets manual
+  // journal entries carry the same dimensions so trial-balance and
+  // per-entity profitability reports remain consistent across all
+  // journal sources).
+  costCenterId: z.coerce.number().int().positive().optional(),
+  activityType: z.string().optional(),
+  projectId: z.coerce.number().int().positive().optional(),
+  vehicleId: z.coerce.number().int().positive().optional(),
+  propertyId: z.coerce.number().int().positive().optional(),
+  unitId: z.coerce.number().int().positive().optional(),
+  assetId: z.coerce.number().int().positive().optional(),
+  employeeId: z.coerce.number().int().positive().optional(),
+  driverId: z.coerce.number().int().positive().optional(),
+  contractId: z.coerce.number().int().positive().optional(),
+  clientId: z.coerce.number().int().positive().optional(),
+  vendorId: z.coerce.number().int().positive().optional(),
+  umrahSeasonId: z.coerce.number().int().positive().optional(),
+  umrahAgentId: z.coerce.number().int().positive().optional(),
+  manualOverrideReason: z.string().optional(),
 });
 
 const createJournalSchema = z.object({
