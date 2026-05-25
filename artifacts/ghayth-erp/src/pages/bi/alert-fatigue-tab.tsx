@@ -1,36 +1,47 @@
-import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DataTable } from "@workspace/ui-core";
+import {
+  DataTable,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormSelectField,
+} from "@workspace/ui-core";
 import { BellOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { GuardedButton } from "@/components/shared/permission-gate";
+import { usePermission } from "@/components/shared/permission-gate";
+
+const muteSchema = z.object({
+  alertType: z.string().min(1, "أدخل نوع التنبيه"),
+  muteHours: z.string(),
+});
+
+const MUTE_HOURS_OPTIONS = [
+  { value: "1", label: "ساعة واحدة" },
+  { value: "4", label: "4 ساعات" },
+  { value: "8", label: "8 ساعات" },
+  { value: "24", label: "يوم كامل" },
+  { value: "72", label: "3 أيام" },
+];
 
 export function AlertFatigueTab() {
   const { data: dcData, isLoading, isError } = useApiQuery<any>(["alert-daily-count"], "/bi/alert-fatigue/daily-count");
   const { data: settingsData } = useApiQuery<any>(["alert-fatigue-settings"], "/bi/alert-fatigue/settings");
   const { toast } = useToast();
-  const [muteType, setMuteType] = useState("");
-  const [muteHours, setMuteHours] = useState("24");
-  const [loading, setLoading] = useState(false);
+  const canMute = usePermission("bi:create");
 
-  const handleMute = async () => {
-    if (!muteType.trim()) { toast({ title: "أدخل نوع التنبيه", variant: "destructive" }); return; }
-    setLoading(true);
+  const handleMute = async (values: { alertType: string; muteHours: string }) => {
     try {
-      const muteUntil = new Date(Date.now() + Number(muteHours) * 3600000).toISOString();
-      await apiFetch("/bi/alert-fatigue/mute", { method: "POST", body: JSON.stringify({ alertType: muteType, muteUntil }) });
-      toast({ title: "تم كتم التنبيهات", description: `سيتم كتم "${muteType}" لمدة ${muteHours} ساعة` });
-      setMuteType("");
+      const muteUntil = new Date(Date.now() + Number(values.muteHours) * 3600000).toISOString();
+      await apiFetch("/bi/alert-fatigue/mute", { method: "POST", body: JSON.stringify({ alertType: values.alertType, muteUntil }) });
+      toast({ title: "تم كتم التنبيهات", description: `سيتم كتم "${values.alertType}" لمدة ${values.muteHours} ساعة` });
     } catch {
       toast({ title: "خطأ", variant: "destructive" });
     }
-    setLoading(false);
   };
 
   const dc = dcData || {};
@@ -69,28 +80,18 @@ export function AlertFatigueTab() {
       <Card>
         <CardHeader><CardTitle>كتم نوع تنبيه مؤقتاً</CardTitle></CardHeader>
         <CardContent>
-          <div className="flex gap-3">
-            <input
-              className="flex-1 border rounded-md px-3 py-2 text-sm"
-              placeholder="نوع التنبيه (مثال: invoice_overdue)"
-              value={muteType}
-              onChange={(e) => setMuteType(e.target.value)}
-              dir="ltr"
-            />
-            <Select value={muteHours} onValueChange={setMuteHours}>
-              <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">ساعة واحدة</SelectItem>
-                <SelectItem value="4">4 ساعات</SelectItem>
-                <SelectItem value="8">8 ساعات</SelectItem>
-                <SelectItem value="24">يوم كامل</SelectItem>
-                <SelectItem value="72">3 أيام</SelectItem>
-              </SelectContent>
-            </Select>
-            <GuardedButton perm="bi:create" onClick={handleMute} disabled={loading}>
-              <BellOff className="h-4 w-4 me-2" />كتم
-            </GuardedButton>
-          </div>
+          <FormShell
+            schema={muteSchema}
+            defaultValues={{ alertType: "", muteHours: "24" }}
+            submitLabel="كتم"
+            disabled={!canMute}
+            onSubmit={handleMute}
+          >
+            <FormGrid cols={2}>
+              <FormTextField name="alertType" label="نوع التنبيه" placeholder="invoice_overdue" required />
+              <FormSelectField name="muteHours" label="المدة" options={MUTE_HOURS_OPTIONS} />
+            </FormGrid>
+          </FormShell>
         </CardContent>
       </Card>
 
