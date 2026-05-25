@@ -117,12 +117,18 @@ export async function renderPrint(
   }
 
   // 3. Template
+  // entityId === "list" is the well-known signal that the caller wants a
+  // list-view render (ListPage exports the visible rows as payload).
+  // resolveTemplate then skips the single-entity bespoke preset and uses
+  // universal so the items table auto-builds from arbitrary row shapes.
+  const isListView = req.entityId === "list" || req.entityId === "_list";
   const template =
     req.overrideTemplate ??
     (await resolveTemplate({
       companyId: scope.companyId,
       branchId: scope.branchId,
       entityType: req.entityType,
+      asList: isListView,
     }));
   if (!template) {
     throw new PrintTemplateMissingError(req.entityType);
