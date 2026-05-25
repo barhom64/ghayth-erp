@@ -13,8 +13,8 @@
   "domain": "hr",
   "title": "عقد عمل",
   "implementation": {
-    "kind": "universal-fallback",
-    "key": "—"
+    "kind": "bespoke-preset",
+    "key": "employee_contract"
   },
   "ownerTeam": "hr"
 }

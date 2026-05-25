@@ -13,8 +13,8 @@
   "domain": "finance",
   "title": "أمر شراء",
   "implementation": {
-    "kind": "universal-fallback",
-    "key": "—"
+    "kind": "bespoke-preset",
+    "key": "purchase_order"
   },
   "ownerTeam": "finance"
 }

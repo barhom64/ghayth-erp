@@ -13,8 +13,8 @@
   "domain": "hr",
   "title": "قسيمة راتب فرد",
   "implementation": {
-    "kind": "universal-fallback",
-    "key": "—"
+    "kind": "bespoke-preset",
+    "key": "payslip"
   },
   "ownerTeam": "hr"
 }

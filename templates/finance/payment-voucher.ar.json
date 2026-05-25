@@ -13,8 +13,8 @@
   "domain": "finance",
   "title": "سند صرف",
   "implementation": {
-    "kind": "universal-fallback",
-    "key": "—"
+    "kind": "bespoke-preset",
+    "key": "payment_voucher"
   },
   "ownerTeam": "finance"
 }
