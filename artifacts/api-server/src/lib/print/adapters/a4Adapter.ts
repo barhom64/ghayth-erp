@@ -33,7 +33,12 @@ th { background:#f1f5f9; }
 `;
 
 function wrapHtml(body: string, ctx: RenderContext): string {
-  const title = `${ctx.entityType}-${ctx.entityId}`;
+  // entityId comes from the request body — an attacker can send something
+  // like "</title><script>alert(1)</script>" to escape the title element
+  // and inject script that runs when the browser opens the doc to print.
+  // Self-XSS only (their own session), but cheap to plug.
+  const title = `${ctx.entityType}-${ctx.entityId}`
+    .replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]!));
   const cssOverrides = ctx.template.cssOverrides ?? "";
   return `<!doctype html>
 <html lang="ar" dir="rtl">

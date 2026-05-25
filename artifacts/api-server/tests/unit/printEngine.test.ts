@@ -240,3 +240,95 @@ describe("Print Engine v2 — variable substitution", () => {
     expect(src).toContain('class="watermark"');
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// Regression: a 500 "حدث خطأ غير متوقع" was hitting users when the print
+// pipeline received a payload with weird shapes (null first row in items[],
+// empty objects, JSONB-as-array, etc). Buildt-tablefn must never crash — it
+// must fall back to the "لا توجد بنود" placeholder instead.
+// ──────────────────────────────────────────────────────────────────────────
+
+describe("Print Engine v2 — substitute() resilience to bad data", () => {
+  it("does not throw on a typical invoice payload", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = {
+      companyName: "شركة الاختبار",
+      branchName: "الفرع الرئيسي",
+      phone: "0123456789",
+      email: "x@example.com",
+    } as Parameters<typeof substitute>[0]["branch"];
+    const data = {
+      entity: { id: 42, ref: "INV-001", status: "approved", subtotal: 1000, total: 1150 },
+      items: [
+        { id: 1, invoiceId: 42, description: "بند 1", quantity: 2, unitPrice: 500, totalPrice: 1000 },
+      ],
+      client: { id: 7, name: "عميل اختبار", taxNumber: "30012345600003" },
+    };
+    expect(() =>
+      substitute({
+        template: "{{branch.letterhead}}<p>{{entity.ref}}</p>{{entity.itemsTable}}",
+        data,
+        branch,
+        isThermal: false,
+      }),
+    ).not.toThrow();
+  });
+
+  it("does not throw when items[0] is null (degenerate join result)", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const data = {
+      entity: { id: 1 },
+      items: [null, { description: "real row", quantity: 1 }],
+    };
+    let html = "";
+    expect(() => {
+      html = substitute({ template: "{{entity.itemsTable}}", data, branch, isThermal: false });
+    }).not.toThrow();
+    expect(html).toContain("real row");
+  });
+
+  it("does not throw when items[] is empty", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    let html = "";
+    expect(() => {
+      html = substitute({
+        template: "{{entity.itemsTable}}",
+        data: { entity: { id: 1 }, items: [] },
+        branch,
+        isThermal: false,
+      });
+    }).not.toThrow();
+    expect(html).toContain("لا توجد بنود");
+  });
+
+  it("does not throw when data.items is undefined", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    expect(() =>
+      substitute({
+        template: "{{entity.itemsTable}}",
+        data: { entity: { id: 1 } },
+        branch,
+        isThermal: false,
+      }),
+    ).not.toThrow();
+  });
+
+  it("does not throw when item rows are missing the sample's columns", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const data = {
+      entity: { id: 1 },
+      items: [
+        { description: "A", quantity: 1 },
+        { description: "B" }, // missing quantity
+        {}, // empty
+      ],
+    };
+    expect(() =>
+      substitute({ template: "{{entity.itemsTable}}", data, branch, isThermal: false }),
+    ).not.toThrow();
+  });
+});
