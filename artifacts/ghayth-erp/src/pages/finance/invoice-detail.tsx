@@ -121,6 +121,14 @@ export default function InvoiceDetailPage() {
     id ? `/finance/invoices/${id}` : null,
     !!id,
   );
+  const { data: memos, refetch: refetchMemos } = useApiQuery<{
+    creditMemos: any[];
+    debitMemos: any[];
+  }>(
+    ["invoice-memos", id || ""],
+    id ? `/finance/invoices/${id}/memos` : null,
+    !!id,
+  );
   const [showPayment, setShowPayment] = useState(false);
   const [showCreditMemo, setShowCreditMemo] = useState(false);
   const [showDebitMemo, setShowDebitMemo] = useState(false);
@@ -440,6 +448,57 @@ export default function InvoiceDetailPage() {
         </CardContent>
       </Card>
 
+      {((memos?.creditMemos?.length ?? 0) > 0 || (memos?.debitMemos?.length ?? 0) > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-muted-foreground" />
+              الإشعارات (دائنة + مدينة) — {(memos?.creditMemos?.length ?? 0) + (memos?.debitMemos?.length ?? 0)}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {(memos?.creditMemos?.length ?? 0) > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-emerald-700 mb-2">
+                  إشعارات دائنة — {memos!.creditMemos.length}
+                </p>
+                <DataTable
+                  columns={[
+                    { key: "id", header: "#", render: (r) => <span className="font-mono text-xs">{r.id}</span> },
+                    { key: "memoDate", header: "التاريخ", render: (r) => r.memoDate ? formatDateAr(r.memoDate) : "-" },
+                    { key: "amount", header: "الإجمالي", render: (r) => <span className="font-bold text-emerald-700">{formatCurrency(Number(r.amount))}</span> },
+                    { key: "netAmount", header: "الصافي", render: (r) => <span className="font-mono">{formatCurrency(Number(r.netAmount))}</span> },
+                    { key: "vatAmount", header: "الضريبة", render: (r) => <span className="font-mono text-muted-foreground">{formatCurrency(Number(r.vatAmount))}</span> },
+                    { key: "reason", header: "السبب", render: (r) => <span className="text-xs">{r.reason || "—"}</span> },
+                  ] satisfies DataTableColumn<any>[]}
+                  data={memos!.creditMemos}
+                  pageSize={0} noToolbar searchPlaceholder={null} emptyMessage="—"
+                />
+              </div>
+            )}
+            {(memos?.debitMemos?.length ?? 0) > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-orange-700 mb-2">
+                  إشعارات مدينة — {memos!.debitMemos.length}
+                </p>
+                <DataTable
+                  columns={[
+                    { key: "id", header: "#", render: (r) => <span className="font-mono text-xs">{r.id}</span> },
+                    { key: "memoDate", header: "التاريخ", render: (r) => r.memoDate ? formatDateAr(r.memoDate) : "-" },
+                    { key: "amount", header: "الإجمالي", render: (r) => <span className="font-bold text-orange-700">{formatCurrency(Number(r.amount))}</span> },
+                    { key: "netAmount", header: "الصافي", render: (r) => <span className="font-mono">{formatCurrency(Number(r.netAmount))}</span> },
+                    { key: "vatAmount", header: "الضريبة", render: (r) => <span className="font-mono text-muted-foreground">{formatCurrency(Number(r.vatAmount))}</span> },
+                    { key: "reason", header: "السبب", render: (r) => <span className="text-xs">{r.reason || "—"}</span> },
+                  ] satisfies DataTableColumn<any>[]}
+                  data={memos!.debitMemos}
+                  pageSize={0} noToolbar searchPlaceholder={null} emptyMessage="—"
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {invoice.status === "draft" && (
         <>
           <CogsPreviewCard invoiceId={Number(id)} />
@@ -513,14 +572,14 @@ export default function InvoiceDetailPage() {
             openBalance={remaining}
             open={showCreditMemo}
             onOpenChange={setShowCreditMemo}
-            onIssued={refetch}
+            onIssued={() => { refetch(); refetchMemos(); }}
           />
           <DebitMemoDialog
             invoiceId={Number(id)}
             invoiceRef={invoice.ref}
             open={showDebitMemo}
             onOpenChange={setShowDebitMemo}
-            onIssued={refetch}
+            onIssued={() => { refetch(); refetchMemos(); }}
           />
         </>
       )}
