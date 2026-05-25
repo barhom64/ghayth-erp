@@ -2506,3 +2506,153 @@ reportsRouter.get(
     }
   },
 );
+// ─────────────────────────────────────────────────────────────────────────────
+// Negative-stock outliers — companion to the inventory valuation report.
+//
+// A lot row should NEVER go negative. When it does, one of three bugs
+// is at play:
+//
+//   1. A sale was approved without the lot decrement guard catching
+//      insufficient stock (pre-#1013 invoices, or a manual SQL fix).
+//   2. A stocktake adjustment that subtracted more than the on-hand
+//      quantity bypassed the floor.
+//   3. A double-applied stock movement (idempotency replay before #885's
+//      reentrant-tx engine landed).
+//
+// Surfacing these as a queryable list lets ops investigate + correct
+// before the period-end valuation report claims a negative inventory
+// asset. Pairs with the inventory-valuation report (#1033).
+//
+// Read-only, no transaction.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/negative-stock",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { warehouseId, productId } =
+        req.query as Record<string, string | undefined>;
+
+      const params: unknown[] = [scope.companyId];
+      let whereExtra = "";
+      if (warehouseId) {
+        const wid = Number(warehouseId);
+        if (Number.isFinite(wid) && wid > 0) {
+          params.push(wid);
+          whereExtra += ` AND l."warehouseId" = $${params.length}`;
+        }
+      }
+      if (productId) {
+        const pid = Number(productId);
+        if (Number.isFinite(pid) && pid > 0) {
+          params.push(pid);
+          whereExtra += ` AND l."productId" = $${params.length}`;
+        }
+      }
+      // Branch scope via the warehouse the lot belongs to.
+      const branchFilter = getBranchCondition(scope, undefined, params, "w");
+
+      interface NegLotRow {
+        lotId: number;
+        productId: number;
+        sku: string | null;
+        productName: string | null;
+        warehouseId: number;
+        warehouseName: string | null;
+        warehouseCode: string | null;
+        lotNumber: string;
+        quantity: string | number;
+        originalQuantity: string | number;
+        unitCost: string | number;
+        receivedDate: string;
+        status: string;
+        deficitValue: string | number;
+        latestMovementAt: string | null;
+        latestMovementType: string | null;
+        latestJournalEntryId: number | null;
+      }
+
+      const rows = await rawQuery<NegLotRow>(
+        `SELECT l.id                          AS "lotId",
+                l."productId",
+                p.sku,
+                p.name                        AS "productName",
+                l."warehouseId",
+                w.name                        AS "warehouseName",
+                w.code                        AS "warehouseCode",
+                l."lotNumber",
+                l.quantity::float8            AS quantity,
+                l."originalQuantity"::float8  AS "originalQuantity",
+                l."unitCost"::float8          AS "unitCost",
+                l."receivedDate"::text        AS "receivedDate",
+                l.status,
+                -- deficit value = how many SAR the books over-credited
+                -- inventory for. Negative quantity × unit cost magnitude.
+                (ABS(l.quantity) * l."unitCost")::float8 AS "deficitValue",
+                latest."latestMovementAt"::text AS "latestMovementAt",
+                latest."latestMovementType"     AS "latestMovementType",
+                latest."latestJournalEntryId"   AS "latestJournalEntryId"
+           FROM warehouse_stock_lots l
+           LEFT JOIN warehouses w
+             ON w.id = l."warehouseId" AND w."deletedAt" IS NULL
+           LEFT JOIN warehouse_products p
+             ON p.id = l."productId" AND p."deletedAt" IS NULL
+           LEFT JOIN LATERAL (
+             SELECT m."createdAt"     AS "latestMovementAt",
+                    m.type            AS "latestMovementType",
+                    m."journalEntryId" AS "latestJournalEntryId"
+               FROM warehouse_movements m
+              WHERE m."companyId" = l."companyId"
+                AND m."lotId" = l.id
+              ORDER BY m."createdAt" DESC
+              LIMIT 1
+           ) latest ON true
+          WHERE l."companyId" = $1
+            AND l.quantity < 0
+            AND l."deletedAt" IS NULL
+            ${whereExtra}${branchFilter}
+          ORDER BY l.quantity ASC, l.id DESC
+          LIMIT 1000`,
+        params,
+      );
+
+      const totalDeficitValue = rows.reduce(
+        (s, r) => s + Number(r.deficitValue ?? 0), 0
+      );
+      const byWarehouse = new Map<number, {
+        warehouseId: number;
+        warehouseName: string | null;
+        warehouseCode: string | null;
+        lotCount: number;
+        deficitValue: number;
+      }>();
+      for (const r of rows) {
+        const w = byWarehouse.get(r.warehouseId) ?? {
+          warehouseId: r.warehouseId,
+          warehouseName: r.warehouseName,
+          warehouseCode: r.warehouseCode,
+          lotCount: 0,
+          deficitValue: 0,
+        };
+        w.lotCount += 1;
+        w.deficitValue += Number(r.deficitValue ?? 0);
+        byWarehouse.set(r.warehouseId, w);
+      }
+
+      res.json(maskFields(req, {
+        filters: { warehouseId, productId },
+        summary: {
+          lotCount: rows.length,
+          totalDeficitValue: roundTo2(totalDeficitValue),
+        },
+        byWarehouse: Array.from(byWarehouse.values())
+          .map((w) => ({ ...w, deficitValue: roundTo2(w.deficitValue) }))
+          .sort((a, b) => b.deficitValue - a.deficitValue),
+        data: rows,
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "Negative stock report error:");
+    }
+  },
+);

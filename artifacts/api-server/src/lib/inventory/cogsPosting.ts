@@ -471,6 +471,27 @@ export interface CogsReversalPlan {
   lineUpdates: CogsReversalLineUpdate[];
   /** Σ COGS being reversed by this plan. */
   totalReversed: number;
+  /** Soft warnings surfaced to the route layer — non-fatal. The
+   *  credit-memo handler bubbles these into its response so the
+   *  operator + UI can show "review before approval" without
+   *  blocking the refund. */
+  warnings: CogsReversalWarning[];
+}
+
+export type CogsReversalWarningReason =
+  | "lot_quarantine"
+  | "lot_recalled"
+  | "lot_expired"
+  | "lot_disposed"
+  | "lot_qc_rejected"
+  | "lot_not_found";
+
+export interface CogsReversalWarning {
+  invoiceLineId: number;
+  productId: number;
+  lotId: number;
+  reason: CogsReversalWarningReason;
+  detail?: string;
 }
 
 interface InvoiceLineCogsRow {
@@ -506,6 +527,7 @@ export async function planCogsReversal(
 ): Promise<CogsReversalPlan> {
   const empty: CogsReversalPlan = {
     journalLines: [], stockMovements: [], lineUpdates: [], totalReversed: 0,
+    warnings: [],
   };
   if (input.ratio <= 0) return empty;
   // Cap at 100 % so a buggy ratio like 1.0001 doesn't over-restock.
@@ -535,6 +557,7 @@ export async function planCogsReversal(
 
   const stockMovements: StockMovementInput[] = [];
   const lineUpdates: CogsReversalLineUpdate[] = [];
+  const warnings: CogsReversalWarning[] = [];
   const bucketsDr = new Map<string, CogsJournalLine>();
   const bucketsCr = new Map<string, CogsJournalLine>();
   let totalReversed = 0;
@@ -570,6 +593,39 @@ export async function planCogsReversal(
         extendedCost: restoreCost,
       });
       const lot = lotsForProduct.find((l) => l.id === alloc.lotId);
+      // Flag operator / QC if the lot's status drifted between sale
+      // and return. We still proceed with the restock (the customer
+      // is owed their refund and the inventory must balance) — the
+      // warning is purely advisory so QC can re-inspect.
+      if (!lot) {
+        warnings.push({
+          invoiceLineId: ln.id, productId: ln.productId, lotId: alloc.lotId,
+          reason: "lot_not_found",
+          detail: "Original lot deleted between sale and return — restock will hit a missing row (no quantity increment); review manually.",
+        });
+      } else {
+        const statusReasonMap: Record<string, CogsReversalWarningReason | null> = {
+          quarantine: "lot_quarantine",
+          recalled:   "lot_recalled",
+          expired:    "lot_expired",
+          disposed:   "lot_disposed",
+        };
+        const statusReason = statusReasonMap[lot.status] ?? null;
+        if (statusReason) {
+          warnings.push({
+            invoiceLineId: ln.id, productId: ln.productId, lotId: alloc.lotId,
+            reason: statusReason,
+            detail: `Lot status is '${lot.status}'${lot.recalledAt ? ` (since ${lot.recalledAt})` : ""} — QC should re-inspect the returned units before re-issuing.`,
+          });
+        }
+        if (lot.qualityControlStatus === "rejected") {
+          warnings.push({
+            invoiceLineId: ln.id, productId: ln.productId, lotId: alloc.lotId,
+            reason: "lot_qc_rejected",
+            detail: "Lot was QC-rejected after the original sale — the returned units may be physically defective.",
+          });
+        }
+      }
       stockMovements.push({
         productId: ln.productId,
         quantity: restoreQty,
@@ -634,6 +690,7 @@ export async function planCogsReversal(
     stockMovements,
     lineUpdates,
     totalReversed,
+    warnings,
   };
 }
 
@@ -690,6 +747,10 @@ export async function applyStockReversals(
 interface ReversalLotRow {
   id: number;
   warehouseId: number;
+  status: string;
+  qualityControlStatus: string;
+  recallId: number | null;
+  recalledAt: string | null;
 }
 
 async function loadLotsForReversal(
@@ -702,8 +763,14 @@ async function loadLotsForReversal(
   // No status filter — even quarantined / expired lots get the
   // returned units back. The lot row stays around for traceability
   // even when its status was flipped after the original sale.
+  // We DO pull status fields so the planner can emit a warning when
+  // the operator is about to restock into a non-active lot.
   const res = await client.query<ReversalLotRow>(
-    `SELECT id, "warehouseId"
+    `SELECT id, "warehouseId",
+            status,
+            "qualityControlStatus",
+            "recallId",
+            "recalledAt"::text AS "recalledAt"
        FROM warehouse_stock_lots
       WHERE "companyId" = $1
         AND "productId" = $2
