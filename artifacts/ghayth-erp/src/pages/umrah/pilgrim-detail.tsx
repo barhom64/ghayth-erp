@@ -168,7 +168,7 @@ export default function PilgrimDetail() {
       overview={overview}
       actions={
         <div className="flex items-center gap-2">
-          actions
+          {actions}
           <PrintButton entityType="umrah_pilgrim" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
         </div>
       }
