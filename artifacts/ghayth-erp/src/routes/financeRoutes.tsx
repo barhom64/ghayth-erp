@@ -15,6 +15,8 @@ const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
 const TaxCodesCreate = lazy(() => import("@/pages/create/finance/tax-codes-create"));
 const WhtCategories = lazy(() => import("@/pages/finance/wht-categories"));
 const WhtCategoriesCreate = lazy(() => import("@/pages/create/finance/wht-categories-create"));
+const TaxCodesEdit = lazy(() => import("@/pages/create/finance/tax-codes-edit"));
+const WhtCategoriesEdit = lazy(() => import("@/pages/create/finance/wht-categories-edit"));
 const LotExpiryAlerts = lazy(() => import("@/pages/finance/lot-expiry-alerts"));
 const CogsSummary = lazy(() => import("@/pages/finance/cogs-summary"));
 const InventoryValuation = lazy(() => import("@/pages/finance/inventory-valuation"));
@@ -101,8 +103,10 @@ export const financeRoutes = [
   // as accounts.tsx; create pages mirror accounts-create.tsx.
   { path: "/finance/tax-codes", component: TaxCodes },
   { path: "/finance/tax-codes/create", component: TaxCodesCreate },
+  { path: "/finance/tax-codes/:id/edit", component: TaxCodesEdit },
   { path: "/finance/wht-categories", component: WhtCategories },
   { path: "/finance/wht-categories/create", component: WhtCategoriesCreate },
+  { path: "/finance/wht-categories/:id/edit", component: WhtCategoriesEdit },
   // GL integrity gaps — period-close pre-flight (#1043).
   { path: "/finance/reports/gl-integrity-gaps", component: GlIntegrityGaps },
   // ZATCA & inventory reports hub — landing page (#1059).
