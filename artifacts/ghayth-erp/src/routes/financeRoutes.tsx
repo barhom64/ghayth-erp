@@ -23,6 +23,8 @@ const InventoryValuation = lazy(() => import("@/pages/finance/inventory-valuatio
 const NegativeStock = lazy(() => import("@/pages/finance/negative-stock"));
 const InventoryTurnover = lazy(() => import("@/pages/finance/inventory-turnover"));
 const GlIntegrityGaps = lazy(() => import("@/pages/finance/gl-integrity-gaps"));
+const UnmappedLines = lazy(() => import("@/pages/finance/unmapped-lines"));
+const WhtSummary = lazy(() => import("@/pages/finance/wht-summary"));
 const ZatcaReportsHub = lazy(() => import("@/pages/finance/zatca-reports-hub"));
 const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
 const VouchersCreate = lazy(() => import("@/pages/create/finance/vouchers-create"));
@@ -42,6 +44,7 @@ const Vendors = lazy(() => import("@/pages/finance/vendors"));
 const VendorsCreate = lazy(() => import("@/pages/create/finance/vendors-create"));
 const VendorsEdit = lazy(() => import("@/pages/create/finance/vendors-edit"));
 const VendorDetail = lazy(() => import("@/pages/finance/vendor-detail"));
+const VendorStatement = lazy(() => import("@/pages/finance/vendor-statement"));
 const PurchaseOrders = lazy(() => import("@/pages/finance/purchase-orders"));
 const PurchaseOrdersCreate = lazy(() => import("@/pages/create/finance/purchase-orders-create"));
 const PurchaseOrderDetail = lazy(() => import("@/pages/finance/purchase-order-detail"));
@@ -113,6 +116,8 @@ export const financeRoutes = [
   { path: "/finance/wht-categories/:id/edit", component: WhtCategoriesEdit },
   // GL integrity gaps — period-close pre-flight (#1043).
   { path: "/finance/reports/gl-integrity-gaps", component: GlIntegrityGaps },
+  { path: "/finance/reports/unmapped-lines", component: UnmappedLines },
+  { path: "/finance/reports/wht-summary", component: WhtSummary },
   // ZATCA & inventory reports hub — landing page (#1059).
   { path: "/finance/reports/zatca", component: ZatcaReportsHub },
   // Lot expiry alerts — consumes /reports/lot-expiry-alerts (#1042).
@@ -142,6 +147,7 @@ export const financeRoutes = [
   { path: "/finance/vendors", component: Vendors },
   { path: "/finance/vendors/create", component: VendorsCreate },
   { path: "/finance/vendors/:id/edit", component: VendorsEdit, subKey: "vendors" },
+  { path: "/finance/vendors/:id/statement", component: VendorStatement, subKey: "vendors" },
   { path: "/finance/vendors/:id", component: VendorDetail, subKey: "vendors" },
   { path: "/finance/purchase-orders", component: PurchaseOrders },
   { path: "/finance/purchase-orders/create", component: PurchaseOrdersCreate },

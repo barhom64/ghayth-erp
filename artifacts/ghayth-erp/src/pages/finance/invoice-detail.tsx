@@ -19,6 +19,7 @@ import {
   Zap,
   Send,
   FileText,
+  FilePlus,
 } from "lucide-react";
 import {
   DataTable,
@@ -41,6 +42,7 @@ import {
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
 import { CreditMemoDialog } from "@/components/shared/credit-memo-dialog";
+import { DebitMemoDialog } from "@/components/shared/debit-memo-dialog";
 
 /**
  * Invoice detail page — migrated to DetailPageLayout which provides
@@ -121,6 +123,7 @@ export default function InvoiceDetailPage() {
   );
   const [showPayment, setShowPayment] = useState(false);
   const [showCreditMemo, setShowCreditMemo] = useState(false);
+  const [showDebitMemo, setShowDebitMemo] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
 
   // R.4 iter 4 — both mutations now flow through useApiMutation so
@@ -209,6 +212,12 @@ export default function InvoiceDetailPage() {
         <GuardedButton perm="finance:create" variant="outline" size="sm" onClick={() => setShowCreditMemo(true)}>
           <FileText className="h-4 w-4 me-1" />
           إصدار إشعار دائن
+        </GuardedButton>
+      )}
+      {invoice && invoice.status !== "draft" && invoice.status !== "cancelled" && (
+        <GuardedButton perm="finance:create" variant="outline" size="sm" onClick={() => setShowDebitMemo(true)}>
+          <FilePlus className="h-4 w-4 me-1" />
+          إصدار إشعار مدين
         </GuardedButton>
       )}
       {invoice && (
@@ -497,14 +506,23 @@ export default function InvoiceDetailPage() {
         hideTabs={registryHideTabs}
       />
       {invoice && (
-        <CreditMemoDialog
-          invoiceId={Number(id)}
-          invoiceRef={invoice.ref}
-          openBalance={remaining}
-          open={showCreditMemo}
-          onOpenChange={setShowCreditMemo}
-          onIssued={refetch}
-        />
+        <>
+          <CreditMemoDialog
+            invoiceId={Number(id)}
+            invoiceRef={invoice.ref}
+            openBalance={remaining}
+            open={showCreditMemo}
+            onOpenChange={setShowCreditMemo}
+            onIssued={refetch}
+          />
+          <DebitMemoDialog
+            invoiceId={Number(id)}
+            invoiceRef={invoice.ref}
+            open={showDebitMemo}
+            onOpenChange={setShowDebitMemo}
+            onIssued={refetch}
+          />
+        </>
       )}
     </>
   );
