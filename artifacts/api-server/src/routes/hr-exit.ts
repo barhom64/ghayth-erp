@@ -74,6 +74,7 @@ import {
   toDateISO,
   currentDateInTz,
 } from "../lib/businessHelpers.js";
+import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { generateSequentialNumber } from "../lib/hrHelpers.js";
@@ -178,9 +179,20 @@ router.get("/exit", authorize({ feature: "hr.exit", action: "list" }), async (re
     const scope = req.scope!;
     const { status } = req.query as Record<string, string | undefined>;
 
-    let where = `x."companyId" = $1 AND x."deletedAt" IS NULL`;
-    const params: unknown[] = [scope.companyId];
-    let idx = 2;
+    // Honor multi-company picker via buildScopedWhere. hr_exit_requests has no
+    // branchId of its own (branch is inferred from the linked assignment), so
+    // disableBranchScope: true matches the table shape.
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      parseScopeFilters(req),
+      {
+        companyColumn: 'x."companyId"',
+        disableBranchScope: true,
+        softDeleteColumn: 'x."deletedAt"',
+      },
+    );
+    let where = baseWhere;
+    let idx = nextParamIndex;
 
     if (status) { where += ` AND x.status = $${idx}`; params.push(status); idx++; }
 
