@@ -16,10 +16,15 @@ pnpm bench tests/benchmarks/scopedQuery.bench.ts
 
 # Filter by describe/bench name
 pnpm bench -t "buildScopedWhere"
+
+# Save a baseline to compare against later (gitignored)
+pnpm bench | tee tests/benchmarks/.last-run.txt
 ```
 
 Output is `hz` (ops/sec, higher is better), mean/median (ns, lower is better),
 and `rme%` (relative margin of error — keep below ~3% for stable numbers).
+Stash a pre-refactor baseline via `tee` and `diff` against a post-refactor
+run to spot regressions.
 
 ## What's covered
 
@@ -29,6 +34,10 @@ and `rme%` (relative margin of error — keep below ~3% for stable numbers).
 | `auditDiff.bench.ts`      | `computeDiff` — runs on every mutation that writes `audit_log`            |
 | `algorithms.bench.ts`     | Haversine, moving avg, critical path, resource picker                     |
 | `fx.bench.ts`             | `convertWithRate`, `computeRealizedFx`, `computeRevaluationLines`         |
+| `fxJournal.bench.ts`      | `aggregateRevaluation`, `buildRevaluationEntryInput`, realised-FX builder |
+| `gl.bench.ts`             | `buildEntry` / `buildSimpleEntry` — balance check on every posting        |
+| `tax.bench.ts`            | `splitFromRate` — VAT split per invoice / purchase line                   |
+| `rbac.bench.ts`            | `isKnownPermission`, `getRolePermissions` — runs on every authorize()     |
 | `businessHelpers.bench.ts`| Riyadh-aware `currentDateInTz`, `combineDateAndShiftTime`, VAT, rounding  |
 
 Only **pure** functions belong here. DB-driven paths are measured by the
