@@ -423,25 +423,28 @@ export default function InvoiceDetailPage() {
       </Card>
 
       {invoice.status === "draft" && (
-        <Card>
-          <CardHeader><CardTitle>إجراءات الاعتماد</CardTitle></CardHeader>
-          <CardContent>
-            <ApprovalActions
-              entityType="invoice"
-              entityId={Number(id)}
-              approveEndpoint={`/finance/invoices/${id}/approve`}
-              rejectEndpoint={`/finance/invoices/${id}/reject`}
-              returnEndpoint={`/finance/invoices/${id}/return`}
-              approveMethod="POST"
-              rejectMethod="PATCH"
-              returnMethod="PATCH"
-              approveBody={() => ({})}
-              rejectBody={(r) => ({ notes: r })}
-              returnBody={(r) => ({ notes: r })}
-              invalidateKeys={[["invoice-detail", id || ""], ["invoices"]]}
-            />
-          </CardContent>
-        </Card>
+        <>
+          <CogsPreviewCard invoiceId={Number(id)} />
+          <Card>
+            <CardHeader><CardTitle>إجراءات الاعتماد</CardTitle></CardHeader>
+            <CardContent>
+              <ApprovalActions
+                entityType="invoice"
+                entityId={Number(id)}
+                approveEndpoint={`/finance/invoices/${id}/approve`}
+                rejectEndpoint={`/finance/invoices/${id}/reject`}
+                returnEndpoint={`/finance/invoices/${id}/return`}
+                approveMethod="POST"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={() => ({})}
+                rejectBody={(r) => ({ notes: r })}
+                returnBody={(r) => ({ notes: r })}
+                invalidateKeys={[["invoice-detail", id || ""], ["invoices"]]}
+              />
+            </CardContent>
+          </Card>
+        </>
       )}
 
       <Card>
@@ -483,5 +486,177 @@ export default function InvoiceDetailPage() {
       extraTabs={registryExtraTabs}
       hideTabs={registryHideTabs}
     />
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CogsPreviewCard — surfaces the COGS plan + stock-shortage blockers
+// from POST /invoices/:id/preview-posting (#1023) before the operator
+// clicks "اعتماد". A red blocker banner appears when the planner
+// reports insufficient_stock; warnings for product_not_tracked /
+// no_active_lots / no_*_account pin to the offending line.
+// ─────────────────────────────────────────────────────────────────────────────
+interface PreviewLine {
+  accountCode: string;
+  debit: number;
+  credit: number;
+  description?: string;
+}
+
+interface PreviewResponse {
+  invoiceId: number;
+  invoiceRef: string;
+  canApprove: boolean;
+  blockers: Array<{ field: string; message: string }>;
+  warnings: Array<{ field: string; message: string; lineIds?: number[] }>;
+  resolverWarnings: Array<{ lineId: number; code: string; message: string }>;
+  cogsWarnings: Array<{ lineId: number; productId: number | null; reason: string; detail?: string }>;
+  cogsTotal: number;
+  journalLines: PreviewLine[];
+  totals: { debit: number; credit: number; balanced: boolean };
+}
+
+const COGS_REASON_LABEL: Record<string, string> = {
+  insufficient_stock:    "مخزون غير كافٍ",
+  product_not_found:     "المنتج غير موجود",
+  product_not_tracked:   "المنتج غير مرتبط بمخزون",
+  no_active_lots:        "لا توجد تشغيلات نشطة",
+  no_cogs_account:       "حساب COGS غير مهيأ",
+  no_inventory_account:  "حساب المخزون غير مهيأ",
+};
+
+function CogsPreviewCard({ invoiceId }: { invoiceId: number }) {
+  // preview-posting is a POST that takes no body — same shape #1023 ships.
+  const previewMut = useApiMutation<PreviewResponse, any>(
+    `/finance/invoices/${invoiceId}/preview-posting`,
+    "POST",
+    [],
+  );
+  const [data, setData] = useState<PreviewResponse | null>(null);
+
+  const run = async () => {
+    try {
+      const res = await previewMut.mutateAsync({});
+      setData(res as PreviewResponse);
+    } catch (_e) {
+      // Errors surface via the global toast; nothing extra needed.
+    }
+  };
+
+  // Auto-run the first time the card mounts so the operator sees the
+  // status before scrolling.
+  if (!data && !previewMut.isPending && previewMut.isIdle) {
+    run();
+  }
+
+  if (previewMut.isPending && !data) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>معاينة الاعتماد</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">جاري التحقق من المخزون والحسابات...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!data) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>معاينة الاعتماد</CardTitle></CardHeader>
+        <CardContent>
+          <Button onClick={run} variant="outline" size="sm" rateLimitAware>تحديث المعاينة</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const insufficient = data.cogsWarnings?.filter((w) => w.reason === "insufficient_stock") ?? [];
+  const otherCogsWarnings = (data.cogsWarnings ?? []).filter((w) => w.reason !== "insufficient_stock");
+
+  return (
+    <Card className={data.canApprove
+      ? "border-emerald-300 bg-emerald-50/40"
+      : "border-destructive/40 bg-destructive/5"}>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span>معاينة الاعتماد</span>
+          <span className={`text-xs font-semibold ${data.canApprove ? "text-emerald-700" : "text-destructive"}`}>
+            {data.canApprove ? "✓ جاهز للاعتماد" : "⚠ توجد عوائق"}
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {/* Blockers */}
+        {data.blockers.length > 0 && (
+          <div className="border border-destructive/30 rounded-md p-3 bg-destructive/5">
+            <p className="font-semibold text-destructive mb-2">عوائق الاعتماد ({data.blockers.length})</p>
+            <ul className="list-disc list-inside space-y-1 text-xs">
+              {data.blockers.map((b, i) => (
+                <li key={i} className="text-destructive">
+                  <span className="font-mono text-xs me-1">[{b.field}]</span>
+                  {b.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* COGS warnings (non-fatal) */}
+        {otherCogsWarnings.length > 0 && (
+          <div className="border border-amber-300 rounded-md p-3 bg-amber-50/40">
+            <p className="font-semibold text-amber-700 mb-2">
+              تنبيهات على COGS ({otherCogsWarnings.length}) — الفاتورة ستُعتمد لكن COGS لن يُسجَّل لهذه البنود
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-xs">
+              {otherCogsWarnings.map((w, i) => (
+                <li key={i} className="text-amber-700">
+                  <span className="font-mono text-xs me-1">سطر #{w.lineId}</span>
+                  {COGS_REASON_LABEL[w.reason] ?? w.reason}
+                  {w.detail && <span className="text-muted-foreground"> — {w.detail}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Insufficient stock — already in blockers above; this is just emphasis */}
+        {insufficient.length > 0 && (
+          <p className="text-xs text-destructive">
+            ⛔ المخزون غير كافٍ على {insufficient.length} بند(ود). عدّل الكميات أو استلم بضاعة قبل الاعتماد.
+          </p>
+        )}
+
+        {/* Document-level warnings */}
+        {data.warnings.length > 0 && (
+          <div className="border border-amber-300 rounded-md p-3 bg-amber-50/40">
+            <p className="font-semibold text-amber-700 mb-2">تنبيهات عامة ({data.warnings.length})</p>
+            <ul className="list-disc list-inside space-y-1 text-xs">
+              {data.warnings.map((w, i) => (
+                <li key={i} className="text-amber-700">{w.message}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Posting summary */}
+        <div className="bg-muted/30 p-3 rounded-md flex flex-wrap items-center gap-4 text-xs">
+          <span>عدد القيود: <span className="font-semibold">{data.journalLines.length}</span></span>
+          <span>إجمالي مدين: <span className="font-semibold text-status-info-foreground">{formatCurrency(data.totals.debit)}</span></span>
+          <span>إجمالي دائن: <span className="font-semibold text-status-info-foreground">{formatCurrency(data.totals.credit)}</span></span>
+          <span>متوازن: <span className={`font-semibold ${data.totals.balanced ? "text-emerald-700" : "text-destructive"}`}>{data.totals.balanced ? "✓" : "✗"}</span></span>
+          {data.cogsTotal > 0 && (
+            <span>إجمالي COGS: <span className="font-semibold text-orange-700">{formatCurrency(data.cogsTotal)}</span></span>
+          )}
+        </div>
+
+        <div>
+          <Button onClick={run} variant="outline" size="sm" rateLimitAware
+            disabled={previewMut.isPending}>
+            {previewMut.isPending ? "..." : "تحديث المعاينة"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
