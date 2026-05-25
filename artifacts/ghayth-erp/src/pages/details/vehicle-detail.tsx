@@ -13,7 +13,7 @@ import {
   PageStatusBadge,
   DataTable,
 } from "@workspace/ui-core";
-import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText } from "lucide-react";
+import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText, TrendingUp } from "lucide-react";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 
@@ -803,7 +803,12 @@ export default function VehicleDetail() {
       overview={overview}
       actions={
         <div className="flex items-center gap-2">
-          actions
+          {actions}
+          <Link href={`/finance/profitability/vehicle/${id}`}>
+            <Button variant="outline" size="sm" className="gap-1">
+              <TrendingUp className="h-4 w-4" /> الربحية
+            </Button>
+          </Link>
           <PrintButton entityType="vehicle" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
         </div>
       }
