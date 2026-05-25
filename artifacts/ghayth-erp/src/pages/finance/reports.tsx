@@ -12,7 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   FileBarChart, TrendingUp, TrendingDown, Scale, DollarSign,
   ArrowDownCircle, ArrowUpCircle, BookOpen, AlertTriangle, Download,
-  Users, BarChart2, PieChart, FileText, Printer, ChevronDown, ChevronRight
+  Users, BarChart2, PieChart, FileText, Printer, ChevronDown, ChevronRight,
+  Activity, Briefcase,
 } from "lucide-react";
 import { formatCurrency, formatDateAr, currentPeriodRiyadh } from "@/lib/formatters";
 import {
@@ -76,6 +77,8 @@ export default function FinancialReportsPage() {
           <TabsTrigger value="revenue-analysis" className="text-xs"><PieChart className="h-3.5 w-3.5 me-1" />تحليل الإيرادات</TabsTrigger>
           <TabsTrigger value="budget-variance" className="text-xs"><AlertTriangle className="h-3.5 w-3.5 me-1" />انحراف الميزانية</TabsTrigger>
           <TabsTrigger value="entity-statement" className="text-xs"><FileText className="h-3.5 w-3.5 me-1" />كشف حساب الجهة</TabsTrigger>
+          <TabsTrigger value="revenue-by-activity" className="text-xs"><Activity className="h-3.5 w-3.5 me-1" />إيراد حسب النشاط</TabsTrigger>
+          <TabsTrigger value="expenses-by-cost-center" className="text-xs"><Briefcase className="h-3.5 w-3.5 me-1" />مصروفات حسب مركز التكلفة</TabsTrigger>
         </TabsList>
 
         <TabsContent value="trial-balance"><TrialBalance dateParams={dateParams} startDate={startDate} endDate={endDate} /></TabsContent>
@@ -88,6 +91,8 @@ export default function FinancialReportsPage() {
         <TabsContent value="revenue-analysis"><RevenueAnalysis dateParams={dateParams} /></TabsContent>
         <TabsContent value="budget-variance"><BudgetVariance /></TabsContent>
         <TabsContent value="entity-statement"><EntityStatement startDate={startDate} endDate={endDate} /></TabsContent>
+        <TabsContent value="revenue-by-activity"><RevenueByActivity dateParams={dateParams} /></TabsContent>
+        <TabsContent value="expenses-by-cost-center"><ExpensesByCostCenter dateParams={dateParams} /></TabsContent>
       </Tabs>
     </PageShell>
   );
@@ -1168,6 +1173,159 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
           )}
         </>
       )}
+    </div>
+  );
+}
+
+interface RevenueActivityRow {
+  activityType: string;
+  revenue: number | string;
+  entryCount: number | string;
+}
+
+function RevenueByActivity({ dateParams }: { dateParams: string }) {
+  const { data, isLoading, isError } = useApiQuery<{
+    rows: RevenueActivityRow[];
+    summary: { totalRevenue: number };
+  }>(["revenue-by-activity", dateParams],
+     `/finance/reports/revenue-by-activity-type${dateParams ? `?${dateParams}` : ""}`);
+
+  if (isLoading) return <Skeleton className="h-64 w-full" />;
+  if (isError || !data) return <ErrorState />;
+
+  const totalRevenue = Number(data.summary?.totalRevenue || 0);
+  const sortedRows = [...(data.rows || [])].sort((a, b) => Number(b.revenue) - Number(a.revenue));
+
+  const cols: DataTableColumn<RevenueActivityRow>[] = [
+    { key: "activityType", header: "نوع النشاط",
+      render: (r) => <Badge variant="outline">{r.activityType}</Badge> },
+    { key: "entryCount", header: "عدد القيود",
+      render: (r) => <span className="font-mono text-xs">{r.entryCount}</span> },
+    { key: "revenue", header: "الإيراد",
+      render: (r) => <span className="font-mono font-bold text-emerald-700">{formatCurrency(Number(r.revenue))}</span> },
+    { key: "share", header: "النسبة من الإجمالي",
+      render: (r) => {
+        const pct = totalRevenue > 0 ? (Number(r.revenue) / totalRevenue) * 100 : 0;
+        return (
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs w-12 text-end">{pct.toFixed(1)}%</span>
+            <div className="h-2 w-32 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, pct)}%` }} />
+            </div>
+          </div>
+        );
+      },
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-emerald-200 bg-emerald-50/30">
+        <CardContent className="p-3 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground">إجمالي الإيراد عبر كل الأنشطة</p>
+            <p className="text-2xl font-bold text-emerald-700 font-mono">{formatCurrency(totalRevenue)}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{sortedRows.length} نشاط</Badge>
+            <GuardedButton perm="finance:export" variant="outline" size="sm"
+              onClick={() => exportCSV(
+                sortedRows.map(r => ({ activityType: r.activityType, revenue: Number(r.revenue).toFixed(2), entryCount: r.entryCount })),
+                ["activityType", "revenue", "entryCount"], "revenue-by-activity.csv",
+              )}>
+              <Download className="h-3.5 w-3.5 me-1" /> CSV
+            </GuardedButton>
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-0">
+          <DataTable columns={cols} data={sortedRows} pageSize={50} emptyMessage="لا توجد إيرادات" />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+interface CostCenterExpenseRow {
+  costCenterId: number | null;
+  costCenterName: string | null;
+  costCenterCode: string | null;
+  costCenterType: string | null;
+  expense: number | string;
+  entryCount: number | string;
+}
+
+function ExpensesByCostCenter({ dateParams }: { dateParams: string }) {
+  const { data, isLoading, isError } = useApiQuery<{
+    rows: CostCenterExpenseRow[];
+    summary: { totalExpense: number };
+  }>(["expenses-by-cost-center", dateParams],
+     `/finance/reports/expenses-by-cost-center${dateParams ? `?${dateParams}` : ""}`);
+
+  if (isLoading) return <Skeleton className="h-64 w-full" />;
+  if (isError || !data) return <ErrorState />;
+
+  const totalExpense = Number(data.summary?.totalExpense || 0);
+  const sortedRows = [...(data.rows || [])].sort((a, b) => Number(b.expense) - Number(a.expense));
+
+  const cols: DataTableColumn<CostCenterExpenseRow>[] = [
+    { key: "costCenterCode", header: "رمز المركز",
+      render: (r) => <span className="font-mono text-xs">{r.costCenterCode ?? "—"}</span> },
+    { key: "costCenterName", header: "اسم المركز",
+      render: (r) => r.costCenterName ?? <span className="text-muted-foreground italic">— غير محدد —</span> },
+    { key: "costCenterType", header: "النوع",
+      render: (r) => r.costCenterType ? <Badge variant="outline" className="text-xs">{r.costCenterType}</Badge> : "—" },
+    { key: "entryCount", header: "عدد القيود",
+      render: (r) => <span className="font-mono text-xs">{r.entryCount}</span> },
+    { key: "expense", header: "المصروف",
+      render: (r) => <span className="font-mono font-bold text-orange-700">{formatCurrency(Number(r.expense))}</span> },
+    { key: "share", header: "النسبة من الإجمالي",
+      render: (r) => {
+        const pct = totalExpense > 0 ? (Number(r.expense) / totalExpense) * 100 : 0;
+        return (
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs w-12 text-end">{pct.toFixed(1)}%</span>
+            <div className="h-2 w-32 bg-muted rounded-full overflow-hidden">
+              <div className="h-full bg-orange-500" style={{ width: `${Math.min(100, pct)}%` }} />
+            </div>
+          </div>
+        );
+      },
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-orange-200 bg-orange-50/30">
+        <CardContent className="p-3 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground">إجمالي المصروف عبر كل مراكز التكلفة</p>
+            <p className="text-2xl font-bold text-orange-700 font-mono">{formatCurrency(totalExpense)}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{sortedRows.length} مركز</Badge>
+            <GuardedButton perm="finance:export" variant="outline" size="sm"
+              onClick={() => exportCSV(
+                sortedRows.map(r => ({
+                  costCenterCode: r.costCenterCode ?? "",
+                  costCenterName: r.costCenterName ?? "غير محدد",
+                  expense: Number(r.expense).toFixed(2),
+                  entryCount: r.entryCount,
+                })),
+                ["costCenterCode", "costCenterName", "expense", "entryCount"],
+                "expenses-by-cost-center.csv",
+              )}>
+              <Download className="h-3.5 w-3.5 me-1" /> CSV
+            </GuardedButton>
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-0">
+          <DataTable columns={cols} data={sortedRows} pageSize={50} emptyMessage="لا توجد مصروفات" />
+        </CardContent>
+      </Card>
     </div>
   );
 }
