@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
+import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   MapPin,
@@ -30,6 +31,7 @@ import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 export default function TripDetailPage() {
   const [, params] = useRoute("/fleet/trips/:id");
   const [, navigate] = useLocation();
+  const [cancelling, setCancelling] = useState(false);
   const id = params?.id || "";
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("fleet_trip", id);
   const queryClient = useQueryClient();
@@ -129,21 +131,16 @@ export default function TripDetailPage() {
     }
   };
 
-  const handleCancel = async () => {
-    // FLT-001: /cancel frees the vehicle + driver and requires a reason.
-    const reason = window.prompt("سبب إلغاء الرحلة:");
-    if (reason === null) return; // user dismissed the prompt
-    if (!reason.trim()) {
-      toast({ variant: "destructive", title: "سبب الإلغاء مطلوب" });
-      return;
-    }
+  // FLT-001: /cancel frees the vehicle + driver and requires a reason.
+  const submitCancel = async (reason: string) => {
     try {
       await apiFetch(`/fleet/trips/${id}/cancel`, {
         method: "POST",
-        body: JSON.stringify({ reason: reason.trim() }),
+        body: JSON.stringify({ reason }),
       });
       queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
       toast({ title: "تم إلغاء الرحلة" });
+      setCancelling(false);
       navigate("/fleet/trips");
     } catch (err: any) {
       toast({
@@ -242,7 +239,7 @@ export default function TripDetailPage() {
         perm="fleet:create"
         size="sm"
         variant="outline"
-        onClick={handleCancel}
+        onClick={() => setCancelling(true)}
         disabled={trip?.status === "completed" || trip?.status === "cancelled"}
         className="gap-1"
       >
@@ -281,24 +278,35 @@ export default function TripDetailPage() {
   ];
 
   return (
-    <DetailPageLayout
-      title={trip ? `رحلة #${trip.id}` : "الرحلة"}
-      subtitle={trip ? `${trip.fromLocation || trip.origin || ""} → ${trip.toLocation || trip.destination || ""}` : undefined}
-      backPath="/fleet/trips"
-      backLabel="العودة للرحلات"
-      status={trip?.status ? { label: trip.status, tone: statusTone } : undefined}
-      entityType="fleet_trip"
-      entityId={id}
-      isLoading={isLoading}
-      error={isError ? true : undefined}
-      onRetry={() => refetch()}
-      createdAt={trip?.createdAt}
-      updatedAt={trip?.updatedAt}
-      overview={overview}
-      actions={actions}
-      extraTabs={[...extraTabs, ...registryExtraTabs]}
-      hideTabs={registryHideTabs}
-    />
+    <>
+      <DetailPageLayout
+        title={trip ? `رحلة #${trip.id}` : "الرحلة"}
+        subtitle={trip ? `${trip.fromLocation || trip.origin || ""} → ${trip.toLocation || trip.destination || ""}` : undefined}
+        backPath="/fleet/trips"
+        backLabel="العودة للرحلات"
+        status={trip?.status ? { label: trip.status, tone: statusTone } : undefined}
+        entityType="fleet_trip"
+        entityId={id}
+        isLoading={isLoading}
+        error={isError ? true : undefined}
+        onRetry={() => refetch()}
+        createdAt={trip?.createdAt}
+        updatedAt={trip?.updatedAt}
+        overview={overview}
+        actions={actions}
+        extraTabs={[...extraTabs, ...registryExtraTabs]}
+        hideTabs={registryHideTabs}
+      />
+      <PromptDialog
+        open={cancelling}
+        title={trip ? `إلغاء الرحلة #${trip.id}` : "إلغاء الرحلة"}
+        description="سيتم تحرير المركبة والسائق. لا يمكن التراجع عن هذا الإجراء."
+        placeholder="سبب إلغاء الرحلة"
+        confirmLabel="تأكيد الإلغاء"
+        onSubmit={submitCancel}
+        onClose={() => setCancelling(false)}
+      />
+    </>
   );
 }
 
