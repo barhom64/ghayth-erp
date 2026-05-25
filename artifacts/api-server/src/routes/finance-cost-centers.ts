@@ -7,6 +7,7 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { logger } from "../lib/logger.js";
 
 // Local row shape for cost_centers (not in @workspace/db schema yet).
@@ -57,20 +58,34 @@ const updateCostCenterSchema = z.object({
 router.get("/cost-centers", authorize({ feature: "finance.cost_centers", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    const filters = parseScopeFilters(req);
+    // cost_centers has no branchId column, so disable branch scope.
+    // Correlated subqueries below now key off cc."companyId" instead of
+    // hard-coding $1 — that way name resolution works correctly when the
+    // multi-company picker is active and a single result set contains
+    // rows from more than one company.
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      filters,
+      { companyColumn: 'cc."companyId"', disableBranchScope: true },
+    );
+    const extraConditions = [`cc.status != 'deleted'`];
+    const where = `${baseWhere} AND ${extraConditions.join(" AND ")}`;
+    void nextParamIndex; // reserved if a future filter needs more params
     const rows = await rawQuery<CostCenterListRow>(
       `SELECT cc.*,
-              CASE WHEN cc."relatedEntityType" = 'project' THEN (SELECT name FROM projects WHERE id = cc."relatedEntityId" AND "companyId" = $1 AND "deletedAt" IS NULL LIMIT 1)
-                   WHEN cc."relatedEntityType" = 'vehicle' THEN (SELECT "plateNumber" FROM fleet_vehicles WHERE id = cc."relatedEntityId" AND "companyId" = $1 AND "deletedAt" IS NULL LIMIT 1)
-                   WHEN cc."relatedEntityType" = 'employee' THEN (SELECT e.name FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE e.id = cc."relatedEntityId" AND ea."companyId" = $1 AND e."deletedAt" IS NULL LIMIT 1)
-                   WHEN cc."relatedEntityType" = 'department' THEN (SELECT name FROM departments WHERE id = cc."relatedEntityId" AND "companyId" = $1 LIMIT 1)
-                   WHEN cc."relatedEntityType" = 'branch' THEN (SELECT name FROM branches WHERE id = cc."relatedEntityId" AND "companyId" = $1 LIMIT 1)
+              CASE WHEN cc."relatedEntityType" = 'project' THEN (SELECT name FROM projects WHERE id = cc."relatedEntityId" AND "companyId" = cc."companyId" AND "deletedAt" IS NULL LIMIT 1)
+                   WHEN cc."relatedEntityType" = 'vehicle' THEN (SELECT "plateNumber" FROM fleet_vehicles WHERE id = cc."relatedEntityId" AND "companyId" = cc."companyId" AND "deletedAt" IS NULL LIMIT 1)
+                   WHEN cc."relatedEntityType" = 'employee' THEN (SELECT e.name FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE e.id = cc."relatedEntityId" AND ea."companyId" = cc."companyId" AND e."deletedAt" IS NULL LIMIT 1)
+                   WHEN cc."relatedEntityType" = 'department' THEN (SELECT name FROM departments WHERE id = cc."relatedEntityId" AND "companyId" = cc."companyId" LIMIT 1)
+                   WHEN cc."relatedEntityType" = 'branch' THEN (SELECT name FROM branches WHERE id = cc."relatedEntityId" AND "companyId" = cc."companyId" LIMIT 1)
                    ELSE NULL
               END AS "relatedEntityName"
        FROM cost_centers cc
-       WHERE cc."companyId" = $1 AND cc.status != 'deleted'
+       WHERE ${where}
        ORDER BY cc.code, cc.name
        LIMIT 1000`,
-      [scope.companyId]
+      params,
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "List cost centers error"); }

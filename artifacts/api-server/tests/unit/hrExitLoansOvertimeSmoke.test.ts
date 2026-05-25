@@ -348,7 +348,11 @@ describe("Loan rejection", () => {
 describe("Loan self-service", () => {
   it("GET /loans/my uses activeAssignmentId scope", () => {
     const idx = LOANS_ROUTE.indexOf('"/loans/my"');
-    const section = LOANS_ROUTE.slice(idx, idx + 500);
+    // Window widened to 1100 after the buildScopedWhere refactor pushed the
+    // params.push(scope.activeAssignmentId) call below the new scope helper
+    // call. The literal `scope.activeAssignmentId` still sits inside the same
+    // handler — just further down the function body.
+    const section = LOANS_ROUTE.slice(idx, idx + 1100);
     expect(section).toContain("scope.activeAssignmentId");
   });
 });

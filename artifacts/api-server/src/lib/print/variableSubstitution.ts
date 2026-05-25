@@ -187,10 +187,30 @@ export function renderContextToHtml(ctx: RenderContext): string {
   const baseTemplate = ctx.template.mode === "visual" && ctx.template.layoutJson
     ? renderLayoutToHtml(ctx.template.layoutJson)
     : ctx.template.htmlContent ?? "";
+  // Template-level overrides — the cliché editor lets users upload a custom
+  // logo, override the company/branch header text, set a custom footer, and
+  // attach a signature image per template. These win over the branch's
+  // default letterhead so a single branch can have multiple presentations
+  // (e.g. ZATCA invoice vs internal voucher).
+  const headerOv = (ctx.template.headerOverride as Record<string, unknown>) ?? {};
+  const footerOv = (ctx.template.footerOverride as Record<string, unknown>) ?? {};
+  const mergedBranch = {
+    ...ctx.branch,
+    logoUrl: (headerOv.logoUrl as string) || ctx.branch.logoUrl,
+    companyName: (headerOv.companyName as string) || ctx.branch.companyName,
+    branchName: (headerOv.branchName as string) || ctx.branch.branchName,
+    address: (headerOv.address as string) || ctx.branch.address,
+    phone: (headerOv.phone as string) || ctx.branch.phone,
+    email: (headerOv.email as string) || ctx.branch.email,
+    website: (headerOv.website as string) || ctx.branch.website,
+    taxNumber: (headerOv.taxNumber as string) || ctx.branch.taxNumber,
+    crNumber: (headerOv.crNumber as string) || ctx.branch.crNumber,
+    footerText: (footerOv.text as string) || ctx.branch.footerText,
+  };
   return substitute({
     template: baseTemplate,
     data: ctx.data,
-    branch: ctx.branch,
+    branch: mergedBranch,
     isThermal: ctx.template.isThermal || ctx.format.startsWith("thermal"),
     watermark: ctx.watermark,
   });
