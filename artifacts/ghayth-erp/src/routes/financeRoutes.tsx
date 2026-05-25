@@ -18,6 +18,7 @@ const WhtCategoriesCreate = lazy(() => import("@/pages/create/finance/wht-catego
 const LotExpiryAlerts = lazy(() => import("@/pages/finance/lot-expiry-alerts"));
 const CogsSummary = lazy(() => import("@/pages/finance/cogs-summary"));
 const InventoryValuation = lazy(() => import("@/pages/finance/inventory-valuation"));
+const NegativeStock = lazy(() => import("@/pages/finance/negative-stock"));
 const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
 const VouchersCreate = lazy(() => import("@/pages/create/finance/vouchers-create"));
 const VoucherDetail = lazy(() => import("@/pages/details/voucher-detail"));
@@ -102,6 +103,8 @@ export const financeRoutes = [
   { path: "/finance/reports/lot-expiry-alerts", component: LotExpiryAlerts },
   // Inventory valuation report — consumes /reports/inventory-valuation (#1033).
   { path: "/finance/reports/inventory-valuation", component: InventoryValuation },
+  // Negative-stock outliers — consumes /reports/negative-stock (#1035).
+  { path: "/finance/reports/negative-stock", component: NegativeStock },
   // COGS / margin summary — consumes /reports/cogs-summary (#1034).
   { path: "/finance/reports/cogs-summary", component: CogsSummary },
   { path: "/finance/vouchers", component: Vouchers },
