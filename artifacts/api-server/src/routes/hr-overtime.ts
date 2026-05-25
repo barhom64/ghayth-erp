@@ -60,6 +60,7 @@ import {
   processApprovalStep,
   roundTo2,
 } from "../lib/businessHelpers.js";
+import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { generateSequentialNumber, calcHourlyRate as calcHourlyRateHelper } from "../lib/hrHelpers.js";
 import { HR_TABLES, NUMBER_PREFIXES } from "../lib/hrEnums.js";
@@ -137,9 +138,19 @@ router.get("/overtime", authorize({ feature: "hr.overtime", action: "list" }), a
     const scope = req.scope!;
     const { status, assignmentId, month } = req.query as Record<string, string | undefined>;
 
-    let where = `o."companyId" = $1 AND o."deletedAt" IS NULL`;
-    const params: unknown[] = [scope.companyId];
-    let idx = 2;
+    // Honor multi-company picker; hr_overtime_requests has no branchId of its
+    // own (branch flows through the assignment), so disableBranchScope: true.
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      parseScopeFilters(req),
+      {
+        companyColumn: 'o."companyId"',
+        disableBranchScope: true,
+        softDeleteColumn: 'o."deletedAt"',
+      },
+    );
+    let where = baseWhere;
+    let idx = nextParamIndex;
 
     if (status) { where += ` AND o.status = $${idx}`; params.push(status); idx++; }
     if (assignmentId) { where += ` AND o."assignmentId" = $${idx}`; params.push(Number(assignmentId)); idx++; }
@@ -183,13 +194,25 @@ router.get("/overtime/my", authorize({ feature: "hr.overtime.my", action: "list"
   try {
     await ensureOvertimeTable();
     const scope = req.scope!;
+    // Self-service: assignmentId narrows to the caller's own rows first,
+    // then buildScopedWhere stacks the standard company predicate.
+    const { where: scopeWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      parseScopeFilters(req),
+      {
+        companyColumn: 'o."companyId"',
+        disableBranchScope: true,
+        softDeleteColumn: 'o."deletedAt"',
+      },
+    );
+    params.push(scope.activeAssignmentId);
     const data = await rawQuery<OvertimeRow>(
       `SELECT o.*, e.name AS "employeeName"
        FROM hr_overtime_requests o
        JOIN employees e ON e.id = o."employeeId"
-       WHERE o."assignmentId" = $1 AND o."companyId" = $2 AND o."deletedAt" IS NULL
+       WHERE o."assignmentId" = $${nextParamIndex} AND ${scopeWhere}
        ORDER BY o."overtimeDate" DESC LIMIT 500`,
-      [scope.activeAssignmentId, scope.companyId]
+      params,
     );
     res.json(maskFields(req, { data }));
   } catch (err) {
@@ -205,6 +228,16 @@ router.get("/overtime/summary", authorize({ feature: "hr.overtime", action: "lis
     await ensureOvertimeTable();
     const scope = req.scope!;
     const period = String(req.query.period || req.query.month || "");
+    const { where: scopeWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      parseScopeFilters(req),
+      {
+        companyColumn: 'o."companyId"',
+        disableBranchScope: true,
+        softDeleteColumn: 'o."deletedAt"',
+      },
+    );
+    params.push(period);
     const data = await rawQuery<OvertimeRow>(
       `SELECT o."assignmentId", e.name AS "employeeName", e."empNumber",
               SUM(o.hours) AS "totalHours", SUM(o."totalAmount") AS "totalAmount",
@@ -212,11 +245,11 @@ router.get("/overtime/summary", authorize({ feature: "hr.overtime", action: "lis
        FROM hr_overtime_requests o
        JOIN employee_assignments ea ON ea.id = o."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       WHERE o."companyId" = $1 AND o."payrollPeriod" = $2
-         AND o.status = 'approved' AND o."deletedAt" IS NULL
+       WHERE ${scopeWhere} AND o."payrollPeriod" = $${nextParamIndex}
+         AND o.status = 'approved'
        GROUP BY o."assignmentId", e.name, e."empNumber"
        ORDER BY "totalAmount" DESC`,
-      [scope.companyId, period]
+      params
     );
 
     const [totals] = await rawQuery<{ totalHours: number | string; totalAmount: number | string }>(

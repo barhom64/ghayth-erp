@@ -465,7 +465,10 @@ describe("Overtime monthly summary", () => {
 
   it("summary only includes approved requests", () => {
     const idx = OVERTIME_ROUTE.indexOf('"/overtime/summary"');
-    const section = OVERTIME_ROUTE.slice(idx, idx + 1000);
+    // Window widened from 1000 → 1600 after the buildScopedWhere refactor
+    // pushed the `status = 'approved'` predicate further down past the new
+    // scope-helper block. The assertion content is unchanged.
+    const section = OVERTIME_ROUTE.slice(idx, idx + 1600);
     expect(section).toContain("status = 'approved'");
   });
 });
