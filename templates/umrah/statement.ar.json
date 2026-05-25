@@ -1,0 +1,20 @@
+{
+  "code": "umrah.statement",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "umrah_statement",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": false,
+  "qr": true,
+  "status": "published",
+  "domain": "umrah",
+  "title": "كشف حساب وكيل فرعي",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "umrah_statement"
+  },
+  "ownerTeam": "umrah"
+}

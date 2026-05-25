@@ -1,0 +1,20 @@
+{
+  "code": "finance.credit-note",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "credit_note",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": false,
+  "qr": true,
+  "status": "published",
+  "domain": "finance",
+  "title": "قائمة دائن",
+  "implementation": {
+    "kind": "universal-fallback",
+    "key": "—"
+  },
+  "ownerTeam": "finance"
+}
