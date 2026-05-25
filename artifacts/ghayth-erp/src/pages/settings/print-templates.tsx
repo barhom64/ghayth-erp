@@ -32,6 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Save, Eye, Trash2, Pencil, FileText, Receipt, Tag, Layers } from "lucide-react";
 import { PageHeader, FormShell } from "@workspace/ui-core";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 
 const PRINTABLE_ENTITIES = [
   { id: "invoice", label: "فاتورة" },
@@ -426,6 +427,7 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
     ];
   });
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const defaultValues: TemplateForm = {
     name: existing?.name ?? "",
@@ -484,19 +486,6 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
     }
   }
 
-  async function remove() {
-    if (!templateId) return;
-    if (!confirm("هل أنت متأكد من حذف هذا القالب؟")) return;
-    try {
-      await apiFetch(`/print/templates/${templateId}`, { method: "DELETE" });
-      toast({ title: "تم الحذف" });
-      qc.invalidateQueries({ queryKey: ["print-templates"] });
-      onClose();
-    } catch {
-      toast({ title: "فشل الحذف", variant: "destructive" });
-    }
-  }
-
   return (
     <FormShell
       schema={templateSchema}
@@ -507,7 +496,13 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
     >
       <PageHeader
         title={templateId ? "تعديل قالب طباعة" : "قالب طباعة جديد"}
-        action={<EditorHeaderActions templateId={templateId} onClose={onClose} onDelete={remove} />}
+        action={
+          <EditorHeaderActions
+            templateId={templateId}
+            onClose={onClose}
+            onDelete={() => setConfirmingDelete(true)}
+          />
+        }
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -551,6 +546,20 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
       </div>
 
       <PreviewCard previewHtml={previewHtml} onGenerate={preview} />
+
+      {templateId && (
+        <ConfirmDeleteDialog
+          open={confirmingDelete}
+          onOpenChange={setConfirmingDelete}
+          entity={{ type: "print_template", id: templateId, name: existing?.name ?? "" }}
+          deletePath={`/print/templates/${templateId}`}
+          invalidateKeys={[["print-templates"]]}
+          onDeleted={() => {
+            setConfirmingDelete(false);
+            onClose();
+          }}
+        />
+      )}
     </FormShell>
   );
 }
