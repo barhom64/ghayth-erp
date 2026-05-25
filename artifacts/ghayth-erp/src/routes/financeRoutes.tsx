@@ -104,6 +104,7 @@ const BadDebt = lazy(() => import("@/pages/finance/bad-debt"));
 const AllocationRules = lazy(() => import("@/pages/finance/allocation-rules"));
 const OverridesReport = lazy(() => import("@/pages/finance/overrides-report"));
 const AllocationResults = lazy(() => import("@/pages/finance/allocation-results"));
+const AllocationRuleCreate = lazy(() => import("@/pages/create/finance/allocation-rule-create"));
 
 export const financeRoutes = [
   // /finance → the new dashboard (R.1.5). The chart of accounts moves
@@ -171,6 +172,7 @@ export const financeRoutes = [
   { path: "/finance/dunning", component: Dunning },
   { path: "/finance/bad-debt", component: BadDebt },
   { path: "/finance/allocation-rules", component: AllocationRules },
+  { path: "/finance/allocation-rules/create", component: AllocationRuleCreate },
   { path: "/finance/overrides-report", component: OverridesReport },
   { path: "/finance/allocation-results", component: AllocationResults },
   { path: "/finance/reports", component: FinancialReports },
