@@ -219,6 +219,44 @@ check(
   fires("direct-process-env-read", `const url = process.env.DATABASE_URL;`),
 );
 
+// ─── manual-form-instead-of-formshell (post-migration hard rule) ───────────
+//
+// The legacy useAutoDraft + useFieldErrors create-page pattern was fully
+// migrated to FormShell + zod. The two helper hooks were deleted. Any
+// reintroduction of either symbol under src/{pages,components,hooks,lib}
+// fails the build.
+
+console.log("manual-form-instead-of-formshell rule");
+
+check(
+  "importing useAutoDraft IS flagged",
+  fires(
+    "manual-form-instead-of-formshell",
+    `import { useAutoDraft } from "@/hooks/use-auto-draft";`,
+  ),
+);
+check(
+  "importing useFieldErrors IS flagged",
+  fires(
+    "manual-form-instead-of-formshell",
+    `import { useFieldErrors } from "@/hooks/use-field-errors";`,
+  ),
+);
+check(
+  "calling useAutoDraft IS flagged",
+  fires(
+    "manual-form-instead-of-formshell",
+    `const { form, setForm } = useAutoDraft("k", { name: "" });`,
+  ),
+);
+check(
+  "FormShell + zodResolver usage is NOT flagged",
+  !fires(
+    "manual-form-instead-of-formshell",
+    `import { FormShell } from "@workspace/ui-core";\nconst createMut = useApiMutation("/x", "POST");`,
+  ),
+);
+
 // ─── Save-button rate-limit rule (multiline) ────────────────────────────
 //
 // The hardest regex in the file: it must catch <Button type="submit"> or
