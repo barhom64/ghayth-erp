@@ -221,20 +221,33 @@ collectionRouter.get("/collection/:invoiceId/history", authorize({ feature: "fin
     const scope = req.scope!;
     const invoiceId = parseId(req.params.invoiceId, "invoiceId");
 
+    // Validate invoice access via scope-aware predicate (honors multi-company picker).
+    const invoiceScope = buildScopedWhere(
+      scope,
+      parseScopeFilters(req),
+      { companyColumn: '"companyId"', disableBranchScope: true },
+    );
     const [invoice] = await rawQuery<InvoiceIdRow>(
-      `SELECT id FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [invoiceId, scope.companyId]
+      `SELECT id FROM invoices WHERE id = $${invoiceScope.nextParamIndex} AND ${invoiceScope.where} AND "deletedAt" IS NULL`,
+      [...invoiceScope.params, invoiceId],
     );
     if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
 
+    // History scope: same company predicate as the invoice check above so multi-company users
+    // see history for any invoice they could reach via /collection list.
+    const historyScope = buildScopedWhere(
+      scope,
+      parseScopeFilters(req),
+      { companyColumn: 'ics."companyId"', disableBranchScope: true },
+    );
     const history = await rawQuery<CollectionHistoryRow>(
       `SELECT ics.*, e.name AS "performedByName"
        FROM invoice_collection_stages ics
        LEFT JOIN employee_assignments ea ON ea.id = ics."performedBy"
        LEFT JOIN employees e ON e.id = ea."employeeId"
-       WHERE ics."invoiceId" = $1 AND ics."companyId" = $2
+       WHERE ics."invoiceId" = $${historyScope.nextParamIndex} AND ${historyScope.where}
        ORDER BY ics.id ASC`,
-      [invoiceId, scope.companyId]
+      [...historyScope.params, invoiceId],
     );
 
     res.json(maskFields(req, history));

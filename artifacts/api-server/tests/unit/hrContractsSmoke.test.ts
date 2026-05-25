@@ -328,7 +328,11 @@ describe("Contract security", () => {
 
   it("list endpoint has a LIMIT to prevent unbounded queries", () => {
     const idx = CONTRACTS_ROUTE.indexOf('contractsRouter.get("/",');
-    const section = CONTRACTS_ROUTE.slice(idx, idx + 1500);
+    // Window widened from 1500 → 2200 after the buildScopedWhere refactor
+    // (which introduces a multi-line helper-call block before the SQL
+    // template). The `LIMIT 200` is still in the same handler — just
+    // further past the new helper call.
+    const section = CONTRACTS_ROUTE.slice(idx, idx + 2200);
     expect(section).toContain("LIMIT");
   });
 
