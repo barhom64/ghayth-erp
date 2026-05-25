@@ -1,9 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, AutoField, CreationDateField } from "@workspace/ui-core";
@@ -17,6 +19,32 @@ import { ClientContextCard } from "@/components/shared/client-context-card";
 import { TextField, NumberField, FormFieldWrapper, fieldErrorClass } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { ClientSelect, BranchSelect, CostCenterSelect } from "@/components/shared/entity-selects";
+
+interface TaxCode {
+  id: number;
+  code: string;
+  name: string;
+  rate: number | string;
+  taxType: string;
+  isInclusiveDefault?: boolean;
+  isActive: boolean;
+}
+
+/**
+ * Compute net/vat/gross from a line's quantity × unitPrice + the
+ * tax-code's rate, respecting the inclusive/exclusive flag. Mirrors
+ * the backend math in computeTaxFromTaxCode (#989).
+ */
+function lineTaxSplit(qty: number, unitPrice: number, rate: number, inclusive: boolean) {
+  const amount = roundMoney(qty * unitPrice);
+  if (inclusive) {
+    const net = roundMoney(amount / (1 + rate / 100));
+    const vat = roundMoney(amount - net);
+    return { net, vat, gross: amount };
+  }
+  const vat = roundMoney(amount * (rate / 100));
+  return { net: amount, vat, gross: roundMoney(amount + vat) };
+}
 
 const INVOICE_TYPE_CODES = [
   { value: "388", label: "فاتورة ضريبية (388)" },
@@ -72,8 +100,29 @@ export default function InvoicesCreate() {
     invoiceTypeCode: "388",
     taxCategoryCode: "S",
     exemptionReason: "",
+    // Header-level tax-code default. Per-line tax codes can override.
+    // When the operator picks "VAT15 inclusive" here, every NEW line
+    // inherits it. The Daftra-style flow you asked for.
+    taxCode: "VAT15",
+    taxInclusive: true,
   });
-  const [lines, setLines] = useState([{ description: "", quantity: "1", unitPrice: "" }]);
+  const [lines, setLines] = useState([{
+    description: "", quantity: "1", unitPrice: "",
+    taxCode: "" as string,        // empty → fall back to header taxCode
+    taxInclusive: undefined as boolean | undefined, // empty → fall back to header
+  }]);
+
+  // Load all active tax codes (the 5 seeded Saudi defaults + any custom).
+  const { data: taxCodesData } = useApiQuery<{ data: TaxCode[] }>(
+    ["tax-codes"],
+    "/finance/accounts/tax-codes",
+  );
+  const taxCodes = useMemo(() => (taxCodesData?.data ?? []).filter((t) => t.isActive), [taxCodesData]);
+  const taxCodeByCode = useMemo(() => {
+    const m = new Map<string, TaxCode>();
+    for (const t of taxCodes) m.set(t.code, t);
+    return m;
+  }, [taxCodes]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [copied, setCopied] = useState(false);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
@@ -100,17 +149,33 @@ export default function InvoicesCreate() {
   }, [copySource, copied]);
   const autoNumberRef = useRef(`INV-${Date.now().toString(36).toUpperCase()}`);
 
-  const addLine = () => setLines([...lines, { description: "", quantity: "1", unitPrice: "" }]);
+  const addLine = () => setLines([...lines, {
+    description: "", quantity: "1", unitPrice: "",
+    taxCode: "", taxInclusive: undefined,
+  }]);
   const removeLine = (idx: number) => setLines(lines.filter((_, i) => i !== idx));
-  const updateLine = (idx: number, field: string, value: string) => {
+  const updateLine = (idx: number, field: string, value: any) => {
     const updated = [...lines];
     (updated[idx] as any)[field] = value;
     setLines(updated);
   };
 
-  const subtotal = roundMoney(lines.reduce((sum, l) => sum + roundMoney(Number(l.quantity || 0) * Number(l.unitPrice || 0)), 0));
-  const vatAmount = roundMoney(subtotal * (Number(form.vatRate) / 100));
-  const total = roundMoney(subtotal + vatAmount);
+  // Per-line + total math now driven by the tax-code system.
+  // 1. Line picks its own taxCode (or falls back to header).
+  // 2. Line picks its own inclusive flag (or falls back to header).
+  // 3. Rate comes from the resolved taxCode, not a free-text vatRate.
+  // Header `vatRate` is kept in the payload only for legacy DB columns
+  // (server still reads it for the un-coded fallback path).
+  const lineSplits = lines.map((l) => {
+    const code = l.taxCode || form.taxCode;
+    const tc = code ? taxCodeByCode.get(code) : undefined;
+    const rate = tc ? Number(tc.rate) : Number(form.vatRate || 0);
+    const inclusive = l.taxInclusive ?? form.taxInclusive;
+    return lineTaxSplit(Number(l.quantity || 0), Number(l.unitPrice || 0), rate, inclusive);
+  });
+  const subtotal = roundMoney(lineSplits.reduce((s, x) => s + x.net, 0));
+  const vatAmount = roundMoney(lineSplits.reduce((s, x) => s + x.vat, 0));
+  const total = roundMoney(lineSplits.reduce((s, x) => s + x.gross, 0));
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -145,11 +210,18 @@ export default function InvoicesCreate() {
         invoiceTypeCode: form.isTaxLinked ? form.invoiceTypeCode : undefined,
         taxCategoryCode: form.isTaxLinked ? form.taxCategoryCode : undefined,
         exemptionReason: form.isTaxLinked && form.exemptionReason ? form.exemptionReason : undefined,
+        // Header-level tax code + inclusive flag — server picks
+        // these up via #989's createInvoiceSchema. Per-line overrides
+        // are applied below.
+        taxCode: form.taxCode || undefined,
+        taxInclusive: form.taxInclusive,
         lines: lines.map((l) => ({
           description: l.description,
           quantity: Number(l.quantity),
           unitPrice: Number(l.unitPrice),
           total: Number(l.quantity) * Number(l.unitPrice),
+          taxCode: l.taxCode || undefined,
+          taxInclusive: l.taxInclusive,
         })),
       });
       toast({ title: "تم إنشاء الفاتورة بنجاح" });
@@ -198,7 +270,43 @@ export default function InvoicesCreate() {
           label="الفرع"
           required
         />
-        <NumberField label="نسبة الضريبة %" value={form.vatRate} onChange={(v) => setForm({ ...form, vatRate: v })} min={0} max={100} step={0.01} />
+        <FormFieldWrapper label="رمز الضريبة (افتراضي للأسطر الجديدة)">
+          <Select value={form.taxCode || "_none"} onValueChange={(v) =>
+            setForm((f) => {
+              const code = v === "_none" ? "" : v;
+              const tc = taxCodeByCode.get(code);
+              return {
+                ...f,
+                taxCode: code,
+                // Snap the legacy vatRate to match so any line that
+                // hasn't picked its own taxCode still gets the right
+                // number on its fallback path.
+                vatRate: tc ? String(Number(tc.rate)) : f.vatRate,
+              };
+            })}>
+            <SelectTrigger><SelectValue placeholder="اختر رمز الضريبة..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">— بدون —</SelectItem>
+              {taxCodes.map((t) => (
+                <SelectItem key={t.code} value={t.code}>
+                  {t.code} ({Number(t.rate).toFixed(0)}%) — {t.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="نوع السعر">
+          <div className="flex items-center gap-3 h-10">
+            <Switch
+              id="header-tax-inclusive"
+              checked={form.taxInclusive}
+              onCheckedChange={(v) => setForm({ ...form, taxInclusive: v })}
+            />
+            <Label htmlFor="header-tax-inclusive" className="text-sm cursor-pointer">
+              {form.taxInclusive ? "السعر شامل الضريبة" : "السعر غير شامل (سيُضاف عليه)"}
+            </Label>
+          </div>
+        </FormFieldWrapper>
         <FormFieldWrapper label="شروط الدفع" required>
           <Select value={form.paymentTermsDays || "_none"} onValueChange={(v) => setForm(prev => ({ ...prev, paymentTermsDays: v === "_none" ? "" : v }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -220,17 +328,88 @@ export default function InvoicesCreate() {
       </div>
 
       <div className="mb-4">
-        <Label className="text-base font-semibold">البنود</Label>
+        <div className="flex items-center justify-between">
+          <Label className="text-base font-semibold">البنود</Label>
+          <span className="text-xs text-muted-foreground">
+            * كل بند يرث رمز الضريبة + نوع السعر من الترويسة — تقدر تعدّلها هنا.
+          </span>
+        </div>
         {fieldErrors.lines && <p className="text-xs text-status-error-foreground mt-1">{fieldErrors.lines}</p>}
-        {lines.map((line, idx) => (
-          <div key={idx} className="grid grid-cols-4 gap-2 mt-2 items-end">
-            <div><Label className="text-xs">الوصف</Label><Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} /></div>
-            <NumberField label="الكمية" value={line.quantity} onChange={(v) => updateLine(idx, "quantity", v)} placeholder="1" />
-            <NumberField label="سعر الوحدة" value={line.unitPrice} onChange={(v) => updateLine(idx, "unitPrice", v)} placeholder="0.00" />
-            <Button type="button" variant="destructive" size="sm" onClick={() => removeLine(idx)} disabled={lines.length <= 1}>حذف</Button>
-          </div>
-        ))}
-        <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addLine}>+ إضافة بند</Button>
+        {lines.map((line, idx) => {
+          const split = lineSplits[idx];
+          const lineCode = line.taxCode || form.taxCode;
+          const lineInclusive = line.taxInclusive ?? form.taxInclusive;
+          return (
+            <div key={idx} className="border border-border rounded-md p-3 mt-3 bg-card">
+              <div className="grid grid-cols-12 gap-2 items-end">
+                <div className="col-span-12 md:col-span-4">
+                  <Label className="text-xs">الوصف</Label>
+                  <Input value={line.description}
+                    onChange={(e) => updateLine(idx, "description", e.target.value)} />
+                </div>
+                <div className="col-span-6 md:col-span-1">
+                  <NumberField label="كمية" value={line.quantity}
+                    onChange={(v) => updateLine(idx, "quantity", v)} placeholder="1" />
+                </div>
+                <div className="col-span-6 md:col-span-2">
+                  <NumberField label="سعر الوحدة" value={line.unitPrice}
+                    onChange={(v) => updateLine(idx, "unitPrice", v)} placeholder="0.00" />
+                </div>
+                <div className="col-span-6 md:col-span-2">
+                  <Label className="text-xs">رمز الضريبة</Label>
+                  <Select
+                    value={line.taxCode || "_inherit"}
+                    onValueChange={(v) => updateLine(idx, "taxCode", v === "_inherit" ? "" : v)}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder={form.taxCode ? `↓ ${form.taxCode}` : "بدون"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_inherit">↓ يرث من الترويسة ({form.taxCode || "بدون"})</SelectItem>
+                      {taxCodes.map((t) => (
+                        <SelectItem key={t.code} value={t.code}>
+                          {t.code} ({Number(t.rate).toFixed(0)}%)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-6 md:col-span-2">
+                  <Label className="text-xs">نوع السعر</Label>
+                  <Select
+                    value={line.taxInclusive === undefined ? "_inherit" : line.taxInclusive ? "inclusive" : "exclusive"}
+                    onValueChange={(v) => updateLine(idx, "taxInclusive",
+                      v === "_inherit" ? undefined : v === "inclusive")}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_inherit">↓ يرث ({form.taxInclusive ? "شامل" : "غير شامل"})</SelectItem>
+                      <SelectItem value="inclusive">شامل الضريبة</SelectItem>
+                      <SelectItem value="exclusive">غير شامل</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-12 md:col-span-1">
+                  <Button type="button" variant="ghost" size="sm" className="w-full text-destructive"
+                    onClick={() => removeLine(idx)} disabled={lines.length <= 1}>حذف</Button>
+                </div>
+              </div>
+              {/* Live tax split for THIS line */}
+              {(Number(line.quantity) > 0 && Number(line.unitPrice) > 0) && (
+                <div className="mt-3 pt-3 border-t border-dashed flex flex-wrap items-center gap-3 text-xs">
+                  <Badge variant="outline" className="font-mono">{lineCode || "—"}</Badge>
+                  <Badge variant="secondary">{lineInclusive ? "شامل" : "غير شامل"}</Badge>
+                  <span className="text-muted-foreground">صافي: <span className="font-semibold text-foreground">{formatCurrency(split.net)}</span></span>
+                  <span className="text-muted-foreground">ضريبة: <span className="font-semibold text-amber-700">{formatCurrency(split.vat)}</span></span>
+                  <span className="text-muted-foreground">إجمالي: <span className="font-semibold text-emerald-700">{formatCurrency(split.gross)}</span></span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <Button type="button" variant="outline" size="sm" className="mt-3" onClick={addLine}>+ إضافة بند</Button>
       </div>
 
       <div className={`bg-muted/50 p-4 rounded-md text-sm space-y-1 ${fieldErrorClass(fieldErrors.totalAmount)}`}>
