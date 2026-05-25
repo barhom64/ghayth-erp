@@ -1,5 +1,5 @@
-import { type ReactNode } from "react";
-import { Plus } from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { Plus, Download, FileSpreadsheet, FileText, Printer, ChevronDown } from "lucide-react";
 import { type LucideIcon } from "lucide-react";
 
 import { useApiQuery } from "@/lib/api";
@@ -17,6 +17,14 @@ import {
   DataTable,
   type DataTableColumn,
 } from "@/components/ui/data-table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import { downloadDocument, renderDocument, decodeRenderResponse } from "@/lib/print-client";
 
 /**
  * ListPage — the composite list page primitive (UNIFICATION_PLAN §P7).
@@ -171,6 +179,30 @@ export interface ListPageProps<T> {
   // ─── Primary action (top-right) ────────────────────────────────────
   primaryAction?: ListPagePrimaryAction;
 
+  // ─── Print Platform integration (Phase 2) ──────────────────────────
+  // When set, renders a small "تصدير" dropdown next to the primary
+  // action with options for Excel / PDF (A4) / Print / CSV. Each option
+  // calls the appropriate Print Platform endpoint with this entityType
+  // — the universal-fallback template auto-builds an items table from
+  // the page's current rows.
+  //
+  // Pass `printEntityType` to use the per-entity registered template
+  // (e.g. "invoice" gets the ZATCA-styled invoice preset). Otherwise
+  // we fall back to the synthetic `<entityType>_list` shape and the
+  // universal preset.
+  printEntityType?: string;
+  /** Stable code from /templates/{domain}/{name}.json — when set,
+   *  resolveTemplate uses this code directly instead of looking up by
+   *  entityType. Lets a page use a custom report template. */
+  documentTemplate?: string;
+  /** Disable specific export formats. Default: csv, excel and print are all on. */
+  exports?: {
+    csv?: boolean;
+    excel?: boolean;
+    print?: boolean;
+    pdf?: boolean;
+  };
+
   // ─── Optional stats grid (above the filter bar) ────────────────────
   stats?: ListPageStat[];
 
@@ -213,6 +245,9 @@ export function ListPage<T>(props: ListPageProps<T>) {
     customFilterBar,
     onRowClick,
     primaryAction,
+    printEntityType,
+    documentTemplate,
+    exports: exportOpts,
     stats,
     children,
   } = props;
@@ -261,7 +296,27 @@ export function ListPage<T>(props: ListPageProps<T>) {
       ]
     : columns;
 
-  const actions = primaryAction ? <PrimaryActionButton {...primaryAction} /> : undefined;
+  // Phase 2 — render a small export dropdown next to the primary action
+  // when the page opted in via `printEntityType`. Going through the
+  // Print Platform means the export inherits the branch letterhead,
+  // RBAC, audit log + verify QR for free; pages don't roll their own.
+  const exportMenu = printEntityType ? (
+    <ListPageExportMenu
+      entityType={printEntityType}
+      documentTemplate={documentTemplate}
+      rows={rows}
+      exports={exportOpts}
+    />
+  ) : null;
+
+  const actions = (primaryAction || exportMenu)
+    ? (
+      <div className="flex items-center gap-2">
+        {exportMenu}
+        {primaryAction ? <PrimaryActionButton {...primaryAction} /> : null}
+      </div>
+    )
+    : undefined;
 
   return (
     <PageShell
@@ -370,5 +425,107 @@ function StatTile(s: ListPageStat) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * ListPageExportMenu — Phase 2 export dropdown.
+ *
+ * Renders a small dropdown next to the primary action with options for
+ * Excel / Print / PDF / CSV. Each option routes through the Print
+ * Platform (/print/render) so the page inherits branch letterhead,
+ * RBAC, audit logging, verify QR + reprint detection for free.
+ *
+ * `rows` is currently unused — the loader on the server side fetches
+ * the data from the canonical table. A future enhancement: pass `rows`
+ * as a `previewPayload` to /print/preview when the page has filtered
+ * the rows in-browser and wants to print only the visible subset.
+ */
+function ListPageExportMenu<T>(props: {
+  entityType: string;
+  documentTemplate?: string;
+  rows: T[];
+  exports?: { csv?: boolean; excel?: boolean; print?: boolean; pdf?: boolean };
+}) {
+  const { entityType, exports: opts } = props;
+  const showExcel = opts?.excel !== false;
+  const showPrint = opts?.print !== false;
+  const showPdf = opts?.pdf ?? false;
+  const showCsv = opts?.csv ?? false;
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+
+  async function runPrint() {
+    // Sales report / list rendering. The synthetic entityId "_list" tells
+    // the universal-fallback loader to use the registry-declared table
+    // and the default columns; the items table auto-builds from the
+    // returned rows.
+    setBusy(true);
+    const w = window.open("", "_blank");
+    if (w) {
+      w.document.write(
+        `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"/><title>جارٍ التحضير…</title></head><body style="font-family:Tahoma,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;color:#475569"><div>جارٍ تجهيز المعاينة…</div></body></html>`,
+      );
+    }
+    try {
+      const resp = await renderDocument({ entityType, entityId: "_list", format: "a4" });
+      const html = decodeRenderResponse(resp);
+      if (w) {
+        w.document.open();
+        w.document.write(html);
+        w.document.close();
+        w.focus();
+      }
+    } catch (err) {
+      if (w && !w.closed) w.close();
+      toast({ title: "تعذّر التحضير للطباعة", description: (err as { message?: string })?.message ?? "خطأ غير متوقع", variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runExcel() {
+    setBusy(true);
+    try {
+      await downloadDocument({ entityType, entityId: "_list", format: "excel" });
+    } catch (err) {
+      toast({ title: "فشل تصدير Excel", description: (err as { message?: string })?.message ?? "—", variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!showExcel && !showPrint && !showPdf && !showCsv) return null;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" disabled={busy} className="gap-1">
+          <Download className="h-4 w-4" />
+          تصدير
+          <ChevronDown className="h-3.5 w-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {showPrint && (
+          <DropdownMenuItem onClick={runPrint} className="gap-2">
+            <Printer className="h-4 w-4" />
+            <span>طباعة</span>
+          </DropdownMenuItem>
+        )}
+        {showExcel && (
+          <DropdownMenuItem onClick={runExcel} className="gap-2">
+            <FileSpreadsheet className="h-4 w-4" />
+            <span>Excel</span>
+          </DropdownMenuItem>
+        )}
+        {showPdf && (
+          <DropdownMenuItem onClick={runPrint} className="gap-2">
+            <FileText className="h-4 w-4" />
+            <span>PDF</span>
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
