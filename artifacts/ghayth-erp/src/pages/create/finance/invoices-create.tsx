@@ -19,6 +19,7 @@ import { ClientContextCard } from "@/components/shared/client-context-card";
 import { TextField, NumberField, FormFieldWrapper, fieldErrorClass } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { ClientSelect, BranchSelect, CostCenterSelect } from "@/components/shared/entity-selects";
+import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 
 interface TaxCode {
   id: number;
@@ -110,6 +111,7 @@ export default function InvoicesCreate() {
     description: "", quantity: "1", unitPrice: "",
     taxCode: "" as string,        // empty → fall back to header taxCode
     taxInclusive: undefined as boolean | undefined, // empty → fall back to header
+    allocation: {} as LineAllocation,
   }]);
 
   // Load all active tax codes (the 5 seeded Saudi defaults + any custom).
@@ -152,6 +154,7 @@ export default function InvoicesCreate() {
   const addLine = () => setLines([...lines, {
     description: "", quantity: "1", unitPrice: "",
     taxCode: "", taxInclusive: undefined,
+    allocation: {} as LineAllocation,
   }]);
   const removeLine = (idx: number) => setLines(lines.filter((_, i) => i !== idx));
   const updateLine = (idx: number, field: string, value: any) => {
@@ -222,6 +225,7 @@ export default function InvoicesCreate() {
           total: Number(l.quantity) * Number(l.unitPrice),
           taxCode: l.taxCode || undefined,
           taxInclusive: l.taxInclusive,
+          ...buildAllocationPayload(l.allocation ?? {}),
         })),
       });
       toast({ title: "تم إنشاء الفاتورة بنجاح" });
@@ -406,6 +410,12 @@ export default function InvoicesCreate() {
                   <span className="text-muted-foreground">إجمالي: <span className="font-semibold text-emerald-700">{formatCurrency(split.gross)}</span></span>
                 </div>
               )}
+              <LineAllocationPanel
+                value={line.allocation ?? {}}
+                onChange={(next) => updateLine(idx, "allocation", next)}
+                status={deriveAllocationStatus(line.allocation ?? {})}
+                required={false}
+              />
             </div>
           );
         })}
