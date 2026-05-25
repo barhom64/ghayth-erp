@@ -12,18 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
 import {
   Plus,
@@ -31,7 +20,6 @@ import {
   AlertTriangle,
   ShieldCheck,
   XCircle,
-  Undo2,
 } from "lucide-react";
 import {
   DataTable,
@@ -181,7 +169,6 @@ export default function BankGuaranteesPage() {
   const [formDefaults, setFormDefaults] = useState<FormState>(EMPTY_FORM);
   const [deleting, setDeleting] = useState<BankGuarantee | null>(null);
   const [actionModal, setActionModal] = useState<ActionModal | null>(null);
-  const [actionReason, setActionReason] = useState("");
 
   const { data, isLoading, isError } = useApiQuery<any>(
     ["bank-guarantees", scopeQueryString],
@@ -243,7 +230,6 @@ export default function BankGuaranteesPage() {
       successMessage: "تم إلغاء الضمان البنكي",
       onSuccess: () => {
         setActionModal(null);
-        setActionReason("");
       },
     },
   );
@@ -261,7 +247,6 @@ export default function BankGuaranteesPage() {
       successMessage: "تم تحرير الضمان البنكي",
       onSuccess: () => {
         setActionModal(null);
-        setActionReason("");
       },
     },
   );
@@ -310,28 +295,21 @@ export default function BankGuaranteesPage() {
   };
 
   const openCancel = (row: BankGuarantee) => {
-    setActionReason("");
     setActionModal({ type: "cancel", row });
   };
 
   const openRelease = (row: BankGuarantee) => {
-    setActionReason("");
     setActionModal({ type: "release", row });
   };
 
-  const submitAction = () => {
+  const submitAction = (value: string) => {
     if (!actionModal) return;
     if (actionModal.type === "cancel") {
-      if (!actionReason.trim()) {
-        return; // The server enforces it too — the button disables
-               // until the reason is non-empty, so this is just a
-               // guard against a racey click.
-      }
-      cancelMutation.mutate({ id: actionModal.row.id, reason: actionReason });
+      cancelMutation.mutate({ id: actionModal.row.id, reason: value });
     } else {
       releaseMutation.mutate({
         id: actionModal.row.id,
-        notes: actionReason.trim() || undefined,
+        notes: value.trim() || undefined,
       });
     }
   };
@@ -611,75 +589,28 @@ export default function BankGuaranteesPage() {
       </Dialog>
 
       {/* ─── Cancel / Release dialog (Phase 8.1 lifecycle transitions) ── */}
-      <AlertDialog open={actionModal !== null} onOpenChange={(v) => !v && setActionModal(null)}>
-        <AlertDialogContent dir="rtl">
-          <AlertDialogHeader className="text-right">
-            <AlertDialogTitle className="flex items-center gap-2">
-              {actionModal?.type === "cancel" ? (
-                <>
-                  <XCircle className="h-5 w-5 text-status-warning-foreground" />
-                  إلغاء الضمان البنكي {actionModal.row.ref}
-                </>
-              ) : (
-                <>
-                  <Undo2 className="h-5 w-5 text-emerald-600" />
-                  تحرير الضمان البنكي {actionModal?.row.ref}
-                </>
-              )}
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="text-start space-y-3 pt-1">
-                <p className="text-sm text-muted-foreground">
-                  {actionModal?.type === "cancel"
-                    ? "سيتم تغيير حالة الضمان إلى «ملغى». هذا الإجراء يمرّ عبر محرك دورة الحياة المركزي ولا يمكن التراجع عنه."
-                    : "سيتم تغيير حالة الضمان إلى «مُحرَّر». هذا الإجراء يُسجَّل في سجل الأحداث ولا يمكن التراجع عنه."}
-                </p>
-                <div>
-                  <Label htmlFor="action-reason">
-                    {actionModal?.type === "cancel" ? "سبب الإلغاء *" : "ملاحظات التحرير (اختيارية)"}
-                  </Label>
-                  <Textarea
-                    id="action-reason"
-                    rows={3}
-                    value={actionReason}
-                    onChange={(e) => setActionReason(e.target.value)}
-                    placeholder={
-                      actionModal?.type === "cancel"
-                        ? "اذكر سبب إلغاء الضمان…"
-                        : "ملاحظات عند التحرير (اختيارية)…"
-                    }
-                  />
-                </div>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-row justify-start gap-2">
-            <AlertDialogAction
-              className={cn(
-                actionModal?.type === "cancel"
-                  ? "bg-amber-600 hover:bg-amber-700"
-                  : "bg-emerald-600 hover:bg-emerald-700",
-              )}
-              disabled={
-                (actionModal?.type === "cancel" && !actionReason.trim()) ||
-                cancelMutation.isPending ||
-                releaseMutation.isPending
-              }
-              onClick={(e) => {
-                e.preventDefault();
-                submitAction();
-              }}
-            >
-              {cancelMutation.isPending || releaseMutation.isPending
-                ? "جاري التنفيذ..."
-                : actionModal?.type === "cancel"
-                  ? "تأكيد الإلغاء"
-                  : "تأكيد التحرير"}
-            </AlertDialogAction>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <PromptDialog
+        open={actionModal !== null}
+        title={
+          actionModal?.type === "cancel"
+            ? `إلغاء الضمان البنكي ${actionModal.row.ref}`
+            : `تحرير الضمان البنكي ${actionModal?.row.ref ?? ""}`
+        }
+        description={
+          actionModal?.type === "cancel"
+            ? "سيتم تغيير حالة الضمان إلى «ملغى». هذا الإجراء يمرّ عبر محرك دورة الحياة المركزي ولا يمكن التراجع عنه."
+            : "سيتم تغيير حالة الضمان إلى «مُحرَّر». هذا الإجراء يُسجَّل في سجل الأحداث ولا يمكن التراجع عنه."
+        }
+        placeholder={
+          actionModal?.type === "cancel"
+            ? "اذكر سبب إلغاء الضمان…"
+            : "ملاحظات عند التحرير (اختيارية)…"
+        }
+        confirmLabel={actionModal?.type === "cancel" ? "تأكيد الإلغاء" : "تأكيد التحرير"}
+        optional={actionModal?.type === "release"}
+        onSubmit={submitAction}
+        onClose={() => setActionModal(null)}
+      />
 
       {/* ─── Delete dialog (Phase 9 soft-delete + C.7b blockers) ──── */}
       <ConfirmDeleteDialog
