@@ -1,24 +1,32 @@
 import { useState, useEffect } from "react";
 import { todayLocal } from "@/lib/formatters";
 import { useLocation } from "wouter";
+import { z } from "zod";
 import { useApiMutation, useApiQuery, ApiError, buildErrorToast } from "@/lib/api";
+import { useFormContext } from "react-hook-form";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DatePicker } from "@/components/ui/date-picker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
+import {
+  CreatePageLayout,
+  CreationDateField,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormEmailField,
+  FormPhoneField,
+  FormNumberField,
+  FormSelectField,
+  FormDateField,
+} from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { ROLES } from "@/lib/constants";
 import { CheckCircle, AlertCircle, User, Briefcase, FileText, Calendar, Shield, DollarSign, Clock, Building2, CreditCard, Users, ArrowRight } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
-import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useAppContext } from "@/contexts/app-context";
-import { fieldErrorClass, TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const OPERATIONS = [
   { key: "employee", label: "إنشاء سجل الموظف", icon: User },
@@ -34,6 +42,174 @@ const OPERATIONS = [
   { key: "notification", label: "إرسال إشعار للإدارة", icon: AlertCircle },
 ];
 
+const NATIONALITY_OPTIONS = [
+  { value: "سعودي", label: "سعودي" },
+  { value: "يمني", label: "يمني" },
+  { value: "مصري", label: "مصري" },
+  { value: "سوداني", label: "سوداني" },
+  { value: "باكستاني", label: "باكستاني" },
+  { value: "بنغلاديشي", label: "بنغلاديشي" },
+  { value: "هندي", label: "هندي" },
+  { value: "فلبيني", label: "فلبيني" },
+  { value: "أخرى", label: "أخرى" },
+];
+const GENDER_OPTIONS = [
+  { value: "male", label: "ذكر" },
+  { value: "female", label: "أنثى" },
+];
+const CONTRACT_OPTIONS = [
+  { value: "full_time", label: "دوام كامل" },
+  { value: "part_time", label: "دوام جزئي" },
+  { value: "contract", label: "عقد مؤقت" },
+  { value: "freelance", label: "عمل حر" },
+];
+const VISA_TYPE_OPTIONS = [
+  { value: "work", label: "عمل" },
+  { value: "visit", label: "زيارة" },
+  { value: "family", label: "تابع / عائلة" },
+  { value: "student", label: "طالب" },
+  { value: "umrah", label: "عمرة" },
+];
+const IQAMA_STATUS_OPTIONS = [
+  { value: "active", label: "سارية" },
+  { value: "expired", label: "منتهية" },
+  { value: "renewal_pending", label: "قيد التجديد" },
+];
+const BANK_OPTIONS = [
+  { value: "الراجحي", label: "مصرف الراجحي" },
+  { value: "الأهلي", label: "البنك الأهلي السعودي" },
+  { value: "الإنماء", label: "مصرف الإنماء" },
+  { value: "الرياض", label: "بنك الرياض" },
+  { value: "البلاد", label: "بنك البلاد" },
+  { value: "الجزيرة", label: "بنك الجزيرة" },
+  { value: "العربي", label: "البنك العربي الوطني" },
+  { value: "ساب", label: "بنك ساب" },
+  { value: "الفرنسي", label: "البنك السعودي الفرنسي" },
+  { value: "الاستثمار", label: "بنك الاستثمار السعودي" },
+  { value: "الأول", label: "البنك الأول" },
+];
+
+const schema = z.object({
+  name: z.string().min(1, "يرجى إدخال اسم الموظف"),
+  phone: z.string().min(1, "يرجى إدخال رقم الجوال"),
+  email: z.string().optional(),
+  jobTitle: z.string().min(1, "يرجى اختيار المسمى الوظيفي"),
+  role: z.string(),
+  salary: z
+    .string()
+    .refine((v) => Number(v) > 0, "يرجى إدخال الراتب الأساسي"),
+  hireDate: z.string(),
+  nationalId: z.string().min(1, "يرجى إدخال رقم الهوية"),
+  nationality: z.string().min(1, "يرجى اختيار الجنسية"),
+  gender: z.enum(["male", "female"]),
+  dateOfBirth: z.string().optional(),
+  department: z.string().min(1, "يرجى اختيار القسم"),
+  contractType: z.enum(["full_time", "part_time", "contract", "freelance"]),
+  branchId: z.string().optional(),
+  companyId: z.string().optional(),
+  managerId: z.string().optional(),
+  iqamaNumber: z.string().optional(),
+  passportNumber: z.string().optional(),
+  iqamaExpiry: z.string().optional(),
+  passportExpiry: z.string().optional(),
+  borderNumber: z.string().optional(),
+  visaNumber: z.string().optional(),
+  visaType: z.string().optional(),
+  visaExpiry: z.string().optional(),
+  sponsorNumber: z.string().optional(),
+  workPermitNumber: z.string().optional(),
+  workPermitExpiry: z.string().optional(),
+  iqamaStatus: z.enum(["active", "expired", "renewal_pending"]),
+  bankName: z.string().optional(),
+  bankAccount: z.string().optional(),
+  iban: z.string().optional(),
+  emergencyContact: z.string().optional(),
+  emergencyPhone: z.string().optional(),
+});
+
+function ManagerSearchPicker({ employeesList }: { employeesList: any[] }) {
+  const { watch, setValue } = useFormContext();
+  const managerId = watch("managerId") as string;
+  const [managerSearch, setManagerSearch] = useState("");
+  const [showManagerDropdown, setShowManagerDropdown] = useState(false);
+
+  // Sync display when managerId is preset (e.g. from draft restore)
+  useEffect(() => {
+    if (managerId && !managerSearch) {
+      const emp = employeesList.find((e: any) => String(e.id) === managerId);
+      if (emp) setManagerSearch(`${emp.name}${emp.jobTitle ? ` (${emp.jobTitle})` : ""}`);
+    }
+  }, [managerId, managerSearch, employeesList]);
+
+  return (
+    <div className="md:col-span-2">
+      <Label>المدير المباشر <span className="text-status-error">*</span></Label>
+      <div className="relative mt-1">
+        <Input
+          placeholder="ابحث عن المدير المباشر..."
+          value={managerSearch}
+          onFocus={() => setShowManagerDropdown(true)}
+          onChange={(e) => {
+            setManagerSearch(e.target.value);
+            setShowManagerDropdown(true);
+            if (!e.target.value) setValue("managerId", "");
+          }}
+          className="w-full"
+        />
+        {showManagerDropdown && managerSearch && !managerId && (
+          <div className="absolute z-10 w-full bg-white border border-border rounded-md shadow-lg max-h-52 overflow-y-auto mt-1">
+            {employeesList
+              .filter((emp: { name?: string; jobTitle?: string }) =>
+                emp.name?.toLowerCase().includes(managerSearch.toLowerCase()) ||
+                emp.jobTitle?.toLowerCase().includes(managerSearch.toLowerCase()),
+              )
+              .slice(0, 10)
+              .map((emp: { id: number; name: string; jobTitle?: string }) => (
+                <button
+                  key={emp.id}
+                  type="button"
+                  className="w-full text-right px-3 py-2 text-sm hover:bg-surface-subtle flex justify-between items-center gap-2"
+                  onClick={() => {
+                    setValue("managerId", String(emp.id));
+                    setManagerSearch(`${emp.name}${emp.jobTitle ? ` (${emp.jobTitle})` : ""}`);
+                    setShowManagerDropdown(false);
+                  }}
+                >
+                  <span className="font-medium text-status-neutral-foreground">{emp.name}</span>
+                  {emp.jobTitle && <span className="text-xs text-muted-foreground">{emp.jobTitle}</span>}
+                </button>
+              ))}
+            {employeesList.filter((emp: { name?: string; jobTitle?: string }) =>
+              emp.name?.toLowerCase().includes(managerSearch.toLowerCase()) ||
+              emp.jobTitle?.toLowerCase().includes(managerSearch.toLowerCase()),
+            ).length === 0 && (
+              <div className="px-3 py-2 text-sm text-muted-foreground">لا توجد نتائج</div>
+            )}
+          </div>
+        )}
+        {managerId && (
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs text-status-success-foreground">
+              ✓ المدير المحدد: {employeesList.find((e: { id: number }) => String(e.id) === managerId)?.name}
+            </p>
+            <button
+              type="button"
+              className="text-xs text-red-400 hover:text-status-error-foreground"
+              onClick={() => {
+                setValue("managerId", "");
+                setManagerSearch("");
+                setShowManagerDropdown(false);
+              }}
+            >
+              تغيير
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function EmployeesCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -43,47 +219,12 @@ export default function EmployeesCreate() {
   const { data: branchesData } = useApiQuery<{ data: any[] }>(["branches-list"], "/settings/branches");
   const { data: jobTitlesData } = useApiQuery<{ data: any[] }>(["job-titles-list"], "/employees/job-titles");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list-for-manager"], "/employees?limit=200");
-  const departments = departmentsData?.data || [];
-  const branches = branchesData?.data || [];
-  const jobTitles = jobTitlesData?.data || [];
-  const employeesList = employeesData?.data || [];
-  const [managerSearch, setManagerSearch] = useState("");
-  const [showManagerDropdown, setShowManagerDropdown] = useState(false);
 
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("employees_create", {
-    name: "", phone: "", email: "", jobTitle: "", role: "employee", salary: "",
-    hireDate: todayLocal(),
-    nationalId: "", nationality: "سعودي", gender: "male", dateOfBirth: "",
-    department: "", contractType: "full_time", branchId: selectedBranchId ? String(selectedBranchId) : "",
-    companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "",
-    managerId: "",
-    iqamaNumber: "", passportNumber: "", iqamaExpiry: "", passportExpiry: "",
-    borderNumber: "", visaNumber: "", visaType: "", visaExpiry: "",
-    sponsorNumber: "", workPermitNumber: "", workPermitExpiry: "", iqamaStatus: "active",
-    bankName: "", bankAccount: "", iban: "",
-    emergencyContact: "", emergencyPhone: "",
-  });
-
-  // HR-005 — when the page is opened from a recruitment application, the
-  // application id rides along so the POST links the application, emits
-  // recruitment.application.converted_to_employee and writes the audit.
-  // Creation still goes through the same /employees pipeline.
   const [sourceApplicationId, setSourceApplicationId] = useState<string | null>(null);
+  const [creationResult, setCreationResult] = useState<Record<string, any> | null>(null);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [prefill, setPrefill] = useState({ name: "", email: "", phone: "" });
 
-  useEffect(() => {
-    if (selectedBranchId && !form.branchId) {
-      setForm((f) => ({ ...f, branchId: String(selectedBranchId) }));
-    }
-    if (selectedCompanyIds.length === 1 && !form.companyId) {
-      setForm((f) => ({ ...f, companyId: String(selectedCompanyIds[0]) }));
-    }
-  }, [selectedBranchId, selectedCompanyIds]);
-
-  // One-time prefill when arriving from "إنشاء موظف من الطلب" on a hired
-  // applicant. A job application only carries name/email/phone — the
-  // legally required fields (national id, nationality, department,
-  // salary, contract) are completed here by HR. This is the recruitment
-  // → employee bridge that the pipeline previously lacked (audit C5).
   useEffect(() => {
     const qp = new URLSearchParams(window.location.search);
     const name = qp.get("name");
@@ -91,68 +232,46 @@ export default function EmployeesCreate() {
     const phone = qp.get("phone");
     const appId = qp.get("sourceApplicationId");
     if (appId) setSourceApplicationId(appId);
-    if (name || email || phone) {
-      setForm((f) => ({
-        ...f,
-        name: name || f.name,
-        email: email || f.email,
-        phone: phone || f.phone,
-      }));
-    }
+    setPrefill({ name: name || "", email: email || "", phone: phone || "" });
   }, []);
-
-  const [creationResult, setCreationResult] = useState<Record<string, any> | null>(null);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const { fieldErrors, validate, setApiError } = useFieldErrors();
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
-  const errCls = (field: string) => fieldErrorClass(fieldErrors[field]);
-  const FieldHint = ({ field }: { field: string }) => fieldErrors[field] ? <p className="text-xs text-status-error-foreground mt-1">{fieldErrors[field]}</p> : null;
+  const departments = departmentsData?.data || [];
+  const branches = branchesData?.data || [];
+  const jobTitles = jobTitlesData?.data || [];
+  const employeesList = employeesData?.data || [];
 
-  const handleSubmit = async () => {
-    const firstError = validate({
-      name: form.name ? null : "يرجى إدخال اسم الموظف",
-      nationalId: form.nationalId ? null : "يرجى إدخال رقم الهوية",
-      nationality: form.nationality ? null : "يرجى اختيار الجنسية",
-      phone: form.phone ? null : "يرجى إدخال رقم الجوال",
-      department: form.department ? null : "يرجى اختيار القسم",
-      jobTitle: form.jobTitle ? null : "يرجى اختيار المسمى الوظيفي",
-      contractType: form.contractType ? null : "يرجى اختيار نوع العقد",
-      salary: !form.salary || Number(form.salary) <= 0 ? "يرجى إدخال الراتب الأساسي" : null,
-    });
-    if (firstError) {
-      toast({ variant: "destructive", title: firstError });
-      return;
-    }
-    try {
-      const result = await createMut.mutateAsync({
-        ...form,
-        salary: Number(form.salary) || 0,
-        branchId: form.branchId ? Number(form.branchId) : undefined,
-        managerId: form.managerId ? Number(form.managerId) : undefined,
-        ...(attachments.length > 0 ? { attachments } : {}),
-        ...(sourceApplicationId ? { sourceApplicationId: Number(sourceApplicationId) } : {}),
-      });
-      clearDraft();
-      toast({ title: "تم إضافة الموظف بنجاح" });
-      setCreationResult(result as Record<string, any>);
-    } catch (err) {
-      if (err instanceof ApiError && err.field) {
-        setApiError(err);
-        toast({
-          variant: "destructive",
-          title: err.code === "CONFLICT" ? "لا يمكن تنفيذ هذه العملية الآن" : "البيانات غير صالحة",
-          description: err.fix ?? err.message,
-        });
-      } else {
-        // HR-U2 — بدّلنا toast العام بـ buildErrorToast حتى يعرض
-        // رسالة مكتوبة (code + description) للمستخدم بدلاً من "حدث خطأ".
-        toast(buildErrorToast(err));
-      }
-    }
-  };
+  const jobTitleOptions = jobTitles.length > 0
+    ? jobTitles.map((jt: any) => ({ value: jt.name, label: jt.name }))
+    : [
+        { value: "مدير عام", label: "مدير عام" },
+        { value: "مدير قسم", label: "مدير قسم" },
+        { value: "محاسب", label: "محاسب" },
+        { value: "مهندس", label: "مهندس" },
+        { value: "فني", label: "فني" },
+        { value: "سائق", label: "سائق" },
+        { value: "موظف استقبال", label: "موظف استقبال" },
+        { value: "مندوب مبيعات", label: "مندوب مبيعات" },
+        { value: "أخصائي موارد بشرية", label: "أخصائي موارد بشرية" },
+      ];
+
+  const departmentOptions = departments.length > 0
+    ? departments.map((d: any) => ({ value: d.name, label: d.name }))
+    : [
+        { value: "تقنية المعلومات", label: "تقنية المعلومات" },
+        { value: "الموارد البشرية", label: "الموارد البشرية" },
+        { value: "المالية", label: "المالية" },
+        { value: "التسويق", label: "التسويق" },
+        { value: "العمليات", label: "العمليات" },
+        { value: "المبيعات", label: "المبيعات" },
+        { value: "القانونية", label: "القانونية" },
+        { value: "الإدارة العامة", label: "الإدارة العامة" },
+      ];
+
+  const branchOptions = branches.map((b: any) => ({ value: String(b.id), label: b.name }));
+  const roleOptions = Object.entries(ROLES).map(([k, v]) => ({ value: k, label: v as string }));
 
   if (creationResult) {
     const userAccount = creationResult.userAccount;
@@ -211,25 +330,7 @@ export default function EmployeesCreate() {
           </CardContent>
         </Card>
         <div className="flex justify-end gap-3 pt-4">
-          <Button variant="outline" onClick={() => {
-            setCreationResult(null);
-            setManagerSearch("");
-            setShowManagerDropdown(false);
-            setForm({
-              name: "", phone: "", email: "", jobTitle: "", role: "employee", salary: "",
-              hireDate: todayLocal(),
-              nationalId: "", nationality: "سعودي", gender: "male", dateOfBirth: "",
-              department: "", contractType: "full_time",
-              branchId: selectedBranchId ? String(selectedBranchId) : "",
-              companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "",
-              managerId: "",
-              iqamaNumber: "", passportNumber: "", iqamaExpiry: "", passportExpiry: "",
-              borderNumber: "", visaNumber: "", visaType: "", visaExpiry: "",
-              sponsorNumber: "", workPermitNumber: "", workPermitExpiry: "", iqamaStatus: "active",
-              bankName: "", bankAccount: "", iban: "",
-              emergencyContact: "", emergencyPhone: "",
-            });
-          }}>
+          <Button variant="outline" onClick={() => setCreationResult(null)}>
             إضافة موظف آخر
           </Button>
           <Button onClick={() => setLocation("/employees")} className="gap-1">
@@ -242,12 +343,6 @@ export default function EmployeesCreate() {
 
   return (
     <CreatePageLayout title="إضافة موظف جديد" backPath="/employees">
-      {hasDraft && (
-        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
-          <span>تم استعادة مسودة محفوظة سابقاً</span>
-          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
-        </div>
-      )}
       {sourceApplicationId && (
         <div className="mb-4 flex items-center gap-2 bg-status-info-surface border border-status-info-surface rounded-lg px-4 py-2 text-sm text-status-info-foreground">
           <Briefcase className="h-4 w-4 shrink-0" />
@@ -257,261 +352,130 @@ export default function EmployeesCreate() {
       <div className="mb-4">
         <CreationDateField />
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <TextField label="الاسم الرباعي" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} error={fieldErrors.name} className="md:col-span-2" />
-        <TextField label="رقم الهوية / الإقامة" required dir="ltr" value={form.nationalId} onChange={(v) => setForm((f) => ({ ...f, nationalId: v }))} placeholder="مثال: 1234567890" error={fieldErrors.nationalId} />
-        <FormFieldWrapper label="الجنسية" required error={fieldErrors.nationality}>
-          <Select value={form.nationality} onValueChange={(v) => setForm((f) => ({ ...f, nationality: v }))}>
-            <SelectTrigger className={fieldErrorClass(fieldErrors.nationality)}><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="سعودي">سعودي</SelectItem>
-              <SelectItem value="يمني">يمني</SelectItem>
-              <SelectItem value="مصري">مصري</SelectItem>
-              <SelectItem value="سوداني">سوداني</SelectItem>
-              <SelectItem value="باكستاني">باكستاني</SelectItem>
-              <SelectItem value="بنغلاديشي">بنغلاديشي</SelectItem>
-              <SelectItem value="هندي">هندي</SelectItem>
-              <SelectItem value="فلبيني">فلبيني</SelectItem>
-              <SelectItem value="أخرى">أخرى</SelectItem>
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
-        <FormFieldWrapper label="الجنس">
-          <Select value={form.gender} onValueChange={(v) => setForm((f) => ({ ...f, gender: v }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="male">ذكر</SelectItem>
-              <SelectItem value="female">أنثى</SelectItem>
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
-        <FormFieldWrapper label="تاريخ الميلاد"><DatePicker value={form.dateOfBirth} onChange={(v) => setForm((f) => ({ ...f, dateOfBirth: v }))} /></FormFieldWrapper>
-        <TextField label="رقم الجوال" required type="tel" inputMode="tel" dir="ltr" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} error={fieldErrors.phone} />
-        <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} error={fieldErrors.email} />
+      <FormShell
+        schema={schema}
+        defaultValues={{
+          name: prefill.name,
+          phone: prefill.phone,
+          email: prefill.email,
+          jobTitle: "",
+          role: "employee",
+          salary: "",
+          hireDate: todayLocal(),
+          nationalId: "",
+          nationality: "سعودي",
+          gender: "male",
+          dateOfBirth: "",
+          department: "",
+          contractType: "full_time",
+          branchId: selectedBranchId ? String(selectedBranchId) : "",
+          companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "",
+          managerId: "",
+          iqamaNumber: "",
+          passportNumber: "",
+          iqamaExpiry: "",
+          passportExpiry: "",
+          borderNumber: "",
+          visaNumber: "",
+          visaType: "",
+          visaExpiry: "",
+          sponsorNumber: "",
+          workPermitNumber: "",
+          workPermitExpiry: "",
+          iqamaStatus: "active",
+          bankName: "",
+          bankAccount: "",
+          iban: "",
+          emergencyContact: "",
+          emergencyPhone: "",
+        }}
+        submitLabel={createMut.isPending ? "جاري الحفظ..." : "حفظ الموظف"}
+        secondaryActions={
+          <Button type="button" variant="outline" onClick={() => setLocation("/employees")}>
+            إلغاء
+          </Button>
+        }
+        onSubmit={async (values, { setFieldError }) => {
+          try {
+            const result = await createMut.mutateAsync({
+              ...values,
+              salary: Number(values.salary) || 0,
+              branchId: values.branchId ? Number(values.branchId) : undefined,
+              managerId: values.managerId ? Number(values.managerId) : undefined,
+              ...(attachments.length > 0 ? { attachments } : {}),
+              ...(sourceApplicationId ? { sourceApplicationId: Number(sourceApplicationId) } : {}),
+            });
+            toast({ title: "تم إضافة الموظف بنجاح" });
+            setCreationResult(result as Record<string, any>);
+          } catch (err) {
+            if (err instanceof ApiError && err.field) {
+              setFieldError(err.field as any, err.fix ?? err.message);
+              toast({
+                variant: "destructive",
+                title: err.code === "CONFLICT" ? "لا يمكن تنفيذ هذه العملية الآن" : "البيانات غير صالحة",
+                description: err.fix ?? err.message,
+              });
+            } else {
+              toast(buildErrorToast(err));
+            }
+          }
+        }}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="name" label="الاسم الرباعي" required className="md:col-span-2" />
+          <FormTextField name="nationalId" label="رقم الهوية / الإقامة" required placeholder="مثال: 1234567890" />
+          <FormSelectField name="nationality" label="الجنسية" required options={NATIONALITY_OPTIONS} />
+          <FormSelectField name="gender" label="الجنس" options={GENDER_OPTIONS} />
+          <FormDateField name="dateOfBirth" label="تاريخ الميلاد" />
+          <FormPhoneField name="phone" label="رقم الجوال" required />
+          <FormEmailField name="email" label="البريد الإلكتروني" />
+          <ManagerSearchPicker employeesList={employeesList} />
+          <FormSelectField name="jobTitle" label="المسمى الوظيفي" required options={jobTitleOptions} placeholder="اختر المسمى الوظيفي" />
+          <FormSelectField name="department" label="القسم" required options={departmentOptions} placeholder="اختر القسم" />
+          <FormSelectField name="branchId" label="الفرع" options={branchOptions} placeholder="— اختياري —" />
+          <FormSelectField name="role" label="الصلاحية" options={roleOptions} />
+          <FormSelectField name="contractType" label="نوع العقد" options={CONTRACT_OPTIONS} />
+          <FormNumberField name="salary" label="الراتب الأساسي" />
+          <FormDateField name="hireDate" label="تاريخ التعيين" />
 
-        <div className="md:col-span-2">
-          <Label>المدير المباشر <span className="text-status-error">*</span></Label>
-          <div className="relative mt-1">
-            <Input
-              placeholder="ابحث عن المدير المباشر..."
-              value={managerSearch}
-              onFocus={() => setShowManagerDropdown(true)}
-              onChange={(e) => {
-                setManagerSearch(e.target.value);
-                setShowManagerDropdown(true);
-                if (!e.target.value) setForm((f) => ({ ...f, managerId: "" }));
-              }}
-              className={`w-full ${errCls("managerId")}`}
-            />
-            <FieldHint field="managerId" />
-            {showManagerDropdown && managerSearch && !form.managerId && (
-              <div className="absolute z-10 w-full bg-white border border-border rounded-md shadow-lg max-h-52 overflow-y-auto mt-1">
-                {employeesList
-                  .filter((emp: { name?: string; jobTitle?: string }) =>
-                    emp.name?.toLowerCase().includes(managerSearch.toLowerCase()) ||
-                    emp.jobTitle?.toLowerCase().includes(managerSearch.toLowerCase())
-                  )
-                  .slice(0, 10)
-                  .map((emp: { id: number; name: string; jobTitle?: string }) => (
-                    <button
-                      key={emp.id}
-                      type="button"
-                      className="w-full text-right px-3 py-2 text-sm hover:bg-surface-subtle flex justify-between items-center gap-2"
-                      onClick={() => {
-                        setForm((f) => ({ ...f, managerId: String(emp.id) }));
-                        setManagerSearch(`${emp.name}${emp.jobTitle ? ` (${emp.jobTitle})` : ""}`);
-                        setShowManagerDropdown(false);
-                      }}
-                    >
-                      <span className="font-medium text-status-neutral-foreground">{emp.name}</span>
-                      {emp.jobTitle && <span className="text-xs text-muted-foreground">{emp.jobTitle}</span>}
-                    </button>
-                  ))}
-                {employeesList.filter((emp: { name?: string; jobTitle?: string }) =>
-                  emp.name?.toLowerCase().includes(managerSearch.toLowerCase()) ||
-                  emp.jobTitle?.toLowerCase().includes(managerSearch.toLowerCase())
-                ).length === 0 && (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">لا توجد نتائج</div>
-                )}
-              </div>
-            )}
-            {form.managerId && (
-              <div className="flex items-center gap-2 mt-1">
-                <p className="text-xs text-status-success-foreground">
-                  ✓ المدير المحدد: {employeesList.find((e: { id: number }) => String(e.id) === form.managerId)?.name}
-                </p>
-                <button
-                  type="button"
-                  className="text-xs text-red-400 hover:text-status-error-foreground"
-                  onClick={() => {
-                    setForm((f) => ({ ...f, managerId: "" }));
-                    setManagerSearch("");
-                    setShowManagerDropdown(false);
-                  }}
-                >
-                  تغيير
-                </button>
-              </div>
-            )}
+          <div className="md:col-span-2 border-t pt-4 mt-2">
+            <h3 className="text-sm font-semibold text-muted-foreground mb-3">بيانات الإقامة والجواز</h3>
           </div>
-        </div>
+          <FormTextField name="iqamaNumber" label="رقم الإقامة" />
+          <FormTextField name="passportNumber" label="رقم الجواز" />
+          <FormDateField name="iqamaExpiry" label="تاريخ انتهاء الإقامة" />
+          <FormDateField name="passportExpiry" label="تاريخ انتهاء الجواز" />
 
-        <FormFieldWrapper label="المسمى الوظيفي" error={fieldErrors.jobTitle}>
-          <Select value={form.jobTitle || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, jobTitle: v === "_none" ? "" : v }))}>
-            <SelectTrigger className={fieldErrorClass(fieldErrors.jobTitle)}><SelectValue placeholder="اختر المسمى الوظيفي" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">اختر المسمى الوظيفي</SelectItem>
-              {jobTitles.length > 0
-                ? jobTitles.map((jt: { id: number; name: string }) => <SelectItem key={jt.id} value={jt.name}>{jt.name}</SelectItem>)
-                : <>
-                    <SelectItem value="مدير عام">مدير عام</SelectItem>
-                    <SelectItem value="مدير قسم">مدير قسم</SelectItem>
-                    <SelectItem value="محاسب">محاسب</SelectItem>
-                    <SelectItem value="مهندس">مهندس</SelectItem>
-                    <SelectItem value="فني">فني</SelectItem>
-                    <SelectItem value="سائق">سائق</SelectItem>
-                    <SelectItem value="موظف استقبال">موظف استقبال</SelectItem>
-                    <SelectItem value="مندوب مبيعات">مندوب مبيعات</SelectItem>
-                    <SelectItem value="أخصائي موارد بشرية">أخصائي موارد بشرية</SelectItem>
-                  </>
-              }
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
-        <FormFieldWrapper label="القسم" error={fieldErrors.department}>
-          <Select value={form.department || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, department: v === "_none" ? "" : v }))}>
-            <SelectTrigger className={fieldErrorClass(fieldErrors.department)}><SelectValue placeholder="اختر القسم" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">اختر القسم</SelectItem>
-              {departments.length > 0
-                ? departments.map((d: { id: number; name: string }) => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)
-                : <>
-                    <SelectItem value="تقنية المعلومات">تقنية المعلومات</SelectItem>
-                    <SelectItem value="الموارد البشرية">الموارد البشرية</SelectItem>
-                    <SelectItem value="المالية">المالية</SelectItem>
-                    <SelectItem value="التسويق">التسويق</SelectItem>
-                    <SelectItem value="العمليات">العمليات</SelectItem>
-                    <SelectItem value="المبيعات">المبيعات</SelectItem>
-                    <SelectItem value="القانونية">القانونية</SelectItem>
-                    <SelectItem value="الإدارة العامة">الإدارة العامة</SelectItem>
-                  </>
-              }
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
-        <FormFieldWrapper label="الفرع">
-          <Select value={form.branchId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, branchId: v === "_none" ? "" : v }))}>
-            <SelectTrigger><SelectValue placeholder="— اختياري —" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">— اختياري —</SelectItem>
-              {branches.map((b: { id: number; name: string }) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
-        <FormFieldWrapper label="الصلاحية">
-          <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {Object.entries(ROLES).map(([key, value]) => <SelectItem key={key} value={key}>{value as string}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
-        <FormFieldWrapper label="نوع العقد" error={fieldErrors.contractType}>
-          <Select value={form.contractType} onValueChange={(v) => setForm((f) => ({ ...f, contractType: v }))}>
-            <SelectTrigger className={fieldErrorClass(fieldErrors.contractType)}><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="full_time">دوام كامل</SelectItem>
-              <SelectItem value="part_time">دوام جزئي</SelectItem>
-              <SelectItem value="contract">عقد مؤقت</SelectItem>
-              <SelectItem value="freelance">عمل حر</SelectItem>
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
-        <NumberField label="الراتب الأساسي" value={form.salary} onChange={(v) => setForm((f) => ({ ...f, salary: v }))} error={fieldErrors.salary} />
-        <FormFieldWrapper label="تاريخ التعيين"><DatePicker value={form.hireDate} onChange={(v) => setForm((f) => ({ ...f, hireDate: v }))} /></FormFieldWrapper>
+          <div className="md:col-span-2 border-t pt-4 mt-2">
+            <h3 className="text-sm font-semibold text-status-info-foreground mb-3 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-status-info-surface0 inline-block"></span>
+              بيانات التأشيرة والتصاريح — الربط الحكومي (مقيم)
+            </h3>
+          </div>
+          <FormTextField name="borderNumber" label="رقم الحدود" placeholder="رقم الحدود" />
+          <FormTextField name="visaNumber" label="رقم التأشيرة" placeholder="رقم التأشيرة" />
+          <FormSelectField name="visaType" label="نوع التأشيرة" options={VISA_TYPE_OPTIONS} placeholder="— اختياري —" />
+          <FormDateField name="visaExpiry" label="تاريخ انتهاء التأشيرة" />
+          <FormTextField name="sponsorNumber" label="رقم الكفيل / المنشأة" placeholder="رقم المنشأة أو الكفيل" />
+          <FormTextField name="workPermitNumber" label="رقم رخصة العمل" placeholder="رقم رخصة العمل" />
+          <FormDateField name="workPermitExpiry" label="تاريخ انتهاء رخصة العمل" />
+          <FormSelectField name="iqamaStatus" label="حالة الإقامة" options={IQAMA_STATUS_OPTIONS} />
 
-        <div className="md:col-span-2 border-t pt-4 mt-2">
-          <h3 className="text-sm font-semibold text-muted-foreground mb-3">بيانات الإقامة والجواز</h3>
-        </div>
-        <TextField label="رقم الإقامة" dir="ltr" value={form.iqamaNumber} onChange={(v) => setForm((f) => ({ ...f, iqamaNumber: v }))} />
-        <TextField label="رقم الجواز" dir="ltr" value={form.passportNumber} onChange={(v) => setForm((f) => ({ ...f, passportNumber: v }))} />
-        <FormFieldWrapper label="تاريخ انتهاء الإقامة"><DatePicker value={form.iqamaExpiry} onChange={(v) => setForm((f) => ({ ...f, iqamaExpiry: v }))} /></FormFieldWrapper>
-        <FormFieldWrapper label="تاريخ انتهاء الجواز"><DatePicker value={form.passportExpiry} onChange={(v) => setForm((f) => ({ ...f, passportExpiry: v }))} /></FormFieldWrapper>
+          <div className="md:col-span-2 border-t pt-4 mt-2">
+            <h3 className="text-sm font-semibold text-muted-foreground mb-3">البيانات البنكية</h3>
+          </div>
+          <FormSelectField name="bankName" label="اسم البنك" options={BANK_OPTIONS} placeholder="اختر البنك" />
+          <FormTextField name="bankAccount" label="رقم الحساب" />
+          <FormTextField name="iban" label="رقم الآيبان" placeholder="SA..." />
 
-        <div className="md:col-span-2 border-t pt-4 mt-2">
-          <h3 className="text-sm font-semibold text-status-info-foreground mb-3 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-status-info-surface0 inline-block"></span>
-            بيانات التأشيرة والتصاريح — الربط الحكومي (مقيم)
-          </h3>
-        </div>
-        <TextField label="رقم الحدود" dir="ltr" value={form.borderNumber} onChange={(v) => setForm((f) => ({ ...f, borderNumber: v }))} placeholder="رقم الحدود" />
-        <TextField label="رقم التأشيرة" dir="ltr" value={form.visaNumber} onChange={(v) => setForm((f) => ({ ...f, visaNumber: v }))} placeholder="رقم التأشيرة" />
-        <FormFieldWrapper label="نوع التأشيرة">
-          <Select value={form.visaType || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, visaType: v === "_none" ? "" : v }))}>
-            <SelectTrigger><SelectValue placeholder="— اختياري —" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">— اختياري —</SelectItem>
-              <SelectItem value="work">عمل</SelectItem>
-              <SelectItem value="visit">زيارة</SelectItem>
-              <SelectItem value="family">تابع / عائلة</SelectItem>
-              <SelectItem value="student">طالب</SelectItem>
-              <SelectItem value="umrah">عمرة</SelectItem>
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
-        <FormFieldWrapper label="تاريخ انتهاء التأشيرة"><DatePicker value={form.visaExpiry} onChange={(v) => setForm((f) => ({ ...f, visaExpiry: v }))} /></FormFieldWrapper>
-        <TextField label="رقم الكفيل / المنشأة" dir="ltr" value={form.sponsorNumber} onChange={(v) => setForm((f) => ({ ...f, sponsorNumber: v }))} placeholder="رقم المنشأة أو الكفيل" />
-        <TextField label="رقم رخصة العمل" dir="ltr" value={form.workPermitNumber} onChange={(v) => setForm((f) => ({ ...f, workPermitNumber: v }))} placeholder="رقم رخصة العمل" />
-        <FormFieldWrapper label="تاريخ انتهاء رخصة العمل"><DatePicker value={form.workPermitExpiry} onChange={(v) => setForm((f) => ({ ...f, workPermitExpiry: v }))} /></FormFieldWrapper>
-        <FormFieldWrapper label="حالة الإقامة">
-          <Select value={form.iqamaStatus} onValueChange={(v) => setForm((f) => ({ ...f, iqamaStatus: v }))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">سارية</SelectItem>
-              <SelectItem value="expired">منتهية</SelectItem>
-              <SelectItem value="renewal_pending">قيد التجديد</SelectItem>
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
-
-        <div className="md:col-span-2 border-t pt-4 mt-2">
-          <h3 className="text-sm font-semibold text-muted-foreground mb-3">البيانات البنكية</h3>
-        </div>
-        <FormFieldWrapper label="اسم البنك">
-          <Select value={form.bankName || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, bankName: v === "_none" ? "" : v }))}>
-            <SelectTrigger><SelectValue placeholder="اختر البنك" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="_none">اختر البنك</SelectItem>
-              <SelectItem value="الراجحي">مصرف الراجحي</SelectItem>
-              <SelectItem value="الأهلي">البنك الأهلي السعودي</SelectItem>
-              <SelectItem value="الإنماء">مصرف الإنماء</SelectItem>
-              <SelectItem value="الرياض">بنك الرياض</SelectItem>
-              <SelectItem value="البلاد">بنك البلاد</SelectItem>
-              <SelectItem value="الجزيرة">بنك الجزيرة</SelectItem>
-              <SelectItem value="العربي">البنك العربي الوطني</SelectItem>
-              <SelectItem value="ساب">بنك ساب</SelectItem>
-              <SelectItem value="الفرنسي">البنك السعودي الفرنسي</SelectItem>
-              <SelectItem value="الاستثمار">بنك الاستثمار السعودي</SelectItem>
-              <SelectItem value="الأول">البنك الأول</SelectItem>
-            </SelectContent>
-          </Select>
-        </FormFieldWrapper>
-        <TextField label="رقم الحساب" dir="ltr" value={form.bankAccount} onChange={(v) => setForm((f) => ({ ...f, bankAccount: v }))} />
-        <TextField label="رقم الآيبان" dir="ltr" value={form.iban} onChange={(v) => setForm((f) => ({ ...f, iban: v }))} placeholder="SA..." />
-
-        <div className="md:col-span-2 border-t pt-4 mt-2">
-          <h3 className="text-sm font-semibold text-muted-foreground mb-3">جهة الاتصال في حالة الطوارئ</h3>
-        </div>
-        <TextField label="اسم جهة الاتصال" value={form.emergencyContact} onChange={(v) => setForm((f) => ({ ...f, emergencyContact: v }))} />
-        <TextField label="رقم الطوارئ" dir="ltr" value={form.emergencyPhone} onChange={(v) => setForm((f) => ({ ...f, emergencyPhone: v }))} />
-      </div>
-      <FileDropZone files={attachments} onFilesChange={setAttachments} label="المرفقات (صور، وثائق)" />
-      <div className="flex justify-end gap-3 pt-6">
-        <Button variant="outline" onClick={() => setLocation("/employees")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending} rateLimitAware>
-          {createMut.isPending ? "جاري الحفظ..." : "حفظ الموظف"}
-        </Button>
-      </div>
+          <div className="md:col-span-2 border-t pt-4 mt-2">
+            <h3 className="text-sm font-semibold text-muted-foreground mb-3">جهة الاتصال في حالة الطوارئ</h3>
+          </div>
+          <FormTextField name="emergencyContact" label="اسم جهة الاتصال" />
+          <FormPhoneField name="emergencyPhone" label="رقم الطوارئ" />
+        </FormGrid>
+        <FileDropZone files={attachments} onFilesChange={setAttachments} label="المرفقات (صور، وثائق)" />
+      </FormShell>
     </CreatePageLayout>
   );
 }
