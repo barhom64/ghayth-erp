@@ -4,6 +4,7 @@ import type { ModuleType } from "@/contexts/app-context";
 const Clients = lazy(() => import("@/pages/clients"));
 const ClientDetail = lazy(() => import("@/pages/client-detail"));
 const ClientsCreate = lazy(() => import("@/pages/create/clients-create"));
+const CustomerStatement = lazy(() => import("@/pages/finance/customer-statement"));
 const CRM = lazy(() => import("@/pages/crm"));
 const CrmCreate = lazy(() => import("@/pages/create/crm-create"));
 const CrmActivities = lazy(() => import("@/pages/crm/activities"));
@@ -81,6 +82,7 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/daily-close", component: DailyClose, module: "operations", minRoleLevel: 40 },
   { path: "/clients", component: Clients, module: "crm" },
   { path: "/clients/create", component: ClientsCreate, module: "crm" },
+  { path: "/clients/:id/statement", component: CustomerStatement, module: "crm" },
   { path: "/clients/:id", component: ClientDetail, module: "crm" },
   { path: "/crm", component: CRM, module: "crm" },
   { path: "/crm/create", component: CrmCreate, module: "crm" },
