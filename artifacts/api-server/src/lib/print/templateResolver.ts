@@ -237,7 +237,86 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
     isThermal: false,
     version: 1,
   }),
+  // A sales invoice with no DB-stored template used to fall through to
+  // universalFallback, which printed only ref/status/id — no totals, no
+  // client, no line breakdown. Users got an unusable document. This preset
+  // gives a complete A4 invoice straight out of the box (header → buyer →
+  // items table → totals → footer) using the {entity, items, client}
+  // payload shape from dataLoader.loadInvoice.
+  invoice: () => buildInvoicePreset(),
+  sales_invoice: () => buildInvoicePreset(),
 };
+
+function buildInvoicePreset(): PrintTemplate {
+  return {
+    id: -5,
+    name: "Invoice — classic A4",
+    entityType: "invoice",
+    branchId: null,
+    companyId: null,
+    paperSize: "A4",
+    mode: "preset",
+    presetKey: "invoice_classic",
+    htmlContent: `<div class="print-doc">
+{{branch.letterhead}}
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">فاتورة ضريبية</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">Tax Invoice</div>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">العميل / Bill To</div>
+      <div>{{client.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الرقم الضريبي: {{client.taxNumber}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>المرجع:</strong> {{entity.ref}}</div>
+      <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+      <div><strong>تاريخ الاستحقاق:</strong> {{entity.dueDate}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:right">البيان</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:60px">الكمية</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:60px">الوحدة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">سعر الوحدة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">الإجمالي</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt">{{this.description}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{this.quantity}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{this.unit}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.unitPrice}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.totalPrice}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<table style="width:280px;margin-right:auto;margin-left:0;border-collapse:collapse">
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">المجموع قبل الضريبة</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.subtotal}} {{entity.currency}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">ضريبة القيمة المضافة ({{entity.vatRate}}%)</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.vatAmount}} {{entity.currency}}</td></tr>
+  <tr style="background:#f1f5f9;font-weight:bold"><td style="padding:6px 8px;border:1px solid #cbd5e1">الإجمالي شامل الضريبة</td><td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.total}} {{entity.currency}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">المدفوع</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.paidAmount}} {{entity.currency}}</td></tr>
+</table>
+<div style="margin-top:18px;font-size:10pt;color:#475569">{{entity.notes}}</div>
+{{branch.footer}}
+</div>`,
+    layoutJson: null,
+    cssOverrides: null,
+    headerOverride: null,
+    footerOverride: null,
+    isThermal: false,
+    version: 1,
+  };
+}
 
 /** In-memory template that works for any entityType. */
 function universalFallback(entityType: string): PrintTemplate {
