@@ -38,6 +38,9 @@ run to spot regressions.
 | `gl.bench.ts`             | `buildEntry` / `buildSimpleEntry` — balance check on every posting        |
 | `tax.bench.ts`            | `splitFromRate` — VAT split per invoice / purchase line                   |
 | `rbac.bench.ts`            | `isKnownPermission`, `getRolePermissions` — runs on every authorize()     |
+| `eventCatalog.bench.ts`   | `getEventDefinition`, `validateEventPayload` — every `emitEvent()` call   |
+| `secrets.bench.ts`        | `isEncrypted` — prefix guard on every settings read                       |
+| `discipline.bench.ts`     | `parsePenaltyLabel` — Arabic penalty classifier per HR violation          |
 | `businessHelpers.bench.ts`| Riyadh-aware `currentDateInTz`, `combineDateAndShiftTime`, VAT, rounding  |
 
 Only **pure** functions belong here. DB-driven paths are measured by the
