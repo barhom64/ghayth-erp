@@ -108,6 +108,8 @@ const AllocationRuleCreate = lazy(() => import("@/pages/create/finance/allocatio
 const AllocationRuleEdit = lazy(() => import("@/pages/create/finance/allocation-rule-edit"));
 const ProductCatalog = lazy(() => import("@/pages/finance/product-catalog"));
 const FxRates = lazy(() => import("@/pages/finance/fx-rates"));
+const SettingsHub = lazy(() => import("@/pages/finance/settings-hub"));
+const FxRevaluation = lazy(() => import("@/pages/finance/fx-revaluation"));
 
 export const financeRoutes = [
   // /finance → the new dashboard (R.1.5). The chart of accounts moves
@@ -181,6 +183,8 @@ export const financeRoutes = [
   { path: "/finance/allocation-results", component: AllocationResults },
   { path: "/finance/product-catalog", component: ProductCatalog },
   { path: "/finance/fx-rates", component: FxRates },
+  { path: "/finance/settings", component: SettingsHub },
+  { path: "/finance/fx-revaluation", component: FxRevaluation },
   { path: "/finance/reports", component: FinancialReports },
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },
