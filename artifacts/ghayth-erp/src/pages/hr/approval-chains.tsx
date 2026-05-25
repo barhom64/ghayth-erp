@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,11 @@ import {
   AdvancedFilters,
   useFilters,
   applyFilters,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormNumberField,
+  FormSelectField,
 } from "@workspace/ui-core";
 import { APPROVAL_ROLES, APPROVAL_CHAIN_STATUS } from "@/lib/hr-type-maps";
 
@@ -46,22 +52,42 @@ interface StepDraft {
 
 const emptyStep = (): StepDraft => ({ requiredRole: "branch_manager", timeoutHours: 48, autoApproveOnTimeout: false });
 
+const chainFormSchema = z.object({
+  name: z.string().min(1, "اسم السلسلة مطلوب"),
+  chainType: z.string(),
+  minAmount: z.string().optional(),
+  maxAmount: z.string().optional(),
+});
+type ChainForm = z.infer<typeof chainFormSchema>;
+
+const CHAIN_TYPE_OPTIONS = Object.entries({
+  leaves: "الإجازات",
+  purchases: "المشتريات",
+  expenses: "المصروفات",
+  advances: "السلف",
+  letters: "الخطابات الرسمية",
+  loans: "القروض",
+  overtime: "العمل الإضافي",
+  exit: "إخلاء الطرف",
+}).map(([value, label]) => ({ value, label }));
+
 export default function ApprovalChainsPage() {
   const [filters, setFilters] = useFilters();
   const stagesQ = useApiQuery<any>(["approval-chains"], "/hr/approval-chains");
   const defsQ = useApiQuery<any>(["approval-chain-definitions"], "/hr/approval-chain-definitions");
 
   const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState("");
-  const [chainType, setChainType] = useState("leaves");
-  const [minAmount, setMinAmount] = useState("");
-  const [maxAmount, setMaxAmount] = useState("");
+  // Steps remain in useState because they're a dynamic array of structured
+  // values, not a flat-named RHF field — same pattern as the journal lines
+  // arrays in finance/journal-create.
   const [steps, setSteps] = useState<StepDraft[]>([emptyStep()]);
+  const [formKey, setFormKey] = useState(0);
   const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null);
 
   const resetForm = () => {
-    setName(""); setChainType("leaves"); setMinAmount(""); setMaxAmount("");
-    setSteps([emptyStep()]); setShowForm(false);
+    setSteps([emptyStep()]);
+    setFormKey((k) => k + 1);
+    setShowForm(false);
   };
 
   const createMut = useApiMutation<unknown, any>(
@@ -145,15 +171,13 @@ export default function ApprovalChainsPage() {
     },
   ];
 
-  const canSubmit = name.trim().length > 0 && steps.length > 0;
-
-  const submit = () => {
-    if (!canSubmit) return;
-    createMut.mutate({
-      name: name.trim(),
-      chainType,
-      minAmount: minAmount === "" ? undefined : Number(minAmount),
-      maxAmount: maxAmount === "" ? undefined : Number(maxAmount),
+  const handleSubmit = async (values: ChainForm) => {
+    if (steps.length === 0) return;
+    await createMut.mutateAsync({
+      name: values.name.trim(),
+      chainType: values.chainType,
+      minAmount: !values.minAmount ? undefined : Number(values.minAmount),
+      maxAmount: !values.maxAmount ? undefined : Number(values.maxAmount),
       steps: steps.map((s) => ({
         requiredRole: s.requiredRole,
         timeoutHours: Number(s.timeoutHours) || 48,
@@ -180,94 +204,78 @@ export default function ApprovalChainsPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">تعريف سلسلة موافقة جديدة</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div className="md:col-span-2">
-                <Label className="text-xs">اسم السلسلة</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: اعتماد إجازات الفروع" />
-              </div>
-              <div>
-                <Label className="text-xs">النوع</Label>
-                <Select value={chainType} onValueChange={setChainType}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(CHAIN_TYPES).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">أدنى مبلغ</Label>
-                  <Input type="number" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} placeholder="0" />
-                </div>
-                <div>
-                  <Label className="text-xs">أعلى مبلغ</Label>
-                  <Input type="number" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} placeholder="—" />
-                </div>
-              </div>
-            </div>
+          <CardContent>
+            <FormShell
+              key={formKey}
+              schema={chainFormSchema}
+              defaultValues={{ name: "", chainType: "leaves", minAmount: "", maxAmount: "" }}
+              submitLabel="حفظ السلسلة"
+              disabled={steps.length === 0 || createMut.isPending}
+              secondaryActions={
+                <Button type="button" size="sm" variant="ghost" onClick={resetForm}>إلغاء</Button>
+              }
+              onSubmit={handleSubmit}
+            >
+              <FormGrid cols={4}>
+                <FormTextField name="name" label="اسم السلسلة" required placeholder="مثال: اعتماد إجازات الفروع" className="md:col-span-2" />
+                <FormSelectField name="chainType" label="نوع الطلبات" options={CHAIN_TYPE_OPTIONS} />
+                <FormNumberField name="minAmount" label="أدنى مبلغ" placeholder="0" />
+                <FormNumberField name="maxAmount" label="أعلى مبلغ" placeholder="—" />
+              </FormGrid>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs">مراحل الاعتماد</Label>
-                <Button type="button" size="sm" variant="ghost" onClick={() => setSteps((s) => [...s, emptyStep()])}>
-                  <Plus className="h-3.5 w-3.5 me-1" />إضافة مرحلة
-                </Button>
-              </div>
-              {steps.map((step, i) => (
-                <div key={i} className="flex items-end gap-2 p-2 rounded border bg-card">
-                  <span className="text-xs text-muted-foreground pb-2">#{i + 1}</span>
-                  <div className="flex-1">
-                    <Label className="text-[10px]">الدور المعتمد</Label>
-                    <Select
-                      value={step.requiredRole}
-                      onValueChange={(v) => setSteps((s) => s.map((x, j) => (j === i ? { ...x, requiredRole: v } : x)))}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {STEP_ROLES.map((r) => (
-                          <SelectItem key={r} value={r}>{APPROVAL_ROLES[r] || r}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="w-28">
-                    <Label className="text-[10px]">المهلة (ساعات)</Label>
-                    <Input
-                      type="number"
-                      value={step.timeoutHours}
-                      onChange={(e) => setSteps((s) => s.map((x, j) => (j === i ? { ...x, timeoutHours: Number(e.target.value) } : x)))}
-                    />
-                  </div>
-                  <label className="flex items-center gap-1 text-xs pb-2 whitespace-nowrap">
-                    <input
-                      type="checkbox"
-                      checked={step.autoApproveOnTimeout}
-                      onChange={(e) => setSteps((s) => s.map((x, j) => (j === i ? { ...x, autoApproveOnTimeout: e.target.checked } : x)))}
-                    />
-                    اعتماد تلقائي عند المهلة
-                  </label>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={steps.length <= 1}
-                    onClick={() => setSteps((s) => s.filter((_, j) => j !== i))}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-status-error-foreground" />
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">مراحل الاعتماد</Label>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setSteps((s) => [...s, emptyStep()])}>
+                    <Plus className="h-3.5 w-3.5 me-1" />إضافة مرحلة
                   </Button>
                 </div>
-              ))}
-            </div>
-
-            <div className="flex gap-2">
-              <GuardedButton perm="hr:create" size="sm" disabled={!canSubmit || createMut.isPending} onClick={submit}>
-                حفظ السلسلة
-              </GuardedButton>
-              <Button type="button" size="sm" variant="ghost" onClick={resetForm}>إلغاء</Button>
-            </div>
+                {steps.map((step, i) => (
+                  <div key={i} className="flex items-end gap-2 p-2 rounded border bg-card">
+                    <span className="text-xs text-muted-foreground pb-2">#{i + 1}</span>
+                    <div className="flex-1">
+                      <Label className="text-[10px]">الدور المعتمد</Label>
+                      <Select
+                        value={step.requiredRole}
+                        onValueChange={(v) => setSteps((s) => s.map((x, j) => (j === i ? { ...x, requiredRole: v } : x)))}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {STEP_ROLES.map((r) => (
+                            <SelectItem key={r} value={r}>{APPROVAL_ROLES[r] || r}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="w-28">
+                      <Label className="text-[10px]">المهلة (ساعات)</Label>
+                      <Input
+                        type="number"
+                        value={step.timeoutHours}
+                        onChange={(e) => setSteps((s) => s.map((x, j) => (j === i ? { ...x, timeoutHours: Number(e.target.value) } : x)))}
+                      />
+                    </div>
+                    <label className="flex items-center gap-1 text-xs pb-2 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={step.autoApproveOnTimeout}
+                        onChange={(e) => setSteps((s) => s.map((x, j) => (j === i ? { ...x, autoApproveOnTimeout: e.target.checked } : x)))}
+                      />
+                      اعتماد تلقائي عند المهلة
+                    </label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={steps.length <= 1}
+                      onClick={() => setSteps((s) => s.filter((_, j) => j !== i))}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-status-error-foreground" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </FormShell>
           </CardContent>
         </Card>
       )}
