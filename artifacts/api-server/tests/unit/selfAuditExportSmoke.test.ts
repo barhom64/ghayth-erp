@@ -7,7 +7,11 @@ const read = (f: string) => readFileSync(join(root, f), "utf8");
 
 const SELF_AUDIT = read("selfAuditEngine.ts");
 const PDF = read("pdfExport.ts");
-const EXCEL = read("excelExport.ts");
+const REPORT_LOADERS = read("print/reportLoaders.ts");
+const EXPORT_ROUTES = readFileSync(
+  join(import.meta.dirname!, "../../../../artifacts/api-server/src/routes/export.ts"),
+  "utf8",
+);
 
 // ══════════════════════════════════════════════════════════════════════════
 // SELF AUDIT ENGINE
@@ -77,32 +81,33 @@ describe("selfAuditEngine — security", () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════
-// PDF EXPORT
+// PDF EXPORT — only Umrah-specific generators remain. Every other entity
+// flows through Print Engine v2 via lib/print/printService.ts.
 // ══════════════════════════════════════════════════════════════════════════
 
-describe("pdfExport — exported functions", () => {
-  it("exports exportInvoicePdf", () => {
-    expect(PDF).toContain("export async function exportInvoicePdf");
+describe("pdfExport — Umrah-only surface", () => {
+  it("exports exportOfficialLetterPdf", () => {
+    expect(PDF).toContain("export async function exportOfficialLetterPdf");
   });
 
-  it("exports exportPurchaseOrderPdf", () => {
-    expect(PDF).toContain("export async function exportPurchaseOrderPdf");
+  it("exports exportUmrahStatementPdf", () => {
+    expect(PDF).toContain("export async function exportUmrahStatementPdf");
   });
 
-  it("exports exportVoucherPdf", () => {
-    expect(PDF).toContain("export async function exportVoucherPdf");
+  it("exports exportUmrahDailyRunsheetPdf", () => {
+    expect(PDF).toContain("export async function exportUmrahDailyRunsheetPdf");
   });
 
-  it("exports exportPayrollSlipPdf", () => {
-    expect(PDF).toContain("export async function exportPayrollSlipPdf");
+  it("no longer exports the legacy single-entity generators (replaced by v2)", () => {
+    expect(PDF).not.toContain("export async function exportInvoicePdf");
+    expect(PDF).not.toContain("export async function exportPurchaseOrderPdf");
+    expect(PDF).not.toContain("export async function exportVoucherPdf");
+    expect(PDF).not.toContain("export async function exportPayrollSlipPdf");
   });
 
-  it("exports exportTrialBalancePdf", () => {
-    expect(PDF).toContain("export async function exportTrialBalancePdf");
-  });
-
-  it("exports exportFleetTripsPdf", () => {
-    expect(PDF).toContain("export async function exportFleetTripsPdf");
+  it("no longer exports the legacy batch generators (replaced by v2)", () => {
+    expect(PDF).not.toContain("export async function exportTrialBalancePdf");
+    expect(PDF).not.toContain("export async function exportFleetTripsPdf");
   });
 });
 
@@ -131,61 +136,65 @@ describe("pdfExport — internal helpers", () => {
 describe("pdfExport — security", () => {
   it("uses parameterized queries", () => {
     const params = [...PDF.matchAll(/\$\d/g)];
-    expect(params.length).toBeGreaterThan(10);
+    expect(params.length).toBeGreaterThan(3);
   });
 
   it("scopes by companyId", () => {
     const matches = [...PDF.matchAll(/companyId/g)];
-    expect(matches.length).toBeGreaterThan(5);
+    expect(matches.length).toBeGreaterThan(3);
   });
 });
 
 // ══════════════════════════════════════════════════════════════════════════
-// EXCEL EXPORT
+// REPORT LOADERS — every batch report (was excelExport.ts + the batch
+// portion of pdfExport.ts) now lives here and feeds renderPrint().
 // ══════════════════════════════════════════════════════════════════════════
 
-describe("excelExport — exported functions", () => {
-  it("builds workbooks via the exceljs compat layer", () => {
-    // xlsx@0.18.5 (Prototype Pollution + ReDoS, no upstream fix) was
-    // replaced by exceljs behind lib/excelCompat.ts (Task #269).
-    expect(EXCEL).toContain('from "./excelCompat.js"');
-    expect(EXCEL).toContain("buildXlsxBuffer");
-    expect(EXCEL).not.toContain('from "xlsx"');
-  });
-
-  it("exports exportTrialBalanceExcel", () => {
-    expect(EXCEL).toContain("export async function exportTrialBalanceExcel");
-  });
-
-  it("exports exportIncomeStatementExcel", () => {
-    expect(EXCEL).toContain("export async function exportIncomeStatementExcel");
-  });
-
-  it("exports exportInvoicesExcel", () => {
-    expect(EXCEL).toContain("export async function exportInvoicesExcel");
-  });
-
-  it("exports exportPayrollExcel", () => {
-    expect(EXCEL).toContain("export async function exportPayrollExcel");
-  });
-
-  it("exports exportAttendanceExcel", () => {
-    expect(EXCEL).toContain("export async function exportAttendanceExcel");
-  });
-
-  it("exports exportFleetExcel", () => {
-    expect(EXCEL).toContain("export async function exportFleetExcel");
-  });
+describe("print/reportLoaders — exported loaders", () => {
+  for (const fn of [
+    "loadTrialBalance",
+    "loadIncomeStatement",
+    "loadInvoicesReport",
+    "loadPayrollReport",
+    "loadAttendanceReport",
+    "loadFleetReport",
+    "loadFleetTripsReport",
+  ]) {
+    it(`exports ${fn}`, () => {
+      expect(REPORT_LOADERS).toContain(`export async function ${fn}`);
+    });
+  }
 });
 
-describe("excelExport — security", () => {
+describe("print/reportLoaders — security", () => {
   it("uses parameterized queries", () => {
-    const params = [...EXCEL.matchAll(/\$\d/g)];
-    expect(params.length).toBeGreaterThan(5);
+    const params = [...REPORT_LOADERS.matchAll(/\$\d/g)];
+    expect(params.length).toBeGreaterThan(10);
   });
 
-  it("scopes by companyId", () => {
-    const matches = [...EXCEL.matchAll(/companyId/g)];
-    expect(matches.length).toBeGreaterThan(5);
+  it("scopes every loader by companyId", () => {
+    const matches = [...REPORT_LOADERS.matchAll(/companyId/g)];
+    expect(matches.length).toBeGreaterThan(8);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// EXPORT ROUTES — every /export/* endpoint now proxies through Print Engine
+// v2 (renderPrint). No direct legacy generator import allowed here.
+// ══════════════════════════════════════════════════════════════════════════
+
+describe("routes/export — Print Engine v2 only", () => {
+  it("imports renderPrint", () => {
+    expect(EXPORT_ROUTES).toContain('from "../lib/print/printService.js"');
+    expect(EXPORT_ROUTES).toContain("renderPrint");
+  });
+
+  it("does not import the legacy excel generator (deleted)", () => {
+    expect(EXPORT_ROUTES).not.toContain("excelExport");
+  });
+
+  it("does not import legacy batch pdf generators", () => {
+    expect(EXPORT_ROUTES).not.toContain("exportTrialBalancePdf");
+    expect(EXPORT_ROUTES).not.toContain("exportFleetTripsPdf");
   });
 });
