@@ -114,7 +114,7 @@ interface Props {
 
 export default function ProfitabilityPage({ entityType }: Props) {
   const config = TYPE_CONFIG[entityType];
-  const [, params] = useRoute(config.routePattern);
+  const [, params] = useRoute<{ id: string }>(config.routePattern);
   const id = params?.id ?? "";
 
   const [startDate, setStartDate] = useState(() => {
