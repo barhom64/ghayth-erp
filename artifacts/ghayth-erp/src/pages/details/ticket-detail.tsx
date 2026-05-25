@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { z } from "zod";
+import { useFormContext } from "react-hook-form";
 import { useRoute, Link, useLocation } from "wouter";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
 import { formatDateAr, formatTimeAr } from "@/lib/formatters";
@@ -10,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Headphones, User, MessageSquare, Send, Trash2, Clock } from "lucide-react";
+import { FormShell } from "@workspace/ui-core";
 import {
   DetailPageLayout,
   EntityComments,
@@ -40,14 +43,60 @@ const TICKET_STATUS_LABELS: Record<string, string> = {
   closed: "مغلقة",
 };
 
+const replySchema = z.object({
+  message: z.string().min(1, "مطلوب"),
+});
+type ReplyForm = z.infer<typeof replySchema>;
+
+function ReplyForm({ ticketId }: { ticketId: string }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  return (
+    <FormShell
+      schema={replySchema}
+      defaultValues={{ message: "" }}
+      hideSubmit
+      onSubmit={async (values, ctx) => {
+        try {
+          await apiFetch(`/support/tickets/${ticketId}/replies`, {
+            method: "POST",
+            body: JSON.stringify({ message: values.message, authorName: "مستخدم النظام" }),
+          });
+          toast({ title: "تم إرسال الرد" });
+          qc.invalidateQueries({ queryKey: ["ticket-detail", ticketId] });
+          ctx.reset();
+        } catch (err) {
+          toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+          throw err;
+        }
+      }}
+    >
+      <ReplyFormBody />
+    </FormShell>
+  );
+}
+
+function ReplyFormBody() {
+  const { register, watch, formState } = useFormContext<ReplyForm>();
+  const message = watch("message");
+  return (
+    <div className="space-y-3">
+      <Textarea {...register("message")} placeholder="اكتب رداً..." className="min-h-[80px]" />
+      <div className="flex justify-end">
+        <Button type="submit" className="gap-2" disabled={!message?.trim() || formState.isSubmitting} rateLimitAware>
+          <Send className="w-4 h-4" /> إرسال الرد
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function TicketDetail() {
   const [, params] = useRoute("/support/:id");
   const id = params?.id;
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [newReply, setNewReply] = useState("");
-  const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("support_ticket", id ?? 0);
 
@@ -69,23 +118,6 @@ export default function TicketDetail() {
     s === "closed" ? "muted" as const : "default" as const;
 
   const statusLabel = (s: string) => TICKET_STATUS_LABELS[s] ?? s;
-
-  const handleSendReply = async () => {
-    if (!newReply.trim()) return;
-    setSending(true);
-    try {
-      await apiFetch(`/support/tickets/${id}/replies`, {
-        method: "POST",
-        body: JSON.stringify({ message: newReply, authorName: "مستخدم النظام" }),
-      });
-      toast({ title: "تم إرسال الرد" });
-      setNewReply("");
-      qc.invalidateQueries({ queryKey: ["ticket-detail", id] });
-    } catch (err) {
-      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
-    }
-    setSending(false);
-  };
 
   const handleStatusChange = async (newStatus: string) => {
     try {
@@ -139,12 +171,11 @@ export default function TicketDetail() {
               </div>
             ))}
 
-            <div className="border-t pt-4 space-y-3">
-              <Textarea placeholder="اكتب رداً..." value={newReply} onChange={(e) => setNewReply(e.target.value)} className="min-h-[80px]" />
-              <div className="flex justify-end">
-                <Button className="gap-2" disabled={!newReply.trim() || sending} onClick={handleSendReply} rateLimitAware><Send className="w-4 h-4" /> إرسال الرد</Button>
+            {id && (
+              <div className="border-t pt-4">
+                <ReplyForm ticketId={id} />
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>
