@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageStatusBadge } from "@workspace/ui-core";
-import { Building2, Home, Plus, ArrowRight, BookOpen } from "lucide-react";
+import { Building2, Home, Plus, ArrowRight, BookOpen, TrendingUp } from "lucide-react";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency } from "@/lib/formatters";
@@ -205,7 +205,12 @@ export default function BuildingDetail() {
       overview={overview}
       actions={
         <div className="flex items-center gap-2">
-          actions
+          {actions}
+          <Link href={`/finance/profitability/property/${id}`}>
+            <Button variant="outline" size="sm" className="gap-1">
+              <TrendingUp className="h-4 w-4" /> الربحية
+            </Button>
+          </Link>
           <PrintButton entityType="building" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
         </div>
       }
