@@ -69,8 +69,14 @@ export async function resolveTemplate(opts: {
   branchId: number | null;
   entityType: string;
   templateId?: number;
+  /** When the caller is printing a list view (entityId="list"), the
+   *  bespoke single-entity preset (invoice, contract, …) doesn't apply
+   *  — its `{{#each items}}` expects line-item shape, not row-of-list
+   *  shape. The route layer flips this on when entityId === "list" so
+   *  list exports get the universal preset's generic itemsTable. */
+  asList?: boolean;
 }): Promise<PrintTemplate | null> {
-  const { companyId, branchId, entityType, templateId } = opts;
+  const { companyId, branchId, entityType, templateId, asList } = opts;
 
   if (templateId) {
     const rows = await safeQuery<TemplateRow>(
@@ -129,6 +135,10 @@ export async function resolveTemplate(opts: {
   // even if nobody seeded or designed a template for it. Renders the branch
   // letterhead, a sensible title, the entity fields as an info-grid, the
   // items table if present, and the branch footer.
+  // List exports bypass the single-entity bespoke preset and go straight
+  // to universal — the universal template's {{entity.itemsTable}}
+  // auto-builds the table from arbitrary row shapes.
+  if (asList) return universalFallback(entityType);
   return BESPOKE_PRESETS[entityType]?.() ?? universalFallback(entityType);
 }
 

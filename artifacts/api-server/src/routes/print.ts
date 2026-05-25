@@ -112,6 +112,12 @@ const renderBody = z.object({
   // dedicated approve route.
   /** When set, returns the bytes inline instead of a JSON pointer. */
   inline: z.boolean().optional(),
+  /** Caller-supplied data payload — when present we SKIP the dataLoader
+   *  and use this directly. Lets ListPage exports pass the visible rows
+   *  ("items"), AI letter drafts pass the generated body, etc. Capped
+   *  at ~256KB so it can't be used as a backdoor to embed arbitrary
+   *  template content. */
+  payload: z.record(z.any()).optional(),
 });
 
 router.post("/render", renderLimiter, requirePermission("print:create"), async (req: Request, res: Response) => {
@@ -127,6 +133,12 @@ router.post("/render", renderLimiter, requirePermission("print:create"), async (
         paperSize: body.paperSize,
         copyNumber: body.copyNumber,
         isReprint: body.isReprint,
+        // When the caller supplied a payload (e.g. ListPage exporting the
+        // visible rows), bypass the dataLoader and use it directly. This
+        // is what fixes "blank page on list export" — the synthetic
+        // entityId "_list" doesn't exist in any table, so without this
+        // path the loader returned a stub and the doc was nearly empty.
+        previewPayload: body.payload,
         // reprintApprovedBy never sourced from the public body — see schema
         // comment above. The internal /reprint-requests/:id/approve handler
         // calls renderPrint() directly with scope.userId.
@@ -171,6 +183,22 @@ router.post("/render", renderLimiter, requirePermission("print:create"), async (
       entityId: req.body?.entityId,
       format: req.body?.format,
     });
+    // Belt-and-suspenders for "ما زالت فيه مشكلة 500": handleRouteError
+    // categorises typed errors well, but a brand-new unhandled exception
+    // (a fresh adapter crash, a Buffer.from on non-ASCII issue, etc.) still
+    // returns the generic 500 toast with no hint. Catch anything that
+    // hasn't been classified by the time we get here and return a
+    // structured error the SPA can show — including the actual message
+    // tail so the user can paste it into a support ticket.
+    if (!res.headersSent) {
+      const e = err as { message?: string; name?: string; code?: string };
+      const safeMsg = (e?.message ?? "").toString().slice(0, 200);
+      return res.status(500).json({
+        error: safeMsg || "تعذّرت عملية الطباعة. أرسل هذه الرسالة للدعم الفني.",
+        code: e?.code ?? "PRINT_RENDER_FAILED",
+        details: { name: e?.name, entityType: req.body?.entityType, entityId: req.body?.entityId },
+      });
+    }
     return handleRouteError(err, res, "print");
   }
 });

@@ -39,6 +39,11 @@ export interface PrintRenderInput {
    *  to false (JSON envelope with base64) so the SDK can decode safely
    *  through TextDecoder — see #1085 for the UTF-8 mojibake history. */
   inline?: boolean;
+  /** Caller-supplied data — when present, the server skips the dataLoader
+   *  and renders this directly. Used by ListPage to export visible rows
+   *  (no real entityId), and by future AI flows that pass a generated body.
+   *  Shape: { entity: {...}, items?: [...], client?: {...}, ... }. */
+  payload?: Record<string, unknown>;
 }
 
 export interface PrintRenderResponse {
@@ -111,6 +116,7 @@ export async function renderDocument(input: PrintRenderInput): Promise<PrintRend
       format: input.format,
       paperSize: input.paperSize,
       inline: input.inline ?? false,
+      payload: input.payload,
     }),
   });
 }
