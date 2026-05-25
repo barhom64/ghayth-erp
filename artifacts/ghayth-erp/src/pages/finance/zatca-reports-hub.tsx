@@ -5,6 +5,7 @@ import { PageShell } from "@workspace/ui-core";
 import {
   Receipt, FileBarChart2, Boxes, Layers, Clock,
   AlertTriangle, RefreshCw, ShieldAlert, Percent, Receipt as ReceiptIcon,
+  FileSearch,
 } from "lucide-react";
 
 /**
@@ -94,6 +95,14 @@ const CARDS: ReportCard[] = [
     description: "فواتير معتمدة بدون قيد، إشعارات بدون JE، دفعات بدون GL — يجب التسوية قبل أي إقفال شهري.",
     icon: ShieldAlert,
     iconClass: "text-orange-600 bg-orange-50",
+    group: "tax",
+  },
+  {
+    href: "/finance/reports/unmapped-lines",
+    title: "البنود غير المُوجَّهة",
+    description: "بنود فواتير / أوامر شراء / إيصالات استلام بدون allocation لحساب GL محدد — تخفي قيمتها عن تحليل الإيرادات والمصروفات.",
+    icon: FileSearch,
+    iconClass: "text-amber-700 bg-amber-50",
     group: "tax",
   },
 
