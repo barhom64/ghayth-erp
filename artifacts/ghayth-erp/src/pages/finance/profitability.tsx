@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { formatCurrency, todayLocal } from "@/lib/formatters";
+import { formatCurrency, todayLocal, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import { Download, ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
 
 type ProfitabilityType = "vehicle" | "property" | "project" | "umrah-agent";
@@ -117,11 +117,9 @@ export default function ProfitabilityPage({ entityType }: Props) {
   const [, params] = useRoute<{ id: string }>(config.routePattern);
   const id = params?.id ?? "";
 
-  const [startDate, setStartDate] = useState(() => {
-    const d = new Date();
-    d.setFullYear(d.getFullYear() - 1);
-    return d.toISOString().slice(0, 10);
-  });
+  const [startDate, setStartDate] = useState(
+    () => `${currentYearRiyadh() - 1}-${currentMonthPaddedRiyadh()}-${todayLocal().slice(8, 10)}`,
+  );
   const [endDate, setEndDate] = useState(todayLocal());
 
   const endpoint = id
