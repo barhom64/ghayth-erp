@@ -97,6 +97,13 @@ export interface FormShellProps<TSchema extends FieldValues> {
   secondaryActions?: ReactNode;
   /** Override disabled-state logic (e.g. disable until a dependency loads). */
   disabled?: boolean;
+  /**
+   * Hide the built-in submit footer entirely. Use when the form's primary
+   * submit button lives outside FormShell's default footer (e.g. the page
+   * header). The button still needs `type="submit"` so the form picks it
+   * up — but FormShell stops rendering its own copy.
+   */
+  hideSubmit?: boolean;
   /** Extra className for the outer form. */
   className?: string;
   /** Form fields. Use `<FormTextField>` etc. or your own components that read from `useFormContext`. */
@@ -111,6 +118,7 @@ export function FormShell<TSchema extends FieldValues>({
   submitVariant = "default",
   secondaryActions,
   disabled,
+  hideSubmit = false,
   className,
   children,
 }: FormShellProps<TSchema>) {
@@ -170,18 +178,20 @@ export function FormShell<TSchema extends FieldValues>({
       >
         <div className="space-y-4">{children}</div>
 
-        <div className="flex items-center justify-between gap-2 pt-4 border-t">
-          <div className="flex items-center gap-2">{secondaryActions}</div>
-          <Button
-            type="submit"
-            variant={submitVariant}
-            disabled={disabled || submitting}
-            className="min-w-[7rem]"
-            rateLimitAware
-          >
-            {submitting ? "جارٍ الحفظ..." : submitLabel}
-          </Button>
-        </div>
+        {!hideSubmit && (
+          <div className="flex items-center justify-between gap-2 pt-4 border-t">
+            <div className="flex items-center gap-2">{secondaryActions}</div>
+            <Button
+              type="submit"
+              variant={submitVariant}
+              disabled={disabled || submitting}
+              className="min-w-[7rem]"
+              rateLimitAware
+            >
+              {submitting ? "جارٍ الحفظ..." : submitLabel}
+            </Button>
+          </div>
+        )}
       </form>
     </FormProvider>
   );
