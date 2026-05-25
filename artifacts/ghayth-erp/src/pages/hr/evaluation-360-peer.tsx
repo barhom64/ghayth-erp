@@ -1,16 +1,19 @@
-import { useState } from "react";
+import { useFormContext, Controller } from "react-hook-form";
+import { z } from "zod";
 import { useRoute, useLocation, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { GuardedButton } from "@/components/shared/permission-gate";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { ArrowRight, Users, Target, CheckCircle, Clock, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PageShell } from "@workspace/ui-core";
+import {
+  PageShell,
+  FormShell,
+  FormTextareaField,
+} from "@workspace/ui-core";
+import { usePermission } from "@/components/shared/permission-gate";
 
 const EVAL_CRITERIA = [
   { key: "technical_skills", label: "المهارات التقنية والمهنية" },
@@ -18,30 +21,76 @@ const EVAL_CRITERIA = [
   { key: "initiative", label: "روح المبادرة والإبداع" },
   { key: "punctuality", label: "الالتزام بالمواعيد" },
   { key: "quality", label: "جودة العمل والدقة" },
-];
+] as const;
 
-function ScoreSlider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
-  const color = value >= 80 ? "text-status-success-foreground" : value >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground";
+const peerEvalSchema = z.object({
+  technical_skills: z.number().min(0).max(100),
+  communication: z.number().min(0).max(100),
+  initiative: z.number().min(0).max(100),
+  punctuality: z.number().min(0).max(100),
+  quality: z.number().min(0).max(100),
+  comments: z.string(),
+});
+type PeerEvalForm = z.infer<typeof peerEvalSchema>;
+
+// Slider wrapper for RHF Controller. Stays semantically identical to the
+// legacy ScoreSlider — same labels, same color thresholds — but reads /
+// writes the form state via field.value/onChange.
+function FormScoreSlider({ name, label }: { name: keyof PeerEvalForm; label: string }) {
+  const { control } = useFormContext<PeerEvalForm>();
   return (
-    <div className="space-y-2">
-      <div className="flex justify-between">
-        <span className="text-sm font-medium">{label}</span>
-        <span className={cn("text-sm font-bold", color)}>{value}%</span>
-      </div>
-      <Slider
-        min={0} max={100} step={5}
-        value={[value]}
-        onValueChange={([v]) => onChange(v!)}
-        className="w-full"
-      />
-      <div className="flex justify-between text-xs text-muted-foreground">
-        <span>ضعيف</span>
-        <span>مقبول</span>
-        <span>جيد</span>
-        <span>جيد جداً</span>
-        <span>ممتاز</span>
-      </div>
-    </div>
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => {
+        const value = (field.value as number) ?? 0;
+        const color = value >= 80 ? "text-status-success-foreground" : value >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground";
+        return (
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-sm font-medium">{label}</span>
+              <span className={cn("text-sm font-bold", color)}>{value}%</span>
+            </div>
+            <Slider
+              min={0} max={100} step={5}
+              value={[value]}
+              onValueChange={([v]) => field.onChange(v!)}
+              className="w-full"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>ضعيف</span>
+              <span>مقبول</span>
+              <span>جيد</span>
+              <span>جيد جداً</span>
+              <span>ممتاز</span>
+            </div>
+          </div>
+        );
+      }}
+    />
+  );
+}
+
+// Live overall-score card. Reads the slider values via watch() and
+// renders the same colored summary the legacy page derived from local
+// useState.
+function OverallScoreCard() {
+  const { watch } = useFormContext<PeerEvalForm>();
+  const values = watch();
+  const scores = EVAL_CRITERIA.map((c) => Number(values[c.key as keyof PeerEvalForm]) || 0);
+  const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  return (
+    <Card className={cn(
+      "border-0 shadow-sm",
+      avg >= 80 ? "bg-status-success-surface" : avg >= 60 ? "bg-status-warning-surface" : "bg-status-error-surface"
+    )}>
+      <CardContent className="p-4 text-center">
+        <p className="text-sm text-muted-foreground mb-1">الدرجة الإجمالية</p>
+        <p className={cn("text-5xl font-black", avg >= 80 ? "text-status-success-foreground" : avg >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground")}>
+          {avg}%
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -49,11 +98,7 @@ export default function Evaluation360PeerPage() {
   const [, params] = useRoute("/hr/evaluation-360/:id/peer");
   const [, navigate] = useLocation();
   const cycleId = params?.id ?? "";
-
-  const [scores, setScores] = useState<Record<string, number>>(
-    Object.fromEntries(EVAL_CRITERIA.map((c) => [c.key, 70]))
-  );
-  const [comments, setComments] = useState("");
+  const canSubmit = usePermission("hr:create");
 
   const { data: cycleData, isLoading, isError } = useApiQuery<any>(
     ["evaluation-cycle-detail", cycleId],
@@ -71,17 +116,27 @@ export default function Evaluation360PeerPage() {
   const cycle = cycleData?.cycle;
   const systemEval = cycleData?.systemEval;
 
-  const avgScore = Math.round(Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length);
-
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
-  function handleSubmit() {
-    submitMutation.mutate(
-      { overallScore: avgScore, scores, comments },
-      { onSuccess: () => navigate(`/hr/evaluation-360/${cycleId}`) },
+  const handleSubmit = async (values: PeerEvalForm) => {
+    const scores = Object.fromEntries(EVAL_CRITERIA.map((c) => [c.key, values[c.key as keyof PeerEvalForm]]));
+    const avg = Math.round(
+      EVAL_CRITERIA.reduce((s, c) => s + Number(values[c.key as keyof PeerEvalForm] || 0), 0) / EVAL_CRITERIA.length
     );
-  }
+    await new Promise<void>((resolve, reject) => {
+      submitMutation.mutate(
+        { overallScore: avg, scores, comments: values.comments },
+        {
+          onSuccess: () => {
+            navigate(`/hr/evaluation-360/${cycleId}`);
+            resolve();
+          },
+          onError: () => reject(),
+        },
+      );
+    });
+  };
 
   return (
     <PageShell
@@ -138,58 +193,52 @@ export default function Evaluation360PeerPage() {
         </Card>
       )}
 
-      {/* Score sliders */}
-      <Card className="border-0 shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">تقييم معايير الأداء</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {EVAL_CRITERIA.map((c) => (
-            <ScoreSlider
-              key={c.key}
-              label={c.label}
-              value={scores[c.key]!}
-              onChange={(v) => setScores({ ...scores, [c.key]: v })}
+      <FormShell
+        schema={peerEvalSchema}
+        defaultValues={{
+          technical_skills: 70,
+          communication: 70,
+          initiative: 70,
+          punctuality: 70,
+          quality: 70,
+          comments: "",
+        }}
+        submitLabel="إرسال التقييم"
+        disabled={!canSubmit}
+        secondaryActions={
+          <Link href={`/hr/evaluation-360/${cycleId}`}>
+            <Button type="button" variant="outline">إلغاء</Button>
+          </Link>
+        }
+        onSubmit={handleSubmit}
+      >
+        {/* Score sliders */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">تقييم معايير الأداء</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {EVAL_CRITERIA.map((c) => (
+              <FormScoreSlider key={c.key} name={c.key} label={c.label} />
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Overall score display — reads sliders via watch() */}
+        <OverallScoreCard />
+
+        {/* Comments */}
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <FormTextareaField
+              name="comments"
+              label="ملاحظات وتعليقات"
+              placeholder="أضف ملاحظاتك حول أداء الموظف، نقاط القوة، مجالات التحسين..."
+              rows={4}
             />
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* Overall score display */}
-      <Card className={cn(
-        "border-0 shadow-sm",
-        avgScore >= 80 ? "bg-status-success-surface" : avgScore >= 60 ? "bg-status-warning-surface" : "bg-status-error-surface"
-      )}>
-        <CardContent className="p-4 text-center">
-          <p className="text-sm text-muted-foreground mb-1">الدرجة الإجمالية</p>
-          <p className={cn("text-5xl font-black", avgScore >= 80 ? "text-status-success-foreground" : avgScore >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground")}>
-            {avgScore}%
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Comments */}
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-4">
-          <Label>ملاحظات وتعليقات</Label>
-          <Textarea
-            className="mt-2"
-            placeholder="أضف ملاحظاتك حول أداء الموظف، نقاط القوة، مجالات التحسين..."
-            value={comments}
-            onChange={(e) => setComments(e.target.value)}
-            rows={4}
-          />
-        </CardContent>
-      </Card>
-
-      <div className="flex gap-3 justify-end">
-        <Link href={`/hr/evaluation-360/${cycleId}`}>
-          <Button variant="outline">إلغاء</Button>
-        </Link>
-        <GuardedButton perm="hr:create" onClick={handleSubmit} disabled={submitMutation.isPending} rateLimitAware>
-          {submitMutation.isPending ? "جارٍ الإرسال..." : "إرسال التقييم"}
-        </GuardedButton>
-      </div>
+          </CardContent>
+        </Card>
+      </FormShell>
     </PageShell>
   );
 }

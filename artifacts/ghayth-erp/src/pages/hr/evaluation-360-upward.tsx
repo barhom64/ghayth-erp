@@ -1,18 +1,21 @@
 import { useState } from "react";
+import { useFormContext, Controller } from "react-hook-form";
+import { z } from "zod";
 import { useRoute, useLocation, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { GuardedButton } from "@/components/shared/permission-gate";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { ArrowRight, Shield, Lock, EyeOff, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "@/hooks/use-toast";
-import { PageShell } from "@workspace/ui-core";
+import {
+  PageShell,
+  FormShell,
+  FormSelectField,
+  FormTextareaField,
+} from "@workspace/ui-core";
+import { usePermission } from "@/components/shared/permission-gate";
 
 const UPWARD_CRITERIA = [
   { key: "leadership", label: "القيادة وتوزيع المهام" },
@@ -20,42 +23,75 @@ const UPWARD_CRITERIA = [
   { key: "fairness", label: "العدالة والموضوعية" },
   { key: "support", label: "الدعم والتوجيه المهني" },
   { key: "feedback", label: "جودة التغذية الراجعة" },
-];
+] as const;
 
-function ScoreSlider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
-  const color = value >= 80 ? "text-status-success-foreground" : value >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground";
+const upwardEvalSchema = z.object({
+  managerId: z.string().min(1, "اختر المدير"),
+  leadership: z.number().min(0).max(100),
+  communication: z.number().min(0).max(100),
+  fairness: z.number().min(0).max(100),
+  support: z.number().min(0).max(100),
+  feedback: z.number().min(0).max(100),
+  comments: z.string(),
+});
+type UpwardEvalForm = z.infer<typeof upwardEvalSchema>;
+
+function FormScoreSlider({ name, label }: { name: keyof UpwardEvalForm; label: string }) {
+  const { control } = useFormContext<UpwardEvalForm>();
   return (
-    <div className="space-y-2">
-      <div className="flex justify-between">
-        <span className="text-sm font-medium">{label}</span>
-        <span className={cn("text-sm font-bold", color)}>{value}%</span>
-      </div>
-      <Slider
-        min={0} max={100} step={5}
-        value={[value]}
-        onValueChange={([v]) => onChange(v!)}
-      />
-      <div className="flex justify-between text-xs text-muted-foreground">
-        <span>ضعيف</span>
-        <span>مقبول</span>
-        <span>جيد</span>
-        <span>جيد جداً</span>
-        <span>ممتاز</span>
-      </div>
-    </div>
+    <Controller
+      control={control}
+      name={name}
+      render={({ field }) => {
+        const value = (field.value as number) ?? 0;
+        const color = value >= 80 ? "text-status-success-foreground" : value >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground";
+        return (
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-sm font-medium">{label}</span>
+              <span className={cn("text-sm font-bold", color)}>{value}%</span>
+            </div>
+            <Slider
+              min={0} max={100} step={5}
+              value={[value]}
+              onValueChange={([v]) => field.onChange(v!)}
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>ضعيف</span>
+              <span>مقبول</span>
+              <span>جيد</span>
+              <span>جيد جداً</span>
+              <span>ممتاز</span>
+            </div>
+          </div>
+        );
+      }}
+    />
+  );
+}
+
+function OverallScoreCard() {
+  const { watch } = useFormContext<UpwardEvalForm>();
+  const values = watch();
+  const scores = UPWARD_CRITERIA.map((c) => Number(values[c.key as keyof UpwardEvalForm]) || 0);
+  const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  return (
+    <Card className={cn("border-0 shadow-sm", avg >= 80 ? "bg-status-success-surface" : avg >= 60 ? "bg-status-warning-surface" : "bg-status-error-surface")}>
+      <CardContent className="p-4 text-center">
+        <p className="text-sm text-muted-foreground mb-1">الدرجة الإجمالية</p>
+        <p className={cn("text-5xl font-black", avg >= 80 ? "text-status-success-foreground" : avg >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground")}>
+          {avg}%
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
 export default function Evaluation360UpwardPage() {
   const [, params] = useRoute("/hr/evaluation-360/:id/upward");
-  const [, navigate] = useLocation();
   const cycleId = params?.id ?? "";
+  const canSubmit = usePermission("hr:create");
 
-  const [managerId, setManagerId] = useState("");
-  const [scores, setScores] = useState<Record<string, number>>(
-    Object.fromEntries(UPWARD_CRITERIA.map((c) => [c.key, 70]))
-  );
-  const [comments, setComments] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
   const { data: cycleData, isLoading, isError } = useApiQuery<any>(
@@ -63,8 +99,6 @@ export default function Evaluation360UpwardPage() {
     `/hr/evaluation-cycles/${cycleId}`,
     { enabled: !!cycleId }
   );
-  // Use the cycle's participants to build the manager list — they are already company-scoped
-  // and visible to the current user. This avoids calling /employees (restricted for employees).
   // HR-U4 — successMessage + onSuccess بدل try/catch العام.
   const submitMutation = useApiMutation(
     `/hr/evaluation-cycles/${cycleId}/upward-review`,
@@ -74,33 +108,36 @@ export default function Evaluation360UpwardPage() {
   );
 
   const cycle = cycleData?.cycle;
-  // Extract managers from participants list + optionally the initiator
+  // Use the cycle's participants to build the manager list — they are already company-scoped
+  // and visible to the current user. This avoids calling /employees (restricted for employees).
   const participants: any[] = cycleData?.participants ?? [];
-  // Offer all participants with role manager/owner/general_manager as manager candidates
-  // Also include HR participants since they can be rated
   const managerCandidates = participants.filter((p: any) =>
     ["manager", "owner", "general_manager"].includes(p.evaluatorRole) || p.evaluatorRole === "manager"
   );
-  const avgScore = Math.round(Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
-  function handleSubmit() {
-    if (!managerId) {
-      toast({ variant: "destructive", title: "الرجاء اختيار المدير المراد تقييمه" });
-      return;
-    }
-    submitMutation.mutate(
-      {
-        managerId: Number(managerId),
-        overallScore: avgScore,
-        scores,
-        comments: comments || null,
-      },
-      { onSuccess: () => setSubmitted(true) },
+  const handleSubmit = async (values: UpwardEvalForm) => {
+    const scores = Object.fromEntries(UPWARD_CRITERIA.map((c) => [c.key, values[c.key as keyof UpwardEvalForm]]));
+    const avg = Math.round(
+      UPWARD_CRITERIA.reduce((s, c) => s + Number(values[c.key as keyof UpwardEvalForm] || 0), 0) / UPWARD_CRITERIA.length
     );
-  }
+    await new Promise<void>((resolve, reject) => {
+      submitMutation.mutate(
+        {
+          managerId: Number(values.managerId),
+          overallScore: avg,
+          scores,
+          comments: values.comments || null,
+        },
+        {
+          onSuccess: () => { setSubmitted(true); resolve(); },
+          onError: () => reject(),
+        },
+      );
+    });
+  };
 
   if (submitted) {
     return (
@@ -146,92 +183,75 @@ export default function Evaluation360UpwardPage() {
         </CardContent>
       </Card>
 
-      {/* Manager selection */}
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-4">
-          <Label>اختر المدير المراد تقييمه *</Label>
-          <Select value={managerId} onValueChange={setManagerId}>
-            <SelectTrigger className="mt-2">
-              <SelectValue placeholder="اختر المدير" />
-            </SelectTrigger>
-            <SelectContent>
-              {managerCandidates.length > 0 ? (
-                managerCandidates.map((p: any) => (
-                  <SelectItem key={p.evaluatorId} value={String(p.evaluatorId)}>
-                    {p.evaluatorName}
-                  </SelectItem>
-                ))
-              ) : null}
-            </SelectContent>
-          </Select>
-          {managerCandidates.length === 0 && (
-            <p className="text-xs text-status-warning-foreground mt-1">
-              يجب أن يُضيف قسم الموارد البشرية مشرفاً بدور "مدير" ضمن المقيِّمين قبل إرسال تقييم عكسي
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Score sliders */}
-      <Card className="border-0 shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">تقييم معايير القيادة</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {UPWARD_CRITERIA.map((c) => (
-            <ScoreSlider
-              key={c.key}
-              label={c.label}
-              value={scores[c.key]!}
-              onChange={(v) => setScores({ ...scores, [c.key]: v })}
+      <FormShell
+        schema={upwardEvalSchema}
+        defaultValues={{
+          managerId: "",
+          leadership: 70,
+          communication: 70,
+          fairness: 70,
+          support: 70,
+          feedback: 70,
+          comments: "",
+        }}
+        submitLabel="إرسال بشكل سري"
+        disabled={!canSubmit}
+        secondaryActions={
+          <Link href={`/hr/evaluation-360/${cycleId}`}>
+            <Button type="button" variant="outline">إلغاء</Button>
+          </Link>
+        }
+        onSubmit={handleSubmit}
+      >
+        {/* Manager selection */}
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <FormSelectField
+              name="managerId"
+              label="اختر المدير المراد تقييمه"
+              placeholder="اختر المدير"
+              required
+              options={managerCandidates.map((p: any) => ({ value: String(p.evaluatorId), label: p.evaluatorName }))}
             />
-          ))}
-        </CardContent>
-      </Card>
+            {managerCandidates.length === 0 && (
+              <p className="text-xs text-status-warning-foreground mt-1">
+                يجب أن يُضيف قسم الموارد البشرية مشرفاً بدور "مدير" ضمن المقيِّمين قبل إرسال تقييم عكسي
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
-      {/* Overall */}
-      <Card className={cn("border-0 shadow-sm", avgScore >= 80 ? "bg-status-success-surface" : avgScore >= 60 ? "bg-status-warning-surface" : "bg-status-error-surface")}>
-        <CardContent className="p-4 text-center">
-          <p className="text-sm text-muted-foreground mb-1">الدرجة الإجمالية</p>
-          <p className={cn("text-5xl font-black", avgScore >= 80 ? "text-status-success-foreground" : avgScore >= 60 ? "text-status-warning-foreground" : "text-status-error-foreground")}>
-            {avgScore}%
-          </p>
-        </CardContent>
-      </Card>
+        {/* Score sliders */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">تقييم معايير القيادة</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {UPWARD_CRITERIA.map((c) => (
+              <FormScoreSlider key={c.key} name={c.key} label={c.label} />
+            ))}
+          </CardContent>
+        </Card>
 
-      {/* Comments (optional) */}
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-4">
-          <Label>ملاحظات اختيارية (مجهولة المصدر)</Label>
-          <Textarea
-            className="mt-2"
-            placeholder="يمكنك إضافة ملاحظات بدون ذكر هويتك..."
-            value={comments}
-            onChange={(e) => setComments(e.target.value)}
-            rows={3}
-          />
-          <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-            <AlertCircle className="w-3 h-3" />
-            <span>لا تذكر معلومات تُعرِّف بهويتك</span>
-          </div>
-        </CardContent>
-      </Card>
+        {/* Overall */}
+        <OverallScoreCard />
 
-      <div className="flex gap-3 justify-end">
-        <Link href={`/hr/evaluation-360/${cycleId}`}>
-          <Button variant="outline">إلغاء</Button>
-        </Link>
-        <GuardedButton
-          perm="hr:create"
-          onClick={handleSubmit}
-          disabled={submitMutation.isPending}
-          className="bg-purple-600 hover:bg-purple-700"
-          rateLimitAware
-        >
-          <Shield className="w-4 h-4 me-1" />
-          {submitMutation.isPending ? "جارٍ الإرسال..." : "إرسال بشكل سري"}
-        </GuardedButton>
-      </div>
+        {/* Comments (optional) */}
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <FormTextareaField
+              name="comments"
+              label="ملاحظات اختيارية (مجهولة المصدر)"
+              placeholder="يمكنك إضافة ملاحظات بدون ذكر هويتك..."
+              rows={3}
+            />
+            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+              <AlertCircle className="w-3 h-3" />
+              <span>لا تذكر معلومات تُعرِّف بهويتك</span>
+            </div>
+          </CardContent>
+        </Card>
+      </FormShell>
     </PageShell>
   );
 }
