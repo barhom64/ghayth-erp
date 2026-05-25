@@ -17,6 +17,7 @@ const AdminRbacMatrix = lazy(() => import("@/pages/admin-rbac-matrix"));
 const AdminGlReconciliation = lazy(() => import("@/pages/admin-gl-reconciliation"));
 const AdminSystemRegistry = lazy(() => import("@/pages/admin-system-registry"));
 const AdminPrintTemplates = lazy(() => import("@/pages/admin/print-templates"));
+const AdminDigitalSignatureLogs = lazy(() => import("@/pages/admin/digital-signature-logs"));
 
 export const adminRoutes = [
   { path: "/admin", component: Admin },
@@ -36,4 +37,5 @@ export const adminRoutes = [
   { path: "/admin/gl-reconciliation", component: AdminGlReconciliation },
   { path: "/admin/system-registry", component: AdminSystemRegistry },
   { path: "/admin/print-templates", component: AdminPrintTemplates },
+  { path: "/admin/digital-signature-logs", component: AdminDigitalSignatureLogs },
 ];
