@@ -11,6 +11,10 @@ const Accounts = lazy(() => import("@/pages/finance/accounts"));
 const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
 const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
+const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
+const TaxCodesCreate = lazy(() => import("@/pages/create/finance/tax-codes-create"));
+const WhtCategories = lazy(() => import("@/pages/finance/wht-categories"));
+const WhtCategoriesCreate = lazy(() => import("@/pages/create/finance/wht-categories-create"));
 const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
 const VouchersCreate = lazy(() => import("@/pages/create/finance/vouchers-create"));
 const VoucherDetail = lazy(() => import("@/pages/details/voucher-detail"));
@@ -84,6 +88,13 @@ export const financeRoutes = [
   { path: "/finance/accounts/create", component: AccountsCreate },
   { path: "/finance/accounts/:id/edit", component: AccountsEdit },
   { path: "/finance/accounts/:id", component: AccountDetail },
+  // Saudi tax registries — Daftra-style tax codes + WHT categories.
+  // Both pages live under finance/ and use the same PageShell pattern
+  // as accounts.tsx; create pages mirror accounts-create.tsx.
+  { path: "/finance/tax-codes", component: TaxCodes },
+  { path: "/finance/tax-codes/create", component: TaxCodesCreate },
+  { path: "/finance/wht-categories", component: WhtCategories },
+  { path: "/finance/wht-categories/create", component: WhtCategoriesCreate },
   { path: "/finance/vouchers", component: Vouchers },
   { path: "/finance/vouchers/create", component: VouchersCreate },
   { path: "/finance/vouchers/:id", component: VoucherDetail },
