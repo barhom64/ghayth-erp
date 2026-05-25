@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useFormContext, Controller } from "react-hook-form";
+import { z } from "zod";
 import { apiFetch, isRateLimitedError } from "@/lib/api";
 import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,38 +9,107 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle2, Eye, EyeOff, Lock } from "lucide-react";
+import { FormShell } from "@workspace/ui-core";
+
+const changePasswordSchema = z
+  .object({
+    current: z.string().min(1, "كلمة المرور الحالية مطلوبة"),
+    newPw: z.string().min(6, "كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل"),
+    confirmPw: z.string().min(1, "تأكيد كلمة المرور مطلوب"),
+  })
+  .refine((v) => v.newPw === v.confirmPw, {
+    message: "كلمة المرور الجديدة وتأكيدها غير متطابقتين",
+    path: ["confirmPw"],
+  });
+type ChangePasswordForm = z.infer<typeof changePasswordSchema>;
+
+// Inline password field with toggleable eye icon. FormPasswordField from
+// ui-core doesn't ship a show/hide toggle, so this component wraps a
+// Controller + raw Input + button to keep the legacy UX intact.
+function PasswordFieldWithToggle({
+  name,
+  label,
+}: {
+  name: "current" | "newPw" | "confirmPw";
+  label: string;
+}) {
+  const { control, formState } = useFormContext<ChangePasswordForm>();
+  const [show, setShow] = useState(false);
+  const error = formState.errors[name]?.message as string | undefined;
+  return (
+    <div>
+      <Label className="text-xs text-muted-foreground mb-1 block">{label}</Label>
+      <div className="relative">
+        <Controller
+          control={control}
+          name={name}
+          render={({ field }) => (
+            <Input
+              type={show ? "text" : "password"}
+              dir="ltr"
+              value={field.value ?? ""}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+            />
+          )}
+        />
+        <button
+          type="button"
+          className="absolute end-2 top-1/2 -translate-y-1/2"
+          onClick={() => setShow(!show)}
+        >
+          {show ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
+        </button>
+      </div>
+      {error && <p className="text-xs text-status-error-foreground mt-1">{error}</p>}
+    </div>
+  );
+}
+
+// Submit button reads form state + rate-limit cooldown to render the
+// existing "loading / cooldown / idle" tri-state label. Lives inside
+// FormShell as a custom footer instead of FormShell's default submit so
+// the legacy disabled-when-empty + cooldown text + full-width style
+// survive.
+function SubmitButton({ cooldownLabel, isCoolingDown }: { cooldownLabel: string; isCoolingDown: boolean }) {
+  const { formState, watch } = useFormContext<ChangePasswordForm>();
+  const v = watch();
+  const allFilled = !!v.current && !!v.newPw && !!v.confirmPw;
+  return (
+    <Button
+      type="submit"
+      className="w-full"
+      disabled={formState.isSubmitting || isCoolingDown || !allFilled}
+      rateLimitAware
+    >
+      {formState.isSubmitting
+        ? "جاري التغيير..."
+        : isCoolingDown
+          ? cooldownLabel
+          : "تغيير كلمة المرور"}
+    </Button>
+  );
+}
 
 export function ChangePasswordSection() {
   const { toast } = useToast();
   const cooldown = useRateLimitCooldown();
-  const [current, setCurrent] = useState("");
-  const [newPw, setNewPw] = useState("");
-  const [confirmPw, setConfirmPw] = useState("");
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const handleSubmit = async () => {
-    if (!current || !newPw) { toast({ variant: "destructive", title: "يرجى ملء جميع الحقول" }); return; }
-    if (newPw.length < 6) { toast({ variant: "destructive", title: "كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل" }); return; }
-    if (newPw !== confirmPw) { toast({ variant: "destructive", title: "كلمة المرور الجديدة وتأكيدها غير متطابقتين" }); return; }
-    setLoading(true);
+  const handleSubmit = async (values: ChangePasswordForm) => {
     try {
       await apiFetch("/auth/change-password", {
         method: "POST",
-        body: JSON.stringify({ currentPassword: current, newPassword: newPw }),
+        body: JSON.stringify({ currentPassword: values.current, newPassword: values.newPw }),
       });
       toast({ title: "تم تغيير كلمة المرور بنجاح" });
-      setCurrent(""); setNewPw(""); setConfirmPw("");
       setSuccess(true);
     } catch (e: any) {
       // The shared apiFetch already shows a debounced rate-limit toast on
       // 429, so swallow it here to avoid a duplicate generic error toast.
-      if (isRateLimitedError(e)) { setLoading(false); return; }
+      if (isRateLimitedError(e)) return;
       toast({ variant: "destructive", title: e.message || "فشل في تغيير كلمة المرور" });
     }
-    setLoading(false);
   };
 
   return (
@@ -57,57 +128,17 @@ export function ChangePasswordSection() {
             <Button size="sm" variant="ghost" className="ms-auto" onClick={() => setSuccess(false)}>تغيير مجدداً</Button>
           </div>
         ) : (
-          <>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">كلمة المرور الحالية</Label>
-              <div className="relative">
-                <Input
-                  type={showCurrent ? "text" : "password"}
-                  dir="ltr"
-                  value={current}
-                  onChange={(e) => setCurrent(e.target.value)}
-                />
-                <button className="absolute end-2 top-1/2 -translate-y-1/2" onClick={() => setShowCurrent(!showCurrent)}>
-                  {showCurrent ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
-                </button>
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">كلمة المرور الجديدة</Label>
-              <div className="relative">
-                <Input
-                  type={showNew ? "text" : "password"}
-                  dir="ltr"
-                  value={newPw}
-                  onChange={(e) => setNewPw(e.target.value)}
-                />
-                <button className="absolute end-2 top-1/2 -translate-y-1/2" onClick={() => setShowNew(!showNew)}>
-                  {showNew ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
-                </button>
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">تأكيد كلمة المرور الجديدة</Label>
-              <Input
-                type="password"
-                dir="ltr"
-                value={confirmPw}
-                onChange={(e) => setConfirmPw(e.target.value)}
-              />
-            </div>
-            <Button
-              className="w-full"
-              onClick={handleSubmit}
-              disabled={loading || cooldown.isCoolingDown || !current || !newPw || !confirmPw}
-              rateLimitAware
-            >
-              {loading
-                ? "جاري التغيير..."
-                : cooldown.isCoolingDown
-                  ? cooldown.label
-                  : "تغيير كلمة المرور"}
-            </Button>
-          </>
+          <FormShell
+            schema={changePasswordSchema}
+            defaultValues={{ current: "", newPw: "", confirmPw: "" }}
+            hideSubmit
+            onSubmit={handleSubmit}
+          >
+            <PasswordFieldWithToggle name="current" label="كلمة المرور الحالية" />
+            <PasswordFieldWithToggle name="newPw" label="كلمة المرور الجديدة" />
+            <PasswordFieldWithToggle name="confirmPw" label="تأكيد كلمة المرور الجديدة" />
+            <SubmitButton cooldownLabel={cooldown.label} isCoolingDown={cooldown.isCoolingDown} />
+          </FormShell>
         )}
       </CardContent>
     </Card>
