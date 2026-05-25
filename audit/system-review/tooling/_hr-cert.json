@@ -1219,7 +1219,7 @@
       "writeEndpoints": 3,
       "dimAgg": {
         "rbac": "PASS",
-        "scope": "PARTIAL",
+        "scope": "PASS",
         "audit": "PASS",
         "event": "PASS",
         "lifecycle": "FAIL",
@@ -1229,11 +1229,11 @@
         {
           "method": "GET",
           "path": "/overtime",
-          "line": 134,
+          "line": 135,
           "checks": {
             "rbac": true,
-            "scopeParseFilters": false,
-            "scopeBuildWhere": false,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
             "scopeManualCompany": true,
             "audit": false,
             "event": false,
@@ -1243,7 +1243,7 @@
           },
           "dims": {
             "rbac": "PASS",
-            "scope": "PARTIAL",
+            "scope": "PASS",
             "audit": "SKIP",
             "event": "SKIP",
             "lifecycle": "SKIP",
@@ -1253,12 +1253,12 @@
         {
           "method": "GET",
           "path": "/overtime/my",
-          "line": 182,
+          "line": 193,
           "checks": {
             "rbac": true,
-            "scopeParseFilters": false,
-            "scopeBuildWhere": false,
-            "scopeManualCompany": true,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
+            "scopeManualCompany": false,
             "audit": false,
             "event": false,
             "applyTransition": false,
@@ -1267,7 +1267,7 @@
           },
           "dims": {
             "rbac": "PASS",
-            "scope": "PARTIAL",
+            "scope": "PASS",
             "audit": "SKIP",
             "event": "SKIP",
             "lifecycle": "SKIP",
@@ -1277,11 +1277,11 @@
         {
           "method": "GET",
           "path": "/overtime/summary",
-          "line": 203,
+          "line": 226,
           "checks": {
             "rbac": true,
-            "scopeParseFilters": false,
-            "scopeBuildWhere": false,
+            "scopeParseFilters": true,
+            "scopeBuildWhere": true,
             "scopeManualCompany": true,
             "audit": false,
             "event": false,
@@ -1291,7 +1291,7 @@
           },
           "dims": {
             "rbac": "PASS",
-            "scope": "PARTIAL",
+            "scope": "PASS",
             "audit": "SKIP",
             "event": "SKIP",
             "lifecycle": "SKIP",
@@ -1301,7 +1301,7 @@
         {
           "method": "GET",
           "path": "/overtime/:id",
-          "line": 238,
+          "line": 271,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1325,7 +1325,7 @@
         {
           "method": "POST",
           "path": "/overtime",
-          "line": 263,
+          "line": 296,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1349,7 +1349,7 @@
         {
           "method": "PATCH",
           "path": "/overtime/:id/approve",
-          "line": 374,
+          "line": 407,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1373,7 +1373,7 @@
         {
           "method": "PATCH",
           "path": "/overtime/:id/reject",
-          "line": 492,
+          "line": 525,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,

@@ -10,7 +10,7 @@ Generated: 2026-05-25
 ## Scope
 
 Files audited: **16** under `artifacts/api-server/src/routes/finance-*.ts`.
-Endpoints: **262** total, **134** writes.
+Endpoints: **263** total, **134** writes.
 
 ## Dimensions evaluated
 
@@ -41,17 +41,17 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 | `finance-journal.ts` | 25 (17w) | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL | ❌ FAIL | 🟡 PARTIAL |
 | `finance-purchase.ts` | 23 (15w) | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL | ✅ PASS | 🟡 PARTIAL |
 | `finance-recurring.ts` | 6 (4w) | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | — SKIP |
-| `finance-reports.ts` | 26 (0w) | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| `finance-reports.ts` | 27 (0w) | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 | `finance-vendor-contracts.ts` | 5 (3w) | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP | — SKIP |
 | `finance-vendors.ts` | 18 (8w) | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL | — SKIP | ✅ PASS |
-| `finance-zatca.ts` | 9 (6w) | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL | ❌ FAIL | ✅ PASS |
+| `finance-zatca.ts` | 9 (6w) | ✅ PASS | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | ❌ FAIL | ✅ PASS |
 
 ## Module-level totals (files)
 
 | Dimension | PASS | PARTIAL | FAIL | SKIP |
 |---|---:|---:|---:|---:|
 | RBAC | 16 | 0 | 0 | 0 |
-| Scope | 4 | 12 | 0 | 0 |
+| Scope | 5 | 11 | 0 | 0 |
 | Audit | 7 | 8 | 0 | 1 |
 | Events | 5 | 10 | 0 | 1 |
 | Lifecycle | 2 | 1 | 5 | 8 |
@@ -202,19 +202,19 @@ From `audit/system-review/tooling/_workflow-audit.json`:
 | 2169 | `PATCH /invoices/:id/return` | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
 | 2171 | `GET /tax/summary` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 | 2273 | `POST /invoices/:id/credit-memo/preview` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 2398 | `POST /invoices/:id/credit-memo` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | ❌ FAIL | ✅ PASS |
-| 2676 | `POST /invoices/:id/debit-memo/preview` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 2753 | `POST /invoices/:id/debit-memo` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | ✅ PASS |
-| 2922 | `GET /invoices/:id/memos` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 2957 | `GET /bad-debt/preview` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 3009 | `POST /bad-debt/post` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | ✅ PASS |
-| 3132 | `POST /customer-advances` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | ✅ PASS |
-| 3233 | `POST /customer-advances/:id/apply` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | ✅ PASS |
-| 3327 | `GET /customer-advances` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 3432 | `GET /dunning/preview` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 3510 | `POST /dunning/send` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
-| 3582 | `GET /dunning/history` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 3608 | `GET /tax/declarations` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 2403 | `POST /invoices/:id/credit-memo` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | ❌ FAIL | ✅ PASS |
+| 2689 | `POST /invoices/:id/debit-memo/preview` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
+| 2766 | `POST /invoices/:id/debit-memo` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | ✅ PASS |
+| 2935 | `GET /invoices/:id/memos` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 2970 | `GET /bad-debt/preview` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 3022 | `POST /bad-debt/post` | ✅ PASS | ✅ PASS | ❌ FAIL | ✅ PASS | — SKIP | ✅ PASS |
+| 3145 | `POST /customer-advances` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | ✅ PASS |
+| 3246 | `POST /customer-advances/:id/apply` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | ✅ PASS |
+| 3340 | `GET /customer-advances` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 3445 | `GET /dunning/preview` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 3523 | `POST /dunning/send` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | 🟡 PARTIAL |
+| 3595 | `GET /dunning/history` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 3621 | `GET /tax/declarations` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 
 ### `finance-journal.ts`
 
@@ -275,10 +275,11 @@ From `audit/system-review/tooling/_workflow-audit.json`:
 | 1396 | `GET /reports/expenses-by-cost-center` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 | 1435 | `GET /reports/unmapped-lines` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 | 1519 | `GET /reports/wht-summary` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1712 | `GET /reports/inventory-turnover` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 1902 | `GET /reports/inventory-valuation` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 2112 | `GET /reports/cogs-summary` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 2346 | `GET /reports/negative-stock` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1718 | `GET /reports/lot-expiry-alerts` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 1894 | `GET /reports/inventory-turnover` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 2084 | `GET /reports/inventory-valuation` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 2294 | `GET /reports/cogs-summary` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
+| 2528 | `GET /reports/negative-stock` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
 
 ### `finance-vendors.ts`
 
@@ -300,14 +301,11 @@ From `audit/system-review/tooling/_workflow-audit.json`:
 
 | Line | Endpoint | RBAC | Scope | Audit | Events | Lifecycle | GL bridge |
 |---:|---|---|---|---|---|---|---|
-| 347 | `GET /zatca/settings` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 467 | `POST /zatca/test-connection` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | — SKIP |
-| 503 | `GET /zatca/invoice/:id/xml` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 591 | `POST /zatca/invoice/:id/submit` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | — SKIP |
-| 722 | `POST /zatca/expense/:id/submit` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | ✅ PASS |
-| 802 | `GET /zatca/submissions` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 869 | `PATCH /zatca/invoice/:id` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
-| 900 | `PATCH /zatca/expense/:id` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | ✅ PASS |
+| 475 | `POST /zatca/test-connection` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | — SKIP |
+| 609 | `POST /zatca/invoice/:id/submit` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | — SKIP |
+| 740 | `POST /zatca/expense/:id/submit` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | ❌ FAIL | ✅ PASS |
+| 898 | `PATCH /zatca/invoice/:id` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | — SKIP |
+| 929 | `PATCH /zatca/expense/:id` | ✅ PASS | ✅ PASS | ❌ FAIL | ❌ FAIL | — SKIP | ✅ PASS |
 
 ## Reproducing this audit
 

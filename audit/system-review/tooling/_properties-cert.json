@@ -521,7 +521,7 @@
         {
           "method": "GET",
           "path": "/maintenance-requests",
-          "line": 2117,
+          "line": 2120,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -545,7 +545,7 @@
         {
           "method": "GET",
           "path": "/maintenance/:id",
-          "line": 2132,
+          "line": 2135,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -569,7 +569,7 @@
         {
           "method": "POST",
           "path": "/maintenance-requests",
-          "line": 2151,
+          "line": 2154,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -593,7 +593,7 @@
         {
           "method": "PATCH",
           "path": "/maintenance-requests/:id/approve",
-          "line": 2325,
+          "line": 2328,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -617,7 +617,7 @@
         {
           "method": "POST",
           "path": "/maintenance-requests/:id/complete",
-          "line": 2392,
+          "line": 2395,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -641,7 +641,7 @@
         {
           "method": "GET",
           "path": "/technicians",
-          "line": 2564,
+          "line": 2567,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -665,7 +665,7 @@
         {
           "method": "GET",
           "path": "/tenants",
-          "line": 2572,
+          "line": 2575,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -689,7 +689,7 @@
         {
           "method": "POST",
           "path": "/tenants",
-          "line": 2588,
+          "line": 2591,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -713,7 +713,7 @@
         {
           "method": "GET",
           "path": "/tenants/:id",
-          "line": 2635,
+          "line": 2638,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -737,7 +737,7 @@
         {
           "method": "GET",
           "path": "/buildings",
-          "line": 2703,
+          "line": 2706,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -761,7 +761,7 @@
         {
           "method": "GET",
           "path": "/buildings/:id",
-          "line": 2731,
+          "line": 2734,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -785,7 +785,7 @@
         {
           "method": "POST",
           "path": "/buildings",
-          "line": 2751,
+          "line": 2754,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -809,7 +809,7 @@
         {
           "method": "PATCH",
           "path": "/buildings/:id",
-          "line": 2829,
+          "line": 2832,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -833,7 +833,7 @@
         {
           "method": "DELETE",
           "path": "/buildings/:id",
-          "line": 2909,
+          "line": 2912,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -857,7 +857,7 @@
         {
           "method": "GET",
           "path": "/maintenance",
-          "line": 2954,
+          "line": 2957,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -881,7 +881,7 @@
         {
           "method": "POST",
           "path": "/maintenance",
-          "line": 2969,
+          "line": 2972,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -905,7 +905,7 @@
         {
           "method": "GET",
           "path": "/stats",
-          "line": 3013,
+          "line": 3016,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -929,7 +929,7 @@
         {
           "method": "PATCH",
           "path": "/maintenance-requests/:id",
-          "line": 3091,
+          "line": 3094,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -953,7 +953,7 @@
         {
           "method": "GET",
           "path": "/operations-dashboard",
-          "line": 3230,
+          "line": 3233,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -977,7 +977,7 @@
         {
           "method": "GET",
           "path": "/owners",
-          "line": 3287,
+          "line": 3290,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1001,7 +1001,7 @@
         {
           "method": "GET",
           "path": "/owners/:id",
-          "line": 3306,
+          "line": 3309,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1025,7 +1025,7 @@
         {
           "method": "POST",
           "path": "/owners",
-          "line": 3321,
+          "line": 3324,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1049,7 +1049,7 @@
         {
           "method": "PATCH",
           "path": "/owners/:id",
-          "line": 3380,
+          "line": 3383,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1073,7 +1073,7 @@
         {
           "method": "DELETE",
           "path": "/owners/:id",
-          "line": 3432,
+          "line": 3435,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1097,7 +1097,7 @@
         {
           "method": "GET",
           "path": "/contracts/:id/schedule",
-          "line": 3487,
+          "line": 3490,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1121,7 +1121,7 @@
         {
           "method": "POST",
           "path": "/contracts/:id/schedule/:installmentId/pay",
-          "line": 3501,
+          "line": 3504,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1145,7 +1145,7 @@
         {
           "method": "GET",
           "path": "/inspections",
-          "line": 3567,
+          "line": 3570,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1169,7 +1169,7 @@
         {
           "method": "POST",
           "path": "/inspections",
-          "line": 3588,
+          "line": 3591,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1193,7 +1193,7 @@
         {
           "method": "PATCH",
           "path": "/inspections/:id",
-          "line": 3638,
+          "line": 3641,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1217,7 +1217,7 @@
         {
           "method": "GET",
           "path": "/deposits",
-          "line": 3738,
+          "line": 3741,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1241,7 +1241,7 @@
         {
           "method": "POST",
           "path": "/deposits",
-          "line": 3760,
+          "line": 3763,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1265,7 +1265,7 @@
         {
           "method": "PATCH",
           "path": "/deposits/:id/refund",
-          "line": 3829,
+          "line": 3832,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1289,7 +1289,7 @@
         {
           "method": "GET",
           "path": "/occupancy-report",
-          "line": 3902,
+          "line": 3905,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,
@@ -1313,7 +1313,7 @@
         {
           "method": "GET",
           "path": "/tenants/:id/letters",
-          "line": 3952,
+          "line": 3955,
           "checks": {
             "rbac": true,
             "scopeParseFilters": false,

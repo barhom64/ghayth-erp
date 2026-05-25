@@ -33,7 +33,7 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 | `hr-discipline.ts` | 24 (15w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | ✅ PASS | — SKIP |
 | `hr-exit.ts` | 6 (4w) | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | 🟡 PARTIAL | — SKIP |
 | `hr-loans.ts` | 6 (3w) | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | 🟡 PARTIAL |
-| `hr-overtime.ts` | 7 (3w) | ✅ PASS | 🟡 PARTIAL | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP |
+| `hr-overtime.ts` | 7 (3w) | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP |
 | `hr.ts` | 116 (62w) | ✅ PASS | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL | 🟡 PARTIAL |
 
 ## Module-level totals (files)
@@ -41,7 +41,7 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 | Dimension | PASS | PARTIAL | FAIL | SKIP |
 |---|---:|---:|---:|---:|
 | RBAC | 6 | 0 | 0 | 0 |
-| Scope | 3 | 3 | 0 | 0 |
+| Scope | 4 | 2 | 0 | 0 |
 | Audit | 4 | 2 | 0 | 0 |
 | Events | 5 | 1 | 0 | 0 |
 | Lifecycle | 1 | 2 | 3 | 0 |
@@ -107,11 +107,8 @@ Out of scope (Phase 5): concurrency / locking correctness, large-dataset perform
 
 | Line | Endpoint | RBAC | Scope | Audit | Events | Lifecycle | GL bridge |
 |---:|---|---|---|---|---|---|---|
-| 134 | `GET /overtime` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 182 | `GET /overtime/my` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 203 | `GET /overtime/summary` | ✅ PASS | 🟡 PARTIAL | — SKIP | — SKIP | — SKIP | — SKIP |
-| 374 | `PATCH /overtime/:id/approve` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP |
-| 492 | `PATCH /overtime/:id/reject` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP |
+| 407 | `PATCH /overtime/:id/approve` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP |
+| 525 | `PATCH /overtime/:id/reject` | ✅ PASS | ✅ PASS | ✅ PASS | ✅ PASS | ❌ FAIL | — SKIP |
 
 ### `hr.ts`
 
