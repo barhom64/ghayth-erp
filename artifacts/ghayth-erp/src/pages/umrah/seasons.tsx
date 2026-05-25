@@ -1,39 +1,45 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { z } from "zod";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import {
   DataTable,
   type DataTableColumn,
   PageStatusBadge,
   PageShell,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormDateField,
 } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Calendar } from "lucide-react";
+import { Plus } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
+
+const seasonSchema = z
+  .object({
+    title: z.string().min(1, "العنوان مطلوب"),
+    startDate: z.string().min(1, "تاريخ البداية مطلوب"),
+    endDate: z.string().min(1, "تاريخ النهاية مطلوب"),
+  })
+  .refine(
+    (v) => !v.startDate || !v.endDate || v.endDate >= v.startDate,
+    { message: "تاريخ النهاية يجب أن يكون بعد تاريخ البداية", path: ["endDate"] },
+  );
+type SeasonForm = z.infer<typeof seasonSchema>;
+
+const EMPTY: SeasonForm = { title: "", startDate: "", endDate: "" };
 
 export default function UmrahSeasons() {
   const [, navigate] = useLocation();
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const items = resp?.data || [];
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<any>({});
+  const [formKey, setFormKey] = useState(0);
   const { toast } = useToast();
-
-  const save = async () => {
-    try {
-      await apiFetch("/umrah/seasons", { method: "POST", body: JSON.stringify(form) });
-      toast({ title: "تم إنشاء الموسم" });
-      setShowForm(false);
-      setForm({});
-      refetch();
-    } catch { toast({ variant: "destructive", title: "خطأ" }); }
-  };
 
   const closeSeason = async (id: number) => {
     try {
@@ -78,14 +84,33 @@ export default function UmrahSeasons() {
 
       {showForm && (
         <Card>
-          <CardContent className="p-4 grid grid-cols-3 gap-4">
-            <div><Label>العنوان *</Label><Input value={form.title || ""} onChange={e => setForm({ ...form, title: e.target.value })} /></div>
-            <div><Label>تاريخ البداية *</Label><UnifiedDateInput value={form.startDate || ""} onChange={v => setForm({ ...form, startDate: v })} showDualCalendar showPresets /></div>
-            <div><Label>تاريخ النهاية *</Label><UnifiedDateInput value={form.endDate || ""} onChange={v => setForm({ ...form, endDate: v })} showDualCalendar showPresets /></div>
-            <div className="col-span-full flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
-              <Button onClick={save} disabled={!form.title || !form.startDate || !form.endDate}>حفظ</Button>
-            </div>
+          <CardContent className="p-4">
+            <FormShell
+              key={formKey}
+              schema={seasonSchema}
+              defaultValues={EMPTY}
+              submitLabel="حفظ"
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
+              }
+              onSubmit={async (values) => {
+                try {
+                  await apiFetch("/umrah/seasons", { method: "POST", body: JSON.stringify(values) });
+                  toast({ title: "تم إنشاء الموسم" });
+                  setShowForm(false);
+                  setFormKey((k) => k + 1);
+                  refetch();
+                } catch {
+                  toast({ variant: "destructive", title: "خطأ" });
+                }
+              }}
+            >
+              <FormGrid cols={3}>
+                <FormTextField name="title" label="العنوان" required />
+                <FormDateField name="startDate" label="تاريخ البداية" required />
+                <FormDateField name="endDate" label="تاريخ النهاية" required />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}

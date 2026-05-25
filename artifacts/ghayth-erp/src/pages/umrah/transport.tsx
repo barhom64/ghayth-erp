@@ -1,16 +1,19 @@
 import { useState } from "react";
+import { z } from "zod";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import {
   DataTable,
   type DataTableColumn,
   PageShell,
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormNumberField,
+  FormDateField,
 } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Card, CardContent } from "@/components/ui/card";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -56,25 +59,28 @@ const columns: DataTableColumn<TransportEntry>[] = [
   },
 ];
 
+const transportSchema = z.object({
+  tripDate: z.string().min(1, "تاريخ الرحلة مطلوب"),
+  fromLocation: z.string().min(1, "نقطة الانطلاق مطلوبة"),
+  toLocation: z.string().min(1, "نقطة الوصول مطلوبة"),
+  capacity: z.string().optional(),
+  pilgrimCount: z.string().optional(),
+  cost: z.string().optional(),
+  notes: z.string().optional(),
+});
+type TransportForm = z.infer<typeof transportSchema>;
+
+const EMPTY: TransportForm = {
+  tripDate: "", fromLocation: "", toLocation: "", capacity: "", pilgrimCount: "", cost: "", notes: "",
+};
+
 export default function UmrahTransport() {
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["umrah-transport"], "/umrah/transport");
   const rows = asList(data?.data || data);
   const [, navigate] = useLocation();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<Record<string, any>>({});
+  const [formKey, setFormKey] = useState(0);
   const { toast } = useToast();
-
-  const save = async () => {
-    try {
-      await apiFetch("/umrah/transport", { method: "POST", body: JSON.stringify(form) });
-      toast({ title: "تم إنشاء رحلة النقل" });
-      setShowForm(false);
-      setForm({});
-      refetch();
-    } catch (err: any) {
-      toast({ variant: "destructive", title: err?.message || err?.error || "خطأ في إنشاء الرحلة" });
-    }
-  };
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -88,18 +94,48 @@ export default function UmrahTransport() {
     >
       {showForm && (
         <Card>
-          <CardContent className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div><Label>تاريخ الرحلة *</Label><UnifiedDateInput value={form.tripDate || ""} onChange={v => setForm({ ...form, tripDate: v })} showDualCalendar showPresets /></div>
-            <div><Label>من *</Label><Input value={form.fromLocation || ""} onChange={e => setForm({ ...form, fromLocation: e.target.value })} placeholder="مكة" /></div>
-            <div><Label>إلى *</Label><Input value={form.toLocation || ""} onChange={e => setForm({ ...form, toLocation: e.target.value })} placeholder="المدينة" /></div>
-            <div><Label>السعة</Label><Input type="number" value={form.capacity || ""} onChange={e => setForm({ ...form, capacity: e.target.value ? Number(e.target.value) : undefined })} placeholder="45" /></div>
-            <div><Label>عدد المعتمرين</Label><Input type="number" value={form.pilgrimCount || ""} onChange={e => setForm({ ...form, pilgrimCount: e.target.value ? Number(e.target.value) : undefined })} /></div>
-            <div><Label>التكلفة</Label><Input type="number" value={form.cost || ""} onChange={e => setForm({ ...form, cost: e.target.value ? Number(e.target.value) : undefined })} /></div>
-            <div className="col-span-full"><Label>ملاحظات</Label><Input value={form.notes || ""} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
-            <div className="col-span-full flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => { setShowForm(false); setForm({}); }}>إلغاء</Button>
-              <Button onClick={save} disabled={!form.tripDate || !form.fromLocation || !form.toLocation}>حفظ</Button>
-            </div>
+          <CardContent className="p-4">
+            <FormShell
+              key={formKey}
+              schema={transportSchema}
+              defaultValues={EMPTY}
+              submitLabel="حفظ"
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>إلغاء</Button>
+              }
+              onSubmit={async (values) => {
+                try {
+                  await apiFetch("/umrah/transport", {
+                    method: "POST",
+                    body: JSON.stringify({
+                      tripDate: values.tripDate,
+                      fromLocation: values.fromLocation,
+                      toLocation: values.toLocation,
+                      capacity: values.capacity ? Number(values.capacity) : undefined,
+                      pilgrimCount: values.pilgrimCount ? Number(values.pilgrimCount) : undefined,
+                      cost: values.cost ? Number(values.cost) : undefined,
+                      notes: values.notes || undefined,
+                    }),
+                  });
+                  toast({ title: "تم إنشاء رحلة النقل" });
+                  setShowForm(false);
+                  setFormKey((k) => k + 1);
+                  refetch();
+                } catch (err: any) {
+                  toast({ variant: "destructive", title: err?.message || err?.error || "خطأ في إنشاء الرحلة" });
+                }
+              }}
+            >
+              <FormGrid cols={3}>
+                <FormDateField name="tripDate" label="تاريخ الرحلة" required />
+                <FormTextField name="fromLocation" label="من" required placeholder="مكة" />
+                <FormTextField name="toLocation" label="إلى" required placeholder="المدينة" />
+                <FormNumberField name="capacity" label="السعة" placeholder="45" />
+                <FormNumberField name="pilgrimCount" label="عدد المعتمرين" />
+                <FormNumberField name="cost" label="التكلفة" />
+                <FormTextField name="notes" label="ملاحظات" className="md:col-span-3" />
+              </FormGrid>
+            </FormShell>
           </CardContent>
         </Card>
       )}
