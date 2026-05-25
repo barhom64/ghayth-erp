@@ -128,6 +128,17 @@ router.post("/render", renderLimiter, requirePermission("print:create"), async (
       return res.status(err.status).json({ error: err.message, copyNumber: err.copyNumber });
     if (err instanceof PrintTemplateMissingError)
       return res.status(err.status).json({ error: err.message });
+    // Log the full context so "the print button broke" tickets have something
+    // to grep for. The user only sees a toast — without this line we'd have to
+    // guess what entity/format/scope triggered the failure.
+    logger.error(err as Error, "[print] /render failed", {
+      userId: req.scope?.userId,
+      companyId: req.scope?.companyId,
+      branchId: req.scope?.branchId,
+      entityType: req.body?.entityType,
+      entityId: req.body?.entityId,
+      format: req.body?.format,
+    });
     return handleRouteError(err, res, "print");
   }
 });
