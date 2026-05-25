@@ -13,15 +13,12 @@ import {
   exportFleetExcel,
 } from "../lib/excelExport.js";
 import {
-  exportInvoicePdf,
-  exportPurchaseOrderPdf,
-  exportVoucherPdf,
-  exportPayrollSlipPdf,
   exportTrialBalancePdf,
   exportFleetTripsPdf,
 } from "../lib/pdfExport.js";
 
 import { authorize } from "../lib/rbac/authorize.js";
+import { renderPrint } from "../lib/print/printService.js";
 
 export const exportRouter = Router();
 exportRouter.use(authMiddleware);
@@ -107,57 +104,60 @@ exportRouter.get("/excel/fleet", fleetGuard, authorize({ feature: "fleet", actio
   }
 });
 
-exportRouter.get("/pdf/invoice/:id", financeGuard, authorize({ feature: "finance.invoices", action: "export" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = parseId(req.params.id, "id");
-    const buf = await exportInvoicePdf(scope.companyId, id);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=invoice-${id}.pdf`);
-    res.send(buf);
-  } catch (err) {
-    handleRouteError(err, res, "PDF invoice error:");
-  }
-});
+// Print Engine v2 — these four /pdf/<entity>/:id routes used to call the
+// legacy PDFKit exporters in lib/pdfExport.ts. They now proxy to
+// PrintService.render() so the per-branch cliché, audit log, duplicate-copy
+// stamp, RBAC, and rate-limit all apply — without breaking any frontend
+// caller that still uses ExportButton with these endpoints.
 
-exportRouter.get("/pdf/purchase-order/:id", financeGuard, authorize({ feature: "finance.purchase", action: "export" }), async (req, res) => {
+async function proxyToPrintEngine(
+  req: import("express").Request,
+  res: import("express").Response,
+  entityType: string,
+  filenamePrefix: string,
+) {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const buf = await exportPurchaseOrderPdf(scope.companyId, id);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=purchase-order-${id}.pdf`);
-    res.send(buf);
+    const result = await renderPrint(
+      {
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        userId: scope.userId,
+        role: scope.role,
+        isOwner: scope.isOwner,
+      },
+      { entityType, entityId: String(id), format: "a4" },
+      { ipAddress: req.ip, userAgent: req.get("user-agent") ?? undefined },
+    );
+    res.setHeader("Content-Type", result.mime);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=${filenamePrefix}-${id}.${result.mime.includes("html") ? "html" : "pdf"}`,
+    );
+    if (result.jobId) res.setHeader("X-Print-Job-Id", result.jobId);
+    res.send(result.bytes);
   } catch (err) {
-    handleRouteError(err, res, "PDF purchase-order error:");
+    handleRouteError(err, res, `PDF ${entityType} (v2 proxy) error:`);
   }
-});
+}
 
-exportRouter.get("/pdf/voucher/:id", financeGuard, authorize({ feature: "finance.reports", action: "export" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = parseId(req.params.id, "id");
-    const buf = await exportVoucherPdf(scope.companyId, id);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=voucher-${id}.pdf`);
-    res.send(buf);
-  } catch (err) {
-    handleRouteError(err, res, "PDF voucher error:");
-  }
-});
+exportRouter.get("/pdf/invoice/:id", financeGuard, authorize({ feature: "finance.invoices", action: "export" }), (req, res) =>
+  proxyToPrintEngine(req, res, "invoice", "invoice"),
+);
 
-exportRouter.get("/pdf/payroll/:id", hrGuard, authorize({ feature: "hr.payroll", action: "export" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = parseId(req.params.id, "id");
-    const buf = await exportPayrollSlipPdf(scope.companyId, id);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=payroll-slip-${id}.pdf`);
-    res.send(buf);
-  } catch (err) {
-    handleRouteError(err, res, "PDF payroll error:");
-  }
-});
+exportRouter.get("/pdf/purchase-order/:id", financeGuard, authorize({ feature: "finance.purchase", action: "export" }), (req, res) =>
+  proxyToPrintEngine(req, res, "purchase_order", "purchase-order"),
+);
+
+exportRouter.get("/pdf/voucher/:id", financeGuard, authorize({ feature: "finance.reports", action: "export" }), (req, res) =>
+  proxyToPrintEngine(req, res, "payment_voucher", "voucher"),
+);
+
+exportRouter.get("/pdf/payroll/:id", hrGuard, authorize({ feature: "hr.payroll", action: "export" }), (req, res) =>
+  proxyToPrintEngine(req, res, "payroll", "payroll-slip"),
+);
+
 
 exportRouter.get("/pdf/trial-balance", financeGuard, authorize({ feature: "finance.reports", action: "export" }), async (req, res) => {
   try {
