@@ -105,9 +105,12 @@ const AllocationRules = lazy(() => import("@/pages/finance/allocation-rules"));
 const OverridesReport = lazy(() => import("@/pages/finance/overrides-report"));
 const AllocationResults = lazy(() => import("@/pages/finance/allocation-results"));
 const AllocationRuleCreate = lazy(() => import("@/pages/create/finance/allocation-rule-create"));
+const AllocationRuleEdit = lazy(() => import("@/pages/create/finance/allocation-rule-edit"));
 const ProductCatalog = lazy(() => import("@/pages/finance/product-catalog"));
 const FxRates = lazy(() => import("@/pages/finance/fx-rates"));
+const FxRevaluationHistory = lazy(() => import("@/pages/finance/fx-revaluation-history"));
 const SettingsHub = lazy(() => import("@/pages/finance/settings-hub"));
+const FxRevaluation = lazy(() => import("@/pages/finance/fx-revaluation"));
 
 export const financeRoutes = [
   // /finance → the new dashboard (R.1.5). The chart of accounts moves
@@ -176,11 +179,14 @@ export const financeRoutes = [
   { path: "/finance/bad-debt", component: BadDebt },
   { path: "/finance/allocation-rules", component: AllocationRules },
   { path: "/finance/allocation-rules/create", component: AllocationRuleCreate },
+  { path: "/finance/allocation-rules/:id/edit", component: AllocationRuleEdit },
   { path: "/finance/overrides-report", component: OverridesReport },
   { path: "/finance/allocation-results", component: AllocationResults },
   { path: "/finance/product-catalog", component: ProductCatalog },
   { path: "/finance/fx-rates", component: FxRates },
+  { path: "/finance/fx-revaluation/history", component: FxRevaluationHistory },
   { path: "/finance/settings", component: SettingsHub },
+  { path: "/finance/fx-revaluation", component: FxRevaluation },
   { path: "/finance/reports", component: FinancialReports },
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },
