@@ -760,25 +760,46 @@ async function loadPayslip(companyId: number, id: string) {
 }
 
 async function loadPayrollRun(companyId: number, id: string) {
-  // entityType "payroll" → the payroll_runs row + all its payroll_lines.
-  // The frontend opens /finance/payroll/:id where id is a payroll_runs.id.
-  // Before this loader existed, the old loadPayslip queried payroll_slips
-  // (a table that was never created) so every payroll print rendered as
-  // an empty stub.
+  // payroll_run roster — header + per-employee lines. Computes aggregated
+  // allowances + deductions so the preset can show them as single columns.
   const [run] = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM payroll_runs WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    `SELECT pr.*, u.name AS "approvedByName", pr.period
+     FROM payroll_runs pr
+     LEFT JOIN users u ON u.id = pr."approvedBy"
+     WHERE pr.id = $1 AND pr."companyId" = $2 LIMIT 1`,
     [id, companyId]
-  ).catch(() => [null]);
+  );
   if (!run) return { entity: { id } };
-  const items = await rawQuery<Record<string, unknown>>(
-    `SELECT pl.*, e.name AS "employeeName", e."empNumber"
+  const lines = await rawQuery<Record<string, unknown>>(
+    `SELECT pl.id, pl.basic AS "baseSalary",
+            (COALESCE(pl."housingAllowance",0) + COALESCE(pl."transportAllowance",0)
+              + COALESCE(pl.overtime,0) + COALESCE(pl.commission,0))::numeric AS "totalAllowances",
+            (COALESCE(pl.gosi,0) + COALESCE(pl."lateDeduction",0)
+              + COALESCE(pl."absenceDeduction",0) + COALESCE(pl."violationDeduction",0)
+              + COALESCE(pl."loanDeduction",0))::numeric AS "totalDeductions",
+            pl."netSalary", pl."grossSalary",
+            e.name AS "employeeName", e."empNumber"
        FROM payroll_lines pl
        LEFT JOIN employees e ON e.id = pl."employeeId"
       WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL
       ORDER BY e."empNumber" NULLS LAST, pl.id`,
     [id]
-  ).catch(() => []);
-  return { entity: run, items };
+  );
+  // Aggregate header-level totals so the preset's footer table can render
+  // grand totals without needing a separate query.
+  const totalBaseSalary = lines.reduce((s, l) => s + Number(l.baseSalary ?? 0), 0);
+  const totalAllowances = lines.reduce((s, l) => s + Number(l.totalAllowances ?? 0), 0);
+  const totalDeductions = lines.reduce((s, l) => s + Number(l.totalDeductions ?? 0), 0);
+  const totalNet        = lines.reduce((s, l) => s + Number(l.netSalary ?? 0), 0);
+  return {
+    entity: {
+      ...run,
+      ref: run.reference ?? `PR-${run.id}`,
+      employeeCount: lines.length,
+      totalBaseSalary, totalAllowances, totalDeductions, totalNet,
+    },
+    items: lines,
+  };
 }
 
 async function loadOfficialLetter(companyId: number, id: string) {
