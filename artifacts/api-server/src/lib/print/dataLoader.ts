@@ -201,6 +201,42 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadOfficialLetter(companyId, entityId);
     case "employee_contract":
       return await loadEmployeeContract(companyId, entityId);
+    // ─── Master cards + niche transactions (Batches 5-7 presets) ───────
+    case "vendor":
+    case "supplier":
+      return await loadVendorCard(companyId, entityId);
+    case "building":
+      return await loadBuildingCard(companyId, entityId);
+    case "project":
+      return await loadProjectCard(companyId, entityId);
+    case "store_order":
+      return await loadStoreOrder(companyId, entityId);
+    case "crm_opportunity":
+      return await loadCrmOpportunity(companyId, entityId);
+    case "support_ticket":
+      return await loadSupportTicket(companyId, entityId);
+    case "umrah_pilgrim":
+      return await loadUmrahPilgrim(companyId, entityId);
+    case "umrah_invoice":
+    case "umrah_sales_invoice":
+      return await loadUmrahInvoice(companyId, entityId);
+    case "salary_advance":
+      return await loadSalaryAdvance(companyId, entityId);
+    case "training_program":
+      return await loadTrainingProgram(companyId, entityId);
+    case "warehouse_product":
+    case "store_product":
+      return await loadWarehouseProductCard(companyId, entityId);
+    case "governance_policy":
+      return await loadGovernancePolicy(companyId, entityId);
+    case "budget":
+      return await loadBudgetCard(companyId, entityId);
+    case "shift":
+      return await loadShiftCard(companyId, entityId);
+    case "umrah_season":
+      return await loadUmrahSeason(companyId, entityId);
+    case "chart_of_account":
+      return await loadChartOfAccount(companyId, entityId);
     // ─── Batch reports (no single row — synthetic entityId encodes filters) ──
     case "report_trial_balance":
       return await loadTrialBalance(companyId, entityId);
@@ -799,4 +835,263 @@ async function loadEmployeeContract(companyId: number, id: string) {
     ? (await rawQuery(`SELECT * FROM employees WHERE id = $1`, [contract.employeeId]))[0]
     : null;
   return { entity: contract, employee };
+}
+
+// ─── Master cards + transactions with JOINs ──────────────────────────────
+// Each loader fetches the canonical row and JOINs the related lookups the
+// preset references (clientName, branchName, etc.) so {{entity.xxx}}
+// tokens render real values instead of empty placeholders.
+
+async function loadVendorCard(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT s.*, COALESCE(s."paymentTerms"::text, '-') AS "paymentTerms"
+     FROM suppliers s
+     WHERE s.id = $1 AND s."companyId" = $2 AND s."deletedAt" IS NULL LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadBuildingCard(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT b.*, e.name AS "managerName",
+            b.address AS "fullAddress",
+            b."totalUnits" AS "unitsCount"
+     FROM property_buildings b
+     LEFT JOIN employees e ON e.id = b."managerId"
+     WHERE b.id = $1 AND b."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadProjectCard(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT p.*, c.name AS "clientName", e.name AS "managerName",
+            br.name AS "branchName"
+     FROM projects p
+     LEFT JOIN clients c ON c.id = p."clientId"
+     LEFT JOIN employees e ON e.id = p."managerId"
+     LEFT JOIN branches br ON br.id = p."branchId"
+     WHERE p.id = $1 AND p."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadStoreOrder(companyId: number, id: string) {
+  const [header] = await rawQuery<Record<string, unknown>>(
+    `SELECT so.*,
+            c.name AS "customerName",
+            c.phone AS "customerPhone",
+            c.email AS "customerEmail"
+     FROM store_orders so
+     LEFT JOIN clients c ON c.id = so."clientId"
+     WHERE so.id = $1 AND so."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  if (!header) return { entity: { id } };
+  const lines = await rawQuery<Record<string, unknown>>(
+    `SELECT sol.*, wp.name AS "productName", wp.sku
+     FROM store_order_lines sol
+     LEFT JOIN warehouse_products wp ON wp.id = sol."productId"
+     WHERE sol."orderId" = $1 ORDER BY sol.id`,
+    [id],
+  ).catch((err) => {
+    if ((err as { code?: string })?.code === "42P01") return [];
+    throw err;
+  });
+  return { entity: header, items: lines };
+}
+
+async function loadCrmOpportunity(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT co.*, c.name AS "clientName", e.name AS "assigneeName",
+            co.value AS "expectedValue",
+            co."expectedCloseDate" AS "closeDate"
+     FROM crm_opportunities co
+     LEFT JOIN clients c ON c.id = co."clientId"
+     LEFT JOIN employees e ON e.id = co."assignedTo"
+     WHERE co.id = $1 AND co."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadSupportTicket(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT st.*,
+            st.id::text AS "ticketNumber",
+            er.name AS "reporterName",
+            ag.name AS "assigneeName"
+     FROM support_tickets st
+     LEFT JOIN users er ON er.id = st."reporterId"
+     LEFT JOIN users ag ON ag.id = st."assigneeId"
+     WHERE st.id = $1 AND st."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadUmrahPilgrim(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT p.*, s.name AS "seasonName",
+            ua.name AS "agentName"
+     FROM umrah_pilgrims p
+     LEFT JOIN umrah_seasons s ON s.id = p."seasonId"
+     LEFT JOIN umrah_agents ua ON ua.id = p."agentId"
+     WHERE p.id = $1 AND p."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadUmrahInvoice(companyId: number, id: string) {
+  const [header] = await rawQuery<Record<string, unknown>>(
+    `SELECT i.*, p.name AS "pilgrimName", s.name AS "seasonName"
+     FROM umrah_sales_invoices i
+     LEFT JOIN umrah_pilgrims p ON p.id = i."pilgrimId"
+     LEFT JOIN umrah_seasons s ON s.id = i."seasonId"
+     WHERE i.id = $1 AND i."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  if (!header) return { entity: { id } };
+  const items = await rawQuery<Record<string, unknown>>(
+    `SELECT * FROM umrah_sales_invoice_lines WHERE "invoiceId" = $1 ORDER BY id`,
+    [id],
+  ).catch((err) => {
+    if ((err as { code?: string })?.code === "42P01") return [];
+    throw err;
+  });
+  return { entity: header, items };
+}
+
+async function loadSalaryAdvance(companyId: number, id: string) {
+  // salary_advance reuses hr_employee_loans (type='advance' typically).
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT l.*,
+            l."installmentAmount" AS "monthlyInstallment",
+            l."installmentCount", l.amount,
+            e.name AS "employeeName", e."empNumber",
+            e.salary AS "baseSalary"
+     FROM hr_employee_loans l
+     LEFT JOIN employees e ON e.id = l."employeeId"
+     WHERE l.id = $1 AND l."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  if (!row) return { entity: { id } };
+  const employee = {
+    name: row.employeeName,
+    empNumber: row.empNumber,
+    baseSalary: row.baseSalary,
+  };
+  return { entity: row, employee };
+}
+
+async function loadTrainingProgram(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT tp.*,
+            tp."totalHours", tp."startDate", tp."endDate"
+     FROM training_programs tp
+     WHERE tp.id = $1 AND tp."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadWarehouseProductCard(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT wp.*,
+            wc.name AS "categoryName",
+            wp."costPrice", wp."sellPrice" AS price,
+            wp.sku AS barcode,
+            b.name AS "warehouseName",
+            wp.status
+     FROM warehouse_products wp
+     LEFT JOIN warehouse_categories wc ON wc.id = wp."categoryId"
+     LEFT JOIN branches b ON b.id = wp."branchId"
+     WHERE wp.id = $1 AND wp."companyId" = $2 AND wp."deletedAt" IS NULL LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadGovernancePolicy(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT gp.*, u1.name AS "ownerName", u2.name AS "approvedByName"
+     FROM governance_policies gp
+     LEFT JOIN users u1 ON u1.id = gp."ownerId"
+     LEFT JOIN users u2 ON u2.id = gp."approvedBy"
+     WHERE gp.id = $1 AND gp."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadBudgetCard(companyId: number, id: string) {
+  const [header] = await rawQuery<Record<string, unknown>>(
+    `SELECT b.*, cc.name AS "costCenterName",
+            u1.name AS "ownerName",
+            b.amount AS "totalBudget"
+     FROM budgets b
+     LEFT JOIN cost_centers cc ON cc.id = b."costCenterId"
+     LEFT JOIN users u1 ON u1.id = b."ownerId"
+     WHERE b.id = $1 AND b."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  if (!header) return { entity: { id } };
+  const totalBudget = Number(header.totalBudget ?? 0);
+  // Lookup consumed from journal_lines if a cost center is set.
+  let consumed = 0;
+  if (header.costCenterId) {
+    const [r] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(jl.debit - jl.credit), 0)::float8 AS spent
+       FROM journal_lines jl
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL
+       WHERE jl."costCenterId" = $2`,
+      [companyId, header.costCenterId],
+    ).catch(() => [{ spent: 0 }]);
+    consumed = Number(r?.spent ?? 0);
+  }
+  return {
+    entity: { ...header, consumed, remaining: totalBudget - consumed },
+  };
+}
+
+async function loadShiftCard(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT s.*,
+            s."totalHours",
+            s."lateGraceMinutes",
+            br.name AS "branchName"
+     FROM shifts s
+     LEFT JOIN branches br ON br.id = s."branchId"
+     WHERE s.id = $1 AND s."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadUmrahSeason(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT s.*,
+            (SELECT COUNT(*) FROM umrah_agents WHERE "seasonId" = s.id) AS "agentCount",
+            (SELECT COUNT(*) FROM umrah_pilgrims WHERE "seasonId" = s.id) AS "expectedPilgrims"
+     FROM umrah_seasons s
+     WHERE s.id = $1 AND s."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadChartOfAccount(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT coa.*,
+            (SELECT name FROM chart_of_accounts WHERE code = coa."parentCode" AND "companyId" = $2 LIMIT 1) AS "parentName",
+            coa."currentBalance"
+     FROM chart_of_accounts coa
+     WHERE coa.id = $1 AND coa."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
 }
