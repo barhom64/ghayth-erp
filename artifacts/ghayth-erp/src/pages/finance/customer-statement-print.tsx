@@ -71,7 +71,10 @@ function daysInMonth(year: number, month: number): number {
 }
 
 export default function CustomerStatementPrintPage() {
-  const [clientId, setClientId] = useState<string>("");
+  const initialClientId = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("clientId") ?? ""
+    : "";
+  const [clientId, setClientId] = useState<string>(initialClientId);
   const [year, setYear] = useState(currentYearRiyadh());
   const [month, setMonth] = useState(currentMonthPaddedRiyadh());
   const [scope, setScope] = useState<"month" | "ytd" | "all">("month");
