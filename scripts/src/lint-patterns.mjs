@@ -254,8 +254,9 @@ const RULES = [
     skip: (file) => file.endsWith("/routes/numbering.ts"),
     // Match `nextval('something_seq')` or any nextval call inside a
     // route file. The numbering authority owns all official sequences.
+    // Hardened to a hard rule (baseline 0) — every route now routes
+    // through `numberingService.issueNumber`.
     regex: /\bnextval\s*\(\s*['"`]?[a-zA-Z_]+_seq/,
-    countBaseline: 2,
     message:
       "Direct `nextval('…_seq')` calls inside route handlers are forbidden " +
       "(Issue #1141 — unified numbering center). Official document numbers " +
@@ -274,7 +275,7 @@ const RULES = [
     // there is no legitimate use — every visible ref must come from
     // numberingService.
     regex: /\bgenerateTimeRef\s*\(/,
-    countBaseline: 12,
+    countBaseline: 7,
     message:
       "`generateTimeRef(...)` is a Date.now()-based tech ref, NOT a valid " +
       "official document number (Issue #1141). For executive document " +

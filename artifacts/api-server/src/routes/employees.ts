@@ -10,6 +10,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import {
   createNotification,
   emitEvent,
@@ -466,15 +467,28 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       }
     }
 
+    // Numbering center (Issue #1141) — employee code via central
+    // authority (`hr.employee_code`). Issued OUTSIDE the transaction
+    // so the numbering counter advances even if the employee insert
+    // fails later; the assignment is left orphaned (entityId NULL)
+    // and is detectable from the audit view if needed. The route
+    // still accepts a user-provided `empNumber` for legacy imports.
+    let preIssuedEmpNumber: string | null = empNumber ?? null;
+    let preIssued: Awaited<ReturnType<typeof issueNumber>> | null = null;
+    if (!preIssuedEmpNumber) {
+      preIssued = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "hr",
+        entityKey: "employee_code",
+        entityTable: "employees",
+        actorId: scope.userId,
+      });
+      preIssuedEmpNumber = preIssued.number;
+    }
+
     const result = await withTransaction(async (client) => {
-      // ── Step 1: Auto-generate employee number (EMP-YYYY-NNN) ──
-      let finalEmpNumber = empNumber;
-      if (!finalEmpNumber) {
-        const seqRes = await client.query(`SELECT nextval('employee_number_seq') AS seq`);
-        const seq = Number(seqRes.rows[0].seq);
-        const yearStr = currentYear().toString();
-        finalEmpNumber = `EMP-${yearStr}-${String(seq).padStart(3, "0")}`;
-      }
+      const finalEmpNumber = preIssuedEmpNumber!;
 
       // ── Step 2: Create the employee record ──
       const empRes = await client.query(
@@ -496,6 +510,15 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
          (body as any).attachments ? JSON.stringify((body as any).attachments) : null]
       );
       const empId = empRes.rows[0].id;
+
+      // Link the numbering assignment to the employee row (if one was
+      // issued — `empNumber` may have been supplied for legacy imports).
+      if (preIssued) {
+        await client.query(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [empId, preIssued.assignmentId]
+        );
+      }
 
       // ── HR-005: link the source recruitment application ──
       // Race-safe: the `createdEmployeeId IS NULL` predicate makes a
