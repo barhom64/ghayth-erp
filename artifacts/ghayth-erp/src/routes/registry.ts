@@ -42,7 +42,7 @@ for (const pat of REGISTERED_PATTERNS) {
     const re = new RegExp(
       "^" +
         pat
-          .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+          .replace(/[.+?^${}()|[\]\\*]/g, "\\$&")
           .replace(/:[A-Za-z_][A-Za-z0-9_]*/g, "[^/]+")
           .replace(/\\\*/g, ".*") +
         "$"

@@ -34,6 +34,7 @@ const GlIntegrityGaps = lazy(() => import("@/pages/finance/gl-integrity-gaps"));
 const GlAnomalyDetector = lazy(() => import("@/pages/finance/gl-anomaly-detector"));
 const UnmappedLines = lazy(() => import("@/pages/finance/unmapped-lines"));
 const WhtSummary = lazy(() => import("@/pages/finance/wht-summary"));
+const WhtFilingWorkbench = lazy(() => import("@/pages/finance/wht-filing-workbench"));
 const ZatcaReportsHub = lazy(() => import("@/pages/finance/zatca-reports-hub"));
 const VatReconciliation = lazy(() => import("@/pages/finance/vat-reconciliation"));
 const VatFilingReadiness = lazy(() => import("@/pages/finance/vat-filing-readiness"));
@@ -75,6 +76,7 @@ const VendorDetail = lazy(() => import("@/pages/finance/vendor-detail"));
 const VendorStatement = lazy(() => import("@/pages/finance/vendor-statement"));
 const VendorStatementPrint = lazy(() => import("@/pages/finance/vendor-statement-print"));
 const VendorContracts = lazy(() => import("@/pages/finance/vendor-contracts"));
+const VendorContractsTracker = lazy(() => import("@/pages/finance/vendor-contracts-tracker"));
 const VendorSpend = lazy(() => import("@/pages/finance/vendor-spend"));
 const VendorSettlementWorkbench = lazy(() => import("@/pages/finance/vendor-settlement-workbench"));
 const PurchaseRequests = lazy(() => import("@/pages/finance/purchase-requests"));
@@ -203,6 +205,7 @@ export const financeRoutes = [
   { path: "/finance/gl-anomaly-detector", component: GlAnomalyDetector },
   { path: "/finance/reports/unmapped-lines", component: UnmappedLines },
   { path: "/finance/reports/wht-summary", component: WhtSummary },
+  { path: "/finance/wht-filing-workbench", component: WhtFilingWorkbench },
   // ZATCA & inventory reports hub — landing page (#1059).
   { path: "/finance/reports/zatca", component: ZatcaReportsHub },
   { path: "/finance/vat-filing-readiness", component: VatFilingReadiness },
@@ -248,6 +251,7 @@ export const financeRoutes = [
   { path: "/finance/vendors/:id/statement", component: VendorStatement, subKey: "vendors" },
   { path: "/finance/vendor-statement-print", component: VendorStatementPrint },
   { path: "/finance/contracts", component: VendorContracts },
+  { path: "/finance/vendor-contracts-tracker", component: VendorContractsTracker },
   { path: "/finance/vendor-spend", component: VendorSpend },
   { path: "/finance/vendor-settlement-workbench", component: VendorSettlementWorkbench },
   { path: "/finance/vendors/:id", component: VendorDetail, subKey: "vendors" },

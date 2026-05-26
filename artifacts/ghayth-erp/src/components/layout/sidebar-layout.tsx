@@ -34,6 +34,7 @@ import { NotificationDropdown } from "@/components/notification-dropdown";
 import { PolicyBanner } from "@/components/policy-banner";
 import { RateLimitFallbackBanner } from "@/components/rate-limit-fallback-banner";
 import { useKeyboardShortcuts, usePropertyKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { isRegisteredRoute } from "@/routes/registry";
 // CommandPalette is only mounted when the user opens it (Cmd+K or the
 // header button). Lazy-load it so its ~345 lines + icons don't ship in
 // the initial bundle.
@@ -213,6 +214,7 @@ const allNavSections: NavSection[] = [
         { label: "إنفاق الموردين 🆕", path: "/finance/vendor-spend", icon: BarChart3 },
         { label: "دفعة الدفع", path: "/finance/payment-run", icon: Banknote },
         { label: "تقويم الدفعات 🆕", path: "/finance/ap-payment-calendar", icon: Calendar },
+        { label: "متابعة عقود الموردين 🆕", path: "/finance/vendor-contracts-tracker", icon: FileSignature },
       ]},
       { label: "النقد والذمم", path: "/finance/treasury", icon: Building, module: "finance", children: [
         { label: "مراقبة البنوك 🆕", path: "/finance/bank-accounts-watch", icon: Banknote },
@@ -267,6 +269,7 @@ const allNavSections: NavSection[] = [
         { label: "ZATCA Reports Hub", path: "/finance/reports/zatca", icon: FileCheck },
         { label: "تسوية VAT", path: "/finance/reports/vat-reconciliation", icon: Scale },
         { label: "ملخص WHT", path: "/finance/reports/wht-summary", icon: Percent },
+        { label: "إعداد إقرار WHT 🆕", path: "/finance/wht-filing-workbench", icon: FileCheck },
         { label: "التقارير المالية", path: "/finance/reports", icon: FileBarChart },
         { label: "P&L مقابل الميزانية 🆕", path: "/finance/reports/is-vs-budget", icon: Scale },
         { label: "اتجاه قائمة الدخل 🆕", path: "/finance/reports/is-trend", icon: TrendingUp },
@@ -587,7 +590,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         if (item.minRoleLevel && effectiveRoleLevel < item.minRoleLevel) return null;
         if (item.subKey && mod && !canAccessSubPage(mod, item.subKey)) return null;
         if (!itemPermAllowed(item)) return null;
-        if (!item.children) return item;
+        if (!item.children || item.children.length === 0) {
+          if (!isRegisteredRoute(item.path)) return null;
+          return item;
+        }
         const filteredChildren = filterItems(item.children, mod);
         if (filteredChildren.length === 0) return null;
         return { ...item, children: filteredChildren };
