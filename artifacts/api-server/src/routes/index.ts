@@ -49,6 +49,7 @@ import adminAiGovernanceRouter from "./admin-ai-governance.js";
 import adminCommControlRouter from "./admin-communication-control.js";
 import adminPbxControlRouter from "./admin-pbx-control.js";
 import adminMasterPlanRouter from "./admin-master-plan.js";
+import adminNotificationRoutingRouter from "./admin-notification-routing.js";
 import permissionsRouter from "./permissions.js";
 import rbacV2Router from "./rbacV2.js";
 import auditLogsRouter from "./auditLogs.js";
@@ -365,6 +366,9 @@ router.use("/admin/communication-control", requireModule("admin"), requireMinLev
 router.use("/admin/pbx-control", requireModule("admin"), requireMinLevel(90), adminPbxControlRouter);
 // Master Plan dashboard (#1139 §6 — "كل شيء قابل للتحكم من الواجهة")
 router.use("/admin/master-plan", requireModule("admin"), requireMinLevel(90), adminMasterPlanRouter);
+// Notification Routing rules + fallback chains UI (existing tables;
+// new admin surface to fulfil #1139 §6 "كل شيء قابل للتحكم من الواجهة").
+router.use("/admin/notification-routing", requireModule("admin"), requireMinLevel(90), adminNotificationRoutingRouter);
 // FND-004 — RBAC administration surfaces. permissions.ts is fully
 // authorize()-guarded per route; rbacV2.ts had a few routes without one;
 // gating the mount at level 90 (consistent with /admin) closes the gap

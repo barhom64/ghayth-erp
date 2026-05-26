@@ -386,6 +386,7 @@ const allNavSections: NavSection[] = [
         { label: "مركز التحكّم بالاتصالات", path: "/admin/communication-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "مركز التحكّم بالـ PBX", path: "/admin/pbx-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "خارطة #1139 الحيّة", path: "/admin/master-plan", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+        { label: "توجيه الإشعارات", path: "/admin/notification-routing", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
         { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any" },
         { label: "سجل الحركات", path: "/activity-log", icon: Activity },
