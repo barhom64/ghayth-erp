@@ -540,9 +540,52 @@ export async function previewNextNumber(params: {
 }
 
 /**
+ * Look up the entity's current `status` from its native table and
+ * decide whether the scheme's `lockAfterStatuses` policy blocks the
+ * caller from mutating the assigned number. Returns the status string
+ * so the caller can surface it in the error message.
+ *
+ * This is the missing link between the numbering center and the
+ * lifecycle engine — `lockAfterStatuses` was declared on the scheme
+ * but nobody enforced it. Now overrideNumber + voidNumber both gate
+ * on this check, and the result is appended to the audit row.
+ */
+export async function readEntityStatus(params: {
+  entityTable: string;
+  entityId: number | null;
+}): Promise<string | null> {
+  if (params.entityId == null) return null;
+  // Identifier sanitisation — entityTable is whitelisted in
+  // numbering_schemes.defaultEntityTable, but we still validate the
+  // shape because the assignment row's entityTable column is free-form.
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]{0,62}$/.test(params.entityTable)) return null;
+  try {
+    const rows = await rawQuery<{ status: string | null }>(
+      `SELECT status::text FROM "${params.entityTable}" WHERE id = $1 LIMIT 1`,
+      [params.entityId],
+    );
+    return rows[0]?.status ?? null;
+  } catch {
+    // Some executive tables don't have a `status` column (e.g.
+    // employees uses isActive). Treat as "no status" — the policy
+    // simply doesn't apply to entities without a status field.
+    return null;
+  }
+}
+
+function lockAfterApplies(
+  scheme: NumberingScheme,
+  entityStatus: string | null,
+): boolean {
+  if (!entityStatus) return false;
+  return scheme.lockAfterStatuses.includes(entityStatus);
+}
+
+/**
  * Validate that a user-supplied number can be accepted for `(scheme,
- * entity)`. Enforces the scheme's `manualEditPolicy` and uniqueness.
- * Throws on rejection so callers can let the error bubble.
+ * entity)`. Enforces the scheme's `manualEditPolicy`, the
+ * `lockAfterStatuses` lifecycle gate, and uniqueness. Throws on
+ * rejection so callers can let the error bubble.
  */
 export async function validateManualNumber(params: {
   companyId: number;
@@ -581,6 +624,20 @@ export async function validateManualNumber(params: {
   if (policy === "legacy_import_only" && !params.isLegacyImport) {
     throw new ForbiddenError(
       `لا يسمح بتعديل رقم ${scheme.displayNameAr} يدويًا إلا أثناء استيراد بيانات قديمة`,
+    );
+  }
+  // Lifecycle gate — if the entity has reached a "locked" status (e.g.
+  // approved / sent / posted / closed), block the override regardless
+  // of manualEditPolicy. This is the missing link the lawyer flagged:
+  // the scheme declares the locked-after states, but until this check
+  // landed nobody enforced them.
+  const status = await readEntityStatus({
+    entityTable: params.entityTable,
+    entityId: params.entityId ?? null,
+  });
+  if (lockAfterApplies(scheme, status)) {
+    throw new ForbiddenError(
+      `لا يمكن تعديل رقم ${scheme.displayNameAr} بعد دخوله حالة "${status}" — هذه الحالة مقفلة بموجب سياسة الترقيم`,
     );
   }
   if (!params.number.trim()) {
@@ -702,8 +759,8 @@ export async function voidNumber(params: {
   if (!params.reason || params.reason.trim().length < 3) {
     throw new ValidationError("سبب الإلغاء إلزامي ولا يقل عن 3 أحرف");
   }
-  const [existing] = await rawQuery<{ status: AssignmentStatus; number: string; entityTable: string; entityId: number | null }>(
-    `SELECT status, number, "entityTable", "entityId"
+  const [existing] = await rawQuery<{ status: AssignmentStatus; number: string; entityTable: string; entityId: number | null; moduleKey: string; entityKey: string }>(
+    `SELECT status, number, "entityTable", "entityId", "moduleKey", "entityKey"
        FROM numbering_assignments
       WHERE id = $1 AND "companyId" = $2`,
     [params.assignmentId, params.companyId],
@@ -713,6 +770,21 @@ export async function voidNumber(params: {
   }
   if (existing.status === "voided" || existing.status === "cancelled") {
     return; // already void.
+  }
+  // Lifecycle gate — voiding a number after the entity is in a
+  // locked state (posted invoice, sent letter, etc) destroys audit
+  // trail. Refuse unless the lockAfterStatuses policy permits it.
+  const scheme = await getScheme(params.companyId, existing.moduleKey, existing.entityKey);
+  if (scheme) {
+    const status = await readEntityStatus({
+      entityTable: existing.entityTable,
+      entityId: existing.entityId,
+    });
+    if (lockAfterApplies(scheme, status)) {
+      throw new ForbiddenError(
+        `لا يمكن إلغاء رقم ${scheme.displayNameAr} بعد دخوله حالة "${status}" — استخدم إشعار دائن/مدين لعكس الأثر`,
+      );
+    }
   }
   await withTransaction(async (client) => {
     await client.query(

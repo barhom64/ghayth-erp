@@ -414,3 +414,113 @@ describe("UX simplification + backfill (#1141 phase 5)", () => {
   });
 });
 
+describe("phase-6 enterprise hardening (#1141)", () => {
+  const SVC2 = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/numberingService.ts"), "utf8");
+  const MIG217 = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/migrations/217_numbering_full_coverage.sql"),
+    "utf8",
+  );
+  const AUDIT = readFileSync(
+    join(REPO_ROOT, "scripts/src/audit-numbering-coverage.mjs"),
+    "utf8",
+  );
+  const GUARD = readFileSync(join(REPO_ROOT, "scripts/guard.sh"), "utf8");
+
+  it("lifecycle gate — validateManualNumber + voidNumber now check lockAfterStatuses", () => {
+    expect(SVC2).toContain("export async function readEntityStatus");
+    expect(SVC2).toContain("function lockAfterApplies");
+    // Both lifecycle-aware functions call into the gate.
+    expect(SVC2).toMatch(/lockAfterApplies\(scheme,\s*status\)/);
+    expect(SVC2).toContain("هذه الحالة مقفلة بموجب سياسة الترقيم");
+  });
+
+  it("migration 217 adds the 5 new schemes (hr.loan/overtime/exit + bank_guarantee + legal.case)", () => {
+    expect(MIG217).toMatch(/'hr',\s+'loan'/);
+    expect(MIG217).toMatch(/'hr',\s+'overtime'/);
+    expect(MIG217).toMatch(/'hr',\s+'exit'/);
+    expect(MIG217).toMatch(/'finance',\s+'bank_guarantee'/);
+    expect(MIG217).toMatch(/'legal',\s+'case'/);
+  });
+  it("migration 217 enforces UNIQUE on every executive ref column", () => {
+    expect(MIG217).toContain("uniq_requests_ref");
+    expect(MIG217).toContain("uniq_invoices_ref");
+    expect(MIG217).toContain("uniq_journal_entries_ref");
+    expect(MIG217).toContain("uniq_purchase_orders_ref");
+    expect(MIG217).toContain("uniq_employee_contracts_ref");
+    expect(MIG217).toContain("uniq_correspondence_ref");
+    expect(MIG217).toContain("uniq_hr_employee_loans_loanNumber");
+    expect(MIG217).toContain("uniq_bank_guarantees_ref");
+    expect(MIG217).toContain("uniq_legal_cases_caseNumber");
+    expect(MIG217).toContain("uniq_fleet_trips_ref");
+    expect(MIG217).toContain("uniq_projects_ref");
+  });
+  it("migration 217 adds the new ref columns on fleet_trips / projects / umrah_groups.internalRef", () => {
+    expect(MIG217).toContain("ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS ref");
+    expect(MIG217).toContain("ALTER TABLE projects    ADD COLUMN IF NOT EXISTS ref");
+    expect(MIG217).toContain('ALTER TABLE umrah_groups ADD COLUMN IF NOT EXISTS "internalRef"');
+  });
+
+  it("Stop-Ship audit gate is wired into the guard pipeline", () => {
+    expect(GUARD).toContain("audit:numbering-coverage");
+    expect(GUARD).toContain("audit-numbering-coverage.mjs");
+  });
+  it("audit-numbering-coverage knows every executive table that ships an official number", () => {
+    expect(AUDIT).toContain('"requests"');
+    expect(AUDIT).toContain('"invoices"');
+    expect(AUDIT).toContain('"hr_employee_loans"');
+    expect(AUDIT).toContain('"hr_overtime_requests"');
+    expect(AUDIT).toContain('"hr_exit_requests"');
+    expect(AUDIT).toContain('"bank_guarantees"');
+    expect(AUDIT).toContain('"legal_cases"');
+    expect(AUDIT).toContain('"fleet_trips"');
+    expect(AUDIT).toContain('"projects"');
+    expect(AUDIT).toContain('"umrah_groups"');
+  });
+});
+
+describe("phase-6 — 9 priority-2 routes migrated to numberingService", () => {
+  const HRL = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/hr-loans.ts"), "utf8");
+  const HRO = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/hr-overtime.ts"), "utf8");
+  const HRE = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/hr-exit.ts"), "utf8");
+  const FH  = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/finance-hardening.ts"), "utf8");
+  const PRJ = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/projects.ts"), "utf8");
+  const LGL = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/legal.ts"), "utf8");
+  const FLT = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/fleet.ts"), "utf8");
+  const CMC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/communications.ts"), "utf8");
+  const UME = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"), "utf8");
+
+  it("hr-loans.ts now issues hr.loan", () => {
+    expect(HRL).toContain('entityKey: "loan"');
+    expect(HRL).toContain('issueNumber({');
+  });
+  it("hr-overtime.ts now issues hr.overtime", () => {
+    expect(HRO).toContain('entityKey: "overtime"');
+  });
+  it("hr-exit.ts now issues hr.exit", () => {
+    expect(HRE).toContain('entityKey: "exit"');
+  });
+  it("finance-hardening.ts issues both bank_guarantee + project", () => {
+    expect(FH).toContain('entityKey: "bank_guarantee"');
+    expect(FH).toContain('entityKey: "project"');
+  });
+  it("projects.ts (main) issues projects.project", () => {
+    expect(PRJ).toContain('entityKey: "project"');
+  });
+  it("legal.ts issues both crm.contract + legal.case", () => {
+    expect(LGL).toContain('entityKey: "contract"');
+    expect(LGL).toContain('entityKey: "case"');
+  });
+  it("fleet.ts issues fleet.fleet_trip and voids on sourceKey dedupe", () => {
+    expect(FLT).toContain('entityKey: "fleet_trip"');
+    expect(FLT).toContain("status='voided'");
+  });
+  it("communications.ts issues real refs for derived tickets + requests", () => {
+    expect(CMC).toMatch(/entityKey:\s*"support_ticket"/);
+    expect(CMC).toMatch(/entityKey:\s*"general_request"/);
+  });
+  it("umrah-entities.ts issues client_code + umrah_group internalRef", () => {
+    expect(UME).toContain('entityKey: "client_code"');
+    expect(UME).toContain('entityKey: "umrah_group"');
+  });
+});
+

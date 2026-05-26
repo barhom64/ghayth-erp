@@ -9,6 +9,7 @@ import { LOAN_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 
 // Local row shapes — hr_employee_loans / hr_loan_installments not in
 // @workspace/db Drizzle schema yet.
@@ -353,7 +354,16 @@ router.post("/loans", authorize({ feature: "hr.loans", action: "create" }), asyn
       throw new ValidationError(`الحد الأقصى للسلفة ${maxLoan.toLocaleString()} ريال (3 أضعاف الراتب)`, { field: "amount" });
     }
 
-    const loanNumber = await generateLoanNumber(scope.companyId);
+    // Numbering center (Issue #1141) — loan number from central authority.
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: emp.branchId ?? scope.branchId ?? null,
+      moduleKey: "hr",
+      entityKey: "loan",
+      entityTable: "hr_employee_loans",
+      actorId: scope.userId,
+    });
+    const loanNumber = issued.number;
     const startPeriod = b.startDeductionPeriod || nextPeriod();
 
     const { insertId } = await rawExecute(
@@ -371,6 +381,10 @@ router.post("/loans", authorize({ feature: "hr.loans", action: "create" }), asyn
       ]
     );
     assertInsert(insertId, "hr_employee_loans");
+    await rawExecute(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [insertId, issued.assignmentId]
+    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to hr_employee_loans row"));
 
     // ── سلسلة الموافقات ──
     const approvalResult = await initiateApprovalChain({
