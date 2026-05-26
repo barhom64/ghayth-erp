@@ -942,4 +942,42 @@ router.post(
   },
 );
 
+// ─── Retention — prune old PDFs from object storage ──────────────────────
+//
+// Audit rows in print_jobs are never deleted (regulatory). Only the
+// rendered bytes are evicted from object storage and the pdfStorageKey
+// column is cleared so re-runs don't re-scan the same rows.
+//
+// Gated by `print_jobs:read` (read-level access to the print log + manual
+// cleanup of one's own company's artifacts). Owners + GMs are the
+// expected callers via an admin button; a future cron can call this
+// helper directly without going through HTTP.
+router.post(
+  "/jobs/prune",
+  requirePermission("print_jobs:read"),
+  async (req: Request, res: Response) => {
+    try {
+      const scope = scopeFromReq(req);
+      const body = zodParse(z.object({
+        daysToKeep: z.number().int().min(1).max(3650).default(90),
+        maxPerRun: z.number().int().min(1).max(10_000).optional(),
+        dryRun: z.boolean().optional(),
+      }).safeParse(req.body));
+      const { prunePrintArtifacts } = await import("../lib/print/retention.js");
+      const result = await prunePrintArtifacts({
+        daysToKeep: body.daysToKeep,
+        maxPerRun: body.maxPerRun,
+        dryRun: body.dryRun,
+        // Non-owners are scoped to their own company; owners across
+        // the whole platform would still see only their currentCompany
+        // because scopeFromReq populates it from the JWT.
+        companyId: scope.companyId,
+      });
+      res.json(result);
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  },
+);
+
 export default router;

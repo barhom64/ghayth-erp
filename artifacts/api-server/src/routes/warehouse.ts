@@ -921,6 +921,7 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
     entityTable: "purchase_requests",
     actorId: userId,
     metadata: { autoReorder: true, productId: product.id },
+    expectedTiming: "on_draft",
   });
   const ref = issuedPr.number;
 
@@ -964,6 +965,7 @@ router.post("/transfers", authorize({ feature: "warehouse.transfers", action: "c
       entityKey: "stock_transfer",
       entityTable: "warehouse_movements",
       actorId: scope.userId,
+      expectedTiming: "on_draft",
     });
     const transferRef = issuedTransfer.number;
     const fromLocation = b.fromLocation || b.fromWarehouseId ? `مستودع-${b.fromWarehouseId}` : 'المستودع الرئيسي';
