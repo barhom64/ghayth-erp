@@ -54,7 +54,10 @@ export default function ExpensesPage() {
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["expenses", scopeQueryString], `/finance/expenses${scopeSuffix}`);
   const items = data?.data || [];
-  const [filters, setFilters] = useFilters();
+  // Seed status from ?status=... so deep-links from CFO Cockpit land
+  // pre-filtered (e.g. /finance/expenses?status=pending).
+  const initialStatus = new URLSearchParams(window.location.search).get("status") || "";
+  const [filters, setFilters] = useFilters({ status: initialStatus });
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const advFilters = useAdvancedFilters();
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
