@@ -37,6 +37,18 @@ interface LoaderArgs {
   companyId: number;
   entityType: string;
   entityId: string;
+  /** When non-null, the user is restricted to these branches. Loaders that
+   *  span multiple branches (customer/vendor statements, GL movements,
+   *  warehouse moves) must filter by this list. `null` = unrestricted
+   *  (company-owner / general manager / privileged role). */
+  allowedBranches?: number[] | null;
+  /** Caller's primary branch — used by single-entity loaders that want to
+   *  show "this branch's view" of a global entity (e.g., customer card
+   *  → AR balance for this branch only). */
+  branchId?: number | null;
+  /** Defensive: when `true` the user has owner-level access and branch
+   *  filters are bypassed even if `allowedBranches` is set. */
+  isOwner?: boolean;
 }
 
 async function loadByTable(table: string, id: string, companyId: number) {
@@ -105,6 +117,16 @@ async function safeLoad(
     });
     return { entity: { id: args.entityId } };
   }
+}
+
+/** Compute the branch filter that report/statement loaders should apply.
+ *  Returns null = no restriction (the user is an owner or hasn't been
+ *  scoped to specific branches). Otherwise returns the explicit list
+ *  of branchIds the user can see. */
+function branchFilter(args: LoaderArgs): number[] | null {
+  if (args.isOwner) return null;
+  if (!args.allowedBranches || args.allowedBranches.length === 0) return null;
+  return args.allowedBranches;
 }
 
 async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> {
@@ -219,9 +241,9 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "report_expenses_by_cost_center":
       return await loadExpensesByCostCenter(companyId, entityId);
     case "customer_statement":
-      return await loadCustomerStatement(companyId, entityId);
+      return await loadCustomerStatement(companyId, entityId, branchFilter(args));
     case "vendor_statement":
-      return await loadVendorStatement(companyId, entityId);
+      return await loadVendorStatement(companyId, entityId, branchFilter(args));
     default:
       // 1. Entity is in entityRegistry → use its declared table.
       // 2. Otherwise fall back to the static map below for entities the

@@ -1005,7 +1005,18 @@ export async function loadExpensesByCostCenter(companyId: number, entityId: stri
 
 // ─── Customer statement — كشف حساب عميل ─────────────────────────────────
 // entityId format: "<clientId>:<start>..<end>" — e.g., "42:2026-01-01..2026-03-31"
-export async function loadCustomerStatement(companyId: number, entityId: string) {
+//
+// allowedBranches: when non-null, the user is restricted to these branches.
+// All four sub-queries (opening invoices, opening payments, in-period
+// invoices, in-period payments) apply the same filter so the printed
+// statement matches what the user sees on screen — and never leaks
+// movements from branches the user can't access. Owners pass null and see
+// everything.
+export async function loadCustomerStatement(
+  companyId: number,
+  entityId: string,
+  allowedBranches: number[] | null = null,
+) {
   const colonAt = entityId.indexOf(":");
   const clientIdRaw = colonAt >= 0 ? entityId.slice(0, colonAt) : entityId;
   const range = colonAt >= 0 ? entityId.slice(colonAt + 1) : "";
@@ -1017,6 +1028,18 @@ export async function loadCustomerStatement(companyId: number, entityId: string)
   const from = startDate || "1900-01-01";
   const to = endDate || todayISO();
 
+  // Branch filter is applied two ways:
+  //   1. Invoices have a branchId column → direct filter on `branchId`.
+  //   2. invoice_payments has no branchId → derive from the linked invoice
+  //      (i."branchId"). Without this JOIN-side filter a payment that
+  //      settled a Branch-B invoice would surface on a Branch-A statement.
+  const branchInvSql = allowedBranches
+    ? ` AND "branchId" = ANY($BIDX::int[])`
+    : "";
+  const branchPaySql = allowedBranches
+    ? ` AND i."branchId" = ANY($BIDX::int[])`
+    : "";
+
   const [client] = await rawQuery<Record<string, unknown>>(
     `SELECT id, name, phone, email, "vatNumber" FROM clients
      WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
@@ -1026,29 +1049,59 @@ export async function loadCustomerStatement(companyId: number, entityId: string)
     return { entity: { id: entityId, title: "كشف حساب عميل", note: "العميل غير موجود" }, items: [] };
   }
 
+  // Opening invoices — branch-scoped
+  const obInvParams: unknown[] = [clientId, companyId, from];
+  let obInvFilter = "";
+  if (allowedBranches) {
+    obInvParams.push(allowedBranches);
+    obInvFilter = branchInvSql.replace("$BIDX", `$${obInvParams.length}`);
+  }
   const [obInv] = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(SUM(total), 0)::float8 AS total FROM invoices
-     WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND "createdAt" < $3`,
-    [clientId, companyId, from],
+     WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND "createdAt" < $3${obInvFilter}`,
+    obInvParams,
   );
+
+  // Opening payments — derive branch from joined invoice
+  const obPayParams: unknown[] = [clientId, companyId, from];
+  let obPayFilter = "";
+  if (allowedBranches) {
+    obPayParams.push(allowedBranches);
+    obPayFilter = branchPaySql.replace("$BIDX", `$${obPayParams.length}`);
+  }
   const [obPay] = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(SUM(ip.amount), 0)::float8 AS total
        FROM invoice_payments ip
        JOIN invoices i ON i.id = ip."invoiceId" AND i."deletedAt" IS NULL
-      WHERE ip."clientId" = $1 AND ip."companyId" = $2 AND ip."paidAt" < $3`,
-    [clientId, companyId, from],
+      WHERE ip."clientId" = $1 AND ip."companyId" = $2 AND ip."paidAt" < $3${obPayFilter}`,
+    obPayParams,
   );
   const openingBalance = Number(obInv?.total ?? 0) - Number(obPay?.total ?? 0);
 
+  // In-period invoices — branch-scoped
+  const invParams: unknown[] = [clientId, companyId, from, to];
+  let invFilter = "";
+  if (allowedBranches) {
+    invParams.push(allowedBranches);
+    invFilter = branchInvSql.replace("$BIDX", `$${invParams.length}`);
+  }
   const invoices = await rawQuery<Record<string, unknown>>(
     `SELECT ref, "createdAt" AS date, total::float8 AS debit, 0 AS credit,
             CONCAT('فاتورة ', ref) AS description
        FROM invoices
       WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
-        AND "createdAt" >= $3 AND "createdAt" < ($4::date + 1)
+        AND "createdAt" >= $3 AND "createdAt" < ($4::date + 1)${invFilter}
       ORDER BY "createdAt"`,
-    [clientId, companyId, from, to],
+    invParams,
   );
+
+  // In-period payments — derive branch from joined invoice
+  const payParams: unknown[] = [clientId, companyId, from, to];
+  let payFilter = "";
+  if (allowedBranches) {
+    payParams.push(allowedBranches);
+    payFilter = branchPaySql.replace("$BIDX", `$${payParams.length}`);
+  }
   const payments = await rawQuery<Record<string, unknown>>(
     `SELECT COALESCE(ip."transactionRef", CONCAT('PAY-', ip.id)) AS ref,
             ip."paidAt" AS date, 0 AS debit, ip.amount::float8 AS credit,
@@ -1056,9 +1109,9 @@ export async function loadCustomerStatement(companyId: number, entityId: string)
        FROM invoice_payments ip
        JOIN invoices i ON i.id = ip."invoiceId" AND i."deletedAt" IS NULL
       WHERE ip."clientId" = $1 AND ip."companyId" = $2
-        AND ip."paidAt" >= $3 AND ip."paidAt" <= $4
+        AND ip."paidAt" >= $3 AND ip."paidAt" <= $4${payFilter}
       ORDER BY ip."paidAt"`,
-    [clientId, companyId, from, to],
+    payParams,
   );
 
   const all = [...invoices, ...payments].sort(
@@ -1098,7 +1151,13 @@ export async function loadCustomerStatement(companyId: number, entityId: string)
 }
 
 // ─── Vendor statement — كشف حساب مورّد ──────────────────────────────────
-export async function loadVendorStatement(companyId: number, entityId: string) {
+// Same branch-scoping pattern as loadCustomerStatement — `allowedBranches`
+// filters out POs and payment vouchers from branches the user can't see.
+export async function loadVendorStatement(
+  companyId: number,
+  entityId: string,
+  allowedBranches: number[] | null = null,
+) {
   const colonAt = entityId.indexOf(":");
   const supplierIdRaw = colonAt >= 0 ? entityId.slice(0, colonAt) : entityId;
   const range = colonAt >= 0 ? entityId.slice(colonAt + 1) : "";
@@ -1119,25 +1178,48 @@ export async function loadVendorStatement(companyId: number, entityId: string) {
     return { entity: { id: entityId, title: "كشف حساب مورّد", note: "المورّد غير موجود" }, items: [] };
   }
 
+  // Branch filter sql: both purchase_orders and payment_vouchers have a
+  // branchId column, so the filter is direct on each table.
+  const orderParams: unknown[] = [supplierId, companyId, from, to];
+  let orderBranchFilter = "";
+  if (allowedBranches) {
+    orderParams.push(allowedBranches);
+    orderBranchFilter = ` AND "branchId" = ANY($${orderParams.length}::int[])`;
+  }
   const orders = await rawQuery<Record<string, unknown>>(
     `SELECT ref, "createdAt" AS date, total::float8 AS credit, 0 AS debit,
             CONCAT('أمر شراء ', ref) AS description
        FROM purchase_orders
       WHERE "supplierId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
-        AND "createdAt" >= $3 AND "createdAt" < ($4::date + 1)
+        AND "createdAt" >= $3 AND "createdAt" < ($4::date + 1)${orderBranchFilter}
       ORDER BY "createdAt"`,
-    [supplierId, companyId, from, to],
-  ).catch(() => []);
+    orderParams,
+  ).catch((err) => {
+    // Table missing (older tenant pre-procurement) — return empty rather
+    // than blowing up the whole statement. Genuine SQL errors propagate
+    // to safeLoad via the outer try, which logs them at warn level.
+    if ((err as { code?: string })?.code === "42P01") return [];
+    throw err;
+  });
 
+  const paymentParams: unknown[] = [supplierId, companyId, from, to];
+  let paymentBranchFilter = "";
+  if (allowedBranches) {
+    paymentParams.push(allowedBranches);
+    paymentBranchFilter = ` AND "branchId" = ANY($${paymentParams.length}::int[])`;
+  }
   const payments = await rawQuery<Record<string, unknown>>(
     `SELECT ref, "createdAt" AS date, amount::float8 AS debit, 0 AS credit,
             CONCAT('سند صرف ', ref) AS description
        FROM payment_vouchers
       WHERE "supplierId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
-        AND "createdAt" >= $3 AND "createdAt" < ($4::date + 1)
+        AND "createdAt" >= $3 AND "createdAt" < ($4::date + 1)${paymentBranchFilter}
       ORDER BY "createdAt"`,
-    [supplierId, companyId, from, to],
-  ).catch(() => []);
+    paymentParams,
+  ).catch((err) => {
+    if ((err as { code?: string })?.code === "42P01") return [];
+    throw err;
+  });
 
   const all = [...orders, ...payments].sort(
     (a, b) => new Date(a.date as string).getTime() - new Date(b.date as string).getTime(),
