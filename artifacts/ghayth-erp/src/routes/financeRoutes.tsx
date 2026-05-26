@@ -44,6 +44,7 @@ const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
 const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
 const CostSplitter = lazy(() => import("@/pages/create/finance/cost-splitter"));
+const AccountTransfer = lazy(() => import("@/pages/create/finance/account-transfer"));
 const Budget = lazy(() => import("@/pages/finance/budget"));
 const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
@@ -267,4 +268,5 @@ export const financeRoutes = [
   { path: "/finance/recurring-journals/:id", component: RecurringJournalDetail },
   { path: "/finance/year-end-close", component: YearEndClose },
   { path: "/finance/treasury", component: Treasury },
+  { path: "/finance/treasury/transfer", component: AccountTransfer },
 ];
