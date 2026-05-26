@@ -15,7 +15,7 @@
  *   - Compose button (top right) opens a dialog that sends through
  *     the same DLP-aware backend
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { PageShell } from "@workspace/ui-core";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useMutation } from "@tanstack/react-query";
@@ -478,22 +478,82 @@ function CallsHelp() {
 
 // ─────────────────────── Compose dialog ─────────────────────────────────
 
-function ComposeDialog({ open, onClose, onSent }: {
-  open: boolean; onClose: () => void; onSent: () => void;
-}) {
-  const [channel, setChannel] = useState<Channel>("email");
-  const [recipient, setRecipient] = useState("");
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
-  const [dlpInfo, setDlpInfo] = useState<SendResult | null>(null);
+interface RecipientHit {
+  kind: "client" | "employee";
+  id: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  code: string;
+}
 
-  const reset = () => { setRecipient(""); setSubject(""); setBody(""); setDlpInfo(null); };
+interface TemplateRow {
+  id: number;
+  templateKey: string;
+  channel: string;
+  titleTemplate: string | null;
+  bodyTemplate: string;
+  variables: unknown;
+  language: string;
+  isDefault: boolean;
+}
+
+export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRecipient, initialSubject, initialBody, initialRelated }: {
+  open: boolean;
+  onClose: () => void;
+  onSent: () => void;
+  initialChannel?: Channel;
+  initialRecipient?: string;
+  initialSubject?: string;
+  initialBody?: string;
+  initialRelated?: { type: string; id: number };
+}) {
+  const [channel, setChannel] = useState<Channel>(initialChannel ?? "email");
+  const [recipient, setRecipient] = useState(initialRecipient ?? "");
+  const [recipientName, setRecipientName] = useState("");
+  const [subject, setSubject] = useState(initialSubject ?? "");
+  const [body, setBody] = useState(initialBody ?? "");
+  const [dlpInfo, setDlpInfo] = useState<SendResult | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const reset = () => { setRecipient(""); setRecipientName(""); setSubject(""); setBody(""); setDlpInfo(null); };
+
+  // Hydrate from props whenever the dialog opens with new initialX.
+  useEffect(() => {
+    if (open) {
+      if (initialChannel) setChannel(initialChannel);
+      if (initialRecipient !== undefined) setRecipient(initialRecipient);
+      if (initialSubject !== undefined) setSubject(initialSubject);
+      if (initialBody !== undefined) setBody(initialBody);
+    }
+  }, [open, initialChannel, initialRecipient, initialSubject, initialBody]);
+
+  // Recipient autocomplete — fires after 2 chars + 300ms debounce
+  // (debounce inlined via useDeferredValue alternative — keep simple).
+  const { data: searchResp } = useApiQuery<{ data: RecipientHit[] }>(
+    ["inbox-recipients", channel, recipient],
+    recipient.length >= 2 && !recipient.includes("@") && !recipient.startsWith("+") && showSuggestions
+      ? `/inbox/recipients/search?channel=${channel}&q=${encodeURIComponent(recipient)}`
+      : null,
+    { enabled: recipient.length >= 2 && showSuggestions },
+  );
+  const suggestions = searchResp?.data ?? [];
+
+  // Templates filtered to the current channel.
+  const { data: tmplResp } = useApiQuery<{ data: TemplateRow[] }>(
+    ["inbox-templates", channel],
+    `/inbox/templates?channel=${channel}`,
+  );
+  const templates = tmplResp?.data ?? [];
 
   const send = useMutation({
     mutationFn: () => apiFetch<SendResult>("/inbox/send", {
       method: "POST",
       body: JSON.stringify({
-        channel, recipient, subject: channel === "email" ? subject : undefined, body,
+        channel, recipient, recipientName: recipientName || undefined,
+        subject: channel === "email" ? subject : undefined, body,
+        relatedType: initialRelated?.type,
+        relatedId: initialRelated?.id,
       }),
     }),
     onSuccess: (r) => {
@@ -509,9 +569,21 @@ function ComposeDialog({ open, onClose, onSent }: {
     onError: (e: Error) => toast({ title: "فشل الإرسال", description: e.message, variant: "destructive" }),
   });
 
+  const pickRecipient = (hit: RecipientHit) => {
+    const addr = channel === "email" ? hit.email : hit.phone;
+    setRecipient(addr ?? "");
+    setRecipientName(hit.name);
+    setShowSuggestions(false);
+  };
+
+  const applyTemplate = (t: TemplateRow) => {
+    if (t.titleTemplate) setSubject(t.titleTemplate);
+    setBody(t.bodyTemplate);
+  };
+
   const placeholderRecipient = channel === "email"
-    ? "user@example.com"
-    : "+966500000000";
+    ? "user@example.com أو ابحث بالاسم"
+    : "+966500000000 أو ابحث بالاسم";
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); reset(); }}}>
@@ -535,7 +607,7 @@ function ComposeDialog({ open, onClose, onSent }: {
                     variant={channel === c ? "default" : "outline"}
                     size="sm"
                     type="button"
-                    onClick={() => setChannel(c)}
+                    onClick={() => { setChannel(c); setShowSuggestions(false); }}
                   >
                     <Icon className="w-4 h-4 me-1" />{meta.label}
                   </Button>
@@ -543,10 +615,56 @@ function ComposeDialog({ open, onClose, onSent }: {
               })}
             </div>
           </div>
-          <div>
-            <Label>المستلم</Label>
-            <Input value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder={placeholderRecipient} />
+          <div className="relative">
+            <Label>المستلم {recipientName && <span className="text-[10px] text-muted-foreground">({recipientName})</span>}</Label>
+            <Input
+              value={recipient}
+              onChange={(e) => { setRecipient(e.target.value); setShowSuggestions(true); setRecipientName(""); }}
+              onFocus={() => setShowSuggestions(true)}
+              placeholder={placeholderRecipient}
+            />
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute z-50 mt-1 w-full bg-card border rounded shadow-lg max-h-60 overflow-y-auto">
+                {suggestions.map((h) => (
+                  <button
+                    key={`${h.kind}-${h.id}`}
+                    type="button"
+                    className="w-full text-start p-2 hover:bg-surface-subtle text-xs border-b last:border-0"
+                    onClick={() => pickRecipient(h)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{h.name}</span>
+                      <Badge variant="outline" className="text-[9px]">
+                        {h.kind === "client" ? "عميل" : "موظف"}
+                      </Badge>
+                    </div>
+                    <p className="font-mono text-[10px] text-muted-foreground mt-0.5">
+                      {channel === "email" ? h.email : h.phone}
+                      {h.code && <span className="ms-2">#{h.code}</span>}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+          {templates.length > 0 && (
+            <div>
+              <Label className="text-xs">قالب جاهز (اختياري)</Label>
+              <Select value="" onValueChange={(v) => {
+                const t = templates.find((x) => String(x.id) === v);
+                if (t) applyTemplate(t);
+              }}>
+                <SelectTrigger className="text-xs"><SelectValue placeholder={`اختر قالب من ${templates.length} متاح`} /></SelectTrigger>
+                <SelectContent>
+                  {templates.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.templateKey} {t.isDefault && "★"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {channel === "email" && (
             <div>
               <Label>العنوان</Label>
