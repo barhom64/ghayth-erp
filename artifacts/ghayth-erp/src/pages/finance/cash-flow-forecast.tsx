@@ -1,9 +1,11 @@
+import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDateAr as formatDate } from "@/lib/formatters";
-import { TrendingUp, TrendingDown, DollarSign, Calendar, AlertCircle } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, Calendar, AlertCircle, Banknote, BarChart3 } from "lucide-react";
 import { PageShell } from "@workspace/ui-core";
 
 function ForecastCard({ label, days, data }: { label: string; days: string; data: any }) {
@@ -66,6 +68,28 @@ export default function CashFlowForecastPage() {
       subtitle="تحليل التدفقات النقدية المتوقعة خلال 30 و60 و90 يوم القادمة بناءً على الفواتير والمستحقات"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "توقعات التدفق النقدي" }]}
       loading={isLoading}
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/cash-13week">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Calendar className="h-3.5 w-3.5 ml-1" />
+              توقع 13 أسبوع
+            </Button>
+          </Link>
+          <Link href="/finance/cash-position-calculator">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Banknote className="h-3.5 w-3.5 ml-1" />
+              مركز السيولة
+            </Button>
+          </Link>
+          <Link href="/finance/cashflow">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <BarChart3 className="h-3.5 w-3.5 ml-1" />
+              لوحة التدفقات
+            </Button>
+          </Link>
+        </div>
+      }
     >
       {isLoading ? (
         <div className="text-center py-16 text-muted-foreground">جاري تحميل البيانات...</div>

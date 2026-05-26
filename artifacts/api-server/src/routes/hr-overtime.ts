@@ -336,6 +336,7 @@ router.post("/overtime", authorize({ feature: "hr.overtime", action: "create" })
         entityKey: "overtime",
         entityTable: "hr_overtime_requests",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       const result = await rawExecute(
         `INSERT INTO hr_overtime_requests
