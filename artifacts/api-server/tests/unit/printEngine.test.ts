@@ -331,4 +331,80 @@ describe("Print Engine v2 — substitute() resilience to bad data", () => {
       substitute({ template: "{{entity.itemsTable}}", data, branch, isThermal: false }),
     ).not.toThrow();
   });
+
+  it("formats numbers with thousand separators + 2 decimals", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const html = substitute({
+      template: "<p>{{entity.total}}</p><p>{{entity.qty}}</p>",
+      data: { entity: { id: 1, total: 1234567.89, qty: 100000 } },
+      branch,
+      isThermal: false,
+    });
+    expect(html).toContain("1,234,567.89");
+    expect(html).toContain("100,000");
+  });
+
+  it("formats numeric strings from the DB (NUMERIC columns)", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const html = substitute({
+      template: "<p>{{entity.subtotal}}</p>",
+      data: { entity: { id: 1, subtotal: "15000.5" } },
+      branch,
+      isThermal: false,
+    });
+    expect(html).toContain("15,000.50");
+  });
+
+  it("does NOT mangle SKU / reference strings starting with digits", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const html = substitute({
+      template: "<p>{{entity.ref}}</p><p>{{entity.sku}}</p>",
+      data: { entity: { id: 1, ref: "INV-2025-001", sku: "300SP-X" } },
+      branch,
+      isThermal: false,
+    });
+    expect(html).toContain("INV-2025-001");
+    expect(html).toContain("300SP-X");
+  });
+
+  it("auto-formats ISO date strings to Arabic locale (consistency)", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const html = substitute({
+      template: "<p>{{entity.createdAt}}</p><p>{{entity.dueDate}}</p>",
+      data: {
+        entity: {
+          id: 1,
+          createdAt: "2025-06-15T12:34:56.000Z",
+          dueDate: "2025-07-01",
+        },
+      },
+      branch,
+      isThermal: false,
+    });
+    // Should NOT contain the raw ISO timestamp.
+    expect(html).not.toContain("2025-06-15T12:34:56");
+    // The Arabic locale ("ar-SA") renders the year using Arabic-Indic
+    // digits — ٢٠٢٥ instead of 2025. Accept either since some Intl
+    // implementations may differ. Just verify the timestamp was converted
+    // (no longer contains "T" or "Z").
+    expect(html).not.toContain("T12:");
+    expect(html).not.toContain("000Z");
+  });
+
+  it("does NOT mangle date-like refs (year-prefixed strings)", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const html = substitute({
+      template: "<p>{{entity.ref}}</p>",
+      data: { entity: { id: 1, ref: "2025-INV-001" } },
+      branch,
+      isThermal: false,
+    });
+    // Hyphenated alphanumeric ref → left as-is (doesn't match ISO date shape)
+    expect(html).toContain("2025-INV-001");
+  });
 });
