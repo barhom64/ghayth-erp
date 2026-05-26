@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, KeyRound, ScrollText, UserCog, Lock, FileSearch, ShieldAlert,
-  Shield, Layers, GitBranch, AlertTriangle, Scale, Cog, Zap } from "lucide-react";
+  Shield, Layers, GitBranch, AlertTriangle, Scale, Cog, Zap, Radar, Bot, Radio, Phone, Target, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@workspace/ui-core";
 import { UsersTab } from "./admin/users-tab";
@@ -55,6 +55,12 @@ export default function AdminPage() {
             { label: "دورة الحياة", icon: GitBranch, color: "text-cyan-600 bg-cyan-50", path: "/admin/lifecycle-monitor" },
             { label: "مصفوفة الصلاحيات", icon: Lock, color: "text-indigo-600 bg-indigo-50", path: "/admin/rbac-matrix" },
             { label: "مطابقة الأستاذ", icon: Scale, color: "text-teal-600 bg-teal-50", path: "/admin/gl-reconciliation" },
+            { label: "مرصد المراقبة الموحّد", icon: Radar, color: "text-rose-600 bg-rose-50", path: "/admin/observability" },
+            { label: "حوكمة الذكاء الاصطناعي", icon: Bot, color: "text-fuchsia-600 bg-fuchsia-50", path: "/admin/ai-governance" },
+            { label: "مركز التحكّم بالاتصالات", icon: Radio, color: "text-sky-600 bg-sky-50", path: "/admin/communication-control" },
+            { label: "مركز التحكّم بالـ PBX", icon: Phone, color: "text-orange-600 bg-orange-50", path: "/admin/pbx-control" },
+            { label: "خارطة #1139 الحيّة", icon: Target, color: "text-amber-600 bg-amber-50", path: "/admin/master-plan" },
+            { label: "توجيه الإشعارات", icon: Bell, color: "text-violet-600 bg-violet-50", path: "/admin/notification-routing" },
           ].map((item) => (
             <Card
               key={item.path}

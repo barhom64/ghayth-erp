@@ -5,7 +5,7 @@
     "componentName": "Admin",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 21,
+    "routeLine": 25,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -16,7 +16,7 @@
     "componentName": "AdminUsers",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin/users.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 22,
+    "routeLine": 26,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -27,7 +27,7 @@
     "componentName": "AdminRoles",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin/roles.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 23,
+    "routeLine": 27,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -38,7 +38,7 @@
     "componentName": "AdminLogs",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin/logs.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 24,
+    "routeLine": 28,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -49,7 +49,7 @@
     "componentName": "AdminIntegrations",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-integrations.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 25,
+    "routeLine": 29,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -60,7 +60,18 @@
     "componentName": "AdminMonitoring",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-monitoring.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 26,
+    "routeLine": 30,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "admin",
+    "path": "/admin/observability",
+    "componentName": "AdminObservability",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/admin-observability.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
+    "routeLine": 31,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -71,7 +82,7 @@
     "componentName": "AdminViolationsReport",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-violations-report.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 27,
+    "routeLine": 32,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -82,7 +93,7 @@
     "componentName": "AdminSystemGovernor",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-system-governor.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 28,
+    "routeLine": 33,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -93,7 +104,7 @@
     "componentName": "AdminPolicyEngine",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-policy-engine.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 29,
+    "routeLine": 34,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -104,7 +115,7 @@
     "componentName": "AdminDomainRegistry",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-domain-registry.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 30,
+    "routeLine": 35,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -115,7 +126,7 @@
     "componentName": "AdminEventMonitor",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-event-monitor.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 31,
+    "routeLine": 36,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -126,7 +137,7 @@
     "componentName": "AdminPostingFailures",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-posting-failures.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 32,
+    "routeLine": 37,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -137,7 +148,7 @@
     "componentName": "AdminLifecycleMonitor",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-lifecycle-monitor.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 33,
+    "routeLine": 38,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -148,7 +159,7 @@
     "componentName": "AdminRbacMatrix",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-rbac-matrix.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 34,
+    "routeLine": 39,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -159,7 +170,7 @@
     "componentName": "AdminGlReconciliation",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-gl-reconciliation.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 35,
+    "routeLine": 40,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -170,7 +181,40 @@
     "componentName": "AdminSystemRegistry",
     "sourceFile": "artifacts/ghayth-erp/src/pages/admin-system-registry.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
-    "routeLine": 36,
+    "routeLine": 41,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "admin",
+    "path": "/admin/print-templates",
+    "componentName": "AdminPrintTemplates",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/admin/print-templates.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
+    "routeLine": 42,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "admin",
+    "path": "/admin/print-diagnostics",
+    "componentName": "AdminPrintDiagnostics",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/admin/print-diagnostics.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
+    "routeLine": 43,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "admin",
+    "path": "/admin/approval-overrides",
+    "componentName": "AdminApprovalOverrides",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/admin/approval-overrides-report.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/adminRoutes.tsx",
+    "routeLine": 44,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -181,7 +225,7 @@
     "componentName": "BI",
     "sourceFile": "artifacts/ghayth-erp/src/pages/bi.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/biRoutes.tsx",
-    "routeLine": 11,
+    "routeLine": 12,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -192,7 +236,7 @@
     "componentName": "BI",
     "sourceFile": "artifacts/ghayth-erp/src/pages/bi.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/biRoutes.tsx",
-    "routeLine": 12,
+    "routeLine": 13,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -203,7 +247,7 @@
     "componentName": "DashboardsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/bi/dashboards-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/biRoutes.tsx",
-    "routeLine": 13,
+    "routeLine": 14,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -214,7 +258,7 @@
     "componentName": "BI",
     "sourceFile": "artifacts/ghayth-erp/src/pages/bi.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/biRoutes.tsx",
-    "routeLine": 14,
+    "routeLine": 15,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -225,7 +269,7 @@
     "componentName": "KpisCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/bi/kpis-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/biRoutes.tsx",
-    "routeLine": 15,
+    "routeLine": 16,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -236,7 +280,7 @@
     "componentName": "BI",
     "sourceFile": "artifacts/ghayth-erp/src/pages/bi.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/biRoutes.tsx",
-    "routeLine": 16,
+    "routeLine": 17,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -247,7 +291,7 @@
     "componentName": "BiReportsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/bi/reports-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/biRoutes.tsx",
-    "routeLine": 17,
+    "routeLine": 18,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -258,7 +302,7 @@
     "componentName": "BiOperations",
     "sourceFile": "artifacts/ghayth-erp/src/pages/bi-operations.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/biRoutes.tsx",
-    "routeLine": 18,
+    "routeLine": 19,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -269,7 +313,18 @@
     "componentName": "BiAdminReports",
     "sourceFile": "artifacts/ghayth-erp/src/pages/bi-admin-reports.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/biRoutes.tsx",
-    "routeLine": 19,
+    "routeLine": 20,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "bi",
+    "path": "/reports/print-log",
+    "componentName": "PrintLog",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/reports/print-log.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/biRoutes.tsx",
+    "routeLine": 21,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -423,7 +478,18 @@
     "componentName": "Dashboard",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/dashboard.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 80,
+    "routeLine": 128,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/cfo-cockpit",
+    "componentName": "CfoCockpit",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/cfo-cockpit.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 129,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -434,7 +500,7 @@
     "componentName": "Accounts",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/accounts.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 81,
+    "routeLine": 130,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -445,7 +511,7 @@
     "componentName": "AccountsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/accounts-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 82,
+    "routeLine": 131,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -456,7 +522,7 @@
     "componentName": "AccountsEdit",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/accounts-edit.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 83,
+    "routeLine": 132,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -467,7 +533,183 @@
     "componentName": "AccountDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/account-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 84,
+    "routeLine": 133,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/tax-codes",
+    "componentName": "TaxCodes",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/tax-codes.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 137,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/tax-codes/create",
+    "componentName": "TaxCodesCreate",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/tax-codes-create.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 138,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/tax-codes/:id/edit",
+    "componentName": "TaxCodesEdit",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/tax-codes-edit.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 139,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/wht-categories",
+    "componentName": "WhtCategories",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/wht-categories.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 140,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/wht-categories/create",
+    "componentName": "WhtCategoriesCreate",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/wht-categories-create.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 141,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/wht-categories/:id/edit",
+    "componentName": "WhtCategoriesEdit",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/wht-categories-edit.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 142,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/reports/gl-integrity-gaps",
+    "componentName": "GlIntegrityGaps",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/gl-integrity-gaps.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 144,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/reports/unmapped-lines",
+    "componentName": "UnmappedLines",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/unmapped-lines.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 145,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/reports/wht-summary",
+    "componentName": "WhtSummary",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/wht-summary.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 146,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/reports/zatca",
+    "componentName": "ZatcaReportsHub",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/zatca-reports-hub.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 148,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/reports/lot-expiry-alerts",
+    "componentName": "LotExpiryAlerts",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/lot-expiry-alerts.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 150,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/reports/inventory-valuation",
+    "componentName": "InventoryValuation",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/inventory-valuation.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 152,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/reports/negative-stock",
+    "componentName": "NegativeStock",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/negative-stock.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 154,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/reports/inventory-turnover",
+    "componentName": "InventoryTurnover",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/inventory-turnover.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 156,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/reports/cogs-summary",
+    "componentName": "CogsSummary",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/cogs-summary.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 158,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/reports/vat-reconciliation",
+    "componentName": "VatReconciliation",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/vat-reconciliation.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 160,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -478,7 +720,7 @@
     "componentName": "Vouchers",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/vouchers.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 85,
+    "routeLine": 161,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -489,7 +731,7 @@
     "componentName": "VouchersCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/vouchers-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 86,
+    "routeLine": 162,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -500,7 +742,7 @@
     "componentName": "VoucherDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/voucher-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 87,
+    "routeLine": 163,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -511,7 +753,7 @@
     "componentName": "Journal",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/journal.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 88,
+    "routeLine": 164,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -522,7 +764,18 @@
     "componentName": "JournalCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/journal-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 89,
+    "routeLine": 165,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/journal/:id",
+    "componentName": "JournalDetail",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/journal-detail.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 166,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -533,7 +786,7 @@
     "componentName": "Invoices",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/invoices.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 90,
+    "routeLine": 167,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -544,7 +797,7 @@
     "componentName": "InvoicesCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/invoices-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 91,
+    "routeLine": 168,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -555,7 +808,7 @@
     "componentName": "InvoiceDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/invoice-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 92,
+    "routeLine": 169,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -566,7 +819,7 @@
     "componentName": "Expenses",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/expenses.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 93,
+    "routeLine": 170,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -577,7 +830,7 @@
     "componentName": "ExpensesCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/expenses-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 94,
+    "routeLine": 171,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -588,7 +841,7 @@
     "componentName": "ExpenseDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/expense-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 95,
+    "routeLine": 172,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -599,7 +852,7 @@
     "componentName": "Budget",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/budget.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 96,
+    "routeLine": 173,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -610,7 +863,7 @@
     "componentName": "BudgetCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/budget-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 97,
+    "routeLine": 174,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -621,7 +874,29 @@
     "componentName": "BudgetDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/budget-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 98,
+    "routeLine": 175,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/budget-variance",
+    "componentName": "BudgetVariance",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/budget-variance.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 176,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/budget-approvals",
+    "componentName": "BudgetApprovals",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/budget-approvals.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 177,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -632,7 +907,7 @@
     "componentName": "Vendors",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/vendors.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 99,
+    "routeLine": 178,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -643,7 +918,40 @@
     "componentName": "VendorsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/vendors-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 100,
+    "routeLine": 179,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/vendors/:id/edit",
+    "componentName": "VendorsEdit",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/vendors-edit.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 180,
+    "subKey": "vendors",
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/vendors/:id/statement",
+    "componentName": "VendorStatement",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/vendor-statement.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 181,
+    "subKey": "vendors",
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/contracts",
+    "componentName": "VendorContracts",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/vendor-contracts.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 182,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -654,8 +962,19 @@
     "componentName": "VendorDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/vendor-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 101,
+    "routeLine": 183,
     "subKey": "vendors",
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/purchase-requests",
+    "componentName": "PurchaseRequests",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/purchase-requests.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 184,
+    "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
   },
@@ -665,7 +984,7 @@
     "componentName": "PurchaseOrders",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/purchase-orders.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 102,
+    "routeLine": 185,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -676,7 +995,18 @@
     "componentName": "PurchaseOrdersCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/purchase-orders-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 103,
+    "routeLine": 186,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/payment-run",
+    "componentName": "PaymentRun",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/payment-run.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 187,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -687,7 +1017,238 @@
     "componentName": "PurchaseOrderDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/purchase-order-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 104,
+    "routeLine": 188,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/profitability/vehicle/:id",
+    "componentName": "ProfitabilityVehicle",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/profitability-vehicle.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 189,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/profitability/property/:id",
+    "componentName": "ProfitabilityProperty",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/profitability-property.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 190,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/profitability/project/:id",
+    "componentName": "ProfitabilityProject",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/profitability-project.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 191,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/profitability/umrah-agent/:id",
+    "componentName": "ProfitabilityUmrahAgent",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/profitability-umrah-agent.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 192,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/customer-advances",
+    "componentName": "CustomerAdvances",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/customer-advances.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 193,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/customer-advances/create",
+    "componentName": "CustomerAdvancesCreate",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/customer-advances-create.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 194,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/customer-advances/:id/apply",
+    "componentName": "CustomerAdvancesApply",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/customer-advances-apply.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 195,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/dunning",
+    "componentName": "Dunning",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/dunning.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 196,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/collection",
+    "componentName": "CollectionStages",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/collection-stages.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 197,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/bad-debt",
+    "componentName": "BadDebt",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/bad-debt.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 198,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/allocation-rules",
+    "componentName": "AllocationRules",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/allocation-rules.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 199,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/allocation-rules/create",
+    "componentName": "AllocationRuleCreate",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/allocation-rule-create.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 200,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/allocation-rules/:id/edit",
+    "componentName": "AllocationRuleEdit",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/allocation-rule-edit.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 201,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/overrides-report",
+    "componentName": "OverridesReport",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/overrides-report.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 202,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/allocation-results",
+    "componentName": "AllocationResults",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/allocation-results.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 203,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/cost-centers",
+    "componentName": "CostCenters",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/cost-centers.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 204,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/product-catalog",
+    "componentName": "ProductCatalog",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/product-catalog.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 205,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/fx-rates",
+    "componentName": "FxRates",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/fx-rates.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 206,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/fx-revaluation/history",
+    "componentName": "FxRevaluationHistory",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/fx-revaluation-history.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 207,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/settings",
+    "componentName": "SettingsHub",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/settings-hub.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 208,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/fx-revaluation",
+    "componentName": "FxRevaluation",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/fx-revaluation.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 209,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -698,7 +1259,7 @@
     "componentName": "FinancialReports",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/reports.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 105,
+    "routeLine": 210,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -709,7 +1270,7 @@
     "componentName": "TaxSystem",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/tax-system.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 106,
+    "routeLine": 211,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -720,7 +1281,7 @@
     "componentName": "Receivables",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/receivables.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 107,
+    "routeLine": 212,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -731,7 +1292,7 @@
     "componentName": "ReceivableDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/receivable-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 108,
+    "routeLine": 213,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -742,7 +1303,7 @@
     "componentName": "Payments",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/payments-page.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 109,
+    "routeLine": 214,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -753,7 +1314,7 @@
     "componentName": "Commitments",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/commitments.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 110,
+    "routeLine": 215,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -764,7 +1325,7 @@
     "componentName": "CommitmentDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/commitment-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 111,
+    "routeLine": 216,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -775,7 +1336,7 @@
     "componentName": "FinancialRequests",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/financial-requests.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 112,
+    "routeLine": 217,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -786,7 +1347,7 @@
     "componentName": "FinancialRequestDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/financial-request-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 113,
+    "routeLine": 218,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -797,7 +1358,7 @@
     "componentName": "Custodies",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/custodies.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 114,
+    "routeLine": 219,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -808,7 +1369,7 @@
     "componentName": "CustodyAgingReport",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/custody-aging-report.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 115,
+    "routeLine": 220,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -819,7 +1380,7 @@
     "componentName": "CustodyDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/custody-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 116,
+    "routeLine": 221,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -830,7 +1391,29 @@
     "componentName": "FiscalPeriods",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/fiscal-periods.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 117,
+    "routeLine": 222,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/fiscal-periods-v2",
+    "componentName": "FiscalPeriodsV2",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/fiscal-periods-v2.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 223,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "finance",
+    "path": "/finance/period-close-preflight",
+    "componentName": "PeriodClosePreflight",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/period-close-preflight.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
+    "routeLine": 224,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -841,7 +1424,7 @@
     "componentName": "SalaryAdvances",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/salary-advances.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 118,
+    "routeLine": 225,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -852,7 +1435,7 @@
     "componentName": "SalaryAdvanceDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/salary-advance-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 119,
+    "routeLine": 226,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -863,7 +1446,7 @@
     "componentName": "Ledger",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/ledger.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 120,
+    "routeLine": 227,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -874,7 +1457,7 @@
     "componentName": "ArAging",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/ar-aging.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 121,
+    "routeLine": 228,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -885,7 +1468,7 @@
     "componentName": "ApAging",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/ap-aging.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 122,
+    "routeLine": 229,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -896,7 +1479,7 @@
     "componentName": "BankReconciliation",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/bank-reconciliation.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 123,
+    "routeLine": 230,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -907,7 +1490,7 @@
     "componentName": "BankManualMatch",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/bank-manual-match.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 124,
+    "routeLine": 231,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -918,7 +1501,7 @@
     "componentName": "FixedAssets",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/fixed-assets.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 125,
+    "routeLine": 232,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -929,7 +1512,7 @@
     "componentName": "BatchDepreciate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/batch-depreciate.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 126,
+    "routeLine": 233,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -940,7 +1523,7 @@
     "componentName": "FixedAssetDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/fixed-asset-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 127,
+    "routeLine": 234,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -951,7 +1534,7 @@
     "componentName": "InventoryCosting",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/inventory-costing.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 128,
+    "routeLine": 235,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -962,7 +1545,7 @@
     "componentName": "BankGuarantees",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/bank-guarantees.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 129,
+    "routeLine": 236,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -973,7 +1556,7 @@
     "componentName": "JournalManual",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/journal-manual.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 130,
+    "routeLine": 237,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -984,7 +1567,7 @@
     "componentName": "JournalManualCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/journal-manual-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 131,
+    "routeLine": 238,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -995,7 +1578,7 @@
     "componentName": "JournalManualDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/journal-manual-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 132,
+    "routeLine": 239,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1006,7 +1589,7 @@
     "componentName": "GLPostingQueue",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/gl-posting-queue.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 133,
+    "routeLine": 240,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1017,7 +1600,7 @@
     "componentName": "Intercompany",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/intercompany.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 134,
+    "routeLine": 241,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1028,7 +1611,7 @@
     "componentName": "IntercompanyConsolidationCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/intercompany-consolidation-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 135,
+    "routeLine": 242,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1039,7 +1622,7 @@
     "componentName": "CashFlowForecast",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/cash-flow-forecast.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 136,
+    "routeLine": 243,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1050,7 +1633,7 @@
     "componentName": "ProjectCosting",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/project-costing.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 137,
+    "routeLine": 244,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1061,7 +1644,7 @@
     "componentName": "ProjectCostingDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/project-costing-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 138,
+    "routeLine": 245,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1072,7 +1655,7 @@
     "componentName": "CashflowDashboard",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/cashflow-dashboard.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 139,
+    "routeLine": 246,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1083,7 +1666,7 @@
     "componentName": "OpeningBalances",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/opening-balances.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 140,
+    "routeLine": 247,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1094,7 +1677,7 @@
     "componentName": "OpeningBalancesCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/opening-balances-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 141,
+    "routeLine": 248,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1105,7 +1688,7 @@
     "componentName": "RecurringJournals",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/recurring-journals.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 142,
+    "routeLine": 249,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1116,7 +1699,7 @@
     "componentName": "RecurringJournalsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/finance/recurring-journals-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 143,
+    "routeLine": 250,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1127,7 +1710,7 @@
     "componentName": "RecurringJournalDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/recurring-journal-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 144,
+    "routeLine": 251,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1138,7 +1721,7 @@
     "componentName": "YearEndClose",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/year-end-close.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 145,
+    "routeLine": 252,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1149,7 +1732,7 @@
     "componentName": "Treasury",
     "sourceFile": "artifacts/ghayth-erp/src/pages/finance/treasury.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/financeRoutes.tsx",
-    "routeLine": 146,
+    "routeLine": 253,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1160,7 +1743,7 @@
     "componentName": "Fleet",
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 31,
+    "routeLine": 30,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1171,7 +1754,7 @@
     "componentName": "VehiclesCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/vehicles-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 32,
+    "routeLine": 31,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1182,7 +1765,7 @@
     "componentName": "Drivers",
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/drivers.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 33,
+    "routeLine": 32,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1193,7 +1776,7 @@
     "componentName": "DriversCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/drivers-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 34,
+    "routeLine": 33,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1204,7 +1787,7 @@
     "componentName": "DriverDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/driver-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 35,
+    "routeLine": 34,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1215,7 +1798,7 @@
     "componentName": "Trips",
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/trips.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 36,
+    "routeLine": 35,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1226,7 +1809,7 @@
     "componentName": "TripsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/trips-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 37,
+    "routeLine": 36,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1237,7 +1820,7 @@
     "componentName": "TripDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/trip-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 38,
+    "routeLine": 37,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1248,7 +1831,7 @@
     "componentName": "FleetMaintenance",
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/maintenance.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 39,
+    "routeLine": 38,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1259,7 +1842,7 @@
     "componentName": "MaintenanceCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/maintenance-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 40,
+    "routeLine": 39,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1270,7 +1853,7 @@
     "componentName": "MaintenanceDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/maintenance-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 41,
+    "routeLine": 40,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1281,7 +1864,7 @@
     "componentName": "Fuel",
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/fuel.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 42,
+    "routeLine": 41,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1292,7 +1875,7 @@
     "componentName": "FuelCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/fuel-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 43,
+    "routeLine": 42,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1303,7 +1886,7 @@
     "componentName": "FuelDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/fuel-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 44,
+    "routeLine": 43,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1314,7 +1897,7 @@
     "componentName": "Insurance",
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/insurance.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 45,
+    "routeLine": 44,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1325,7 +1908,7 @@
     "componentName": "InsuranceCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/insurance-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 46,
+    "routeLine": 45,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1336,7 +1919,7 @@
     "componentName": "InsuranceDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/insurance-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 47,
+    "routeLine": 46,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1347,18 +1930,7 @@
     "componentName": "FleetAlerts",
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/alerts.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 48,
-    "subKey": null,
-    "minRoleLevel": null,
-    "sourceFileExists": true
-  },
-  {
-    "module": "fleet",
-    "path": "/fleet/alerts/create",
-    "componentName": "FleetAlertsCreate",
-    "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/alerts-create.tsx",
-    "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 49,
+    "routeLine": 47,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1369,7 +1941,7 @@
     "componentName": "FleetReports",
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/reports.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 50,
+    "routeLine": 48,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1380,7 +1952,7 @@
     "componentName": "PreventivePlans",
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/preventive-plans.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 51,
+    "routeLine": 49,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1391,7 +1963,7 @@
     "componentName": "TrafficViolations",
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/traffic-violations.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 52,
+    "routeLine": 50,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1402,7 +1974,7 @@
     "componentName": "TrafficViolationDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/traffic-violation-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 53,
+    "routeLine": 51,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1413,7 +1985,7 @@
     "componentName": "TCO",
     "sourceFile": "artifacts/ghayth-erp/src/pages/fleet/tco.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 54,
+    "routeLine": 52,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1424,7 +1996,7 @@
     "componentName": "VehicleStatusChange",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/fleet/vehicle-status-change.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 55,
+    "routeLine": 53,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1435,7 +2007,7 @@
     "componentName": "VehicleDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/vehicle-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/fleetRoutes.tsx",
-    "routeLine": 56,
+    "routeLine": 54,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1600,7 +2172,7 @@
     "componentName": "HR",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 87,
+    "routeLine": 94,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1611,7 +2183,7 @@
     "componentName": "Employees",
     "sourceFile": "artifacts/ghayth-erp/src/pages/employees.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 88,
+    "routeLine": 95,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1622,7 +2194,7 @@
     "componentName": "EmployeesCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/employees-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 89,
+    "routeLine": 96,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1633,7 +2205,7 @@
     "componentName": "EmployeeDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/employee-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 90,
+    "routeLine": 97,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1644,7 +2216,7 @@
     "componentName": "Attendance",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/attendance.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 91,
+    "routeLine": 98,
     "subKey": "attendance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1655,18 +2227,7 @@
     "componentName": "AttendanceCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/attendance-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 92,
-    "subKey": "attendance",
-    "minRoleLevel": null,
-    "sourceFileExists": true
-  },
-  {
-    "module": "hr",
-    "path": "/hr/attendance/:id",
-    "componentName": "AttendanceDetail",
-    "sourceFile": "artifacts/ghayth-erp/src/pages/details/attendance-detail.tsx",
-    "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 93,
+    "routeLine": 99,
     "subKey": "attendance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1677,7 +2238,7 @@
     "componentName": "AttendanceReports",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/attendance-reports.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 94,
+    "routeLine": 103,
     "subKey": "attendance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1688,7 +2249,7 @@
     "componentName": "FieldTracking",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/field-tracking.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 95,
+    "routeLine": 104,
     "subKey": "attendance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1699,7 +2260,29 @@
     "componentName": "QRScanner",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/qr-scanner.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 96,
+    "routeLine": 105,
+    "subKey": "attendance",
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "hr",
+    "path": "/hr/attendance/:id/edit",
+    "componentName": "AttendanceEdit",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/attendance-edit.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
+    "routeLine": 107,
+    "subKey": "attendance",
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "hr",
+    "path": "/hr/attendance/:id",
+    "componentName": "AttendanceDetail",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/details/attendance-detail.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
+    "routeLine": 108,
     "subKey": "attendance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1710,7 +2293,7 @@
     "componentName": "Leaves",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/leaves.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 97,
+    "routeLine": 109,
     "subKey": "leaves",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1721,18 +2304,7 @@
     "componentName": "LeavesCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/leaves-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 98,
-    "subKey": "leaves",
-    "minRoleLevel": null,
-    "sourceFileExists": true
-  },
-  {
-    "module": "hr",
-    "path": "/hr/leaves/:id",
-    "componentName": "LeaveDetail",
-    "sourceFile": "artifacts/ghayth-erp/src/pages/details/leave-detail.tsx",
-    "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 99,
+    "routeLine": 110,
     "subKey": "leaves",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1743,7 +2315,7 @@
     "componentName": "LeaveManagement",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/leave-management.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 100,
+    "routeLine": 112,
     "subKey": "leaves",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1754,7 +2326,29 @@
     "componentName": "ApprovalChains",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/approval-chains.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 101,
+    "routeLine": 113,
+    "subKey": "leaves",
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "hr",
+    "path": "/hr/leaves/:id/edit",
+    "componentName": "LeavesEdit",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/leaves-edit.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
+    "routeLine": 114,
+    "subKey": "leaves",
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "hr",
+    "path": "/hr/leaves/:id",
+    "componentName": "LeaveDetail",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/details/leave-detail.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
+    "routeLine": 115,
     "subKey": "leaves",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1765,7 +2359,7 @@
     "componentName": "Payroll",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/payroll.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 102,
+    "routeLine": 116,
     "subKey": "payroll",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1776,7 +2370,7 @@
     "componentName": "PayrollCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/payroll-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 103,
+    "routeLine": 117,
     "subKey": "payroll",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1787,7 +2381,7 @@
     "componentName": "SalaryComponents",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/salary-components.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 104,
+    "routeLine": 118,
     "subKey": "payroll",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1798,7 +2392,7 @@
     "componentName": "PayrollDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/payroll-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 105,
+    "routeLine": 119,
     "subKey": "payroll",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1809,7 +2403,7 @@
     "componentName": "Performance",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/performance.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 106,
+    "routeLine": 120,
     "subKey": "performance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1820,7 +2414,7 @@
     "componentName": "PerformanceCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/performance-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 107,
+    "routeLine": 121,
     "subKey": "performance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1831,7 +2425,7 @@
     "componentName": "PerformanceAdvanced",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/performance-advanced.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 108,
+    "routeLine": 122,
     "subKey": "performance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1842,7 +2436,7 @@
     "componentName": "PerformanceDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/performance-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 109,
+    "routeLine": 123,
     "subKey": "performance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1853,7 +2447,7 @@
     "componentName": "Training",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/training.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 110,
+    "routeLine": 124,
     "subKey": "training",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1864,7 +2458,7 @@
     "componentName": "TrainingCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/training-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 111,
+    "routeLine": 125,
     "subKey": "training",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1875,7 +2469,7 @@
     "componentName": "TrainingAdvanced",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/training-advanced.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 112,
+    "routeLine": 126,
     "subKey": "training",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1886,7 +2480,7 @@
     "componentName": "TrainingDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/training-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 113,
+    "routeLine": 127,
     "subKey": "training",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1897,7 +2491,7 @@
     "componentName": "Organization",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/organization.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 114,
+    "routeLine": 128,
     "subKey": "organization",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1908,7 +2502,7 @@
     "componentName": "OrganizationStructure",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/organization-structure.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 115,
+    "routeLine": 129,
     "subKey": "organization",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1919,7 +2513,7 @@
     "componentName": "Recruitment",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/recruitment.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 116,
+    "routeLine": 130,
     "subKey": "recruitment",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1930,7 +2524,7 @@
     "componentName": "RecruitmentCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/recruitment-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 117,
+    "routeLine": 131,
     "subKey": "recruitment",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1941,7 +2535,7 @@
     "componentName": "ApplicantsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/applicants-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 118,
+    "routeLine": 132,
     "subKey": "recruitment",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1952,7 +2546,7 @@
     "componentName": "ApplicationList",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/application-list.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 119,
+    "routeLine": 133,
     "subKey": "recruitment",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1963,7 +2557,7 @@
     "componentName": "RecruitmentAdvanced",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/recruitment-advanced.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 120,
+    "routeLine": 134,
     "subKey": "recruitment",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1974,7 +2568,7 @@
     "componentName": "JobDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/job-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 121,
+    "routeLine": 135,
     "subKey": "recruitment",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1985,7 +2579,7 @@
     "componentName": "Loans",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/loans.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 122,
+    "routeLine": 136,
     "subKey": "payroll",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -1996,7 +2590,7 @@
     "componentName": "LoansCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/loans-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 123,
+    "routeLine": 137,
     "subKey": "payroll",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2007,7 +2601,7 @@
     "componentName": "LoanDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/loan-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 124,
+    "routeLine": 138,
     "subKey": "payroll",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2018,7 +2612,7 @@
     "componentName": "Overtime",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/overtime.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 125,
+    "routeLine": 139,
     "subKey": "attendance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2029,7 +2623,7 @@
     "componentName": "OvertimeCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/overtime-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 126,
+    "routeLine": 140,
     "subKey": "attendance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2040,7 +2634,7 @@
     "componentName": "OvertimeDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/overtime-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 127,
+    "routeLine": 141,
     "subKey": "attendance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2051,7 +2645,7 @@
     "componentName": "ExitRequests",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/exit-requests.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 128,
+    "routeLine": 142,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2062,7 +2656,7 @@
     "componentName": "ExitCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/exit-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 129,
+    "routeLine": 143,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2073,7 +2667,7 @@
     "componentName": "ExitDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/exit-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 130,
+    "routeLine": 144,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2084,7 +2678,7 @@
     "componentName": "Violations",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/violations.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 131,
+    "routeLine": 145,
     "subKey": "violations",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2095,7 +2689,7 @@
     "componentName": "ViolationsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/violations-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 132,
+    "routeLine": 146,
     "subKey": "violations",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2106,7 +2700,7 @@
     "componentName": "ViolationsManagement",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/violations-management.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 133,
+    "routeLine": 147,
     "subKey": "violations",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2117,7 +2711,7 @@
     "componentName": "PenaltyEscalation",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/penalty-escalation.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 134,
+    "routeLine": 148,
     "subKey": "violations",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2128,7 +2722,7 @@
     "componentName": "AutoDetection",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/auto-detection.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 135,
+    "routeLine": 149,
     "subKey": "violations",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2139,7 +2733,7 @@
     "componentName": "ViolationDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/violation-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 136,
+    "routeLine": 150,
     "subKey": "violations",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2150,7 +2744,7 @@
     "componentName": "DisciplineRegulation",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/discipline-regulation.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 137,
+    "routeLine": 151,
     "subKey": "violations",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2161,7 +2755,7 @@
     "componentName": "DisciplineMemos",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/discipline-memos.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 138,
+    "routeLine": 152,
     "subKey": "violations",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2172,7 +2766,7 @@
     "componentName": "DisciplineMemoDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/discipline-memo-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 139,
+    "routeLine": 153,
     "subKey": "violations",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2183,7 +2777,7 @@
     "componentName": "Shifts",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/shifts.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 140,
+    "routeLine": 154,
     "subKey": "shifts",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2194,7 +2788,7 @@
     "componentName": "ShiftsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/shifts-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 141,
+    "routeLine": 155,
     "subKey": "shifts",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2205,7 +2799,7 @@
     "componentName": "ShiftsManagement",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/shifts-management.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 142,
+    "routeLine": 156,
     "subKey": "shifts",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2216,7 +2810,7 @@
     "componentName": "ShiftDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/shift-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 143,
+    "routeLine": 157,
     "subKey": "shifts",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2227,7 +2821,7 @@
     "componentName": "EmployeeProfile",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/employee-profile.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 144,
+    "routeLine": 158,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2238,7 +2832,7 @@
     "componentName": "EmployeeActivation",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/employee-activation.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 145,
+    "routeLine": 159,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2249,7 +2843,7 @@
     "componentName": "OnboardingReview",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/onboarding-review.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 146,
+    "routeLine": 160,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2260,7 +2854,7 @@
     "componentName": "Evaluation360Create",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/evaluation-360-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 147,
+    "routeLine": 161,
     "subKey": "performance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2271,7 +2865,7 @@
     "componentName": "Evaluation360History",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360-history.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 148,
+    "routeLine": 162,
     "subKey": "performance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2282,7 +2876,7 @@
     "componentName": "Evaluation360",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 149,
+    "routeLine": 163,
     "subKey": "performance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2293,7 +2887,7 @@
     "componentName": "Evaluation360Peer",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360-peer.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 150,
+    "routeLine": 164,
     "subKey": "performance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2304,7 +2898,7 @@
     "componentName": "Evaluation360Upward",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360-upward.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 151,
+    "routeLine": 165,
     "subKey": "performance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2315,7 +2909,7 @@
     "componentName": "Evaluation360Detail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/evaluation-360-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 152,
+    "routeLine": 166,
     "subKey": "performance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2326,8 +2920,41 @@
     "componentName": "PublicHolidays",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/public-holidays.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 153,
+    "routeLine": 167,
     "subKey": "leaves",
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "hr",
+    "path": "/hr/attendance-policy",
+    "componentName": "AttendancePolicy",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/attendance-policy.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
+    "routeLine": 168,
+    "subKey": "attendance",
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "hr",
+    "path": "/hr/delegations",
+    "componentName": "Delegations",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/delegations.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
+    "routeLine": 169,
+    "subKey": "employees",
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "hr",
+    "path": "/hr/accruals",
+    "componentName": "Accruals",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/accruals.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
+    "routeLine": 170,
+    "subKey": "payroll",
     "minRoleLevel": null,
     "sourceFileExists": true
   },
@@ -2337,7 +2964,18 @@
     "componentName": "Transfers",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/transfers.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 154,
+    "routeLine": 171,
+    "subKey": "employees",
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "hr",
+    "path": "/hr/transfers/:id/edit",
+    "componentName": "TransfersEdit",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/transfers-edit.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
+    "routeLine": 172,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2348,19 +2986,8 @@
     "componentName": "TransferDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/transfer-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 155,
+    "routeLine": 173,
     "subKey": "employees",
-    "minRoleLevel": null,
-    "sourceFileExists": true
-  },
-  {
-    "module": "hr",
-    "path": "/hr/development-plans",
-    "componentName": "DevelopmentPlans",
-    "sourceFile": "artifacts/ghayth-erp/src/pages/hr/development-plans.tsx",
-    "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 156,
-    "subKey": "performance",
     "minRoleLevel": null,
     "sourceFileExists": true
   },
@@ -2370,7 +2997,7 @@
     "componentName": "IDP",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/idp.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 157,
+    "routeLine": 174,
     "subKey": "performance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2381,7 +3008,7 @@
     "componentName": "Gratuity",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/gratuity.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 158,
+    "routeLine": 175,
     "subKey": "payroll",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2392,7 +3019,7 @@
     "componentName": "TurnoverReport",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/turnover-report.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 159,
+    "routeLine": 176,
     "subKey": "performance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2403,7 +3030,7 @@
     "componentName": "ExpiringDocuments",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/expiring-documents.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 160,
+    "routeLine": 177,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2414,7 +3041,7 @@
     "componentName": "Contracts",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/contracts.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 161,
+    "routeLine": 178,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2425,7 +3052,18 @@
     "componentName": "ContractsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/contracts-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 162,
+    "routeLine": 179,
+    "subKey": "employees",
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "hr",
+    "path": "/hr/contracts/:id/edit",
+    "componentName": "ContractsEdit",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/contracts-edit.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
+    "routeLine": 180,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2436,7 +3074,7 @@
     "componentName": "HrContractDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/hr-contract-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 163,
+    "routeLine": 181,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2447,7 +3085,7 @@
     "componentName": "OfficialLetters",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/official-letters.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 164,
+    "routeLine": 182,
     "subKey": "employees",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2458,7 +3096,7 @@
     "componentName": "ExcuseRequests",
     "sourceFile": "artifacts/ghayth-erp/src/pages/hr/excuse-requests.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 165,
+    "routeLine": 183,
     "subKey": "attendance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2469,7 +3107,18 @@
     "componentName": "ExcuseCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/excuse-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 166,
+    "routeLine": 184,
+    "subKey": "attendance",
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "hr",
+    "path": "/hr/excuse-requests/:id/edit",
+    "componentName": "ExcuseEdit",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/create/hr/excuse-edit.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
+    "routeLine": 185,
     "subKey": "attendance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2480,7 +3129,7 @@
     "componentName": "ExcuseDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/excuse-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/hrRoutes.tsx",
-    "routeLine": 167,
+    "routeLine": 186,
     "subKey": "attendance",
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2634,7 +3283,7 @@
     "componentName": "Dashboard",
     "sourceFile": "artifacts/ghayth-erp/src/pages/dashboard.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 63,
+    "routeLine": 65,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2645,7 +3294,7 @@
     "componentName": "MySpace",
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-space.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 64,
+    "routeLine": 66,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2656,7 +3305,7 @@
     "componentName": "MyRequests",
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-requests.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 65,
+    "routeLine": 67,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2667,7 +3316,7 @@
     "componentName": "MyLeaveRequest",
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-leave-request.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 66,
+    "routeLine": 68,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2678,7 +3327,7 @@
     "componentName": "MyAttendance",
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-attendance.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 67,
+    "routeLine": 69,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2689,7 +3338,7 @@
     "componentName": "MyPayslip",
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-payslip.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 68,
+    "routeLine": 70,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2700,7 +3349,7 @@
     "componentName": "MyPerformance",
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-performance.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 69,
+    "routeLine": 71,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2711,7 +3360,7 @@
     "componentName": "MyDocuments",
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-documents.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 70,
+    "routeLine": 72,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2722,7 +3371,7 @@
     "componentName": "MyLoans",
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-loans.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 71,
+    "routeLine": 73,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2733,7 +3382,7 @@
     "componentName": "MyOvertime",
     "sourceFile": "artifacts/ghayth-erp/src/pages/my-overtime.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 72,
+    "routeLine": 74,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2744,7 +3393,7 @@
     "componentName": "ActionCenter",
     "sourceFile": "artifacts/ghayth-erp/src/pages/action-center.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 73,
+    "routeLine": 75,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2755,7 +3404,7 @@
     "componentName": "Obligations",
     "sourceFile": "artifacts/ghayth-erp/src/pages/obligations.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 74,
+    "routeLine": 76,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2766,7 +3415,7 @@
     "componentName": "CalendarPage",
     "sourceFile": "artifacts/ghayth-erp/src/pages/calendar.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 75,
+    "routeLine": 77,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2777,7 +3426,7 @@
     "componentName": "ExecDashboard",
     "sourceFile": "artifacts/ghayth-erp/src/pages/exec-dashboard.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 76,
+    "routeLine": 78,
     "subKey": null,
     "minRoleLevel": 60,
     "sourceFileExists": true
@@ -2788,7 +3437,18 @@
     "componentName": "ManagerBoard",
     "sourceFile": "artifacts/ghayth-erp/src/pages/manager-board.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 77,
+    "routeLine": 79,
+    "subKey": null,
+    "minRoleLevel": 40,
+    "sourceFileExists": true
+  },
+  {
+    "module": "misc",
+    "path": "/manager-board/reprint-approvals",
+    "componentName": "ReprintApprovals",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/manager-board/reprint-approvals.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
+    "routeLine": 80,
     "subKey": null,
     "minRoleLevel": 40,
     "sourceFileExists": true
@@ -2799,7 +3459,7 @@
     "componentName": "OperationsCenter",
     "sourceFile": "artifacts/ghayth-erp/src/pages/operations-center.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 78,
+    "routeLine": 81,
     "subKey": null,
     "minRoleLevel": 40,
     "sourceFileExists": true
@@ -2810,7 +3470,7 @@
     "componentName": "DailyClose",
     "sourceFile": "artifacts/ghayth-erp/src/pages/daily-close.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 79,
+    "routeLine": 82,
     "subKey": null,
     "minRoleLevel": 40,
     "sourceFileExists": true
@@ -2821,7 +3481,7 @@
     "componentName": "Clients",
     "sourceFile": "artifacts/ghayth-erp/src/pages/clients.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 80,
+    "routeLine": 83,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2832,7 +3492,18 @@
     "componentName": "ClientsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/clients-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 81,
+    "routeLine": 84,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "crm",
+    "path": "/clients/:id/statement",
+    "componentName": "CustomerStatement",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/finance/customer-statement.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
+    "routeLine": 85,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2843,7 +3514,7 @@
     "componentName": "ClientDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/client-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 82,
+    "routeLine": 86,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2854,7 +3525,7 @@
     "componentName": "CRM",
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 83,
+    "routeLine": 87,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2865,7 +3536,7 @@
     "componentName": "CrmCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/crm-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 84,
+    "routeLine": 88,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2876,7 +3547,7 @@
     "componentName": "CRM",
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 85,
+    "routeLine": 89,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2887,7 +3558,7 @@
     "componentName": "CrmActivities",
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm/activities.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 86,
+    "routeLine": 90,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2898,7 +3569,7 @@
     "componentName": "LeadDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/crm/lead-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 87,
+    "routeLine": 91,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2909,7 +3580,7 @@
     "componentName": "OpportunityDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/opportunity-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 88,
+    "routeLine": 92,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2920,7 +3591,7 @@
     "componentName": "Projects",
     "sourceFile": "artifacts/ghayth-erp/src/pages/projects.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 89,
+    "routeLine": 93,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2931,7 +3602,7 @@
     "componentName": "ProjectsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/projects-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 90,
+    "routeLine": 94,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2942,7 +3613,7 @@
     "componentName": "Tasks",
     "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 91,
+    "routeLine": 95,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2953,7 +3624,7 @@
     "componentName": "ProjectGantt",
     "sourceFile": "artifacts/ghayth-erp/src/pages/projects/gantt.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 92,
+    "routeLine": 96,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2964,7 +3635,7 @@
     "componentName": "ProjectRisks",
     "sourceFile": "artifacts/ghayth-erp/src/pages/projects/risks.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 93,
+    "routeLine": 97,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2975,7 +3646,7 @@
     "componentName": "ProjectDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/project-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 94,
+    "routeLine": 98,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2986,7 +3657,7 @@
     "componentName": "Warehouse",
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 95,
+    "routeLine": 99,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -2997,7 +3668,7 @@
     "componentName": "WarehouseCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 96,
+    "routeLine": 100,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3008,7 +3679,7 @@
     "componentName": "WarehouseMovementsCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse/movements-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 97,
+    "routeLine": 101,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3019,7 +3690,7 @@
     "componentName": "WarehouseCategoriesCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse/categories-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 98,
+    "routeLine": 102,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3030,7 +3701,7 @@
     "componentName": "WarehouseSuppliersCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/warehouse/suppliers-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 99,
+    "routeLine": 103,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3041,7 +3712,7 @@
     "componentName": "WarehouseProductDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-product-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 100,
+    "routeLine": 104,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3052,7 +3723,7 @@
     "componentName": "WarehouseMovementDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-movement-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 101,
+    "routeLine": 105,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3063,7 +3734,7 @@
     "componentName": "WarehouseCategoryDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-category-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 102,
+    "routeLine": 106,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3074,7 +3745,7 @@
     "componentName": "WarehouseSupplierDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/warehouse-supplier-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 103,
+    "routeLine": 107,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3085,7 +3756,7 @@
     "componentName": "Warehouse",
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 104,
+    "routeLine": 108,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3096,7 +3767,7 @@
     "componentName": "Warehouse",
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 105,
+    "routeLine": 109,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3107,7 +3778,7 @@
     "componentName": "Warehouse",
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 106,
+    "routeLine": 110,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3118,7 +3789,7 @@
     "componentName": "InventoryCount",
     "sourceFile": "artifacts/ghayth-erp/src/pages/warehouse/inventory-count.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 107,
+    "routeLine": 111,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3129,7 +3800,7 @@
     "componentName": "SupportCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/support-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 108,
+    "routeLine": 112,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3140,7 +3811,7 @@
     "componentName": "SupportReplies",
     "sourceFile": "artifacts/ghayth-erp/src/pages/support/replies.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 109,
+    "routeLine": 113,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3151,7 +3822,7 @@
     "componentName": "KnowledgeBase",
     "sourceFile": "artifacts/ghayth-erp/src/pages/support/kb.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 110,
+    "routeLine": 114,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3162,7 +3833,7 @@
     "componentName": "TicketDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/ticket-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 111,
+    "routeLine": 115,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3173,7 +3844,7 @@
     "componentName": "Support",
     "sourceFile": "artifacts/ghayth-erp/src/pages/support.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 112,
+    "routeLine": 116,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3184,7 +3855,7 @@
     "componentName": "Marketing",
     "sourceFile": "artifacts/ghayth-erp/src/pages/marketing.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 113,
+    "routeLine": 117,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3195,7 +3866,7 @@
     "componentName": "MarketingCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/marketing-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 114,
+    "routeLine": 118,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3206,7 +3877,7 @@
     "componentName": "TasksCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/create/tasks-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 115,
+    "routeLine": 119,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3217,7 +3888,7 @@
     "componentName": "TaskDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/task-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 116,
+    "routeLine": 120,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3228,7 +3899,7 @@
     "componentName": "Tasks",
     "sourceFile": "artifacts/ghayth-erp/src/pages/tasks.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 117,
+    "routeLine": 121,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3239,7 +3910,7 @@
     "componentName": "Notifications",
     "sourceFile": "artifacts/ghayth-erp/src/pages/notifications.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 118,
+    "routeLine": 122,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3250,7 +3921,7 @@
     "componentName": "Intelligence",
     "sourceFile": "artifacts/ghayth-erp/src/pages/intelligence.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 119,
+    "routeLine": 123,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3261,7 +3932,7 @@
     "componentName": "Insights",
     "sourceFile": "artifacts/ghayth-erp/src/pages/insights.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 120,
+    "routeLine": 124,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3272,7 +3943,7 @@
     "componentName": "Automation",
     "sourceFile": "artifacts/ghayth-erp/src/pages/automation.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 121,
+    "routeLine": 125,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3283,7 +3954,7 @@
     "componentName": "ActivityLog",
     "sourceFile": "artifacts/ghayth-erp/src/pages/activity-log.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 122,
+    "routeLine": 126,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3294,7 +3965,7 @@
     "componentName": "ModuleDashboards",
     "sourceFile": "artifacts/ghayth-erp/src/pages/module-dashboards.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 123,
+    "routeLine": 127,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3305,7 +3976,7 @@
     "componentName": "ScheduledReports",
     "sourceFile": "artifacts/ghayth-erp/src/pages/reports/scheduled-reports.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/miscRoutes.tsx",
-    "routeLine": 124,
+    "routeLine": 128,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3712,7 +4383,7 @@
     "componentName": "Settings",
     "sourceFile": "artifacts/ghayth-erp/src/pages/settings.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/settingsRoutes.tsx",
-    "routeLine": 7,
+    "routeLine": 8,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3723,7 +4394,7 @@
     "componentName": "Settings",
     "sourceFile": "artifacts/ghayth-erp/src/pages/settings.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/settingsRoutes.tsx",
-    "routeLine": 8,
+    "routeLine": 9,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3734,7 +4405,7 @@
     "componentName": "Settings",
     "sourceFile": "artifacts/ghayth-erp/src/pages/settings.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/settingsRoutes.tsx",
-    "routeLine": 9,
+    "routeLine": 10,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3745,7 +4416,7 @@
     "componentName": "Settings",
     "sourceFile": "artifacts/ghayth-erp/src/pages/settings.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/settingsRoutes.tsx",
-    "routeLine": 10,
+    "routeLine": 11,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3756,7 +4427,7 @@
     "componentName": "Settings",
     "sourceFile": "artifacts/ghayth-erp/src/pages/settings.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/settingsRoutes.tsx",
-    "routeLine": 11,
+    "routeLine": 12,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3767,7 +4438,18 @@
     "componentName": "SettingsRules",
     "sourceFile": "artifacts/ghayth-erp/src/pages/settings-rules.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/settingsRoutes.tsx",
-    "routeLine": 12,
+    "routeLine": 13,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "settings",
+    "path": "/settings/print-templates",
+    "componentName": "PrintTemplates",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/settings/print-templates.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/settingsRoutes.tsx",
+    "routeLine": 14,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3844,7 +4526,7 @@
     "componentName": "UmrahDashboard",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/dashboard.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 48,
+    "routeLine": 49,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3855,7 +4537,7 @@
     "componentName": "UmrahPilgrims",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrims.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 49,
+    "routeLine": 50,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3866,7 +4548,7 @@
     "componentName": "PilgrimCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrim-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 50,
+    "routeLine": 51,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3877,7 +4559,7 @@
     "componentName": "PilgrimDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pilgrim-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 51,
+    "routeLine": 52,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3888,7 +4570,7 @@
     "componentName": "UmrahAgents",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/agents.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 52,
+    "routeLine": 53,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3899,7 +4581,7 @@
     "componentName": "UmrahAgentDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-agent-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 53,
+    "routeLine": 54,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3910,7 +4592,7 @@
     "componentName": "UmrahSeasons",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/seasons.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 54,
+    "routeLine": 55,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3921,7 +4603,7 @@
     "componentName": "UmrahSeasonDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-season-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 55,
+    "routeLine": 56,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3932,7 +4614,7 @@
     "componentName": "UmrahPenalties",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/penalties.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 56,
+    "routeLine": 57,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3943,7 +4625,7 @@
     "componentName": "UmrahPenaltyDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-penalty-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 57,
+    "routeLine": 58,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3954,7 +4636,7 @@
     "componentName": "UmrahInvoices",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/invoices.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 58,
+    "routeLine": 59,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3965,7 +4647,7 @@
     "componentName": "UmrahInvoiceDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-invoice-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 59,
+    "routeLine": 60,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3976,7 +4658,7 @@
     "componentName": "UmrahPackages",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/packages.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 60,
+    "routeLine": 61,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3987,7 +4669,7 @@
     "componentName": "UmrahPackageDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-package-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 61,
+    "routeLine": 62,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -3998,7 +4680,7 @@
     "componentName": "UmrahTransport",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/transport.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 62,
+    "routeLine": 63,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4009,7 +4691,7 @@
     "componentName": "UmrahTransportDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-transport-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 63,
+    "routeLine": 64,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4020,7 +4702,7 @@
     "componentName": "UmrahImport",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/import.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 65,
+    "routeLine": 66,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4031,7 +4713,7 @@
     "componentName": "UmrahSubAgents",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/sub-agents.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 67,
+    "routeLine": 68,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4042,7 +4724,7 @@
     "componentName": "UmrahSubAgentDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-sub-agent-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 68,
+    "routeLine": 69,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4053,7 +4735,18 @@
     "componentName": "UmrahPricing",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/pricing.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 69,
+    "routeLine": 70,
+    "subKey": null,
+    "minRoleLevel": null,
+    "sourceFileExists": true
+  },
+  {
+    "module": "operations",
+    "path": "/umrah/sales-wizard",
+    "componentName": "UmrahSalesWizard",
+    "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/sales-wizard.tsx",
+    "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
+    "routeLine": 71,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4064,7 +4757,7 @@
     "componentName": "UmrahCommissionPlans",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plans.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 70,
+    "routeLine": 72,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4075,7 +4768,7 @@
     "componentName": "UmrahCommissionPlanEditor",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 71,
+    "routeLine": 73,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4086,7 +4779,7 @@
     "componentName": "UmrahCommissionPlanEditor",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 72,
+    "routeLine": 74,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4097,7 +4790,7 @@
     "componentName": "UmrahViolations",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/violations.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 73,
+    "routeLine": 75,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4108,7 +4801,7 @@
     "componentName": "UmrahViolationCreate",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/violation-create.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 74,
+    "routeLine": 76,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4119,7 +4812,7 @@
     "componentName": "UmrahViolationDetail",
     "sourceFile": "artifacts/ghayth-erp/src/pages/details/umrah-violation-detail.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 75,
+    "routeLine": 77,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4130,7 +4823,7 @@
     "componentName": "UmrahImportWizard",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/import-wizard.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 76,
+    "routeLine": 78,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4141,7 +4834,7 @@
     "componentName": "UmrahDailyRunsheet",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/daily-runsheet.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 77,
+    "routeLine": 79,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4152,7 +4845,7 @@
     "componentName": "UmrahReconciliation",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/reconciliation.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 78,
+    "routeLine": 80,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4163,7 +4856,7 @@
     "componentName": "UmrahGroups",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/groups.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 79,
+    "routeLine": 81,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
@@ -4174,7 +4867,7 @@
     "componentName": "UmrahAttachments",
     "sourceFile": "artifacts/ghayth-erp/src/pages/umrah/attachments.tsx",
     "routeFile": "artifacts/ghayth-erp/src/routes/umrahRoutes.tsx",
-    "routeLine": 80,
+    "routeLine": 82,
     "subKey": null,
     "minRoleLevel": null,
     "sourceFileExists": true
