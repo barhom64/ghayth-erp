@@ -550,6 +550,28 @@ export async function previewNextNumber(params: {
  * but nobody enforced it. Now overrideNumber + voidNumber both gate
  * on this check, and the result is appended to the audit row.
  */
+/**
+ * Status-column candidates. Different executive tables encode their
+ * lifecycle on different column names:
+ *   - most use `status` (text)
+ *   - employee_contracts uses `approvalStatus` (the `status` column
+ *     is generic 'draft'/'active'/'terminated' but the approval gate
+ *     lives in approvalStatus)
+ *   - some entities have both — we check the most specific first
+ *     so a "pending_approval" approval state wins over a generic
+ *     "draft" status when both exist.
+ *
+ * Order matters. Add new column names at the front if they're more
+ * specific to a lifecycle gate, at the back if they're a fallback.
+ */
+const STATUS_COLUMN_CANDIDATES = [
+  "approvalStatus",
+  "status",
+  "state",
+  "currentStatus",
+  "documentStatus",
+] as const;
+
 export async function readEntityStatus(params: {
   entityTable: string;
   entityId: number | null;
@@ -559,16 +581,35 @@ export async function readEntityStatus(params: {
   // numbering_schemes.defaultEntityTable, but we still validate the
   // shape because the assignment row's entityTable column is free-form.
   if (!/^[a-zA-Z_][a-zA-Z0-9_]{0,62}$/.test(params.entityTable)) return null;
+
+  // information_schema.columns is the cheapest way to discover which
+  // status-like column this table actually owns — without it we'd
+  // either silently fall back to "no status" (lawyer's point #7:
+  // approvalStatus tables aren't covered) or burn 5 round-trips per
+  // gate check trying every candidate. One small query, one round-
+  // trip, exhaustive coverage.
+  const cols = await rawQuery<{ column_name: string }>(
+    `SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = $1
+        AND column_name = ANY($2::text[])`,
+    [params.entityTable, STATUS_COLUMN_CANDIDATES as unknown as string[]],
+  ).catch(() => [] as { column_name: string }[]);
+
+  if (cols.length === 0) return null;
+
+  // Pick the most-specific column the table actually has, in the
+  // order declared above (approvalStatus beats status beats state…).
+  const present = new Set(cols.map((c) => c.column_name));
+  const pick = STATUS_COLUMN_CANDIDATES.find((c) => present.has(c));
+  if (!pick) return null;
+
   try {
-    const rows = await rawQuery<{ status: string | null }>(
-      `SELECT status::text FROM "${params.entityTable}" WHERE id = $1 LIMIT 1`,
+    const rows = await rawQuery<{ value: string | null }>(
+      `SELECT "${pick}"::text AS value FROM "${params.entityTable}" WHERE id = $1 LIMIT 1`,
       [params.entityId],
     );
-    return rows[0]?.status ?? null;
+    return rows[0]?.value ?? null;
   } catch {
-    // Some executive tables don't have a `status` column (e.g.
-    // employees uses isActive). Treat as "no status" — the policy
-    // simply doesn't apply to entities without a status field.
     return null;
   }
 }
