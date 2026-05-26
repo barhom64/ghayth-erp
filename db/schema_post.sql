@@ -2198,6 +2198,13 @@ ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_
 
 
 --
+-- Name: vendor_secrets id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vendor_secrets ALTER COLUMN id SET DEFAULT nextval('public.vendor_secrets_id_seq'::regclass);
+
+
+--
 -- Name: vouchers id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -5401,6 +5408,22 @@ ALTER TABLE ONLY public.users
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: vendor_secrets vendor_secrets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vendor_secrets
+    ADD CONSTRAINT vendor_secrets_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: vendor_secrets vendor_secrets_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vendor_secrets
+    ADD CONSTRAINT vendor_secrets_slug_key UNIQUE (slug);
 
 
 --
@@ -9937,6 +9960,90 @@ CREATE INDEX mudad_settlements_journal_idx ON public.mudad_settlements USING btr
 
 
 --
+-- Name: numbering_assignments_entity_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_assignments_entity_idx ON public.numbering_assignments USING btree ("entityTable", "entityId");
+
+
+--
+-- Name: numbering_assignments_scheme_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_assignments_scheme_idx ON public.numbering_assignments USING btree ("schemeId");
+
+
+--
+-- Name: numbering_assignments_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_assignments_status_idx ON public.numbering_assignments USING btree (status);
+
+
+--
+-- Name: numbering_assignments_unique_number; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX numbering_assignments_unique_number ON public.numbering_assignments USING btree ("companyId", "moduleKey", "entityKey", number);
+
+
+--
+-- Name: numbering_audit_logs_assignment_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_audit_logs_assignment_idx ON public.numbering_audit_logs USING btree ("assignmentId");
+
+
+--
+-- Name: numbering_audit_logs_company_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_audit_logs_company_idx ON public.numbering_audit_logs USING btree ("companyId");
+
+
+--
+-- Name: numbering_audit_logs_created_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_audit_logs_created_idx ON public.numbering_audit_logs USING btree ("createdAt");
+
+
+--
+-- Name: numbering_audit_logs_scheme_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_audit_logs_scheme_idx ON public.numbering_audit_logs USING btree ("schemeId");
+
+
+--
+-- Name: numbering_counters_company_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_counters_company_idx ON public.numbering_counters USING btree ("companyId");
+
+
+--
+-- Name: numbering_counters_unique_scope; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX numbering_counters_unique_scope ON public.numbering_counters USING btree ("schemeId", COALESCE("branchId", 0), COALESCE("fiscalYear", 0), COALESCE(period, ''::text), COALESCE("seasonId", 0));
+
+
+--
+-- Name: numbering_schemes_company_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_schemes_company_idx ON public.numbering_schemes USING btree ("companyId");
+
+
+--
+-- Name: numbering_schemes_module_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_schemes_module_idx ON public.numbering_schemes USING btree ("moduleKey");
+
+
+--
 -- Name: official_letters_branch_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13903,5 +14010,5 @@ ALTER TABLE ONLY public.zatca_submission_log
 -- PostgreSQL database dump complete
 --
 
-\unrestrict zDFIG1Auz2JQApfYXugRb3zFxheStbGRyEbPyfdYKjUNLWjoUMKsaAt3kBHQsa9
+\unrestrict NBRaaBJcUZhwI8jcWlHvf1SMzkzMwjvHohkUT6KaiqbjaZoO0Zc1cKB4vuq83By
 
