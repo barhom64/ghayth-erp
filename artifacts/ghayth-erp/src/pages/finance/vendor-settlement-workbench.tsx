@@ -410,10 +410,18 @@ export default function VendorSettlementWorkbenchPage() {
                             </Link>
                           )}
                           {v.supplierId && (
-                            <Link href={`/finance/vendors/${v.supplierId}`}>
+                            <Link href={`/finance/vendor-360-sheet?vendorId=${v.supplierId}`}>
+                              <Button size="sm" variant="outline">
+                                <Users className="w-4 h-4 ml-1" />
+                                ملف المورد 360°
+                              </Button>
+                            </Link>
+                          )}
+                          {v.supplierId && (
+                            <Link href={`/finance/vendor-statement-print?vendorId=${v.supplierId}`}>
                               <Button size="sm" variant="outline">
                                 <FileText className="w-4 h-4 ml-1" />
-                                ملف المورد
+                                كشف الحساب
                               </Button>
                             </Link>
                           )}
