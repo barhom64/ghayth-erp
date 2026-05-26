@@ -421,7 +421,10 @@ d("Numbering center — dynamic (real Postgres)", () => {
         });
       } catch (err: any) {
         blocked = true;
-        expect(err.message).toContain("هذه الحالة مقفلة");
+        // voidNumber's gate surfaces a slightly different Arabic
+        // message than overrideNumber's; both prove the same thing —
+        // the lockAfterStatuses policy was respected.
+        expect(err.message).toMatch(/بعد دخوله حالة|هذه الحالة مقفلة/);
       }
       expect(blocked).toBe(true);
     });
