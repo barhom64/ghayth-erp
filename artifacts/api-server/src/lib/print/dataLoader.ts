@@ -143,6 +143,8 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadStockTransfer(companyId, entityId);
     case "stock_adjustment":
       return await loadStockAdjustment(companyId, entityId);
+    case "inventory_count":
+      return await loadInventoryCount(companyId, entityId);
     case "item_barcode_label":
       return await loadItemBarcode(companyId, entityId);
     case "job":
@@ -153,9 +155,23 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "loan_request":
     case "loan":
       return await loadLoanRequest(companyId, entityId);
+    case "excuse_request":
+      return await loadExcuseRequest(companyId, entityId);
+    case "transfer":
+      return await loadEmployeeTransfer(companyId, entityId);
+    case "attendance":
+      return await loadAttendance(companyId, entityId);
+    case "discipline_memo":
+      return await loadDisciplineMemo(companyId, entityId);
+    case "fleet_maintenance":
+      return await loadFleetMaintenance(companyId, entityId);
+    case "insurance_policy":
+    case "insurance":
+      return await loadInsurancePolicy(companyId, entityId);
     case "maintenance_request":
       return await loadMaintenanceRequest(companyId, entityId);
     case "payroll":
+    case "payroll_run":
       return await loadPayrollRun(companyId, entityId);
     case "payslip":
       return await loadPayslip(companyId, entityId);
@@ -417,19 +433,126 @@ async function loadAccountStatement(companyId: number, id: string) {
 }
 
 async function loadStockTransfer(companyId: number, id: string) {
-  return await loadGeneric("stock_transfers", id, companyId);
+  // The "stock transfer" entityType is virtual: the DB stores per-line moves
+  // in warehouse_movements with type='transfer'. There's no per-document
+  // table. We treat one warehouse_movements row as the printable transfer,
+  // and JOIN the product so {{entity.productName}}/sku resolve correctly.
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT m.id, m.reference AS ref, m."createdAt", m.status,
+            m."fromLocation" AS "fromWarehouseName",
+            m."toLocation"   AS "toWarehouseName",
+            m.notes AS reason,
+            wp.name AS "productName",
+            wp.sku  AS sku,
+            wp.unit AS unit,
+            m.quantity::numeric AS quantity,
+            u.name AS "createdByName"
+     FROM warehouse_movements m
+     LEFT JOIN warehouse_products wp ON wp.id = m."productId"
+     LEFT JOIN users u ON u.id = m."createdBy"
+     WHERE m.id = $1 AND m."companyId" = $2 AND m.type = 'transfer'
+     LIMIT 1`,
+    [id, companyId]
+  );
+  if (!row) return { entity: { id } };
+  // Wrap the single product as a one-row items[] so the preset's #each items
+  // loop renders a real table row (preset can also use {{entity.productName}}).
+  return {
+    entity: row,
+    items: [{
+      productName: row.productName,
+      sku: row.sku,
+      quantity: row.quantity,
+      unit: row.unit,
+    }],
+  };
 }
 
 async function loadStockAdjustment(companyId: number, id: string) {
-  return await loadGeneric("stock_adjustments", id, companyId);
+  // Mirrors loadStockTransfer — same table, type='adjustment'. Stores old/new
+  // qty in unitCost (legacy)/quantity; presets render the variance.
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT m.id, m.reference AS ref, m."createdAt", m.status,
+            m."toLocation" AS "warehouseName",
+            m.type AS "adjustmentType",
+            m.notes AS reason,
+            wp.name AS "productName",
+            wp.sku  AS sku,
+            wp.unit AS unit,
+            m.quantity::numeric AS quantity,
+            COALESCE(m."remainingQty", 0)::numeric AS "newQuantity",
+            (COALESCE(m."remainingQty", 0) - m.quantity)::numeric AS variance,
+            u.name AS "createdByName"
+     FROM warehouse_movements m
+     LEFT JOIN warehouse_products wp ON wp.id = m."productId"
+     LEFT JOIN users u ON u.id = m."createdBy"
+     WHERE m.id = $1 AND m."companyId" = $2 AND m.type IN ('adjustment', 'in', 'out', 'damage')
+     LIMIT 1`,
+    [id, companyId]
+  );
+  if (!row) return { entity: { id } };
+  return {
+    entity: row,
+    items: [{
+      productName: row.productName,
+      oldQuantity: row.quantity,
+      newQuantity: row.newQuantity,
+      variance: row.variance,
+    }],
+  };
+}
+
+async function loadInventoryCount(companyId: number, id: string) {
+  // Inventory count header + line items joined to warehouse_products so the
+  // preset shows real names + skus + variance per item.
+  const [header] = await rawQuery<Record<string, unknown>>(
+    `SELECT ic.id, ic."countDate", ic.status, ic.notes,
+            ic."warehouseLocation" AS "warehouseName",
+            u1.name AS "assigneeName",
+            u2.name AS "approvedByName",
+            ic."approvedAt"
+     FROM inventory_counts ic
+     LEFT JOIN users u1 ON u1.id = ic."conductedBy"
+     LEFT JOIN users u2 ON u2.id = ic."approvedBy"
+     WHERE ic.id = $1 AND ic."companyId" = $2
+     LIMIT 1`,
+    [id, companyId]
+  );
+  if (!header) return { entity: { id } };
+  const lines = await rawQuery<Record<string, unknown>>(
+    `SELECT ici.id, wp.name AS "productName", wp.sku, wp.unit,
+            ici."systemStock"::numeric AS "expectedQty",
+            ici."physicalCount"::numeric AS "actualQty",
+            ici.variance::numeric AS variance,
+            ici.notes
+     FROM inventory_count_items ici
+     LEFT JOIN warehouse_products wp ON wp.id = ici."productId"
+     WHERE ici."countId" = $1
+     ORDER BY ici.id`,
+    [id]
+  );
+  return {
+    entity: {
+      ...header,
+      ref: `IC-${header.id}`,
+      lineCount: lines.length,
+    },
+    items: lines,
+  };
 }
 
 async function loadItemBarcode(companyId: number, id: string) {
+  // warehouse_products has no `barcode` column — labels print the sku
+  // as the scannable code. `sellPrice` is the right column (not `price`).
   const [item] = await rawQuery<Record<string, unknown>>(
-    `SELECT id, name, sku, barcode, price FROM warehouse_products WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    `SELECT id, name, sku, "sellPrice" AS price FROM warehouse_products WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
     [id, companyId]
-  ).catch(() => [null]);
-  return { entity: item ?? { id, name: "—", sku: "—", barcode: id, price: 0 } };
+  );
+  return {
+    entity: item
+      ? { ...item, barcode: item.sku ?? String(id) }
+      : { id, name: "—", sku: "—", barcode: String(id), price: 0 },
+  };
 }
 
 async function loadJobPosting(companyId: number, id: string) {
@@ -453,6 +576,126 @@ async function loadLeaveRequest(companyId: number, id: string) {
     ? (await rawQuery(`SELECT id, name, "empNumber" FROM employees WHERE id = $1`, [lr.employeeId]))[0]
     : null;
   return { entity: lr, employee };
+}
+
+async function loadExcuseRequest(companyId: number, id: string) {
+  const [er] = await rawQuery<Record<string, unknown>>(
+    `SELECT er.*, EXTRACT(EPOCH FROM (er."endTime" - er."startTime"))/3600 AS hours
+     FROM hr_excuse_requests er
+     WHERE er.id = $1 AND er."companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  );
+  if (!er) return { entity: { id } };
+  const employee = er.employeeId
+    ? (await rawQuery(`SELECT id, name, "empNumber" FROM employees WHERE id = $1`, [er.employeeId]))[0]
+    : null;
+  return { entity: er, employee };
+}
+
+async function loadEmployeeTransfer(companyId: number, id: string) {
+  const [t] = await rawQuery<Record<string, unknown>>(
+    `SELECT et.*,
+            fb.name AS "fromBranch", tb.name AS "toBranch",
+            fd.name AS "fromDepartment", td.name AS "toDepartment",
+            fjt.name AS "currentJobTitle", tjt.name AS "newJobTitle"
+     FROM employee_transfers et
+     LEFT JOIN branches fb ON fb.id = et."fromBranchId"
+     LEFT JOIN branches tb ON tb.id = et."toBranchId"
+     LEFT JOIN departments fd ON fd.id = et."fromDepartmentId"
+     LEFT JOIN departments td ON td.id = et."toDepartmentId"
+     LEFT JOIN job_titles fjt ON fjt.id = et."fromJobTitleId"
+     LEFT JOIN job_titles tjt ON tjt.id = et."toJobTitleId"
+     WHERE et.id = $1 AND et."companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  );
+  if (!t) return { entity: { id } };
+  const employee = t.employeeId
+    ? (await rawQuery(`SELECT id, name, "empNumber" FROM employees WHERE id = $1`, [t.employeeId]))[0]
+    : null;
+  return { entity: t, employee };
+}
+
+async function loadAttendance(companyId: number, id: string) {
+  const [att] = await rawQuery<Record<string, unknown>>(
+    `SELECT a.id, a.date AS "attendanceDate",
+            to_char(a.date, 'Day') AS "dayName",
+            a."checkIn"  AS "checkInTime",
+            a."checkOut" AS "checkOutTime",
+            CONCAT(a."checkInLat",  ',', a."checkInLon")  AS "checkInLocation",
+            CONCAT(a."checkOutLat", ',', a."checkOutLon") AS "checkOutLocation",
+            a."lateMinutes", a."earlyMinutes",
+            EXTRACT(EPOCH FROM (a."checkOut" - a."checkIn"))/3600 AS "workedHours",
+            a.status, a.notes,
+            ea.id AS "assignmentId",
+            s.name AS "shiftName",
+            e.id AS "employeeId", e.name AS "employeeName", e."empNumber"
+     FROM attendance a
+     LEFT JOIN employee_assignments ea ON ea.id = a."assignmentId"
+     LEFT JOIN employees e ON e.id = ea."employeeId"
+     LEFT JOIN shifts s ON s.id = ea."shiftId"
+     WHERE a.id = $1 AND a."companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  );
+  if (!att) return { entity: { id } };
+  const employee = att.employeeId
+    ? { id: att.employeeId, name: att.employeeName, empNumber: att.empNumber }
+    : null;
+  return { entity: att, employee };
+}
+
+async function loadDisciplineMemo(companyId: number, id: string) {
+  const [m] = await rawQuery<Record<string, unknown>>(
+    `SELECT dm.id, dm."memoNumber" AS ref, dm.status, dm.notes AS description,
+            dm."penaltyLabel" AS action, dm."totalDeductionAmount",
+            dm."createdAt", v.severity, v."violationType",
+            e.id AS "employeeId", e.name AS "employeeName", e."empNumber",
+            d.name AS "departmentName",
+            (SELECT COUNT(*) FROM hr_violations v2
+              WHERE v2."employeeId" = v."employeeId" AND v2.id <> v.id) AS "priorCount"
+     FROM discipline_memos dm
+     LEFT JOIN hr_violations v ON v.id = dm."violationId"
+     LEFT JOIN employees e ON e.id = v."employeeId"
+     LEFT JOIN departments d ON d.id = e."departmentId"
+     WHERE dm.id = $1 AND dm."companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  );
+  if (!m) return { entity: { id } };
+  const employee = m.employeeId
+    ? { id: m.employeeId, name: m.employeeName, empNumber: m.empNumber, departmentName: m.departmentName }
+    : null;
+  return { entity: m, employee };
+}
+
+async function loadFleetMaintenance(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT fm.id, fm.id AS ref, fm.type AS "serviceType",
+            fm.description, fm.cost AS "totalCost",
+            fm."serviceDate", fm."nextServiceDate", fm."nextServiceKm",
+            fm."performedBy" AS "workshopName",
+            fm."mileageAtService" AS odometer, fm.status,
+            v."plateNumber", d.name AS "driverName"
+     FROM fleet_maintenance fm
+     LEFT JOIN fleet_vehicles v ON v.id = fm."vehicleId"
+     LEFT JOIN fleet_drivers d ON d.id = v."currentDriverId"
+     WHERE fm.id = $1 AND fm."companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadInsurancePolicy(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT fi.id, fi."policyNumber", fi.type AS "policyType",
+            fi.provider AS "insurerName",
+            fi."startDate", fi."endDate" AS "expiryDate",
+            fi."coverageAmount", fi.premium AS "premiumAmount",
+            fi.status, v."plateNumber" AS "insuredEntity"
+     FROM fleet_insurance fi
+     LEFT JOIN fleet_vehicles v ON v.id = fi."vehicleId"
+     WHERE fi.id = $1 AND fi."companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  );
+  return { entity: row ?? { id } };
 }
 
 async function loadLoanRequest(companyId: number, id: string) {

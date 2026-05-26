@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,6 +143,28 @@ export default function BudgetHeatmapPage() {
     <PageShell
       title="خريطة حرارية للميزانية"
       subtitle="استخدام الميزانية شهرياً × بنداً — ألوان فورية تكشف نقاط الانفجار"
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/reports/is-vs-budget">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <TrendingUp className="h-3.5 w-3.5 ml-1" />
+              P&L vs Budget
+            </Button>
+          </Link>
+          <Link href="/finance/budget-variance">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <TrendingDown className="h-3.5 w-3.5 ml-1" />
+              انحرافات الميزانية
+            </Button>
+          </Link>
+          <Link href="/finance/budget-approvals">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <AlertTriangle className="h-3.5 w-3.5 ml-1" />
+              اعتماد الميزانية
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 
