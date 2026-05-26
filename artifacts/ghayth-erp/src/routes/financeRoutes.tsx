@@ -96,6 +96,7 @@ const AccountReconWorkpaper = lazy(() => import("@/pages/finance/account-reconci
 const TbComparison = lazy(() => import("@/pages/finance/trial-balance-comparison"));
 const TbDrilldown = lazy(() => import("@/pages/finance/trial-balance-drilldown"));
 const ArAging = lazy(() => import("@/pages/finance/ar-aging"));
+const ArCollectionWorkbench = lazy(() => import("@/pages/finance/ar-collection-workbench"));
 const ApAging = lazy(() => import("@/pages/finance/ap-aging"));
 const BankReconciliation = lazy(() => import("@/pages/finance/bank-reconciliation"));
 const BankManualMatch = lazy(() => import("@/pages/create/finance/bank-manual-match"));
@@ -273,6 +274,7 @@ export const financeRoutes = [
   { path: "/finance/trial-balance-comparison", component: TbComparison },
   { path: "/finance/trial-balance-drilldown", component: TbDrilldown },
   { path: "/finance/ar-aging", component: ArAging },
+  { path: "/finance/ar-collection-workbench", component: ArCollectionWorkbench },
   { path: "/finance/ap-aging", component: ApAging },
   { path: "/finance/bank-reconciliation", component: BankReconciliation },
   { path: "/finance/bank-reconciliation/manual-match/:batchId/:rowId", component: BankManualMatch },
