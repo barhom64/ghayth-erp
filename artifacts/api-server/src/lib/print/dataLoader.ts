@@ -29,6 +29,8 @@ import {
   loadRevenueAnalysis,
   loadRevenueByActivity,
   loadExpensesByCostCenter,
+  loadCustomerStatement,
+  loadVendorStatement,
 } from "./reportLoaders.js";
 
 interface LoaderArgs {
@@ -200,6 +202,10 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadRevenueByActivity(companyId, entityId);
     case "report_expenses_by_cost_center":
       return await loadExpensesByCostCenter(companyId, entityId);
+    case "customer_statement":
+      return await loadCustomerStatement(companyId, entityId);
+    case "vendor_statement":
+      return await loadVendorStatement(companyId, entityId);
     default:
       // 1. Entity is in entityRegistry → use its declared table.
       // 2. Otherwise fall back to the static map below for entities the
