@@ -32,15 +32,18 @@ export default function ProjectCostingDetailPage() {
   const id = params?.id || "";
   const { extraTabs, hideTabs } = useRegistryTabs("project-costing", id ?? "");
 
+  // useApiQuery's enabled flag (!!id) already guards the fetch when id
+  // is empty, so the URL can be the bare template — keeping the
+  // ternary here hid the URL from the wiring audit's static scan.
   const { data: project, isLoading, isError, refetch } = useApiQuery<any>(
     ["project-finance-detail", id],
-    id ? `/finance/projects/${id}` : null,
+    `/finance/projects/${id}`,
     !!id
   );
 
   const { data: costsData, isLoading: loadingCosts } = useApiQuery<any>(
     ["project-costs", id],
-    id ? `/finance/projects/${id}/costs` : null,
+    `/finance/projects/${id}/costs`,
     !!id
   );
 

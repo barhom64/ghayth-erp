@@ -273,7 +273,7 @@ const RULES = [
     // `border-l-2` (preceded by `-`) and `transform-l-2` (preceded
     // by a letter) so we only catch real margin/padding classes.
     regex: /className=["'][^"']*(?<![a-z-])(ml|mr|pl|pr)-[0-9]/,
-    countBaseline: 47,
+    countBaseline: 46,
     message:
       "`ml-`/`mr-`/`pl-`/`pr-` are physical sides — they do NOT flip " +
       "in RTL. Use Tailwind's logical equivalents: `ms-`/`me-`/`ps-`/`pe-` " +
