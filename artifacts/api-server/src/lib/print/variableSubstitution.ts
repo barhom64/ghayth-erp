@@ -39,8 +39,39 @@ function get(obj: unknown, path: string): unknown {
 function formatValue(v: unknown): string {
   if (v === null || v === undefined) return "";
   if (typeof v === "number") {
-    if (Number.isInteger(v)) return String(v);
-    return v.toFixed(2);
+    if (!Number.isFinite(v)) return "";
+    // Always add thousand separators for readability — large numbers
+    // (100000) without commas are hard to read at a glance. We use the
+    // en-US locale to keep Western digits (Arabic clients consistently
+    // prefer ASCII digits in financial documents). Integers get 0
+    // decimals; non-integers get exactly 2.
+    return v.toLocaleString("en-US", {
+      minimumFractionDigits: Number.isInteger(v) ? 0 : 2,
+      maximumFractionDigits: 2,
+    });
+  }
+  // Numeric strings from the DB (PG returns NUMERIC as string) should
+  // format the same way. Detect "123.456" / "100000" / "-1,234.56".
+  if (typeof v === "string") {
+    const trimmed = v.trim();
+    // Only treat as number if it's purely numeric — don't mangle SKUs,
+    // refs, or codes that happen to start with digits.
+    if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+      const n = Number(trimmed);
+      if (Number.isFinite(n)) {
+        return n.toLocaleString("en-US", {
+          minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
+          maximumFractionDigits: 2,
+        });
+      }
+    }
+    return v;
+  }
+  if (v instanceof Date) {
+    // Date objects → Saudi locale date string. ISO date strings from PG
+    // are returned as strings and handled above (left as-is); presets
+    // that want a localised date should pass a Date.
+    return v.toLocaleDateString("ar-SA");
   }
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);

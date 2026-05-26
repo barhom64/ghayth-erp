@@ -331,4 +331,47 @@ describe("Print Engine v2 — substitute() resilience to bad data", () => {
       substitute({ template: "{{entity.itemsTable}}", data, branch, isThermal: false }),
     ).not.toThrow();
   });
+
+  it("formats numeric values with thousand separators (#audit currency formatting)", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const html = substitute({
+      template: "<p>{{entity.total}}</p><p>{{entity.qty}}</p>",
+      data: { entity: { id: 1, total: 1234567.89, qty: 100000 } },
+      branch,
+      isThermal: false,
+    });
+    // Non-integer → 2 decimals + thousand separators.
+    expect(html).toContain("1,234,567.89");
+    // Integer → 0 decimals + thousand separators.
+    expect(html).toContain("100,000");
+    // Old bug: would render as 1234567.89 / 100000 (no separators).
+    expect(html).not.toContain("1234567.89");
+  });
+
+  it("formats numeric strings from the DB (NUMERIC columns return string)", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const html = substitute({
+      template: "<p>{{entity.subtotal}}</p>",
+      data: { entity: { id: 1, subtotal: "15000.5" } }, // PG NUMERIC returns string
+      branch,
+      isThermal: false,
+    });
+    expect(html).toContain("15,000.50");
+  });
+
+  it("does NOT mangle SKU / reference strings that start with digits", async () => {
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = { companyName: "x", branchName: "y" } as Parameters<typeof substitute>[0]["branch"];
+    const html = substitute({
+      template: "<p>{{entity.ref}}</p><p>{{entity.sku}}</p>",
+      data: { entity: { id: 1, ref: "INV-2025-001", sku: "300SP-X" } },
+      branch,
+      isThermal: false,
+    });
+    // SKUs and refs contain non-numeric chars → left as-is.
+    expect(html).toContain("INV-2025-001");
+    expect(html).toContain("300SP-X");
+  });
 });
