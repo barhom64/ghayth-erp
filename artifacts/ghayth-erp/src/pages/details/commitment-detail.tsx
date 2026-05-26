@@ -60,7 +60,7 @@ export default function CommitmentDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["commitment", String(id)],
-    id ? `/finance/commitments/${id}` : null,
+    `/finance/commitments/${id}`,
     !!id
   );
 

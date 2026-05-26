@@ -104,7 +104,7 @@ export default function VouchersCreate() {
   const createMut = useApiMutation("/finance/vouchers", "POST", [["vouchers"], ["vouchers-list"]]);
   const { data: taxCodesData } = useApiQuery<{ data: TaxCodeOption[] }>(
     ["tax-codes", "active"],
-    "/finance/accounts/tax-codes?active=true",
+    "/finance/tax-codes?active=true",
   );
   const activeTaxCodes = (taxCodesData?.data ?? []).filter((t) => t.isActive !== false);
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");

@@ -2,13 +2,6 @@
 -- PostgreSQL database dump
 --
 
--- \restrict directive stripped: the matching \unrestrict lives in
--- schema_post.sql, but `\ir schema_post.sql` (in the schema.sql wrapper)
--- runs in restricted mode and psql refuses backslash commands there,
--- failing the whole load. dump-schema.sh now strips both directives.
--- (Conflict re-resolved after main regenerated the dump and reintroduced
--- the token. The companion dump-schema.sh edit on this branch will keep
--- future regens clean.)
 
 
 SET statement_timeout = 0;
@@ -1170,6 +1163,8 @@ ALTER TABLE IF EXISTS ONLY public.warehouse_cycle_count_plans DROP CONSTRAINT IF
 ALTER TABLE IF EXISTS ONLY public.warehouse_cycle_count_lines DROP CONSTRAINT IF EXISTS warehouse_cycle_count_lines_pkey;
 ALTER TABLE IF EXISTS ONLY public.warehouse_categories DROP CONSTRAINT IF EXISTS warehouse_categories_pkey;
 ALTER TABLE IF EXISTS ONLY public.vouchers DROP CONSTRAINT IF EXISTS vouchers_pkey;
+ALTER TABLE IF EXISTS ONLY public.vendor_secrets DROP CONSTRAINT IF EXISTS vendor_secrets_slug_key;
+ALTER TABLE IF EXISTS ONLY public.vendor_secrets DROP CONSTRAINT IF EXISTS vendor_secrets_pkey;
 ALTER TABLE IF EXISTS ONLY public.users DROP CONSTRAINT IF EXISTS users_pkey;
 ALTER TABLE IF EXISTS ONLY public.users DROP CONSTRAINT IF EXISTS users_email_key;
 ALTER TABLE IF EXISTS ONLY public.user_sessions DROP CONSTRAINT IF EXISTS user_sessions_pkey;
@@ -1574,6 +1569,7 @@ ALTER TABLE IF EXISTS public.warehouse_cycle_count_plans ALTER COLUMN id DROP DE
 ALTER TABLE IF EXISTS public.warehouse_cycle_count_lines ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.warehouse_categories ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.vouchers ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.vendor_secrets ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.users ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.user_sessions ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.user_roles ALTER COLUMN id DROP DEFAULT;
@@ -1940,6 +1936,8 @@ DROP SEQUENCE IF EXISTS public.warehouse_categories_id_seq;
 DROP TABLE IF EXISTS public.warehouse_categories;
 DROP SEQUENCE IF EXISTS public.vouchers_id_seq;
 DROP TABLE IF EXISTS public.vouchers;
+DROP SEQUENCE IF EXISTS public.vendor_secrets_id_seq;
+DROP TABLE IF EXISTS public.vendor_secrets;
 DROP SEQUENCE IF EXISTS public.vendor_contracts_id_seq;
 DROP TABLE IF EXISTS public.vendor_contracts;
 DROP SEQUENCE IF EXISTS public.users_id_seq;
@@ -2202,6 +2200,10 @@ DROP SEQUENCE IF EXISTS public.official_letters_id_seq;
 DROP TABLE IF EXISTS public.official_letters;
 DROP SEQUENCE IF EXISTS public.obligations_id_seq;
 DROP TABLE IF EXISTS public.obligations;
+DROP TABLE IF EXISTS public.numbering_schemes;
+DROP TABLE IF EXISTS public.numbering_counters;
+DROP TABLE IF EXISTS public.numbering_audit_logs;
+DROP TABLE IF EXISTS public.numbering_assignments;
 DROP SEQUENCE IF EXISTS public.notifications_id_seq;
 DROP TABLE IF EXISTS public.notifications;
 DROP SEQUENCE IF EXISTS public.notification_webhooks_id_seq;
@@ -2806,7 +2808,7 @@ CREATE TABLE public.ai_prompt_evaluation_results (
     "costUsd" numeric(12,6) DEFAULT 0 NOT NULL,
     "tokensUsed" integer DEFAULT 0 NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now(),
-    CONSTRAINT ai_prompt_evaluation_results_status_check CHECK (((status)::text = ANY ((ARRAY['pass'::character varying, 'fail'::character varying, 'error'::character varying])::text[])))
+    CONSTRAINT ai_prompt_evaluation_results_status_check CHECK (((status)::text = ANY (ARRAY[('pass'::character varying)::text, ('fail'::character varying)::text, ('error'::character varying)::text])))
 );
 
 
@@ -2851,7 +2853,7 @@ CREATE TABLE public.ai_prompt_evaluations (
     "errorMessage" text,
     "startedAt" timestamp with time zone DEFAULT now(),
     "completedAt" timestamp with time zone,
-    CONSTRAINT ai_prompt_evaluations_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'running'::character varying, 'completed'::character varying, 'failed'::character varying])::text[])))
+    CONSTRAINT ai_prompt_evaluations_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('running'::character varying)::text, ('completed'::character varying)::text, ('failed'::character varying)::text])))
 );
 
 
@@ -2886,7 +2888,7 @@ CREATE TABLE public.ai_prompt_reviews (
     decision character varying(30) NOT NULL,
     comments text,
     "createdAt" timestamp with time zone DEFAULT now(),
-    CONSTRAINT ai_prompt_reviews_decision_check CHECK (((decision)::text = ANY ((ARRAY['approved'::character varying, 'changes_requested'::character varying, 'rejected'::character varying])::text[])))
+    CONSTRAINT ai_prompt_reviews_decision_check CHECK (((decision)::text = ANY (ARRAY[('approved'::character varying)::text, ('changes_requested'::character varying)::text, ('rejected'::character varying)::text])))
 );
 
 
@@ -2966,7 +2968,7 @@ CREATE TABLE public.ai_prompts (
     "approvedAt" timestamp with time zone,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
-    CONSTRAINT ai_prompts_status_check CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'in_review'::character varying, 'approved'::character varying, 'deprecated'::character varying, 'rejected'::character varying])::text[])))
+    CONSTRAINT ai_prompts_status_check CHECK (((status)::text = ANY (ARRAY[('draft'::character varying)::text, ('in_review'::character varying)::text, ('approved'::character varying)::text, ('deprecated'::character varying)::text, ('rejected'::character varying)::text])))
 );
 
 
@@ -3007,7 +3009,7 @@ CREATE TABLE public.ai_providers (
     "updatedAt" timestamp with time zone DEFAULT now(),
     capabilities jsonb DEFAULT '["generation"]'::jsonb NOT NULL,
     endpoint text,
-    CONSTRAINT ai_providers_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'disabled'::character varying, 'failover-only'::character varying])::text[])))
+    CONSTRAINT ai_providers_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disabled'::character varying)::text, ('failover-only'::character varying)::text])))
 );
 
 
@@ -4481,8 +4483,8 @@ CREATE TABLE public.communication_dlp_rules (
     enabled boolean DEFAULT true NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
-    CONSTRAINT communication_dlp_rules_action_check CHECK (((action)::text = ANY ((ARRAY['flag'::character varying, 'redact'::character varying, 'block'::character varying])::text[]))),
-    CONSTRAINT communication_dlp_rules_severity_check CHECK (((severity)::text = ANY ((ARRAY['info'::character varying, 'warning'::character varying, 'critical'::character varying])::text[])))
+    CONSTRAINT communication_dlp_rules_action_check CHECK (((action)::text = ANY (ARRAY[('flag'::character varying)::text, ('redact'::character varying)::text, ('block'::character varying)::text]))),
+    CONSTRAINT communication_dlp_rules_severity_check CHECK (((severity)::text = ANY (ARRAY[('info'::character varying)::text, ('warning'::character varying)::text, ('critical'::character varying)::text])))
 );
 
 
@@ -4521,7 +4523,7 @@ CREATE TABLE public.communication_providers (
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
-    CONSTRAINT communication_providers_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'disabled'::character varying, 'failover-only'::character varying])::text[])))
+    CONSTRAINT communication_providers_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disabled'::character varying)::text, ('failover-only'::character varying)::text])))
 );
 
 
@@ -9157,7 +9159,7 @@ CREATE TABLE public.integrations (
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
     CONSTRAINT integrations_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('error'::character varying)::text]))),
-    CONSTRAINT integrations_type_check CHECK (((type)::text = ANY (ARRAY[('email'::character varying)::text, ('sms'::character varying)::text, ('whatsapp'::character varying)::text, ('webhook'::character varying)::text])))
+    CONSTRAINT integrations_type_check_v2 CHECK (((type)::text = ANY ((ARRAY['email'::character varying, 'sms'::character varying, 'whatsapp'::character varying, 'webhook'::character varying, 'pbx'::character varying, 'push'::character varying, 'sms_otp'::character varying, 'siem'::character varying, 'zatca'::character varying, 'stt'::character varying, 'storage'::character varying, 'object_storage'::character varying])::text[])))
 );
 
 
@@ -9587,7 +9589,7 @@ CREATE TABLE public.ivr_menu_options (
     "targetMenuId" integer,
     "targetDepartmentId" integer,
     "sortOrder" integer DEFAULT 0 NOT NULL,
-    CONSTRAINT ivr_menu_options_action_check CHECK (((action)::text = ANY ((ARRAY['extension'::character varying, 'menu'::character varying, 'voicemail'::character varying, 'hangup'::character varying, 'department'::character varying])::text[])))
+    CONSTRAINT ivr_menu_options_action_check CHECK (((action)::text = ANY (ARRAY[('extension'::character varying)::text, ('menu'::character varying)::text, ('voicemail'::character varying)::text, ('hangup'::character varying)::text, ('department'::character varying)::text])))
 );
 
 
@@ -9631,8 +9633,8 @@ CREATE TABLE public.ivr_menus (
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
-    CONSTRAINT ivr_menus_fallback_check CHECK ((("fallbackAction")::text = ANY ((ARRAY['hangup'::character varying, 'extension'::character varying, 'menu'::character varying])::text[]))),
-    CONSTRAINT ivr_menus_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'disabled'::character varying])::text[])))
+    CONSTRAINT ivr_menus_fallback_check CHECK ((("fallbackAction")::text = ANY (ARRAY[('hangup'::character varying)::text, ('extension'::character varying)::text, ('menu'::character varying)::text]))),
+    CONSTRAINT ivr_menus_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disabled'::character varying)::text])))
 );
 
 
@@ -11043,8 +11045,8 @@ CREATE TABLE public.numbering_audit_logs (
     "assignmentId" integer,
     "entityTable" text,
     "entityId" integer,
-    "before" jsonb,
-    "after" jsonb,
+    before jsonb,
+    after jsonb,
     reason text,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -11102,11 +11104,11 @@ CREATE TABLE public.numbering_schemes (
     "lastBackfillCount" integer,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT numbering_schemes_edit_check CHECK (("manualEditPolicy" = ANY (ARRAY['disabled'::text, 'draft_only'::text, 'privileged'::text, 'legacy_import_only'::text]))),
     CONSTRAINT numbering_schemes_pad_check CHECK ((("padLength" >= 3) AND ("padLength" <= 10))),
     CONSTRAINT numbering_schemes_reset_check CHECK (("resetPolicy" = ANY (ARRAY['never'::text, 'yearly'::text, 'monthly'::text, 'seasonal'::text, 'fiscal_year'::text]))),
     CONSTRAINT numbering_schemes_scope_check CHECK (("scopePolicy" = ANY (ARRAY['company'::text, 'branch'::text, 'module'::text, 'entity'::text, 'season'::text, 'fiscal_year'::text]))),
-    CONSTRAINT numbering_schemes_timing_check CHECK (("issueTiming" = ANY (ARRAY['on_draft'::text, 'on_submit'::text, 'on_approval'::text, 'on_posting'::text]))),
-    CONSTRAINT numbering_schemes_edit_check CHECK (("manualEditPolicy" = ANY (ARRAY['disabled'::text, 'draft_only'::text, 'privileged'::text, 'legacy_import_only'::text])))
+    CONSTRAINT numbering_schemes_timing_check CHECK (("issueTiming" = ANY (ARRAY['on_draft'::text, 'on_submit'::text, 'on_approval'::text, 'on_posting'::text])))
 );
 
 
@@ -11538,7 +11540,7 @@ CREATE TABLE public.pbx_call_recordings (
     status character varying(20) DEFAULT 'active'::character varying NOT NULL,
     "deletedAt" timestamp with time zone,
     "createdAt" timestamp with time zone DEFAULT now(),
-    CONSTRAINT pbx_call_recordings_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'expired'::character varying, 'deleted'::character varying])::text[])))
+    CONSTRAINT pbx_call_recordings_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('expired'::character varying)::text, ('deleted'::character varying)::text])))
 );
 
 
@@ -11579,7 +11581,7 @@ CREATE TABLE public.pbx_call_transcripts (
     "transcribedAt" timestamp with time zone,
     "summarisedAt" timestamp with time zone,
     "createdAt" timestamp with time zone DEFAULT now(),
-    CONSTRAINT pbx_call_transcripts_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'transcribing'::character varying, 'completed'::character varying, 'failed'::character varying])::text[])))
+    CONSTRAINT pbx_call_transcripts_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('transcribing'::character varying)::text, ('completed'::character varying)::text, ('failed'::character varying)::text])))
 );
 
 
@@ -11660,8 +11662,8 @@ CREATE TABLE public.pbx_extensions (
     notes text,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
-    CONSTRAINT pbx_extensions_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'disabled'::character varying])::text[]))),
-    CONSTRAINT pbx_extensions_type_check CHECK (((type)::text = ANY ((ARRAY['employee'::character varying, 'department'::character varying, 'queue'::character varying, 'voicemail'::character varying])::text[])))
+    CONSTRAINT pbx_extensions_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disabled'::character varying)::text]))),
+    CONSTRAINT pbx_extensions_type_check CHECK (((type)::text = ANY (ARRAY[('employee'::character varying)::text, ('department'::character varying)::text, ('queue'::character varying)::text, ('voicemail'::character varying)::text])))
 );
 
 
@@ -14792,7 +14794,7 @@ CREATE TABLE public.supplier_payment_allocations (
     "whtRate" numeric(7,4),
     "whtCategory" character varying(20),
     CONSTRAINT supplier_payment_allocations_amount_check CHECK ((amount > (0)::numeric)),
-    CONSTRAINT "supplier_payment_allocations_obligationType_check" CHECK ((("obligationType")::text = ANY ((ARRAY['purchase_order'::character varying, 'nusk_invoice'::character varying, 'expense'::character varying, 'manual'::character varying])::text[])))
+    CONSTRAINT "supplier_payment_allocations_obligationType_check" CHECK ((("obligationType")::text = ANY (ARRAY[('purchase_order'::character varying)::text, ('nusk_invoice'::character varying)::text, ('expense'::character varying)::text, ('manual'::character varying)::text])))
 );
 
 
@@ -16706,6 +16708,43 @@ CREATE SEQUENCE public.vendor_contracts_id_seq
 --
 
 ALTER SEQUENCE public.vendor_contracts_id_seq OWNED BY public.vendor_contracts.id;
+
+
+--
+-- Name: vendor_secrets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.vendor_secrets (
+    id integer NOT NULL,
+    slug character varying(80) NOT NULL,
+    name character varying(200) NOT NULL,
+    description text,
+    status character varying(20) DEFAULT 'active'::character varying NOT NULL,
+    config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    CONSTRAINT vendor_secrets_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'disabled'::character varying])::text[])))
+);
+
+
+--
+-- Name: vendor_secrets_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.vendor_secrets_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: vendor_secrets_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.vendor_secrets_id_seq OWNED BY public.vendor_secrets.id;
 
 
 --

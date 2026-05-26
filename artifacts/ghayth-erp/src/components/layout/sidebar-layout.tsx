@@ -234,6 +234,7 @@ const allNavSections: NavSection[] = [
         { label: "سجل الأصول التحليلي 🆕", path: "/finance/fixed-asset-register", icon: BarChart3 },
         { label: "إهلاك دفعة واحدة 🆕", path: "/finance/fixed-assets/batch-depreciate", icon: TrendingUp },
         { label: "العهد", path: "/finance/custodies", icon: KeyRound },
+        { label: "منضدة العُهد 🆕", path: "/finance/custody-workbench", icon: KeyRound },
       ]},
       { label: "الفترات والميزانية", path: "/finance/budget", icon: FileBarChart, module: "finance", children: [
         { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
@@ -249,6 +250,9 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "التكاليف والتسويات", path: "/finance/project-costing", icon: FolderOpen, module: "finance", children: [
         { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
+        { label: "محفظة المشاريع 🆕", path: "/finance/project-portfolio", icon: BarChart3 },
+        { label: "محفظة المركبات 🆕", path: "/finance/vehicle-portfolio", icon: BarChart3 },
+        { label: "محفظة العقارات 🆕", path: "/finance/property-portfolio", icon: BarChart3 },
         { label: "Cost Center P&L 🆕", path: "/finance/cost-center-pnl", icon: BarChart3 },
         { label: "تقييم المخزون", path: "/finance/inventory-costing", icon: Package },
         { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
@@ -438,6 +442,7 @@ const allNavSections: NavSection[] = [
         { label: "مركز التحكّم بالـ PBX", path: "/admin/pbx-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "خارطة #1139 الحيّة", path: "/admin/master-plan", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "توجيه الإشعارات", path: "/admin/notification-routing", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+        { label: "إعدادات المزوّدات", path: "/admin/vendor-settings", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
         { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any" },
         { label: "سجل الحركات", path: "/activity-log", icon: Activity },

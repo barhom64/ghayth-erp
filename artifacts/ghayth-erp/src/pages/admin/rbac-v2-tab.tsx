@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { z } from "zod";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormCheckboxField,
+} from "@workspace/ui-core";
 import { Shield, Plus, Save, AlertTriangle, Eye, History, Copy, Layers, EyeOff, DollarSign, ChevronDown, ChevronRight, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -884,35 +891,16 @@ function SimulateDialog({ open, onClose, features }: { open: boolean; onClose: (
 }
 
 // ─── Clone dialog ───────────────────────────────────────────────────────────
+const cloneRoleSchema = z.object({
+  newKey: z.string().min(1, "المفتاح مطلوب"),
+  labelAr: z.string().min(1, "الاسم مطلوب"),
+  asTemplate: z.boolean().default(false),
+});
+
 function CloneDialog({ open, onClose, sourceRoleId, sourceLabel, onDone }: {
   open: boolean; onClose: () => void; sourceRoleId: number; sourceLabel: string; onDone: () => void;
 }) {
-  const [newKey, setNewKey] = useState("");
-  const [labelAr, setLabelAr] = useState("");
-  const [asTemplate, setAsTemplate] = useState(false);
-  const [busy, setBusy] = useState(false);
   const { toast } = useToast();
-
-  const submit = async () => {
-    if (!newKey || !labelAr) return;
-    setBusy(true);
-    try {
-      await apiFetch(`/rbac/v2/roles/${sourceRoleId}/clone`, {
-        method: "POST",
-        body: JSON.stringify({ newRoleKey: newKey, labelAr, asTemplate }),
-      });
-      toast({ title: "تم النسخ", description: `تم إنشاء "${labelAr}" من "${sourceLabel}"` });
-      onDone();
-      onClose();
-      setNewKey("");
-      setLabelAr("");
-      setAsTemplate(false);
-    } catch (err: any) {
-      toast({ title: "فشل النسخ", description: err?.message || "خطأ", variant: "destructive" });
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -923,26 +911,35 @@ function CloneDialog({ open, onClose, sourceRoleId, sourceLabel, onDone }: {
             نسخ الدور: {sourceLabel}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">المفتاح الجديد</label>
-            <Input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="custom_role_key" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">الاسم بالعربية</label>
-            <Input value={labelAr} onChange={(e) => setLabelAr(e.target.value)} placeholder="مدير المبيعات" />
-          </div>
-          <label className="flex items-center gap-2">
-            <Checkbox checked={asTemplate} onCheckedChange={(v) => setAsTemplate(!!v)} />
-            <span className="text-sm">حفظ كقالب عام (يُستخدم في شركات أخرى)</span>
-          </label>
-        </div>
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>إلغاء</Button>
-          <Button onClick={submit} disabled={!newKey || !labelAr || busy}>
-            {busy ? "نسخ..." : "نسخ الدور"}
-          </Button>
-        </DialogFooter>
+        <FormShell
+          schema={cloneRoleSchema}
+          defaultValues={{ newKey: "", labelAr: "", asTemplate: false }}
+          submitLabel="نسخ الدور"
+          secondaryActions={
+            <Button type="button" variant="outline" onClick={onClose}>إلغاء</Button>
+          }
+          onSubmit={async (values) => {
+            try {
+              await apiFetch(`/rbac/v2/roles/${sourceRoleId}/clone`, {
+                method: "POST",
+                body: JSON.stringify({
+                  newRoleKey: values.newKey,
+                  labelAr: values.labelAr,
+                  asTemplate: values.asTemplate,
+                }),
+              });
+              toast({ title: "تم النسخ", description: `تم إنشاء "${values.labelAr}" من "${sourceLabel}"` });
+              onDone();
+              onClose();
+            } catch (err: any) {
+              toast({ title: "فشل النسخ", description: err?.message || "خطأ", variant: "destructive" });
+            }
+          }}
+        >
+          <FormTextField name="newKey" label="المفتاح الجديد" placeholder="custom_role_key" required />
+          <FormTextField name="labelAr" label="الاسم بالعربية" placeholder="مدير المبيعات" required />
+          <FormCheckboxField name="asTemplate" label="حفظ كقالب عام (يُستخدم في شركات أخرى)" />
+        </FormShell>
       </DialogContent>
     </Dialog>
   );
@@ -1013,32 +1010,29 @@ interface Template {
   limit_count: string;
 }
 
+const applyTemplateSchema = z.object({
+  newKey: z.string().min(1, "المفتاح مطلوب"),
+  newLabel: z.string().min(1, "الاسم مطلوب"),
+});
+
 function TemplatesDialog({ open, onClose, onApplied }: { open: boolean; onClose: () => void; onApplied: () => void }) {
   const { data, isLoading } = useApiQuery<{ templates: Template[] }>(["rbac-templates"], "/rbac/v2/templates", open);
-  const [applying, setApplying] = useState<number | null>(null);
-  const [newKey, setNewKey] = useState("");
-  const [newLabel, setNewLabel] = useState("");
   const [pickedTemplate, setPickedTemplate] = useState<Template | null>(null);
   const { toast } = useToast();
 
-  const apply = async () => {
-    if (!pickedTemplate || !newKey || !newLabel) return;
-    setApplying(pickedTemplate.id);
+  const apply = async (values: { newKey: string; newLabel: string }) => {
+    if (!pickedTemplate) return;
     try {
       await apiFetch(`/rbac/v2/templates/${pickedTemplate.id}/apply`, {
         method: "POST",
-        body: JSON.stringify({ newRoleKey: newKey, labelAr: newLabel }),
+        body: JSON.stringify({ newRoleKey: values.newKey, labelAr: values.newLabel }),
       });
-      toast({ title: "تم تطبيق القالب", description: `تم إنشاء "${newLabel}" من قالب "${pickedTemplate.label_ar}"` });
+      toast({ title: "تم تطبيق القالب", description: `تم إنشاء "${values.newLabel}" من قالب "${pickedTemplate.label_ar}"` });
       onApplied();
       setPickedTemplate(null);
-      setNewKey("");
-      setNewLabel("");
       onClose();
     } catch (err: any) {
       toast({ title: "فشل تطبيق القالب", description: err?.message || "خطأ", variant: "destructive" });
-    } finally {
-      setApplying(null);
     }
   };
 
@@ -1063,11 +1057,7 @@ function TemplatesDialog({ open, onClose, onApplied }: { open: boolean; onClose:
                   <Card
                     key={t.id}
                     className="cursor-pointer hover:shadow-md transition border-2 hover:border-status-info-surface"
-                    onClick={() => {
-                      setPickedTemplate(t);
-                      setNewKey(t.role_key.replace(/^tpl_/, ""));
-                      setNewLabel(t.label_ar.replace(/\s*\(قالب\)$/, ""));
-                    }}
+                    onClick={() => setPickedTemplate(t)}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-start gap-2 mb-2">
@@ -1097,28 +1087,28 @@ function TemplatesDialog({ open, onClose, onApplied }: { open: boolean; onClose:
                 {pickedTemplate.description}
               </CardContent>
             </Card>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">المفتاح في شركتك</label>
-              <Input value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="branch_accountant" />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">الاسم بالعربية</label>
-              <Input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="محاسب فرع" />
-            </div>
+            <FormShell
+              schema={applyTemplateSchema}
+              defaultValues={{
+                newKey: pickedTemplate.role_key.replace(/^tpl_/, ""),
+                newLabel: pickedTemplate.label_ar.replace(/\s*\(قالب\)$/, ""),
+              }}
+              submitLabel="تطبيق القالب"
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setPickedTemplate(null)}>عودة</Button>
+              }
+              onSubmit={apply}
+            >
+              <FormTextField name="newKey" label="المفتاح في شركتك" placeholder="branch_accountant" required />
+              <FormTextField name="newLabel" label="الاسم بالعربية" placeholder="محاسب فرع" required />
+            </FormShell>
           </div>
         )}
-        <DialogFooter className="gap-2">
-          {pickedTemplate ? (
-            <>
-              <Button variant="outline" onClick={() => setPickedTemplate(null)}>عودة</Button>
-              <Button onClick={apply} disabled={!newKey || !newLabel || applying !== null}>
-                {applying ? "جاري التطبيق..." : "تطبيق القالب"}
-              </Button>
-            </>
-          ) : (
+        {!pickedTemplate && (
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={onClose}>إغلاق</Button>
-          )}
-        </DialogFooter>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

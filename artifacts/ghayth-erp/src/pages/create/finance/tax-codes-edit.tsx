@@ -17,7 +17,7 @@ import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrap
 
 /**
  * Tax Code editor — mirrors tax-codes-create.tsx structure but
- * loads the existing row from PATCH /finance/accounts/tax-codes/:id.
+ * loads the existing row from PATCH /finance/tax-codes/:id.
  */
 
 const TAX_TYPES = [
@@ -51,12 +51,12 @@ export default function TaxCodesEdit() {
 
   const { data: existing, isLoading, isError } = useApiQuery<TaxCodeRow>(
     ["tax-code-detail", id ?? ""],
-    id ? `/finance/accounts/tax-codes/${id}` : null,
+    id ? `/finance/tax-codes/${id}` : null,
     !!id,
   );
 
   const patchMut = useApiMutation(
-    `/finance/accounts/tax-codes/${id}`, "PATCH",
+    `/finance/tax-codes/${id}`, "PATCH",
     [["tax-codes"], ["tax-code-detail", id ?? ""]],
   );
 

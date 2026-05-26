@@ -55,6 +55,9 @@ const CATEGORIES: WorkflowCategory[] = [
       { title: "محلل مزيج الإيرادات", description: "من أين يأتي دخلنا؟", href: "/finance/revenue-mix", icon: PieChart, isNew: true },
       { title: "محلل مزيج المصاريف", description: "3 عدسات: حساب/فرع/موظف", href: "/finance/expense-mix", icon: BarChart3, isNew: true },
       { title: "Cost Center P&L", description: "ربحية كل مركز تكلفة", href: "/finance/cost-center-pnl", icon: Layers },
+      { title: "محفظة المشاريع", description: "P&L كل مشروع نشط", href: "/finance/project-portfolio", icon: Briefcase, isNew: true },
+      { title: "محفظة المركبات", description: "ربحية كل مركبة في الأسطول", href: "/finance/vehicle-portfolio", icon: BarChart3, isNew: true },
+      { title: "محفظة العقارات", description: "ربحية + إشغال كل عقار", href: "/finance/property-portfolio", icon: Building2, isNew: true },
     ],
   },
   {
@@ -156,6 +159,7 @@ const CATEGORIES: WorkflowCategory[] = [
       { title: "GL Integrity Gaps", description: "ثغرات النزاهة في GL", href: "/finance/reports/gl-integrity-gaps", icon: AlertTriangle },
       { title: "Unmapped Lines", description: "بنود بدون ربط", href: "/finance/reports/unmapped-lines", icon: AlertTriangle },
       { title: "Posting Activity", description: "نشاط الترحيل", href: "/finance/journal/activity", icon: Activity },
+      { title: "منضدة العُهد", description: "عُهد كل موظف مع أعمار وتسوية", href: "/finance/custody-workbench", icon: Users, isNew: true },
     ],
   },
 ];
