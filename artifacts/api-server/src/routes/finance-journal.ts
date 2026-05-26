@@ -1463,6 +1463,7 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
       entityKey: "journal_entry",
       entityTable: "journal_entries",
       actorId: scope.userId,
+      expectedTiming: "on_draft",
     });
     const ref = issued.number;
     const idempotencyToken = requestIdempotencyToken(req);
