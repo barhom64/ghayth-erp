@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { formatCurrency, formatNumber, currentYearRiyadh } from "@/lib/formatters";
+import { formatCurrency, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import {
   ArrowLeftRight, TrendingUp, TrendingDown, ChevronRight, Download,
   RefreshCw, Search,
@@ -82,9 +82,7 @@ function startOfMonth(y: number, m: number): string {
 
 export default function TbComparisonPage() {
   const thisYear = currentYearRiyadh();
-  const today = new Date();
-  // utc-ok: month index from local Date is acceptable for default period selection
-  const thisMonth = today.getMonth() + 1;
+  const thisMonth = Number(currentMonthPaddedRiyadh());
   const prevMonth = thisMonth === 1 ? 12 : thisMonth - 1;
   const prevYear = thisMonth === 1 ? thisYear - 1 : thisYear;
 
