@@ -12,7 +12,8 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import { logger } from "../lib/logger.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, LifecycleError, lifecycleErrorResponse, STATE_MACHINES } from "../lib/lifecycleEngine.js";
 import type { ExtraValue } from "../lib/lifecycleEngine.js";
@@ -242,7 +243,17 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
       }
     }
 
-    const ref = generateTimeRef("TKT");
+    // Numbering center (Issue #1141) — support ticket number from
+    // the central authority. Scheme: `support.support_ticket`.
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "support",
+      entityKey: "support_ticket",
+      entityTable: "support_tickets",
+      actorId: scope.userId,
+    });
+    const ref = issued.number;
 
     const aiDetectedPriority = detectPriority(`${title} ${b.description || ''}`);
     const priority = b.priority || aiDetectedPriority;
@@ -293,6 +304,10 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
       [scope.companyId, scope.branchId, ref, title, b.description, b.category, priority, 'open', b.clientId ?? null, assigneeId, slaResolutionDeadline]
     );
     assertInsert(insertId, "support_tickets");
+    await rawExecute(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [insertId, issued.assignmentId]
+    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to support_tickets row"));
     const [row] = await rawQuery<SupportTicketRow>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     if (assigneeId) {

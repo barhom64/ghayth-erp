@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -249,6 +250,7 @@ export default function TripDetailPage() {
         <XCircle className="h-4 w-4" />
         إلغاء
       </GuardedButton>
+      <EntityPrintButton entityType="fleet_trip" entityId={id ?? ""} formats={["a4"]} />
     </div>
   );
 

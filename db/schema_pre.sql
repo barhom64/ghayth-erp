@@ -3990,7 +3990,8 @@ CREATE TABLE public.branches (
     website character varying(200),
     "footerText" text,
     "nameEn" character varying(200),
-    city character varying(100)
+    city character varying(100),
+    "numberingCode" character varying(10)
 );
 
 
@@ -10992,6 +10993,110 @@ CREATE SEQUENCE public.notifications_id_seq
 --
 
 ALTER SEQUENCE public.notifications_id_seq OWNED BY public.notifications.id;
+
+
+--
+-- Name: numbering_assignments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.numbering_assignments (
+    id integer NOT NULL,
+    "schemeId" integer NOT NULL,
+    "counterId" integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "moduleKey" text NOT NULL,
+    "entityKey" text NOT NULL,
+    "entityTable" text NOT NULL,
+    "entityId" integer,
+    number text NOT NULL,
+    "sequenceValue" bigint NOT NULL,
+    status text DEFAULT 'assigned'::text NOT NULL,
+    "issuedBy" integer,
+    "issuedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "assignedAt" timestamp with time zone,
+    "voidReason" text,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT numbering_assignments_number_not_empty CHECK ((number <> ''::text)),
+    CONSTRAINT numbering_assignments_status_check CHECK ((status = ANY (ARRAY['reserved'::text, 'assigned'::text, 'cancelled'::text, 'voided'::text, 'released'::text])))
+);
+
+
+--
+-- Name: numbering_audit_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.numbering_audit_logs (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "actorId" integer,
+    action text NOT NULL,
+    "schemeId" integer,
+    "assignmentId" integer,
+    "entityTable" text,
+    "entityId" integer,
+    "before" jsonb,
+    "after" jsonb,
+    reason text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: numbering_counters; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.numbering_counters (
+    id integer NOT NULL,
+    "schemeId" integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "branchId" integer,
+    "moduleKey" text NOT NULL,
+    "entityKey" text NOT NULL,
+    "fiscalYear" integer,
+    period text,
+    "seasonId" integer,
+    "lastNumber" bigint DEFAULT 0 NOT NULL,
+    "nextNumber" bigint DEFAULT 1 NOT NULL,
+    "lockedAt" timestamp with time zone,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT numbering_counters_last_check CHECK (("lastNumber" >= 0)),
+    CONSTRAINT numbering_counters_next_check CHECK (("nextNumber" >= 1))
+);
+
+
+--
+-- Name: numbering_schemes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.numbering_schemes (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "moduleKey" text NOT NULL,
+    "entityKey" text NOT NULL,
+    "displayNameAr" text NOT NULL,
+    "displayNameEn" text,
+    prefix text NOT NULL,
+    pattern text DEFAULT '{PREFIX}-{YYYY}-{SEQ}'::text NOT NULL,
+    "padLength" integer DEFAULT 4 NOT NULL,
+    "resetPolicy" text DEFAULT 'yearly'::text NOT NULL,
+    "scopePolicy" text DEFAULT 'branch'::text NOT NULL,
+    "issueTiming" text DEFAULT 'on_submit'::text NOT NULL,
+    "manualEditPolicy" text DEFAULT 'disabled'::text NOT NULL,
+    "requiresReasonOnManualEdit" boolean DEFAULT true NOT NULL,
+    "lockAfterStatuses" jsonb DEFAULT '[]'::jsonb NOT NULL,
+    "branchPrefixOverrides" jsonb DEFAULT '{}'::jsonb NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT numbering_schemes_pad_check CHECK ((("padLength" >= 3) AND ("padLength" <= 10))),
+    CONSTRAINT numbering_schemes_reset_check CHECK (("resetPolicy" = ANY (ARRAY['never'::text, 'yearly'::text, 'monthly'::text, 'seasonal'::text, 'fiscal_year'::text]))),
+    CONSTRAINT numbering_schemes_scope_check CHECK (("scopePolicy" = ANY (ARRAY['company'::text, 'branch'::text, 'module'::text, 'entity'::text, 'season'::text, 'fiscal_year'::text]))),
+    CONSTRAINT numbering_schemes_timing_check CHECK (("issueTiming" = ANY (ARRAY['on_draft'::text, 'on_submit'::text, 'on_approval'::text, 'on_posting'::text]))),
+    CONSTRAINT numbering_schemes_edit_check CHECK (("manualEditPolicy" = ANY (ARRAY['disabled'::text, 'draft_only'::text, 'privileged'::text, 'legacy_import_only'::text])))
+);
 
 
 --

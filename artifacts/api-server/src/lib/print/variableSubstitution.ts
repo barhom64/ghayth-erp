@@ -71,7 +71,7 @@ function buildLetterheadThermal(branch: BranchLetterhead): string {
   <div style="font-weight:bold;font-size:11pt">${escapeHtml(branch.companyName)}</div>
   <div style="font-size:9pt">${escapeHtml(branch.branchName)}</div>
   ${branch.phone ? `<div style="font-size:8pt" dir="ltr">${escapeHtml(branch.phone)}</div>` : ""}
-  ${branch.taxNumber ? `<div style="font-size:8pt">VAT: ${escapeHtml(branch.taxNumber)}</div>` : ""}
+  ${branch.taxNumber ? `<div style="font-size:8pt">ر.ض: ${escapeHtml(branch.taxNumber)}</div>` : ""}
 </div>`;
 }
 
@@ -83,6 +83,44 @@ function buildFooter(branch: BranchLetterhead, isThermal: boolean): string {
   ${branch.address ? `<div>${escapeHtml(branch.address)}</div>` : ""}
 </footer>`;
 }
+
+/** Snake/camel column key → Arabic display label for auto-built tables.
+ *  Mirrors the column titles the SPA uses on list pages so a printed
+ *  list of invoices reads identically to the on-screen list. */
+const COLUMN_AR: Record<string, string> = {
+  ref: "المرجع", name: "الاسم", title: "العنوان", description: "البيان", notes: "ملاحظات",
+  status: "الحالة", type: "النوع", category: "الفئة", priority: "الأولوية",
+  date: "التاريخ", startDate: "تاريخ البداية", endDate: "تاريخ النهاية",
+  dueDate: "تاريخ الاستحقاق", createdAt: "تاريخ الإنشاء", paidAt: "تاريخ السداد",
+  amount: "المبلغ", total: "الإجمالي", totalAmount: "الإجمالي", totalPrice: "الإجمالي",
+  subtotal: "المجموع قبل الضريبة", vatAmount: "الضريبة", vatRate: "نسبة الضريبة",
+  netAmount: "الصافي", netSalary: "صافي الراتب", grossSalary: "إجمالي الراتب",
+  paidAmount: "المدفوع", remainingAmount: "المتبقي", balance: "الرصيد",
+  quantity: "الكمية", qty: "الكمية", unit: "الوحدة", unitPrice: "سعر الوحدة",
+  lineTotal: "إجمالي السطر", lineGross: "الإجمالي شامل الضريبة",
+  receivedQty: "الكمية المستلمة", itemName: "اسم الصنف",
+  accountCode: "رمز الحساب", debit: "مدين", credit: "دائن",
+  reference: "المرجع", currency: "العملة", paymentMethod: "طريقة الدفع",
+  clientName: "اسم العميل", supplierName: "اسم المورّد", vendorName: "اسم المورّد",
+  employeeName: "اسم الموظف", empNumber: "الرقم الوظيفي",
+  branchName: "الفرع", departmentName: "الإدارة",
+  plateNumber: "رقم اللوحة", make: "الصانع", model: "الموديل", year: "السنة",
+  vinNumber: "رقم الهيكل", currentMileage: "العداد", fuelType: "نوع الوقود",
+  insuranceExpiry: "انتهاء التأمين", registrationExpiry: "انتهاء الاستمارة",
+  period: "الفترة", days: "عدد الأيام", hours: "الساعات",
+  reason: "السبب", phone: "الهاتف", email: "البريد", address: "العنوان",
+  taxNumber: "الرقم الضريبي", crNumber: "السجل التجاري",
+  monthlyRent: "الإيجار الشهري", depositAmount: "مبلغ التأمين",
+  contractType: "نوع العقد", partyName: "الطرف", value: "القيمة",
+  caseNumber: "رقم القضية", court: "المحكمة", filingDate: "تاريخ الرفع",
+  opposingParty: "الطرف الخصم", lawyerName: "المحامي",
+  exitType: "نوع الإنهاء", exitReason: "سبب الإنهاء",
+  fromLocation: "من", toLocation: "إلى", distance: "المسافة",
+  startTime: "وقت البداية", endTime: "وقت النهاية",
+  approvedAt: "تاريخ الاعتماد", approvedBy: "المعتمِد",
+  installmentAmount: "قيمة القسط", installmentCount: "عدد الأقساط",
+  loanType: "نوع القرض", loanNumber: "رقم القرض",
+};
 
 function buildItemsTable(items: unknown): string {
   if (!Array.isArray(items) || items.length === 0) {
@@ -101,7 +139,11 @@ function buildItemsTable(items: unknown): string {
   if (cols.length === 0) {
     return `<div class="empty">لا توجد بنود</div>`;
   }
-  const head = cols.map((c) => `<th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;font-size:10pt">${escapeHtml(c)}</th>`).join("");
+  // Translate column keys to Arabic labels so the printed table reads
+  // as a real document, not a database dump. Anything not in the map
+  // keeps the snake_case key — those are rare leaves like custom
+  // metric columns where the user usually knows what they mean.
+  const head = cols.map((c) => `<th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;font-size:10pt">${escapeHtml(COLUMN_AR[c] ?? c)}</th>`).join("");
   const body = items
     .map((r) => {
       if (!r || typeof r !== "object") return "";
@@ -137,7 +179,7 @@ function buildVerifyBlock(opts: {
 }): string {
   if (!opts.jobId) return "";
   const qr = opts.verifyQrDataUrl
-    ? `<img src="${opts.verifyQrDataUrl}" alt="QR" style="width:80px;height:80px;display:block;"/>`
+    ? `<img src="${opts.verifyQrDataUrl}" alt="رمز التحقق" style="width:80px;height:80px;display:block;"/>`
     : "";
   const url = opts.verifyUrl ? escapeHtml(opts.verifyUrl) : "";
   const jid = escapeHtml(opts.jobId);
@@ -201,7 +243,7 @@ export function substitute(input: SubstitutionInput): string {
     // an ephemeral preview (no audit row, nothing to verify against).
     "system.verifyUrl": verifyUrl ?? "",
     "system.verifyQr": verifyQrDataUrl
-      ? `<img src="${verifyQrDataUrl}" alt="verify QR" style="width:90px;height:90px;display:block;"/>`
+      ? `<img src="${verifyQrDataUrl}" alt="رمز التحقق" style="width:90px;height:90px;display:block;"/>`
       : "",
     "system.verifyBlock": buildVerifyBlock({ verifyUrl, verifyQrDataUrl, jobId }),
     "entity.itemsTable": buildItemsTable((data as { items?: unknown }).items),

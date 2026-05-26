@@ -219,6 +219,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isAuthenticated) { setApiData(null); return; }
+    // apiFetch automatically sends the picked role as `x-selected-role`,
+    // and authMiddleware narrows scope.role + authzEngine grants to that
+    // role on the backend. We just need to refetch here whenever the
+    // user changes their pick so the local apiData (which drives the
+    // sidebar and button gating) reflects the new scope.
     apiFetch("/permissions/my")
       .then((data: any) => {
         setApiData({
@@ -228,7 +233,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
       })
       .catch(() => { setApiData(null); });
-  }, [isAuthenticated, user?.id, permRefreshKey]);
+  }, [isAuthenticated, user?.id, permRefreshKey, selectedRoleKey]);
+
+  // Bust React Query cache when the picked role changes so any in-flight
+  // list/detail data gets refetched under the new role's permissions.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    queryClient.clear();
+  }, [selectedRoleKey, isAuthenticated, queryClient]);
 
   const allowedModules: ModuleType[] = useMemo(() => {
     if (apiData !== null) {
