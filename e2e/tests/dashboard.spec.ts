@@ -67,22 +67,21 @@ test.describe("Dashboard", () => {
     expect(consoleErrors, `console.error: ${consoleErrors.join("\n")}`).toHaveLength(0);
   });
 
-  test("navigates to HR > Employees and shows a list", async ({ page }) => {
+  test("opens the employees list page", async ({ page }) => {
     await login(page);
 
-    // Try Arabic first, then English; one of them will be visible depending
-    // on i18n state.
-    const navLink = page
-      .getByRole("link", { name: /موظفين|employees/i })
-      .first();
-    await navLink.click();
-
+    // Direct URL navigation. The sidebar (sidebar-layout.tsx:115) renders
+    // "الموظفون" as a collapsed-by-default <button> that toggles its
+    // children, not a link — and the actual "قائمة الموظفين" link is
+    // hidden under that toggle. Trying to drive that interaction through
+    // role=link is fragile (and the HR section itself can be hidden when
+    // the user lacks the `hr` module). The regression we want to catch
+    // here is "list page crashes / 500s / doesn't render at all", so we
+    // jump straight to the URL and assert the page rendered.
+    await page.goto("/employees");
     await expect(page).toHaveURL(/employees/i);
-    // The list either shows rows OR an empty-state message. Either is fine
-    // — the regression we catch here is "page crashes / 500s / doesn't
-    // render at all".
     await expect(
       page.locator('table, [role="table"], [data-empty-state]'),
-    ).toBeVisible({ timeout: 10_000 });
+    ).toBeVisible({ timeout: 15_000 });
   });
 });

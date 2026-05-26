@@ -132,5 +132,16 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    // Mirror the dev server proxy so the e2e workflow (which runs `vite
+    // preview` to serve the built bundle on the same port the tests hit)
+    // can still reach the API server. Without this the SPA's relative
+    // `/api/...` fetches stay on port 5173 and 500/404 instantly, making
+    // every browser-based test (auth, dashboard) impossible to pass.
+    proxy: {
+      "/api": {
+        target: process.env.API_PROXY_TARGET ?? "http://localhost:8080",
+        changeOrigin: true,
+      },
+    },
   },
 });
