@@ -292,6 +292,10 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   traffic_violation: () => buildTrafficViolationPreset(),
   expense: () => buildExpenseClaimPreset(),
   task: () => buildTaskPreset(),
+  // Batch-4 — recruitment + warehouse labels.
+  job_posting: () => buildJobPostingPreset(),
+  job: () => buildJobPostingPreset(),
+  item_barcode_label: () => buildBarcodeLabelPreset(),
 };
 
 function buildInvoicePreset(): PrintTemplate {
@@ -1264,6 +1268,63 @@ function buildTaskPreset(): PrintTemplate {
   });
 }
 
+function buildJobPostingPreset(): PrintTemplate {
+  return makePreset({
+    id: -37, presetKey: "job_posting_classic", entityType: "job_posting",
+    name: "إعلان وظيفي",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">إعلان وظيفي</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.title}}</div>
+<div class="meta-grid">
+  <div><strong>المسمى الوظيفي:</strong> {{entity.title}}</div>
+  <div><strong>الإدارة:</strong> {{entity.department}}</div>
+  <div><strong>الموقع:</strong> {{entity.location}}</div>
+  <div><strong>نوع التوظيف:</strong> {{entity.type}}</div>
+  <div><strong>مستوى الخبرة:</strong> {{entity.experienceLevel}}</div>
+  <div><strong>عدد الشواغر:</strong> {{entity.vacancies}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>تاريخ الإقفال:</strong> {{entity.closingDate}}</div>
+  <div><strong>الحد الأدنى للراتب:</strong> {{entity.salaryMin}}</div>
+  <div><strong>الحد الأعلى للراتب:</strong> {{entity.salaryMax}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف الوظيفي</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">المتطلبات</div>
+  <div style="white-space:pre-wrap">{{entity.requirements}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">المهارات المطلوبة</div>
+  <div style="white-space:pre-wrap">{{entity.skills}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">المؤهلات العلمية</div>
+  <div style="white-space:pre-wrap">{{entity.education}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fdf2f8;border:1px solid #fbcfe8;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">المزايا</div>
+  <div style="white-space:pre-wrap">{{entity.benefits}}</div>
+</div>`,
+  });
+}
+
+function buildBarcodeLabelPreset(): PrintTemplate {
+  return makePreset({
+    id: -38, presetKey: "item_barcode_label_classic", entityType: "item_barcode_label",
+    name: "ملصق باركود صنف",
+    body: `
+<div class="label-doc">
+  <div class="l-name">{{entity.name}}</div>
+  <div class="l-sku">SKU: <span dir="ltr">{{entity.sku}}</span></div>
+  <div class="l-barcode" dir="ltr">*{{entity.barcode}}*</div>
+  <div class="l-sku" dir="ltr">{{entity.barcode}}</div>
+  <div class="l-price">{{entity.price}}</div>
+</div>`,
+  });
+}
+
 /** Map snake_case entityType → Arabic display label. Mirrors the labels
  *  the SPA uses on detail/list pages so the printed doc reads the same as
  *  the screen. Anything not in the map falls back to the raw entityType,
@@ -1306,7 +1367,7 @@ const ARABIC_TITLES: Record<string, string> = {
   compliance: "التزام تنظيمي", audit_record: "سجل تدقيق",
   insurance: "وثيقة تأمين", traffic_violation: "مخالفة مرورية",
   shift: "وردية عمل", expense: "مصروف", transfer: "تحويل",
-  job: "وظيفة شاغرة", store_order: "طلب متجر", store_product: "منتج متجر",
+  job: "وظيفة شاغرة", job_posting: "إعلان وظيفي", store_order: "طلب متجر", store_product: "منتج متجر",
   support_ticket: "تذكرة دعم", warehouse_category: "تصنيف مستودع",
   owner: "بطاقة مالك", policy_detail: "تفاصيل سياسة",
   client: "بطاقة عميل", crm_lead: "عميل محتمل",
