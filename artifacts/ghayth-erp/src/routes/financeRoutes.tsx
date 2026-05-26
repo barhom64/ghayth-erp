@@ -32,6 +32,7 @@ const UnmappedLines = lazy(() => import("@/pages/finance/unmapped-lines"));
 const WhtSummary = lazy(() => import("@/pages/finance/wht-summary"));
 const ZatcaReportsHub = lazy(() => import("@/pages/finance/zatca-reports-hub"));
 const VatReconciliation = lazy(() => import("@/pages/finance/vat-reconciliation"));
+const VatFilingReadiness = lazy(() => import("@/pages/finance/vat-filing-readiness"));
 const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
 const VouchersCreate = lazy(() => import("@/pages/create/finance/vouchers-create"));
 const VoucherDetail = lazy(() => import("@/pages/details/voucher-detail"));
@@ -167,6 +168,7 @@ export const financeRoutes = [
   { path: "/finance/reports/wht-summary", component: WhtSummary },
   // ZATCA & inventory reports hub — landing page (#1059).
   { path: "/finance/reports/zatca", component: ZatcaReportsHub },
+  { path: "/finance/vat-filing-readiness", component: VatFilingReadiness },
   // Lot expiry alerts — consumes /reports/lot-expiry-alerts (#1042).
   { path: "/finance/reports/lot-expiry-alerts", component: LotExpiryAlerts },
   // Inventory valuation report — consumes /reports/inventory-valuation (#1033).
