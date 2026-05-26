@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { Layers, Plus, Building, Car, User, Briefcase, MapPin } from "lucide-react";
+import { Layers, Plus, Building, Car, User, Briefcase, MapPin, Pencil, Trash2 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 interface CostCenter {
@@ -61,7 +61,26 @@ export default function CostCentersPage() {
     `/finance/cost-centers`,
   );
 
+  const [editing, setEditing] = useState<CostCenter | null>(null);
+  const [deleting, setDeleting] = useState<CostCenter | null>(null);
+
   const createMut = useApiMutation("/finance/cost-centers", "POST", [["cost-centers"]]);
+  // PATCH + DELETE for /finance/cost-centers/:id — backend already
+  // supports both; the previous code-comment noted them as "follow-up
+  // PR" but the UI never landed. Inline edit dialog + delete confirm
+  // below.
+  const updateMut = useApiMutation<unknown, { id: number; name: string; code: string | null; allocatedAmount: number | null; status: string }>(
+    (b) => `/finance/cost-centers/${b.id}`,
+    "PATCH",
+    [["cost-centers"]],
+    { successMessage: "تم تحديث مركز التكلفة", onSuccess: () => setEditing(null) },
+  );
+  const deleteMut = useApiMutation<unknown, { id: number }>(
+    (b) => `/finance/cost-centers/${b.id}`,
+    "DELETE",
+    [["cost-centers"]],
+    { successMessage: "تم حذف مركز التكلفة", onSuccess: () => setDeleting(null) },
+  );
 
   const [form, setForm] = useState({
     code: "",
@@ -160,6 +179,32 @@ export default function CostCentersPage() {
       render: (r) => r.status === "active"
         ? <Badge className="bg-emerald-100 text-emerald-800 text-xs">نشط</Badge>
         : <Badge variant="outline" className="text-xs">{r.status}</Badge>,
+    },
+    {
+      key: "__actions",
+      header: "إجراءات",
+      render: (r) => (
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setEditing(r)}
+            title="تعديل"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDeleting(r)}
+            title="حذف"
+            className="text-status-error-foreground"
+            disabled={deleteMut.isPending}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ),
     },
   ];
 
@@ -304,12 +349,101 @@ export default function CostCentersPage() {
         </CardContent>
       </Card>
 
-      <Card className="mt-4 bg-status-warning-surface/30 border-status-warning-surface">
-        <CardContent className="p-3 text-xs text-status-warning-foreground">
-          ⓘ التعديل والحذف + ربط الكيانات (vehicle/project/...) follow-up PR.
-          المسارات PATCH/DELETE /finance/cost-centers/:id موجودة في الـ backend.
-        </CardContent>
-      </Card>
+      {/* Inline edit dialog — wires PATCH /finance/cost-centers/:id. */}
+      <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+        <DialogContent dir="rtl" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>تعديل مركز التكلفة</DialogTitle>
+          </DialogHeader>
+          {editing && (
+            <div className="space-y-3 py-2">
+              <div className="space-y-1">
+                <Label htmlFor="edit-cc-code">الرمز</Label>
+                <Input
+                  id="edit-cc-code"
+                  defaultValue={editing.code ?? ""}
+                  onChange={(e) => { editing.code = e.target.value; }}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-cc-name">الاسم</Label>
+                <Input
+                  id="edit-cc-name"
+                  defaultValue={editing.name}
+                  onChange={(e) => { editing.name = e.target.value; }}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-cc-amount">المبلغ المخصص</Label>
+                <Input
+                  id="edit-cc-amount"
+                  type="number"
+                  defaultValue={editing.allocatedAmount?.toString() ?? ""}
+                  onChange={(e) => { editing.allocatedAmount = e.target.value as any; }}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-cc-status">الحالة</Label>
+                <Select
+                  defaultValue={editing.status}
+                  onValueChange={(v) => { editing.status = v; }}
+                >
+                  <SelectTrigger id="edit-cc-status"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">نشط</SelectItem>
+                    <SelectItem value="inactive">معطّل</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>إلغاء</Button>
+            <GuardedButton
+              perm="finance:update"
+              onClick={() => {
+                if (!editing) return;
+                updateMut.mutate({
+                  id: editing.id,
+                  name: editing.name,
+                  code: editing.code,
+                  allocatedAmount: editing.allocatedAmount != null && editing.allocatedAmount !== ""
+                    ? Number(editing.allocatedAmount)
+                    : null,
+                  status: editing.status,
+                });
+              }}
+              disabled={updateMut.isPending}
+            >
+              {updateMut.isPending ? "جاري الحفظ…" : "حفظ"}
+            </GuardedButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirm — wires DELETE /finance/cost-centers/:id. */}
+      <Dialog open={!!deleting} onOpenChange={(o) => { if (!o) setDeleting(null); }}>
+        <DialogContent dir="rtl" className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>حذف مركز التكلفة</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            هل تريد بالتأكيد حذف <span className="font-semibold text-status-neutral-foreground">{deleting?.name}</span>؟
+            هذا الإجراء لا يمكن التراجع عنه.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleting(null)}>إلغاء</Button>
+            <GuardedButton
+              perm="finance:delete"
+              variant="destructive"
+              onClick={() => deleting && deleteMut.mutate({ id: deleting.id })}
+              disabled={deleteMut.isPending}
+            >
+              {deleteMut.isPending ? "جاري الحذف…" : "حذف"}
+            </GuardedButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }
