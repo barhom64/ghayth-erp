@@ -36,8 +36,9 @@ import {
 } from "../lib/errorHandler.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
-import { invalidateAiGovernanceCache } from "../lib/aiGovernance.js";
-import { recordAiUsage } from "../lib/aiUsage.js";
+import { invalidateAiGovernanceCache, PROVIDER_SECRET_KEYS } from "../lib/aiGovernance.js";
+import { recordAiUsage, computeAiCostUsd } from "../lib/aiUsage.js";
+import { encryptSecret, isEncrypted } from "../lib/secrets.js";
 import { config } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
 
@@ -51,21 +52,77 @@ const providerCreateSchema = z.object({
   status: z.enum(["active", "disabled", "failover-only"]).default("active"),
   priority: z.number().int().min(1).max(1000).default(100),
   defaultModel: z.string().max(120).optional().nullable(),
+  capabilities: z.array(z.enum(["generation", "stt", "embedding", "image"]))
+    .min(1, "اختر قدرة واحدة على الأقل").default(["generation"]),
+  endpoint: z.string().url("URL غير صالح").optional().nullable(),
   config: z.record(z.unknown()).default({}),
   notes: z.string().optional().nullable(),
 });
 
 const providerUpdateSchema = providerCreateSchema.partial().omit({ slug: true });
 
+/** Sentinel the GET handler returns in place of an existing secret value. */
+const SECRET_MASK = "*****";
+
+/**
+ * Prepare a config object for INSERT/UPDATE:
+ *   - Plaintext secret values get encrypted.
+ *   - Already-encrypted values pass through unchanged (so a PATCH
+ *     that doesn't touch a secret field keeps the existing IV/ciphertext).
+ *   - The mask sentinel ("*****") from the GET response is DROPPED so a
+ *     round-trip GET→PATCH never overwrites a real secret with the mask.
+ *     Caller must then merge with the existing row to preserve the
+ *     un-touched secret — done in the PATCH handler.
+ *
+ * Returns the safe-to-store config + the set of secret keys the caller
+ * stripped (so the PATCH handler can restore them from the DB row).
+ */
+function prepareProviderConfigForStorage(
+  config: Record<string, unknown>,
+): { safe: Record<string, unknown>; preserved: Set<string> } {
+  const out: Record<string, unknown> = {};
+  const preserved = new Set<string>();
+  for (const [k, v] of Object.entries(config)) {
+    if (PROVIDER_SECRET_KEYS.has(k) && typeof v === "string" && v === SECRET_MASK) {
+      // GET → PATCH round-trip. Skip — caller will restore from DB.
+      preserved.add(k);
+      continue;
+    }
+    if (PROVIDER_SECRET_KEYS.has(k) && typeof v === "string" && v.length > 0 && !isEncrypted(v)) {
+      out[k] = encryptSecret(v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return { safe: out, preserved };
+}
+
 router.get("/providers", authorize({ feature: "admin", action: "list" }), async (req, res) => {
   try {
-    const rows = await rawQuery(
-      `SELECT id, slug, name, status, priority, "defaultModel", config, notes,
+    const rows = await rawQuery<Record<string, unknown> & { config: Record<string, unknown> }>(
+      `SELECT id, slug, name, status, priority, "defaultModel",
+              capabilities, endpoint, config, notes,
               "createdAt", "updatedAt"
          FROM ai_providers
         ORDER BY priority ASC, slug ASC`,
     );
-    res.json(maskFields(req, { data: rows, total: rows.length }));
+    // Mask secrets in the response so an operator listing the
+    // registry sees a placeholder instead of an encrypted blob (and
+    // never the plaintext, since values are stored encrypted). UI
+    // shows "set/not-set" + a re-enter field on edit.
+    const data = rows.map((r) => {
+      const cfg = r.config ?? {};
+      const maskedCfg: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(cfg)) {
+        if (PROVIDER_SECRET_KEYS.has(k)) {
+          maskedCfg[k] = typeof v === "string" && v.length > 0 ? "*****" : "";
+        } else {
+          maskedCfg[k] = v;
+        }
+      }
+      return { ...r, config: maskedCfg };
+    });
+    res.json(maskFields(req, { data, total: data.length }));
   } catch (err) {
     handleRouteError(err, res, "admin/ai-governance/providers/list");
   }
@@ -76,10 +133,16 @@ router.post("/providers", authorize({ feature: "admin", action: "create" }), asy
     const scope = req.scope!;
     const body = zodParse(providerCreateSchema.safeParse(req.body));
 
+    const { safe: safeConfig } = prepareProviderConfigForStorage(body.config);
     const { insertId } = await rawExecute(
-      `INSERT INTO ai_providers (slug, name, status, priority, "defaultModel", config, notes)
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
-      [body.slug, body.name, body.status, body.priority, body.defaultModel ?? null, JSON.stringify(body.config), body.notes ?? null],
+      `INSERT INTO ai_providers
+         (slug, name, status, priority, "defaultModel", capabilities, endpoint, config, notes)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb, $9)`,
+      [
+        body.slug, body.name, body.status, body.priority, body.defaultModel ?? null,
+        JSON.stringify(body.capabilities), body.endpoint ?? null,
+        JSON.stringify(safeConfig), body.notes ?? null,
+      ],
     ).catch((err) => {
       if (String(err?.message).includes("ai_providers_slug_key")) {
         throw new ConflictError("هذا المعرّف مسجّل مسبقاً", { field: "slug" });
@@ -131,7 +194,26 @@ router.patch("/providers/:id", authorize({ feature: "admin", action: "update" })
     setIf("status", body.status);
     setIf("priority", body.priority);
     setIf("defaultModel", body.defaultModel);
-    setIf("config", body.config, true);
+    setIf("capabilities", body.capabilities, true);
+    setIf("endpoint", body.endpoint);
+    // Config gets special treatment so a GET→PATCH round-trip never
+    // overwrites a real secret with the mask sentinel: any secret key
+    // that came back as "*****" is restored from the existing row
+    // before write.
+    if (body.config !== undefined) {
+      const { safe, preserved } = prepareProviderConfigForStorage(body.config);
+      if (preserved.size > 0) {
+        const [existing] = await rawQuery<{ config: Record<string, unknown> | null }>(
+          `SELECT config FROM ai_providers WHERE id = $1`, [id],
+        );
+        const prior = existing?.config ?? {};
+        for (const k of preserved) {
+          if (prior[k] !== undefined) safe[k] = prior[k];
+        }
+      }
+      sets.push(`"config" = $${idx++}::jsonb`);
+      params.push(JSON.stringify(safe));
+    }
     setIf("notes", body.notes);
 
     if (sets.length === 0) {
@@ -650,10 +732,10 @@ async function runOneShot(
       durationMs,
       status: "success",
     });
-    // Rough cost mirror from aiUsage's PRICING — we don't import the
-    // constant so this stays a pure derivation; aiUsage records the
-    // authoritative number to the DB.
-    const cost = (promptTokens / 1_000_000) * 1.0 + (completionTokens / 1_000_000) * 5.0;
+    // Use the shared pricing function so simulator cost stays in
+    // lockstep with the authoritative recordAiUsage() values written
+    // to the DB — no separate maintenance trap.
+    const cost = computeAiCostUsd("anthropic", ANTHROPIC_MODEL, promptTokens, completionTokens);
     const block = msg.content[0];
     return {
       output: block?.type === "text" ? block.text : "",

@@ -12,7 +12,7 @@
  * the navigation flat. Forms use the existing apiFetch + tanstack
  * mutation pattern from finance pages.
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   PageShell,
   DataTable,
@@ -41,6 +41,8 @@ import {
   XCircle, AlertOctagon, MessageSquare, RefreshCw, Eye, FlaskConical, PlayCircle, TestTube,
 } from "lucide-react";
 
+type AiCapability = "generation" | "stt" | "embedding" | "image";
+
 interface ProviderRow {
   id: number;
   slug: string;
@@ -48,6 +50,8 @@ interface ProviderRow {
   status: "active" | "disabled" | "failover-only";
   priority: number;
   defaultModel: string | null;
+  capabilities: AiCapability[];
+  endpoint: string | null;
   config: Record<string, unknown>;
   notes: string | null;
   createdAt: string;
@@ -150,6 +154,7 @@ export default function AdminAiGovernance() {
   const [reviewPromptId, setReviewPromptId] = useState<number | null>(null);
   const [simulatePromptId, setSimulatePromptId] = useState<number | null>(null);
   const [evaluatePrompt, setEvaluatePrompt] = useState<PromptRow | null>(null);
+  const [editProvider, setEditProvider] = useState<ProviderRow | null>(null);
 
   const { data: overview, isLoading: ovLoading, error: ovError, refetch: refetchOverview } =
     useApiQuery<Overview>(["ai-governance-overview"], "/admin/ai-governance/overview");
@@ -229,6 +234,13 @@ export default function AdminAiGovernance() {
       <span className="font-mono text-xs font-medium">{r.slug}</span>
     )},
     { key: "name", header: "الاسم", render: (r) => <span className="text-xs">{r.name}</span> },
+    { key: "capabilities", header: "القدرات", render: (r) => (
+      <div className="flex gap-1 flex-wrap">
+        {(r.capabilities ?? []).map((c) => (
+          <Badge key={c} variant="outline" className="text-[10px]">{c}</Badge>
+        ))}
+      </div>
+    )},
     { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
     { key: "priority", header: "الأولوية", render: (r) => (
       <span className="font-mono text-xs">{r.priority}</span>
@@ -236,12 +248,26 @@ export default function AdminAiGovernance() {
     { key: "defaultModel", header: "النموذج الافتراضي", render: (r) => (
       <span className="font-mono text-xs">{r.defaultModel ?? "—"}</span>
     )},
+    { key: "apiKey", header: "API Key", render: (r) => {
+      // The list endpoint returns "*****" when a key is set, empty
+      // string when not — operator sees at a glance whether the
+      // provider can actually be called.
+      const key = (r.config as { apiKey?: string })?.apiKey;
+      return key === "*****"
+        ? <Badge variant="outline" className="text-[10px] text-status-success-foreground">مضبوط</Badge>
+        : <Badge variant="outline" className="text-[10px] text-muted-foreground">غير مضبوط</Badge>;
+    }},
     { key: "actions", header: "إجراءات", render: (r) => (
-      <Button variant="ghost" size="sm" onClick={() => updateProvider.mutate({
-        id: r.id, body: { status: r.status === "active" ? "disabled" : "active" },
-      })}>
-        {r.status === "active" ? "تعطيل" : "تفعيل"}
-      </Button>
+      <div className="flex items-center gap-1 flex-wrap">
+        <Button variant="ghost" size="sm" onClick={() => setEditProvider(r)}>
+          تعديل
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => updateProvider.mutate({
+          id: r.id, body: { status: r.status === "active" ? "disabled" : "active" },
+        })}>
+          {r.status === "active" ? "تعطيل" : "تفعيل"}
+        </Button>
+      </div>
     )},
   ];
 
@@ -488,12 +514,20 @@ export default function AdminAiGovernance() {
           prompt={evaluatePrompt}
           onClose={() => setEvaluatePrompt(null)}
         />
+        <EditProviderDialog
+          provider={editProvider}
+          onClose={() => setEditProvider(null)}
+          onSubmit={(b) => editProvider && updateProvider.mutate({ id: editProvider.id, body: b })}
+          isSubmitting={updateProvider.isPending}
+        />
       </PageStateWrapper>
     </PageShell>
   );
 }
 
 // ─────────────────────── Dialogs ──────────────────────────────────────────
+
+const ALL_CAPABILITIES: AiCapability[] = ["generation", "stt", "embedding", "image"];
 
 function NewProviderDialog({ open, onClose, onSubmit, isSubmitting }: {
   open: boolean; onClose: () => void;
@@ -503,23 +537,46 @@ function NewProviderDialog({ open, onClose, onSubmit, isSubmitting }: {
   const [name, setName] = useState("");
   const [priority, setPriority] = useState(100);
   const [defaultModel, setDefaultModel] = useState("");
+  const [endpoint, setEndpoint] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [notes, setNotes] = useState("");
+  const [capabilities, setCapabilities] = useState<AiCapability[]>(["generation"]);
+  const toggleCap = (c: AiCapability) =>
+    setCapabilities((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>تسجيل مزوّد جديد</DialogTitle>
-          <DialogDescription>يضاف للسجل وتصبح حالته الافتراضية "نشط".</DialogDescription>
+          <DialogDescription>
+            اختر القدرات (يمكن واحدة أو أكثر) — مزوّد STT يُستهلَك تلقائياً من /admin/pbx-control.
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto">
           <div>
             <Label>المعرّف (slug)</Label>
-            <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="anthropic" />
+            <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="openai-whisper" />
           </div>
           <div>
             <Label>الاسم</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Anthropic Claude" />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="OpenAI Whisper" />
+          </div>
+          <div>
+            <Label>القدرات</Label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {ALL_CAPABILITIES.map((c) => (
+                <Button
+                  key={c}
+                  variant={capabilities.includes(c) ? "default" : "outline"}
+                  size="sm"
+                  type="button"
+                  onClick={() => toggleCap(c)}
+                >
+                  {c}
+                </Button>
+              ))}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -528,8 +585,24 @@ function NewProviderDialog({ open, onClose, onSubmit, isSubmitting }: {
             </div>
             <div>
               <Label>النموذج الافتراضي</Label>
-              <Input value={defaultModel} onChange={(e) => setDefaultModel(e.target.value)} placeholder="claude-haiku-4-5" />
+              <Input value={defaultModel} onChange={(e) => setDefaultModel(e.target.value)} placeholder="whisper-1" />
             </div>
+          </div>
+          <div>
+            <Label>Endpoint (اختياري — للـ STT و custom hosts)</Label>
+            <Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} placeholder="https://api.openai.com/v1/audio/transcriptions" />
+          </div>
+          <div>
+            <Label>API Key (يُشفَّر قبل الحفظ)</Label>
+            <Input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="sk-..."
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              يُحفظ مشفّراً عبر SECRETS_ENCRYPTION_KEY ولا يُعاد عرضه. اتركه فارغاً إن لم يكن المزوّد يتطلّب مصادقة.
+            </p>
           </div>
           <div>
             <Label>ملاحظات</Label>
@@ -540,10 +613,12 @@ function NewProviderDialog({ open, onClose, onSubmit, isSubmitting }: {
           <Button variant="outline" onClick={onClose}>إلغاء</Button>
           <Button
             rateLimitAware
-            disabled={isSubmitting || !slug || !name}
+            disabled={isSubmitting || !slug || !name || capabilities.length === 0}
             onClick={() => onSubmit({
-              slug, name, priority,
+              slug, name, priority, capabilities,
               defaultModel: defaultModel || null,
+              endpoint: endpoint || null,
+              config: apiKey ? { apiKey } : {},
               notes: notes || null,
             })}
           >
@@ -996,6 +1071,102 @@ function NewTestCaseDialog({ open, slug, onClose, onSuccess }: {
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>إلغاء</Button>
           <Button rateLimitAware disabled={create.isPending || !name} onClick={() => create.mutate()}>حفظ</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditProviderDialog({ provider, onClose, onSubmit, isSubmitting }: {
+  provider: ProviderRow | null; onClose: () => void;
+  onSubmit: (b: Partial<ProviderRow>) => void; isSubmitting: boolean;
+}) {
+  const [name, setName] = useState("");
+  const [priority, setPriority] = useState(100);
+  const [defaultModel, setDefaultModel] = useState("");
+  const [endpoint, setEndpoint] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [notes, setNotes] = useState("");
+  const [capabilities, setCapabilities] = useState<AiCapability[]>([]);
+  const [status, setStatus] = useState<"active" | "disabled" | "failover-only">("active");
+  const toggleCap = (c: AiCapability) =>
+    setCapabilities((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
+
+  // Hydrate state from the provider being edited each time the dialog
+  // opens — including the apiKey-set badge so the operator sees "*****"
+  // and knows the key is present without it being revealed.
+  useEffect(() => {
+    if (!provider) return;
+    setName(provider.name);
+    setPriority(provider.priority);
+    setDefaultModel(provider.defaultModel ?? "");
+    setEndpoint(provider.endpoint ?? "");
+    setNotes(provider.notes ?? "");
+    setCapabilities(provider.capabilities ?? ["generation"]);
+    setStatus(provider.status);
+    setApiKey((provider.config as { apiKey?: string })?.apiKey === "*****" ? "*****" : "");
+  }, [provider]);
+
+  if (!provider) return null;
+  return (
+    <Dialog open={!!provider} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>تعديل المزوّد: <span className="font-mono text-sm">{provider.slug}</span></DialogTitle>
+          <DialogDescription>
+            اترك حقل API Key على "*****" للحفاظ على المفتاح الحالي، أو امسحه وأدخل قيمة جديدة.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+          <div><Label>الاسم</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+          <div>
+            <Label>الحالة</Label>
+            <div className="flex gap-2 mt-2">
+              {(["active", "disabled", "failover-only"] as const).map((s) => (
+                <Button key={s} variant={status === s ? "default" : "outline"} size="sm" type="button" onClick={() => setStatus(s)}>
+                  {s}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label>القدرات</Label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {ALL_CAPABILITIES.map((c) => (
+                <Button key={c} variant={capabilities.includes(c) ? "default" : "outline"} size="sm" type="button" onClick={() => toggleCap(c)}>
+                  {c}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label>الأولوية</Label><Input type="number" value={priority} onChange={(e) => setPriority(Number(e.target.value))} /></div>
+            <div><Label>النموذج الافتراضي</Label><Input value={defaultModel} onChange={(e) => setDefaultModel(e.target.value)} /></div>
+          </div>
+          <div><Label>Endpoint</Label><Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} /></div>
+          <div>
+            <Label>API Key</Label>
+            <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="اتركه على ***** للإبقاء على القيمة الحالية" />
+          </div>
+          <div><Label>ملاحظات</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button rateLimitAware disabled={isSubmitting || !name || capabilities.length === 0} onClick={() => {
+            const body: Partial<ProviderRow> = {
+              name, status, priority, capabilities,
+              defaultModel: defaultModel || null,
+              endpoint: endpoint || null,
+              notes: notes || null,
+            };
+            // Only send config if the operator typed something. The
+            // server preserves "*****" → existing value, and never sees
+            // the user's plain key on round-trips that didn't touch it.
+            if (apiKey !== "") {
+              body.config = { apiKey };
+            }
+            onSubmit(body);
+          }}>حفظ</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

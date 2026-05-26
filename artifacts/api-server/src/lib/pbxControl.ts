@@ -25,6 +25,8 @@
  */
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { logger } from "./logger.js";
+import { getActiveProvidersByCapability, type AiProviderRow } from "./aiGovernance.js";
+import { recordAiUsage } from "./aiUsage.js";
 
 export type IvrAction =
   | { kind: "extension"; extension: string; ringTimeoutSeconds?: number }
@@ -204,15 +206,26 @@ export async function enqueueTranscription(
 
 /**
  * Pull the oldest pending transcript and process it. Returns null
- * when the queue is empty. When no STT vendor is configured, the row
- * is marked 'failed' with a clear reason so the operator can act —
- * vs. hanging in 'pending' indefinitely.
+ * when the queue is empty.
  *
- * Wiring a vendor later: replace the "STT_NOT_CONFIGURED" branch
- * with a call to the vendor SDK and write the transcript text +
- * provider name + transcribedAt timestamp into the same row. The
- * surrounding lifecycle (status, errorMessage, AI summary trigger)
- * doesn't need to change.
+ * Vendor resolution:
+ *   1. Look up an active provider with capability='stt' from the
+ *      ai_providers registry (operator wires it from the UI, no env
+ *      vars or code edits required).
+ *   2. If none, mark the row 'failed' with STT_NOT_CONFIGURED so the
+ *      operator sees what's blocking — never silent 'pending'.
+ *   3. If found, call the provider's Whisper-compatible endpoint
+ *      (POST audio/transcriptions multipart) with the recording URL
+ *      streamed from pbx_calls.recordingUrl.
+ *   4. On success: write transcript text + transcribedAt; record
+ *      provider/duration through recordAiUsage so transcription cost
+ *      shows up in the observability AI panel alongside generation.
+ *   5. On failure: write the vendor's error message and mark failed.
+ *
+ * Whisper-compatible API contract (works with OpenAI / Azure
+ * Whisper / self-hosted whisper.cpp servers exposing the same
+ * route): POST <endpoint> with multipart form-data `file` + `model`,
+ * Bearer auth from config.apiKey, response `{ text: string }`.
  */
 export async function runPendingTranscription(): Promise<{ callId: number; status: string } | null> {
   // FOR UPDATE SKIP LOCKED so multiple workers can run safely.
@@ -233,21 +246,144 @@ export async function runPendingTranscription(): Promise<{ callId: number; statu
        RETURNING t.id, t."callId", t."companyId"`,
     );
     if (rows.length === 0) return null;
-    const { id, callId } = rows[0]!;
+    const { id, callId, companyId } = rows[0]!;
 
-    // No vendor wired yet. Mark failed with a clear reason so the
-    // operator UI surfaces what's blocking transcription instead of
-    // letting the row sit in 'pending' silently.
+    // Resolve the STT vendor from the registry.
+    const sttProviders = await getActiveProvidersByCapability("stt");
+    if (sttProviders.length === 0) {
+      await rawExecute(
+        `UPDATE pbx_call_transcripts
+            SET status = 'failed',
+                "errorMessage" = 'STT_NOT_CONFIGURED — قم بتفعيل مزوّد STT من /admin/ai-governance (Providers → capability=stt + apiKey)'
+          WHERE id = $1`,
+        [id],
+      );
+      return { callId, status: "failed" };
+    }
+
+    // Find the call's recording URL.
+    const [call] = await rawQuery<{ recordingUrl: string | null }>(
+      `SELECT "recordingUrl" FROM pbx_calls WHERE id = $1`,
+      [callId],
+    );
+    if (!call?.recordingUrl) {
+      await rawExecute(
+        `UPDATE pbx_call_transcripts
+            SET status = 'failed',
+                "errorMessage" = 'NO_RECORDING — مكالمة بدون رابط تسجيل'
+          WHERE id = $1`,
+        [id],
+      );
+      return { callId, status: "failed" };
+    }
+
+    // Try providers in priority order; first one that succeeds wins.
+    let lastError: string | null = null;
+    for (const provider of sttProviders) {
+      const result = await callWhisperCompatible(provider, call.recordingUrl);
+      if (result.ok) {
+        await rawExecute(
+          `UPDATE pbx_call_transcripts
+              SET status = 'completed',
+                  provider = $2,
+                  transcript = $3,
+                  "transcribedAt" = NOW(),
+                  "errorMessage" = NULL
+            WHERE id = $1`,
+          [id, provider.slug, result.text],
+        );
+        // Record cost/usage for observability. STT pricing is
+        // per-second of audio; we don't know the duration here so
+        // fall back to a 0-token row that still surfaces the call
+        // in the AI panel as a usage event.
+        void recordAiUsage({
+          companyId,
+          provider: provider.slug,
+          model: provider.defaultModel ?? "whisper-1",
+          feature: "pbx_control.stt",
+          promptTokens: 0,
+          completionTokens: 0,
+          durationMs: result.durationMs,
+          status: "success",
+        });
+        return { callId, status: "completed" };
+      }
+      lastError = result.error;
+      logger.warn({ slug: provider.slug, error: result.error }, "[pbxControl] STT provider failed; trying next");
+    }
+
     await rawExecute(
       `UPDATE pbx_call_transcripts
           SET status = 'failed',
-              "errorMessage" = 'STT_NOT_CONFIGURED — wire a speech-to-text vendor in lib/pbxControl.runPendingTranscription()'
+              "errorMessage" = $2
         WHERE id = $1`,
-      [id],
+      [id, `STT_VENDOR_ERROR: ${lastError ?? "unknown"}`],
     );
     return { callId, status: "failed" };
   } catch (err) {
     logger.warn(err, "[pbxControl] runPendingTranscription failed");
     return null;
+  }
+}
+
+/**
+ * Whisper-compatible STT call. Streams the audio from the recording
+ * URL straight into a multipart POST so we never have to buffer the
+ * whole file in memory. Returns { ok: true, text, durationMs } on
+ * success, { ok: false, error, durationMs } on any failure path
+ * (network, auth, parse). Never throws.
+ */
+async function callWhisperCompatible(
+  provider: AiProviderRow,
+  recordingUrl: string,
+): Promise<{ ok: true; text: string; durationMs: number } | { ok: false; error: string; durationMs: number }> {
+  const endpoint = provider.endpoint ?? "https://api.openai.com/v1/audio/transcriptions";
+  const apiKey = typeof provider.config.apiKey === "string" ? provider.config.apiKey : "";
+  if (!apiKey) {
+    return { ok: false, error: "PROVIDER_APIKEY_MISSING", durationMs: 0 };
+  }
+  const model = provider.defaultModel ?? "whisper-1";
+  const startedAt = Date.now();
+
+  try {
+    // 1. Fetch the recording. Recording URLs may be presigned S3
+    //    links from the PBX vendor — short-lived, public, no auth.
+    const audioRes = await fetch(recordingUrl);
+    if (!audioRes.ok) {
+      return { ok: false, error: `RECORDING_FETCH_${audioRes.status}`, durationMs: Date.now() - startedAt };
+    }
+    const audioBuf = await audioRes.arrayBuffer();
+    if (audioBuf.byteLength === 0) {
+      return { ok: false, error: "RECORDING_EMPTY", durationMs: Date.now() - startedAt };
+    }
+
+    // 2. Build the multipart body the Whisper API expects.
+    const form = new FormData();
+    form.append("model", model);
+    form.append("file", new Blob([audioBuf], { type: audioRes.headers.get("content-type") ?? "audio/mpeg" }), "recording.mp3");
+
+    // 3. POST to the configured endpoint.
+    const sttRes = await fetch(endpoint, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
+    });
+    const durationMs = Date.now() - startedAt;
+    if (!sttRes.ok) {
+      const errText = await sttRes.text().catch(() => "");
+      return { ok: false, error: `STT_HTTP_${sttRes.status}: ${errText.slice(0, 200)}`, durationMs };
+    }
+    const payload = (await sttRes.json().catch(() => null)) as { text?: unknown } | null;
+    const text = typeof payload?.text === "string" ? payload.text : "";
+    if (!text) {
+      return { ok: false, error: "STT_EMPTY_RESPONSE", durationMs };
+    }
+    return { ok: true, text, durationMs };
+  } catch (err) {
+    return {
+      ok: false,
+      error: `STT_NETWORK: ${(err as Error)?.message ?? String(err)}`.slice(0, 300),
+      durationMs: Date.now() - startedAt,
+    };
   }
 }

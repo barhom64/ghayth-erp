@@ -47,19 +47,39 @@ export interface AiUsageRecord {
 }
 
 /**
- * Per-million-token USD prices, keyed by `${provider}:${model}`. Source:
- * Anthropic / OpenAI public pricing pages at time of writing — keep this
- * the single source of truth so cost numbers don't drift across the
- * codebase. Update when a new model ships or a price changes; old rows
- * keep the price they were inserted with (cost is computed at write
- * time, not on read).
+ * Per-million-token USD prices. Keys can be exact (`provider:model`) or
+ * a model-family prefix (`provider:claude-haiku-4-5`) — the lookup
+ * tries an exact match first, then walks back to the longest prefix
+ * match, so a dated/suffixed model id (`claude-haiku-4-5-20251001`)
+ * still resolves to its family's price without an exact entry. New
+ * families go in this table; price changes update existing entries.
+ * Old rows keep the price they were inserted with (cost is computed
+ * at write time, not on read).
  */
 const PRICING: Record<string, { inputPerMTok: number; outputPerMTok: number }> = {
-  // Anthropic
-  "anthropic:claude-haiku-4-5": { inputPerMTok: 1.0,  outputPerMTok: 5.0  },
+  // Anthropic — Claude 4.x family. Add a date-suffixed entry if a
+  // specific version needs its own price; otherwise the prefix
+  // match below carries the family-level price through.
+  "anthropic:claude-haiku-4-5":  { inputPerMTok: 1.0,  outputPerMTok: 5.0  },
   "anthropic:claude-sonnet-4-6": { inputPerMTok: 3.0,  outputPerMTok: 15.0 },
   "anthropic:claude-opus-4-7":   { inputPerMTok: 15.0, outputPerMTok: 75.0 },
 };
+
+/** Resolve a price entry for `provider:model`, falling back to the longest matching prefix. */
+function resolvePrice(provider: string, model: string): { inputPerMTok: number; outputPerMTok: number } | null {
+  const exactKey = `${provider}:${model}`;
+  if (PRICING[exactKey]) return PRICING[exactKey];
+  // Walk back the model string by removing trailing -segments until
+  // we hit a prefix that's in the table. Handles dated suffixes like
+  // `claude-haiku-4-5-20251001` falling back to `claude-haiku-4-5`.
+  const parts = model.split("-");
+  while (parts.length > 1) {
+    parts.pop();
+    const prefixKey = `${provider}:${parts.join("-")}`;
+    if (PRICING[prefixKey]) return PRICING[prefixKey];
+  }
+  return null;
+}
 
 /**
  * Cost in USD for one call. Returns 0 (with a warning) for unknown
@@ -72,8 +92,7 @@ export function computeAiCostUsd(
   promptTokens: number,
   completionTokens: number,
 ): number {
-  const key = `${provider}:${model}`;
-  const price = PRICING[key];
+  const price = resolvePrice(provider, model);
   if (!price) {
     logger.warn({ provider, model }, "[aiUsage] no pricing entry — cost recorded as $0");
     return 0;
