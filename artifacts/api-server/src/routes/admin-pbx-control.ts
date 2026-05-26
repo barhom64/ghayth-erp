@@ -134,9 +134,10 @@ router.get("/extensions", authorize({ feature: "admin", action: "list" }), async
       `SELECT e.id, e.extension, e.name, e."employeeId", e."departmentId", e.type, e.status,
               e."ringTimeoutSeconds", e."voicemailEnabled", e.notes,
               e."createdAt", e."updatedAt",
-              emp."nameAr" AS "employeeName"
+              emp.name AS "employeeName"
          FROM pbx_extensions e
-         LEFT JOIN employees emp ON emp.id = e."employeeId"
+         LEFT JOIN employees emp
+                ON emp.id = e."employeeId" AND emp."deletedAt" IS NULL
         WHERE e."companyId" = $1
         ORDER BY e.extension ASC`,
       [cid],
@@ -477,6 +478,7 @@ router.get("/recordings", authorize({ feature: "admin", action: "list" }), async
          FROM pbx_call_recordings r
          JOIN pbx_calls c ON c.id = r."callId"
         WHERE r."companyId" = $1
+          AND r."deletedAt" IS NULL
         ORDER BY r."createdAt" DESC
         LIMIT 100`,
       [cid],

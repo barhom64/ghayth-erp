@@ -67,6 +67,7 @@ router.get("/overview", authorize({ feature: "admin", action: "list" }), async (
            FROM communications_log
           WHERE "createdAt" > NOW() - INTERVAL '24 hours'
             AND ("companyId" = $1 OR "companyId" IS NULL)
+            AND "deletedAt" IS NULL
           GROUP BY channel, direction
           ORDER BY channel, direction`,
         [cid],
@@ -138,6 +139,7 @@ router.get("/inbox", authorize({ feature: "admin", action: "list" }), async (req
            FROM communications_log
           WHERE "companyId" = $1
             AND "createdAt" > NOW() - $2::interval
+            AND "deletedAt" IS NULL
             ${channelCond}
        ),
        calls AS (
