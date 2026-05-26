@@ -393,6 +393,23 @@ function extractFrontendCalls() {
       calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "DELETE", source: "prop" });
     }
 
+    // Raw anchor href to /api/* — file-serving endpoints (PDFs,
+    // downloads, previews) can't use apiFetch because the response
+    // is a stream, not JSON. The convention across the app is
+    // `<a href="/api/documents/:id/download" download>` or
+    // `<a href="/api/documents/:id/preview" target="_blank">`.
+    // Crediting these so download/preview routes don't show as
+    // unused even though the user-visible flow works.
+    const hrefRe = /\bhref\s*=\s*[`"']\/api\//g;
+    for (const m of src.matchAll(hrefRe)) {
+      let i = m.index + 5; // skip "href="
+      while (i < src.length && /\s/.test(src[i])) i++;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/api/")) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "prop" });
+    }
+
     // useDetailEditDelete({ patchPath: "/...", deletePath: "/..." })
     // wraps apiPatch + apiDelete with variable URLs — invisible to the
     // helper-call scanner. Credits the PATCH + DELETE per call.
