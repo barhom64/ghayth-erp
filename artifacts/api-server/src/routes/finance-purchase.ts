@@ -23,7 +23,6 @@ import {
   computeVat,
   roundTo2,
   currentYear,
-  generateRef,
   todayISO,
   toDateISO,
 } from "../lib/businessHelpers.js";
@@ -933,23 +932,24 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     const vatAmount = roundTo2(subtotal * vatRatio);
     const grnTotal = roundTo2(subtotal + vatAmount);
 
-    // RD9-01 — generating `grnRef` from `SELECT MAX(id)+1` outside the
-    // transaction has a textbook two-writer race: T1 reads MAX=N, T2
-    // reads MAX=N, both compute the same ref "GRN-00(N+1)", T1 inserts
-    // OK, T2 hits the unique index uq_goods_receipts_ref(companyId, ref)
-    // and gets a 500. The user retries by hand and it works — but it's
-    // an avoidable user-visible failure on a hot path. Loop a few
-    // attempts: recompute MAX each time, catch only the unique-violation
-    // (Postgres SQLSTATE 23505) and retry. Other errors bubble.
-    let grnRef = "";
+    // Numbering center (Issue #1141) — GRN ref from central authority.
+    // The numberingService runs SELECT … FOR UPDATE inside its own
+    // transaction to serialise allocators, so the previous "MAX(id)+1
+    // + retry on 23505" hot-path workaround (RD9-01) is no longer
+    // needed — concurrent receipts on the same PO simply queue on the
+    // counter row instead of racing.
+    const issuedGrn = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "purchase",
+      entityKey: "goods_receipt",
+      entityTable: "goods_receipts",
+      actorId: scope.userId,
+      metadata: { fromPurchaseOrderId: id },
+    });
+    const grnRef = issuedGrn.number;
     let grnId: number | undefined;
-    let lastErr: unknown;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const [grnSeq] = await rawQuery<Record<string, unknown>>(
-        `SELECT COALESCE(MAX(id),0)+1 AS seq FROM goods_receipts WHERE "companyId" = $1`,
-        [scope.companyId]
-      );
-      grnRef = generateRef("GRN", (grnSeq?.seq as string | number | undefined) ?? Date.now(), 5);
+    {
       try {
         grnId = await withTransaction(async (client) => {
           const grnRes = await client.query(
@@ -958,6 +958,10 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
             [scope.companyId, scope.branchId, id, grnRef, receiptDate, scope.activeAssignmentId, qualityNotes ?? null]
           );
           const newGrnId = grnRes.rows[0].id;
+          await client.query(
+            `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+            [newGrnId, issuedGrn.assignmentId]
+          );
 
           for (const l of inputLines) {
             const item = poItemMap.get(l.poItemId)!;
@@ -1011,20 +1015,15 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
 
           return newGrnId;
         });
-        break;
       } catch (e) {
-        const code = (e as { code?: string } | null)?.code;
-        const constraint = (e as { constraint?: string } | null)?.constraint;
-        if (code === "23505" && (constraint === "uq_goods_receipts_ref" || !constraint)) {
-          lastErr = e;
-          continue;
-        }
+        // The numbering center already serialised our slot on the GRN
+        // counter, so a duplicate ref shouldn't occur. If it does, it's
+        // a real data-integrity bug — surface it instead of looping.
         throw e;
       }
     }
     if (grnId === undefined) {
-      logger.error(lastErr, "[finance-purchase] GRN ref allocation exhausted retries");
-      throw new Error("تعذّر توليد رقم إيصال فريد بعد عدة محاولات");
+      throw new Error("تعذّر إنشاء إيصال الاستلام — راجع سجل التدقيق");
     }
 
     // Post GRN journal.
