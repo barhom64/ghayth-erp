@@ -80,6 +80,7 @@ const SalaryAdvanceDetail = lazy(() => import("@/pages/details/salary-advance-de
 const Ledger = lazy(() => import("@/pages/finance/ledger"));
 const Entity360 = lazy(() => import("@/pages/finance/entity-360"));
 const ReconciliationHub = lazy(() => import("@/pages/finance/reconciliation-hub"));
+const TbComparison = lazy(() => import("@/pages/finance/trial-balance-comparison"));
 const ArAging = lazy(() => import("@/pages/finance/ar-aging"));
 const ApAging = lazy(() => import("@/pages/finance/ap-aging"));
 const BankReconciliation = lazy(() => import("@/pages/finance/bank-reconciliation"));
@@ -96,6 +97,7 @@ const JournalManualDetail = lazy(() => import("@/pages/finance/journal-manual-de
 const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
 const IntercompanyConsolidationCreate = lazy(() => import("@/pages/create/finance/intercompany-consolidation-create"));
 const CashFlowForecast = lazy(() => import("@/pages/finance/cash-flow-forecast"));
+const CashCalendar = lazy(() => import("@/pages/finance/cash-calendar"));
 const ProjectCosting = lazy(() => import("@/pages/finance/project-costing"));
 const ProjectCostingDetail = lazy(() => import("@/pages/finance/project-costing-detail"));
 const CashflowDashboard = lazy(() => import("@/pages/finance/cashflow-dashboard"));
@@ -235,6 +237,7 @@ export const financeRoutes = [
   { path: "/finance/ledger/:code", component: Ledger },
   { path: "/finance/entity-360", component: Entity360 },
   { path: "/finance/reconciliation-hub", component: ReconciliationHub },
+  { path: "/finance/trial-balance-comparison", component: TbComparison },
   { path: "/finance/ar-aging", component: ArAging },
   { path: "/finance/ap-aging", component: ApAging },
   { path: "/finance/bank-reconciliation", component: BankReconciliation },
@@ -251,6 +254,7 @@ export const financeRoutes = [
   { path: "/finance/intercompany", component: Intercompany },
   { path: "/finance/intercompany/consolidation/create", component: IntercompanyConsolidationCreate },
   { path: "/finance/cash-flow-forecast", component: CashFlowForecast },
+  { path: "/finance/cash-calendar", component: CashCalendar },
   { path: "/finance/project-costing", component: ProjectCosting },
   { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
