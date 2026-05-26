@@ -166,6 +166,14 @@ export default function VendorStatementPrintPage() {
             </div>
           </div>
           <div className="flex gap-2 mt-3 justify-end">
+            {supplierId && (
+              <Link href={`/finance/vendor-360-sheet?vendorId=${supplierId}`}>
+                <Button variant="outline" size="sm">
+                  <FileText className="w-4 h-4 ml-1" />
+                  ملف المورد 360°
+                </Button>
+              </Link>
+            )}
             <Button variant="outline" size="sm" onClick={exportCSV} disabled={!data}>
               <Download className="w-4 h-4 ml-1" />
               CSV
