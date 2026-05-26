@@ -1,7 +1,10 @@
 import { useMemo } from "react";
 import { useRoute } from "wouter";
+import { z } from "zod";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
+import { FormGrid, FormTextField, FormTextareaField, FormSelectField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,12 +51,21 @@ function statusTone(status: string) {
   return "default" as const;
 }
 
+const requestEditSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب"),
+  description: z.string().optional().default(""),
+  priority: z.enum(["low", "medium", "high", "urgent"]),
+  notes: z.string().optional().default(""),
+});
+type RequestEditForm = z.infer<typeof requestEditSchema>;
+
 export default function RequestDetail() {
   const [, params] = useRoute("/requests/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("request", id ?? 0);
   const { toast } = useToast();
   const [previewAttachment, setPreviewAttachment] = useState<PreviewableAttachment | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["request", String(id)],
@@ -273,6 +285,16 @@ export default function RequestDetail() {
                 entityId={id ?? 0}
                 formats={["a4"]}/>
             )}
+            <GuardedButton
+              perm="requests:write"
+              variant="outline"
+              size="sm"
+              onClick={() => setEditOpen(true)}
+              disabled={!request || ["closed", "rejected"].includes(request.status)}
+            >
+              <Edit className="h-4 w-4 ms-1" />
+              تعديل
+            </GuardedButton>
           </>
         }
       />
@@ -281,6 +303,39 @@ export default function RequestDetail() {
         open={!!previewAttachment}
         onOpenChange={(o) => !o && setPreviewAttachment(null)}
       />
+      {request && id && (
+        <EntityEditDialog<RequestEditForm>
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          title="تعديل الطلب"
+          schema={requestEditSchema}
+          defaultValues={{
+            title: request.title ?? "",
+            description: request.description ?? "",
+            priority: (request.priority ?? "medium") as RequestEditForm["priority"],
+            notes: request.notes ?? "",
+          }}
+          endpoint={`/requests/${id}`}
+          invalidateKeys={[["request", String(id)], ["requests"]]}
+          onSaved={() => refetch()}
+        >
+          <FormGrid cols={2}>
+            <FormTextField name="title" label="العنوان" required className="md:col-span-2" />
+            <FormSelectField
+              name="priority"
+              label="الأولوية"
+              options={[
+                { value: "low", label: "منخفضة" },
+                { value: "medium", label: "متوسطة" },
+                { value: "high", label: "عالية" },
+                { value: "urgent", label: "عاجلة" },
+              ]}
+            />
+            <FormTextareaField name="description" label="الوصف" className="md:col-span-2" />
+            <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+          </FormGrid>
+        </EntityEditDialog>
+      )}
     </>
   );
 }

@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
+import { z } from "zod";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
   EntityComments,
 } from "@workspace/entity-kit";
+import { FormGrid, FormTextareaField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
@@ -68,11 +71,20 @@ function statusTone(status?: string | null) {
   return "default" as const;
 }
 
+// Expenses PATCH only accepts the description (the row is a posted-or-draft
+// journal_entries record; structural fields are corrected via a reversing
+// entry, not in-place). Backend rejects the call entirely once status='posted'.
+const expenseEditSchema = z.object({
+  description: z.string().min(1, "الوصف مطلوب"),
+});
+type ExpenseEditForm = z.infer<typeof expenseEditSchema>;
+
 export default function ExpenseDetail() {
   const [, params] = useRoute("/finance/expenses/:id");
   const id = params?.id ? Number(params.id) : null;
   const { toast } = useToast();
   const [previewAttachment, setPreviewAttachment] = useState<PreviewableAttachment | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("expense_claim", id ?? 0);
 
   // Fetch via the generic journal endpoint — there is no dedicated
@@ -418,6 +430,16 @@ export default function ExpenseDetail() {
                 entityId={id ?? 0}
                 formats={["a4"]}/>
             )}
+            <GuardedButton
+              perm="finance:update"
+              variant="outline"
+              size="sm"
+              onClick={() => setEditOpen(true)}
+              disabled={!expense || expense?.status === "posted"}
+            >
+              <Edit className="h-4 w-4 ms-1" />
+              تعديل
+            </GuardedButton>
           </>
         }
       />
@@ -426,6 +448,23 @@ export default function ExpenseDetail() {
         open={!!previewAttachment}
         onOpenChange={(o) => !o && setPreviewAttachment(null)}
       />
+      {expense && id && (
+        <EntityEditDialog<ExpenseEditForm>
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          title="تعديل وصف المصروف"
+          description="فقط الوصف قابل للتعديل — التعديلات البنيوية تتم عبر قيد عاكس."
+          schema={expenseEditSchema}
+          defaultValues={{ description: expense.description ?? "" }}
+          endpoint={`/finance/expenses/${id}`}
+          invalidateKeys={[["expense", String(id)], ["expenses"]]}
+          onSaved={() => refetch()}
+        >
+          <FormGrid cols={1}>
+            <FormTextareaField name="description" label="الوصف" />
+          </FormGrid>
+        </EntityEditDialog>
+      )}
     </>
   );
 }
