@@ -219,7 +219,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isAuthenticated) { setApiData(null); return; }
-    apiFetch("/permissions/my")
+    // Pass the picked role to the backend so /permissions/my returns just
+    // that role's modules + permissions. Without this, the union of every
+    // assigned role was returned and switching role in the header dropdown
+    // had no visible effect ("فلتر الدور لا يعمل"). Also clear cached
+    // queries so list pages refetch under the new role's scope.
+    const rolePath = selectedRoleKey
+      ? `/permissions/my?role=${encodeURIComponent(selectedRoleKey)}`
+      : "/permissions/my";
+    apiFetch(rolePath)
       .then((data: any) => {
         setApiData({
           permissions: Array.isArray(data?.permissions) ? data.permissions : [],
@@ -228,7 +236,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
       })
       .catch(() => { setApiData(null); });
-  }, [isAuthenticated, user?.id, permRefreshKey]);
+  }, [isAuthenticated, user?.id, permRefreshKey, selectedRoleKey]);
+
+  // Bust React Query cache when the picked role changes so any in-flight
+  // list/detail data gets refetched under the new role's permissions.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    queryClient.clear();
+  }, [selectedRoleKey, isAuthenticated, queryClient]);
 
   const allowedModules: ModuleType[] = useMemo(() => {
     if (apiData !== null) {
