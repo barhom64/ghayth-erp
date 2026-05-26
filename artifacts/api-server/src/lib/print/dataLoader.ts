@@ -17,6 +17,13 @@ import {
   loadAttendanceReport,
   loadFleetReport,
   loadFleetTripsReport,
+  loadBalanceSheet,
+  loadCashFlow,
+  loadCashBankStatement,
+  loadBudgetVariance,
+  loadGeneralLedger,
+  loadWhtSummary,
+  loadChartOfAccounts,
 } from "./reportLoaders.js";
 
 interface LoaderArgs {
@@ -131,6 +138,9 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadStockAdjustment(companyId, entityId);
     case "item_barcode_label":
       return await loadItemBarcode(companyId, entityId);
+    case "job":
+    case "job_posting":
+      return await loadJobPosting(companyId, entityId);
     case "leave_request":
       return await loadLeaveRequest(companyId, entityId);
     case "loan_request":
@@ -161,6 +171,20 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadFleetReport(companyId, entityId);
     case "report_fleet_trips":
       return await loadFleetTripsReport(companyId, entityId);
+    case "report_balance_sheet":
+      return await loadBalanceSheet(companyId, entityId);
+    case "report_cash_flow":
+      return await loadCashFlow(companyId, entityId);
+    case "report_cash_bank":
+      return await loadCashBankStatement(companyId, entityId);
+    case "report_budget_variance":
+      return await loadBudgetVariance(companyId, entityId);
+    case "report_general_ledger":
+      return await loadGeneralLedger(companyId, entityId);
+    case "report_wht_summary":
+      return await loadWhtSummary(companyId, entityId);
+    case "report_chart_of_accounts":
+      return await loadChartOfAccounts(companyId, entityId);
     default:
       // 1. Entity is in entityRegistry → use its declared table.
       // 2. Otherwise fall back to the static map below for entities the
@@ -385,6 +409,17 @@ async function loadItemBarcode(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   return { entity: item ?? { id, name: "—", sku: "—", barcode: id, price: 0 } };
+}
+
+async function loadJobPosting(companyId: number, id: string) {
+  const [posting] = await rawQuery<Record<string, unknown>>(
+    `SELECT id, title, department, location, type, description, requirements,
+            "salaryMin", "salaryMax", status, "closingDate", "createdAt",
+            "experienceLevel", education, vacancies, benefits, skills
+     FROM job_postings WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: posting ?? { id } };
 }
 
 async function loadLeaveRequest(companyId: number, id: string) {

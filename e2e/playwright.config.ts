@@ -16,8 +16,11 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
-const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:5173";
-const API_URL = process.env.E2E_API_URL ?? "http://localhost:8080";
+// Default to the Replit shared proxy on :80 — that's how the artifact is
+// actually served in this monorepo. Vite-direct (:5173) and api-direct
+// (:8080) bypass path routing and cause every nav assertion to 404.
+const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
+const API_URL = process.env.E2E_API_URL ?? "http://localhost:80";
 
 export default defineConfig({
   testDir: "./tests",

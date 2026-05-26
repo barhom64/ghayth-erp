@@ -18,6 +18,7 @@
     "audit:migrations": "node scripts/src/check-migration-policy.mjs",
     "audit:boundaries": "node scripts/src/audit-domain-boundaries.mjs",
     "audit:domain-routes": "node scripts/src/audit-domain-routes.mjs",
+    "audit:stop-ship": "node scripts/src/audit-stop-ship.mjs",
     "audit:system-review": "node audit/system-review/tooling/run-all.mjs",
     "audit:print-templates": "node scripts/src/audit-print-templates.mjs",
     "guard": "bash scripts/guard.sh",

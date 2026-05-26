@@ -238,6 +238,42 @@ describe("priority-2 numbering schemes seeded in migration 214", () => {
   });
 });
 
+describe("phase-3 cleanup — generateTimeRef removed from all routes (#1141)", () => {
+  const CLI = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/clients.ts"), "utf8");
+  const WHS = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/warehouse.ts"), "utf8");
+  const POR = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/clientPortal.ts"), "utf8");
+  const ALG = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/finance-algorithms.ts"), "utf8");
+  const SIG = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/digital-signature.ts"), "utf8");
+  const INTERNAL = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/internalRef.ts"), "utf8");
+  const MIG215 = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/migrations/215_numbering_client_code_scheme.sql"),
+    "utf8",
+  );
+
+  it("clients.ts issues client code through the numbering center", () => {
+    expect(CLI).not.toMatch(/generateTimeRef\(\s*["']CLT["']\s*\)/);
+    expect(CLI).toContain('entityKey: "client_code"');
+  });
+  it("warehouse.ts no longer calls generateTimeRef for official refs", () => {
+    expect(WHS).not.toMatch(/generateTimeRef\(\s*["']PR-AUTO["']\s*\)/);
+    expect(WHS).not.toMatch(/generateTimeRef\(\s*["']TRANSFER["']\s*\)/);
+    expect(WHS).toContain('entityKey: "purchase_request"');
+    expect(WHS).toContain('entityKey: "stock_transfer"');
+  });
+  it("internal correlation refs (BATCH/BANK/SIG/PAY-PORTAL) go through lib/internalRef.ts", () => {
+    expect(INTERNAL).toContain("export function internalTechRef");
+    expect(WHS).toContain('internalTechRef("BATCH")');
+    expect(POR).toContain('internalTechRef("PAY-PORTAL")');
+    expect(ALG).toContain('internalTechRef("BANK")');
+    expect(SIG).toContain('internalTechRef("SIG")');
+  });
+  it("migration 215 seeds the crm.client_code scheme for every company", () => {
+    expect(MIG215).toContain("'crm', 'client_code'");
+    expect(MIG215).toContain("CLT");
+    expect(MIG215).toContain('ON CONFLICT ("companyId","moduleKey","entityKey") DO NOTHING');
+  });
+});
+
 describe("finance routes migrated to the numbering center", () => {
   const INV = readFileSync(
     join(REPO_ROOT, "artifacts/api-server/src/routes/finance-invoices.ts"),
@@ -285,4 +321,96 @@ describe("CI guard — direct numbering inside routes", () => {
   it("references Issue #1141 for the rules' rationale", () => {
     expect(LINT).toContain("Issue #1141");
   });
+  it("also bans generateRef / generateBranchRef inside routes (phase-4 guard)", () => {
+    expect(LINT).toContain('id: "generateRef-or-generateBranchRef-in-route"');
+  });
 });
+
+describe("phase-4 — GRN + umrah agent invoice now go through the numbering center (#1141)", () => {
+  const PUR = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/finance-purchase.ts"), "utf8");
+  const UMR = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah.ts"), "utf8");
+
+  it("finance-purchase.ts uses numberingService for GRN refs (no MAX+retry hot path)", () => {
+    expect(PUR).not.toMatch(/generateRef\(\s*["']GRN["']/);
+    expect(PUR).not.toMatch(/uq_goods_receipts_ref/);
+    expect(PUR).toContain('entityKey: "goods_receipt"');
+  });
+  it("umrah.ts uses numberingService for agent invoices with seasonId scope", () => {
+    expect(UMR).not.toMatch(/generateBranchRef\(\s*scope\s*,\s*["']invoice_prefix["']/);
+    expect(UMR).toContain('entityKey: "umrah_agent_invoice"');
+    expect(UMR).toContain("seasonId,");
+  });
+});
+
+describe("UX simplification + backfill (#1141 phase 5)", () => {
+  const TAB = readFileSync(
+    join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/settings/numbering-tab.tsx"),
+    "utf8",
+  );
+  const BACKFILL = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/lib/numberingBackfill.ts"),
+    "utf8",
+  );
+  const MIG216 = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/migrations/216_numbering_backfill_metadata.sql"),
+    "utf8",
+  );
+  const ROUTES = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/routes/numbering.ts"),
+    "utf8",
+  );
+
+  it("numbering tab does NOT use forbidden Dialog/Modal popups", () => {
+    // No popup imports — the new UX uses inline master/detail.
+    expect(TAB).not.toMatch(/from\s+["']@\/components\/ui\/dialog["']/);
+    expect(TAB).not.toMatch(/<DialogContent\b/);
+    expect(TAB).not.toMatch(/<DialogHeader\b/);
+  });
+  it("numbering tab exposes the three end-user presets", () => {
+    expect(TAB).toContain("per_branch_yearly");
+    expect(TAB).toContain("company_yearly");
+    expect(TAB).toContain("per_season");
+    expect(TAB).toContain("كل فرع رقم مستقل");
+    expect(TAB).toContain("رقم واحد للشركة");
+    expect(TAB).toContain("حسب الموسم");
+  });
+  it("numbering tab hides expert fields behind an advanced toggle", () => {
+    expect(TAB).toContain("إعدادات متقدمة");
+    expect(TAB).toContain("showAdvanced");
+  });
+  it("numbering tab renders a backfill banner with row count + action", () => {
+    expect(TAB).toContain("BackfillBanner");
+    expect(TAB).toContain("/numbering/schemes/${scheme.id}/backfill");
+  });
+  it("numberingBackfill exports the backfill API surface", () => {
+    expect(BACKFILL).toContain("export async function backfillScheme");
+    expect(BACKFILL).toContain("export async function backfillAllSchemes");
+    expect(BACKFILL).toContain("export async function previewBackfill");
+    expect(BACKFILL).toContain("export function extractSequenceFromRef");
+  });
+  it("backfill rejects non-identifier table/column names (SQL-injection guard)", () => {
+    expect(BACKFILL).toContain("safeIdent");
+    expect(BACKFILL).toMatch(/\/\^\[a-zA-Z_\]\[a-zA-Z0-9_\]\{0,62\}\$\//);
+  });
+  it("backfill ratchets the counter — never decrements", () => {
+    expect(BACKFILL).toContain('GREATEST("lastNumber"');
+    expect(BACKFILL).toContain('GREATEST("nextNumber"');
+  });
+  it("migration 216 adds the backfill-metadata columns + seeds entity-table mapping", () => {
+    expect(MIG216).toContain('"defaultEntityTable"');
+    expect(MIG216).toContain('"defaultRefColumn"');
+    expect(MIG216).toContain('"lastBackfillAt"');
+    expect(MIG216).toContain("'general_request',     'requests'");
+    expect(MIG216).toContain("'employee_contract',   'employee_contracts'");
+    expect(MIG216).toContain("'umrah_agent_invoice', 'umrah_agent_invoices'");
+  });
+  it("backfill endpoints are wired through the numbering router with override RBAC", () => {
+    expect(ROUTES).toMatch(/router\.get\(\s*["']\/schemes\/:id\/backfill\/preview["']/);
+    expect(ROUTES).toMatch(/router\.post\(\s*["']\/schemes\/:id\/backfill["']/);
+    expect(ROUTES).toMatch(/router\.post\(\s*["']\/backfill-all["']/);
+    // The destructive endpoints sit behind `settings.numbering.reset`
+    // — same guard that protects counter resets.
+    expect(ROUTES).toMatch(/backfill["'][\s\S]{0,200}feature:\s*"settings\.numbering\.reset"/);
+  });
+});
+

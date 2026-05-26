@@ -8,8 +8,8 @@
 import { test, expect, request as apiRequest } from "@playwright/test";
 import { TEST_API_URL } from "../playwright.config.js";
 
-const EMAIL = process.env.E2E_USER_EMAIL ?? "owner@local.test";
-const PASSWORD = process.env.E2E_USER_PASSWORD ?? "Test1234!";
+const EMAIL = process.env.E2E_USER_EMAIL ?? "admin@ghayth.com";
+const PASSWORD = process.env.E2E_USER_PASSWORD ?? "Admin@123456";
 
 // csrfMiddleware (artifacts/api-server/src/middlewares/csrfMiddleware.ts)
 // requires every non-safe method to carry the `erp_csrf` cookie value as an
