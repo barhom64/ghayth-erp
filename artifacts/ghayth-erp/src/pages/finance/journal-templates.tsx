@@ -24,7 +24,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Plus, Pencil, Trash2, FileText, X } from "lucide-react";
+import { Link } from "wouter";
+import { Plus, Pencil, Trash2, FileText, X, ScrollText, Repeat } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 /**
@@ -190,13 +191,25 @@ export default function JournalTemplatesPage() {
       subtitle="تعريف الحسابات الافتراضية لكل نوع عملية — تختصر تعبئة القيود اليدوية المتكررة"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "قوالب القيود" }]}
       actions={
-        <GuardedButton
-          perm="finance.accounting_engine:create"
-          onClick={() => setCreating(true)}
-          className="gap-1.5"
-        >
-          <Plus className="h-4 w-4" /> قالب جديد
-        </GuardedButton>
+        <>
+          <Link href="/finance/journal">
+            <Button variant="outline" size="sm">
+              <ScrollText className="h-4 w-4 me-2" />القيود اليومية
+            </Button>
+          </Link>
+          <Link href="/finance/recurring-journals">
+            <Button variant="outline" size="sm">
+              <Repeat className="h-4 w-4 me-2" />القيود الدورية
+            </Button>
+          </Link>
+          <GuardedButton
+            perm="finance.accounting_engine:create"
+            onClick={() => setCreating(true)}
+            className="gap-1.5"
+          >
+            <Plus className="h-4 w-4" /> قالب جديد
+          </GuardedButton>
+        </>
       }
     >
       <FinanceTabsNav />
