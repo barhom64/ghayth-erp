@@ -8,6 +8,7 @@ import { lazy } from "react";
 // for the cascade to the rest of the module.
 const Dashboard = lazy(() => import("@/pages/finance/dashboard"));
 const CfoCockpit = lazy(() => import("@/pages/finance/cfo-cockpit"));
+const GlHealthScore = lazy(() => import("@/pages/finance/gl-health-score"));
 const Accounts = lazy(() => import("@/pages/finance/accounts"));
 const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
@@ -45,6 +46,7 @@ const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
 const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
 const CostSplitter = lazy(() => import("@/pages/create/finance/cost-splitter"));
+const AccountTransfer = lazy(() => import("@/pages/create/finance/account-transfer"));
 const Budget = lazy(() => import("@/pages/finance/budget"));
 const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
@@ -141,6 +143,7 @@ export const financeRoutes = [
   // to its own explicit path so the two pages don't share a URL.
   { path: "/finance", component: Dashboard },
   { path: "/finance/cfo-cockpit", component: CfoCockpit },
+  { path: "/finance/gl-health", component: GlHealthScore },
   { path: "/finance/accounts", component: Accounts },
   { path: "/finance/accounts/create", component: AccountsCreate },
   { path: "/finance/accounts/:id/edit", component: AccountsEdit },
@@ -279,4 +282,5 @@ export const financeRoutes = [
   { path: "/finance/recurring-journals/:id", component: RecurringJournalDetail },
   { path: "/finance/year-end-close", component: YearEndClose },
   { path: "/finance/treasury", component: Treasury },
+  { path: "/finance/treasury/transfer", component: AccountTransfer },
 ];
