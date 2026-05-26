@@ -250,7 +250,11 @@ const RULES = [
     //   30 — initial ratchet baseline (2026-05-25)
     //   28 — after import-wizard.tsx moved 2 of its preview tables to
     //        <DataTable noToolbar> (unlinkedSubAgents + newAgentsToCreate)
-    countBaseline: 28,
+    //   27 — commission-plan-editor.tsx TiersTab moved its
+    //        useFieldArray rows to <DataTable noToolbar>; per-cell
+    //        Input/Checkbox/Button stays bound to react-hook-form via
+    //        column.render() callbacks
+    countBaseline: 27,
     message:
       "Raw <table> element in a page. Use `<DataTable>` from " +
       "`@workspace/ui-core` for list data (search/sort/pagination), or " +

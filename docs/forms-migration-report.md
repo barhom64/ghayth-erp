@@ -22,7 +22,7 @@
 | Page-level `window.confirm()` / `confirm()` callers | **0** | ✅ `grep -rn 'window\.confirm\|\bconfirm(' artifacts/ghayth-erp/src/pages` |
 | Frontend API calls resolving to real backend routes (path + HTTP method) | **728/728 (100%)** | ✅ `pnpm run audit:wiring` (hard gate in `scripts/guard.sh` — any orphan OR method mismatch fails the build) |
 | Wiring-audit fixture tests | **35/35 pass** | ✅ `scripts/src/check-frontend-backend-wiring.test.mjs` (readString, normaliseFrontendUrl, urlsMatch + regression guards, methodsMatch, inferMethod for all 7 helpers, end-to-end invariant) |
-| Raw `<table>` ratchet baseline | **28 occurrences** (down from 30 — 2 import-wizard preview tables migrated to `<DataTable noToolbar>`) | ✅ `raw-table-in-page` rule in `scripts/src/lint-patterns.mjs` — net-new raw `<table>` fails the build; existing ones (mostly print views) stay until per-file migration |
+| Raw `<table>` ratchet baseline | **27 occurrences** (down from 30 — import-wizard preview tables + commission-plan-editor tiers table migrated to `<DataTable noToolbar>`) | ✅ `raw-table-in-page` rule in `scripts/src/lint-patterns.mjs` — net-new raw `<table>` fails the build; existing ones (mostly print views) stay until per-file migration |
 | Legacy `useAutoDraft` / `useFieldErrors` callers | **0** | ✅ both hook files deleted from src/hooks/ |
 | Hard lint rule blocking regression | **active** | ✅ `manual-form-instead-of-formshell` in scripts/src/lint-patterns.mjs |
 | Lint-pattern test fixtures for the FormShell + native-dialog rules | **9** | ✅ scripts/src/lint-patterns.test.mjs (4 for `manual-form-instead-of-formshell`, 5 for `native-confirm-or-prompt`) |
