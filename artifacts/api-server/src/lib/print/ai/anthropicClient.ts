@@ -16,6 +16,7 @@ import type {
   LetterDraft,
 } from "../ai.js";
 import { logger } from "../../logger.js";
+import { recordAiUsage } from "../../aiUsage.js";
 
 // Default model — Claude Haiku 4.5 matches aiEngine.ts and is the
 // cost/latency sweet spot for the doc-platform workloads (template
@@ -41,16 +42,41 @@ export class AnthropicAiClient implements AiClient {
     return this.client !== null;
   }
 
-  private async call(systemPrompt: string, userPrompt: string): Promise<string> {
+  private async call(systemPrompt: string, userPrompt: string, feature: string): Promise<string> {
     if (!this.client) throw new Error("AI_NOT_CONFIGURED");
-    const msg = await this.client.messages.create({
-      model: this.opts.model ?? MODEL,
-      max_tokens: MAX_TOKENS,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-    const block = msg.content[0];
-    return block?.type === "text" ? block.text : "";
+    const model = this.opts.model ?? MODEL;
+    const startedAt = Date.now();
+    try {
+      const msg = await this.client.messages.create({
+        model,
+        max_tokens: MAX_TOKENS,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      });
+      void recordAiUsage({
+        provider: "anthropic",
+        model,
+        feature,
+        promptTokens: msg.usage?.input_tokens ?? 0,
+        completionTokens: msg.usage?.output_tokens ?? 0,
+        durationMs: Date.now() - startedAt,
+        status: "success",
+      });
+      const block = msg.content[0];
+      return block?.type === "text" ? block.text : "";
+    } catch (err) {
+      void recordAiUsage({
+        provider: "anthropic",
+        model,
+        feature,
+        promptTokens: 0,
+        completionTokens: 0,
+        durationMs: Date.now() - startedAt,
+        status: "error",
+        errorCode: (err as Error)?.name ?? "AI_ERROR",
+      });
+      throw err;
+    }
   }
 
   private parseJsonStrict<T>(raw: string, fallback: T): T {
@@ -79,7 +105,7 @@ export class AnthropicAiClient implements AiClient {
       "Tokens follow the {{entity.X}}, {{branch.letterhead}}, {{client.name}}, {{system.verifyBlock}} convention. " +
       "Sections are top-to-bottom blocks (e.g. 'letterhead', 'buyer-block', 'items-table', 'totals', 'verify-block', 'footer').";
     const user = `Entity type: ${input.entityType}\nLocale: ${input.locale}\nSample data (truncated):\n\`\`\`json\n${JSON.stringify(input.sampleData, null, 2).slice(0, 3000)}\n\`\`\`\nSuggest the layout.`;
-    const raw = await this.call(system, user);
+    const raw = await this.call(system, user, "print.suggest_template");
     const parsed = this.parseJsonStrict<{
       suggestedSections?: string[];
       suggestedTokens?: string[];
@@ -107,7 +133,7 @@ export class AnthropicAiClient implements AiClient {
     // first 100 rows + total count are enough for a summary.
     const sample = input.rows.slice(0, 100);
     const user = `Title: ${input.title}\nTotal rows: ${input.rows.length}\nFirst ${sample.length} rows:\n\`\`\`json\n${JSON.stringify(sample, null, 2)}\n\`\`\``;
-    const raw = await this.call(system, user);
+    const raw = await this.call(system, user, "print.summarise_report");
     const parsed = this.parseJsonStrict<{
       oneLine?: string;
       paragraphs?: string[];
@@ -136,7 +162,7 @@ export class AnthropicAiClient implements AiClient {
       "The body is plain text with paragraph breaks; no HTML tags. " +
       "Keep the body under 400 words.";
     const user = `Purpose: ${input.purpose}\nAddressee: ${input.addressee}\nFacts:\n\`\`\`json\n${JSON.stringify(input.facts, null, 2)}\n\`\`\`\nDraft the letter.`;
-    const raw = await this.call(system, user);
+    const raw = await this.call(system, user, "print.draft_letter");
     const parsed = this.parseJsonStrict<{ subject?: string; body?: string }>(raw, {
       subject: "",
       body: "",

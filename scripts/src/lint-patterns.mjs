@@ -308,6 +308,24 @@ const RULES = [
       "fails, let the error bubble — the document must NOT be created " +
       "without a properly-issued number.",
   },
+  {
+    // Final guard for #1141 — the two legacy ref-builder helpers from
+    // businessHelpers (generateRef / generateBranchRef) only assemble a
+    // ref string from a sequence value the caller has already obtained.
+    // They have NO audit, NO uniqueness check, and NO branch counter.
+    // Every callsite that survived #1141 has been migrated to
+    // numberingService; this rule prevents a regression in any route.
+    id: "generateRef-or-generateBranchRef-in-route",
+    scan: [ROUTES_DIR],
+    regex: /\bgenerate(?:Branch)?Ref\s*\(/,
+    message:
+      "`generateRef(...)` / `generateBranchRef(...)` inside a route is " +
+      "forbidden (Issue #1141). These helpers just format a string from " +
+      "a seq the caller obtained — there is no audit, no counter, no " +
+      "uniqueness check. Call `numberingService.issueNumber(...)` " +
+      "instead so the resulting number lands in `numbering_assignments` " +
+      "with full audit and per-scope uniqueness enforcement.",
+  },
 
   // ─── UI-kit adoption ratchet (UNIFICATION_PLAN §P8) ──────────────────
   //
