@@ -12,6 +12,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { haversineKm } from "../lib/algorithms.js";
@@ -4096,8 +4097,17 @@ router.post("/official-letters", authorize({ feature: "hr.organization", action:
       });
     }
 
-    const [seqRow] = await rawQuery<Record<string, unknown>>(`SELECT nextval('letter_number_seq') AS seq`).catch((e) => { logger.error(e, "letter sequence query failed"); return [{ seq: Date.now() % 1000000 }]; });
-    const letterRef = generateRef("LTR", seqRow.seq as string | number);
+    // Numbering center (Issue #1141) — official letter number from
+    // the central authority. Scheme: `hr.official_letter`.
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "hr",
+      entityKey: "official_letter",
+      entityTable: "official_letters",
+      actorId: scope.userId,
+    });
+    const letterRef = issued.number;
 
     let insertId!: number;
     await withTransaction(async (client) => {
@@ -4107,6 +4117,10 @@ router.post("/official-letters", authorize({ feature: "hr.organization", action:
         [scope.companyId, Number(employeeId), type ?? "general", String(subject).trim(), String(content).trim(), status ?? "draft", scope.activeAssignmentId, letterRef, scope.branchId || null]
       );
       insertId = ins.rows[0].id;
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertId, issued.assignmentId]
+      );
     });
 
     const approvalResult = await initiateApprovalChain({
