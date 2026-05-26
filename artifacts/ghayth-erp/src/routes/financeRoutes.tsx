@@ -43,6 +43,7 @@ const JournalDetail = lazy(() => import("@/pages/finance/journal-detail"));
 const PostingActivity = lazy(() => import("@/pages/finance/posting-activity"));
 const JournalCreate = lazy(() => import("@/pages/create/finance/journal-create"));
 const Invoices = lazy(() => import("@/pages/finance/invoices"));
+const InvoiceSendQueue = lazy(() => import("@/pages/finance/invoice-send-queue"));
 const InvoicesCreate = lazy(() => import("@/pages/create/finance/invoices-create"));
 const InvoiceDetail = lazy(() => import("@/pages/finance/invoice-detail"));
 const Expenses = lazy(() => import("@/pages/finance/expenses"));
@@ -208,6 +209,7 @@ export const financeRoutes = [
   { path: "/finance/journal/create", component: JournalCreate },
   { path: "/finance/journal/:id", component: JournalDetail },
   { path: "/finance/invoices", component: Invoices },
+  { path: "/finance/invoice-send-queue", component: InvoiceSendQueue },
   { path: "/finance/invoices/create", component: InvoicesCreate },
   { path: "/finance/invoices/:id", component: InvoiceDetail },
   { path: "/finance/expenses", component: Expenses },
