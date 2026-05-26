@@ -446,4 +446,99 @@ router.post("/calls", authorize({ feature: "communications", action: "create" })
   }
 });
 
+// ─────────────────────── GET /recipients/search ──────────────────────────
+
+/**
+ * Search clients + employees by name/phone/email and return a flat
+ * list the compose dialog can autocomplete into. Channel-aware:
+ *   - email  → returns only entries with an email address
+ *   - sms/whatsapp → returns only entries with a phone number
+ * Capped at 30 results so the dropdown stays fast.
+ */
+router.get("/recipients/search", authorize({ feature: "communications", action: "list" }), async (req, res) => {
+  try {
+    const cid = req.scope!.companyId;
+    const q = String(req.query.q ?? "").trim();
+    const channel = String(req.query.channel ?? "email") as "email" | "sms" | "whatsapp";
+    if (q.length < 2) {
+      res.json(maskFields(req, { data: [], total: 0 }));
+      return;
+    }
+    const like = `%${q}%`;
+
+    // Pull from clients + employees in one query via UNION ALL. The
+    // channel filter restricts to rows that actually have the right
+    // contact field, so an email search never returns a phone-only
+    // client.
+    const fieldCheck = channel === "email" ? `c.email IS NOT NULL AND c.email <> ''`
+      : `c.phone IS NOT NULL AND c.phone <> ''`;
+    const empFieldCheck = channel === "email" ? `e.email IS NOT NULL AND e.email <> ''`
+      : `e.phone IS NOT NULL AND e.phone <> ''`;
+
+    const rows = await rawQuery(
+      `(
+         SELECT 'client' AS kind, c.id, c.name,
+                c.phone, c.email,
+                COALESCE(c.code, '') AS code
+           FROM clients c
+          WHERE c."companyId" = $1
+            AND c."deletedAt" IS NULL
+            AND ${fieldCheck}
+            AND (c.name ILIKE $2 OR c.phone ILIKE $2 OR c.email ILIKE $2 OR c.code ILIKE $2)
+          LIMIT 15
+       )
+       UNION ALL
+       (
+         SELECT 'employee' AS kind, e.id, e.name,
+                e.phone, e.email,
+                COALESCE(e."empNumber", '') AS code
+           FROM employees e
+           JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1
+          WHERE e."deletedAt" IS NULL
+            AND ${empFieldCheck}
+            AND (e.name ILIKE $2 OR e.phone ILIKE $2 OR e.email ILIKE $2)
+          LIMIT 15
+       )`,
+      [cid, like],
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "inbox/recipients/search");
+  }
+});
+
+// ─────────────────────── GET /templates ──────────────────────────────────
+
+/**
+ * List notification templates for the compose dialog's template
+ * picker. Operator-managed via the existing notification engine;
+ * here we just expose the active ones filterable by channel.
+ */
+router.get("/templates", authorize({ feature: "communications", action: "list" }), async (req, res) => {
+  try {
+    const cid = req.scope!.companyId;
+    const channel = (req.query.channel as string | undefined) ?? null;
+    const params: unknown[] = [cid];
+    let channelCond = "";
+    if (channel && ["email", "whatsapp", "sms"].includes(channel)) {
+      params.push(channel);
+      channelCond = ` AND channel = $${params.length}`;
+    }
+    const rows = await rawQuery(
+      `SELECT id, "templateKey", channel, "titleTemplate", "bodyTemplate",
+              variables, language, "isDefault"
+         FROM notification_templates
+        WHERE ("companyId" = $1 OR "companyId" IS NULL)
+          AND "isActive" = true
+          ${channelCond}
+        ORDER BY "isDefault" DESC, "templateKey" ASC
+        LIMIT 100`,
+      params,
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "inbox/templates");
+  }
+});
+
 export default router;
