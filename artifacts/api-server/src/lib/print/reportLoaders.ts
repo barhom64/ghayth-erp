@@ -410,3 +410,203 @@ export async function loadFleetTripsReport(companyId: number, entityId: string) 
     items,
   };
 }
+
+// ─── Balance sheet — مَيزانية عمومية حسب نوع الحساب لحظة معينة ─────────
+export async function loadBalanceSheet(companyId: number, entityId: string) {
+  // entityId encodes asOfDate as "YYYY-MM-DD..YYYY-MM-DD" — we use endDate
+  // when present, otherwise startDate, otherwise today.
+  const { startDate, endDate } = parseEntityId(entityId);
+  const asOf = endDate ?? startDate ?? null;
+  const params: unknown[] = [companyId];
+  let dateFilter = "";
+  if (asOf) { params.push(asOf); dateFilter = ` AND je."createdAt" <= $${params.length}`; }
+
+  const rows = await rawQuery<Record<string, unknown>>(
+    `SELECT coa.code, coa.name, coa.type,
+            (COALESCE(SUM(jl.debit), 0) - COALESCE(SUM(jl.credit), 0))::float8 AS balance
+     FROM chart_of_accounts coa
+     LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
+     LEFT JOIN journal_entries je
+       ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter}
+     WHERE coa."companyId" = $1 AND coa.type IN ('asset', 'liability', 'equity')
+     GROUP BY coa.code, coa.name, coa.type
+     HAVING (COALESCE(SUM(jl.debit), 0) - COALESCE(SUM(jl.credit), 0)) <> 0
+     ORDER BY coa.type, coa.code`,
+    params,
+  );
+
+  const items = rows.map((r) => ({
+    "الفئة": TYPE_ACCOUNT[r.type as string] ?? (r.type as string),
+    "الرمز": r.code as string,
+    "اسم الحساب": r.name as string,
+    "الرصيد": Number(r.balance ?? 0),
+  }));
+
+  const totalAssets      = rows.filter((r) => r.type === "asset").reduce((s, r) => s + Number(r.balance ?? 0), 0);
+  // Liabilities + equity are credit-balance accounts — flip sign for display.
+  const totalLiabilities = -rows.filter((r) => r.type === "liability").reduce((s, r) => s + Number(r.balance ?? 0), 0);
+  const totalEquity      = -rows.filter((r) => r.type === "equity").reduce((s, r) => s + Number(r.balance ?? 0), 0);
+
+  return {
+    entity: {
+      id: entityId,
+      ref: "الميزانية العمومية",
+      title: "الميزانية العمومية",
+      date: new Date().toLocaleDateString("ar-SA"),
+      asOfDate: asOf ?? "اليوم",
+      totalAssets, totalLiabilities, totalEquity,
+      status: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01 ? "متوازن" : "غير متوازن",
+    },
+    items,
+  };
+}
+
+// ─── Cash flow — حركة النقدية حسب نشاط من جداول journal_lines ───────────
+export async function loadCashFlow(companyId: number, entityId: string) {
+  const { startDate, endDate } = parseEntityId(entityId);
+  let dateFilter = "";
+  const params: unknown[] = [companyId];
+  if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+  if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+
+  const rows = await rawQuery<Record<string, unknown>>(
+    `SELECT je.type AS "activity", coa.name AS "accountName",
+            COALESCE(SUM(jl.debit), 0)::float8  AS "inflow",
+            COALESCE(SUM(jl.credit), 0)::float8 AS "outflow"
+     FROM journal_lines jl
+     JOIN journal_entries je ON je.id = jl."journalId"
+     JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = $1
+     WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+       AND coa.type = 'asset' AND coa.code LIKE '1%'  -- cash/bank GL prefix
+       ${dateFilter}
+     GROUP BY je.type, coa.name
+     ORDER BY je.type, coa.name`,
+    params,
+  );
+
+  const items = rows.map((r) => ({
+    "النشاط": (r.activity as string | null) ?? "غير محدد",
+    "الحساب": (r.accountName as string | null) ?? "",
+    "وارد": Number(r.inflow ?? 0),
+    "صادر": Number(r.outflow ?? 0),
+    "صافي": Number(r.inflow ?? 0) - Number(r.outflow ?? 0),
+  }));
+
+  const totalInflow  = items.reduce((s, r) => s + (r["وارد"] as number), 0);
+  const totalOutflow = items.reduce((s, r) => s + (r["صادر"] as number), 0);
+
+  return {
+    entity: {
+      id: entityId,
+      ref: "قائمة التدفقات النقدية",
+      title: "قائمة التدفقات النقدية",
+      date: new Date().toLocaleDateString("ar-SA"),
+      period: startDate || endDate ? `${startDate ?? "البداية"} → ${endDate ?? "اليوم"}` : "كل الفترات",
+      totalInflow, totalOutflow, netCashFlow: totalInflow - totalOutflow,
+    },
+    items,
+  };
+}
+
+// ─── Cash & bank statement — كل حركات حسابات النقدية والبنك ───────────
+export async function loadCashBankStatement(companyId: number, entityId: string) {
+  const { startDate, endDate } = parseEntityId(entityId);
+  let dateFilter = "";
+  const params: unknown[] = [companyId];
+  if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+  if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+
+  const rows = await rawQuery<Record<string, unknown>>(
+    `SELECT je.ref, je."createdAt", coa.code, coa.name AS "accountName",
+            jl.description, jl.debit::float8 AS debit, jl.credit::float8 AS credit
+     FROM journal_lines jl
+     JOIN journal_entries je ON je.id = jl."journalId"
+     JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = $1
+     WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+       AND coa.type = 'asset' AND coa.code LIKE '1%'
+       ${dateFilter}
+     ORDER BY je."createdAt" DESC
+     LIMIT 1000`,
+    params,
+  );
+
+  const items = rows.map((r) => ({
+    "المرجع": (r.ref as string | null) ?? "",
+    "التاريخ": r.createdAt ? new Date(r.createdAt as string | Date).toLocaleDateString("ar-SA") : "",
+    "رمز الحساب": (r.code as string | null) ?? "",
+    "اسم الحساب": (r.accountName as string | null) ?? "",
+    "الوصف": (r.description as string | null) ?? "",
+    "مدين": Number(r.debit ?? 0),
+    "دائن": Number(r.credit ?? 0),
+  }));
+
+  const totalDebit  = items.reduce((s, r) => s + (r["مدين"] as number), 0);
+  const totalCredit = items.reduce((s, r) => s + (r["دائن"] as number), 0);
+
+  return {
+    entity: {
+      id: entityId,
+      ref: "كشف الصندوق والبنك",
+      title: "كشف الصندوق والبنك",
+      date: new Date().toLocaleDateString("ar-SA"),
+      period: startDate || endDate ? `${startDate ?? "البداية"} → ${endDate ?? "اليوم"}` : "كل الفترات",
+      count: items.length,
+      totalDebit, totalCredit, netMovement: totalDebit - totalCredit,
+    },
+    items,
+  };
+}
+
+// ─── Budget variance — موازنة vs فعلي حسب الحساب ───────────────────────
+export async function loadBudgetVariance(companyId: number, entityId: string) {
+  const { startDate, endDate } = parseEntityId(entityId);
+  let dateFilter = "";
+  const params: unknown[] = [companyId];
+  if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+  if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" <= $${params.length}`; }
+
+  // Budget lines × actual GL movement. Skips silently if budgets table is
+  // missing in the tenant (older companies pre-budget rollout).
+  const rows = await rawQuery<Record<string, unknown>>(
+    `SELECT b."accountCode", coa.name AS "accountName",
+            COALESCE(b.amount, 0)::float8 AS "budgeted",
+            COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)::float8 AS "actual"
+     FROM budget_lines b
+     JOIN chart_of_accounts coa ON coa.code = b."accountCode" AND coa."companyId" = $1
+     LEFT JOIN journal_lines jl ON jl."accountCode" = b."accountCode"
+     LEFT JOIN journal_entries je
+       ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL ${dateFilter}
+     WHERE b."companyId" = $1
+     GROUP BY b."accountCode", coa.name, b.amount
+     ORDER BY b."accountCode"`,
+    params,
+  ).catch(() => []);
+
+  const items = rows.map((r) => {
+    const budgeted = Number(r.budgeted ?? 0);
+    const actual = Number(r.actual ?? 0);
+    return {
+      "رمز الحساب": r.accountCode as string,
+      "اسم الحساب": (r.accountName as string | null) ?? "",
+      "الميزانية": budgeted,
+      "الفعلي": actual,
+      "الفرق": budgeted - actual,
+      "النسبة %": budgeted !== 0 ? Number(((actual / budgeted) * 100).toFixed(1)) : 0,
+    };
+  });
+
+  const totalBudget = items.reduce((s, r) => s + (r["الميزانية"] as number), 0);
+  const totalActual = items.reduce((s, r) => s + (r["الفعلي"] as number), 0);
+
+  return {
+    entity: {
+      id: entityId,
+      ref: "انحراف الميزانية",
+      title: "تقرير انحراف الميزانية",
+      date: new Date().toLocaleDateString("ar-SA"),
+      period: startDate || endDate ? `${startDate ?? "البداية"} → ${endDate ?? "اليوم"}` : "كل الفترات",
+      totalBudget, totalActual, variance: totalBudget - totalActual,
+    },
+    items,
+  };
+}
