@@ -91,6 +91,7 @@ import disciplineRouter from "./hr-discipline.js";
 import loansRouter from "./hr-loans.js";
 import overtimeRouter from "./hr-overtime.js";
 import exitRouter from "./hr-exit.js";
+import wpsRouter from "./hr-wps.js";
 import digitalSignatureRouter from "./digital-signature.js";
 import { eventsRouter } from "./events.js";
 import { execDashboardRouter } from "./execDashboard.js";
@@ -285,6 +286,7 @@ router.use("/hr/discipline", requireModule("hr"), disciplineRouter);
 router.use("/hr", requireModule("hr"), loansRouter);
 router.use("/hr", requireModule("hr"), overtimeRouter);
 router.use("/hr", requireModule("hr"), exitRouter);
+router.use("/hr", requireModule("hr"), wpsRouter);
 router.use("/hr/training", requireModule("hr"), trainingRouter);
 router.use("/hr/recruitment", requireModule("hr"), recruitmentRouter);
 // Per-user finance limiter — mounted once on /finance so the dozen+

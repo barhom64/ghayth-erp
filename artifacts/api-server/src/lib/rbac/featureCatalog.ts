@@ -102,6 +102,13 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     approvableActions: ["approve"], displayOrder: 142 },
 
+  { key: "hr.payroll.wps", parentKey: "hr.payroll", moduleKey: "hr", labelAr: "نظام حماية الأجور (WPS)",
+    descriptionAr: "توليد ملف WPS من مسير الرواتب المعتمد، تسليمه للبنك، واستلام تأكيد البنك",
+    availableActions: ["view", "list", "create", "update", "submit", "export"],
+    availableScopes: ["branch", "company"],
+    sensitiveFields: ["iban", "iqamaOrId", "amount", "bankRefNumber"],
+    displayOrder: 143 },
+
   { key: "hr.discipline", parentKey: "hr", moduleKey: "hr", labelAr: "الانضباط الوظيفي",
     availableActions: ALL_ACTIONS, availableScopes: ALL_SCOPES,
     approvableActions: ["approve"], displayOrder: 150 },

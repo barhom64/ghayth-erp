@@ -30,6 +30,8 @@ const OvertimeCreate = lazy(() => import("@/pages/create/hr/overtime-create"));
 const ExitRequests = lazy(() => import("@/pages/hr/exit-requests"));
 const ExitDetail = lazy(() => import("@/pages/hr/exit-detail"));
 const ExitCreate = lazy(() => import("@/pages/create/hr/exit-create"));
+const WpsRuns = lazy(() => import("@/pages/hr/wps-runs"));
+const WpsRunDetail = lazy(() => import("@/pages/hr/wps-run-detail"));
 const Violations = lazy(() => import("@/pages/hr/violations"));
 const ViolationDetail = lazy(() => import("@/pages/hr/violation-detail"));
 const ViolationsCreate = lazy(() => import("@/pages/create/hr/violations-create"));
@@ -184,4 +186,6 @@ export const hrRoutes = [
   { path: "/hr/excuse-requests/create", component: ExcuseCreate, subKey: "attendance" },
   { path: "/hr/excuse-requests/:id/edit", component: ExcuseEdit, subKey: "attendance" },
   { path: "/hr/excuse-requests/:id", component: ExcuseDetail, subKey: "attendance" },
+  { path: "/hr/wps", component: WpsRuns, subKey: "payroll" },
+  { path: "/hr/wps/:id", component: WpsRunDetail, subKey: "payroll" },
 ];
