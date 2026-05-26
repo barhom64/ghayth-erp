@@ -109,6 +109,12 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     sensitiveFields: ["iban", "iqamaOrId", "amount", "bankRefNumber"],
     displayOrder: 143 },
 
+  { key: "hr.saudization", parentKey: "hr", moduleKey: "hr", labelAr: "السعودة (نطاقات)",
+    descriptionAr: "متابعة نسبة السعودة وتصنيف الشركة في نطاقات + تاريخ اللقطات الشهرية",
+    availableActions: ["view", "list", "update", "export"],
+    availableScopes: ["company"],
+    displayOrder: 144 },
+
   { key: "hr.discipline", parentKey: "hr", moduleKey: "hr", labelAr: "الانضباط الوظيفي",
     availableActions: ALL_ACTIONS, availableScopes: ALL_SCOPES,
     approvableActions: ["approve"], displayOrder: 150 },
