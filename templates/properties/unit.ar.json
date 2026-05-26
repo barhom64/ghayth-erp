@@ -1,0 +1,20 @@
+{
+  "code": "properties.property-unit",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "property_unit",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": true,
+  "qr": true,
+  "status": "published",
+  "domain": "properties",
+  "title": "بطاقة وحدة عقارية",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "property_unit"
+  },
+  "ownerTeam": "properties"
+}
