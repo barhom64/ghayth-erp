@@ -225,16 +225,6 @@ export default function FinancialRequestDetail() {
             entityType="purchase_request"
             entityId={item?.id ?? id}
             formats={["a4"]}/>
-          <GuardedButton
-            perm="finance:update"
-            variant="outline"
-            size="sm"
-            onClick={() => setLocation("/finance/financial-requests")}
-            disabled={!item || ["approved", "disbursed", "rejected", "cancelled"].includes(item.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

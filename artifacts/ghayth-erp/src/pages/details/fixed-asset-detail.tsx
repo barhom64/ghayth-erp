@@ -249,16 +249,6 @@ export default function FixedAssetDetail() {
             entityType="fixed_asset"
             entityId={id ?? 0}
             formats={["a4"]}/>
-          <GuardedButton
-            perm="finance:update"
-            variant="outline"
-            size="sm"
-            onClick={() => setLocation("/finance/fixed-assets")}
-            disabled={!item || ["disposed", "sold"].includes(item.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

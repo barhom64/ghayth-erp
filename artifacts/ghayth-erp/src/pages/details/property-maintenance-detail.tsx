@@ -212,16 +212,6 @@ export default function PropertyMaintenanceDetail() {
             entityType="maintenance_request"
             entityId={id ?? 0}
             formats={["a4"]}/>
-          <GuardedButton
-            perm="properties:update"
-            variant="outline"
-            size="sm"
-            onClick={() => setLocation("/properties/maintenance")}
-            disabled={!item || item.status === "completed"}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />
