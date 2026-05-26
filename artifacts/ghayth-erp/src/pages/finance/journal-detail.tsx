@@ -10,6 +10,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ScrollText, ArrowLeftRight, ExternalLink, Hash, Calendar, FileText } from "lucide-react";
 
@@ -165,6 +166,7 @@ export default function JournalDetailPage() {
             ? <PageStatusBadge status="active">مُرَحَّل</PageStatusBadge>
             : <PageStatusBadge status="pending">مسودة</PageStatusBadge>}
           {je.reversedById && <PageStatusBadge status="reversed" />}
+          <EntityPrintButton entityType="journal_entry" entityId={id ?? ""} formats={["a4"]} />
         </div>
       }
     >

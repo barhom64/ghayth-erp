@@ -34,6 +34,7 @@ const VouchersCreate = lazy(() => import("@/pages/create/finance/vouchers-create
 const VoucherDetail = lazy(() => import("@/pages/details/voucher-detail"));
 const Journal = lazy(() => import("@/pages/finance/journal"));
 const JournalDetail = lazy(() => import("@/pages/finance/journal-detail"));
+const PostingActivity = lazy(() => import("@/pages/finance/posting-activity"));
 const JournalCreate = lazy(() => import("@/pages/create/finance/journal-create"));
 const Invoices = lazy(() => import("@/pages/finance/invoices"));
 const InvoicesCreate = lazy(() => import("@/pages/create/finance/invoices-create"));
@@ -41,6 +42,7 @@ const InvoiceDetail = lazy(() => import("@/pages/finance/invoice-detail"));
 const Expenses = lazy(() => import("@/pages/finance/expenses"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
+const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
 const Budget = lazy(() => import("@/pages/finance/budget"));
 const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
@@ -75,6 +77,7 @@ const PeriodClosePreflight = lazy(() => import("@/pages/finance/period-close-pre
 const SalaryAdvances = lazy(() => import("@/pages/finance/salary-advances"));
 const SalaryAdvanceDetail = lazy(() => import("@/pages/details/salary-advance-detail"));
 const Ledger = lazy(() => import("@/pages/finance/ledger"));
+const ReconciliationHub = lazy(() => import("@/pages/finance/reconciliation-hub"));
 const ArAging = lazy(() => import("@/pages/finance/ar-aging"));
 const ApAging = lazy(() => import("@/pages/finance/ap-aging"));
 const BankReconciliation = lazy(() => import("@/pages/finance/bank-reconciliation"));
@@ -162,6 +165,7 @@ export const financeRoutes = [
   { path: "/finance/vouchers/create", component: VouchersCreate },
   { path: "/finance/vouchers/:id", component: VoucherDetail },
   { path: "/finance/journal", component: Journal },
+  { path: "/finance/journal/activity", component: PostingActivity },
   { path: "/finance/journal/create", component: JournalCreate },
   { path: "/finance/journal/:id", component: JournalDetail },
   { path: "/finance/invoices", component: Invoices },
@@ -169,6 +173,7 @@ export const financeRoutes = [
   { path: "/finance/invoices/:id", component: InvoiceDetail },
   { path: "/finance/expenses", component: Expenses },
   { path: "/finance/expenses/create", component: ExpensesCreate },
+  { path: "/finance/expenses/multi-line", component: MultiLineExpenseCreate },
   { path: "/finance/expenses/:id", component: ExpenseDetail },
   { path: "/finance/budget", component: Budget },
   { path: "/finance/budget/create", component: BudgetCreate },
@@ -225,6 +230,7 @@ export const financeRoutes = [
   { path: "/finance/salary-advances", component: SalaryAdvances },
   { path: "/finance/salary-advances/:id", component: SalaryAdvanceDetail },
   { path: "/finance/ledger/:code", component: Ledger },
+  { path: "/finance/reconciliation-hub", component: ReconciliationHub },
   { path: "/finance/ar-aging", component: ArAging },
   { path: "/finance/ap-aging", component: ApAging },
   { path: "/finance/bank-reconciliation", component: BankReconciliation },

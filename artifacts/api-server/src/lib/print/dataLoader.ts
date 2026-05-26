@@ -203,6 +203,8 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   tenant: "tenants",
   property_unit: "property_units",
   rental_contract: "rental_contracts",
+  client: "clients",
+  crm_lead: "crm_opportunities",
   // Fleet
   vehicle: "fleet_vehicles",
   fleet_trip: "fleet_trips",
