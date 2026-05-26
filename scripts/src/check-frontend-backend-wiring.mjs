@@ -381,6 +381,34 @@ function extractFrontendCalls() {
       if (!lit.value.startsWith("/")) continue;
       calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "DELETE", source: "prop" });
     }
+
+    // useInlineActions({ endpoint: "/x", ... }) — the shared hook in
+    // components/inline-actions.tsx that wraps PATCH /:id + (optionally)
+    // DELETE /:id for per-row actions on list pages. The hook itself
+    // fires `apiPatch(\`${endpoint}/${id}\`)` and `apiDelete(...)`, but
+    // the audit can't resolve the `endpoint` variable so both verbs
+    // were invisible on every page using the hook (recruitment / crm /
+    // legal / fleet / support / store / etc. — 22 pages total).
+    //
+    // Per-call: always emit PATCH. Only emit DELETE if the page's
+    // destructure pulls `handleDelete` or `startDelete` — pages that
+    // don't (governance/capa-tab.tsx) intentionally suppress the delete
+    // affordance because the backend doesn't expose a DELETE route.
+    const inlineRe = /(?:const\s*\{([^}]*)\}\s*=\s*)?useInlineActions\s*\(\s*\{[^}]*endpoint\s*:\s*/g;
+    for (const m of src.matchAll(inlineRe)) {
+      let i = m.index + m[0].length;
+      while (i < src.length && /\s/.test(src[i])) i++;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      const url = `${lit.value}/:param`;
+      const line = lineOf(src, m.index);
+      calls.push({ file: rel, url, line, method: "PATCH", source: "prop" });
+      const destructure = m[1] ?? "";
+      if (/\b(handleDelete|startDelete|deletingId)\b/.test(destructure)) {
+        calls.push({ file: rel, url, line, method: "DELETE", source: "prop" });
+      }
+    }
   }
   return calls;
 }
