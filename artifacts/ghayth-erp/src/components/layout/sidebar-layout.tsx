@@ -186,6 +186,7 @@ const allNavSections: NavSection[] = [
         { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
         { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus },
         { label: "مراكز التكلفة", path: "/finance/cost-centers", icon: GitBranch },
+        { label: "قوالب القيود", path: "/finance/journal-templates", icon: FileText },
         { label: "طابور ترحيل GL", path: "/finance/gl-posting-queue", icon: Activity },
       ]},
       { label: "الفواتير والسندات", path: "/finance/invoices", icon: Receipt, module: "finance", children: [

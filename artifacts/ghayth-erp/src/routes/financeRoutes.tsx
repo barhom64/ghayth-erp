@@ -9,6 +9,7 @@ import { lazy } from "react";
 const Dashboard = lazy(() => import("@/pages/finance/dashboard"));
 const Accounts = lazy(() => import("@/pages/finance/accounts"));
 const CostCenters = lazy(() => import("@/pages/finance/cost-centers"));
+const JournalTemplates = lazy(() => import("@/pages/finance/journal-templates"));
 const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
 const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
@@ -83,6 +84,7 @@ export const financeRoutes = [
   { path: "/finance", component: Dashboard },
   { path: "/finance/accounts", component: Accounts },
   { path: "/finance/cost-centers", component: CostCenters },
+  { path: "/finance/journal-templates", component: JournalTemplates },
   { path: "/finance/accounts/create", component: AccountsCreate },
   { path: "/finance/accounts/:id/edit", component: AccountsEdit },
   { path: "/finance/accounts/:id", component: AccountDetail },
