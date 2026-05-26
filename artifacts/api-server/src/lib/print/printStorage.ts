@@ -66,3 +66,24 @@ export async function fetchPrintArtifact(opts: {
     return null;
   }
 }
+
+/** Delete a single rendered artifact from object storage. Idempotent — a
+ *  missing object resolves without error so re-runs of the retention
+ *  job don't fail on the same key twice. The print_jobs audit row is
+ *  left intact (only its pdfStorageKey is cleared by the caller). */
+export async function deletePrintArtifact(opts: {
+  storageKey: string;
+}): Promise<boolean> {
+  const dir = config.objectStorage.privateDir;
+  if (!dir) return false;
+  try {
+    const fullPath = `${dir.replace(/\/+$/, "")}/${opts.storageKey}`;
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    const file = (objectStorageClient as Storage).bucket(bucketName).file(objectName);
+    await file.delete({ ignoreNotFound: true });
+    return true;
+  } catch (err) {
+    logger.warn(err as Error, "[print] failed to delete artifact");
+    return false;
+  }
+}

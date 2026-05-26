@@ -356,6 +356,7 @@ router.post("/exit", authorize({ feature: "hr.exit", action: "create" }), async 
       entityKey: "exit",
       entityTable: "hr_exit_requests",
       actorId: scope.userId,
+      expectedTiming: "on_draft",
     });
     const exitNumber = issuedExit.number;
 

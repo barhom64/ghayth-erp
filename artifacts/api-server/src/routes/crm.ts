@@ -761,6 +761,7 @@ async function handleDealWon(scope: RequestScope, opp: CrmOpportunityRow, dealVa
         entityTable: "legal_contracts",
         actorId: scope.userId,
         metadata: { sourceOpportunityId: opp.id },
+        expectedTiming: "on_draft",
       });
       const { crmEngine } = await import("../lib/engines/index.js");
       crmEngine.requestLegalContractCreation(

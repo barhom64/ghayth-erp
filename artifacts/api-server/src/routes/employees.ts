@@ -484,6 +484,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         entityKey: "employee_code",
         entityTable: "employees",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       preIssuedEmpNumber = preIssued.number;
     }
