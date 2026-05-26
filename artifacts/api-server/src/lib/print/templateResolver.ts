@@ -152,7 +152,7 @@ export async function resolveTemplate(opts: {
 const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   official_letter: () => ({
     id: -2,
-    name: "Letterhead — official letter",
+    name: "خطاب رسمي",
     entityType: "official_letter",
     branchId: null,
     companyId: null,
@@ -184,7 +184,7 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   }),
   umrah_statement: () => ({
     id: -3,
-    name: "Umrah — sub-agent statement",
+    name: "كشف حساب وكيل فرعي — عمرة",
     entityType: "umrah_statement",
     branchId: null,
     companyId: null,
@@ -218,7 +218,7 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   }),
   umrah_runsheet: () => ({
     id: -4,
-    name: "Umrah — daily run-sheet",
+    name: "كشف اليوم التشغيلي — عمرة",
     entityType: "umrah_runsheet",
     branchId: null,
     companyId: null,
@@ -276,7 +276,7 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
 function buildInvoicePreset(): PrintTemplate {
   return {
     id: -5,
-    name: "Invoice — classic A4",
+    name: "فاتورة ضريبية — كلاسيك A4",
     entityType: "invoice",
     branchId: null,
     companyId: null,
@@ -286,11 +286,11 @@ function buildInvoicePreset(): PrintTemplate {
     htmlContent: `<div class="print-doc">
 {{branch.letterhead}}
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">فاتورة ضريبية</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Tax Invoice</div>
+
 <table style="width:100%;margin-bottom:14px;border-collapse:collapse">
   <tr>
     <td style="vertical-align:top;width:50%;padding:0 6px">
-      <div style="font-weight:bold;margin-bottom:4px">العميل / Bill To</div>
+      <div style="font-weight:bold;margin-bottom:4px">العميل</div>
       <div>{{client.name}}</div>
       <div style="color:#64748b;font-size:9pt">الرقم الضريبي: {{client.taxNumber}}</div>
     </td>
@@ -393,7 +393,7 @@ function buildVoucherPreset(kind: "payment" | "receipt"): PrintTemplate {
     name: title,
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">${title}</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Voucher No. <span dir="ltr">{{entity.ref}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم السند: <span dir="ltr">{{entity.ref}}</span></div>
 <div class="meta-grid">
   <div><strong>${partyLabel}:</strong> ${partyToken}</div>
   <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
@@ -422,7 +422,7 @@ function buildPurchaseOrderPreset(): PrintTemplate {
     name: "أمر شراء",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">أمر شراء</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Purchase Order — <span dir="ltr">{{entity.ref}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم الأمر: <span dir="ltr">{{entity.ref}}</span></div>
 <table style="width:100%;margin-bottom:14px;border-collapse:collapse">
   <tr>
     <td style="vertical-align:top;width:50%;padding:0 6px">
@@ -483,7 +483,7 @@ function buildPurchaseRequestPreset(): PrintTemplate {
     name: "طلب شراء",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب شراء</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Purchase Request — <span dir="ltr">{{entity.ref}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم الطلب: <span dir="ltr">{{entity.ref}}</span></div>
 <div class="meta-grid">
   <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
   <div><strong>الحالة:</strong> {{entity.status}}</div>
@@ -531,7 +531,7 @@ function buildGoodsReceiptPreset(): PrintTemplate {
     name: "إيصال استلام بضاعة (GRN)",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">إيصال استلام بضاعة</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Goods Receipt Note — <span dir="ltr">{{entity.ref}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم الإيصال: <span dir="ltr">{{entity.ref}}</span></div>
 <div class="meta-grid">
   <div><strong>تاريخ الاستلام:</strong> {{entity.receivedAt}}</div>
   <div><strong>أمر الشراء المرتبط:</strong> #{{entity.poId}}</div>
@@ -576,7 +576,7 @@ function buildJournalEntryPreset(): PrintTemplate {
     name: "قيد محاسبي",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">قيد محاسبي</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Journal Entry — <span dir="ltr">{{entity.ref}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم القيد: <span dir="ltr">{{entity.ref}}</span></div>
 <div class="meta-grid">
   <div><strong>التاريخ:</strong> {{entity.date}}</div>
   <div><strong>النوع:</strong> {{entity.type}}</div>
@@ -622,7 +622,7 @@ function buildEmployeeContractPreset(): PrintTemplate {
     name: "عقد عمل",
     body: `
 <h1 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">عقد عمل</h1>
-<div style="text-align:center;color:#475569;margin-bottom:18px">Employment Contract</div>
+
 <div style="line-height:1.9;font-size:11pt;padding:0 8px">
   <p>إنه في تاريخ <strong>{{entity.startDate}}</strong> تم إبرام هذا العقد بين:</p>
   <p><strong>الطرف الأول:</strong> {{branch.companyName}} (الموظِّف)<br/>
@@ -655,7 +655,7 @@ function buildPayslipPreset(): PrintTemplate {
     name: "قسيمة راتب",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">قسيمة راتب</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Payslip — Period <span dir="ltr">{{entity.period}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">عن فترة: <span dir="ltr">{{entity.period}}</span></div>
 <table style="width:100%;margin-bottom:14px;border-collapse:collapse">
   <tr>
     <td style="vertical-align:top;width:50%;padding:0 6px">
@@ -715,7 +715,7 @@ function buildLeaveRequestPreset(): PrintTemplate {
     name: "طلب إجازة",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب إجازة</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Leave Request</div>
+
 <table style="width:100%;margin-bottom:14px;border-collapse:collapse">
   <tr>
     <td style="vertical-align:top;width:50%;padding:0 6px">
@@ -755,7 +755,7 @@ function buildLoanRequestPreset(): PrintTemplate {
     name: "طلب قرض / سُلفة",
     body: `
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب قرض / سُلفة</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Loan Request — <span dir="ltr">{{entity.loanNumber}}</span></div>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم القرض: <span dir="ltr">{{entity.loanNumber}}</span></div>
 <table style="width:100%;margin-bottom:14px;border-collapse:collapse">
   <tr>
     <td style="vertical-align:top;width:50%;padding:0 6px">
@@ -786,10 +786,58 @@ function buildLoanRequestPreset(): PrintTemplate {
 }
 
 /** In-memory template that works for any entityType. */
+/** Map snake_case entityType → Arabic display label. Mirrors the labels
+ *  the SPA uses on detail/list pages so the printed doc reads the same as
+ *  the screen. Anything not in the map falls back to the raw entityType,
+ *  which is rare now that every common type has a bespoke preset. */
+const ARABIC_TITLES: Record<string, string> = {
+  invoice: "فاتورة ضريبية", sales_invoice: "فاتورة مبيعات",
+  credit_note: "إشعار دائن", pos_receipt: "إيصال نقطة بيع",
+  receipt_voucher: "سند قبض", payment_voucher: "سند صرف",
+  quotation: "عرض سعر", sales_order: "أمر بيع", delivery_note: "إذن تسليم",
+  purchase_order: "أمر شراء", purchase_request: "طلب شراء",
+  goods_receipt: "إيصال استلام بضاعة", journal_entry: "قيد محاسبي",
+  account_statement: "كشف حساب",
+  stock_transfer: "تحويل مخزون", stock_adjustment: "تسوية مخزون",
+  item_barcode_label: "ملصق باركود",
+  leave_request: "طلب إجازة", loan_request: "طلب قرض", loan: "قرض موظف",
+  maintenance_request: "طلب صيانة", payroll: "كشف رواتب", payslip: "قسيمة راتب",
+  official_letter: "خطاب رسمي", employee_contract: "عقد عمل",
+  employee: "بطاقة موظف", employee_profile: "بطاقة موظف",
+  overtime_request: "طلب عمل إضافي", exit_request: "طلب إنهاء خدمة",
+  evaluation_360: "تقييم 360°", training: "دورة تدريبية",
+  discipline_memo: "مذكرة إنذار", attendance: "سجل حضور",
+  excuse: "عذر", performance_review: "تقييم أداء",
+  vehicle: "بطاقة مركبة", fleet_trip: "كشف رحلة", driver: "سائق",
+  fuel: "تعبئة وقود", fixed_asset: "بطاقة أصل ثابت",
+  vendor: "بطاقة مورّد", supplier: "بطاقة مورّد",
+  rental_contract: "عقد إيجار", property_unit: "بطاقة وحدة عقارية",
+  tenant: "بطاقة مستأجر", building: "بطاقة مبنى",
+  legal_contract: "عقد قانوني", legal_judgment: "ملف قضية",
+  legal_session: "محضر جلسة",
+  umrah_invoice: "فاتورة عمرة", umrah_statement: "كشف وكيل عمرة",
+  umrah_runsheet: "كشف اليوم — عمرة", umrah_agent: "وكيل عمرة",
+  umrah_sub_agent: "وكيل عمرة فرعي", umrah_pilgrim: "معتمر",
+  umrah_package: "باقة عمرة", umrah_season: "موسم عمرة",
+  umrah_transport: "نقل عمرة", umrah_penalty: "عقوبة عمرة",
+  umrah_violation: "مخالفة عمرة",
+  budget: "موازنة", custody: "عهدة", commitment: "التزام",
+  receivable: "ذمم مدينة", recurring_journal: "قيد متكرر",
+  project: "مشروع", project_costing: "تكلفة مشروع",
+  task: "مهمة", request: "طلب", policy: "سياسة", risk: "مخاطرة",
+  compliance: "التزام تنظيمي", audit_record: "سجل تدقيق",
+  insurance: "وثيقة تأمين", traffic_violation: "مخالفة مرورية",
+  shift: "وردية عمل", expense: "مصروف", transfer: "تحويل",
+  job: "وظيفة شاغرة", store_order: "طلب متجر", store_product: "منتج متجر",
+  support_ticket: "تذكرة دعم", warehouse_category: "تصنيف مستودع",
+  owner: "بطاقة مالك", policy_detail: "تفاصيل سياسة",
+};
+
 function universalFallback(entityType: string): PrintTemplate {
+  const title = ARABIC_TITLES[entityType] ?? entityType;
   return {
     id: -1,
-    name: `Universal fallback — ${entityType}`,
+    name: `قالب احتياطي — ${title}`,
     entityType,
     branchId: null,
     companyId: null,
@@ -798,7 +846,7 @@ function universalFallback(entityType: string): PrintTemplate {
     presetKey: "universal",
     htmlContent: `<div class="print-doc">
 {{branch.letterhead}}
-<h2 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">${entityType}</h2>
+<h2 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">${title}</h2>
 <div class="meta-grid">
   <div><strong>المرجع:</strong> {{entity.ref}}</div>
   <div><strong>التاريخ:</strong> {{entity.date}}</div>
@@ -806,6 +854,7 @@ function universalFallback(entityType: string): PrintTemplate {
   <div><strong>المعرّف:</strong> {{entity.id}}</div>
 </div>
 {{entity.itemsTable}}
+{{system.verifyBlock}}
 {{branch.footer}}
 </div>`,
     layoutJson: null,
