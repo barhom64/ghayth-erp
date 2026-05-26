@@ -12,7 +12,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { SupplierSelect, AccountSelect, CostCenterSelect, VehicleSelect, ProjectSelect } from "@/components/shared/entity-selects";
+import {
+  SupplierSelect, AccountSelect, CostCenterSelect, VehicleSelect,
+  ProjectSelect, EmployeeSelect, DriverSelect, ClientSelect,
+} from "@/components/shared/entity-selects";
 import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -51,7 +54,36 @@ interface TaxCode {
   accountCode?: string | null;
 }
 
-type EntityType = "" | "vehicle" | "property" | "unit" | "project" | "contract";
+// Every entity type the JE line schema supports (finance-accounts.ts).
+// The "linkage engine" — pick any of these per line, alone or alongside
+// a cost-center, to drive per-entity profitability reporting.
+type EntityType =
+  | ""
+  | "vehicle"
+  | "property"
+  | "unit"
+  | "project"
+  | "contract"
+  | "employee"
+  | "driver"
+  | "asset"
+  | "client"
+  | "umrah_agent"
+  | "umrah_season";
+
+const ENTITY_TYPE_LABEL: Record<Exclude<EntityType, "">, string> = {
+  vehicle:      "مركبة (Fleet)",
+  property:     "عقار",
+  unit:         "وحدة سكنية / مساحة في عقار",
+  project:      "مشروع",
+  contract:     "عقد",
+  employee:     "موظف",
+  driver:       "سائق",
+  asset:        "أصل ثابت",
+  client:       "عميل",
+  umrah_agent:  "مرشد عمرة",
+  umrah_season: "موسم عمرة",
+};
 
 interface ExpenseLine {
   id: string;
@@ -62,13 +94,32 @@ interface ExpenseLine {
   taxCode: string;            // "" = بدون ضريبة (explicit no-tax)
   taxInclusive: boolean;       // false by default — exclusive
   costCenterId: string;
+  activityType: string;
   entityType: EntityType;
+  // All possible entity ids — only the one matching entityType is sent.
   vehicleId: string;
   propertyId: string;
   unitId: string;
   projectId: string;
   contractId: string;
+  employeeId: string;
+  driverId: string;
+  assetId: string;
+  clientId: string;
+  umrahAgentId: string;
+  umrahSeasonId: string;
 }
+
+const ACTIVITY_TYPES = [
+  { value: "transport",        label: "نقل" },
+  { value: "equipment_rental", label: "تأجير معدات" },
+  { value: "property_rental",  label: "إيجار عقاري" },
+  { value: "umrah",            label: "عمرة" },
+  { value: "contracting",      label: "مقاولات" },
+  { value: "services",         label: "خدمات عامة" },
+  { value: "trading",          label: "تجارة" },
+  { value: "other",            label: "أخرى" },
+];
 
 function emptyLine(): ExpenseLine {
   return {
@@ -80,12 +131,19 @@ function emptyLine(): ExpenseLine {
     taxCode: "VAT15",
     taxInclusive: false,
     costCenterId: "",
+    activityType: "",
     entityType: "",
     vehicleId: "",
     propertyId: "",
     unitId: "",
     projectId: "",
     contractId: "",
+    employeeId: "",
+    driverId: "",
+    assetId: "",
+    clientId: "",
+    umrahAgentId: "",
+    umrahSeasonId: "",
   };
 }
 
@@ -205,14 +263,21 @@ export default function MultiLineExpenseCreatePage() {
       const c = computeLine(l, taxCodeMap);
       if (c.gross === 0) continue;
 
-      // Net expense debit
+      // Net expense debit — every entity type the line carries
       const dims: any = {
         costCenterId: l.costCenterId ? Number(l.costCenterId) : undefined,
-        vehicleId: l.entityType === "vehicle" && l.vehicleId ? Number(l.vehicleId) : undefined,
-        propertyId: l.entityType === "property" && l.propertyId ? Number(l.propertyId) : undefined,
-        unitId: l.entityType === "unit" && l.unitId ? Number(l.unitId) : undefined,
-        projectId: l.entityType === "project" && l.projectId ? Number(l.projectId) : undefined,
-        contractId: l.entityType === "contract" && l.contractId ? Number(l.contractId) : undefined,
+        activityType: l.activityType || undefined,
+        vehicleId:     l.entityType === "vehicle"      && l.vehicleId     ? Number(l.vehicleId)     : undefined,
+        propertyId:    l.entityType === "property"     && l.propertyId    ? Number(l.propertyId)    : undefined,
+        unitId:        l.entityType === "unit"         && l.unitId        ? Number(l.unitId)        : undefined,
+        projectId:     l.entityType === "project"      && l.projectId     ? Number(l.projectId)     : undefined,
+        contractId:    l.entityType === "contract"     && l.contractId    ? Number(l.contractId)    : undefined,
+        employeeId:    l.entityType === "employee"     && l.employeeId    ? Number(l.employeeId)    : undefined,
+        driverId:      l.entityType === "driver"       && l.driverId      ? Number(l.driverId)      : undefined,
+        assetId:       l.entityType === "asset"        && l.assetId       ? Number(l.assetId)       : undefined,
+        clientId:      l.entityType === "client"       && l.clientId      ? Number(l.clientId)      : undefined,
+        umrahAgentId:  l.entityType === "umrah_agent"  && l.umrahAgentId  ? Number(l.umrahAgentId)  : undefined,
+        umrahSeasonId: l.entityType === "umrah_season" && l.umrahSeasonId ? Number(l.umrahSeasonId) : undefined,
       };
       Object.keys(dims).forEach((k) => dims[k] === undefined && delete dims[k]);
 
@@ -417,24 +482,39 @@ export default function MultiLineExpenseCreatePage() {
                   <div className="col-span-12 md:col-span-4">
                     <CostCenterSelect value={line.costCenterId} onChange={(v) => updateLine(line.id, { costCenterId: String(v ?? "") })} label="مركز التكلفة" />
                   </div>
+                  <div className="col-span-12 md:col-span-2">
+                    <Label className="text-xs">النشاط</Label>
+                    <Select
+                      value={line.activityType || "_none"}
+                      onValueChange={(v) => updateLine(line.id, { activityType: v === "_none" ? "" : v })}
+                    >
+                      <SelectTrigger className="h-9"><SelectValue placeholder="—" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">— أي نشاط —</SelectItem>
+                        {ACTIVITY_TYPES.map((a) => (
+                          <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="col-span-12 md:col-span-3">
                     <Label className="text-xs">نوع الكيان المرتبط</Label>
                     <Select value={line.entityType || "_none"} onValueChange={(v) => updateLine(line.id, {
                       entityType: v === "_none" ? "" : v as EntityType,
                       vehicleId: "", propertyId: "", unitId: "", projectId: "", contractId: "",
+                      employeeId: "", driverId: "", assetId: "", clientId: "",
+                      umrahAgentId: "", umrahSeasonId: "",
                     })}>
                       <SelectTrigger className="h-9"><SelectValue placeholder="بدون" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="_none">— بدون كيان —</SelectItem>
-                        <SelectItem value="vehicle">مركبة</SelectItem>
-                        <SelectItem value="property">عقار</SelectItem>
-                        <SelectItem value="unit">وحدة سكنية</SelectItem>
-                        <SelectItem value="project">مشروع</SelectItem>
-                        <SelectItem value="contract">عقد</SelectItem>
+                        {(Object.entries(ENTITY_TYPE_LABEL) as Array<[Exclude<EntityType, "">, string]>).map(
+                          ([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="col-span-12 md:col-span-5">
+                  <div className="col-span-12 md:col-span-3">
                     {line.entityType === "vehicle" && (
                       <VehicleSelect value={line.vehicleId} onChange={(v) => updateLine(line.id, { vehicleId: String(v ?? "") })} label="المركبة" />
                     )}
@@ -460,6 +540,36 @@ export default function MultiLineExpenseCreatePage() {
                         <Label className="text-xs">معرّف العقد</Label>
                         <Input type="number" value={line.contractId} onChange={(e) => updateLine(line.id, { contractId: e.target.value })}
                           placeholder="contract id" className="h-9 font-mono" />
+                      </div>
+                    )}
+                    {line.entityType === "employee" && (
+                      <EmployeeSelect value={line.employeeId} onChange={(v) => updateLine(line.id, { employeeId: String(v ?? "") })} label="الموظف" />
+                    )}
+                    {line.entityType === "driver" && (
+                      <DriverSelect value={line.driverId} onChange={(v) => updateLine(line.id, { driverId: String(v ?? "") })} label="السائق" />
+                    )}
+                    {line.entityType === "asset" && (
+                      <div>
+                        <Label className="text-xs">معرّف الأصل</Label>
+                        <Input type="number" value={line.assetId} onChange={(e) => updateLine(line.id, { assetId: e.target.value })}
+                          placeholder="asset id" className="h-9 font-mono" />
+                      </div>
+                    )}
+                    {line.entityType === "client" && (
+                      <ClientSelect value={line.clientId} onChange={(v) => updateLine(line.id, { clientId: String(v ?? "") })} label="العميل" />
+                    )}
+                    {line.entityType === "umrah_agent" && (
+                      <div>
+                        <Label className="text-xs">معرّف مرشد العمرة</Label>
+                        <Input type="number" value={line.umrahAgentId} onChange={(e) => updateLine(line.id, { umrahAgentId: e.target.value })}
+                          placeholder="umrah agent id" className="h-9 font-mono" />
+                      </div>
+                    )}
+                    {line.entityType === "umrah_season" && (
+                      <div>
+                        <Label className="text-xs">معرّف موسم العمرة</Label>
+                        <Input type="number" value={line.umrahSeasonId} onChange={(e) => updateLine(line.id, { umrahSeasonId: e.target.value })}
+                          placeholder="umrah season id" className="h-9 font-mono" />
                       </div>
                     )}
                   </div>
