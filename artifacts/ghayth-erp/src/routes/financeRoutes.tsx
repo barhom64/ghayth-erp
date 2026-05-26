@@ -14,6 +14,7 @@ const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
 const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
 const CostCenters = lazy(() => import("@/pages/finance/cost-centers"));
+const CostCenterPnl = lazy(() => import("@/pages/finance/cost-center-pnl"));
 const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
 const TaxCodesCreate = lazy(() => import("@/pages/create/finance/tax-codes-create"));
 const WhtCategories = lazy(() => import("@/pages/finance/wht-categories"));
@@ -56,12 +57,14 @@ const VendorsEdit = lazy(() => import("@/pages/create/finance/vendors-edit"));
 const VendorDetail = lazy(() => import("@/pages/finance/vendor-detail"));
 const VendorStatement = lazy(() => import("@/pages/finance/vendor-statement"));
 const VendorContracts = lazy(() => import("@/pages/finance/vendor-contracts"));
+const VendorSpend = lazy(() => import("@/pages/finance/vendor-spend"));
 const PurchaseRequests = lazy(() => import("@/pages/finance/purchase-requests"));
 const PurchaseOrders = lazy(() => import("@/pages/finance/purchase-orders"));
 const PurchaseOrdersCreate = lazy(() => import("@/pages/create/finance/purchase-orders-create"));
 const PurchaseOrderDetail = lazy(() => import("@/pages/finance/purchase-order-detail"));
 const PaymentRun = lazy(() => import("@/pages/finance/payment-run"));
 const FinancialReports = lazy(() => import("@/pages/finance/reports"));
+const IncomeStatementTrend = lazy(() => import("@/pages/finance/income-statement-trend"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
 const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
@@ -193,6 +196,7 @@ export const financeRoutes = [
   { path: "/finance/vendors/:id/edit", component: VendorsEdit, subKey: "vendors" },
   { path: "/finance/vendors/:id/statement", component: VendorStatement, subKey: "vendors" },
   { path: "/finance/contracts", component: VendorContracts },
+  { path: "/finance/vendor-spend", component: VendorSpend },
   { path: "/finance/vendors/:id", component: VendorDetail, subKey: "vendors" },
   { path: "/finance/purchase-requests", component: PurchaseRequests },
   { path: "/finance/purchase-orders", component: PurchaseOrders },
@@ -215,12 +219,14 @@ export const financeRoutes = [
   { path: "/finance/overrides-report", component: OverridesReport },
   { path: "/finance/allocation-results", component: AllocationResults },
   { path: "/finance/cost-centers", component: CostCenters },
+  { path: "/finance/cost-center-pnl", component: CostCenterPnl },
   { path: "/finance/product-catalog", component: ProductCatalog },
   { path: "/finance/fx-rates", component: FxRates },
   { path: "/finance/fx-revaluation/history", component: FxRevaluationHistory },
   { path: "/finance/settings", component: SettingsHub },
   { path: "/finance/fx-revaluation", component: FxRevaluation },
   { path: "/finance/reports", component: FinancialReports },
+  { path: "/finance/reports/is-trend", component: IncomeStatementTrend },
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },
   { path: "/finance/customer-risk", component: CustomerRisk },
