@@ -491,6 +491,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read"],
     notifications: [],
     reports: ["recruitment_pipeline"],
+    print: { hasTemplate: true, templateKey: "job_posting", formats: ["a4"], defaultFormat: "a4", permission: "hr:read" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1175,6 +1176,23 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["warehouse:create", "warehouse:read", "warehouse:approve"],
     notifications: ["inventory_count_ready", "inventory_count_approved"],
     reports: ["inventory_count_report"],
+  },
+  {
+    id: "item_barcode_label",
+    label: "ملصق باركود",
+    domain: "warehouse",
+    table: "warehouse_products",
+    type: "master",
+    owner: "warehouse",
+    origin: [],
+    relatedEntities: ["warehouse_product"],
+    routes: {},
+    attachments: { supported: false },
+    events: [],
+    permissions: ["warehouse:read", "warehouse:update"],
+    notifications: [],
+    reports: [],
+    print: { hasTemplate: true, templateKey: "item_barcode_label", formats: ["label", "a4"], defaultFormat: "label", permission: "warehouse:read" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
