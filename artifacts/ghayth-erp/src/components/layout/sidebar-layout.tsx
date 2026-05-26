@@ -209,6 +209,7 @@ const allNavSections: NavSection[] = [
         { label: "الخزينة", path: "/finance/treasury", icon: Wallet },
         { label: "التسوية البنكية", path: "/finance/bank-reconciliation", icon: Building },
         { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
+        { label: "التحصيل والمتابعة", path: "/finance/collections", icon: Mail },
         { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
         { label: "لوحة التدفق النقدي", path: "/finance/cashflow", icon: LineChart },
         { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
