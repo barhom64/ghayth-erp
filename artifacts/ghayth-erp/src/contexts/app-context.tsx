@@ -245,7 +245,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const allowedModules: ModuleType[] = useMemo(() => {
     if (apiData !== null) {
       const mods = apiData.modules as ModuleType[];
-      if (mods.includes("admin" as ModuleType)) return ALL_MODULES;
+      if (
+        mods.includes("all" as ModuleType) ||
+        mods.includes("*" as ModuleType) ||
+        mods.includes("admin" as ModuleType)
+      ) return ALL_MODULES;
       return mods.length > 0 ? mods : (["home"] as ModuleType[]);
     }
     if (!selectedRole) return ["home", "requests", "documents", "comms"] as ModuleType[];
