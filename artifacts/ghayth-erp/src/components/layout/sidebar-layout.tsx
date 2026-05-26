@@ -235,6 +235,7 @@ const allNavSections: NavSection[] = [
         { label: "سجل الأصول التحليلي 🆕", path: "/finance/fixed-asset-register", icon: BarChart3 },
         { label: "إهلاك دفعة واحدة 🆕", path: "/finance/fixed-assets/batch-depreciate", icon: TrendingUp },
         { label: "العهد", path: "/finance/custodies", icon: KeyRound },
+        { label: "منضدة العُهد 🆕", path: "/finance/custody-workbench", icon: KeyRound },
       ]},
       { label: "الفترات والميزانية", path: "/finance/budget", icon: FileBarChart, module: "finance", children: [
         { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
@@ -250,6 +251,9 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "التكاليف والتسويات", path: "/finance/project-costing", icon: FolderOpen, module: "finance", children: [
         { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
+        { label: "محفظة المشاريع 🆕", path: "/finance/project-portfolio", icon: BarChart3 },
+        { label: "محفظة المركبات 🆕", path: "/finance/vehicle-portfolio", icon: BarChart3 },
+        { label: "محفظة العقارات 🆕", path: "/finance/property-portfolio", icon: BarChart3 },
         { label: "Cost Center P&L 🆕", path: "/finance/cost-center-pnl", icon: BarChart3 },
         { label: "تقييم المخزون", path: "/finance/inventory-costing", icon: Package },
         { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
@@ -389,7 +393,8 @@ const allNavSections: NavSection[] = [
         { label: "الأرشيف", path: "/documents/archive", icon: Archive },
         { label: "القوالب", path: "/documents/templates", icon: FilePlus },
       ]},
-      { label: "التواصل", path: "/communications", icon: Mail, module: "comms", children: [
+      { label: "التواصل", path: "/inbox", icon: Mail, module: "comms", children: [
+        { label: "صندوقي الموحّد", path: "/inbox", icon: Mail },
         { label: "سجل الاتصالات", path: "/communications", icon: MessageSquare },
         { label: "الصادر والوارد", path: "/correspondence", icon: FileText },
         { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap },
