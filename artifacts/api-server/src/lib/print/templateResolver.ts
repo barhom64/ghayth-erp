@@ -1309,6 +1309,7 @@ const ARABIC_TITLES: Record<string, string> = {
   job: "وظيفة شاغرة", store_order: "طلب متجر", store_product: "منتج متجر",
   support_ticket: "تذكرة دعم", warehouse_category: "تصنيف مستودع",
   owner: "بطاقة مالك", policy_detail: "تفاصيل سياسة",
+  client: "بطاقة عميل", crm_lead: "عميل محتمل",
 };
 
 function universalFallback(entityType: string): PrintTemplate {
