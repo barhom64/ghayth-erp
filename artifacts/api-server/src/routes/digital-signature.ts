@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { internalTechRef } from "../lib/internalRef.js";
 import { handleRouteError, ValidationError , zodParse } from "../lib/errorHandler.js";
 import { logger } from "../lib/logger.js";
 import crypto from "node:crypto";
@@ -129,7 +130,9 @@ router.post("/verify", authorize({ feature: "documents", action: "create" }), as
       throw new ValidationError("رمز التحقق غير صحيح أو منتهي الصلاحية");
     }
 
-    const signatureRef = generateTimeRef("SIG");
+    // Internal correlation between the signer flow and the signed
+    // document — NOT a customer-visible doc number (Issue #1141).
+    const signatureRef = internalTechRef("SIG");
     await withTransaction(async (client) => {
       await client.query(`UPDATE digital_signature_otps SET used=true, "usedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [record.id, scope.companyId]);
       await client.query(

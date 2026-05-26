@@ -45,8 +45,11 @@ interface CompanyRow {
 }
 
 export async function loadCompany(companyId: number) {
+  // companies.vatNumber is the actual column; alias to taxNumber so the
+  // CompanyRow interface and downstream letterhead code stay stable.
   const rows = await safeRawQuery<CompanyRow>(
-    `SELECT id, name, "nameEn", address, phone, email, "taxNumber", "crNumber", "logoUrl"
+    `SELECT id, name, "nameEn", address, phone, email,
+            "vatNumber" AS "taxNumber", "crNumber", "logoUrl"
      FROM companies WHERE id = $1 LIMIT 1`,
     [companyId]
   );
