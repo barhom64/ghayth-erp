@@ -386,6 +386,102 @@ check(
   ),
 );
 
+// ─── rtl-text-align-lr (ratchet) ───────────────────────────────────────────
+//
+// Physical text-left/right don't flip in RTL — they're the reason
+// Arabic headings drift to the wrong side on mobile. Logical pair:
+// text-start / text-end.
+
+console.log("rtl-text-align-lr rule");
+
+check(
+  "text-left in className IS flagged",
+  fires(
+    "rtl-text-align-lr",
+    `<div className="text-left mb-2">x</div>`,
+  ),
+);
+check(
+  "text-right in className IS flagged",
+  fires(
+    "rtl-text-align-lr",
+    `<th className="p-2 text-right">العنوان</th>`,
+  ),
+);
+check(
+  "text-start is NOT flagged (logical equivalent)",
+  !fires(
+    "rtl-text-align-lr",
+    `<div className="text-start mb-2">x</div>`,
+  ),
+);
+check(
+  "text-end is NOT flagged",
+  !fires(
+    "rtl-text-align-lr",
+    `<th className="p-2 text-end">العنوان</th>`,
+  ),
+);
+
+// ─── rtl-margin-padding-lr (ratchet) ───────────────────────────────────────
+
+console.log("rtl-margin-padding-lr rule");
+
+check(
+  "ml-2 IS flagged",
+  fires(
+    "rtl-margin-padding-lr",
+    `<Icon className="ml-2 h-4 w-4" />`,
+  ),
+);
+check(
+  "responsive md:pr-4 IS flagged",
+  fires(
+    "rtl-margin-padding-lr",
+    `<div className="p-2 md:pr-4">x</div>`,
+  ),
+);
+check(
+  "ms-2 / me-2 are NOT flagged",
+  !fires(
+    "rtl-margin-padding-lr",
+    `<Icon className="ms-2 me-1" />`,
+  ),
+);
+check(
+  "border-l-2 is NOT flagged (border, not margin)",
+  !fires(
+    "rtl-margin-padding-lr",
+    `<div className="border-l-2 border-status-info">x</div>`,
+  ),
+);
+
+// ─── rtl-position-left-right (ratchet) ─────────────────────────────────────
+
+console.log("rtl-position-left-right rule");
+
+check(
+  "right-3 in absolute positioning IS flagged",
+  fires(
+    "rtl-position-left-right",
+    `<Search className="absolute right-3 top-1/2" />`,
+  ),
+);
+check(
+  "left-0 IS flagged",
+  fires(
+    "rtl-position-left-right",
+    `<div className="absolute left-0 top-1" />`,
+  ),
+);
+check(
+  "start-3 / end-3 are NOT flagged",
+  !fires(
+    "rtl-position-left-right",
+    `<Search className="absolute start-3 top-1/2" />`,
+  ),
+);
+
 // ─── Ratchet structural invariant ───────────────────────────────────────
 //
 // All 15 kit rules were intentionally hardened — none of them should

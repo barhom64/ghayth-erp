@@ -358,7 +358,7 @@ function FinancialLegalTab() {
                         <p className="font-medium text-sm">{c.title}</p>
                         <p className="text-xs mt-0.5 opacity-75">{c.court || "-"} — {c.opposingParty || "-"}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-end">
                         <p className="font-bold text-sm">{formatCurrency(c.financialRisk || 0)}</p>
                         <p className="text-xs mt-0.5 font-medium">{RISK_LABELS[c.riskLevel] || c.riskLevel}</p>
                       </div>

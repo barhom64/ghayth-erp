@@ -23,6 +23,9 @@
 | Frontend API calls resolving to real backend routes (path + HTTP method) | **728/728 (100%)** | ✅ `pnpm run audit:wiring` (hard gate in `scripts/guard.sh` — any orphan OR method mismatch fails the build) |
 | Wiring-audit fixture tests | **35/35 pass** | ✅ `scripts/src/check-frontend-backend-wiring.test.mjs` (readString, normaliseFrontendUrl, urlsMatch + regression guards, methodsMatch, inferMethod for all 7 helpers, end-to-end invariant) |
 | Raw `<table>` ratchet baseline | **27 occurrences** (down from 30 — import-wizard preview tables + commission-plan-editor tiers table migrated to `<DataTable noToolbar>`) | ✅ `raw-table-in-page` rule in `scripts/src/lint-patterns.mjs` — net-new raw `<table>` fails the build; existing ones (mostly print views) stay until per-file migration |
+| RTL hardening — physical `left-N`/`right-N` | **0** (hard rule) | ✅ `rtl-position-left-right` — any new physical position class fails the build. This was the class causing print/dropdown buttons to drift left on mobile Arabic |
+| RTL hardening — physical `text-left`/`text-right` ratchet | **69** (down from 74 — login + insights + legal cleaned) | ✅ `rtl-text-align-lr` — use `text-start`/`text-end` instead |
+| RTL hardening — physical `ml-`/`mr-`/`pl-`/`pr-` ratchet | **47** (locked) | ✅ `rtl-margin-padding-lr` — use logical `ms-`/`me-`/`ps-`/`pe-` instead |
 | Legacy `useAutoDraft` / `useFieldErrors` callers | **0** | ✅ both hook files deleted from src/hooks/ |
 | Hard lint rule blocking regression | **active** | ✅ `manual-form-instead-of-formshell` in scripts/src/lint-patterns.mjs |
 | Lint-pattern test fixtures for the FormShell + native-dialog rules | **9** | ✅ scripts/src/lint-patterns.test.mjs (4 for `manual-form-instead-of-formshell`, 5 for `native-confirm-or-prompt`) |

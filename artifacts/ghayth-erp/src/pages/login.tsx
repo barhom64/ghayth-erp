@@ -416,7 +416,7 @@ export default function Login() {
                     أداة شاملة لإدارة عمليات المنشأة من الموارد البشرية والمالية إلى المشاريع والعمليات اليومية
                   </p>
                 </div>
-                <div className="space-y-3 text-right w-full max-w-xs">
+                <div className="space-y-3 text-end w-full max-w-xs">
                   {[
                     { icon: ShieldCheck, label: "أمان عالٍ وتحكم بالصلاحيات" },
                     { icon: Layers,      label: "وحدات متكاملة لكل قسم"      },
@@ -471,7 +471,7 @@ export default function Login() {
                   onSubmit={handleLogin}
                 >
                   {loginError && (
-                    <Alert className="border-status-error-surface bg-status-error-surface text-right">
+                    <Alert className="border-status-error-surface bg-status-error-surface text-end">
                       <AlertCircle className="h-4 w-4 text-status-error" />
                       <AlertDescription className="text-status-error-foreground text-sm">{loginError}</AlertDescription>
                     </Alert>
@@ -527,7 +527,7 @@ export default function Login() {
                     onSubmit={handleForgotPassword}
                   >
                     {forgotError && (
-                      <Alert className="border-status-error-surface bg-status-error-surface text-right">
+                      <Alert className="border-status-error-surface bg-status-error-surface text-end">
                         <AlertCircle className="h-4 w-4 text-status-error" />
                         <AlertDescription className="text-status-error-foreground text-sm">{forgotError}</AlertDescription>
                       </Alert>

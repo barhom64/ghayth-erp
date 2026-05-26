@@ -238,6 +238,66 @@ const RULES = [
     // existing ones stay until a future PR replaces them. See the
     // discussion in docs/forms-migration-report.md for the per-file
     // status.
+    id: "rtl-text-align-lr",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
+    extensions: [".tsx"],
+    // Match `text-left` or `text-right` ONLY when they appear inside a
+    // className= attribute — avoids matching identifiers like
+    // `useTextRight`, attribute names, or print-stylesheet imports
+    // outside JSX. The regex is single-line and the file scanner
+    // applies it per line.
+    regex: /className=["'][^"']*\btext-(left|right)\b/,
+    // 2026-05-26 baseline. The codebase mixes Tailwind's logical (`text-start`/`text-end`,
+    // RTL-aware) with the physical `text-left`/`text-right` (LTR-only).
+    // Mobile RTL users see headings/buttons flip to the wrong side. The
+    // ratchet locks today's count and forces every new line to use the
+    // logical pair.
+    //
+    // History:
+    //   74 — initial baseline
+    //   69 — login.tsx (3) + insights.tsx (1) + legal.tsx (1) cleaned
+    countBaseline: 69,
+    message:
+      "`text-left` / `text-right` are LTR-only — in RTL mode they keep " +
+      "their physical direction, so headings/buttons appear on the wrong " +
+      "side on mobile. Use Tailwind logical pair `text-start` / `text-end` " +
+      "which flips with the `dir` attribute. (RTL hardening, 2026-05-26.)",
+  },
+  {
+    id: "rtl-margin-padding-lr",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
+    extensions: [".tsx"],
+    // `ml-N`, `mr-N`, `pl-N`, `pr-N` (and their responsive prefixes
+    // `md:ml-2`, etc.) — must use logical `ms-`/`me-`/`ps-`/`pe-`.
+    // The negative lookbehind `(?<![a-z-])` skips substrings like
+    // `border-l-2` (preceded by `-`) and `transform-l-2` (preceded
+    // by a letter) so we only catch real margin/padding classes.
+    regex: /className=["'][^"']*(?<![a-z-])(ml|mr|pl|pr)-[0-9]/,
+    countBaseline: 47,
+    message:
+      "`ml-`/`mr-`/`pl-`/`pr-` are physical sides — they do NOT flip " +
+      "in RTL. Use Tailwind's logical equivalents: `ms-`/`me-`/`ps-`/`pe-` " +
+      "(start/end). Without this, margins/padding land on the wrong side " +
+      "in Arabic UI. (RTL hardening, 2026-05-26.)",
+  },
+  {
+    id: "rtl-position-left-right",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
+    extensions: [".tsx"],
+    // `left-N` / `right-N` as physical positioning (typically inside
+    // `absolute` or `fixed` elements). Logical pair: `start-` / `end-`.
+    // Same negative-lookbehind guard as the margin rule.
+    // 2026-05-26: ratchet started at 2; both fixed in the same commit
+    // so the rule converts straight to hard. Any new physical position
+    // class fails the build.
+    regex: /className=["'][^"']*(?<![a-z-])(left|right)-[0-9]/,
+    message:
+      "`left-N` / `right-N` are physical positions and do NOT flip in " +
+      "RTL — this is what makes print/dropdown buttons drift to the " +
+      "wrong side on mobile Arabic. Use logical `start-N` / `end-N` " +
+      "instead. (RTL hardening, 2026-05-26.)",
+  },
+  {
     id: "raw-table-in-page",
     scan: [ERP_PAGES_DIR],
     extensions: [".tsx"],
