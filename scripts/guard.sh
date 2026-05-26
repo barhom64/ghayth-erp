@@ -73,6 +73,11 @@ else
 fi
 run_step "audit:boundaries"   node scripts/src/audit-domain-boundaries.mjs
 run_step "audit:domain-routes" node scripts/src/audit-domain-routes.mjs
+# Stop-Ship gate for #1141: every route that INSERTs into an executive
+# document table must also call `numberingService.issueNumber`. A pure
+# lint regex can't catch a fresh INSERT into invoices/contracts/etc.
+# that simply doesn't import issueNumber at all — this audit can.
+run_step "audit:numbering-coverage" node scripts/src/audit-numbering-coverage.mjs
 run_step "check:duplicate-migrations" node scripts/src/check-duplicate-migrations.mjs
 # Pure-logic fixtures for the breaking-change detection — no DB needed,
 # guards the guard itself (same pattern as check:ghost-rows:tests above).
