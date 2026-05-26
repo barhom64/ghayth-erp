@@ -13,6 +13,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import {
   emitEvent,
   createAuditLog,
@@ -1453,8 +1454,18 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
       return;
     }
 
-    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('journal_number_seq') AS seq`).catch((e) => { logger.error(e, "finance journal query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
-    const ref = generateRef("JE", seqRow.seq, 5);
+    // Numbering center (Issue #1141) — manual journal number from the
+    // central authority (scheme: finance.journal_entry). No random
+    // fallback: if numbering fails, the manual JE creation fails too.
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "finance",
+      entityKey: "journal_entry",
+      entityTable: "journal_entries",
+      actorId: scope.userId,
+    });
+    const ref = issued.number;
     const idempotencyToken = requestIdempotencyToken(req);
 
     // FIN-013 — manual journals now follow a draft → approved → posted

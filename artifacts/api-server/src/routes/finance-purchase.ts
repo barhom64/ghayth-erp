@@ -13,6 +13,7 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import {
   emitEvent,
   createAuditLog,
@@ -319,13 +320,22 @@ purchaseRouter.post("/purchase-requests", authorize({ feature: "finance.purchase
       for (const p of productRows) productNameById.set(Number(p.id), p.name);
     }
 
-    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('pr_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
-    const ref = generateRef("PR", seqRow.seq, 5);
-
     if (supplierId) {
       const [sup] = await rawQuery<{ id: number }>(`SELECT id FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`, [supplierId, scope.companyId]);
       if (!sup) throw new ValidationError("المورد غير موجود", { field: "supplierId", fix: "اختر مورداً من قائمة الموردين." });
     }
+
+    // Numbering center (Issue #1141) — purchase request number from the
+    // central authority. Scheme: `purchase.purchase_request`.
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "purchase",
+      entityKey: "purchase_request",
+      entityTable: "purchase_requests",
+      actorId: scope.userId,
+    });
+    const ref = issued.number;
 
     const { insertId } = await rawExecute(
       `INSERT INTO purchase_requests ("companyId","branchId","requestedBy",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","costCenter")
@@ -333,6 +343,10 @@ purchaseRouter.post("/purchase-requests", authorize({ feature: "finance.purchase
       [scope.companyId, scope.branchId, scope.activeAssignmentId, ref, totalAmount, supplierId ?? null, notes ?? null, expectedDate ?? null, costCenter ?? null]
     );
     assertInsert(insertId, "purchase_requests");
+    await rawExecute(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [insertId, issued.assignmentId]
+    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to purchase_requests row"));
 
     if (Array.isArray(items) && items.length > 0) {
       // Phase 4 P1 — carry the full dimensional + lineTreatment payload
@@ -531,8 +545,17 @@ purchaseRouter.post("/purchase-requests/:id/convert", authorize({ feature: "fina
     const vatAmount = computeVat(subtotal, vatRate);
     const totalAmount = subtotal + vatAmount;
 
-    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('po_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
-    const poRef = generateRef("PO", seqRow.seq, 5);
+    // Numbering center (Issue #1141) — PO number from central authority.
+    const issuedPo = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "purchase",
+      entityKey: "purchase_order",
+      entityTable: "purchase_orders",
+      actorId: scope.userId,
+      metadata: { fromPurchaseRequestId: id },
+    });
+    const poRef = issuedPo.number;
 
     let poId!: number;
     await applyTransition({
@@ -599,6 +622,11 @@ purchaseRouter.post("/purchase-requests/:id/convert", authorize({ feature: "fina
         }
       },
     });
+
+    await rawExecute(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [poId, issuedPo.assignmentId]
+    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to purchase_orders row"));
 
     // Record the PR→PO conversion explicitly so the chain audit/events
     // can follow "who turned which PR into which PO" without having to
@@ -684,8 +712,17 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
       if (!sup) throw new ValidationError("المورد غير موجود", { field: "supplierId", fix: "اختر مورداً من قائمة الموردين." });
     }
 
-    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('po_number_seq') AS seq`).catch((e) => { logger.error(e, "finance purchase query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
-    const ref = generateRef("PO", seqRow.seq, 5);
+    // Numbering center (Issue #1141) — purchase order number from
+    // central authority. Scheme: purchase.purchase_order.
+    const issued = await issueNumber({
+      companyId: effectiveCompanyId,
+      branchId: effectiveBranchId ?? null,
+      moduleKey: "purchase",
+      entityKey: "purchase_order",
+      entityTable: "purchase_orders",
+      actorId: scope.userId,
+    });
+    const ref = issued.number;
 
     const { insertId } = await rawExecute(
       `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","createdBy")
@@ -693,6 +730,10 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
       [effectiveCompanyId, effectiveBranchId, ref, Number(totalAmount), supplierId, notes ?? null, expectedDelivery ?? null, scope.userId]
     );
     assertInsert(insertId, "purchase_orders");
+    await rawExecute(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [insertId, issued.assignmentId]
+    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to purchase_orders row"));
 
     if (Array.isArray(items) && items.length > 0) {
       // Phase 4 P1 — direct PO creation (no PR upstream) also carries
@@ -1748,9 +1789,17 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", authorize({ feature:
       throw new ValidationError("يجب الموافقة على طلب الشراء أولاً");
     }
 
-    // Auto-generate PO ref using DB sequence (race-safe)
-    const [poSeqRow] = await rawQuery<Record<string, unknown>>(`SELECT nextval('po_number_seq') AS seq`);
-    const poRef = generateRef("PO", Number(poSeqRow.seq));
+    // Numbering center (Issue #1141) — PO number from central authority.
+    const issuedPo = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "purchase",
+      entityKey: "purchase_order",
+      entityTable: "purchase_orders",
+      actorId: scope.userId,
+      metadata: { fromPurchaseRequestId: id },
+    });
+    const poRef = issuedPo.number;
 
     let poId!: number;
     await applyTransition({
@@ -1780,6 +1829,11 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", authorize({ feature:
         poId = poRes.rows[0].id;
       },
     });
+
+    await rawExecute(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [poId, issuedPo.assignmentId]
+    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to purchase_orders row"));
 
     const approvalResult = await initiateApprovalChain({
       companyId: scope.companyId, branchId: scope.branchId,

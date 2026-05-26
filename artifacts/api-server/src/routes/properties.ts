@@ -14,7 +14,8 @@ import { logger } from "../lib/logger.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
-import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2, generateTimeRef } from "../lib/businessHelpers.js";
+import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2 } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
@@ -1123,7 +1124,23 @@ router.post("/contracts", authorize({ feature: "properties.contracts", action: "
       if (!owner) throw new ValidationError("المالك غير موجود", { field: "ownerId", fix: "اختر مالكاً مسجلاً." });
     }
 
-    const contractNumber = b.contractNumber || generateTimeRef("RC");
+    // Numbering center (Issue #1141) — lease contract number from the
+    // central authority. `b.contractNumber` is a legacy-import field
+    // that may already carry the number from a paper migration; only
+    // issue a fresh one when the body didn't supply it.
+    let issuedContract: Awaited<ReturnType<typeof issueNumber>> | null = null;
+    let contractNumber = b.contractNumber;
+    if (!contractNumber) {
+      issuedContract = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "properties",
+        entityKey: "lease_contract",
+        entityTable: "rental_contracts",
+        actorId: scope.userId,
+      });
+      contractNumber = issuedContract.number;
+    }
 
     const insertId = await withTransaction(async (client) => {
       const contractRes = await client.query(
@@ -1136,6 +1153,13 @@ router.post("/contracts", authorize({ feature: "properties.contracts", action: "
          contractNumber, b.ejarNumber || null, b.contractType || 'residential', frequency, yearlyRent, totalContractValue, b.latePenaltyType || 'percentage', b.latePenaltyValue || 0, b.gracePeriodDays || 0, b.terminationNoticeDays || 30, b.earlyTerminationFee || 0, b.autoRenewal || false, b.renewalNoticeDays || 60, b.renewalPeriodMonths || 12, b.electricityResponsibility || 'tenant', b.waterResponsibility || 'tenant', b.gasResponsibility || 'tenant', b.maintenanceResponsibility || 'shared', b.brokerageFee || 0, b.brokeragePayor || 'tenant', b.depositHolder || 'owner', b.insuranceRequired || false, b.ownerId || null, installmentCount, b.specialConditions || null, b.ejarStatus || 'draft', b.registrationDate || null]
       );
       const contractId = contractRes.rows[0].id;
+
+      if (issuedContract) {
+        await client.query(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [contractId, issuedContract.assignmentId]
+        );
+      }
 
       if (installmentCount && installmentCount > 0 && totalContractValue > 0) {
         const installmentAmount = roundTo2(totalContractValue / installmentCount);
@@ -3523,7 +3547,22 @@ router.post("/contracts/:id/schedule/:installmentId/pay", authorize({ feature: "
     }
     const newPaid = Number(existing.paidAmount || 0) + paidAmount;
     const newStatus = newPaid >= Number(existing.amount) ? 'paid' : 'partial';
-    const receiptNumber = b.receiptNumber || generateTimeRef("RCP");
+    // Numbering center (Issue #1141) — rental receipt number from
+    // central authority. `b.receiptNumber` honoured for legacy imports.
+    let issuedReceipt: Awaited<ReturnType<typeof issueNumber>> | null = null;
+    let receiptNumber = b.receiptNumber;
+    if (!receiptNumber) {
+      issuedReceipt = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "properties",
+        entityKey: "lease_receipt",
+        entityTable: "contract_payment_schedule",
+        entityId: installmentId,
+        actorId: scope.userId,
+      });
+      receiptNumber = issuedReceipt.number;
+    }
     await rawExecute(
       `UPDATE contract_payment_schedule SET "paidAmount"=$1, "paidDate"=$2, method=$3, status=$4, "receiptNumber"=$5, "updatedAt"=NOW() WHERE id=$6 AND "companyId"=$7`,
       [newPaid, b.paidDate || todayISO(), b.method || 'bank_transfer', newStatus, receiptNumber, installmentId, scope.companyId]
