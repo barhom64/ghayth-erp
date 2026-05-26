@@ -8,8 +8,9 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, isTyp
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { issueNumber } from "../lib/numberingService.js";
+import { internalTechRef } from "../lib/internalRef.js";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "../lib/logger.js";
@@ -640,7 +641,10 @@ protectedRouter.post("/invoices/:id/pay", withPortalScope(async (req, res) => {
     if (invoice.status === 'paid') throw new ValidationError("الفاتورة مدفوعة بالكامل مسبقاً");
 
     const payAmt = Math.min(Number(amount), Number(invoice.total) - Number(invoice.paidAmount));
-    const paymentRef = transactionRef || generateTimeRef("PAY-PORTAL");
+    // Internal correlation id between the portal payment record and
+    // the finance receipt downstream — NOT a customer-visible doc
+    // number. `transactionRef` from the gateway wins when supplied.
+    const paymentRef = transactionRef || internalTechRef("PAY-PORTAL");
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const { newPaid, newStatus } = await financialEngine.recordInvoicePayment({
