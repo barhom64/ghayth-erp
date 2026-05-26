@@ -114,9 +114,24 @@ router.get("/my", authorize({ feature: "admin", action: "list" }), async (req, r
       [scope.userId, scope.companyId]
     );
 
+    // Header "تغيير الصفة" picker — when the user picks a single role from
+    // their assigned set, scope this endpoint to that role's modules and
+    // permissions only. Without this, the union of every assigned role was
+    // returned and the sidebar never reflected the picker ("فلتر الدور لا
+    // يعمل"). The picker may only narrow to a role the user actually owns;
+    // an unknown / unassigned key falls back to the full union so we don't
+    // accidentally lock the user out.
+    const requestedRole = typeof req.query.role === "string" && req.query.role.trim()
+      ? req.query.role.trim()
+      : null;
+
     let roles: RoleSummaryRow[];
     if (roleRows.length > 0) {
       roles = roleRows;
+      if (requestedRole) {
+        const picked = roleRows.filter((r) => r.roleKey === requestedRole);
+        if (picked.length > 0) roles = picked;
+      }
     } else {
       const roleKey = scope.role || "employee";
       const customRow = await rawQuery<RoleSummaryRow>(
