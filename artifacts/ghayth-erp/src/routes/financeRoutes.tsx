@@ -71,6 +71,7 @@ const YoyComparison = lazy(() => import("@/pages/finance/yoy-comparison"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
 const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
+const BadDebtProvision = lazy(() => import("@/pages/finance/bad-debt-provision"));
 const ReceivableDetail = lazy(() => import("@/pages/details/receivable-detail"));
 const Payments = lazy(() => import("@/pages/finance/payments-page"));
 const Commitments = lazy(() => import("@/pages/finance/commitments"));
@@ -88,6 +89,7 @@ const SalaryAdvanceDetail = lazy(() => import("@/pages/details/salary-advance-de
 const Ledger = lazy(() => import("@/pages/finance/ledger"));
 const Entity360 = lazy(() => import("@/pages/finance/entity-360"));
 const ReconciliationHub = lazy(() => import("@/pages/finance/reconciliation-hub"));
+const AccountReconWorkpaper = lazy(() => import("@/pages/finance/account-reconciliation-workpaper"));
 const TbComparison = lazy(() => import("@/pages/finance/trial-balance-comparison"));
 const TbDrilldown = lazy(() => import("@/pages/finance/trial-balance-drilldown"));
 const ArAging = lazy(() => import("@/pages/finance/ar-aging"));
@@ -102,12 +104,14 @@ const BankGuarantees = lazy(() => import("@/pages/finance/bank-guarantees"));
 const JournalManual = lazy(() => import("@/pages/finance/journal-manual"));
 const GLPostingQueue = lazy(() => import("@/pages/finance/gl-posting-queue"));
 const JournalManualCreate = lazy(() => import("@/pages/create/finance/journal-manual-create"));
+const JournalReversal = lazy(() => import("@/pages/create/finance/journal-reversal"));
 const JournalManualDetail = lazy(() => import("@/pages/finance/journal-manual-detail"));
 const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
 const IntercompanyConsolidationCreate = lazy(() => import("@/pages/create/finance/intercompany-consolidation-create"));
 const CashFlowForecast = lazy(() => import("@/pages/finance/cash-flow-forecast"));
 const CashCalendar = lazy(() => import("@/pages/finance/cash-calendar"));
 const Cash13Week = lazy(() => import("@/pages/finance/cash-13week"));
+const CashFlowStatement = lazy(() => import("@/pages/finance/cash-flow-statement"));
 const ProjectCosting = lazy(() => import("@/pages/finance/project-costing"));
 const ProjectCostingDetail = lazy(() => import("@/pages/finance/project-costing-detail"));
 const CashflowDashboard = lazy(() => import("@/pages/finance/cashflow-dashboard"));
@@ -115,6 +119,7 @@ const OpeningBalances = lazy(() => import("@/pages/finance/opening-balances"));
 const OpeningBalancesCreate = lazy(() => import("@/pages/create/finance/opening-balances-create"));
 const RecurringJournals = lazy(() => import("@/pages/finance/recurring-journals"));
 const RecurringJournalsCreate = lazy(() => import("@/pages/create/finance/recurring-journals-create"));
+const RecurringCalendar = lazy(() => import("@/pages/finance/recurring-calendar"));
 const RecurringJournalDetail = lazy(() => import("@/pages/finance/recurring-journal-detail"));
 const YearEndClose = lazy(() => import("@/pages/finance/year-end-close"));
 const Treasury = lazy(() => import("@/pages/finance/treasury"));
@@ -239,6 +244,7 @@ export const financeRoutes = [
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },
   { path: "/finance/customer-risk", component: CustomerRisk },
+  { path: "/finance/bad-debt-provision", component: BadDebtProvision },
   { path: "/finance/receivables/:id", component: ReceivableDetail },
   { path: "/finance/payments", component: Payments },
   { path: "/finance/commitments", component: Commitments },
@@ -256,6 +262,7 @@ export const financeRoutes = [
   { path: "/finance/ledger/:code", component: Ledger },
   { path: "/finance/entity-360", component: Entity360 },
   { path: "/finance/reconciliation-hub", component: ReconciliationHub },
+  { path: "/finance/account-recon-workpaper", component: AccountReconWorkpaper },
   { path: "/finance/trial-balance-comparison", component: TbComparison },
   { path: "/finance/trial-balance-drilldown", component: TbDrilldown },
   { path: "/finance/ar-aging", component: ArAging },
@@ -269,6 +276,7 @@ export const financeRoutes = [
   { path: "/finance/bank-guarantees", component: BankGuarantees },
   { path: "/finance/journal-manual", component: JournalManual },
   { path: "/finance/journal-manual/create", component: JournalManualCreate },
+  { path: "/finance/journal/reverse", component: JournalReversal },
   { path: "/finance/journal-manual/:id", component: JournalManualDetail },
   { path: "/finance/gl-posting-queue", component: GLPostingQueue },
   { path: "/finance/intercompany", component: Intercompany },
@@ -276,12 +284,14 @@ export const financeRoutes = [
   { path: "/finance/cash-flow-forecast", component: CashFlowForecast },
   { path: "/finance/cash-calendar", component: CashCalendar },
   { path: "/finance/cash-13week", component: Cash13Week },
+  { path: "/finance/reports/cash-flow-statement", component: CashFlowStatement },
   { path: "/finance/project-costing", component: ProjectCosting },
   { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
   { path: "/finance/opening-balances", component: OpeningBalances },
   { path: "/finance/opening-balances/create", component: OpeningBalancesCreate },
   { path: "/finance/recurring-journals", component: RecurringJournals },
+  { path: "/finance/recurring-calendar", component: RecurringCalendar },
   { path: "/finance/recurring-journals/create", component: RecurringJournalsCreate },
   { path: "/finance/recurring-journals/:id", component: RecurringJournalDetail },
   { path: "/finance/year-end-close", component: YearEndClose },

@@ -3413,18 +3413,22 @@ invoicesRouter.get("/customer-advances", authorize({ feature: "finance.invoices"
 // computes eligible invoices and produces the letters to send.
 
 async function ensureDunningTables() {
+  // Schema matches production: stage (int), daysPastDue, outstandingAmount,
+  // letterContent. NO `level`, `subject`, `body`, or `deletedAt` columns.
   await rawQuery(`
     CREATE TABLE IF NOT EXISTS dunning_letters (
       id SERIAL PRIMARY KEY,
       "companyId" INTEGER NOT NULL,
       "invoiceId" INTEGER NOT NULL,
       "clientId" INTEGER,
-      level INTEGER DEFAULT 1,
-      subject VARCHAR(500),
-      body TEXT,
-      "sentAt" TIMESTAMPTZ,
-      "deletedAt" TIMESTAMPTZ,
-      status VARCHAR(50) DEFAULT 'pending'
+      stage INTEGER NOT NULL,
+      "daysPastDue" INTEGER NOT NULL,
+      "outstandingAmount" NUMERIC(18,2) NOT NULL,
+      "letterContent" TEXT,
+      "sentAt" TIMESTAMPTZ DEFAULT NOW(),
+      "sentBy" INTEGER,
+      "sentVia" VARCHAR(16) DEFAULT 'manual',
+      status VARCHAR(16) DEFAULT 'sent'
     )
   `, []);
   await rawQuery(`
@@ -3608,9 +3612,9 @@ invoicesRouter.post("/dunning/send", authorize({ feature: "finance.collection", 
 
       const [row] = await rawQuery<Record<string, unknown>>(
         `INSERT INTO dunning_letters
-         ("companyId","invoiceId","clientId","level",subject,body,"sentAt",status)
-         VALUES ($1,$2,$3,$4,$5,$6,NOW(),'sent') RETURNING id`,
-        [scope.companyId, inv.id, inv.clientId, stg.stage, `تذكير سداد - مرحلة ${stg.stage}`, letter]
+         ("companyId","invoiceId","clientId",stage,"daysPastDue","outstandingAmount","letterContent","sentAt",status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),'sent') RETURNING id`,
+        [scope.companyId, inv.id, inv.clientId, stg.stage, days, outstanding, letter]
       );
       results.push({ invoiceId: inv.id, letterId: row.id, stage: stg.stage, daysPastDue: days, outstanding, status: "sent" });
     }

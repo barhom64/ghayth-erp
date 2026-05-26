@@ -13903,5 +13903,6 @@ ALTER TABLE ONLY public.zatca_submission_log
 -- PostgreSQL database dump complete
 --
 
-\unrestrict zDFIG1Auz2JQApfYXugRb3zFxheStbGRyEbPyfdYKjUNLWjoUMKsaAt3kBHQsa9
+-- \unrestrict directive stripped — its matching \restrict in schema_pre.sql
+-- was also removed. See dump-schema.sh for the rationale.
 
