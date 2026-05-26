@@ -41,10 +41,10 @@ pnpm --filter @workspace/e2e report
 
 | Env var              | Default                 | Notes                                |
 | -------------------- | ----------------------- | ------------------------------------ |
-| `E2E_BASE_URL`       | `http://localhost:5173` | Frontend URL                         |
-| `E2E_API_URL`        | `http://localhost:8080` | API URL                              |
-| `E2E_USER_EMAIL`     | `owner@local.test`      | Seed admin from `seedDemoData.ts`    |
-| `E2E_USER_PASSWORD`  | `Test1234!`             | Same                                 |
+| `E2E_BASE_URL`       | `http://localhost:80`   | Frontend URL (via Replit proxy)      |
+| `E2E_API_URL`        | `http://localhost:80`   | API URL (via Replit proxy)           |
+| `E2E_USER_EMAIL`     | `admin@ghayth.com`      | Seed owner in this project           |
+| `E2E_USER_PASSWORD`  | `Admin@123456`          | Same                                 |
 
 ## Current coverage
 
