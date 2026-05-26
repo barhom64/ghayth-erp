@@ -11108,8 +11108,37 @@ CREATE TABLE public.numbering_schemes (
     CONSTRAINT numbering_schemes_pad_check CHECK ((("padLength" >= 3) AND ("padLength" <= 10))),
     CONSTRAINT numbering_schemes_reset_check CHECK (("resetPolicy" = ANY (ARRAY['never'::text, 'yearly'::text, 'monthly'::text, 'seasonal'::text, 'fiscal_year'::text]))),
     CONSTRAINT numbering_schemes_scope_check CHECK (("scopePolicy" = ANY (ARRAY['company'::text, 'branch'::text, 'module'::text, 'entity'::text, 'season'::text, 'fiscal_year'::text]))),
-    CONSTRAINT numbering_schemes_timing_check CHECK (("issueTiming" = ANY (ARRAY['on_draft'::text, 'on_submit'::text, 'on_approval'::text, 'on_posting'::text])))
+    CONSTRAINT numbering_schemes_timing_check CHECK (("issueTiming" = ANY (ARRAY['on_draft'::text, 'on_submit'::text, 'on_approval'::text, 'on_posting'::text]))),
+    CONSTRAINT numbering_schemes_unique_key UNIQUE ("companyId", "moduleKey", "entityKey")
 );
+
+
+-- ============================================================
+-- Sequences + id DEFAULTs for the four numbering tables (#1141).
+-- pg_dump would emit these inline after each CREATE TABLE; we add
+-- them in a block at the end of the dump baseline because the tables
+-- themselves were appended in earlier PRs without their sequences.
+-- ============================================================
+
+CREATE SEQUENCE IF NOT EXISTS public.numbering_schemes_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.numbering_schemes_id_seq OWNED BY public.numbering_schemes.id;
+ALTER TABLE ONLY public.numbering_schemes ALTER COLUMN id SET DEFAULT nextval('public.numbering_schemes_id_seq'::regclass);
+
+CREATE SEQUENCE IF NOT EXISTS public.numbering_counters_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.numbering_counters_id_seq OWNED BY public.numbering_counters.id;
+ALTER TABLE ONLY public.numbering_counters ALTER COLUMN id SET DEFAULT nextval('public.numbering_counters_id_seq'::regclass);
+
+CREATE SEQUENCE IF NOT EXISTS public.numbering_assignments_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.numbering_assignments_id_seq OWNED BY public.numbering_assignments.id;
+ALTER TABLE ONLY public.numbering_assignments ALTER COLUMN id SET DEFAULT nextval('public.numbering_assignments_id_seq'::regclass);
+
+CREATE SEQUENCE IF NOT EXISTS public.numbering_audit_logs_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.numbering_audit_logs_id_seq OWNED BY public.numbering_audit_logs.id;
+ALTER TABLE ONLY public.numbering_audit_logs ALTER COLUMN id SET DEFAULT nextval('public.numbering_audit_logs_id_seq'::regclass);
 
 
 --
