@@ -44,6 +44,7 @@ const Expenses = lazy(() => import("@/pages/finance/expenses"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
 const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
+const CostSplitter = lazy(() => import("@/pages/create/finance/cost-splitter"));
 const Budget = lazy(() => import("@/pages/finance/budget"));
 const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
@@ -55,14 +56,17 @@ const VendorsEdit = lazy(() => import("@/pages/create/finance/vendors-edit"));
 const VendorDetail = lazy(() => import("@/pages/finance/vendor-detail"));
 const VendorStatement = lazy(() => import("@/pages/finance/vendor-statement"));
 const VendorContracts = lazy(() => import("@/pages/finance/vendor-contracts"));
+const VendorSpend = lazy(() => import("@/pages/finance/vendor-spend"));
 const PurchaseRequests = lazy(() => import("@/pages/finance/purchase-requests"));
 const PurchaseOrders = lazy(() => import("@/pages/finance/purchase-orders"));
 const PurchaseOrdersCreate = lazy(() => import("@/pages/create/finance/purchase-orders-create"));
 const PurchaseOrderDetail = lazy(() => import("@/pages/finance/purchase-order-detail"));
 const PaymentRun = lazy(() => import("@/pages/finance/payment-run"));
 const FinancialReports = lazy(() => import("@/pages/finance/reports"));
+const IncomeStatementTrend = lazy(() => import("@/pages/finance/income-statement-trend"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
+const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
 const ReceivableDetail = lazy(() => import("@/pages/details/receivable-detail"));
 const Payments = lazy(() => import("@/pages/finance/payments-page"));
 const Commitments = lazy(() => import("@/pages/finance/commitments"));
@@ -178,6 +182,7 @@ export const financeRoutes = [
   { path: "/finance/expenses", component: Expenses },
   { path: "/finance/expenses/create", component: ExpensesCreate },
   { path: "/finance/expenses/multi-line", component: MultiLineExpenseCreate },
+  { path: "/finance/expenses/split", component: CostSplitter },
   { path: "/finance/expenses/:id", component: ExpenseDetail },
   { path: "/finance/budget", component: Budget },
   { path: "/finance/budget/create", component: BudgetCreate },
@@ -189,6 +194,7 @@ export const financeRoutes = [
   { path: "/finance/vendors/:id/edit", component: VendorsEdit, subKey: "vendors" },
   { path: "/finance/vendors/:id/statement", component: VendorStatement, subKey: "vendors" },
   { path: "/finance/contracts", component: VendorContracts },
+  { path: "/finance/vendor-spend", component: VendorSpend },
   { path: "/finance/vendors/:id", component: VendorDetail, subKey: "vendors" },
   { path: "/finance/purchase-requests", component: PurchaseRequests },
   { path: "/finance/purchase-orders", component: PurchaseOrders },
@@ -218,8 +224,10 @@ export const financeRoutes = [
   { path: "/finance/settings", component: SettingsHub },
   { path: "/finance/fx-revaluation", component: FxRevaluation },
   { path: "/finance/reports", component: FinancialReports },
+  { path: "/finance/reports/is-trend", component: IncomeStatementTrend },
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },
+  { path: "/finance/customer-risk", component: CustomerRisk },
   { path: "/finance/receivables/:id", component: ReceivableDetail },
   { path: "/finance/payments", component: Payments },
   { path: "/finance/commitments", component: Commitments },
