@@ -23,7 +23,6 @@ import {
   computeVat,
   currentPeriod,
   currentDateInTz,
-  generateRef,
   toDateISO,
   roundTo2,
   applyJournalEntryBalances,
