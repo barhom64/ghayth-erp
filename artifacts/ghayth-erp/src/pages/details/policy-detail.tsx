@@ -1,11 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
+import { z } from "zod";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
   EntityComments,
 } from "@workspace/entity-kit";
+import { FormGrid, FormTextField, FormTextareaField, FormSelectField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,10 +34,21 @@ function statusTone(status?: string | null) {
   return "default" as const;
 }
 
+const policyEditSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب"),
+  description: z.string().optional().default(""),
+  category: z.string().optional().default(""),
+  status: z.enum(["draft", "active", "archived", "under_review"]),
+  effectiveDate: z.string().optional().default(""),
+  expiryDate: z.string().optional().default(""),
+});
+type PolicyEditForm = z.infer<typeof policyEditSchema>;
+
 export default function PolicyDetail() {
   const [, params] = useRoute("/governance/policies/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("policy", id ?? 0);
+  const [editOpen, setEditOpen] = useState(false);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["policy", String(id)],
@@ -170,6 +184,7 @@ export default function PolicyDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={policy?.title || "تفاصيل السياسة"}
       subtitle={policy?.category}
@@ -202,8 +217,56 @@ export default function PolicyDetail() {
               entityId={id ?? 0}
               formats={["a4"]}/>
           )}
+          <GuardedButton
+            perm="governance:update"
+            variant="outline"
+            size="sm"
+            onClick={() => setEditOpen(true)}
+            disabled={!policy || policy?.status === "archived"}
+          >
+            <Edit className="h-4 w-4 ms-1" />
+            تعديل
+          </GuardedButton>
         </>
       }
     />
+    {policy && id && (
+      <EntityEditDialog<PolicyEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل السياسة"
+        schema={policyEditSchema}
+        defaultValues={{
+          title: policy.title ?? "",
+          description: policy.description ?? "",
+          category: policy.category ?? "",
+          status: (policy.status ?? "draft") as PolicyEditForm["status"],
+          effectiveDate: policy.effectiveDate ?? "",
+          expiryDate: policy.expiryDate ?? "",
+        }}
+        endpoint={`/governance/policies/${id}`}
+        invalidateKeys={[["policy", String(id)], ["gov-policies"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="title" label="العنوان" required className="md:col-span-2" />
+          <FormTextField name="category" label="الفئة" />
+          <FormSelectField
+            name="status"
+            label="الحالة"
+            options={[
+              { value: "draft", label: "مسودة" },
+              { value: "active", label: "ساري" },
+              { value: "under_review", label: "قيد المراجعة" },
+              { value: "archived", label: "مؤرشف" },
+            ]}
+          />
+          <FormTextField name="effectiveDate" label="تاريخ السريان" type="date" />
+          <FormTextField name="expiryDate" label="تاريخ الانتهاء" type="date" />
+          <FormTextareaField name="description" label="الوصف" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }

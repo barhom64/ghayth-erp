@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRoute } from "wouter";
+import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
   EntityComments,
 } from "@workspace/entity-kit";
+import { FormGrid, FormTextField, FormTextareaField, FormSelectField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,10 +86,24 @@ function severityCellColor(score: number): string {
   return "bg-status-success-surface0 text-white";
 }
 
+// Schema for the inline edit dialog. Mirrors the fields the backend
+// PATCH /governance/risks/:id accepts and which the page already displays.
+const riskEditSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب"),
+  description: z.string().optional().default(""),
+  severity: z.enum(["low", "medium", "high", "critical"]),
+  likelihood: z.enum(["rare", "unlikely", "possible", "likely", "certain"]),
+  status: z.enum(["open", "monitoring", "mitigated", "accepted", "closed"]),
+  category: z.string().optional().default(""),
+  owner: z.string().optional().default(""),
+});
+type RiskEditForm = z.infer<typeof riskEditSchema>;
+
 export default function RiskDetail() {
   const [, params] = useRoute("/governance/risks/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("risk", id ?? 0);
+  const [editOpen, setEditOpen] = useState(false);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["risk", String(id)],
@@ -385,6 +402,7 @@ export default function RiskDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={risk?.title || "تفاصيل المخاطرة"}
       subtitle={risk?.category}
@@ -417,8 +435,78 @@ export default function RiskDetail() {
               entityId={id ?? 0}
               formats={["a4"]}/>
           )}
+          <GuardedButton
+            perm="governance:update"
+            variant="outline"
+            size="sm"
+            onClick={() => setEditOpen(true)}
+            disabled={!risk || risk?.status === "closed"}
+          >
+            <Edit className="h-4 w-4 ms-1" />
+            تعديل
+          </GuardedButton>
         </>
       }
     />
+    {risk && id && (
+      <EntityEditDialog<RiskEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل المخاطر"
+        schema={riskEditSchema}
+        defaultValues={{
+          title: risk.title ?? "",
+          description: risk.description ?? "",
+          severity: (risk.severity ?? "medium") as RiskEditForm["severity"],
+          likelihood: (risk.likelihood ?? "possible") as RiskEditForm["likelihood"],
+          status: (risk.status ?? "open") as RiskEditForm["status"],
+          category: risk.category ?? "",
+          owner: risk.owner ?? "",
+        }}
+        endpoint={`/governance/risks/${id}`}
+        invalidateKeys={[["risk", String(id)], ["gov-risks"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="title" label="العنوان" required className="md:col-span-2" />
+          <FormSelectField
+            name="severity"
+            label="الأثر"
+            options={[
+              { value: "low", label: "منخفض" },
+              { value: "medium", label: "متوسط" },
+              { value: "high", label: "عالي" },
+              { value: "critical", label: "حرج" },
+            ]}
+          />
+          <FormSelectField
+            name="likelihood"
+            label="الاحتمالية"
+            options={[
+              { value: "rare", label: "نادر" },
+              { value: "unlikely", label: "غير محتمل" },
+              { value: "possible", label: "ممكن" },
+              { value: "likely", label: "محتمل" },
+              { value: "certain", label: "مؤكد" },
+            ]}
+          />
+          <FormSelectField
+            name="status"
+            label="الحالة"
+            options={[
+              { value: "open", label: "مفتوح" },
+              { value: "monitoring", label: "قيد المراقبة" },
+              { value: "mitigated", label: "مخفف" },
+              { value: "accepted", label: "مقبول" },
+              { value: "closed", label: "مغلق" },
+            ]}
+          />
+          <FormTextField name="category" label="الفئة" />
+          <FormTextField name="owner" label="المسؤول" />
+          <FormTextareaField name="description" label="الوصف" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }
