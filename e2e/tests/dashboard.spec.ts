@@ -30,6 +30,14 @@ const IGNORED_CONSOLE_PATTERNS: RegExp[] = [
   /ResizeObserver loop/i,
   /Failed to load resource.*404/i, // dev-only optional endpoints (e.g. /announcements)
   /Failed to load resource.*net::ERR_/i, // external CDN reachability — not an app bug
+  // playwright.config.ts attaches `X-E2E-Test: 1` to every browser
+  // request (extraHTTPHeaders is unconditional). For cross-origin fetches
+  // like Google Fonts (fonts.gstatic.com), the preflight returns an
+  // Access-Control-Allow-Headers list that doesn't include x-e2e-test,
+  // so the browser blocks every font request and logs one console.error
+  // per blocked URL. None of these point at app code — strip them.
+  /Access to font at .*blocked by CORS/i,
+  /blocked by CORS policy/i,
   /\[vite\]/i,
   /Download the React DevTools/i,
   /findDOMNode is deprecated/i,
