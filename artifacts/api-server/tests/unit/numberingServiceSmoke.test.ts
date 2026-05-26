@@ -321,4 +321,23 @@ describe("CI guard — direct numbering inside routes", () => {
   it("references Issue #1141 for the rules' rationale", () => {
     expect(LINT).toContain("Issue #1141");
   });
+  it("also bans generateRef / generateBranchRef inside routes (phase-4 guard)", () => {
+    expect(LINT).toContain('id: "generateRef-or-generateBranchRef-in-route"');
+  });
+});
+
+describe("phase-4 — GRN + umrah agent invoice now go through the numbering center (#1141)", () => {
+  const PUR = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/finance-purchase.ts"), "utf8");
+  const UMR = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah.ts"), "utf8");
+
+  it("finance-purchase.ts uses numberingService for GRN refs (no MAX+retry hot path)", () => {
+    expect(PUR).not.toMatch(/generateRef\(\s*["']GRN["']/);
+    expect(PUR).not.toMatch(/uq_goods_receipts_ref/);
+    expect(PUR).toContain('entityKey: "goods_receipt"');
+  });
+  it("umrah.ts uses numberingService for agent invoices with seasonId scope", () => {
+    expect(UMR).not.toMatch(/generateBranchRef\(\s*scope\s*,\s*["']invoice_prefix["']/);
+    expect(UMR).toContain('entityKey: "umrah_agent_invoice"');
+    expect(UMR).toContain("seasonId,");
+  });
 });
