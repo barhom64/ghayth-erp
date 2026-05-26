@@ -48,6 +48,8 @@ const MyLoans = lazy(() => import("@/pages/my-loans"));
 const MyOvertime = lazy(() => import("@/pages/my-overtime"));
 const ActionCenter = lazy(() => import("@/pages/action-center"));
 const ManagerBoard = lazy(() => import("@/pages/manager-board"));
+const Workspace = lazy(() => import("@/pages/workspace"));
+const ManagerWorkspace = lazy(() => import("@/pages/manager-workspace"));
 const ReprintApprovals = lazy(() => import("@/pages/manager-board/reprint-approvals"));
 const ModuleDashboards = lazy(() => import("@/pages/module-dashboards"));
 const OperationsCenter = lazy(() => import("@/pages/operations-center"));
@@ -73,6 +75,8 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/my-loans", component: MyLoans },
   { path: "/my-overtime", component: MyOvertime },
   { path: "/action-center", component: ActionCenter },
+  { path: "/workspace", component: Workspace },
+  { path: "/manager-workspace", component: ManagerWorkspace, minRoleLevel: 40 },
   { path: "/obligations", component: Obligations, module: "operations" },
   { path: "/calendar", component: CalendarPage },
   { path: "/exec-dashboard", component: ExecDashboard, minRoleLevel: 60 },

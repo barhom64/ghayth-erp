@@ -586,5 +586,63 @@ describe("phase-7 real-closure (#1141)", () => {
     expect(AUDIT).toContain("LEGACY_PATTERNS");
     expect(AUDIT).toContain("zero legacy patterns remain");
   });
+
+  it("issueTiming enforcement — service refuses on mismatch (lawyer's nit #6)", () => {
+    // The service must hard-throw when the route's expectedTiming
+    // disagrees with scheme.issueTiming. Without this check the timing
+    // field in the settings UI is decorative — flip it to on_posting
+    // and routes still issue silently at draft time.
+    expect(SVC).toMatch(/scheme\.issueTiming\s*!==\s*params\.expectedTiming/);
+    expect(SVC).toContain("توقيت الإصدار");
+  });
+
+  it("issueTiming enforcement — IssueParams requires expectedTiming", () => {
+    // Type-level enforcement: omitting expectedTiming should fail
+    // typecheck. We check that the param is declared without `?`
+    // (i.e. required) inside the IssueParams interface.
+    const ifaceIdx = SVC.indexOf("export interface IssueParams");
+    expect(ifaceIdx).toBeGreaterThan(-1);
+    const ifaceBlock = SVC.slice(ifaceIdx, ifaceIdx + 2500);
+    expect(ifaceBlock).toMatch(/expectedTiming:\s*IssueTiming;/);
+    expect(ifaceBlock).not.toMatch(/expectedTiming\?:/);
+  });
+
+  it("issueTiming enforcement — all 35 route callsites pass expectedTiming", () => {
+    // Walk all route files that contain `issueNumber({` and verify each
+    // call object literal contains an `expectedTiming` field. Catches
+    // the case where someone adds a new route but forgets the timing
+    // (which would now also fail typecheck, but a fast unit test is
+    // friendlier in PR review).
+    const fs = require("node:fs") as typeof import("node:fs");
+    const path = require("node:path") as typeof import("node:path");
+    const routesDir = join(REPO_ROOT, "artifacts/api-server/src/routes");
+    const files = fs.readdirSync(routesDir).filter((f: string) => f.endsWith(".ts"));
+    const missingFields: string[] = [];
+    for (const f of files) {
+      const src = fs.readFileSync(path.join(routesDir, f), "utf8");
+      let i = 0;
+      while (true) {
+        const idx = src.indexOf("issueNumber({", i);
+        if (idx === -1) break;
+        // Find matching `})`
+        let depth = 1;
+        let j = idx + "issueNumber({".length;
+        while (j < src.length && depth > 0) {
+          const ch = src[j];
+          if (ch === "{") depth++;
+          else if (ch === "}") depth--;
+          j++;
+        }
+        const block = src.slice(idx, j);
+        if (!/expectedTiming\s*:/.test(block)) {
+          // Compute line number
+          const lineNo = src.slice(0, idx).split("\n").length;
+          missingFields.push(`${f}:${lineNo}`);
+        }
+        i = j;
+      }
+    }
+    expect(missingFields, `routes missing expectedTiming: ${missingFields.join(", ")}`).toEqual([]);
+  });
 });
 
