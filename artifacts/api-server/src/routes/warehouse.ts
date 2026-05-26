@@ -20,8 +20,9 @@ import {
   todayISO,
   toDateISO,
   roundTo2,
-  generateTimeRef,
 } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
+import { internalTechRef } from "../lib/internalRef.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { runningWeightedAverageCost } from "../lib/inventory/valuation/running-average.js";
 import { logger } from "../lib/logger.js";
@@ -708,7 +709,9 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
       }
 
       if (b.type === 'in') {
-        const batchNum = generateTimeRef("BATCH");
+        // Internal correlation id, NOT a customer-visible doc number
+        // (Issue #1141). Stays as a time-based ref by design.
+        const batchNum = internalTechRef("BATCH");
         await client.query(
           `INSERT INTO warehouse_stock_batches ("productId","batchNumber",quantity,"unitCost","receivedDate") VALUES ($1,$2,$3,$4,NOW())`,
           [b.productId, batchNum, b.quantity, b.unitCost || 0]
@@ -908,7 +911,18 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
   );
   const supplierId = preferredSupplier[0]?.id || null;
   const estimatedTotal = reorderQty * estimatedUnitCost;
-  const ref = generateTimeRef("PR-AUTO");
+  // Numbering center (Issue #1141) — auto-generated PR shares the same
+  // numbering scheme as manually-created PRs.
+  const issuedPr = await issueNumber({
+    companyId,
+    branchId: null,
+    moduleKey: "purchase",
+    entityKey: "purchase_request",
+    entityTable: "purchase_requests",
+    actorId: userId,
+    metadata: { autoReorder: true, productId: product.id },
+  });
+  const ref = issuedPr.number;
 
   let effectiveAssignmentId = assignmentId;
   if (!effectiveAssignmentId) {
@@ -926,6 +940,10 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
       `INSERT INTO purchase_request_items ("requestId","productId",quantity,"unitPrice","totalPrice") VALUES ($1,$2,$3,$4,$5)`,
       [prId, product.id, reorderQty, estimatedUnitCost, estimatedTotal]
     );
+    await client.query(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [prId, issuedPr.assignmentId]
+    );
   });
   return prId || null;
 }
@@ -937,7 +955,17 @@ router.post("/transfers", authorize({ feature: "warehouse.transfers", action: "c
 
     const qtyNum = b.quantity;
 
-    const transferRef = generateTimeRef("TRANSFER");
+    // Numbering center (Issue #1141) — stock transfer ref. Scheme
+    // `warehouse.stock_transfer` was seeded in migration 214.
+    const issuedTransfer = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "warehouse",
+      entityKey: "stock_transfer",
+      entityTable: "warehouse_movements",
+      actorId: scope.userId,
+    });
+    const transferRef = issuedTransfer.number;
     const fromLocation = b.fromLocation || b.fromWarehouseId ? `مستودع-${b.fromWarehouseId}` : 'المستودع الرئيسي';
     const toLocation = b.toLocation || b.toWarehouseId ? `مستودع-${b.toWarehouseId}` : 'المستودع الفرعي';
 
