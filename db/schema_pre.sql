@@ -2,7 +2,13 @@
 -- PostgreSQL database dump
 --
 
-\restrict zDFIG1Auz2JQApfYXugRb3zFxheStbGRyEbPyfdYKjUNLWjoUMKsaAt3kBHQsa9
+-- \restrict directive stripped: the matching \unrestrict lives in
+-- schema_post.sql, but `\ir schema_post.sql` (in the schema.sql wrapper)
+-- runs in restricted mode and psql refuses backslash commands there,
+-- failing the whole load. dump-schema.sh now strips both directives.
+-- (Conflict re-resolved after main regenerated the dump and reintroduced
+-- the token. The companion dump-schema.sh edit on this branch will keep
+-- future regens clean.)
 
 
 SET statement_timeout = 0;

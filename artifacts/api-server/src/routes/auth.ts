@@ -172,6 +172,14 @@ const loginLimiter = rateLimit({
   message: { error: "تم تجاوز الحد الأقصى لمحاولات الدخول. يرجى المحاولة بعد دقيقة" },
   validate: { ip: false, trustProxy: false },
   store: makeRateLimitStore("auth:login"),
+  // The Playwright suite reuses a single test admin across ~8 tests in
+  // parallel + retries, easily exceeding 10/min from a single CI runner.
+  // Skip the limiter in non-production when the canonical e2e marker
+  // header is set — the workflow already attaches `X-E2E-Test: 1` to
+  // every request via playwright.config.ts. Production traffic never
+  // carries this header so abuse protection is unchanged there.
+  skip: (req) =>
+    !config.isProduction && req.headers["x-e2e-test"] === "1",
 });
 
 // Per-user limiter for the authenticated /auth/* endpoints (/me, /logout,
