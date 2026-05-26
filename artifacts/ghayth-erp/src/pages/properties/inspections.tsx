@@ -245,11 +245,11 @@ export default function InspectionsPage() {
 }
 
 // ─── Inspection-completion dialog ────────────────────────────────────────────
-// Replaces the back-to-back `prompt("تقييم...")` + `prompt("ملاحظات...")`
-// pair the page used to fire from the "إتمام" button. The native flow
-// blocked the event loop, allowed any string to land in `conditionRating`
-// (we then `Number(...)`-coerced server-side), and showed an OS-default UI
-// that didn't match RTL/dark mode. The dialog uses the shared FormShell so
+// Replaces the back-to-back native rating prompt + notes prompt pair the
+// page used to fire from the "إتمام" button. The native flow blocked the
+// event loop, allowed any string to land in `conditionRating` (we then
+// `Number(...)`-coerced server-side), and showed an OS-default UI that
+// didn't match RTL/dark mode. The dialog uses the shared FormShell so
 // the rating is validated as an integer 1-5 BEFORE the PATCH is sent.
 
 // `z.coerce.number()` because `<input type="number">` + react-hook-form's

@@ -48,7 +48,7 @@ export default function UmrahPenaltyDetail() {
 
   const { data: penalty, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-penalty", String(id)],
-    id ? `/umrah/penalties/${id}` : null,
+    `/umrah/penalties/${id}`,
     !!id
   );
 

@@ -60,7 +60,7 @@ export default function AuditDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["audit", String(id)],
-    id ? `/governance/audits/${id}` : null,
+    `/governance/audits/${id}`,
     !!id
   );
 

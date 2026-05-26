@@ -43,7 +43,7 @@ export default function UmrahSeasonDetail() {
 
   const { data: season, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-season", String(id)],
-    id ? `/umrah/seasons/${id}` : null,
+    `/umrah/seasons/${id}`,
     !!id
   );
 

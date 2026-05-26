@@ -37,7 +37,7 @@ export default function VendorDetailPage() {
 
   const { data: vendor, isLoading, isError, refetch } = useApiQuery<any>(
     ["vendor", id],
-    id ? `/finance/vendors/${id}` : null,
+    `/finance/vendors/${id}`,
     !!id
   );
 
@@ -61,7 +61,7 @@ export default function VendorDetailPage() {
 
   const { data: poResp } = useApiQuery<any>(
     ["vendor-pos", id],
-    id ? `/finance/purchase-orders` : null,
+    `/finance/purchase-orders`,
     !!id
   );
   const allPos: any[] = poResp?.data || [];
@@ -72,7 +72,7 @@ export default function VendorDetailPage() {
 
   const { data: invoicesResp } = useApiQuery<any>(
     ["vendor-invoices", id],
-    id ? `/finance/invoices?vendorId=${id}` : null,
+    `/finance/invoices?vendorId=${id}`,
     !!id
   );
   const invoices: any[] = (invoicesResp?.data || []).filter(
@@ -81,7 +81,7 @@ export default function VendorDetailPage() {
 
   const { data: paymentsResp } = useApiQuery<any>(
     ["vendor-payments", id],
-    id ? `/finance/payments?vendorId=${id}` : null,
+    `/finance/payments?vendorId=${id}`,
     !!id
   );
   const payments: any[] = (paymentsResp?.data || []).filter(

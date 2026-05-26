@@ -54,7 +54,7 @@ export default function WhtCategoriesCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation(
-    "/finance/accounts/wht-categories", "POST",
+    "/finance/wht-categories", "POST",
     [["wht-categories"]],
   );
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);

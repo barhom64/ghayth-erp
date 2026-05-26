@@ -200,7 +200,7 @@ export default function ExpensesCreate() {
   const { data: accountsData, isLoading: accountsLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
   const { data: taxCodesData } = useApiQuery<{ data: TaxCodeOption[] }>(
     ["tax-codes", "active"],
-    "/finance/accounts/tax-codes?active=true",
+    "/finance/tax-codes?active=true",
   );
   const activeTaxCodes = (taxCodesData?.data ?? []).filter((t) => t.isActive !== false);
   const { data: govIntegrationsData } = useApiQuery<{ data: any[] }>(["gov-integrations"], "/gov-integrations");

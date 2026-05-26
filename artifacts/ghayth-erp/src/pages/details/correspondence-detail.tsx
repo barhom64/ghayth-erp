@@ -79,7 +79,7 @@ export default function CorrespondenceDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["correspondence-detail", String(id)],
-    id ? `/correspondence/${id}` : null,
+    `/correspondence/${id}`,
     !!id,
   );
 
