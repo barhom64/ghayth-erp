@@ -38,11 +38,11 @@ interface OverdueInvoice {
 }
 
 const STAGES = [
-  { stage: 1, label: "تذكير SMS + إيميل",              days: 1,  color: "bg-blue-100 text-blue-800" },
+  { stage: 1, label: "تذكير SMS + إيميل",              days: 1,  color: "bg-blue-100 text-status-info-foreground" },
   { stage: 2, label: "إشعار محاسب + إيميل ثاني",       days: 7,  color: "bg-cyan-100 text-cyan-800" },
-  { stage: 3, label: "مهمة تحصيل ميداني",              days: 14, color: "bg-amber-100 text-amber-800" },
+  { stage: 3, label: "مهمة تحصيل ميداني",              days: 14, color: "bg-amber-100 text-status-warning-foreground" },
   { stage: 4, label: "تصعيد للمدير المالي",            days: 21, color: "bg-orange-100 text-orange-800" },
-  { stage: 5, label: "إشعار GM + غرامة 2%",            days: 30, color: "bg-red-100 text-red-800" },
+  { stage: 5, label: "إشعار GM + غرامة 2%",            days: 30, color: "bg-red-100 text-status-error-foreground" },
   { stage: 6, label: "إشعار قانوني + تصنيف churned",   days: 60, color: "bg-purple-100 text-purple-800" },
 ];
 
@@ -136,7 +136,7 @@ export default function CollectionStagesPage() {
       header: "أيام التأخر",
       render: (r) => {
         const d = Number(r.daysOverdue);
-        const color = d >= 60 ? "text-red-700" : d >= 30 ? "text-red-600" : d >= 14 ? "text-amber-700" : "text-orange-600";
+        const color = d >= 60 ? "text-status-error-foreground" : d >= 30 ? "text-status-error-foreground" : d >= 14 ? "text-status-warning-foreground" : "text-orange-600";
         return <span className={`font-mono font-semibold ${color}`}>{d}</span>;
       },
     },
@@ -230,12 +230,12 @@ export default function CollectionStagesPage() {
       </Card>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <Card className="border-red-300">
+        <Card className="border-status-error-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <AlertTriangle className="h-3 w-3" /> فواتير متأخرة
             </p>
-            <p className="text-lg font-bold font-mono text-red-700">{formatNumber(rows.length)}</p>
+            <p className="text-lg font-bold font-mono text-status-error-foreground">{formatNumber(rows.length)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -244,16 +244,16 @@ export default function CollectionStagesPage() {
             <p className="text-lg font-bold font-mono">{formatCurrency(totalOverdueAmount)}</p>
           </CardContent>
         </Card>
-        <Card className="border-amber-300">
+        <Card className="border-status-warning-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">يحتاج تصعيد</p>
-            <p className="text-lg font-bold font-mono text-amber-700">{formatNumber(stagesBehind)}</p>
+            <p className="text-lg font-bold font-mono text-status-warning-foreground">{formatNumber(stagesBehind)}</p>
           </CardContent>
         </Card>
         <Card className="border-red-400">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">مرحلة 5+ (GM/قانوني)</p>
-            <p className="text-lg font-bold font-mono text-red-700">{formatNumber(stage5Plus)}</p>
+            <p className="text-lg font-bold font-mono text-status-error-foreground">{formatNumber(stage5Plus)}</p>
           </CardContent>
         </Card>
       </div>
@@ -288,7 +288,7 @@ export default function CollectionStagesPage() {
             <div className="text-sm space-y-2 py-2">
               <p>الفاتورة: <span className="font-mono">{actionTarget.ref}</span></p>
               <p>العميل: <span className="font-medium">{actionTarget.clientName ?? "—"}</span></p>
-              <p>التأخر: <span className="font-mono font-bold text-red-700">{actionTarget.daysOverdue} يوم</span></p>
+              <p>التأخر: <span className="font-mono font-bold text-status-error-foreground">{actionTarget.daysOverdue} يوم</span></p>
               <p>الإجراء: <span className="font-semibold">{STAGES.find((s) => s.stage === actionTarget.recommendedStage)?.label}</span></p>
               <div>
                 <Label className="text-xs">ملاحظات (اختياري)</Label>

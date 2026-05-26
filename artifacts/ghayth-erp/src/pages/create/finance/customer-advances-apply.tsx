@@ -138,7 +138,7 @@ export default function CustomerAdvancesApply() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">المتبقي للتطبيق</p>
-              <p className="font-mono font-bold text-amber-700">{formatCurrency(remaining)}</p>
+              <p className="font-mono font-bold text-status-warning-foreground">{formatCurrency(remaining)}</p>
             </div>
           </div>
         </CardContent>
@@ -200,7 +200,7 @@ export default function CustomerAdvancesApply() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">المتبقي</p>
-                <p className="font-mono font-bold text-amber-700">{formatCurrency(invoiceRemaining)}</p>
+                <p className="font-mono font-bold text-status-warning-foreground">{formatCurrency(invoiceRemaining)}</p>
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-3">

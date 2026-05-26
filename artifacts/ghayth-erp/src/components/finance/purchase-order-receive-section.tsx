@@ -115,7 +115,7 @@ export function PurchaseOrderReceiveSection({ poId, poStatus }: { poId: number |
         const tone =
           ord === rec && rec === inv ? "text-emerald-600" :
           rec >= ord && inv >= rec ? "text-emerald-600" :
-          rec < ord ? "text-amber-600" :
+          rec < ord ? "text-status-warning-foreground" :
           inv < rec ? "text-status-info-foreground" :
           "text-muted-foreground";
         const label =

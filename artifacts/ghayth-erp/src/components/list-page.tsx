@@ -214,7 +214,7 @@ const TONE_BG: Record<StatTone, string> = {
   info: "bg-status-info-surface",
   emerald: "bg-emerald-50",
   slate: "bg-slate-100",
-  amber: "bg-amber-50",
+  amber: "bg-status-warning-surface",
   rose: "bg-rose-50",
 };
 
@@ -222,7 +222,7 @@ const TONE_FG: Record<StatTone, string> = {
   info: "text-status-info-foreground",
   emerald: "text-emerald-600",
   slate: "text-slate-600",
-  amber: "text-amber-600",
+  amber: "text-status-warning-foreground",
   rose: "text-rose-600",
 };
 

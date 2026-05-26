@@ -47,9 +47,9 @@ const STATUS_LABEL: Record<VendorContract["status"], string> = {
 
 const STATUS_BADGE: Record<VendorContract["status"], string> = {
   active:     "bg-emerald-100 text-emerald-800",
-  expired:    "bg-amber-100 text-amber-800",
-  terminated: "bg-red-100 text-red-800",
-  pending:    "bg-blue-100 text-blue-800",
+  expired:    "bg-amber-100 text-status-warning-foreground",
+  terminated: "bg-red-100 text-status-error-foreground",
+  pending:    "bg-blue-100 text-status-info-foreground",
 };
 
 function daysUntil(iso: string): number {
@@ -162,7 +162,7 @@ export default function VendorContractsPage() {
         const isPast = d < 0;
         return (
           <span className={`text-xs font-mono inline-flex items-center gap-1
-            ${isSoon ? "text-amber-700 font-semibold" : isPast ? "text-red-700" : ""}`}>
+            ${isSoon ? "text-status-warning-foreground font-semibold" : isPast ? "text-status-error-foreground" : ""}`}>
             {formatDateAr(r.endDate)}
             {isSoon && <CalendarCheck className="h-3 w-3" />}
             {isPast && r.status === "active" && <CalendarX className="h-3 w-3" />}
@@ -299,12 +299,12 @@ export default function VendorContractsPage() {
             <p className="text-lg font-bold font-mono text-emerald-700">{formatNumber(activeCount)}</p>
           </CardContent>
         </Card>
-        <Card className="border-amber-300">
+        <Card className="border-status-warning-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <AlertTriangle className="h-3 w-3" /> ينتهي خلال 30 يوم
             </p>
-            <p className="text-lg font-bold font-mono text-amber-700">{formatNumber(expiringSoonCount)}</p>
+            <p className="text-lg font-bold font-mono text-status-warning-foreground">{formatNumber(expiringSoonCount)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -350,8 +350,8 @@ export default function VendorContractsPage() {
         </CardContent>
       </Card>
 
-      <Card className="mt-4 bg-amber-50/30 border-amber-200">
-        <CardContent className="p-3 text-xs text-amber-800">
+      <Card className="mt-4 bg-status-warning-surface/30 border-status-warning-surface">
+        <CardContent className="p-3 text-xs text-status-warning-foreground">
           ⓘ التعديل والحذف — follow-up PR (PATCH/DELETE /finance/contracts/:id موجود في الـ backend).
           حالياً للتعديل استخدم الـ API مباشرة.
         </CardContent>

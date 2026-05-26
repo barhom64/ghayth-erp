@@ -179,15 +179,15 @@ export default function VendorDetailPage() {
       )}
 
       {vendor?.residencyStatus && vendor.residencyStatus !== "resident" && (
-        <Card className="border-amber-200 bg-amber-50/40">
+        <Card className="border-status-warning-surface bg-status-warning-surface/40">
           <CardContent className="p-6 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm flex items-center gap-2">
-                <span className="text-amber-700">💰</span>
+                <span className="text-status-warning-foreground">💰</span>
                 إعدادات استقطاع ضريبة الدخل (WHT)
               </h3>
               <div className="flex items-center gap-2">
-                <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
+                <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-status-warning-foreground font-medium">
                   مورد غير مقيم — يُستقطع منه ضريبة عند الدفع
                 </span>
                 <Button size="sm" variant="outline" onClick={() => navigate(`/finance/vendors/${id}/edit`)}>
@@ -195,7 +195,7 @@ export default function VendorDetailPage() {
                 </Button>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-amber-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-status-warning-surface">
               <InfoRow label="حالة الإقامة الضريبية"
                 value={
                   vendor.residencyStatus === "non_resident_gcc" ? "غير مقيم — دول الخليج" :
@@ -210,10 +210,10 @@ export default function VendorDetailPage() {
                 ) as any : "—"} />
               <InfoRow label="نسبة استقطاع افتراضية"
                 value={vendor.defaultWhtRate != null
-                  ? (<span className="font-mono font-bold text-amber-700">{Number(vendor.defaultWhtRate).toFixed(2)}%</span>) as any
+                  ? (<span className="font-mono font-bold text-status-warning-foreground">{Number(vendor.defaultWhtRate).toFixed(2)}%</span>) as any
                   : "—"} />
             </div>
-            <p className="text-xs text-muted-foreground pt-2 border-t border-amber-200">
+            <p className="text-xs text-muted-foreground pt-2 border-t border-status-warning-surface">
               ⓘ عند دفع هذا المورد، سيتم استقطاع النسبة من المبلغ تلقائياً وقيد المستقطع على حساب
               "زاتكا — ضريبة استقطاع" (افتراضي 2330) ليُسدّد في الإقرار الشهري.
             </p>

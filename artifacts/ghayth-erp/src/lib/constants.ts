@@ -107,7 +107,7 @@ export const getStatusColor = (status: string) => {
     case "reserved":
     case "medium":
     case "open":
-      return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400";
+      return "bg-amber-100 text-status-warning-foreground dark:bg-amber-900/30 dark:text-amber-400";
     case "overdue":
     case "cancelled":
     case "rejected":
@@ -125,7 +125,7 @@ export const getStatusColor = (status: string) => {
     case "departed":
     case "lead":
     case "planning":
-      return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
+      return "bg-blue-100 text-status-info-foreground dark:bg-blue-900/30 dark:text-blue-400";
     case "maintenance":
     case "late":
       return "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400";
@@ -142,7 +142,7 @@ export const getStatusColor = (status: string) => {
     case "low":
     case "proposal":
     case "processed":
-      return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
+      return "bg-blue-100 text-status-info-foreground dark:bg-blue-900/30 dark:text-blue-400";
     case "closed_won":
     case "new":
     case "refunded":

@@ -148,7 +148,7 @@ export default function VendorsCreate() {
             استقطاع ضريبة الدخل (WHT) — وفق نظام ضريبة الدخل السعودي (المادة 68)
           </h3>
           {isNonResident && (
-            <Badge className="bg-amber-100 text-amber-800">
+            <Badge className="bg-amber-100 text-status-warning-foreground">
               سيتم استقطاع الضريبة عند الدفع
             </Badge>
           )}
