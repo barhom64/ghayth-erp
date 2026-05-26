@@ -92,19 +92,33 @@ jobs:
 
       - name: Load DB schema
         run: |
+          set -ex
+          psql --version
+          psql "$DATABASE_URL" -c "SELECT version();"
           psql "$DATABASE_URL" -f db/schema.sql
+          echo "::notice::schema load OK — $(psql -tA "$DATABASE_URL" -c "SELECT count(*) FROM pg_tables WHERE schemaname='public'") tables"
         env:
           PGPASSWORD: ghayth_erp
 
       - name: Build api-server
-        run: pnpm --filter @workspace/api-server build
+        run: |
+          set -ex
+          pnpm --filter @workspace/api-server build
+          ls -la artifacts/api-server/dist/index.mjs
+          echo "::notice::api-server build OK"
 
       - name: Build frontend
         run: |
+          set -ex
           PORT=5173 BASE_PATH=/ pnpm --filter @workspace/ghayth-erp build
+          ls -la artifacts/ghayth-erp/dist/public/index.html
+          echo "::notice::frontend build OK"
 
       - name: Install Playwright browsers
-        run: pnpm --filter @workspace/e2e exec playwright install --with-deps chromium
+        run: |
+          set -ex
+          pnpm --filter @workspace/e2e exec playwright install --with-deps chromium
+          echo "::notice::playwright browsers installed"
 
       - name: Start api-server
         run: |
@@ -144,6 +158,27 @@ jobs:
       - name: Run Playwright tests
         run: pnpm --filter @workspace/e2e test
 
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          echo "::group::process list"
+          ps -ef | grep -E "node|vite|psql" | grep -v grep || true
+          echo "::endgroup::"
+          echo "::group::tail api-server.log"
+          tail -200 api-server.log 2>/dev/null || echo "(no api-server.log)"
+          echo "::endgroup::"
+          echo "::group::tail frontend.log"
+          tail -200 frontend.log 2>/dev/null || echo "(no frontend.log)"
+          echo "::endgroup::"
+          echo "::group::dist contents"
+          ls -la artifacts/api-server/dist 2>/dev/null | head -20 || echo "(no api-server dist)"
+          ls -la artifacts/ghayth-erp/dist/public 2>/dev/null | head -20 || echo "(no frontend dist)"
+          echo "::endgroup::"
+          echo "::group::playwright report root"
+          ls -la e2e/playwright-report 2>/dev/null | head -20 || echo "(no playwright-report)"
+          ls -la e2e/test-results 2>/dev/null | head -20 || echo "(no test-results)"
+          echo "::endgroup::"
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
@@ -151,6 +186,7 @@ jobs:
           name: playwright-report
           path: e2e/playwright-report/
           retention-days: 14
+          if-no-files-found: ignore
 
       - name: Upload server logs (on failure)
         if: failure()
@@ -161,6 +197,7 @@ jobs:
             api-server.log
             frontend.log
           retention-days: 7
+          if-no-files-found: ignore
 
       - name: Tear down
         if: always()

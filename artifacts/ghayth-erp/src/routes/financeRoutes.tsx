@@ -9,6 +9,7 @@ import { lazy } from "react";
 const Dashboard = lazy(() => import("@/pages/finance/dashboard"));
 const CfoCockpit = lazy(() => import("@/pages/finance/cfo-cockpit"));
 const GlHealthScore = lazy(() => import("@/pages/finance/gl-health-score"));
+const ApprovalsInbox = lazy(() => import("@/pages/finance/approvals-inbox"));
 const Accounts = lazy(() => import("@/pages/finance/accounts"));
 const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
@@ -107,6 +108,7 @@ const IntercompanyConsolidationCreate = lazy(() => import("@/pages/create/financ
 const CashFlowForecast = lazy(() => import("@/pages/finance/cash-flow-forecast"));
 const CashCalendar = lazy(() => import("@/pages/finance/cash-calendar"));
 const Cash13Week = lazy(() => import("@/pages/finance/cash-13week"));
+const CashFlowStatement = lazy(() => import("@/pages/finance/cash-flow-statement"));
 const ProjectCosting = lazy(() => import("@/pages/finance/project-costing"));
 const ProjectCostingDetail = lazy(() => import("@/pages/finance/project-costing-detail"));
 const CashflowDashboard = lazy(() => import("@/pages/finance/cashflow-dashboard"));
@@ -114,6 +116,7 @@ const OpeningBalances = lazy(() => import("@/pages/finance/opening-balances"));
 const OpeningBalancesCreate = lazy(() => import("@/pages/create/finance/opening-balances-create"));
 const RecurringJournals = lazy(() => import("@/pages/finance/recurring-journals"));
 const RecurringJournalsCreate = lazy(() => import("@/pages/create/finance/recurring-journals-create"));
+const RecurringCalendar = lazy(() => import("@/pages/finance/recurring-calendar"));
 const RecurringJournalDetail = lazy(() => import("@/pages/finance/recurring-journal-detail"));
 const YearEndClose = lazy(() => import("@/pages/finance/year-end-close"));
 const Treasury = lazy(() => import("@/pages/finance/treasury"));
@@ -145,6 +148,7 @@ export const financeRoutes = [
   { path: "/finance", component: Dashboard },
   { path: "/finance/cfo-cockpit", component: CfoCockpit },
   { path: "/finance/gl-health", component: GlHealthScore },
+  { path: "/finance/approvals-inbox", component: ApprovalsInbox },
   { path: "/finance/accounts", component: Accounts },
   { path: "/finance/accounts/create", component: AccountsCreate },
   { path: "/finance/accounts/:id/edit", component: AccountsEdit },
@@ -274,12 +278,14 @@ export const financeRoutes = [
   { path: "/finance/cash-flow-forecast", component: CashFlowForecast },
   { path: "/finance/cash-calendar", component: CashCalendar },
   { path: "/finance/cash-13week", component: Cash13Week },
+  { path: "/finance/reports/cash-flow-statement", component: CashFlowStatement },
   { path: "/finance/project-costing", component: ProjectCosting },
   { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
   { path: "/finance/opening-balances", component: OpeningBalances },
   { path: "/finance/opening-balances/create", component: OpeningBalancesCreate },
   { path: "/finance/recurring-journals", component: RecurringJournals },
+  { path: "/finance/recurring-calendar", component: RecurringCalendar },
   { path: "/finance/recurring-journals/create", component: RecurringJournalsCreate },
   { path: "/finance/recurring-journals/:id", component: RecurringJournalDetail },
   { path: "/finance/year-end-close", component: YearEndClose },
