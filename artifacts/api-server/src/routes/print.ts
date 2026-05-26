@@ -85,6 +85,7 @@ function scopeFromReq(req: Request): PrintScope {
     userId: s.userId,
     role: s.role,
     isOwner: s.isOwner,
+    allowedBranches: s.allowedBranches ?? [],
   };
 }
 
