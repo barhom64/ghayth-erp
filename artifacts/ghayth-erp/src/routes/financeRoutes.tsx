@@ -12,6 +12,7 @@ const CostCenters = lazy(() => import("@/pages/finance/cost-centers"));
 const JournalTemplates = lazy(() => import("@/pages/finance/journal-templates"));
 const Fx = lazy(() => import("@/pages/finance/fx"));
 const VendorContracts = lazy(() => import("@/pages/finance/contracts"));
+const SubsidiaryAccounts = lazy(() => import("@/pages/finance/subsidiary-accounts"));
 const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
 const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
@@ -89,6 +90,7 @@ export const financeRoutes = [
   { path: "/finance/journal-templates", component: JournalTemplates },
   { path: "/finance/fx", component: Fx },
   { path: "/finance/contracts", component: VendorContracts },
+  { path: "/finance/subsidiary-accounts", component: SubsidiaryAccounts },
   { path: "/finance/accounts/create", component: AccountsCreate },
   { path: "/finance/accounts/:id/edit", component: AccountsEdit },
   { path: "/finance/accounts/:id", component: AccountDetail },

@@ -16,7 +16,7 @@ import {
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
-  BarChart2, ShieldAlert, Flag, Lock, Layers,
+  BarChart2, ShieldAlert, Flag, Lock, Layers, Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -186,6 +186,7 @@ const allNavSections: NavSection[] = [
         { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
         { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus },
         { label: "مراكز التكلفة", path: "/finance/cost-centers", icon: GitBranch },
+        { label: "الحسابات الفرعية", path: "/finance/subsidiary-accounts", icon: Link2 },
         { label: "قوالب القيود", path: "/finance/journal-templates", icon: FileText },
         { label: "العملات الأجنبية", path: "/finance/fx", icon: ArrowLeftRight },
         { label: "طابور ترحيل GL", path: "/finance/gl-posting-queue", icon: Activity },
