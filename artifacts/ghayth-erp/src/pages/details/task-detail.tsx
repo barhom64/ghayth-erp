@@ -57,7 +57,7 @@ export default function TaskDetail() {
 
   const { data: task, isLoading, error, refetch } = useApiQuery<any>(
     ["task", String(id)],
-    id ? `/tasks/${id}` : null,
+    `/tasks/${id}`,
     !!id,
   );
 

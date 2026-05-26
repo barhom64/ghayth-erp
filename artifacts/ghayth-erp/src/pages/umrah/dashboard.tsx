@@ -20,7 +20,7 @@ export default function UmrahDashboard() {
   const seasonId = activeSeason?.id;
   const { data: dash, refetch, isLoading: dashLoading, isError: dashError } = useApiQuery<any>(
     ["umrah-dashboard", String(seasonId || "")],
-    seasonId ? `/umrah/dashboard?seasonId=${seasonId}` : null
+    `/umrah/dashboard?seasonId=${seasonId ?? 0}`
   );
   const { toast } = useToast();
   const p = dash?.pilgrims || {};

@@ -239,7 +239,7 @@ export default function LegalCaseDetail() {
 
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("legal_case", Number(id));
 
-  const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], id ? `/legal/cases/${id}` : null);
+  const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], `/legal/cases/${id}`);
 
   const transitionMut = useApiMutation<any, { status: string }>(
     () => `/legal/cases/${id}`,

@@ -117,7 +117,7 @@ export default function InvoicesCreate() {
   // Load all active tax codes (the 5 seeded Saudi defaults + any custom).
   const { data: taxCodesData } = useApiQuery<{ data: TaxCode[] }>(
     ["tax-codes"],
-    "/finance/accounts/tax-codes",
+    "/finance/tax-codes",
   );
   const taxCodes = useMemo(() => (taxCodesData?.data ?? []).filter((t) => t.isActive), [taxCodesData]);
   const taxCodeByCode = useMemo(() => {

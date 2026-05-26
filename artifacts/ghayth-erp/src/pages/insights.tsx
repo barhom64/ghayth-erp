@@ -451,7 +451,7 @@ export default function Insights() {
                             }}
                           />
                         </div>
-                        <span className="text-sm font-bold w-10 text-right">{kpi.value}%</span>
+                        <span className="text-sm font-bold w-10 text-end">{kpi.value}%</span>
                       </div>
                     </div>
                   ))}

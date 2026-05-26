@@ -61,7 +61,7 @@ export default function VoucherDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["voucher", String(id)],
-    id ? `/finance/vouchers/${id}` : null,
+    `/finance/vouchers/${id}`,
     !!id
   );
 

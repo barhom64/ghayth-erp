@@ -87,6 +87,14 @@ export default function CustodiesPage() {
     ["custodies", scopeQueryString],
     `/finance/custodies${scopeSuffix}`,
   );
+  // GET /custodies/summary computes from journal_entries directly,
+  // so it stays accurate even if the current list query is filtered.
+  // The list response includes its own filtered summary, but the
+  // global one is the authoritative cross-list health check.
+  const { data: globalSummary } = useApiQuery<{
+    total: number; totalAmount: number; totalRemaining: number;
+    activeCount: number; overdueCount: number; settledCount: number;
+  }>(["custodies-summary"], "/finance/custodies/summary");
   const items = data?.data || [];
   const summary: CustodySummary = data?.summary || EMPTY_OBJ;
   const [filters, setFilters] = useFilters();
@@ -236,6 +244,23 @@ export default function CustodiesPage() {
         { label: "المسوّاة", value: items.filter((c: any) => c.status === "settled").length, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
         { label: "إجمالي المبالغ", value: formatCurrency(Number(summary.totalAmount || 0)), icon: DollarSign, color: "text-emerald-600 bg-emerald-50" },
       ]} />
+      {globalSummary && (
+        <div className="text-xs text-muted-foreground -mt-2 mb-2 px-1">
+          الإجمالي عبر النظام (غير محدود بالفلتر):{" "}
+          <span className="font-medium">{globalSummary.total}</span> عهدة /
+          متبقي{" "}
+          <span className="font-medium">{formatCurrency(Number(globalSummary.totalRemaining))}</span>{" "}
+          / منها{" "}
+          <span className="font-medium text-status-error-foreground">
+            {globalSummary.overdueCount}
+          </span>{" "}
+          متأخرة، و{" "}
+          <span className="font-medium text-status-success-foreground">
+            {globalSummary.settledCount}
+          </span>{" "}
+          مسوّاة
+        </div>
+      )}
 
       {showForm && <CreateCustodyForm onDone={() => setShowForm(false)} />}
       {settleTarget && (
