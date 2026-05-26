@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -152,6 +153,28 @@ export default function ExpenseBurnRatePage() {
     <PageShell
       title="معدل الحرق وفترة البقاء"
       subtitle="6 أشهر من معدل صافي الحرق + توقع فترة البقاء بناءً على السيولة الحالية"
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/cash-position-calculator">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Banknote className="h-3.5 w-3.5 ml-1" />
+              مركز السيولة
+            </Button>
+          </Link>
+          <Link href="/finance/cash-13week">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Calendar className="h-3.5 w-3.5 ml-1" />
+              توقع 13 أسبوع
+            </Button>
+          </Link>
+          <Link href="/finance/expense-bulk-approvals">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <BarChart3 className="h-3.5 w-3.5 ml-1" />
+              اعتماد المصاريف
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 
