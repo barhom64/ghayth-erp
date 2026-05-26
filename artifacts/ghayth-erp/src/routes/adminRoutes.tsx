@@ -18,6 +18,7 @@ const AdminGlReconciliation = lazy(() => import("@/pages/admin-gl-reconciliation
 const AdminSystemRegistry = lazy(() => import("@/pages/admin-system-registry"));
 const AdminPrintTemplates = lazy(() => import("@/pages/admin/print-templates"));
 const AdminPrintDiagnostics = lazy(() => import("@/pages/admin/print-diagnostics"));
+const AdminApprovalOverrides = lazy(() => import("@/pages/admin/approval-overrides-report"));
 
 export const adminRoutes = [
   { path: "/admin", component: Admin },
@@ -38,4 +39,5 @@ export const adminRoutes = [
   { path: "/admin/system-registry", component: AdminSystemRegistry },
   { path: "/admin/print-templates", component: AdminPrintTemplates },
   { path: "/admin/print-diagnostics", component: AdminPrintDiagnostics },
+  { path: "/admin/approval-overrides", component: AdminApprovalOverrides },
 ];
