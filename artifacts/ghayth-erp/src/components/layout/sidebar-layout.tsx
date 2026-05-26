@@ -214,6 +214,7 @@ const allNavSections: NavSection[] = [
         { label: "إنفاق الموردين 🆕", path: "/finance/vendor-spend", icon: BarChart3 },
         { label: "دفعة الدفع", path: "/finance/payment-run", icon: Banknote },
         { label: "تقويم الدفعات 🆕", path: "/finance/ap-payment-calendar", icon: Calendar },
+        { label: "متابعة عقود الموردين 🆕", path: "/finance/vendor-contracts-tracker", icon: FileSignature },
       ]},
       { label: "النقد والذمم", path: "/finance/treasury", icon: Building, module: "finance", children: [
         { label: "مراقبة البنوك 🆕", path: "/finance/bank-accounts-watch", icon: Banknote },
