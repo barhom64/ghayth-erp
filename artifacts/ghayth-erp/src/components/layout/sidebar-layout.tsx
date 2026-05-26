@@ -266,6 +266,7 @@ const allNavSections: NavSection[] = [
         { label: "ZATCA Reports Hub", path: "/finance/reports/zatca", icon: FileCheck },
         { label: "تسوية VAT", path: "/finance/reports/vat-reconciliation", icon: Scale },
         { label: "ملخص WHT", path: "/finance/reports/wht-summary", icon: Percent },
+        { label: "إعداد إقرار WHT 🆕", path: "/finance/wht-filing-workbench", icon: FileCheck },
         { label: "التقارير المالية", path: "/finance/reports", icon: FileBarChart },
         { label: "P&L مقابل الميزانية 🆕", path: "/finance/reports/is-vs-budget", icon: Scale },
         { label: "اتجاه قائمة الدخل 🆕", path: "/finance/reports/is-trend", icon: TrendingUp },
