@@ -67,7 +67,7 @@ const ALLOWLIST: Allow[] = [
   },
   {
     file: "auth.ts",
-    line: 414,
+    line: 422,
     table: "employee_assignments",
     reason:
       "Same refresh-token bootstrap flow as L297/L327 — third active-assignment lookup in the refresh handler. Runs after the verified refresh token is loaded; tenant boundary is the token's employeeId, not scope.companyId (scope is being rebuilt).",
