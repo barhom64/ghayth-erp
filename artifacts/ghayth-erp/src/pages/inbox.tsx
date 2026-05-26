@@ -37,7 +37,21 @@ import {
   Mail, MessageSquare, Phone, Send, Plus, RefreshCw,
   ArrowDownLeft, ArrowUpRight, AlertOctagon, Sparkles,
   PhoneCall, PhoneIncoming, PhoneOutgoing, PhoneMissed,
+  Inbox as InboxIcon, FileEdit, Star, Archive, Trash2, AlertTriangle,
+  Save, PenSquare, Settings,
 } from "lucide-react";
+
+type Folder = "inbox" | "sent" | "drafts" | "starred" | "archive" | "trash" | "spam";
+
+const FOLDER_META: Record<Folder, { icon: typeof InboxIcon; label: string }> = {
+  inbox:    { icon: InboxIcon,     label: "الوارد" },
+  sent:     { icon: Send,          label: "المرسلة" },
+  drafts:   { icon: FileEdit,      label: "المسودّات" },
+  starred:  { icon: Star,          label: "بنجمة" },
+  archive:  { icon: Archive,       label: "الأرشيف" },
+  trash:    { icon: Trash2,        label: "المحذوفة" },
+  spam:     { icon: AlertTriangle, label: "السبام" },
+};
 
 type Channel = "email" | "whatsapp" | "sms";
 
@@ -51,6 +65,8 @@ interface ThreadRow {
   subject: string | null;
   body_preview: string;
   status: string;
+  folder: Folder | string;
+  isStarred: boolean;
   relatedType: string | null;
   relatedId: number | null;
   createdAt: string;
@@ -93,6 +109,30 @@ interface SendResult {
   dlpMatches?: Array<{ rule: string; action: string }>;
 }
 
+interface DraftRow {
+  id: number;
+  channel: Channel;
+  recipient: string | null;
+  recipientName: string | null;
+  subject: string | null;
+  body: string;
+  templateKey: string | null;
+  relatedType: string | null;
+  relatedId: number | null;
+  scheduledAt: string | null;
+  lastSavedAt: string;
+  createdAt: string;
+}
+
+interface SignatureRow {
+  id: number;
+  name: string;
+  body: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 const CHANNEL_META: Record<string, { icon: typeof Mail; label: string; color: string }> = {
   email:    { icon: Mail,          label: "بريد",   color: "text-purple-600 bg-purple-50" },
   whatsapp: { icon: MessageSquare, label: "واتساب",  color: "text-emerald-600 bg-emerald-50" },
@@ -102,31 +142,56 @@ const CHANNEL_META: Record<string, { icon: typeof Mail; label: string; color: st
 
 export default function Inbox() {
   const [tab, setTab] = useState<"all" | Channel | "calls">("all");
+  const [folder, setFolder] = useState<Folder>("inbox");
   const [composeOpen, setComposeOpen] = useState(false);
   const [callLogOpen, setCallLogOpen] = useState(false);
+  const [signaturesOpen, setSignaturesOpen] = useState(false);
   const [activeThread, setActiveThread] = useState<{ channel: Channel; address: string } | null>(null);
+  const [editingDraft, setEditingDraft] = useState<DraftRow | null>(null);
 
-  const threadsPath = tab === "all" || tab === "calls"
-    ? "/inbox/threads"
-    : `/inbox/threads?channel=${tab}`;
+  // Build the threads URL with channel + folder filters. The drafts
+  // folder reads from /inbox/drafts not /inbox/threads, so we branch
+  // the query path entirely.
+  const isDraftsFolder = folder === "drafts";
+  const isCallsTab = tab === "calls";
+  const threadsParams: string[] = [];
+  if (tab !== "all" && tab !== "calls") threadsParams.push(`channel=${tab}`);
+  if (folder !== "inbox") threadsParams.push(`folder=${folder}`);
+  const threadsPath = `/inbox/threads${threadsParams.length ? `?${threadsParams.join("&")}` : ""}`;
 
   const { data: threadsResp, isLoading, refetch: refetchThreads } = useApiQuery<{ data: ThreadRow[] }>(
-    ["inbox-threads", tab],
+    ["inbox-threads", tab, folder],
     threadsPath,
-    { enabled: tab !== "calls" },
+    { enabled: !isCallsTab && !isDraftsFolder },
+  );
+  const { data: draftsResp, refetch: refetchDrafts } = useApiQuery<{ data: DraftRow[] }>(
+    ["inbox-drafts"],
+    "/inbox/drafts",
+    { enabled: isDraftsFolder },
   );
   const { data: callsResp, refetch: refetchCalls } = useApiQuery<{ data: CallRow[] }>(
     ["inbox-calls"],
     "/inbox/calls",
-    { enabled: tab === "calls" },
+    { enabled: isCallsTab },
+  );
+  const { data: countsResp, refetch: refetchCounts } = useApiQuery<Record<Folder, number>>(
+    ["inbox-folder-counts"],
+    "/inbox/folder-counts",
   );
   const threads = threadsResp?.data ?? [];
+  const drafts = draftsResp?.data ?? [];
   const calls = callsResp?.data ?? [];
+  const counts = countsResp ?? { inbox: 0, sent: 0, drafts: 0, starred: 0, archive: 0, trash: 0, spam: 0 };
 
   const refreshAll = () => {
     void refetchThreads();
+    void refetchDrafts();
     void refetchCalls();
+    void refetchCounts();
   };
+
+  const openCompose = () => { setEditingDraft(null); setComposeOpen(true); };
+  const openDraft = (d: DraftRow) => { setEditingDraft(d); setComposeOpen(true); };
 
   return (
     <PageShell
@@ -137,71 +202,122 @@ export default function Inbox() {
           <Button variant="outline" size="sm" onClick={refreshAll}>
             <RefreshCw className="w-4 h-4 me-1" />تحديث
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setSignaturesOpen(true)}>
+            <PenSquare className="w-4 h-4 me-1" />التواقيع
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setCallLogOpen(true)}>
             <PhoneCall className="w-4 h-4 me-1" />سجّل مكالمة
           </Button>
-          <Button size="sm" rateLimitAware onClick={() => setComposeOpen(true)}>
+          <Button size="sm" rateLimitAware onClick={openCompose}>
             <Plus className="w-4 h-4 me-1" />رسالة جديدة
           </Button>
         </div>
       }
     >
-      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="all">الكل</TabsTrigger>
-          <TabsTrigger value="email"><Mail className="w-4 h-4 me-1" />بريد</TabsTrigger>
-          <TabsTrigger value="whatsapp"><MessageSquare className="w-4 h-4 me-1" />واتساب</TabsTrigger>
-          <TabsTrigger value="sms"><MessageSquare className="w-4 h-4 me-1" />رسائل</TabsTrigger>
-          <TabsTrigger value="calls"><Phone className="w-4 h-4 me-1" />مكالمات</TabsTrigger>
-        </TabsList>
+      <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr_2fr] gap-4">
+        {/* Folder sidebar */}
+        <Card className="lg:row-span-2 h-fit">
+          <CardContent className="p-2 space-y-0.5">
+            {(["inbox","sent","drafts","starred","archive","trash","spam"] as Folder[]).map((f) => {
+              const meta = FOLDER_META[f];
+              const Icon = meta.icon;
+              const isActive = folder === f;
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => { setFolder(f); setActiveThread(null); }}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors",
+                    isActive
+                      ? "bg-status-info-surface text-status-info-foreground font-medium"
+                      : "hover:bg-surface-subtle",
+                  )}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="flex-1 text-start">{meta.label}</span>
+                  {counts[f] > 0 && (
+                    <Badge variant="outline" className="text-[10px]">{counts[f]}</Badge>
+                  )}
+                </button>
+              );
+            })}
+          </CardContent>
+        </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Left: thread list / call list */}
-          <div className={cn("lg:col-span-1", activeThread && "hidden lg:block")}>
-            {tab === "calls" ? (
-              <CallList calls={calls} />
-            ) : (
-              <ThreadList
-                threads={threads}
-                isLoading={isLoading}
-                active={activeThread}
-                onSelect={(channel, address) => setActiveThread({ channel, address })}
-              />
-            )}
-          </div>
-
-          {/* Right: thread detail / placeholder */}
-          <div className="lg:col-span-2">
-            {tab === "calls" ? (
-              <CallsHelp />
-            ) : activeThread ? (
-              <ThreadView
-                channel={activeThread.channel}
-                address={activeThread.address}
-                onBack={() => setActiveThread(null)}
-                onSent={refreshAll}
-              />
-            ) : (
-              <Card>
-                <CardContent className="p-12 text-center text-sm text-muted-foreground">
-                  <MessageSquare className="w-12 h-12 mx-auto mb-3 text-muted-foreground/40" />
-                  اختر محادثة من القائمة لقراءتها والرد عليها، أو ابدأ رسالة جديدة من زرّ "رسالة جديدة" بالأعلى.
-                </CardContent>
-              </Card>
-            )}
-          </div>
+        {/* Tabs (channel filter) — only relevant when browsing threads, not drafts/calls */}
+        <div className="lg:col-span-2">
+          <Tabs value={tab} onValueChange={(v) => { setTab(v as typeof tab); setActiveThread(null); }} className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="all">الكل</TabsTrigger>
+              <TabsTrigger value="email"><Mail className="w-4 h-4 me-1" />بريد</TabsTrigger>
+              <TabsTrigger value="whatsapp"><MessageSquare className="w-4 h-4 me-1" />واتساب</TabsTrigger>
+              <TabsTrigger value="sms"><MessageSquare className="w-4 h-4 me-1" />رسائل</TabsTrigger>
+              <TabsTrigger value="calls"><Phone className="w-4 h-4 me-1" />مكالمات</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
-      </Tabs>
+
+        {/* Left content: thread list / draft list / call list */}
+        <div className={cn(activeThread && "hidden lg:block")}>
+          {isCallsTab ? (
+            <CallList calls={calls} />
+          ) : isDraftsFolder ? (
+            <DraftsList drafts={drafts} onOpen={openDraft} onChange={refreshAll} />
+          ) : (
+            <ThreadList
+              threads={threads}
+              isLoading={isLoading}
+              active={activeThread}
+              onSelect={(channel, address) => setActiveThread({ channel, address })}
+              onChange={refreshAll}
+            />
+          )}
+        </div>
+
+        {/* Right pane: detail / placeholder */}
+        <div>
+          {isCallsTab ? (
+            <CallsHelp />
+          ) : activeThread ? (
+            <ThreadView
+              channel={activeThread.channel}
+              address={activeThread.address}
+              onBack={() => setActiveThread(null)}
+              onSent={refreshAll}
+            />
+          ) : isDraftsFolder ? (
+            <Card>
+              <CardContent className="p-12 text-center text-sm text-muted-foreground">
+                <FileEdit className="w-12 h-12 mx-auto mb-3 text-muted-foreground/40" />
+                اختر مسودّة من القائمة لمتابعة تعديلها أو إرسالها.
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-12 text-center text-sm text-muted-foreground">
+                <MessageSquare className="w-12 h-12 mx-auto mb-3 text-muted-foreground/40" />
+                اختر محادثة من القائمة لقراءتها والرد عليها، أو ابدأ رسالة جديدة من زرّ "رسالة جديدة" بالأعلى.
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
 
       <ComposeDialog
         open={composeOpen}
-        onClose={() => setComposeOpen(false)}
-        onSent={() => { refreshAll(); setComposeOpen(false); }}
+        onClose={() => { setComposeOpen(false); setEditingDraft(null); }}
+        onSent={() => { refreshAll(); setComposeOpen(false); setEditingDraft(null); }}
+        editingDraft={editingDraft}
       />
       <CallLogDialog
         open={callLogOpen}
         onClose={() => setCallLogOpen(false)}
         onLogged={() => { refreshAll(); setCallLogOpen(false); }}
+      />
+      <SignaturesDialog
+        open={signaturesOpen}
+        onClose={() => setSignaturesOpen(false)}
       />
     </PageShell>
   );
@@ -209,17 +325,28 @@ export default function Inbox() {
 
 // ─────────────────────── Thread list ────────────────────────────────────
 
-function ThreadList({ threads, isLoading, active, onSelect }: {
+function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
   threads: ThreadRow[];
   isLoading: boolean;
   active: { channel: Channel; address: string } | null;
   onSelect: (channel: Channel, address: string) => void;
+  onChange?: () => void;
 }) {
+  const toggleStar = useMutation({
+    mutationFn: (id: number) => apiFetch(`/inbox/messages/${id}/star`, { method: "POST" }),
+    onSuccess: () => onChange?.(),
+  });
+  const moveTo = useMutation({
+    mutationFn: ({ id, folder }: { id: number; folder: string }) =>
+      apiFetch(`/inbox/messages/${id}/folder`, { method: "POST", body: JSON.stringify({ folder }) }),
+    onSuccess: () => { toast({ title: "تم النقل" }); onChange?.(); },
+  });
+
   if (threads.length === 0 && !isLoading) {
     return (
       <Card>
         <CardContent className="p-6 text-center text-sm text-muted-foreground">
-          لا توجد محادثات بعد. ابدأ رسالة جديدة لإنشاء محادثة.
+          لا توجد محادثات في هذا المجلد.
         </CardContent>
       </Card>
     );
@@ -233,26 +360,26 @@ function ThreadList({ threads, isLoading, active, onSelect }: {
             const Icon = meta.icon;
             const isActive = active?.channel === t.channel && active.address === t.peer;
             return (
-              <button
+              <div
                 key={`${t.channel}-${t.peer}-${t.id}`}
-                type="button"
-                onClick={() => t.channel !== "pbx" && onSelect(t.channel as Channel, t.peer)}
                 className={cn(
-                  "w-full text-start p-3 hover:bg-surface-subtle/60 flex gap-3 items-start transition-colors",
+                  "p-3 hover:bg-surface-subtle/60 flex gap-2 items-start transition-colors group",
                   isActive && "bg-status-info-surface",
-                  t.channel === "pbx" && "opacity-60 cursor-default",
+                  t.channel === "pbx" && "opacity-60",
                 )}
               >
                 <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0", meta.color.split(" ")[1])}>
                   <Icon className={cn("w-4 h-4", meta.color.split(" ")[0])} />
                 </div>
-                <div className="flex-1 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => t.channel !== "pbx" && onSelect(t.channel as Channel, t.peer)}
+                  className="flex-1 min-w-0 text-start"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-sm truncate">{t.peer}</span>
                     {t.inbound_count > 0 && (
-                      <Badge variant="outline" className="text-[10px] shrink-0">
-                        {t.inbound_count} وارد
-                      </Badge>
+                      <Badge variant="outline" className="text-[10px] shrink-0">{t.inbound_count} وارد</Badge>
                     )}
                   </div>
                   {t.subject && (
@@ -265,10 +392,90 @@ function ThreadList({ threads, isLoading, active, onSelect }: {
                     <span className="text-[10px] text-muted-foreground">{formatDateAr(t.createdAt)}</span>
                     <span className="text-[10px] text-muted-foreground">{t.total_messages} رسالة</span>
                   </div>
+                </button>
+                <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    onClick={() => toggleStar.mutate(t.id)}
+                    className="p-1 hover:bg-status-warning-surface/40 rounded"
+                    title={t.isStarred ? "إزالة النجمة" : "تمييز بنجمة"}
+                  >
+                    <Star className={cn("w-3 h-3", t.isStarred ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground")} />
+                  </button>
+                  {t.folder !== "archive" && (
+                    <button
+                      type="button"
+                      onClick={() => moveTo.mutate({ id: t.id, folder: "archive" })}
+                      className="p-1 hover:bg-status-info-surface rounded"
+                      title="أرشفة"
+                    >
+                      <Archive className="w-3 h-3 text-muted-foreground" />
+                    </button>
+                  )}
+                  {t.folder !== "trash" && (
+                    <button
+                      type="button"
+                      onClick={() => moveTo.mutate({ id: t.id, folder: "trash" })}
+                      className="p-1 hover:bg-status-error-surface rounded"
+                      title="حذف"
+                    >
+                      <Trash2 className="w-3 h-3 text-muted-foreground" />
+                    </button>
+                  )}
                 </div>
-              </button>
+              </div>
             );
           })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DraftsList({ drafts, onOpen, onChange }: {
+  drafts: DraftRow[];
+  onOpen: (d: DraftRow) => void;
+  onChange: () => void;
+}) {
+  const del = useMutation({
+    mutationFn: (id: number) => apiFetch(`/inbox/drafts/${id}`, { method: "DELETE" }),
+    onSuccess: () => { toast({ title: "حُذفت المسوّدة" }); onChange(); },
+  });
+  if (drafts.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center text-sm text-muted-foreground">
+          لا توجد مسوّدات محفوظة. اضغط "رسالة جديدة" ثم "حفظ كمسوّدة" لتظهر هنا.
+        </CardContent>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <div className="divide-y">
+          {drafts.map((d) => (
+            <div key={d.id} className="p-3 hover:bg-surface-subtle/60 flex gap-2 items-start group">
+              <FileEdit className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
+              <button type="button" onClick={() => onOpen(d)} className="flex-1 min-w-0 text-start">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px]">{d.channel}</Badge>
+                  <span className="text-sm font-medium truncate">{d.recipient ?? "(بدون مستلم)"}</span>
+                </div>
+                <p className="text-xs text-muted-foreground truncate mt-1">{d.subject ?? "(بدون عنوان)"}</p>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">{d.body.slice(0, 100) || "(فارغة)"}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">آخر حفظ: {formatDateAr(d.lastSavedAt)}</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => del.mutate(d.id)}
+                className="p-1 hover:bg-status-error-surface rounded opacity-0 group-hover:opacity-100"
+                title="حذف"
+              >
+                <Trash2 className="w-3 h-3 text-status-error-foreground" />
+              </button>
+            </div>
+          ))}
         </div>
       </CardContent>
     </Card>
@@ -498,7 +705,7 @@ interface TemplateRow {
   isDefault: boolean;
 }
 
-export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRecipient, initialSubject, initialBody, initialRelated }: {
+export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRecipient, initialSubject, initialBody, initialRelated, editingDraft }: {
   open: boolean;
   onClose: () => void;
   onSent: () => void;
@@ -507,26 +714,50 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
   initialSubject?: string;
   initialBody?: string;
   initialRelated?: { type: string; id: number };
+  /** When set, the dialog is editing an existing draft — Save updates it, Send finalises it. */
+  editingDraft?: DraftRow | null;
 }) {
-  const [channel, setChannel] = useState<Channel>(initialChannel ?? "email");
-  const [recipient, setRecipient] = useState(initialRecipient ?? "");
-  const [recipientName, setRecipientName] = useState("");
-  const [subject, setSubject] = useState(initialSubject ?? "");
-  const [body, setBody] = useState(initialBody ?? "");
+  const [channel, setChannel] = useState<Channel>(editingDraft?.channel ?? initialChannel ?? "email");
+  const [recipient, setRecipient] = useState(editingDraft?.recipient ?? initialRecipient ?? "");
+  const [recipientName, setRecipientName] = useState(editingDraft?.recipientName ?? "");
+  const [subject, setSubject] = useState(editingDraft?.subject ?? initialSubject ?? "");
+  const [body, setBody] = useState(editingDraft?.body ?? initialBody ?? "");
   const [dlpInfo, setDlpInfo] = useState<SendResult | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [draftId, setDraftId] = useState<number | null>(editingDraft?.id ?? null);
 
-  const reset = () => { setRecipient(""); setRecipientName(""); setSubject(""); setBody(""); setDlpInfo(null); };
+  const reset = () => {
+    setRecipient(""); setRecipientName(""); setSubject(""); setBody("");
+    setDlpInfo(null); setDraftId(null);
+  };
 
-  // Hydrate from props whenever the dialog opens with new initialX.
+  // Hydrate from props whenever the dialog opens.
   useEffect(() => {
     if (open) {
-      if (initialChannel) setChannel(initialChannel);
-      if (initialRecipient !== undefined) setRecipient(initialRecipient);
-      if (initialSubject !== undefined) setSubject(initialSubject);
-      if (initialBody !== undefined) setBody(initialBody);
+      if (editingDraft) {
+        setChannel(editingDraft.channel);
+        setRecipient(editingDraft.recipient ?? "");
+        setRecipientName(editingDraft.recipientName ?? "");
+        setSubject(editingDraft.subject ?? "");
+        setBody(editingDraft.body);
+        setDraftId(editingDraft.id);
+      } else {
+        if (initialChannel) setChannel(initialChannel);
+        if (initialRecipient !== undefined) setRecipient(initialRecipient);
+        if (initialSubject !== undefined) setSubject(initialSubject);
+        if (initialBody !== undefined) setBody(initialBody);
+        setDraftId(null);
+      }
     }
-  }, [open, initialChannel, initialRecipient, initialSubject, initialBody]);
+  }, [open, editingDraft, initialChannel, initialRecipient, initialSubject, initialBody]);
+
+  // User signatures — auto-applied if there's a default and the
+  // body is empty / matches initial.
+  const { data: sigResp } = useApiQuery<{ data: SignatureRow[] }>(
+    ["inbox-signatures"], "/inbox/signatures",
+  );
+  const signatures = sigResp?.data ?? [];
+  const defaultSig = signatures.find((s) => s.isDefault);
 
   // Recipient autocomplete — fires after 2 chars + 300ms debounce
   // (debounce inlined via useDeferredValue alternative — keep simple).
@@ -547,15 +778,22 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
   const templates = tmplResp?.data ?? [];
 
   const send = useMutation({
-    mutationFn: () => apiFetch<SendResult>("/inbox/send", {
-      method: "POST",
-      body: JSON.stringify({
-        channel, recipient, recipientName: recipientName || undefined,
-        subject: channel === "email" ? subject : undefined, body,
-        relatedType: initialRelated?.type,
-        relatedId: initialRelated?.id,
-      }),
-    }),
+    mutationFn: async () => {
+      // If editing a draft, send via /drafts/:id/send so the draft is
+      // deleted on success. Otherwise just call /inbox/send.
+      if (draftId) {
+        return apiFetch<SendResult>(`/inbox/drafts/${draftId}/send`, { method: "POST" });
+      }
+      return apiFetch<SendResult>("/inbox/send", {
+        method: "POST",
+        body: JSON.stringify({
+          channel, recipient, recipientName: recipientName || undefined,
+          subject: channel === "email" ? subject : undefined, body,
+          relatedType: initialRelated?.type,
+          relatedId: initialRelated?.id,
+        }),
+      });
+    },
     onSuccess: (r) => {
       if (r.blocked) {
         setDlpInfo(r);
@@ -568,6 +806,34 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
     },
     onError: (e: Error) => toast({ title: "فشل الإرسال", description: e.message, variant: "destructive" }),
   });
+
+  const saveDraft = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        channel, recipient: recipient || null, recipientName: recipientName || null,
+        subject: subject || null, body,
+        relatedType: initialRelated?.type ?? null,
+        relatedId: initialRelated?.id ?? null,
+      };
+      if (draftId) {
+        return apiFetch<{ id: number }>(`/inbox/drafts/${draftId}`, {
+          method: "PATCH", body: JSON.stringify(payload),
+        });
+      }
+      return apiFetch<{ id: number }>("/inbox/drafts", {
+        method: "POST", body: JSON.stringify(payload),
+      });
+    },
+    onSuccess: (r) => {
+      if (!draftId && r.id) setDraftId(r.id);
+      toast({ title: "حُفظت كمسوّدة" });
+    },
+    onError: (e: Error) => toast({ title: "فشل الحفظ", description: e.message, variant: "destructive" }),
+  });
+
+  const applySignature = (sig: SignatureRow) => {
+    setBody((prev) => prev.endsWith(sig.body) ? prev : `${prev}\n\n${sig.body}`);
+  };
 
   const pickRecipient = (hit: RecipientHit) => {
     const addr = channel === "email" ? hit.email : hit.phone;
@@ -686,9 +952,31 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
               </div>
             </div>
           )}
+          {signatures.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap pt-2 border-t">
+              <span className="text-xs text-muted-foreground">إلحاق توقيع:</span>
+              {signatures.map((s) => (
+                <Button
+                  key={s.id} type="button" variant="outline" size="sm"
+                  onClick={() => applySignature(s)}
+                  className="text-xs h-6"
+                >
+                  {s.name}{s.isDefault && " ★"}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2 flex-wrap">
           <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button
+            variant="outline"
+            disabled={saveDraft.isPending || !body}
+            onClick={() => saveDraft.mutate()}
+          >
+            <Save className="w-4 h-4 me-1" />
+            {saveDraft.isPending ? "جارٍ الحفظ..." : (draftId ? "تحديث المسوّدة" : "حفظ كمسوّدة")}
+          </Button>
           <Button
             rateLimitAware
             disabled={send.isPending || !recipient || !body || (channel === "email" && !subject)}
@@ -777,6 +1065,112 @@ function CallLogDialog({ open, onClose, onLogged }: {
           <Button rateLimitAware disabled={!peerNumber || log.isPending} onClick={() => log.mutate()}>
             <PhoneCall className="w-4 h-4 me-1" />سجّل
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SignaturesDialog({ open, onClose }: {
+  open: boolean; onClose: () => void;
+}) {
+  const { data: resp, refetch } = useApiQuery<{ data: SignatureRow[] }>(
+    ["inbox-signatures"], "/inbox/signatures", { enabled: open },
+  );
+  const signatures = resp?.data ?? [];
+  const [name, setName] = useState("");
+  const [body, setBody] = useState("");
+  const [isDefault, setIsDefault] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  const reset = () => { setName(""); setBody(""); setIsDefault(false); setEditingId(null); };
+
+  const create = useMutation({
+    mutationFn: () => apiFetch("/inbox/signatures", {
+      method: "POST", body: JSON.stringify({ name, body, isDefault }),
+    }),
+    onSuccess: () => { toast({ title: "أُضيف التوقيع" }); reset(); refetch(); },
+    onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
+  });
+  const update = useMutation({
+    mutationFn: () => apiFetch(`/inbox/signatures/${editingId}`, {
+      method: "PATCH", body: JSON.stringify({ name, body, isDefault }),
+    }),
+    onSuccess: () => { toast({ title: "حُدِّث التوقيع" }); reset(); refetch(); },
+    onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
+  });
+  const remove = useMutation({
+    mutationFn: (id: number) => apiFetch(`/inbox/signatures/${id}`, { method: "DELETE" }),
+    onSuccess: () => { toast({ title: "حُذف" }); refetch(); },
+    onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
+  });
+
+  const edit = (s: SignatureRow) => {
+    setEditingId(s.id); setName(s.name); setBody(s.body); setIsDefault(s.isDefault);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); reset(); }}}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>إدارة التواقيع</DialogTitle>
+          <DialogDescription>
+            توقيع افتراضي واحد يُقترَح أوّل القائمة عند إنشاء رسالة. يمكنك أيضاً إنشاء تواقيع متعددة (رسمي/قانوني/شخصي).
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+          <div className="space-y-2 border-b pb-3">
+            <Label className="text-xs">{editingId ? "تعديل توقيع" : "توقيع جديد"}</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="اسم التوقيع (رسمي / قانوني / شخصي)" />
+            <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={5} placeholder="نص التوقيع الذي يُلصَق نهاية الرسالة" />
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox" id="sig-default" checked={isDefault}
+                onChange={(e) => setIsDefault(e.target.checked)}
+              />
+              <Label htmlFor="sig-default" className="text-xs cursor-pointer">اجعله التوقيع الافتراضي</Label>
+            </div>
+            <div className="flex gap-2">
+              {editingId ? (
+                <>
+                  <Button rateLimitAware size="sm" disabled={update.isPending || !name || !body} onClick={() => update.mutate()}>
+                    حدّث
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={reset}>إلغاء التعديل</Button>
+                </>
+              ) : (
+                <Button rateLimitAware size="sm" disabled={create.isPending || !name || !body} onClick={() => create.mutate()}>
+                  <Plus className="w-4 h-4 me-1" />أضف توقيع
+                </Button>
+              )}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">التواقيع الحالية ({signatures.length})</Label>
+            {signatures.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">لا توجد تواقيع بعد.</p>
+            ) : (
+              <div className="space-y-2">
+                {signatures.map((s) => (
+                  <div key={s.id} className="p-3 border rounded text-sm">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium">{s.name} {s.isDefault && <Badge variant="outline" className="text-[10px] ms-1">افتراضي</Badge>}</span>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => edit(s)}>تعديل</Button>
+                        <Button variant="ghost" size="sm" onClick={() => remove.mutate(s.id)}>
+                          <Trash2 className="w-3 h-3 text-status-error-foreground" />
+                        </Button>
+                      </div>
+                    </div>
+                    <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-sans bg-surface-subtle/60 p-2 rounded">{s.body}</pre>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>إغلاق</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

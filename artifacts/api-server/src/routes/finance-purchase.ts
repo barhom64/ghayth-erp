@@ -334,6 +334,7 @@ purchaseRouter.post("/purchase-requests", authorize({ feature: "finance.purchase
         entityKey: "purchase_request",
         entityTable: "purchase_requests",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       const result = await rawExecute(
         `INSERT INTO purchase_requests ("companyId","branchId","requestedBy",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","costCenter")
@@ -559,6 +560,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", authorize({ feature: "fina
         entityTable: "purchase_orders",
         actorId: scope.userId,
         metadata: { fromPurchaseRequestId: id },
+        expectedTiming: "on_draft",
       });
       poRef = issuedPo.number;
 
@@ -727,6 +729,7 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
         entityKey: "purchase_order",
         entityTable: "purchase_orders",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       const result = await rawExecute(
         `INSERT INTO purchase_orders ("companyId","branchId",ref,status,"totalAmount","supplierId",notes,"expectedDelivery","createdBy")
@@ -959,6 +962,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
             entityTable: "goods_receipts",
             actorId: scope.userId,
             metadata: { fromPurchaseOrderId: id },
+            expectedTiming: "on_draft",
           });
           grnRef = issuedGrn.number;
           const grnRes = await client.query(
@@ -1809,6 +1813,7 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", authorize({ feature:
         entityTable: "purchase_orders",
         actorId: scope.userId,
         metadata: { fromPurchaseRequestId: id },
+        expectedTiming: "on_draft",
       });
       poRef = issuedPo.number;
 
