@@ -422,10 +422,16 @@ export default function ArCollectionWorkbenchPage() {
                               تسجيل دفعة
                             </Button>
                           </Link>
-                          <Link href={`/finance/entity-360?type=client&id=${c.clientId}`}>
+                          <Link href={`/finance/customer-360-sheet?clientId=${c.clientId}`}>
                             <Button size="sm" variant="outline">
                               <Users className="w-4 h-4 ml-1" />
-                              ملف العميل
+                              ملف العميل 360°
+                            </Button>
+                          </Link>
+                          <Link href={`/finance/customer-statement-print?clientId=${c.clientId}`}>
+                            <Button size="sm" variant="outline">
+                              <FileText className="w-4 h-4 ml-1" />
+                              كشف الحساب
                             </Button>
                           </Link>
                         </div>

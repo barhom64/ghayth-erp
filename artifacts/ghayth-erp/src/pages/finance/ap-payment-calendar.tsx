@@ -376,7 +376,11 @@ export default function ApPaymentCalendarPage() {
                   <tbody>
                     {(data?.byVendor ?? []).slice().sort((a, b) => b.amount - a.amount).slice(0, 15).map(v => (
                       <tr key={v.supplierId} className="border-b hover:bg-muted/30">
-                        <td className="py-2 px-2">{v.supplierName}</td>
+                        <td className="py-2 px-2">
+                          <Link href={`/finance/vendor-360-sheet?vendorId=${v.supplierId}`}>
+                            <span className="hover:underline cursor-pointer">{v.supplierName}</span>
+                          </Link>
+                        </td>
                         <td className="py-2 px-2 text-end tabular-nums">{v.count}</td>
                         <td className="py-2 px-2 text-end tabular-nums font-semibold">{formatCurrency(v.amount)}</td>
                         <td className="py-2 px-2 text-end tabular-nums text-muted-foreground">

@@ -34,6 +34,7 @@ import { NotificationDropdown } from "@/components/notification-dropdown";
 import { PolicyBanner } from "@/components/policy-banner";
 import { RateLimitFallbackBanner } from "@/components/rate-limit-fallback-banner";
 import { useKeyboardShortcuts, usePropertyKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { isRegisteredRoute } from "@/routes/registry";
 // CommandPalette is only mounted when the user opens it (Cmd+K or the
 // header button). Lazy-load it so its ~345 lines + icons don't ship in
 // the initial bundle.
@@ -210,9 +211,11 @@ const allNavSections: NavSection[] = [
         { label: "الموردين", path: "/finance/vendors", icon: Users },
         { label: "منضدة التسوية 🆕", path: "/finance/vendor-settlement-workbench", icon: Briefcase },
         { label: "كشف حساب مورد للطباعة 🆕", path: "/finance/vendor-statement-print", icon: Printer },
+        { label: "ملف المورد 360° 🆕", path: "/finance/vendor-360-sheet", icon: Users },
         { label: "إنفاق الموردين 🆕", path: "/finance/vendor-spend", icon: BarChart3 },
         { label: "دفعة الدفع", path: "/finance/payment-run", icon: Banknote },
         { label: "تقويم الدفعات 🆕", path: "/finance/ap-payment-calendar", icon: Calendar },
+        { label: "متابعة عقود الموردين 🆕", path: "/finance/vendor-contracts-tracker", icon: FileSignature },
       ]},
       { label: "النقد والذمم", path: "/finance/treasury", icon: Building, module: "finance", children: [
         { label: "مراقبة البنوك 🆕", path: "/finance/bank-accounts-watch", icon: Banknote },
@@ -222,6 +225,7 @@ const allNavSections: NavSection[] = [
         { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
         { label: "منضدة التحصيل 🆕", path: "/finance/ar-collection-workbench", icon: Users },
         { label: "كشف حساب عميل للطباعة 🆕", path: "/finance/customer-statement-print", icon: Printer },
+        { label: "ملف العميل 360° 🆕", path: "/finance/customer-360-sheet", icon: Users },
         { label: "مخاطر العملاء", path: "/finance/customer-risk", icon: AlertTriangle },
         { label: "مخصص ديون مشكوك فيها 🆕", path: "/finance/bad-debt-provision", icon: TrendingUp },
         { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
@@ -266,6 +270,7 @@ const allNavSections: NavSection[] = [
         { label: "ZATCA Reports Hub", path: "/finance/reports/zatca", icon: FileCheck },
         { label: "تسوية VAT", path: "/finance/reports/vat-reconciliation", icon: Scale },
         { label: "ملخص WHT", path: "/finance/reports/wht-summary", icon: Percent },
+        { label: "إعداد إقرار WHT 🆕", path: "/finance/wht-filing-workbench", icon: FileCheck },
         { label: "التقارير المالية", path: "/finance/reports", icon: FileBarChart },
         { label: "P&L مقابل الميزانية 🆕", path: "/finance/reports/is-vs-budget", icon: Scale },
         { label: "اتجاه قائمة الدخل 🆕", path: "/finance/reports/is-trend", icon: TrendingUp },
@@ -586,7 +591,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         if (item.minRoleLevel && effectiveRoleLevel < item.minRoleLevel) return null;
         if (item.subKey && mod && !canAccessSubPage(mod, item.subKey)) return null;
         if (!itemPermAllowed(item)) return null;
-        if (!item.children) return item;
+        if (!item.children || item.children.length === 0) {
+          if (!isRegisteredRoute(item.path)) return null;
+          return item;
+        }
         const filteredChildren = filterItems(item.children, mod);
         if (filteredChildren.length === 0) return null;
         return { ...item, children: filteredChildren };

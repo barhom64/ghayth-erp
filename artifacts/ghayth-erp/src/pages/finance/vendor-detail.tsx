@@ -291,6 +291,9 @@ export default function VendorDetailPage() {
       actions={
         <div className="flex items-center gap-2">
           {actions}
+          <Button size="sm" variant="default" onClick={() => navigate(`/finance/vendor-360-sheet?vendorId=${id}`)}>
+            ملف 360°
+          </Button>
           <Button size="sm" variant="outline" onClick={() => navigate(`/finance/vendors/${id}/statement`)}>
             <FileSpreadsheet className="h-4 w-4 me-1" /> كشف حساب
           </Button>
