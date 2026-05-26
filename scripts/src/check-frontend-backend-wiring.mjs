@@ -393,6 +393,25 @@ function extractFrontendCalls() {
       calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "DELETE", source: "prop" });
     }
 
+    // useDetailEditDelete({ patchPath: "/...", deletePath: "/..." })
+    // wraps apiPatch + apiDelete with variable URLs — invisible to the
+    // helper-call scanner. Credits the PATCH + DELETE per call.
+    const detailRe = /\b(patchPath|deletePath)\s*:\s*[`"']/g;
+    for (const m of src.matchAll(detailRe)) {
+      const kind = m[1];
+      let i = m.index + m[1].length;
+      while (i < src.length && /[\s:]/.test(src[i])) i++;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      // Require a useDetailEditDelete( ancestor within the preceding span
+      // so we don't pick up an unrelated property name.
+      const before = src.slice(Math.max(0, m.index - 800), m.index);
+      if (!/useDetailEditDelete\s*\(/.test(before)) continue;
+      const method = kind === "patchPath" ? "PATCH" : "DELETE";
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method, source: "prop" });
+    }
+
     // EntityEditDialog's `endpoint` prop maps to PATCH (or PUT). The
     // dialog wraps useApiMutation internally so the URL never appears
     // in a helper call the scanner can read directly. Without this

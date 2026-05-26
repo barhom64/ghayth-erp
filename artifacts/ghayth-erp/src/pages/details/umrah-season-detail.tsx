@@ -51,7 +51,9 @@ export default function UmrahSeasonDetail() {
   const editDelete = useDetailEditDelete({
     entityLabel: "الموسم",
     patchPath: `/umrah/seasons/${id}`,
-    deletePath: `/umrah/seasons/${id}`,
+    // Backend has no DELETE /umrah/seasons/:id — seasons stay in the
+    // archive once created. The hook hides the Trash button when
+    // deletePath is omitted.
     listPath: "/umrah/seasons",
     initialValues: season,
     fields: [
