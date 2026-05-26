@@ -11113,6 +11113,34 @@ CREATE TABLE public.numbering_schemes (
 );
 
 
+-- ============================================================
+-- Sequences + id DEFAULTs for the four numbering tables (#1141).
+-- pg_dump would emit these inline after each CREATE TABLE; we add
+-- them in a block at the end of the dump baseline because the tables
+-- themselves were appended in earlier PRs without their sequences.
+-- ============================================================
+
+CREATE SEQUENCE IF NOT EXISTS public.numbering_schemes_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.numbering_schemes_id_seq OWNED BY public.numbering_schemes.id;
+ALTER TABLE ONLY public.numbering_schemes ALTER COLUMN id SET DEFAULT nextval('public.numbering_schemes_id_seq'::regclass);
+
+CREATE SEQUENCE IF NOT EXISTS public.numbering_counters_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.numbering_counters_id_seq OWNED BY public.numbering_counters.id;
+ALTER TABLE ONLY public.numbering_counters ALTER COLUMN id SET DEFAULT nextval('public.numbering_counters_id_seq'::regclass);
+
+CREATE SEQUENCE IF NOT EXISTS public.numbering_assignments_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.numbering_assignments_id_seq OWNED BY public.numbering_assignments.id;
+ALTER TABLE ONLY public.numbering_assignments ALTER COLUMN id SET DEFAULT nextval('public.numbering_assignments_id_seq'::regclass);
+
+CREATE SEQUENCE IF NOT EXISTS public.numbering_audit_logs_id_seq
+    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.numbering_audit_logs_id_seq OWNED BY public.numbering_audit_logs.id;
+ALTER TABLE ONLY public.numbering_audit_logs ALTER COLUMN id SET DEFAULT nextval('public.numbering_audit_logs_id_seq'::regclass);
+
+
 --
 -- Name: obligations; Type: TABLE; Schema: public; Owner: -
 --
