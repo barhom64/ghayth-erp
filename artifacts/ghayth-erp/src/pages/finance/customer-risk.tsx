@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 import {
   AlertTriangle, ShieldAlert, Users, TrendingUp,
-  ChevronRight, Phone, Megaphone,
+  ChevronRight, Phone, Megaphone, Clock, FileWarning,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
@@ -317,6 +317,28 @@ export default function CustomerRiskPage() {
         { href: "/finance/receivables", label: "الذمم" },
         { label: "تحليل المخاطر" },
       ]}
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/ar-collection-workbench">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Phone className="h-3.5 w-3.5 ml-1" />
+              منضدة التحصيل
+            </Button>
+          </Link>
+          <Link href="/finance/ar-aging">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Clock className="h-3.5 w-3.5 ml-1" />
+              تقادم الذمم
+            </Button>
+          </Link>
+          <Link href="/finance/bad-debt-provision">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <FileWarning className="h-3.5 w-3.5 ml-1" />
+              الديون المشكوك بها
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 
