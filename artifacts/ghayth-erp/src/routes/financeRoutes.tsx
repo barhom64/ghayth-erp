@@ -91,6 +91,7 @@ const YoyComparison = lazy(() => import("@/pages/finance/yoy-comparison"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
 const TaxFilingCalendar = lazy(() => import("@/pages/finance/tax-filing-calendar"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
+const CustomerAdvancesWorkbench = lazy(() => import("@/pages/finance/customer-advances-workbench"));
 const CustomerStatementPrint = lazy(() => import("@/pages/finance/customer-statement-print"));
 const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
 const BadDebtProvision = lazy(() => import("@/pages/finance/bad-debt-provision"));
@@ -261,6 +262,7 @@ export const financeRoutes = [
   { path: "/finance/profitability/project/:id", component: ProfitabilityProject },
   { path: "/finance/profitability/umrah-agent/:id", component: ProfitabilityUmrahAgent },
   { path: "/finance/customer-advances", component: CustomerAdvances },
+  { path: "/finance/customer-advances-workbench", component: CustomerAdvancesWorkbench },
   { path: "/finance/customer-advances/create", component: CustomerAdvancesCreate },
   { path: "/finance/customer-advances/:id/apply", component: CustomerAdvancesApply },
   { path: "/finance/dunning", component: Dunning },
