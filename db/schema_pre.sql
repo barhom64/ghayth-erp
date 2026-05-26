@@ -11092,7 +11092,7 @@ CREATE TABLE public.numbering_schemes (
     "padLength" integer DEFAULT 4 NOT NULL,
     "resetPolicy" text DEFAULT 'yearly'::text NOT NULL,
     "scopePolicy" text DEFAULT 'branch'::text NOT NULL,
-    "issueTiming" text DEFAULT 'on_submit'::text NOT NULL,
+    "issueTiming" text DEFAULT 'on_draft'::text NOT NULL,
     "manualEditPolicy" text DEFAULT 'disabled'::text NOT NULL,
     "requiresReasonOnManualEdit" boolean DEFAULT true NOT NULL,
     "lockAfterStatuses" jsonb DEFAULT '[]'::jsonb NOT NULL,
