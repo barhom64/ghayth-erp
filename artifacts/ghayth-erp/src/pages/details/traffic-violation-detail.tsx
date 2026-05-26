@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -38,7 +38,6 @@ function statusTone(status: string) {
 }
 
 export default function TrafficViolationDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/fleet/traffic-violations/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("traffic-violation", id ?? 0);

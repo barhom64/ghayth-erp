@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -41,7 +41,6 @@ function statusTone(status: string) {
 }
 
 export default function FixedAssetDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/fixed-assets/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("fixed-asset", id ?? 0);

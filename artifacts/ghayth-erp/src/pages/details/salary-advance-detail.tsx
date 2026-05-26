@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -32,7 +32,6 @@ function statusTone(status: string) {
 }
 
 export default function SalaryAdvanceDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/salary-advances/:id");
   const id = params?.id ? Number(params.id) : null;
   const { toast } = useToast();

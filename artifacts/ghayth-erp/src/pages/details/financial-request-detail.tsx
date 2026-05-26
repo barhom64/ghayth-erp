@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -42,7 +42,6 @@ function statusTone(status: string) {
 }
 
 export default function FinancialRequestDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/financial-requests/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("financial-request", id ?? 0);

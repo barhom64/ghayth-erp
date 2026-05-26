@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -48,7 +48,6 @@ function statusTone(status: string) {
 }
 
 export default function PropertyMaintenanceDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/properties/maintenance/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("property-maintenance", id ?? 0);
