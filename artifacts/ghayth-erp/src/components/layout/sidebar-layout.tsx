@@ -16,7 +16,7 @@ import {
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
-  BarChart2, ShieldAlert, ShieldCheck, Flag, Lock, Layers, Link2, ArrowRightCircle,
+  BarChart2, ShieldAlert, ShieldCheck, Flag, Lock, Layers, Link2, ArrowRightCircle, Inbox,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -107,6 +107,7 @@ const allNavSections: NavSection[] = [
     title: "الموارد البشرية",
     items: [
       { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "hr" },
+      { label: "صندوق الموافقات", path: "/hr/approvals", icon: Inbox, module: "hr" },
       { label: "التوظيف", path: "/hr/recruitment", icon: Briefcase, module: "hr", children: [
         { label: "الوظائف", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
         { label: "التوظيف المتقدم", path: "/hr/recruitment/advanced", icon: BarChart3, subKey: "recruitment" },
