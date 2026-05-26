@@ -59,7 +59,7 @@ export default function VendorsEdit() {
   );
 
   const { data: whtData } = useApiQuery<{ data: WhtCategory[] }>(
-    ["wht-categories"], "/finance/accounts/wht-categories",
+    ["wht-categories"], "/finance/wht-categories",
   );
   const whtCategories = useMemo(
     () => (whtData?.data ?? []).filter((c) => c.isActive),

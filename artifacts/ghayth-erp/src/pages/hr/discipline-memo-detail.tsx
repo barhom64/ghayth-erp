@@ -1,17 +1,20 @@
 import { useState } from "react";
 import { useRoute, Link } from "wouter";
+import { z } from "zod";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useApiQuery, apiFetch, buildErrorToast } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { GuardedButton } from "@/components/shared/permission-gate";
+import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { PromptDialog } from "@/components/shared/prompt-dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  FormShell,
+  FormTextareaField,
+  FormCheckboxField,
+  FormSelectField,
+} from "@workspace/ui-core";
 import { Clock, CheckCircle, XCircle, FileText, Ban, Gavel, Scale, Lock, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DetailPageLayout } from "@workspace/entity-kit";
@@ -28,27 +31,55 @@ interface MemoData {
   events: any[];
 }
 
+const justifySchema = z.object({
+  justification: z.string().optional(),
+  declined: z.boolean().default(false),
+}).refine((v) => v.declined || (v.justification?.trim().length ?? 0) > 0, {
+  message: "أدخل تبريرًا أو علّم رفض التبرير",
+  path: ["justification"],
+});
+
+const managerRecSchema = z.object({
+  recommendation: z.enum(["approve_excuse", "reject_excuse"]),
+  comment: z.string().optional(),
+});
+
+const gmDecisionSchema = z.object({
+  decision: z.enum(["approved", "rejected", "other"]),
+  comment: z.string().optional(),
+});
+
+const appealSchema = z.object({
+  reason: z.string().min(1, "اكتب مبررات الاستئناف"),
+});
+
+const MANAGER_REC_OPTIONS = [
+  { value: "approve_excuse", label: "قبول التبرير" },
+  { value: "reject_excuse", label: "رفض التبرير" },
+];
+
+const GM_DECISION_OPTIONS = [
+  { value: "approved", label: "اعتماد الجزاء" },
+  { value: "rejected", label: "رفض المحضر (قبول التبرير)" },
+  { value: "other", label: "قرار آخر" },
+];
+
 export default function DisciplineMemoDetailPage() {
   const [, params] = useRoute("/hr/discipline/memos/:id");
   const id = params?.id;
   const { extraTabs, hideTabs } = useRegistryTabs("discipline_memo", id ?? "");
   const { data, isLoading, isError } = useApiQuery<MemoData>(
     ["discipline-memo", String(id ?? "")],
-    id ? `/hr/discipline/memos/${id}` : null
+    `/hr/discipline/memos/${id}`
   );
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const [justification, setJustification] = useState("");
-  const [declined, setDeclined] = useState(false);
-  const [managerRec, setManagerRec] = useState<"approve_excuse" | "reject_excuse">("reject_excuse");
-  const [managerComment, setManagerComment] = useState("");
-  const [gmDecision, setGmDecision] = useState<"approved" | "rejected" | "other">("approved");
-  const [gmComment, setGmComment] = useState("");
-  const [appealReason, setAppealReason] = useState("");
   const [showAppeal, setShowAppeal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const canCreateHr = usePermission("hr:create");
+  const canApproveHr = usePermission("hr:approve");
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["discipline-memo", id] });
@@ -189,27 +220,24 @@ export default function DisciplineMemoDetailPage() {
           <CardHeader>
             <CardTitle className="text-base">الخطوة 1: تبرير الموظف</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <Textarea
-              value={justification}
-              onChange={(e) => setJustification(e.target.value)}
-              placeholder="اكتب تبريرك للواقعة..."
-              rows={4}
-            />
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={declined}
-                onCheckedChange={(c) => setDeclined(!!c)}
-              />
-              أرفض تقديم تبرير
-            </label>
-            <GuardedButton
-              perm="hr:create"
-              onClick={() => act("/justify", { justification, declined }, "تم إرسال التبرير")}
-              disabled={busy || (!justification && !declined)}
+          <CardContent>
+            <FormShell
+              schema={justifySchema}
+              defaultValues={{ justification: "", declined: false }}
+              submitLabel="إرسال التبرير"
+              disabled={busy || !canCreateHr}
+              onSubmit={async (values) => {
+                await act("/justify", { justification: values.justification ?? "", declined: values.declined }, "تم إرسال التبرير");
+              }}
             >
-              إرسال التبرير
-            </GuardedButton>
+              <FormTextareaField
+                name="justification"
+                label=""
+                rows={4}
+                placeholder="اكتب تبريرك للواقعة..."
+              />
+              <FormCheckboxField name="declined" label="أرفض تقديم تبرير" />
+            </FormShell>
           </CardContent>
         </Card>
       )}
@@ -226,39 +254,18 @@ export default function DisciplineMemoDetailPage() {
                 {memo.justification}
               </div>
             )}
-            <div>
-              <Label>التوصية</Label>
-              <Select value={managerRec} onValueChange={(v: any) => setManagerRec(v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="approve_excuse">قبول التبرير</SelectItem>
-                  <SelectItem value="reject_excuse">رفض التبرير</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>تعليق المدير</Label>
-              <Textarea
-                value={managerComment}
-                onChange={(e) => setManagerComment(e.target.value)}
-                rows={3}
-              />
-            </div>
-            <GuardedButton
-              perm="hr:approve"
-              onClick={() =>
-                act(
-                  "/manager-recommendation",
-                  { recommendation: managerRec, comment: managerComment },
-                  "تم تسجيل التوصية"
-                )
-              }
-              disabled={busy}
+            <FormShell
+              schema={managerRecSchema}
+              defaultValues={{ recommendation: "reject_excuse", comment: "" }}
+              submitLabel="إرسال التوصية"
+              disabled={busy || !canApproveHr}
+              onSubmit={async (values) => {
+                await act("/manager-recommendation", { recommendation: values.recommendation, comment: values.comment ?? "" }, "تم تسجيل التوصية");
+              }}
             >
-              إرسال التوصية
-            </GuardedButton>
+              <FormSelectField name="recommendation" label="التوصية" options={MANAGER_REC_OPTIONS} />
+              <FormTextareaField name="comment" label="تعليق المدير" rows={3} />
+            </FormShell>
           </CardContent>
         </Card>
       )}
@@ -280,40 +287,18 @@ export default function DisciplineMemoDetailPage() {
               </p>
               {memo.managerComment && <p className="text-xs mt-1">{memo.managerComment}</p>}
             </div>
-            <div>
-              <Label>القرار النهائي</Label>
-              <Select value={gmDecision} onValueChange={(v: any) => setGmDecision(v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="approved">اعتماد الجزاء</SelectItem>
-                  <SelectItem value="rejected">رفض المحضر (قبول التبرير)</SelectItem>
-                  <SelectItem value="other">قرار آخر</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>تعليق المدير العام</Label>
-              <Textarea
-                value={gmComment}
-                onChange={(e) => setGmComment(e.target.value)}
-                rows={3}
-              />
-            </div>
-            <GuardedButton
-              perm="hr:approve"
-              onClick={() =>
-                act(
-                  "/gm-decision",
-                  { decision: gmDecision, comment: gmComment },
-                  "تم تسجيل القرار"
-                )
-              }
-              disabled={busy}
+            <FormShell
+              schema={gmDecisionSchema}
+              defaultValues={{ decision: "approved", comment: "" }}
+              submitLabel="اعتماد القرار"
+              disabled={busy || !canApproveHr}
+              onSubmit={async (values) => {
+                await act("/gm-decision", { decision: values.decision, comment: values.comment ?? "" }, "تم تسجيل القرار");
+              }}
             >
-              اعتماد القرار
-            </GuardedButton>
+              <FormSelectField name="decision" label="القرار النهائي" options={GM_DECISION_OPTIONS} />
+              <FormTextareaField name="comment" label="تعليق المدير العام" rows={3} />
+            </FormShell>
           </CardContent>
         </Card>
       )}
@@ -349,20 +334,27 @@ export default function DisciplineMemoDetailPage() {
                 <Scale className="w-4 h-4 me-2" />تقديم استئناف
               </Button>
             ) : (
-              <>
-                <Textarea
-                  value={appealReason}
-                  onChange={(e) => setAppealReason(e.target.value)}
-                  placeholder="اكتب مبررات الاستئناف..."
+              <FormShell
+                schema={appealSchema}
+                defaultValues={{ reason: "" }}
+                submitLabel="إرسال الاستئناف"
+                disabled={busy || !canCreateHr}
+                secondaryActions={
+                  <Button type="button" variant="outline" onClick={() => setShowAppeal(false)}>إلغاء</Button>
+                }
+                onSubmit={async (values) => {
+                  await act("/appeal", { reason: values.reason }, "تم تقديم الاستئناف");
+                  setShowAppeal(false);
+                }}
+              >
+                <FormTextareaField
+                  name="reason"
+                  label=""
                   rows={4}
+                  placeholder="اكتب مبررات الاستئناف..."
+                  required
                 />
-                <div className="flex gap-2">
-                  <GuardedButton perm="hr:create" onClick={() => act("/appeal", { reason: appealReason }, "تم تقديم الاستئناف")} disabled={busy || !appealReason.trim()}>
-                    إرسال الاستئناف
-                  </GuardedButton>
-                  <Button variant="outline" onClick={() => setShowAppeal(false)}>إلغاء</Button>
-                </div>
-              </>
+              </FormShell>
             )}
           </CardContent>
         </Card>

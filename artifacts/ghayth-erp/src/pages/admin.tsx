@@ -61,6 +61,7 @@ export default function AdminPage() {
             { label: "مركز التحكّم بالـ PBX", icon: Phone, color: "text-orange-600 bg-orange-50", path: "/admin/pbx-control" },
             { label: "خارطة #1139 الحيّة", icon: Target, color: "text-amber-600 bg-amber-50", path: "/admin/master-plan" },
             { label: "توجيه الإشعارات", icon: Bell, color: "text-violet-600 bg-violet-50", path: "/admin/notification-routing" },
+            { label: "إعدادات المزوّدات", icon: Cog, color: "text-zinc-600 bg-zinc-50", path: "/admin/vendor-settings" },
           ].map((item) => (
             <Card
               key={item.path}

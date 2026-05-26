@@ -216,7 +216,7 @@ function Support() {
             pageSize={pageSize}
             onPageChange={setPage}
             renderRowExtras={(t) => {
-              if (editingId === t.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(t.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (editingId === t.id) return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(t.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === t.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(t.id)} onCancel={cancelDelete} isPending={isPending} itemName={t.title} entityType="ticket" entityId={t.id} />;
               if (expandedId === t.id) return (
                 <div className="space-y-3 p-2 bg-surface-subtle/50">
@@ -373,7 +373,7 @@ function KBManagement() {
             noToolbar
             rowClassName={(item) => editingId === item.id ? "bg-muted/50" : deletingId === item.id ? "bg-destructive/5" : ""}
             renderRowExtras={(item) => {
-              if (editingId === item.id) return <div className="p-2 bg-muted/30"><InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(item.id, editForm)} onCancel={cancelEdit} isPending={isPending} /></div>;
+              if (editingId === item.id) return <div className="p-2 bg-muted/30"><InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(item.id, values)} onCancel={cancelEdit} isPending={isPending} /></div>;
               if (deletingId === item.id) return <div className="p-2 bg-destructive/5"><InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.title} entityType="kb-article" entityId={item.id} /></div>;
               return null;
             }}

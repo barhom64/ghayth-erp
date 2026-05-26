@@ -12,6 +12,7 @@ import { seedDemoData } from "./lib/seedDemoData.js";
 import { bootstrapAdminUser } from "./lib/bootstrapAdmin.js";
 import { syncFeatureCatalog } from "./lib/rbac/catalogSync.js";
 import { syncLegacyToV2 } from "./lib/rbac/autoMigrate.js";
+import { warmVendorSettingsCache } from "./lib/vendorSettings.js";
 import { pool } from "./lib/rawdb.js";
 import { config, assertEnvOrExit, describeConfig } from "./lib/config.js";
 import http from "http";
@@ -80,6 +81,18 @@ async function start() {
     logger.info("Admin bootstrap complete");
   } catch (bootstrapErr) {
     logger.warn({ err: bootstrapErr }, "Admin bootstrap skipped or failed");
+  }
+
+  // Warm the vendor-settings cache so synchronous reads
+  // (e.g. verifyPbxSignature inside a webhook handler) hit the DB
+  // values immediately instead of falling back to env on the first
+  // call. Non-fatal if the table doesn't exist yet — migration 219
+  // creates it.
+  try {
+    await warmVendorSettingsCache();
+    logger.info("Vendor settings cache warmed");
+  } catch (vsErr) {
+    logger.warn({ err: vsErr }, "Vendor settings cache warm skipped — falling back to env");
   }
 
   try {

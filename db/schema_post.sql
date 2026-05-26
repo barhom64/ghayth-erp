@@ -2198,6 +2198,13 @@ ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_
 
 
 --
+-- Name: vendor_secrets id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vendor_secrets ALTER COLUMN id SET DEFAULT nextval('public.vendor_secrets_id_seq'::regclass);
+
+
+--
 -- Name: vouchers id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -5401,6 +5408,22 @@ ALTER TABLE ONLY public.users
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: vendor_secrets vendor_secrets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vendor_secrets
+    ADD CONSTRAINT vendor_secrets_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: vendor_secrets vendor_secrets_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vendor_secrets
+    ADD CONSTRAINT vendor_secrets_slug_key UNIQUE (slug);
 
 
 --
@@ -13903,6 +13926,4 @@ ALTER TABLE ONLY public.zatca_submission_log
 -- PostgreSQL database dump complete
 --
 
--- \unrestrict directive stripped — its matching \restrict in schema_pre.sql
--- was also removed. See dump-schema.sh for the rationale.
 

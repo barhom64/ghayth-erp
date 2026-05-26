@@ -39,7 +39,7 @@ export default function PolicyDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["policy", String(id)],
-    id ? `/governance/policies/${id}` : null,
+    `/governance/policies/${id}`,
     !!id
   );
 

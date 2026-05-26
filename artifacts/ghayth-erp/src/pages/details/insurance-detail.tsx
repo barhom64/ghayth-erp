@@ -62,7 +62,7 @@ export default function InsuranceDetail() {
 
   const { data: insurance, isLoading, error, refetch } = useApiQuery<any>(
     ["insurance-detail", String(id)],
-    id ? `/fleet/insurance/${id}` : null,
+    `/fleet/insurance/${id}`,
     !!id
   );
 
