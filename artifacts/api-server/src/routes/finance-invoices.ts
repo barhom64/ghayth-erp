@@ -3636,7 +3636,7 @@ invoicesRouter.get("/dunning/history", authorize({ feature: "finance.collection"
     let where = `dl."companyId"=$1`;
     if (invoiceId) { params.push(Number(invoiceId)); where += ` AND dl."invoiceId"=$${params.length}`; }
     if (clientId) { params.push(Number(clientId)); where += ` AND dl."clientId"=$${params.length}`; }
-    if (stage) { params.push(Number(stage)); where += ` AND dl.level=$${params.length}`; }
+    if (stage) { params.push(Number(stage)); where += ` AND dl.stage=$${params.length}`; }
 
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT dl.*, i.ref AS "invoiceNumber", c.name AS "clientName"
