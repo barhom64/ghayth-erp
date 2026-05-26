@@ -102,6 +102,7 @@ const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
 const IntercompanyConsolidationCreate = lazy(() => import("@/pages/create/finance/intercompany-consolidation-create"));
 const CashFlowForecast = lazy(() => import("@/pages/finance/cash-flow-forecast"));
 const CashCalendar = lazy(() => import("@/pages/finance/cash-calendar"));
+const Cash13Week = lazy(() => import("@/pages/finance/cash-13week"));
 const ProjectCosting = lazy(() => import("@/pages/finance/project-costing"));
 const ProjectCostingDetail = lazy(() => import("@/pages/finance/project-costing-detail"));
 const CashflowDashboard = lazy(() => import("@/pages/finance/cashflow-dashboard"));
@@ -265,6 +266,7 @@ export const financeRoutes = [
   { path: "/finance/intercompany/consolidation/create", component: IntercompanyConsolidationCreate },
   { path: "/finance/cash-flow-forecast", component: CashFlowForecast },
   { path: "/finance/cash-calendar", component: CashCalendar },
+  { path: "/finance/cash-13week", component: Cash13Week },
   { path: "/finance/project-costing", component: ProjectCosting },
   { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
