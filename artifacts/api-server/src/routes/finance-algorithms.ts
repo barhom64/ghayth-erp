@@ -13,7 +13,8 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
-import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2, roundTo4, generateTimeRef, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2, roundTo4, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { internalTechRef } from "../lib/internalRef.js";
 import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
 import { logger } from "../lib/logger.js";
 
@@ -352,7 +353,9 @@ financeAlgorithmsRouter.post("/bank-reconciliation/import", authorize({ feature:
 
     const { rows, accountCode, statementDate } = zodParse(bankImportSchema.safeParse(req.body ?? {}));
 
-    const batchId = generateTimeRef("BANK");
+    // Internal batch id for grouping the statement lines processed
+    // in this run — NOT a customer-visible doc number (Issue #1141).
+    const batchId = internalTechRef("BANK");
     let imported = 0;
 
     await withTransaction(async (client) => {
