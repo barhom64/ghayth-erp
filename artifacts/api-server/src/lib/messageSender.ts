@@ -129,12 +129,14 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
   const providerOrder = providers.map((p) => p.slug);
 
   // 3. Persist communications_log row — every attempt is recorded
-  //    even if DLP blocked, so the audit trail captures it.
+  //    even if DLP blocked, so the audit trail captures it. Outbound
+  //    rows land in the 'sent' folder; the 'spam' / 'archive' / 'trash'
+  //    folders are user-driven moves via POST /inbox/messages/:id/folder.
   const { insertId: logId } = await rawExecute(
     `INSERT INTO communications_log
        ("companyId", channel, direction, "fromNumber", "toNumber",
-        subject, body, status, "relatedType", "relatedId", "createdAt")
-     VALUES ($1, $2, 'outbound', NULL, $3, $4, $5, $6, $7, $8, NOW())`,
+        subject, body, status, folder, "relatedType", "relatedId", "createdAt")
+     VALUES ($1, $2, 'outbound', NULL, $3, $4, $5, $6, 'sent', $7, $8, NOW())`,
     [
       input.companyId, input.channel, input.recipient,
       input.subject ?? null, finalBody, status,
