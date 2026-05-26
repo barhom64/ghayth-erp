@@ -558,6 +558,7 @@ protectedRouter.post("/tickets", withPortalScope(async (req, res) => {
       entityTable: "support_tickets",
       actorId: null,
       metadata: { source: "client_portal", clientId },
+      expectedTiming: "on_draft",
     });
     const ref = issued.number;
     const { supportEngine } = await import("../lib/engines/index.js");
