@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, KeyRound, ScrollText, UserCog, Lock, FileSearch, ShieldAlert,
-  Shield, Layers, GitBranch, AlertTriangle, Scale, Cog, Zap, Radar } from "lucide-react";
+  Shield, Layers, GitBranch, AlertTriangle, Scale, Cog, Zap, Radar, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageShell } from "@workspace/ui-core";
 import { UsersTab } from "./admin/users-tab";
@@ -56,6 +56,7 @@ export default function AdminPage() {
             { label: "مصفوفة الصلاحيات", icon: Lock, color: "text-indigo-600 bg-indigo-50", path: "/admin/rbac-matrix" },
             { label: "مطابقة الأستاذ", icon: Scale, color: "text-teal-600 bg-teal-50", path: "/admin/gl-reconciliation" },
             { label: "مرصد المراقبة الموحّد", icon: Radar, color: "text-rose-600 bg-rose-50", path: "/admin/observability" },
+            { label: "حوكمة الذكاء الاصطناعي", icon: Bot, color: "text-fuchsia-600 bg-fuchsia-50", path: "/admin/ai-governance" },
           ].map((item) => (
             <Card
               key={item.path}
