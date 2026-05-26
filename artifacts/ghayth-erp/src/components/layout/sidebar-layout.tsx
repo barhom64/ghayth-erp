@@ -403,6 +403,7 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "التواصل", path: "/inbox", icon: Mail, module: "comms", children: [
         { label: "صندوقي الموحّد", path: "/inbox", icon: Mail },
+        { label: "الصناديق المتصلة", path: "/mailboxes", icon: Send },
         { label: "سجل الاتصالات", path: "/communications", icon: MessageSquare },
         { label: "الصادر والوارد", path: "/correspondence", icon: FileText },
         { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap },

@@ -220,6 +220,7 @@ ALTER TABLE IF EXISTS ONLY public.marketing_campaigns DROP CONSTRAINT IF EXISTS 
 ALTER TABLE IF EXISTS ONLY public.marketing_campaigns DROP CONSTRAINT IF EXISTS "marketing_campaigns_companyId_fkey";
 ALTER TABLE IF EXISTS ONLY public.maintenance_requests DROP CONSTRAINT IF EXISTS "maintenance_requests_unitId_fkey";
 ALTER TABLE IF EXISTS ONLY public.maintenance_requests DROP CONSTRAINT IF EXISTS "maintenance_requests_contractId_fkey";
+ALTER TABLE IF EXISTS ONLY public.mailbox_sync_cursors DROP CONSTRAINT IF EXISTS "mailbox_sync_cursors_accountId_fkey";
 ALTER TABLE IF EXISTS ONLY public.lot_expiry_alerts DROP CONSTRAINT IF EXISTS "lot_expiry_alerts_lotId_fkey";
 ALTER TABLE IF EXISTS ONLY public.loan_accounts DROP CONSTRAINT IF EXISTS loan_accounts_employee_id_fk;
 ALTER TABLE IF EXISTS ONLY public.loan_accounts DROP CONSTRAINT IF EXISTS loan_accounts_company_id_fk;
@@ -476,6 +477,8 @@ DROP INDEX IF EXISTS public.uq_allocation_results_source_line;
 DROP INDEX IF EXISTS public.uq_abc_company_product_period;
 DROP INDEX IF EXISTS public.uniq_requests_ref;
 DROP INDEX IF EXISTS public.uniq_official_letters_ref;
+DROP INDEX IF EXISTS public.uniq_mailbox_sync_cursors_per_folder;
+DROP INDEX IF EXISTS public.uniq_mailbox_accounts_per_user;
 DROP INDEX IF EXISTS public.uniq_invoices_ref;
 DROP INDEX IF EXISTS public.uniq_fleet_trips_source_key;
 DROP INDEX IF EXISTS public.uniq_employee_contracts_ref;
@@ -820,6 +823,9 @@ DROP INDEX IF EXISTS public.idx_message_log_company_folder;
 DROP INDEX IF EXISTS public.idx_message_log_company_channel;
 DROP INDEX IF EXISTS public.idx_marketing_campaigns_companyid;
 DROP INDEX IF EXISTS public.idx_maintenance_requests_companyid;
+DROP INDEX IF EXISTS public.idx_mailbox_sync_cursors_account;
+DROP INDEX IF EXISTS public.idx_mailbox_accounts_sync_due;
+DROP INDEX IF EXISTS public.idx_mailbox_accounts_company_user;
 DROP INDEX IF EXISTS public.idx_lots_picker;
 DROP INDEX IF EXISTS public.idx_lots_expiry;
 DROP INDEX IF EXISTS public.idx_lot_expiry_alerts_company;
@@ -1398,6 +1404,8 @@ ALTER TABLE IF EXISTS ONLY public.mudad_settlements DROP CONSTRAINT IF EXISTS mu
 ALTER TABLE IF EXISTS ONLY public.message_log DROP CONSTRAINT IF EXISTS message_log_pkey;
 ALTER TABLE IF EXISTS ONLY public.marketing_campaigns DROP CONSTRAINT IF EXISTS marketing_campaigns_pkey;
 ALTER TABLE IF EXISTS ONLY public.maintenance_requests DROP CONSTRAINT IF EXISTS maintenance_requests_pkey;
+ALTER TABLE IF EXISTS ONLY public.mailbox_sync_cursors DROP CONSTRAINT IF EXISTS mailbox_sync_cursors_pkey;
+ALTER TABLE IF EXISTS ONLY public.mailbox_accounts DROP CONSTRAINT IF EXISTS mailbox_accounts_pkey;
 ALTER TABLE IF EXISTS ONLY public.lot_expiry_alerts DROP CONSTRAINT IF EXISTS lot_expiry_alerts_pkey;
 ALTER TABLE IF EXISTS ONLY public.lot_expiry_alerts DROP CONSTRAINT IF EXISTS "lot_expiry_alerts_lotId_thresholdDays_key";
 ALTER TABLE IF EXISTS ONLY public.loan_accounts DROP CONSTRAINT IF EXISTS loan_accounts_pkey;
@@ -1781,6 +1789,8 @@ ALTER TABLE IF EXISTS public.mudad_settlements ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.message_log ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.marketing_campaigns ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.maintenance_requests ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.mailbox_sync_cursors ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.mailbox_accounts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.lot_expiry_alerts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.loan_accounts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.legal_sessions ALTER COLUMN id DROP DEFAULT;
@@ -2310,6 +2320,10 @@ DROP SEQUENCE IF EXISTS public.marketing_campaigns_id_seq;
 DROP TABLE IF EXISTS public.marketing_campaigns;
 DROP SEQUENCE IF EXISTS public.maintenance_requests_id_seq;
 DROP TABLE IF EXISTS public.maintenance_requests;
+DROP SEQUENCE IF EXISTS public.mailbox_sync_cursors_id_seq;
+DROP TABLE IF EXISTS public.mailbox_sync_cursors;
+DROP SEQUENCE IF EXISTS public.mailbox_accounts_id_seq;
+DROP TABLE IF EXISTS public.mailbox_accounts;
 DROP SEQUENCE IF EXISTS public.lot_expiry_alerts_id_seq;
 DROP TABLE IF EXISTS public.lot_expiry_alerts;
 DROP SEQUENCE IF EXISTS public.loan_accounts_id_seq;
@@ -10611,6 +10625,98 @@ CREATE SEQUENCE public.lot_expiry_alerts_id_seq
 --
 
 ALTER SEQUENCE public.lot_expiry_alerts_id_seq OWNED BY public.lot_expiry_alerts.id;
+
+
+--
+-- Name: mailbox_accounts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.mailbox_accounts (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "userId" integer NOT NULL,
+    provider character varying(30) NOT NULL,
+    "displayName" character varying(200),
+    "emailAddress" character varying(300) NOT NULL,
+    "accessToken" text,
+    "refreshToken" text,
+    "tokenExpiresAt" timestamp with time zone,
+    "tenantId" character varying(120),
+    "imapHost" character varying(200),
+    "imapPort" integer,
+    "imapUsername" character varying(200),
+    "imapPassword" text,
+    "smtpHost" character varying(200),
+    "smtpPort" integer,
+    "smtpUsername" character varying(200),
+    "smtpPassword" text,
+    "syncEnabled" boolean DEFAULT true NOT NULL,
+    "syncFolders" text[],
+    "lastSyncedAt" timestamp with time zone,
+    "lastSyncStatus" character varying(30),
+    "lastSyncError" text,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT mailbox_accounts_provider_check CHECK (((provider)::text = ANY ((ARRAY['microsoft365'::character varying, 'imap'::character varying, 'hostinger'::character varying])::text[])))
+);
+
+
+--
+-- Name: mailbox_accounts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.mailbox_accounts_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mailbox_accounts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.mailbox_accounts_id_seq OWNED BY public.mailbox_accounts.id;
+
+
+--
+-- Name: mailbox_sync_cursors; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.mailbox_sync_cursors (
+    id integer NOT NULL,
+    "accountId" integer NOT NULL,
+    folder character varying(200) NOT NULL,
+    "deltaToken" text,
+    "lastUid" bigint,
+    "lastFetchedAt" timestamp with time zone,
+    "messagesFetched" integer DEFAULT 0 NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: mailbox_sync_cursors_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.mailbox_sync_cursors_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: mailbox_sync_cursors_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.mailbox_sync_cursors_id_seq OWNED BY public.mailbox_sync_cursors.id;
 
 
 --
