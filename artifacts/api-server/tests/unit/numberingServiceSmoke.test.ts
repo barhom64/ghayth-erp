@@ -183,6 +183,40 @@ describe("priority-1 routes moved to the numbering center", () => {
   });
 });
 
+describe("finance routes migrated to the numbering center", () => {
+  const INV = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/routes/finance-invoices.ts"),
+    "utf8",
+  );
+  const JOU = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/routes/finance-journal.ts"),
+    "utf8",
+  );
+  const PUR = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/routes/finance-purchase.ts"),
+    "utf8",
+  );
+
+  it("finance-invoices.ts no longer calls nextval('invoice_number_seq')", () => {
+    expect(INV).not.toMatch(/nextval\(\s*['"`]invoice_number_seq/);
+    expect(INV).toContain('issueNumber({');
+    expect(INV).toContain('entityKey: "sales_invoice"');
+  });
+  it("finance-journal.ts no longer calls nextval('journal_number_seq') or random fallback", () => {
+    expect(JOU).not.toMatch(/nextval\(\s*['"`]journal_number_seq/);
+    expect(JOU).not.toMatch(/Math\.random[^;]*\bseq\b/);
+    expect(JOU).toContain('issueNumber({');
+    expect(JOU).toContain('entityKey: "journal_entry"');
+  });
+  it("finance-purchase.ts no longer calls nextval('pr_number_seq')/'po_number_seq'", () => {
+    expect(PUR).not.toMatch(/nextval\(\s*['"`]pr_number_seq/);
+    expect(PUR).not.toMatch(/nextval\(\s*['"`]po_number_seq/);
+    expect(PUR).not.toMatch(/Math\.random[^;]*\bseq\b/);
+    expect(PUR).toContain('entityKey: "purchase_request"');
+    expect(PUR).toContain('entityKey: "purchase_order"');
+  });
+});
+
 describe("CI guard — direct numbering inside routes", () => {
   const LINT = readFileSync(
     join(REPO_ROOT, "scripts/src/lint-patterns.mjs"),

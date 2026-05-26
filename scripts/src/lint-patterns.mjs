@@ -255,7 +255,7 @@ const RULES = [
     // Match `nextval('something_seq')` or any nextval call inside a
     // route file. The numbering authority owns all official sequences.
     regex: /\bnextval\s*\(\s*['"`]?[a-zA-Z_]+_seq/,
-    countBaseline: 8,
+    countBaseline: 2,
     message:
       "Direct `nextval('…_seq')` calls inside route handlers are forbidden " +
       "(Issue #1141 — unified numbering center). Official document numbers " +
@@ -297,8 +297,10 @@ const RULES = [
     // that synthesises a fake value. The regex looks BOTH directions: a
     // (seq|ref|number) key within ~180 chars before `Math.random()`, OR
     // the key appearing after the call.
+    // Hardened to a hard rule (baseline 0) — every priority-1 + finance
+    // route now issues numbers through `numberingService.issueNumber`,
+    // so a Math.random fallback near a seq/ref/number is a regression.
     regex: /(?:\b(?:seq|ref|number)\b[^;]{0,180}Math\.random\s*\(|Math\.random\s*\(\s*\)[^;]{0,180}\b(?:seq|ref|number)\b)/,
-    countBaseline: 4,
     message:
       "`Math.random()` near a `ref` / `seq` / `number` value inside a route " +
       "is forbidden (Issue #1141). Random fallbacks hide the real failure " +
