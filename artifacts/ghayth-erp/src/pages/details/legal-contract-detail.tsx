@@ -10,7 +10,7 @@ import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-import { ApprovalActions } from "@workspace/workflow-kit";
+// ApprovalActions removed — contracts use direct status PATCH, no approval flow.
 import { Edit, FileText } from "lucide-react";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -184,36 +184,9 @@ export default function LegalContractDetail() {
       </Card>
 
       <div className="space-y-3">
-        {/* Approval actions */}
-        {id && contract && ["draft", "active"].includes(contract.status) && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ApprovalActions
-                entityType="legal-contract"
-                entityId={id}
-                currentStatus={contract.status}
-                approveEndpoint={`/legal/contracts/${id}/approve`}
-                rejectEndpoint={`/legal/contracts/${id}/approve`}
-                returnEndpoint={`/legal/contracts/${id}/approve`}
-                approveMethod="PATCH"
-                rejectMethod="PATCH"
-                returnMethod="PATCH"
-                approveBody={(notes: string) => ({ approved: true, notes: notes || undefined })}
-                rejectBody={(notes: string) => ({ approved: false, notes })}
-                returnBody={(notes: string) => ({ approved: "returned", notes })}
-                pendingStatuses={["pending", "under_review", "returned"]}
-                invalidateKeys={[["legal-cases"]]}
-                onDone={() => {
-                  refetch();
-                  toast({ title: "تم تحديث العقد" });
-                }}
-              />
-            </CardContent>
-          </Card>
-        )}
+        {/* Legal contracts have no approve/reject lifecycle — status enum
+            is draft/active/expired/terminated/renewed, transitioned via
+            PATCH /:id status field or /renew & /terminate endpoints. */}
 
         {/* Additional info card */}
         <Card>

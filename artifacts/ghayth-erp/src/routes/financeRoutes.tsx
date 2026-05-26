@@ -8,6 +8,7 @@ import { lazy } from "react";
 // for the cascade to the rest of the module.
 const Dashboard = lazy(() => import("@/pages/finance/dashboard"));
 const CfoCockpit = lazy(() => import("@/pages/finance/cfo-cockpit"));
+const FinanceWorkflowsHub = lazy(() => import("@/pages/finance/finance-workflows-hub"));
 const MonthlyClosePack = lazy(() => import("@/pages/finance/monthly-close-pack"));
 const GlHealthScore = lazy(() => import("@/pages/finance/gl-health-score"));
 const ApprovalsInbox = lazy(() => import("@/pages/finance/approvals-inbox"));
@@ -47,11 +48,18 @@ const InvoiceSendQueue = lazy(() => import("@/pages/finance/invoice-send-queue")
 const InvoicesCreate = lazy(() => import("@/pages/create/finance/invoices-create"));
 const InvoiceDetail = lazy(() => import("@/pages/finance/invoice-detail"));
 const Expenses = lazy(() => import("@/pages/finance/expenses"));
+const ExpenseBurnRate = lazy(() => import("@/pages/finance/expense-burn-rate"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
 const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
 const CostSplitter = lazy(() => import("@/pages/create/finance/cost-splitter"));
 const AccountTransfer = lazy(() => import("@/pages/create/finance/account-transfer"));
+// Phase D — pages from the enterprise-hardening branch that don't
+// collide with main's parallel feature work.
+const Collections = lazy(() => import("@/pages/finance/collections"));
+const EntityStatements = lazy(() => import("@/pages/finance/entity-statements"));
+const JournalTemplates = lazy(() => import("@/pages/finance/journal-templates"));
+const SubsidiaryAccounts = lazy(() => import("@/pages/finance/subsidiary-accounts"));
 const Budget = lazy(() => import("@/pages/finance/budget"));
 const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
@@ -166,6 +174,7 @@ export const financeRoutes = [
   // to its own explicit path so the two pages don't share a URL.
   { path: "/finance", component: Dashboard },
   { path: "/finance/cfo-cockpit", component: CfoCockpit },
+  { path: "/finance/workflows-hub", component: FinanceWorkflowsHub },
   { path: "/finance/monthly-close-pack", component: MonthlyClosePack },
   { path: "/finance/gl-health", component: GlHealthScore },
   { path: "/finance/approvals-inbox", component: ApprovalsInbox },
@@ -214,6 +223,7 @@ export const financeRoutes = [
   { path: "/finance/invoices/create", component: InvoicesCreate },
   { path: "/finance/invoices/:id", component: InvoiceDetail },
   { path: "/finance/expenses", component: Expenses },
+  { path: "/finance/expense-burn-rate", component: ExpenseBurnRate },
   { path: "/finance/expenses/create", component: ExpensesCreate },
   { path: "/finance/expenses/multi-line", component: MultiLineExpenseCreate },
   { path: "/finance/expenses/split", component: CostSplitter },
@@ -329,4 +339,9 @@ export const financeRoutes = [
   { path: "/finance/year-end-close", component: YearEndClose },
   { path: "/finance/treasury", component: Treasury },
   { path: "/finance/treasury/transfer", component: AccountTransfer },
+  // Phase D — non-colliding routes from the enterprise-hardening branch
+  { path: "/finance/collections", component: Collections },
+  { path: "/finance/entity-statements", component: EntityStatements },
+  { path: "/finance/journal-templates", component: JournalTemplates },
+  { path: "/finance/subsidiary-accounts", component: SubsidiaryAccounts },
 ];

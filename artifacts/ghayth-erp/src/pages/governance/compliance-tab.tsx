@@ -120,7 +120,7 @@ export function ComplianceTab() {
             noToolbar
             pageSize={20}
             renderRowExtras={(i) => {
-              if (editingId === i.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(i.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (editingId === i.id) return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(i.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === i.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(i.id)} onCancel={cancelDelete} isPending={isPending} itemName={i.regulation} entityType="compliance" entityId={i.id} />;
               return null;
             }}

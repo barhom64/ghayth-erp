@@ -57,13 +57,13 @@ export default function JobDetailPage() {
 
   const { data: job, isLoading, isError, refetch } = useApiQuery<any>(
     ["recruitment-job", id],
-    id ? `/hr/recruitment/postings/${id}` : null,
+    `/hr/recruitment/postings/${id}`,
     !!id
   );
 
   const { data: appsResp } = useApiQuery<any>(
     ["job-applications", id],
-    id ? `/hr/recruitment/applications?postingId=${id}` : null,
+    `/hr/recruitment/applications?postingId=${id}`,
     !!id
   );
   const applicants: any[] = appsResp?.data || [];

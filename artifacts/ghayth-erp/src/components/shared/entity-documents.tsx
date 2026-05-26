@@ -1,17 +1,23 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
+import { useFormContext } from "react-hook-form";
+import { z } from "zod";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { notifyRateLimited, RateLimitError } from "@/lib/rate-limit-toast";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FormShell, FormTextField, FormSelectField } from "@workspace/ui-core";
 import { FileText, Upload, Download, Plus, X, FileUp, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AttachmentPreview, type PreviewableAttachment } from "./attachment-preview";
+
+const uploadDocSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب"),
+  category: z.string(),
+});
 
 const CATEGORIES = [
   { value: "contracts", label: "عقود" },
@@ -154,16 +160,28 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
   );
 }
 
+// Render-only submit that watches the form's title + the side-state file
+// so it stays disabled until both are present, and shows the "uploading"
+// label while the mutation runs.
+function UploadSubmitButton({ file, uploading }: { file: File | null; uploading: boolean }) {
+  const { watch } = useFormContext<z.infer<typeof uploadDocSchema>>();
+  const title = watch("title");
+  return (
+    <Button type="submit" disabled={!title || !file || uploading} className="w-full" rateLimitAware>
+      {uploading ? "جاري الرفع..." : "رفع"}
+    </Button>
+  );
+}
+
 function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType: string; entityId: number | string; onSuccess: () => void }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [form, setForm] = useState({ title: "", description: "", category: "" });
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleUpload = useCallback(async () => {
-    if (!file || !form.title) return;
+  const handleUpload = async (values: z.infer<typeof uploadDocSchema>) => {
+    if (!file) return;
     setUploading(true);
     try {
       const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
@@ -182,12 +200,12 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
       await apiFetch("/documents/upload", {
         method: "POST",
         body: JSON.stringify({
-          title: form.title,
-          description: form.description,
+          title: values.title,
+          description: "",
           fileName: file.name,
           fileSize: file.size,
           mimeType: file.type,
-          category: form.category || null,
+          category: values.category || null,
           storageKey: objectPath,
           entityLinks: [{ entityType, entityId: Number(entityId) }],
         }),
@@ -195,7 +213,6 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
 
       setOpen(false);
       setFile(null);
-      setForm({ title: "", description: "", category: "" });
       onSuccess();
     } catch (err: any) {
       if (err instanceof RateLimitError) {
@@ -206,7 +223,7 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
     } finally {
       setUploading(false);
     }
-  }, [file, form, entityType, entityId, onSuccess, toast]);
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -219,20 +236,20 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
         <DialogHeader>
           <DialogTitle>رفع مستند</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label>العنوان *</Label>
-            <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-          </div>
-          <div>
-            <Label>التصنيف</Label>
-            <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-              <SelectTrigger><SelectValue placeholder="اختر التصنيف" /></SelectTrigger>
-              <SelectContent>
-                {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+        <FormShell
+          schema={uploadDocSchema}
+          defaultValues={{ title: "", category: "" }}
+          hideSubmit
+          className="space-y-4"
+          onSubmit={handleUpload}
+        >
+          <FormTextField name="title" label="العنوان" required />
+          <FormSelectField
+            name="category"
+            label="التصنيف"
+            placeholder="اختر التصنيف"
+            options={CATEGORIES}
+          />
           <div>
             <Label>الملف *</Label>
             <div
@@ -246,7 +263,7 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
                 <div className="flex items-center justify-center gap-2">
                   <FileUp className="h-4 w-4 text-status-success-foreground" />
                   <span>{file.name}</span>
-                  <button onClick={(e) => { e.stopPropagation(); setFile(null); }} className="text-red-400">
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setFile(null); }} className="text-red-400">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -259,10 +276,8 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
               <input ref={inputRef} type="file" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); e.target.value = ""; }} />
             </div>
           </div>
-          <Button onClick={handleUpload} disabled={!form.title || !file || uploading} className="w-full" rateLimitAware>
-            {uploading ? "جاري الرفع..." : "رفع"}
-          </Button>
-        </div>
+          <UploadSubmitButton file={file} uploading={uploading} />
+        </FormShell>
       </DialogContent>
     </Dialog>
   );

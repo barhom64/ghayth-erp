@@ -95,7 +95,7 @@ export default function CostSplitterPage() {
   const { toast } = useToast();
 
   const { data: taxCodesData } = useApiQuery<{ data: TaxCode[] }>(
-    ["tax-codes-active"], `/finance/accounts/tax-codes?active=true`,
+    ["tax-codes-active"], `/finance/tax-codes?active=true`,
   );
   const taxCodes = useMemo(
     () => (taxCodesData?.data ?? []).filter((t) => t.isActive !== false),

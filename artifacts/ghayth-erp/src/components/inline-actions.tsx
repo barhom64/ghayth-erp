@@ -1,9 +1,15 @@
 import { useState } from "react";
+import { z, type ZodTypeAny } from "zod";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { UnifiedDateInput } from "@/components/ui/unified-date-input";
-import { Pencil, Trash2, Check, X, Loader2 } from "lucide-react";
+import {
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormNumberField,
+  FormDateField,
+  FormSelectField,
+} from "@workspace/ui-core";
+import { Pencil, Trash2, Loader2, X } from "lucide-react";
 import { apiPatch, apiDelete } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { usePermission } from "@/components/shared/permission-gate";
@@ -77,66 +83,109 @@ export function RowActions({
   );
 }
 
+/**
+ * Builds a permissive zod schema from the field list so InlineEditForm
+ * can run inside FormShell without each consumer hand-writing a schema.
+ * Number-typed fields accept either number or string (the FormNumberField
+ * keeps them as string until submit).
+ */
+function buildSchema(fields: EditField[]): z.ZodObject<Record<string, ZodTypeAny>> {
+  const shape: Record<string, ZodTypeAny> = {};
+  for (const f of fields) {
+    shape[f.key] = f.type === "number"
+      ? z.union([z.string(), z.number()]).optional()
+      : z.string().optional();
+  }
+  return z.object(shape);
+}
+
+function normalizeDefaults(fields: EditField[], initial: Record<string, any>): Record<string, any> {
+  const next: Record<string, any> = {};
+  for (const f of fields) {
+    const v = initial[f.key];
+    if (v == null) next[f.key] = "";
+    else next[f.key] = String(v);
+  }
+  return next;
+}
+
+/**
+ * Inline row-edit form rendered as a colored strip beneath the table row.
+ *
+ * Migrated from raw <Input>/<Select>/<UnifiedDateInput> + an externally-
+ * owned `form`/`setForm` pair to FormShell + zod. The parent now passes
+ * `initialValues` once and reads the submitted values via `onSave(values)`
+ * — RHF owns the per-keystroke state inside FormShell.
+ *
+ * For consumers that need to keep the values in their own state (e.g.
+ * to feed `handleSave(id, editForm)`), useInlineActions still exposes
+ * `editForm` and `setEditForm` as a seed/snapshot — the FormShell
+ * submission carries the canonical post-edit values.
+ */
 export function InlineEditForm({
   fields,
-  form,
-  setForm,
+  initialValues,
   onSave,
   onCancel,
   isPending,
 }: {
   fields: EditField[];
-  form: Record<string, any>;
-  setForm: (f: Record<string, any>) => void;
-  onSave: () => void;
+  initialValues: Record<string, any>;
+  onSave: (values: Record<string, any>) => void;
   onCancel: () => void;
   isPending: boolean;
 }) {
+  const schema = buildSchema(fields);
+  const defaults = normalizeDefaults(fields, initialValues);
+
   return (
     <div className="p-3 bg-status-info-surface/50 border border-status-info-surface rounded-lg">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        {fields.map((f) => (
-          <div key={f.key}>
-            <Label className="text-xs mb-1">{f.label}</Label>
-            {f.type === "select" && f.options ? (
-              <select
-                className="w-full border rounded-md p-2 text-sm bg-white"
-                value={form[f.key] || ""}
-                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-              >
-                {f.options.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            ) : f.type === "date" ? (
-              <UnifiedDateInput
-                value={form[f.key] ?? ""}
-                onChange={(v) => setForm({ ...form, [f.key]: v })}
-                variant="compact"
-                showDualCalendar
-                showPresets
-              />
-            ) : (
-              <Input
-                type={f.type || "text"}
-                value={form[f.key] ?? ""}
-                onChange={(e) => setForm({ ...form, [f.key]: f.type === "number" ? Number(e.target.value) : e.target.value })}
-                className="h-8 text-sm"
-              />
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="flex items-center gap-2 mt-3">
-        <Button size="sm" onClick={onSave} disabled={isPending} className="gap-1">
-          {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-          حفظ التعديلات
-        </Button>
-        <Button size="sm" variant="outline" onClick={onCancel} disabled={isPending} className="gap-1">
-          <X className="h-3 w-3" />
-          إلغاء
-        </Button>
-      </div>
+      <FormShell
+        schema={schema}
+        defaultValues={defaults}
+        submitLabel={isPending ? "جارٍ الحفظ..." : "حفظ التعديلات"}
+        disabled={isPending}
+        secondaryActions={
+          <Button type="button" size="sm" variant="outline" onClick={onCancel} disabled={isPending} className="gap-1">
+            <X className="h-3 w-3" /> إلغاء
+          </Button>
+        }
+        onSubmit={(values) => {
+          // Coerce number fields back to numbers so the server payload
+          // matches the previous contract (consumers expected
+          // editForm[k]: number when EditField.type === "number").
+          const coerced: Record<string, any> = { ...values };
+          for (const f of fields) {
+            if (f.type === "number" && coerced[f.key] !== "" && coerced[f.key] != null) {
+              const n = Number(coerced[f.key]);
+              if (Number.isFinite(n)) coerced[f.key] = n;
+            }
+          }
+          onSave(coerced);
+        }}
+      >
+        <FormGrid cols={4}>
+          {fields.map((f) => {
+            if (f.type === "select" && f.options) {
+              return (
+                <FormSelectField
+                  key={f.key}
+                  name={f.key}
+                  label={f.label}
+                  options={f.options}
+                />
+              );
+            }
+            if (f.type === "date") {
+              return <FormDateField key={f.key} name={f.key} label={f.label} />;
+            }
+            if (f.type === "number") {
+              return <FormNumberField key={f.key} name={f.key} label={f.label} />;
+            }
+            return <FormTextField key={f.key} name={f.key} label={f.label} />;
+          })}
+        </FormGrid>
+      </FormShell>
     </div>
   );
 }

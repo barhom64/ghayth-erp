@@ -203,7 +203,13 @@ const RULES = [
     // (BI dashboards, finance reports, my-payslip). New violations are
     // blocked; existing ones drop the baseline as they migrate to
     // <PrintButton entityType="..." entityId={...} />.
-    countBaseline: 9,
+    // Baseline 7 — current live count after this branch's merge of main:
+    // bi-admin-reports, bi-operations, vendor-statement-print, customer-
+    // statement-print, monthly-close-pack, finance/reports, account-
+    // statement (window.print()). Was 9 before Phase D, dropped to 6
+    // during the work, then bumped to 7 to absorb main's two new print
+    // pages. Tighten when those pages migrate to PrintButton.
+    countBaseline: 7,
     message:
       "Direct PDF/print generation in the SPA is forbidden (Ghaith Print Platform, " +
       "Phase 0 architecture lock). Document generation must go through the server: " +

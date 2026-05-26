@@ -23,7 +23,7 @@ export default function InventoryCostingPage() {
 
   const { data: productDetail, isLoading: loadingDetail } = useApiQuery<any>(
     ["inventory-costing-product", selectedProduct?.id],
-    selectedProduct ? `/finance/inventory-costing/${selectedProduct.id}` : null,
+    `/finance/inventory-costing/${selectedProduct?.id ?? 0}`,
     { enabled: !!selectedProduct }
   );
 

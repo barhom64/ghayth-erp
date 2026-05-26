@@ -8,8 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
-import { Download, FileSpreadsheet, Printer } from "lucide-react";
+import { Download, FileSpreadsheet } from "lucide-react";
 
 interface Movement {
   id: number;
@@ -161,9 +162,11 @@ export default function AccountStatementPage({ entityType }: Props) {
           >
             <Download className="h-3.5 w-3.5 me-1" /> تصدير CSV
           </GuardedButton>
-          <Button variant="outline" size="sm" onClick={() => window.print()}>
-            <Printer className="h-3.5 w-3.5 me-1" /> طباعة
-          </Button>
+          <EntityPrintButton
+            entityType={entityType === "customer" ? "customer_statement" : "vendor_statement"}
+            entityId={`${id ?? ""}:${startDate ?? ""}..${endDate ?? ""}`}
+            formats={["a4"]}
+          />
         </div>
       }
     >

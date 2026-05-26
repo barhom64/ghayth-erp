@@ -235,7 +235,7 @@ function OpportunitiesTab() {
             onRowClick={(o) => navigate(`/crm/leads/${o.id}`)}
             renderRowExtras={(o) => {
               if (editingId === o.id) {
-                return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(o.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+                return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(o.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               }
               if (deletingId === o.id) {
                 return <InlineDeleteConfirm onConfirm={() => handleDelete(o.id)} onCancel={cancelDelete} isPending={isPending} itemName={o.title} entityType="opportunity" entityId={o.id} />;

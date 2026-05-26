@@ -47,7 +47,7 @@ export default function LegalSessionDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["legal-session", String(id)],
-    id ? `/legal/sessions/${id}` : null,
+    `/legal/sessions/${id}`,
     !!id
   );
 

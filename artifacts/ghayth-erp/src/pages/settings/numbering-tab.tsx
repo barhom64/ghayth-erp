@@ -20,7 +20,7 @@
 //     السابقة" button inventories them into `numbering_assignments`
 //     and bumps the counter past the highest existing sequence.
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, Component, type ErrorInfo } from "react";
 import { useApiQuery, useApiMutation, asList, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -235,6 +235,13 @@ function PoliciesPanel({ schemes, onChange }: { schemes: Scheme[]; onChange: () 
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const selected = schemes.find((s) => s.id === selectedId) || null;
 
+  // Scroll the inline editor into view when a row is expanded so users
+  // never wonder why "the arrow moved but nothing happened". Without
+  // this the editor renders below the fold on long tables.
+  const editorRef = (el: HTMLDivElement | null) => {
+    if (el && selected) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
+
   return (
     <div className="space-y-4">
       <Card><CardContent className="p-0 overflow-x-auto">
@@ -246,7 +253,7 @@ function PoliciesPanel({ schemes, onChange }: { schemes: Scheme[]; onChange: () 
               <th className="p-3 text-start">مثال الرقم</th>
               <th className="p-3 text-start">عدد الأرقام الصادرة</th>
               <th className="p-3 text-start">الحالة</th>
-              <th className="p-3 text-end w-24"></th>
+              <th className="p-3 text-end w-32"></th>
             </tr>
           </thead>
           <tbody>
@@ -254,6 +261,7 @@ function PoliciesPanel({ schemes, onChange }: { schemes: Scheme[]; onChange: () 
               const preset = detectPreset(s);
               const presetDef = PRESETS.find((p) => p.key === preset);
               const isSelected = selectedId === s.id;
+              const toggle = () => setSelectedId(isSelected ? null : s.id);
               return (
                 <tr
                   key={s.id}
@@ -261,7 +269,7 @@ function PoliciesPanel({ schemes, onChange }: { schemes: Scheme[]; onChange: () 
                     "border-b hover:bg-surface-subtle cursor-pointer",
                     isSelected && "bg-status-info-surface/30"
                   )}
-                  onClick={() => setSelectedId(isSelected ? null : s.id)}
+                  onClick={toggle}
                 >
                   <td className="p-3">
                     <div className="font-medium">{s.displayNameAr}</div>
@@ -272,14 +280,27 @@ function PoliciesPanel({ schemes, onChange }: { schemes: Scheme[]; onChange: () 
                   <td className="p-3 font-mono text-xs text-status-info-foreground">
                     {samplePreview(s)}
                   </td>
-                  <td className="p-3 text-sm">{s.assignmentCount.toLocaleString("ar-SA")}</td>
+                  <td className="p-3 text-sm">{(s.assignmentCount ?? 0).toLocaleString("ar-SA")}</td>
                   <td className="p-3">
                     <Badge variant={s.isActive ? "default" : "secondary"} className="text-xs">
                       {s.isActive ? "نشطة" : "متوقفة"}
                     </Badge>
                   </td>
                   <td className="p-3 text-end">
-                    {isSelected ? <ChevronUp className="h-4 w-4 inline" /> : <ChevronDown className="h-4 w-4 inline" />}
+                    {/* Explicit button so the click target is unambiguous; the
+                        whole row still toggles, but a clear button label cures
+                        "the chevron moved but nothing opened" confusion. */}
+                    <Button
+                      variant={isSelected ? "default" : "ghost"}
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); toggle(); }}
+                    >
+                      {isSelected ? (
+                        <><ChevronUp className="h-4 w-4 me-1" /> إغلاق</>
+                      ) : (
+                        <><Edit className="h-4 w-4 me-1" /> تعديل</>
+                      )}
+                    </Button>
                   </td>
                 </tr>
               );
@@ -294,15 +315,49 @@ function PoliciesPanel({ schemes, onChange }: { schemes: Scheme[]; onChange: () 
       </CardContent></Card>
 
       {selected && (
-        <SchemeEditor
-          key={selected.id}
-          scheme={selected}
-          onClose={() => setSelectedId(null)}
-          onSaved={() => { onChange(); }}
-        />
+        <div ref={editorRef}>
+          <SchemeEditorBoundary
+            key={selected.id}
+            scheme={selected}
+            onClose={() => setSelectedId(null)}
+            onSaved={() => { onChange(); }}
+          />
+        </div>
       )}
     </div>
   );
+}
+
+// Tiny error boundary so a render-time exception inside SchemeEditor
+// (bad data shape, missing field, etc) surfaces an actionable message
+// instead of silently collapsing the editor to nothing.
+class SchemeEditorBoundary extends Component<
+  { scheme: Scheme; onClose: () => void; onSaved: () => void },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    // eslint-disable-next-line no-console
+    console.error("[NumberingTab] SchemeEditor crashed:", error, info);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <Card className="border-status-error">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center gap-2 text-status-error-foreground font-medium">
+              <AlertTriangle className="h-4 w-4" />
+              تعذّر فتح محرر سياسة الترقيم
+            </div>
+            <p className="text-xs text-muted-foreground">{this.state.error.message}</p>
+            <Button variant="ghost" size="sm" onClick={this.props.onClose}>إغلاق</Button>
+          </CardContent>
+        </Card>
+      );
+    }
+    return <SchemeEditor {...this.props} />;
+  }
 }
 
 /** Build a quick text-only sample of what the next number would look like.
@@ -312,9 +367,15 @@ function PoliciesPanel({ schemes, onChange }: { schemes: Scheme[]; onChange: () 
  */
 function samplePreview(s: Scheme): string {
   const year = new Date().getFullYear(); // utc-ok: client-side display string; the server uses currentYear() in Asia/Riyadh.
-  const seq = String(1).padStart(s.padLength, "0");
-  return s.pattern
-    .replace("{PREFIX}", s.prefix)
+  // Defensive: pad/pattern/prefix may be undefined when the API row
+  // predates migration 213 — fall back to safe defaults so the row
+  // renders a sensible preview instead of crashing the table.
+  const pad = Math.max(1, Math.min(10, Number(s.padLength) || 4));
+  const seq = String(1).padStart(pad, "0");
+  const pattern = s.pattern || "{PREFIX}-{YYYY}-{SEQ}";
+  const prefix = s.prefix || "REF";
+  return pattern
+    .replace("{PREFIX}", prefix)
     .replace("{BRANCH}", "BR")
     .replace("{YYYY}", String(year))
     .replace("{YY}", String(year).slice(2))
@@ -338,13 +399,17 @@ function SchemeEditor({
   const initialPreset = detectPreset(scheme);
 
   const [presetKey, setPresetKey] = useState<PresetKey | "custom">(initialPreset);
-  const [prefix, setPrefix] = useState(scheme.prefix);
-  const [pattern, setPattern] = useState(scheme.pattern);
-  const [padLength, setPadLength] = useState(scheme.padLength);
-  const [scopePolicy, setScopePolicy] = useState(scheme.scopePolicy);
-  const [resetPolicy, setResetPolicy] = useState(scheme.resetPolicy);
-  const [manualEditPolicy, setManualEditPolicy] = useState(scheme.manualEditPolicy);
-  const [isActive, setIsActive] = useState(scheme.isActive);
+  // Defensive defaults — `scheme` arrives from the API and any field
+  // could be null/undefined if the row predates migration 213. Without
+  // these fallbacks the controlled <Input value={null}> warning fires
+  // and the editor renders blank instead of crashing the boundary.
+  const [prefix, setPrefix] = useState(scheme.prefix ?? "");
+  const [pattern, setPattern] = useState(scheme.pattern ?? "{PREFIX}-{YYYY}-{SEQ}");
+  const [padLength, setPadLength] = useState(scheme.padLength ?? 4);
+  const [scopePolicy, setScopePolicy] = useState(scheme.scopePolicy ?? "company");
+  const [resetPolicy, setResetPolicy] = useState(scheme.resetPolicy ?? "yearly");
+  const [manualEditPolicy, setManualEditPolicy] = useState(scheme.manualEditPolicy ?? "disabled");
+  const [isActive, setIsActive] = useState(scheme.isActive ?? true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [reason, setReason] = useState("");
 

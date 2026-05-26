@@ -6,10 +6,10 @@ import { join } from "node:path";
  * Batch 32 — settings.tsx GeneralSettings (11-field general
  * settings panel). 48 of ~280 forms now on FormShell + zod.
  *
- * The CrudSection generic table form below is intentionally left on
- * useState — it's a dynamic-field renderer driven by a `fields` prop,
- * which doesn't fit the static schema model. Its <Input>/<Label> uses
- * keep those imports alive in the file.
+ * The CrudSection generic table form has since been migrated as
+ * well — it now builds a runtime z.object() from its declarative
+ * `fields` prop and renders the inputs via FormTextField. The
+ * legacy <Input>/<Label> imports are gone from this file.
  *
  * The server stores values as a flat {key, value}[] list; we keep
  * the existing reducer that flattens them into a typed defaults
@@ -66,11 +66,18 @@ describe("settings.tsx GeneralSettings — on FormShell + zod", () => {
     expect(SRC).toContain("useApiMutation<any, GeneralSettingsForm>");
   });
 
-  it("CrudSection generic form INTENTIONALLY preserved — different shape", () => {
-    // The CrudSection is a dynamic-field renderer; left out of scope.
+  it("CrudSection now builds a runtime zod schema and uses FormShell", () => {
+    // The dynamic-field renderer was the last manual-form section in
+    // this file; it now constructs z.object(schemaShape) from its
+    // `fields` prop and renders FormTextField per field inside the
+    // shared FormShell stack.
     expect(SRC).toContain("function CrudSection(");
-    expect(SRC).toContain('from "@/components/ui/input"');
-    expect(SRC).toContain('from "@/components/ui/label"');
+    expect(SRC).toContain("const crudSchema = z.object(schemaShape)");
+    expect(SRC).toMatch(/<FormShell[\s\S]+schema=\{crudSchema/);
+    expect(SRC).toMatch(/<FormTextField\s+key=\{f\.name\}/);
+    // Legacy raw <Input>/<Label> for this section is gone.
+    expect(SRC).not.toContain('from "@/components/ui/input"');
+    expect(SRC).not.toContain('from "@/components/ui/label"');
   });
 
   it("stays inline Card — §3.4 (no modal for create/edit)", () => {

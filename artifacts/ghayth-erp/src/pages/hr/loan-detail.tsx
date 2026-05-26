@@ -50,7 +50,7 @@ function buildLoanSteps(status: string | undefined): StageStep[] {
 
 export default function LoanDetail() {
   const { id } = useParams<{ id: string }>();
-  const { data, isLoading, isError } = useApiQuery<any>(["hr-loan-detail", id], id ? `/hr/loans/${id}` : null);
+  const { data, isLoading, isError } = useApiQuery<any>(["hr-loan-detail", id], `/hr/loans/${id}`);
   const loan = data?.data ?? data;
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("loan", id || "");
 

@@ -41,14 +41,14 @@ export default function ProductDetailPage() {
 
   const { data: product, isLoading, isError, refetch } = useApiQuery<any>(
     ["store-product", id],
-    id ? `/store/products/${id}` : null,
+    `/store/products/${id}`,
     !!id
   );
 
   // Sales history filtered by product
   const { data: ordersResp } = useApiQuery<any>(
     ["product-orders", id],
-    id ? `/store/orders?productId=${id}` : null,
+    `/store/orders?productId=${id}`,
     !!id
   );
   const sales: any[] = ordersResp?.data || [];
@@ -56,7 +56,7 @@ export default function ProductDetailPage() {
   // Purchase orders filtered by product
   const { data: poResp } = useApiQuery<any>(
     ["product-purchase-orders", id],
-    id ? `/finance/purchase-orders?productId=${id}` : null,
+    `/finance/purchase-orders?productId=${id}`,
     !!id
   );
   const purchaseOrders: any[] = poResp?.data || [];
