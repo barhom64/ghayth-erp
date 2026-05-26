@@ -392,7 +392,7 @@ router.post("/ai/categorize", authorize({ feature: "admin", action: "update" }),
     const body = zodParse(aiCategorizeSchema.safeParse(req.body));
     const scope = req.scope!;
     const { message, context } = body;
-    const result = await aiEngine.receptionCategorize(message, context);
+    const result = await aiEngine.receptionCategorize(message, context, { companyId: scope.companyId, userId: scope.userId });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_categorize", entityId: 0, after: { message: message?.substring(0, 100) } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
@@ -412,7 +412,7 @@ router.post("/ai/draft-reply", authorize({ feature: "admin", action: "update" })
     const body = zodParse(aiDraftReplySchema.safeParse(req.body));
     const scope = req.scope!;
     const { ticketTitle, ticketDescription, history } = body;
-    const draft = await aiEngine.responderDraft(ticketTitle, ticketDescription, history);
+    const draft = await aiEngine.responderDraft(ticketTitle, ticketDescription, history, { companyId: scope.companyId, userId: scope.userId });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_draft_reply", entityId: 0, after: { ticketTitle } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
@@ -432,7 +432,7 @@ router.post("/ai/translate", authorize({ feature: "admin", action: "update" }), 
     const body = zodParse(aiTranslateSchema.safeParse(req.body));
     const scope = req.scope!;
     const { text, targetLanguage } = body;
-    const translated = await aiEngine.translatorTranslate(text, targetLanguage);
+    const translated = await aiEngine.translatorTranslate(text, targetLanguage, { companyId: scope.companyId, userId: scope.userId });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_translate", entityId: 0, after: { targetLanguage } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
@@ -452,7 +452,7 @@ router.post("/ai/summarize", authorize({ feature: "admin", action: "update" }), 
     const body = zodParse(aiSummarizeSchema.safeParse(req.body));
     const scope = req.scope!;
     const { content, maxLength } = body;
-    const summary = await aiEngine.summarizerSummarize(content, maxLength);
+    const summary = await aiEngine.summarizerSummarize(content, maxLength, { companyId: scope.companyId, userId: scope.userId });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_summarize", entityId: 0 }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
@@ -472,7 +472,7 @@ router.post("/ai/evaluate-rules", authorize({ feature: "admin", action: "update"
     const body = zodParse(aiEvaluateRulesSchema.safeParse(req.body));
     const scope = req.scope!;
     const { context, data, rules } = body;
-    const result = await aiEngine.rulesEngineEvaluate({ context, data, rules });
+    const result = await aiEngine.rulesEngineEvaluate({ context, data, rules }, { companyId: scope.companyId, userId: scope.userId });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_evaluate_rules", entityId: 0, after: { context } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,
@@ -492,7 +492,7 @@ router.post("/ai/forecast", authorize({ feature: "admin", action: "update" }), a
     const body = zodParse(aiForecastSchema.safeParse(req.body));
     const scope = req.scope!;
     const { metricName, historicalData, forecastPeriods } = body;
-    const result = await aiEngine.predictorForecast({ metricName, historicalData, forecastPeriods });
+    const result = await aiEngine.predictorForecast({ metricName, historicalData, forecastPeriods }, { companyId: scope.companyId, userId: scope.userId });
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "ai_forecast", entityId: 0, after: { metricName } }).catch((e) => logger.error(e, "intelligence background task failed"));
     emitEvent({
       companyId: scope.companyId,

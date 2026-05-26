@@ -1,0 +1,10 @@
+severity,rule,file,endpoint,message
+warning,audit.missing,artifacts/api-server/src/routes/import.ts,"(file-level — 2 write endpoint(s))","Route file has write endpoints but no createAuditLog() call. Verify the path is covered by auditMiddleware ENTITY_MAP, or add explicit audit calls for business-level events."
+warning,events.missing,artifacts/api-server/src/routes/import.ts,"(file-level — 2 write endpoint(s))","Route file has write endpoints but no emitEvent() call anywhere."
+warning,audit.missing,artifacts/api-server/src/routes/obligations.ts,"(file-level — 6 write endpoint(s))","Route file has write endpoints but no createAuditLog() call. Verify the path is covered by auditMiddleware ENTITY_MAP, or add explicit audit calls for business-level events."
+warning,audit.missing,artifacts/api-server/src/routes/print.ts,"(file-level — 13 write endpoint(s))","Route file has write endpoints but no createAuditLog() call. Verify the path is covered by auditMiddleware ENTITY_MAP, or add explicit audit calls for business-level events."
+warning,events.missing,artifacts/api-server/src/routes/print.ts,"(file-level — 13 write endpoint(s))","Route file has write endpoints but no emitEvent() call anywhere."
+warning,audit.missing,artifacts/api-server/src/routes/rbacV2.ts,"(file-level — 19 write endpoint(s))","Route file has write endpoints but no createAuditLog() call. Verify the path is covered by auditMiddleware ENTITY_MAP, or add explicit audit calls for business-level events."
+warning,events.missing,artifacts/api-server/src/routes/rbacV2.ts,"(file-level — 19 write endpoint(s))","Route file has write endpoints but no emitEvent() call anywhere."
+warning,audit.missing,artifacts/api-server/src/routes/scheduled-reports.ts,"(file-level — 3 write endpoint(s))","Route file has write endpoints but no createAuditLog() call. Verify the path is covered by auditMiddleware ENTITY_MAP, or add explicit audit calls for business-level events."
+warning,events.missing,artifacts/api-server/src/routes/scheduled-reports.ts,"(file-level — 3 write endpoint(s))","Route file has write endpoints but no emitEvent() call anywhere."

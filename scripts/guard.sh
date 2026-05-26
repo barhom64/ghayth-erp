@@ -92,6 +92,11 @@ run_step "check:workflow-silent-failures" node scripts/src/check-workflow-silent
 # PRs #1019 (frontend batch 1), #1026 (frontend batch 2), and #1028
 # (bi.ts + finance-budget.ts route files).
 run_step "check:finance-period-drift" node scripts/src/check-finance-period-drift.mjs
+# Stop-Ship compliance scan (#1139 §8): every write endpoint must have an
+# RBAC guard. File-level audit/event gaps are reported as warnings (the
+# global auditMiddleware provides baseline coverage) and don't fail the
+# build. Route-level exemptions live in scripts/src/audit-stop-ship.mjs.
+run_step "audit:stop-ship"    node scripts/src/audit-stop-ship.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test
 
 END=$(date +%s)
