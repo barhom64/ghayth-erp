@@ -67,11 +67,18 @@ export default defineConfig({
           if (!id.includes("node_modules")) return undefined;
           // React core — stays warm for the entire SPA lifetime, isolate it
           // so router/query updates don't bust this cache entry.
-          if (
-            id.includes("/react/") ||
-            id.includes("/react-dom/") ||
-            id.includes("/scheduler/")
-          ) {
+          //
+          // The pattern must match `node_modules/react/...` (the real
+          // package) but NOT `node_modules/@uppy/react/...` or any other
+          // scoped package that happens to be called "react". The earlier
+          // `id.includes("/react/")` was too loose: it slurped @uppy/react
+          // (which transitively pulls in @uppy/core + @floating-ui helpers
+          // that live in vendor-misc) into vendor-react and produced a
+          // hard import cycle vendor-react ↔ vendor-misc — manifesting at
+          // runtime as `Cannot read properties of undefined (reading
+          // 'forwardRef')` because vendor-misc evaluated before
+          // vendor-react had finished exporting forwardRef.
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) {
             return "vendor-react";
           }
           // Data layer — TanStack Query is on every page.

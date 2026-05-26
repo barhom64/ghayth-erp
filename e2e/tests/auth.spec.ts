@@ -14,8 +14,11 @@ test.describe("Auth", () => {
     await page.goto("/");
 
     // Login form should be the entry surface for an anonymous visit.
-    await page.getByLabel(/email|البريد/i).fill(EMAIL);
-    await page.getByLabel(/password|كلمة/i).fill(PASSWORD);
+    // Use the input id directly: getByLabel(/كلمة/i) matches both the
+    // password input AND the "إظهار كلمة المرور" (show password) icon
+    // button via its aria-label, which trips Playwright strict mode.
+    await page.locator("input#email").fill(EMAIL);
+    await page.locator("input#password").fill(PASSWORD);
     await page.getByRole("button", { name: /login|دخول/i }).click();
 
     // Dashboard renders some KPI text. Match a stable Arabic string.
@@ -31,8 +34,8 @@ test.describe("Auth", () => {
 
   test("rejects invalid credentials with a visible error", async ({ page }) => {
     await page.goto("/");
-    await page.getByLabel(/email|البريد/i).fill(EMAIL);
-    await page.getByLabel(/password|كلمة/i).fill("definitely-not-the-password");
+    await page.locator("input#email").fill(EMAIL);
+    await page.locator("input#password").fill("definitely-not-the-password");
     await page.getByRole("button", { name: /login|دخول/i }).click();
 
     // Server replies with "بيانات الدخول غير صحيحة" (FORBIDDEN). Match the

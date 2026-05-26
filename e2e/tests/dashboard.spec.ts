@@ -12,8 +12,11 @@ const PASSWORD = process.env.E2E_USER_PASSWORD ?? "Test1234!";
 
 async function login(page: import("@playwright/test").Page) {
   await page.goto("/");
-  await page.getByLabel(/email|البريد/i).fill(EMAIL);
-  await page.getByLabel(/password|كلمة/i).fill(PASSWORD);
+  // Use input ids directly — getByLabel(/كلمة/i) matches both the input
+  // and the "إظهار كلمة المرور" toggle button via its aria-label, which
+  // Playwright strict mode rejects.
+  await page.locator("input#email").fill(EMAIL);
+  await page.locator("input#password").fill(PASSWORD);
   await page.getByRole("button", { name: /login|دخول/i }).click();
   await page.waitForLoadState("networkidle");
 }
@@ -26,6 +29,7 @@ async function login(page: import("@playwright/test").Page) {
 const IGNORED_CONSOLE_PATTERNS: RegExp[] = [
   /ResizeObserver loop/i,
   /Failed to load resource.*404/i, // dev-only optional endpoints (e.g. /announcements)
+  /Failed to load resource.*net::ERR_/i, // external CDN reachability — not an app bug
   /\[vite\]/i,
   /Download the React DevTools/i,
   /findDOMNode is deprecated/i,
@@ -54,8 +58,10 @@ test.describe("Dashboard", () => {
 
     await login(page);
 
-    // Sidebar is always present on authenticated pages.
-    await expect(page.locator('[data-sidebar], nav, aside')).toBeVisible({ timeout: 10_000 });
+    // Sidebar is always present on authenticated pages. The layout
+    // renders <aside> containing a <nav>; both match the selector, so
+    // pin to the first hit to satisfy Playwright strict mode.
+    await expect(page.locator('[data-sidebar], nav, aside').first()).toBeVisible({ timeout: 10_000 });
 
     // At least one element that looks like a KPI card / stat.
     const cards = page.locator('[data-testid*="kpi"], [class*="card"], [class*="stat"]');
