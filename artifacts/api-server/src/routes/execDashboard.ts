@@ -174,13 +174,13 @@ execDashboardRouter.get("/overview", authorize({ feature: "dashboard.executive",
     // ─── 8. DUNNING PIPELINE ──────────────────────────────────────────────
     safe(async () => {
       const rows = await rawQuery<Record<string, unknown>>(
-        `SELECT dl.level AS stage, COUNT(DISTINCT i.id)::int AS count,
+        `SELECT dl.stage AS stage, COUNT(DISTINCT i.id)::int AS count,
                 COALESCE(SUM(i.total - COALESCE(i."paidAmount",0)), 0) AS amount
          FROM dunning_letters dl
          JOIN invoices i ON i.id = dl."invoiceId" AND i."deletedAt" IS NULL
          WHERE dl."companyId"=$1 AND i.status NOT IN ('paid','cancelled')
-           AND dl."deletedAt" IS NULL AND dl.level > 0
-         GROUP BY dl.level ORDER BY dl.level`,
+           AND dl.stage > 0
+         GROUP BY dl.stage ORDER BY dl.stage`,
         [companyId]
       );
       return rows;
@@ -315,7 +315,7 @@ execDashboardRouter.get("/overdue-invoices", authorize({ feature: "dashboard.exe
               i.total, COALESCE(i."paidAmount",0) AS "paidAmount",
               (i.total - COALESCE(i."paidAmount",0)) AS outstanding,
               (CURRENT_DATE - i."dueDate"::date)::int AS "daysPastDue",
-              COALESCE((SELECT MAX(dl.level) FROM dunning_letters dl WHERE dl."invoiceId" = i.id AND dl."deletedAt" IS NULL), 0) AS "dunningStage",
+              COALESCE((SELECT MAX(dl.stage) FROM dunning_letters dl WHERE dl."invoiceId" = i.id), 0) AS "dunningStage",
               c.name AS "clientName"
        FROM invoices i
        LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
