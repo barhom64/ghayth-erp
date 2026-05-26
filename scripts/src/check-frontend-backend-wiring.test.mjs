@@ -213,7 +213,7 @@ check(
 
 console.log("end-to-end audit — baseline invariant");
 
-const { resolved, orphans, methodMismatches, frontend } = runAudit();
+const { resolved, orphans, methodMismatches, unusedBackend, frontend } = runAudit();
 check(
   `every scanned frontend call resolves to a real backend route (got ${orphans.length} orphan(s))`,
   orphans.length === 0,
@@ -229,6 +229,14 @@ check(
 check(
   `resolved + orphans + methodMismatches accounts for the whole scan`,
   resolved.length + orphans.length + methodMismatches.length === frontend.length,
+);
+// Reverse-direction sanity check: the audit must produce a non-empty
+// unused-backend list (the very point of Phase C). If somebody breaks
+// the touchedByFrontend bookkeeping and every endpoint suddenly looks
+// touched, this fixture catches it.
+check(
+  `unused-backend list is computed (got ${unusedBackend.length} entries — Phase C signal)`,
+  Array.isArray(unusedBackend) && unusedBackend.length > 0,
 );
 
 // ─── summary ───────────────────────────────────────────────────────────────

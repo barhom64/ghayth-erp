@@ -516,16 +516,23 @@ export function runAudit() {
   const resolved = [];
   const orphans = [];
   const methodMismatches = [];
+  // Track which (path, method) pairs the frontend touched, so we can
+  // compute the REVERSE direction below: backend endpoints with no
+  // frontend caller. The Set value is "PATH|METHOD".
+  const touchedByFrontend = new Set();
 
   for (const c of frontend) {
     const fe = normaliseFrontendUrl(c.url);
     // Find a backend path that matches segment-by-segment.
+    let beMatchedPath = null;
     let beMethods = null;
     if (backendPaths.has(fe)) {
+      beMatchedPath = fe;
       beMethods = backendPaths.get(fe);
     } else {
       for (const [be, methods] of backendPaths) {
         if (urlsMatch(fe, be)) {
+          beMatchedPath = be;
           beMethods = methods;
           break;
         }
@@ -538,6 +545,14 @@ export function runAudit() {
     // Path matched — check method. "?" (unresolved) is allowed through.
     if (c.method === "?" || beMethods.has(c.method)) {
       resolved.push({ ...c, normalised: fe });
+      // Mark every method the backend serves on this path as touched
+      // when the frontend's method is "?" (unresolved); otherwise just
+      // the specific method the call uses.
+      if (c.method === "?") {
+        for (const m of beMethods) touchedByFrontend.add(`${beMatchedPath}|${m}`);
+      } else {
+        touchedByFrontend.add(`${beMatchedPath}|${c.method}`);
+      }
     } else {
       methodMismatches.push({
         ...c,
@@ -548,7 +563,27 @@ export function runAudit() {
     }
   }
 
-  return { resolved, orphans, methodMismatches, backendPaths, frontend };
+  // Reverse direction: every backend (path, method) that no frontend
+  // call covers. These are real features the server implements but no
+  // UI consumes — exactly the "النظام يفتقر إلى الجانب العملي"
+  // signal the user asked about.
+  const unusedBackend = [];
+  for (const [bePath, methods] of backendPaths) {
+    for (const method of methods) {
+      if (!touchedByFrontend.has(`${bePath}|${method}`)) {
+        unusedBackend.push({ path: bePath, method });
+      }
+    }
+  }
+
+  return {
+    resolved,
+    orphans,
+    methodMismatches,
+    unusedBackend,
+    backendPaths,
+    frontend,
+  };
 }
 
 // Test-only exports — the .test.mjs sibling exercises each piece
@@ -557,14 +592,26 @@ export function runAudit() {
 export { normaliseFrontendUrl, urlsMatch, methodsMatch, readString, inferMethod };
 
 function main() {
-  const { resolved, orphans, methodMismatches, backendPaths, frontend } = runAudit();
+  const { resolved, orphans, methodMismatches, unusedBackend, backendPaths, frontend } = runAudit();
+
+  // Count total backend (path, method) endpoints — many paths serve
+  // 3-5 methods each, so this is the right denominator for "what %
+  // of the backend surface does the UI cover?".
+  let totalEndpoints = 0;
+  for (const ms of backendPaths.values()) totalEndpoints += ms.size;
+  const usedEndpoints = totalEndpoints - unusedBackend.length;
+  const coveragePercent = totalEndpoints === 0
+    ? 0
+    : Math.round((usedEndpoints / totalEndpoints) * 1000) / 10;
 
   console.log(`# frontend ↔ backend route wiring audit\n`);
-  console.log(`backend routes (mounted):         ${backendPaths.size}`);
+  console.log(`backend routes (mounted):         ${backendPaths.size} paths, ${totalEndpoints} (path,method) endpoints`);
   console.log(`frontend API call-sites scanned:  ${frontend.length}`);
   console.log(`resolved → real backend route:    ${resolved.length}`);
   console.log(`orphan (no backend match):        ${orphans.length}`);
-  console.log(`method mismatch (path ok, verb wrong): ${methodMismatches.length}\n`);
+  console.log(`method mismatch (path ok, verb wrong): ${methodMismatches.length}`);
+  console.log(`backend coverage by UI:           ${usedEndpoints}/${totalEndpoints} (${coveragePercent}%)`);
+  console.log(`unused backend endpoints:         ${unusedBackend.length}\n`);
 
   let failed = false;
 
@@ -600,6 +647,37 @@ function main() {
       );
     }
     console.log();
+  }
+
+  // Report-only section: every backend (path, method) that no
+  // frontend call covers. This does NOT fail the build — many
+  // endpoints are intentionally backend-only (cron triggers, internal
+  // /admin/* probes, webhooks). The list is the "what features does
+  // the server implement that no UI exposes" surface the user asked
+  // about.
+  if (unusedBackend.length > 0) {
+    console.log(`## unused backend endpoints (no frontend caller)\n`);
+    // Group by top-level segment so the report is browseable.
+    const byDomain = new Map();
+    for (const u of unusedBackend) {
+      // Skip the /api/ prefix.
+      const after = u.path.replace(/^\/api\/?/, "");
+      const domain = after.split("/")[0] || "(root)";
+      if (!byDomain.has(domain)) byDomain.set(domain, []);
+      byDomain.get(domain).push(`${u.method} ${u.path}`);
+    }
+    const sorted = [...byDomain.entries()].sort(
+      (a, b) => b[1].length - a[1].length,
+    );
+    for (const [domain, list] of sorted.slice(0, 20)) {
+      console.log(`### /${domain} (${list.length})`);
+      for (const line of list.slice(0, 8)) console.log(`  ${line}`);
+      if (list.length > 8) console.log(`  … and ${list.length - 8} more`);
+      console.log();
+    }
+    if (sorted.length > 20) {
+      console.log(`(${sorted.length - 20} more domains with unused endpoints, truncated)`);
+    }
   }
 
   if (failed) {
