@@ -40,7 +40,10 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 export default function CRM() {
-  const [tab, setTab] = useState("opportunities");
+  const [location] = useLocation();
+  const [tab, setTab] = useState(() =>
+    location === "/crm/pipeline" ? "pipeline" : "opportunities",
+  );
   return (
     <PageShell
       title="إدارة علاقات العملاء"

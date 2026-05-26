@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { z } from "zod";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   PageShell,
   PageStatusBadge,
@@ -391,6 +391,8 @@ function TemplatesTab() {
 }
 
 export default function DocumentsPage() {
+  const [location] = useLocation();
+  const initialTab = location === "/documents/folders" ? "folders" : "documents";
   const { data: stats, isLoading, isError } = useApiQuery<any>(["doc-stats"], "/documents/stats");
 
   if (isLoading) return <LoadingSpinner />;
@@ -418,7 +420,7 @@ export default function DocumentsPage() {
           </Card>
         ))}
       </div>
-      <Tabs defaultValue="documents" dir="rtl">
+      <Tabs defaultValue={initialTab} dir="rtl">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="documents">المستندات</TabsTrigger>
           <TabsTrigger value="folders">المجلدات</TabsTrigger>
