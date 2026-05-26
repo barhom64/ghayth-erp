@@ -123,6 +123,43 @@ export async function backfillScheme(params: {
   const refCol = safeIdent(scheme.defaultRefColumn ?? "ref", "العمود");
   const limit = Math.min(params.limit ?? 50_000, 100_000);
 
+  // Pre-flight: the scheme's defaultEntityTable / defaultRefColumn are
+  // user-editable strings, so the table OR the column may not actually
+  // exist in this tenant's DB (e.g. migration 217 added `fleet_trips.ref`
+  // but the migration hasn't run yet, or a hand-edited scheme points at
+  // a deprecated table). Without this check the next query crashes with
+  // a generic SQLSTATE 42P01 / 42703 and the UI shows "حدث خطأ غير متوقع".
+  const [tableInfo] = await rawQuery<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.tables
+        WHERE table_schema='public' AND table_name = $1
+     ) AS exists`,
+    [table],
+  );
+  if (!tableInfo?.exists) {
+    throw new ValidationError(
+      `جدول المعاملات ${table} غير موجود في قاعدة البيانات لهذه الشركة — تأكد من تطبيق آخر migration أو راجع إعداد السياسة.`,
+    );
+  }
+  const [colInfo] = await rawQuery<{ exists: boolean; hasCompany: boolean }>(
+    `SELECT
+       EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_schema='public' AND table_name=$1 AND column_name=$2) AS exists,
+       EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_schema='public' AND table_name=$1 AND column_name='companyId') AS "hasCompany"`,
+    [table, refCol],
+  );
+  if (!colInfo?.exists) {
+    throw new ValidationError(
+      `عمود الرقم (${refCol}) غير موجود في جدول ${table} — راجع إعدادات السياسة أو طبّق آخر migration.`,
+    );
+  }
+  if (!colInfo.hasCompany) {
+    throw new ValidationError(
+      `جدول ${table} لا يحتوي على عمود companyId — لا يمكن جرد بياناته بأمان عبر الشركات.`,
+    );
+  }
+
   // Step 2 — read every (id, ref) tuple from the entity table that
   // has a non-empty ref and isn't already mirrored in
   // numbering_assignments. The LEFT JOIN + IS NULL is the canonical
@@ -376,6 +413,33 @@ export async function previewBackfill(params: {
   }
   const table = safeIdent(scheme.defaultEntityTable, "الجدول");
   const refCol = safeIdent(scheme.defaultRefColumn ?? "ref", "العمود");
+  // Pre-flight: same protection as backfillScheme — if the table or the
+  // ref column is missing on this tenant's DB, return a zero-state
+  // preview instead of crashing with SQLSTATE 42P01 / 42703.
+  const [tableInfo] = await rawQuery<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.tables
+        WHERE table_schema='public' AND table_name = $1
+     ) AS exists`,
+    [table],
+  );
+  const [colInfo] = await rawQuery<{ exists: boolean; hasCompany: boolean }>(
+    `SELECT
+       EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_schema='public' AND table_name=$1 AND column_name=$2) AS exists,
+       EXISTS (SELECT 1 FROM information_schema.columns
+                WHERE table_schema='public' AND table_name=$1 AND column_name='companyId') AS "hasCompany"`,
+    [table, refCol],
+  );
+  if (!tableInfo?.exists || !colInfo?.exists || !colInfo?.hasCompany) {
+    return {
+      schemeId: scheme.id,
+      entityTable: table,
+      refColumn: refCol,
+      pending: 0,
+      alreadyAssigned: 0,
+    };
+  }
   const [{ pending }] = await rawQuery<{ pending: string }>(
     `SELECT COUNT(*)::text AS pending
        FROM "${table}" t

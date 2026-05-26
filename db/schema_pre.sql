@@ -2,7 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict NBRaaBJcUZhwI8jcWlHvf1SMzkzMwjvHohkUT6KaiqbjaZoO0Zc1cKB4vuq83By
 
 
 SET statement_timeout = 0;
@@ -521,18 +520,6 @@ DROP INDEX IF EXISTS public.official_letters_status_sent_idx;
 DROP INDEX IF EXISTS public.official_letters_ref_idx;
 DROP INDEX IF EXISTS public.official_letters_created_by_idx;
 DROP INDEX IF EXISTS public.official_letters_branch_idx;
-DROP INDEX IF EXISTS public.numbering_schemes_module_idx;
-DROP INDEX IF EXISTS public.numbering_schemes_company_idx;
-DROP INDEX IF EXISTS public.numbering_counters_unique_scope;
-DROP INDEX IF EXISTS public.numbering_counters_company_idx;
-DROP INDEX IF EXISTS public.numbering_audit_logs_scheme_idx;
-DROP INDEX IF EXISTS public.numbering_audit_logs_created_idx;
-DROP INDEX IF EXISTS public.numbering_audit_logs_company_idx;
-DROP INDEX IF EXISTS public.numbering_audit_logs_assignment_idx;
-DROP INDEX IF EXISTS public.numbering_assignments_unique_number;
-DROP INDEX IF EXISTS public.numbering_assignments_status_idx;
-DROP INDEX IF EXISTS public.numbering_assignments_scheme_idx;
-DROP INDEX IF EXISTS public.numbering_assignments_entity_idx;
 DROP INDEX IF EXISTS public.mudad_settlements_journal_idx;
 DROP INDEX IF EXISTS public.leave_balances_employee_idx;
 DROP INDEX IF EXISTS public.leave_balances_company_idx;
@@ -7697,7 +7684,8 @@ CREATE TABLE public.fleet_trips (
     "deletedAt" timestamp with time zone,
     "cancelledAt" timestamp with time zone,
     "cancellationReason" text,
-    "sourceKey" character varying(128)
+    "sourceKey" character varying(128),
+    ref character varying(50)
 );
 
 
@@ -12676,6 +12664,7 @@ ALTER SEQUENCE public.project_tasks_id_seq OWNED BY public.project_tasks.id;
 CREATE TABLE public.projects (
     id integer NOT NULL,
     "companyId" integer NOT NULL,
+    ref character varying(50),
     name character varying(300) NOT NULL,
     description text,
     "clientId" integer,
@@ -15636,6 +15625,7 @@ CREATE TABLE public.umrah_groups (
     "companyId" integer NOT NULL,
     "branchId" integer,
     "nuskGroupNumber" character varying(30) NOT NULL,
+    "internalRef" character varying(50),
     name character varying(255),
     "agentId" integer,
     "subAgentId" integer,
