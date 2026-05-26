@@ -524,3 +524,67 @@ describe("phase-6 — 9 priority-2 routes migrated to numberingService", () => {
   });
 });
 
+describe("phase-7 real-closure (#1141)", () => {
+  const SVC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/numberingService.ts"), "utf8");
+  const MIG218 = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/migrations/218_drop_legacy_numbering_sequences.sql"),
+    "utf8",
+  );
+  const REQ = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/requests.ts"), "utf8");
+  const REPORT = readFileSync(
+    join(REPO_ROOT, "scripts/src/numbering-backfill-report.mjs"),
+    "utf8",
+  );
+  const AUDIT = readFileSync(
+    join(REPO_ROOT, "scripts/src/audit-numbering-coverage.mjs"),
+    "utf8",
+  );
+
+  it("migration 218 drops every legacy numbering sequence", () => {
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.request_number_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.contract_number_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.correspondence_outgoing_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.correspondence_incoming_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.letter_number_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.invoice_number_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.journal_number_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.pr_number_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.po_number_seq");
+    expect(MIG218).toContain("DROP SEQUENCE IF EXISTS public.employee_number_seq");
+  });
+
+  it("readEntityStatus discovers status column via information_schema (lifecycle gate fix)", () => {
+    expect(SVC).toContain("STATUS_COLUMN_CANDIDATES");
+    expect(SVC).toContain("approvalStatus");
+    expect(SVC).toContain("information_schema.columns");
+    // Most-specific column wins — order matters.
+    expect(SVC).toContain('"approvalStatus",');
+  });
+
+  it("requests.ts atomic flow — issue + INSERT + linkback all inside ONE withTransaction", () => {
+    // The previous flow: issueNumber → INSERT → UPDATE.catch(...)
+    // The new flow: withTransaction(async () => { issue; INSERT; UPDATE })
+    // SAVEPOINT reentrancy in rawdb.ts makes issueNumber's own
+    // withTransaction join the outer tx as a savepoint. If link-back
+    // fails, the whole document rolls back.
+    expect(REQ).toContain("await withTransaction(async () => {");
+    // Critically: no .catch on the UPDATE link-back (the lawyer's
+    // point #2 — failure of the link must NOT be swallowed).
+    const updateIdx = REQ.indexOf('UPDATE numbering_assignments SET "entityId"');
+    expect(updateIdx).toBeGreaterThan(-1);
+    const surroundings = REQ.slice(updateIdx, updateIdx + 400);
+    expect(surroundings).not.toMatch(/\.catch\(/);
+  });
+
+  it("backfill report script exists + uses previewBackfill query shape", () => {
+    expect(REPORT.toLowerCase()).toContain("backfillscheme");
+    expect(REPORT).toContain("legacy refs unimported");
+    expect(REPORT).toContain("information_schema.columns");
+  });
+
+  it("audit-numbering-coverage proves zero legacy patterns survive", () => {
+    expect(AUDIT).toContain("LEGACY_PATTERNS");
+    expect(AUDIT).toContain("zero legacy patterns remain");
+  });
+});
+

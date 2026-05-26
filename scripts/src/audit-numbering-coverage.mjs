@@ -202,9 +202,43 @@ async function main() {
   }
   console.log("");
 
-  if (drifts.length === 0) {
-    console.log("✓ audit-numbering-coverage: every route that writes to an executive document table also calls issueNumber.");
+  // Defence-in-depth proof — also confirm the four legacy patterns
+  // are absent across the entire routes/ tree. The lint rules already
+  // forbid them, but a fresh contributor reading this report wants
+  // ONE place where they can see the live count is zero. Same regexes
+  // as scripts/src/lint-patterns.mjs's four numbering rules.
+  const allRouteSources = await Promise.all(
+    files.map(async (f) => ({ file: f, src: await readFile(join(ROUTES_DIR, f), "utf8") })),
+  );
+  const LEGACY_PATTERNS = [
+    { id: "nextval-in-route",                    re: /\bnextval\s*\(\s*['"`]?[a-zA-Z_]+_seq/, skip: (f) => f === "numbering.ts" },
+    { id: "generateTimeRef-as-official-number",  re: /\bgenerateTimeRef\s*\(/,                  skip: () => false },
+    { id: "generateRef-or-generateBranchRef",    re: /\bgenerate(?:Branch)?Ref\s*\(/,           skip: () => false },
+    { id: "random-as-ref-fallback",              re: /(?:\b(?:seq|ref|number)\b[^;]{0,180}Math\.random\s*\(|Math\.random\s*\(\s*\)[^;]{0,180}\b(?:seq|ref|number)\b)/, skip: () => false },
+  ];
+  const legacyHits = [];
+  for (const { file, src } of allRouteSources) {
+    for (const p of LEGACY_PATTERNS) {
+      if (p.skip(file)) continue;
+      if (p.re.test(src)) legacyHits.push({ file, rule: p.id });
+    }
+  }
+  console.log("Legacy-pattern guard (proof that all four forbidden patterns are absent):");
+  for (const p of LEGACY_PATTERNS) {
+    const count = legacyHits.filter((h) => h.rule === p.id).length;
+    console.log(`  ${count === 0 ? "✓" : "✗"} ${p.id}: ${count} hit(s)`);
+  }
+  console.log("");
+
+  if (drifts.length === 0 && legacyHits.length === 0) {
+    console.log("✓ audit-numbering-coverage: every route writes through the numbering center AND zero legacy patterns remain.");
     process.exit(0);
+  }
+
+  if (legacyHits.length > 0) {
+    console.error(`✗ audit-numbering-coverage: ${legacyHits.length} legacy-pattern hit(s) survived the lint rules — investigate scripts/src/lint-patterns.mjs:`);
+    for (const h of legacyHits) console.error(`  • ${h.file} → ${h.rule}`);
+    console.error("");
   }
 
   console.error(`✗ audit-numbering-coverage: ${drifts.length} route(s) INSERT into an executive document table without going through the numbering center:`);
@@ -215,7 +249,7 @@ async function main() {
   console.error(`Fix: import \`issueNumber\` from "../lib/numberingService.js" and replace the ref/number/code value with the returned \`number\`. Add an entry to numbering_schemes if the (moduleKey, entityKey) doesn't exist yet.`);
   console.error(`If the INSERT goes through an engine that already issues, add the file to ENGINE_FORWARD_NOTES in scripts/src/audit-numbering-coverage.mjs with a justification.`);
   if (REPORT_ONLY) process.exit(0);
-  process.exit(1);
+  process.exit(drifts.length > 0 || legacyHits.length > 0 ? 1 : 0);
 }
 
 main().catch((err) => {
