@@ -343,7 +343,7 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   expense_claim: () => buildExpenseClaimPreset(),
   fuel_log: () => buildFuelLogPreset(),
   legal_case: () => buildLegalCasePreset(),
-  payroll_run: () => buildPayslipPreset(),
+  payroll_run: () => buildPayrollRunPreset(),
   recurring_journal: () => buildJournalEntryPreset(),
   // Final config cards (shift roster, season setup, GL account card).
   shift: () => buildShiftCardPreset(),
@@ -962,6 +962,64 @@ function buildEmployeeContractPreset(): PrintTemplate {
 <div class="signatures" style="margin-top:48px">
   <div>الموظِّف<br/>الختم<br/><br/>____________________</div>
   <div>الموظَّف<br/>التوقيع<br/><br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildPayrollRunPreset(): PrintTemplate {
+  // Roster view — many rows, one per employee. Different from payslip
+  // which is a single-employee detail document.
+  return makePreset({
+    id: -73, presetKey: "payroll_run_classic", entityType: "payroll_run",
+    name: "كشف رواتب",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">كشف رواتب</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم المسير: <span dir="ltr">{{entity.ref}}</span> — فترة {{entity.period}}</div>
+<div class="meta-grid">
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+  <div><strong>تاريخ الإصدار:</strong> {{entity.createdAt}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>عدد الموظفين:</strong> {{entity.employeeCount}}</div>
+  <div><strong>تاريخ السداد:</strong> {{entity.paidAt}}</div>
+  <div><strong>المعتمد:</strong> {{entity.approvedByName}}</div>
+</div>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:right">الموظف</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:80px">الرقم</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">الأساسي</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">البدلات</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">الاستقطاعات</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">الصافي</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt">{{this.employeeName}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:9pt;font-family:monospace;text-align:center">{{this.empNumber}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.baseSalary}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.totalAllowances}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.totalDeductions}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left;font-weight:bold">{{this.netSalary}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<table style="width:320px;margin-right:auto;margin-left:0;border-collapse:collapse;margin-top:14px">
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1;background:#f8fafc;font-weight:bold">إجمالي الأساسي</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.totalBaseSalary}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1;background:#f8fafc;font-weight:bold">إجمالي البدلات</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.totalAllowances}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1;background:#f8fafc;font-weight:bold">إجمالي الاستقطاعات</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.totalDeductions}}</td></tr>
+  <tr style="background:#dcfce7;font-weight:bold;font-size:11pt"><td style="padding:6px 8px;border:1px solid #16a34a">إجمالي الصافي</td><td style="padding:6px 8px;border:1px solid #16a34a;text-align:left">{{entity.totalNet}}</td></tr>
+</table>
+<div class="signatures" style="margin-top:36px">
+  <div>المُعِد<br/>____________________</div>
+  <div>الموارد البشرية<br/>____________________</div>
+  <div>المالية<br/>____________________</div>
+  <div>الإدارة العليا<br/>____________________</div>
 </div>`,
   });
 }
