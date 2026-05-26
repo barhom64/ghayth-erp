@@ -200,7 +200,8 @@ const allNavSections: NavSection[] = [
         { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
       ]},
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
-        { label: "طلبات الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },
+        { label: "طلبات شراء (قبل الاعتماد)", path: "/finance/purchase-requests", icon: ClipboardList },
+        { label: "أوامر الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },
         { label: "الموردين", path: "/finance/vendors", icon: Users },
         { label: "عقود الموردين", path: "/finance/contracts", icon: FileSignature },
         { label: "دفعة الدفع", path: "/finance/payment-run", icon: Banknote },

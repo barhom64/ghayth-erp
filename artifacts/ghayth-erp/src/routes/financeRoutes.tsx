@@ -15,6 +15,7 @@ const VendorContracts = lazy(() => import("@/pages/finance/contracts"));
 const SubsidiaryAccounts = lazy(() => import("@/pages/finance/subsidiary-accounts"));
 const CustomerAdvances = lazy(() => import("@/pages/finance/customer-advances"));
 const Collections = lazy(() => import("@/pages/finance/collections"));
+const PurchaseRequests = lazy(() => import("@/pages/finance/purchase-requests"));
 const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
 const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
@@ -95,6 +96,7 @@ export const financeRoutes = [
   { path: "/finance/subsidiary-accounts", component: SubsidiaryAccounts },
   { path: "/finance/customer-advances", component: CustomerAdvances },
   { path: "/finance/collections", component: Collections },
+  { path: "/finance/purchase-requests", component: PurchaseRequests },
   { path: "/finance/accounts/create", component: AccountsCreate },
   { path: "/finance/accounts/:id/edit", component: AccountsEdit },
   { path: "/finance/accounts/:id", component: AccountDetail },
