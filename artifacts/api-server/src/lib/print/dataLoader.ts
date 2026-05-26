@@ -131,6 +131,9 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadStockAdjustment(companyId, entityId);
     case "item_barcode_label":
       return await loadItemBarcode(companyId, entityId);
+    case "job":
+    case "job_posting":
+      return await loadJobPosting(companyId, entityId);
     case "leave_request":
       return await loadLeaveRequest(companyId, entityId);
     case "loan_request":
@@ -385,6 +388,17 @@ async function loadItemBarcode(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   return { entity: item ?? { id, name: "—", sku: "—", barcode: id, price: 0 } };
+}
+
+async function loadJobPosting(companyId: number, id: string) {
+  const [posting] = await rawQuery<Record<string, unknown>>(
+    `SELECT id, title, department, location, type, description, requirements,
+            "salaryMin", "salaryMax", status, "closingDate", "createdAt",
+            "experienceLevel", education, vacancies, benefits, skills
+     FROM job_postings WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: posting ?? { id } };
 }
 
 async function loadLeaveRequest(companyId: number, id: string) {
