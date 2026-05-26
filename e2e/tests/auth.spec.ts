@@ -6,8 +6,11 @@
 
 import { test, expect } from "@playwright/test";
 
-const EMAIL = process.env.E2E_USER_EMAIL ?? "owner@local.test";
-const PASSWORD = process.env.E2E_USER_PASSWORD ?? "Test1234!";
+// Default to the actual seeded owner in this project (admin@ghayth.com /
+// Admin@123456). The historical defaults (owner@local.test / Test1234!)
+// were a different seed flow that no longer applies here.
+const EMAIL = process.env.E2E_USER_EMAIL ?? "admin@ghayth.com";
+const PASSWORD = process.env.E2E_USER_PASSWORD ?? "Admin@123456";
 
 test.describe("Auth", () => {
   test("logs in, lands on dashboard, then logs out", async ({ page }) => {
