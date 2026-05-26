@@ -24,6 +24,7 @@ import {
 import { MultiExportButton } from "@/components/shared/export-buttons";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { ErrorState } from "@/components/shared/loading-error-states";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 
 function exportCSV(rows: any[], headers: string[], filename: string) {
   if (!rows.length) return;
@@ -35,12 +36,27 @@ function exportCSV(rows: any[], headers: string[], filename: string) {
   link.click();
 }
 
-function PrintButton() {
+// PrintButton — routes through Print Engine v2 when entityType is provided
+// so the report carries branch letterhead, audit row, verify QR, and reprint
+// detection. The legacy browser-dialog fallback below is kept for the report
+// tabs that don't yet have a server-side loader; once they do, pass the
+// entityType + entityId and the engine takes over. The entityId encodes the
+// date filter as "YYYY-MM-DD..YYYY-MM-DD" to match parseEntityId() in
+// reportLoaders.ts so each rendered job is traceable to its filter set.
+function PrintButton({ entityType, entityId }: { entityType?: string; entityId?: string } = {}) {
+  if (entityType) {
+    return <EntityPrintButton entityType={entityType} entityId={entityId ?? "all"} formats={["a4"]} />;
+  }
   return (
     <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => window.print()}>
       <Printer className="h-3.5 w-3.5 me-1" />طباعة
     </GuardedButton>
   );
+}
+
+function dateRangeId(startDate?: string, endDate?: string): string {
+  if (!startDate && !endDate) return "all";
+  return `${startDate ?? ""}..${endDate ?? ""}`;
 }
 
 export default function FinancialReportsPage() {
@@ -211,7 +227,7 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
           <Button variant={viewMode === "flat" ? "default" : "outline"} size="sm" onClick={() => setViewMode("flat")}>عرض مسطح</Button>
         </div>
         <div className="flex gap-2">
-          <PrintButton />
+          <PrintButton entityType="report_trial_balance" entityId={dateRangeId(startDate, endDate)} />
           <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(rows, ["code", "name", "type", "totalDebit", "totalCredit", "balance"], "trial-balance.csv")}>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </GuardedButton>
@@ -372,7 +388,7 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
   return (
     <div className="space-y-4 mt-4">
       <div className="flex justify-end gap-2">
-        <PrintButton />
+        <PrintButton entityType="report_income_statement" entityId={dateRangeId(startDate, endDate)} />
         <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV([...revenues.map((r: any) => ({ ...r, section: "إيرادات" })), ...expenses.map((e: any) => ({ ...e, section: "مصروفات" }))], ["section", "code", "name", "amount"], "income-statement.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </GuardedButton>
