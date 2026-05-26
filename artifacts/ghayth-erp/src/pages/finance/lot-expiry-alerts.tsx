@@ -117,7 +117,7 @@ export default function LotExpiryAlertsPage() {
     {
       key: "daysUntil", header: "أيام متبقية", sortable: true,
       render: (r) => (
-        <span className={`font-mono font-bold ${r.daysUntil < 0 ? "text-destructive" : r.daysUntil < 30 ? "text-amber-700" : ""}`}>
+        <span className={`font-mono font-bold ${r.daysUntil < 0 ? "text-destructive" : r.daysUntil < 30 ? "text-status-warning-foreground" : ""}`}>
           {r.daysUntil < 0 ? `${Math.abs(r.daysUntil)}- ` : r.daysUntil}
         </span>
       ),
@@ -158,7 +158,7 @@ export default function LotExpiryAlertsPage() {
     },
     {
       key: "exposureValue", header: "قيمة التعرض", sortable: true, className: "font-bold",
-      render: (r) => <span className="text-amber-700">{formatCurrency(r.exposureValue)}</span>,
+      render: (r) => <span className="text-status-warning-foreground">{formatCurrency(r.exposureValue)}</span>,
     },
   ];
 
@@ -224,7 +224,7 @@ export default function LotExpiryAlertsPage() {
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4 mt-3">
         <Card>
           <CardContent className="p-4 text-center">
-            <Clock className="h-5 w-5 text-amber-600 mx-auto mb-1" />
+            <Clock className="h-5 w-5 text-status-warning-foreground mx-auto mb-1" />
             <p className="text-xs text-muted-foreground">تشغيلات قيد التنبيه</p>
             <p className="text-xl font-bold mt-1">{formatNumber(summary.lotCount)}</p>
           </CardContent>
@@ -232,7 +232,7 @@ export default function LotExpiryAlertsPage() {
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-xs text-muted-foreground">إجمالي قيمة التعرض</p>
-            <p className="text-xl font-bold text-amber-700 mt-1">
+            <p className="text-xl font-bold text-status-warning-foreground mt-1">
               {formatCurrency(summary.totalExposureValue)}
             </p>
           </CardContent>
@@ -263,7 +263,7 @@ export default function LotExpiryAlertsPage() {
                 <p className="text-xs text-muted-foreground mt-2">عدد التشغيلات</p>
                 <p className="text-lg font-bold">{formatNumber(b.lotCount)}</p>
                 <p className="text-xs text-muted-foreground mt-1">قيمة التعرض</p>
-                <p className="text-sm font-semibold text-amber-700">{formatCurrency(b.exposureValue)}</p>
+                <p className="text-sm font-semibold text-status-warning-foreground">{formatCurrency(b.exposureValue)}</p>
               </CardContent>
             </Card>
           ))}

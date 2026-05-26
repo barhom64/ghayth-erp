@@ -253,10 +253,10 @@ export default function CostCentersPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="border-blue-300">
+        <Card className="border-status-info-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">مرتبط بكيان</p>
-            <p className="text-lg font-bold font-mono text-blue-700">{formatNumber(linkedCount)}</p>
+            <p className="text-lg font-bold font-mono text-status-info-foreground">{formatNumber(linkedCount)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -304,8 +304,8 @@ export default function CostCentersPage() {
         </CardContent>
       </Card>
 
-      <Card className="mt-4 bg-amber-50/30 border-amber-200">
-        <CardContent className="p-3 text-xs text-amber-800">
+      <Card className="mt-4 bg-status-warning-surface/30 border-status-warning-surface">
+        <CardContent className="p-3 text-xs text-status-warning-foreground">
           ⓘ التعديل والحذف + ربط الكيانات (vehicle/project/...) follow-up PR.
           المسارات PATCH/DELETE /finance/cost-centers/:id موجودة في الـ backend.
         </CardContent>

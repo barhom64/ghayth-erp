@@ -357,13 +357,13 @@ function CloseDialog({
         )}
 
         {pendingCount !== null && pendingCount > 0 && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm flex gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+          <div className="rounded-md border border-status-warning-surface bg-status-warning-surface p-3 text-sm flex gap-2">
+            <AlertTriangle className="h-5 w-5 text-status-warning-foreground shrink-0" />
             <div>
               <div className="font-medium text-amber-900">
                 لا يمكن إقفال الفترة
               </div>
-              <div className="text-amber-800 mt-1">
+              <div className="text-status-warning-foreground mt-1">
                 يوجد <strong>{pendingCount}</strong> قيد يدوي لم يُرحّل بعد
                 داخل هذه الفترة. ارحّل أو احذف القيود اليدوية المعلّقة قبل
                 إقفال الفترة.

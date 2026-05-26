@@ -143,7 +143,7 @@ export default function ProfitabilityPage({ entityType }: Props) {
   const marginColor = marginPct >= 30 ? "text-emerald-700"
     : marginPct >= 15 ? "text-yellow-700"
     : marginPct >= 0 ? "text-orange-700"
-    : "text-red-700";
+    : "text-status-error-foreground";
 
   const revCols: DataTableColumn<AccountRow>[] = [
     { key: "code", header: "الرمز", render: (r) => <span className="font-mono text-xs">{r.code}</span> },
@@ -215,10 +215,10 @@ export default function ProfitabilityPage({ entityType }: Props) {
             <p className="text-lg font-bold font-mono text-orange-700">{formatCurrency(data.summary.totalExpense)}</p>
           </CardContent>
         </Card>
-        <Card className={data.summary.netProfit >= 0 ? "border-emerald-300" : "border-red-300"}>
+        <Card className={data.summary.netProfit >= 0 ? "border-emerald-300" : "border-status-error-surface"}>
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">صافي الربح / الخسارة</p>
-            <p className={`text-lg font-bold font-mono ${data.summary.netProfit >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+            <p className={`text-lg font-bold font-mono ${data.summary.netProfit >= 0 ? "text-emerald-700" : "text-status-error-foreground"}`}>
               {formatCurrency(data.summary.netProfit)}
             </p>
           </CardContent>

@@ -146,7 +146,7 @@ export default function GlIntegrityGapsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground bg-amber-50/50 border border-amber-200 rounded p-2">
+          <p className="text-xs text-muted-foreground bg-status-warning-surface/50 border border-status-warning-surface rounded p-2">
             ⓘ {SECTION_HINT[section.source] ?? ""}
           </p>
           <DataTable

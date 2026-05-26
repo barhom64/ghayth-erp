@@ -67,9 +67,9 @@ export default function BadDebtPage() {
 
   const bucketTone: Record<keyof PreviewResponse["buckets"], string> = {
     current: "bg-emerald-50 text-emerald-700",
-    d30: "bg-yellow-50 text-yellow-700",
+    d30: "bg-status-warning-surface text-yellow-700",
     d60: "bg-orange-50 text-orange-700",
-    d90: "bg-red-50 text-red-700",
+    d90: "bg-status-error-surface text-status-error-foreground",
     d90plus: "bg-red-100 text-red-900",
   };
 
@@ -175,12 +175,12 @@ export default function BadDebtPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="border-red-300">
+        <Card className="border-status-error-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <AlertTriangle className="h-3 w-3" /> إجمالي المخصص المقترح
             </p>
-            <p className="text-2xl font-bold font-mono text-red-700">{formatCurrency(data.totalProvision)}</p>
+            <p className="text-2xl font-bold font-mono text-status-error-foreground">{formatCurrency(data.totalProvision)}</p>
           </CardContent>
         </Card>
       </div>
@@ -210,7 +210,7 @@ export default function BadDebtPage() {
                     <td className="p-2 text-end text-muted-foreground">
                       {(rates[k] * 100).toFixed(1)}%
                     </td>
-                    <td className="p-2 text-end font-mono font-bold text-red-700">
+                    <td className="p-2 text-end font-mono font-bold text-status-error-foreground">
                       {formatCurrency(data.provision[k])}
                     </td>
                   </tr>
@@ -224,7 +224,7 @@ export default function BadDebtPage() {
                     )}
                   </td>
                   <td />
-                  <td className="p-2 text-end font-mono text-red-700">
+                  <td className="p-2 text-end font-mono text-status-error-foreground">
                     {formatCurrency(data.totalProvision)}
                   </td>
                 </tr>
