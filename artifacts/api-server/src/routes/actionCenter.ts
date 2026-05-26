@@ -176,8 +176,8 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
         `SELECT t.id, t.status, t."createdAt",
                 e.name AS "employeeName"
          FROM employee_transfers t
-         JOIN employees e ON e.id = t."employeeId"
-         WHERE t."companyId" = ANY($1::int[]) AND t.status = 'pending' AND t."deletedAt" IS NULL
+         JOIN employees e ON e.id = t."employeeId" AND e."deletedAt" IS NULL
+         WHERE t."companyId" = ANY($1::int[]) AND t.status = 'pending'
          ORDER BY t."createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingTransfers"),
@@ -186,8 +186,8 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
                 e.name AS "employeeName"
          FROM hr_excuse_requests er
          JOIN employee_assignments ea ON ea.id = er."assignmentId"
-         JOIN employees e ON e.id = ea."employeeId"
-         WHERE er."companyId" = ANY($1::int[]) AND er.status = 'pending' AND er."deletedAt" IS NULL
+         JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
+         WHERE er."companyId" = ANY($1::int[]) AND er.status = 'pending'
          ORDER BY er."createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingExcuses"),
@@ -216,7 +216,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
         [cc]
       ), "pendingTrainings"),
       safe(rawQuery<Record<string, unknown>>(
-        `SELECT id, title, status, priority, "createdAt"
+        `SELECT id, description AS title, status, priority, "createdAt"
          FROM maintenance_requests
          WHERE "companyId" = ANY($1::int[]) AND status = 'pending' AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 20`,
@@ -233,7 +233,7 @@ router.get("/", authorize({ feature: "dashboard.action_center", action: "view" }
       safe(rawQuery<Record<string, unknown>>(
         `SELECT id, status, "countDate", notes, "createdAt"
          FROM inventory_counts
-         WHERE "companyId" = ANY($1::int[]) AND status = 'pending_approval' AND "deletedAt" IS NULL
+         WHERE "companyId" = ANY($1::int[]) AND status = 'pending_approval'
          ORDER BY "createdAt" DESC LIMIT 20`,
         [cc]
       ), "pendingInventory"),

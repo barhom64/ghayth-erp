@@ -18,6 +18,13 @@
 e2e.yml:or-true:[ -f api-server.pid ] && kill "$(cat api-server.pid)" 2>/dev/null || true
 e2e.yml:or-true:[ -f frontend.pid ] && kill "$(cat frontend.pid)" 2>/dev/null || true
 
+# e2e.yml: failure-diagnostics dump (`if: failure()`). The
+# `ps -ef | grep <pattern>` chain exits 1 when no processes match — a
+# normal state for an early-failure debug step where the servers may
+# never have started. Tolerating it lets the rest of the diagnostics
+# (tail logs / list dist dirs) keep running.
+e2e.yml:or-true:ps -ef | grep -E "node|vite|psql" | grep -v grep || true
+
 # guard.yml: schema_post load uses ON_ERROR_STOP=0 because the dump's
 # trailing `\unrestrict` line errors when the session isn't in restricted
 # mode (harmless — all DDL above it has already executed). The next

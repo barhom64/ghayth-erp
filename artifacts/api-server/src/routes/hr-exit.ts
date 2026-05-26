@@ -9,6 +9,7 @@ import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 
 // Local row shapes for hr_exit_requests + hr_exit_clearance.
 
@@ -347,7 +348,16 @@ router.post("/exit", authorize({ feature: "hr.exit", action: "create" }), async 
 
     const netSettlement = roundTo2(gratuity + leaveCompensation - loanDeductions - otherDeductions);
 
-    const exitNumber = await generateExitNumber(scope.companyId);
+    // Numbering center (Issue #1141) — exit request number from authority.
+    const issuedExit = await issueNumber({
+      companyId: scope.companyId,
+      branchId: emp.branchId ?? scope.branchId ?? null,
+      moduleKey: "hr",
+      entityKey: "exit",
+      entityTable: "hr_exit_requests",
+      actorId: scope.userId,
+    });
+    const exitNumber = issuedExit.number;
 
     let insertId!: number;
     await withTransaction(async (client) => {
@@ -368,6 +378,11 @@ router.post("/exit", authorize({ feature: "hr.exit", action: "create" }), async 
         ]
       );
       insertId = ins.rows[0].id;
+
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertId, issuedExit.assignmentId]
+      );
 
       for (const dept of DEFAULT_CLEARANCE_DEPARTMENTS) {
         await client.query(
