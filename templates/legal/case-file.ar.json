@@ -1,0 +1,20 @@
+{
+  "code": "legal.legal-judgment",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "legal_judgment",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": true,
+  "qr": true,
+  "status": "published",
+  "domain": "legal",
+  "title": "ملف قضية",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "legal_judgment"
+  },
+  "ownerTeam": "legal"
+}

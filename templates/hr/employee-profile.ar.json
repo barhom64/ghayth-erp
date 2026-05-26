@@ -1,0 +1,20 @@
+{
+  "code": "hr.employee-profile",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "employee_profile",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": true,
+  "qr": true,
+  "status": "published",
+  "domain": "hr",
+  "title": "بطاقة موظف",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "employee_profile"
+  },
+  "ownerTeam": "hr"
+}
