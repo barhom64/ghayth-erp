@@ -1,20 +1,20 @@
 {
-  "code": "hr.leave-request",
+  "code": "finance.receipt-voucher",
   "version": "1.0.0",
   "locale": "ar",
-  "entityType": "leave_request",
+  "entityType": "receipt_voucher",
   "layout": "a4",
   "paperSize": "A4",
   "isThermal": false,
   "branding": true,
-  "signature": false,
+  "signature": true,
   "qr": true,
   "status": "published",
-  "domain": "hr",
-  "title": "طلب إجازة",
+  "domain": "finance",
+  "title": "سند قبض",
   "implementation": {
     "kind": "bespoke-preset",
-    "key": "leave_request"
+    "key": "receipt_voucher"
   },
-  "ownerTeam": "hr"
+  "ownerTeam": "finance"
 }

@@ -1,20 +1,20 @@
 {
-  "code": "hr.leave-request",
+  "code": "finance.journal-entry",
   "version": "1.0.0",
   "locale": "ar",
-  "entityType": "leave_request",
+  "entityType": "journal_entry",
   "layout": "a4",
   "paperSize": "A4",
   "isThermal": false,
   "branding": true,
-  "signature": false,
+  "signature": true,
   "qr": true,
   "status": "published",
-  "domain": "hr",
-  "title": "طلب إجازة",
+  "domain": "finance",
+  "title": "قيد محاسبي",
   "implementation": {
     "kind": "bespoke-preset",
-    "key": "leave_request"
+    "key": "journal_entry"
   },
-  "ownerTeam": "hr"
+  "ownerTeam": "finance"
 }
