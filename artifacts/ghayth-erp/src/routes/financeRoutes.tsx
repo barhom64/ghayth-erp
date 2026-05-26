@@ -64,6 +64,7 @@ const PurchaseOrderDetail = lazy(() => import("@/pages/finance/purchase-order-de
 const PaymentRun = lazy(() => import("@/pages/finance/payment-run"));
 const FinancialReports = lazy(() => import("@/pages/finance/reports"));
 const IncomeStatementTrend = lazy(() => import("@/pages/finance/income-statement-trend"));
+const YoyComparison = lazy(() => import("@/pages/finance/yoy-comparison"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
 const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
@@ -228,6 +229,7 @@ export const financeRoutes = [
   { path: "/finance/fx-revaluation", component: FxRevaluation },
   { path: "/finance/reports", component: FinancialReports },
   { path: "/finance/reports/is-trend", component: IncomeStatementTrend },
+  { path: "/finance/reports/yoy", component: YoyComparison },
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },
   { path: "/finance/customer-risk", component: CustomerRisk },
