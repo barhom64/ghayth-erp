@@ -33,6 +33,7 @@ import {
 import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { ZatcaActions } from "@/components/finance/zatca-actions";
+import { InvoiceMemoActions } from "@/components/finance/invoice-memo-actions";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   ProcessStages,
@@ -368,6 +369,20 @@ export default function InvoiceDetailPage() {
           }}
           onRefresh={refetch}
           invalidateKeys={[["invoice-detail", id], ["invoice", id]]}
+        />
+      )}
+
+      {invoice && id && (
+        <InvoiceMemoActions
+          invoice={{
+            id: Number(id),
+            ref: invoice.ref ?? `#${id}`,
+            status: invoice.status,
+            total: invoice.total ?? 0,
+            paidAmount: invoice.paidAmount ?? 0,
+            vatRate: invoice.vatRate ?? null,
+          }}
+          onRefresh={refetch}
         />
       )}
 
