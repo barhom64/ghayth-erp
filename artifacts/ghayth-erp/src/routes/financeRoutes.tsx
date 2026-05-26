@@ -27,6 +27,7 @@ const GlIntegrityGaps = lazy(() => import("@/pages/finance/gl-integrity-gaps"));
 const UnmappedLines = lazy(() => import("@/pages/finance/unmapped-lines"));
 const WhtSummary = lazy(() => import("@/pages/finance/wht-summary"));
 const ZatcaReportsHub = lazy(() => import("@/pages/finance/zatca-reports-hub"));
+const VatReconciliation = lazy(() => import("@/pages/finance/vat-reconciliation"));
 const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
 const VouchersCreate = lazy(() => import("@/pages/create/finance/vouchers-create"));
 const VoucherDetail = lazy(() => import("@/pages/details/voucher-detail"));
@@ -152,6 +153,8 @@ export const financeRoutes = [
   { path: "/finance/reports/inventory-turnover", component: InventoryTurnover },
   // COGS / margin summary — consumes /reports/cogs-summary (#1034).
   { path: "/finance/reports/cogs-summary", component: CogsSummary },
+  // VAT reconciliation report — pre-filing sanity check (#1037 backend).
+  { path: "/finance/reports/vat-reconciliation", component: VatReconciliation },
   { path: "/finance/vouchers", component: Vouchers },
   { path: "/finance/vouchers/create", component: VouchersCreate },
   { path: "/finance/vouchers/:id", component: VoucherDetail },
