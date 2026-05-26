@@ -18,6 +18,7 @@ import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PurchaseOrderReceiveSection } from "@/components/finance/purchase-order-receive-section";
+import { PurchaseOrderVendorActions } from "@/components/finance/purchase-order-vendor-actions";
 
 export default function PurchaseOrderDetailPage() {
   const [, params] = useRoute("/finance/purchase-orders/:id");
@@ -106,6 +107,18 @@ export default function PurchaseOrderDetailPage() {
 
       {po && (po.status === "approved" || po.status === "partially_received" || po.status === "received" || po.status === "invoiced") && (
         <PurchaseOrderReceiveSection poId={id || po.id} poStatus={po.status} />
+      )}
+
+      {po && (
+        <PurchaseOrderVendorActions
+          po={{
+            id: Number(po.id),
+            ref: po.ref || `#${po.id}`,
+            status: po.status,
+            totalAmount: Number(po.totalAmount || 0),
+            supplierName: po.supplierName ?? null,
+          }}
+        />
       )}
 
       <Card>
