@@ -183,6 +183,61 @@ describe("priority-1 routes moved to the numbering center", () => {
   });
 });
 
+describe("priority-2 routes migrated to the numbering center", () => {
+  const HR  = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/hr.ts"), "utf8");
+  const EMP = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/employees.ts"), "utf8");
+  const SUP = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/support.ts"), "utf8");
+  const CRM = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/crm.ts"), "utf8");
+  const POR = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/clientPortal.ts"), "utf8");
+  const PRO = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/properties.ts"), "utf8");
+
+  it("hr.ts no longer calls nextval('letter_number_seq')", () => {
+    expect(HR).not.toMatch(/nextval\(\s*['"`]letter_number_seq/);
+    expect(HR).toContain('entityKey: "official_letter"');
+  });
+  it("employees.ts no longer calls nextval('employee_number_seq')", () => {
+    expect(EMP).not.toMatch(/nextval\(\s*['"`]employee_number_seq/);
+    expect(EMP).toContain('entityKey: "employee_code"');
+  });
+  it("support.ts no longer issues TKT- via generateTimeRef", () => {
+    expect(SUP).not.toMatch(/generateTimeRef\(\s*["']TKT["']\s*\)/);
+    expect(SUP).toContain('entityKey: "support_ticket"');
+  });
+  it("crm.ts no longer issues CTR-CRM via generateTimeRef", () => {
+    expect(CRM).not.toMatch(/generateTimeRef\(\s*["']CTR-CRM["']\s*\)/);
+    expect(CRM).toContain('entityKey: "contract"');
+  });
+  it("clientPortal.ts no longer issues TKT via generateTimeRef", () => {
+    expect(POR).not.toMatch(/generateTimeRef\(\s*["']TKT["']\s*\)/);
+    expect(POR).toContain('entityKey: "support_ticket"');
+  });
+  it("properties.ts no longer issues RC / RCP via generateTimeRef", () => {
+    expect(PRO).not.toMatch(/generateTimeRef\(\s*["']RC["']\s*\)/);
+    expect(PRO).not.toMatch(/generateTimeRef\(\s*["']RCP["']\s*\)/);
+    expect(PRO).toContain('entityKey: "lease_contract"');
+    expect(PRO).toContain('entityKey: "lease_receipt"');
+  });
+});
+
+describe("priority-2 numbering schemes seeded in migration 214", () => {
+  const MIG = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/migrations/214_numbering_priority_2_schemes.sql"),
+    "utf8",
+  );
+  it("seeds the new (module, entity) policies for every existing company", () => {
+    expect(MIG).toContain("'official_letter'");
+    expect(MIG).toContain("'employee_code'");
+    expect(MIG).toContain("'lease_receipt'");
+    expect(MIG).toMatch(/'crm',\s+'contract'/);
+    expect(MIG).toContain("'purchase_receipt'");
+    expect(MIG).toContain("'stock_transfer'");
+    expect(MIG).toContain("'expense_voucher'");
+  });
+  it("uses ON CONFLICT to stay idempotent across reruns", () => {
+    expect(MIG).toContain('ON CONFLICT ("companyId","moduleKey","entityKey") DO NOTHING');
+  });
+});
+
 describe("finance routes migrated to the numbering center", () => {
   const INV = readFileSync(
     join(REPO_ROOT, "artifacts/api-server/src/routes/finance-invoices.ts"),

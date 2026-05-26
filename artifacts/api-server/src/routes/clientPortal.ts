@@ -9,6 +9,7 @@ import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, isTyp
   zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "../lib/logger.js";
@@ -544,8 +545,20 @@ protectedRouter.post("/tickets", withPortalScope(async (req, res) => {
     const body = zodParse(portalCreateTicketSchema.safeParse(req.body));
     const { title, description, category, invoiceId, contractId } = body;
     const priority = body.priority ?? "medium";
-    const ref = generateTimeRef("TKT");
     assertPortalScopeInParams(scope, [clientId, companyId]);
+    // Numbering center (Issue #1141) — portal tickets share the same
+    // numbering scheme as internal tickets so a customer never sees a
+    // different ref format than an agent.
+    const issued = await issueNumber({
+      companyId,
+      branchId: null,
+      moduleKey: "support",
+      entityKey: "support_ticket",
+      entityTable: "support_tickets",
+      actorId: null,
+      metadata: { source: "client_portal", clientId },
+    });
+    const ref = issued.number;
     const { supportEngine } = await import("../lib/engines/index.js");
     const { insertId } = await supportEngine.createPortalTicket({
       companyId,
