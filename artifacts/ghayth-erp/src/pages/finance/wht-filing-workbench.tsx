@@ -409,7 +409,13 @@ export default function WhtFilingWorkbenchPage() {
                               <div className="flex items-center gap-2 min-w-0">
                                 {isOpen ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
                                 <div className="min-w-0">
-                                  <div className="font-semibold text-sm">{g.supplierName}</div>
+                                  <div className="font-semibold text-sm">
+                                    {g.supplierId ? (
+                                      <Link href={`/finance/vendor-360-sheet?vendorId=${g.supplierId}`}>
+                                        <span className="hover:underline cursor-pointer" onClick={(e) => e.stopPropagation()}>{g.supplierName}</span>
+                                      </Link>
+                                    ) : g.supplierName}
+                                  </div>
                                   <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5">
                                     {g.supplierTaxNumber && (
                                       <code className="font-mono">{g.supplierTaxNumber}</code>
