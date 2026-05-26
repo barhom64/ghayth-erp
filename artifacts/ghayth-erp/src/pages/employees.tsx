@@ -343,7 +343,7 @@ export default function Employees() {
           }
           if (editingId === employee.id) {
             return (
-              <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(employee.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
+              <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(employee.id, values)} onCancel={cancelEdit} isPending={isPending} />
             );
           }
           if (deletingId === employee.id) {

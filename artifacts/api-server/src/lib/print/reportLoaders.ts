@@ -20,6 +20,7 @@
  */
 
 import { rawQuery } from "../rawdb.js";
+import { todayISO } from "../businessHelpers.js";
 
 /** Parse synthetic entityId formats: "YYYY-MM-DD..YYYY-MM-DD" or "YYYY-MM". */
 function parseEntityId(id: string): { startDate?: string; endDate?: string; period?: string } {
@@ -756,6 +757,418 @@ export async function loadChartOfAccounts(companyId: number, _entityId: string) 
       title: "دليل الحسابات",
       date: new Date().toLocaleDateString("ar-SA"),
       count: items.length,
+    },
+    items,
+  };
+}
+
+// ─── Custody + advances — العهد والسلف الموظَّفة من قيود اليومية ─────────
+export async function loadCustodyAdvances(companyId: number, entityId: string) {
+  const { startDate, endDate } = parseEntityId(entityId);
+  const params: unknown[] = [companyId];
+  let dateFilter = "";
+  if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+  if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+  const rows = await rawQuery<Record<string, unknown>>(
+    `SELECT je.ref, je.description, je."createdAt", je.status,
+            COALESCE(SUM(jl.debit), 0)::float8 AS amount,
+            CASE WHEN jl."accountCode" = '1400' THEN 'عهدة' ELSE 'سُلفة' END AS "type",
+            e.name AS "employeeName"
+     FROM journal_entries je
+     JOIN journal_lines jl ON jl."journalId" = je.id
+       AND jl."accountCode" IN ('1400', '1410')
+     LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
+     LEFT JOIN employees e ON e.id = ea."employeeId"
+     WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+       AND (je.ref LIKE 'CUSTODY%' OR je.ref LIKE 'ADV%')
+       ${dateFilter}
+     GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, jl."accountCode", e.name
+     ORDER BY je."createdAt" DESC
+     LIMIT 1000`,
+    params,
+  ).catch(() => []);
+
+  const items = rows.map((r) => ({
+    "المرجع": (r.ref as string | null) ?? "",
+    "النوع": (r.type as string | null) ?? "",
+    "الموظف": (r.employeeName as string | null) ?? "—",
+    "البيان": (r.description as string | null) ?? "",
+    "التاريخ": r.createdAt ? new Date(r.createdAt as string | Date).toLocaleDateString("ar-SA") : "",
+    "الحالة": (r.status as string | null) ?? "",
+    "المبلغ": Number(r.amount ?? 0),
+  }));
+
+  const totalCustodies = items.filter((r) => r["النوع"] === "عهدة").reduce((s, r) => s + (r["المبلغ"] as number), 0);
+  const totalAdvances  = items.filter((r) => r["النوع"] === "سُلفة").reduce((s, r) => s + (r["المبلغ"] as number), 0);
+
+  return {
+    entity: {
+      id: entityId,
+      ref: "العهد والسلف",
+      title: "تقرير العهد والسلف",
+      date: new Date().toLocaleDateString("ar-SA"),
+      period: startDate || endDate ? `${startDate ?? "البداية"} → ${endDate ?? "اليوم"}` : "كل الفترات",
+      count: items.length,
+      totalCustodies, totalAdvances, grandTotal: totalCustodies + totalAdvances,
+    },
+    items,
+  };
+}
+
+// ─── Expenses analysis — تحليل المصروفات حسب الحساب ─────────────────────
+export async function loadExpensesAnalysis(companyId: number, entityId: string) {
+  const { startDate, endDate } = parseEntityId(entityId);
+  const params: unknown[] = [companyId];
+  let dateFilter = "";
+  if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+  if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+  const rows = await rawQuery<Record<string, unknown>>(
+    `SELECT coa.code, coa.name,
+            COALESCE(SUM(jl.debit) - SUM(jl.credit), 0)::float8 AS amount,
+            COUNT(DISTINCT je.id) AS "entryCount"
+     FROM journal_lines jl
+     JOIN journal_entries je
+       ON je.id = jl."journalId" AND je."companyId" = $1
+      AND je."deletedAt" IS NULL AND je."balancesApplied" = true
+      AND je."reversedById" IS NULL ${dateFilter}
+     JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'expense'
+     WHERE jl.debit > jl.credit AND jl."deletedAt" IS NULL
+     GROUP BY coa.code, coa.name
+     ORDER BY amount DESC
+     LIMIT 500`,
+    params,
+  );
+
+  const items = rows.map((r) => ({
+    "رمز الحساب": r.code as string,
+    "اسم الحساب": r.name as string,
+    "عدد القيود": Number(r.entryCount ?? 0),
+    "إجمالي المصروف": Number(r.amount ?? 0),
+  }));
+
+  const total = items.reduce((s, r) => s + (r["إجمالي المصروف"] as number), 0);
+
+  return {
+    entity: {
+      id: entityId,
+      ref: "تحليل المصروفات",
+      title: "تحليل المصروفات حسب الحساب",
+      date: new Date().toLocaleDateString("ar-SA"),
+      period: startDate || endDate ? `${startDate ?? "البداية"} → ${endDate ?? "اليوم"}` : "كل الفترات",
+      count: items.length, total,
+    },
+    items,
+  };
+}
+
+// ─── Revenue analysis — تحليل الإيرادات حسب الحساب ──────────────────────
+export async function loadRevenueAnalysis(companyId: number, entityId: string) {
+  const { startDate, endDate } = parseEntityId(entityId);
+  const params: unknown[] = [companyId];
+  let dateFilter = "";
+  if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+  if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+  const rows = await rawQuery<Record<string, unknown>>(
+    `SELECT coa.code, coa.name,
+            COALESCE(SUM(jl.credit) - SUM(jl.debit), 0)::float8 AS amount,
+            COUNT(DISTINCT je.id) AS "entryCount"
+     FROM journal_lines jl
+     JOIN journal_entries je
+       ON je.id = jl."journalId" AND je."companyId" = $1
+      AND je."deletedAt" IS NULL AND je."balancesApplied" = true
+      AND je."reversedById" IS NULL ${dateFilter}
+     JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'revenue'
+     WHERE jl.credit > jl.debit AND jl."deletedAt" IS NULL
+     GROUP BY coa.code, coa.name
+     ORDER BY amount DESC
+     LIMIT 500`,
+    params,
+  );
+
+  const items = rows.map((r) => ({
+    "رمز الحساب": r.code as string,
+    "اسم الحساب": r.name as string,
+    "عدد القيود": Number(r.entryCount ?? 0),
+    "إجمالي الإيراد": Number(r.amount ?? 0),
+  }));
+
+  const total = items.reduce((s, r) => s + (r["إجمالي الإيراد"] as number), 0);
+
+  return {
+    entity: {
+      id: entityId,
+      ref: "تحليل الإيرادات",
+      title: "تحليل الإيرادات حسب الحساب",
+      date: new Date().toLocaleDateString("ar-SA"),
+      period: startDate || endDate ? `${startDate ?? "البداية"} → ${endDate ?? "اليوم"}` : "كل الفترات",
+      count: items.length, total,
+    },
+    items,
+  };
+}
+
+// ─── Revenue by activity — الإيرادات حسب نوع النشاط ─────────────────────
+export async function loadRevenueByActivity(companyId: number, entityId: string) {
+  const { startDate, endDate } = parseEntityId(entityId);
+  const params: unknown[] = [companyId];
+  let dateFilter = "";
+  if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+  if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+  const rows = await rawQuery<Record<string, unknown>>(
+    `SELECT COALESCE(jl."activityType", '— غير محدد —') AS "activityType",
+            COALESCE(SUM(jl.credit - jl.debit), 0)::float8 AS revenue,
+            COUNT(DISTINCT je.id) AS "entryCount"
+     FROM journal_lines jl
+     JOIN journal_entries je ON je.id = jl."journalId"
+      AND je."companyId" = $1 AND je."deletedAt" IS NULL
+      AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}
+     JOIN chart_of_accounts coa ON coa.code = jl."accountCode"
+      AND coa.type = 'revenue' AND coa."companyId" = $1
+     WHERE jl."deletedAt" IS NULL
+     GROUP BY jl."activityType"
+     ORDER BY revenue DESC`,
+    params,
+  ).catch(() => []);
+
+  const items = rows.map((r) => ({
+    "النشاط": (r.activityType as string | null) ?? "— غير محدد —",
+    "عدد القيود": Number(r.entryCount ?? 0),
+    "إجمالي الإيراد": Number(r.revenue ?? 0),
+  }));
+
+  const total = items.reduce((s, r) => s + (r["إجمالي الإيراد"] as number), 0);
+
+  return {
+    entity: {
+      id: entityId,
+      ref: "الإيرادات حسب النشاط",
+      title: "الإيرادات حسب نوع النشاط",
+      date: new Date().toLocaleDateString("ar-SA"),
+      period: startDate || endDate ? `${startDate ?? "البداية"} → ${endDate ?? "اليوم"}` : "كل الفترات",
+      count: items.length, total,
+    },
+    items,
+  };
+}
+
+// ─── Expenses by cost center — المصروفات حسب مركز التكلفة ─────────────
+export async function loadExpensesByCostCenter(companyId: number, entityId: string) {
+  const { startDate, endDate } = parseEntityId(entityId);
+  const params: unknown[] = [companyId];
+  let dateFilter = "";
+  if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+  if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+  const rows = await rawQuery<Record<string, unknown>>(
+    `SELECT cc.code AS "costCenterCode", cc.name AS "costCenterName", cc.type AS "costCenterType",
+            COALESCE(SUM(jl.debit - jl.credit), 0)::float8 AS expense,
+            COUNT(DISTINCT je.id) AS "entryCount"
+     FROM journal_lines jl
+     JOIN journal_entries je ON je.id = jl."journalId"
+      AND je."companyId" = $1 AND je."deletedAt" IS NULL
+      AND je."balancesApplied" = true AND je."reversedById" IS NULL ${dateFilter}
+     JOIN chart_of_accounts coa ON coa.code = jl."accountCode"
+      AND coa.type = 'expense' AND coa."companyId" = $1
+     LEFT JOIN cost_centers cc ON cc.id = jl."costCenterId" AND cc."companyId" = $1
+     WHERE jl."deletedAt" IS NULL
+     GROUP BY jl."costCenterId", cc.code, cc.name, cc.type
+     ORDER BY expense DESC`,
+    params,
+  ).catch(() => []);
+
+  const items = rows.map((r) => ({
+    "رمز المركز": (r.costCenterCode as string | null) ?? "—",
+    "اسم المركز": (r.costCenterName as string | null) ?? "— غير محدد —",
+    "نوع المركز": (r.costCenterType as string | null) ?? "",
+    "عدد القيود": Number(r.entryCount ?? 0),
+    "إجمالي المصروف": Number(r.expense ?? 0),
+  }));
+
+  const total = items.reduce((s, r) => s + (r["إجمالي المصروف"] as number), 0);
+
+  return {
+    entity: {
+      id: entityId,
+      ref: "المصروفات حسب مركز التكلفة",
+      title: "المصروفات حسب مركز التكلفة",
+      date: new Date().toLocaleDateString("ar-SA"),
+      period: startDate || endDate ? `${startDate ?? "البداية"} → ${endDate ?? "اليوم"}` : "كل الفترات",
+      count: items.length, total,
+    },
+    items,
+  };
+}
+
+// ─── Customer statement — كشف حساب عميل ─────────────────────────────────
+// entityId format: "<clientId>:<start>..<end>" — e.g., "42:2026-01-01..2026-03-31"
+export async function loadCustomerStatement(companyId: number, entityId: string) {
+  const colonAt = entityId.indexOf(":");
+  const clientIdRaw = colonAt >= 0 ? entityId.slice(0, colonAt) : entityId;
+  const range = colonAt >= 0 ? entityId.slice(colonAt + 1) : "";
+  const clientId = Number(clientIdRaw);
+  if (!Number.isFinite(clientId) || clientId <= 0) {
+    return { entity: { id: entityId, title: "كشف حساب عميل", note: "معرّف العميل غير صحيح" }, items: [] };
+  }
+  const { startDate, endDate } = parseEntityId(range);
+  const from = startDate || "1900-01-01";
+  const to = endDate || todayISO();
+
+  const [client] = await rawQuery<Record<string, unknown>>(
+    `SELECT id, name, phone, email, "vatNumber" FROM clients
+     WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+    [clientId, companyId],
+  );
+  if (!client) {
+    return { entity: { id: entityId, title: "كشف حساب عميل", note: "العميل غير موجود" }, items: [] };
+  }
+
+  const [obInv] = await rawQuery<Record<string, unknown>>(
+    `SELECT COALESCE(SUM(total), 0)::float8 AS total FROM invoices
+     WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND "createdAt" < $3`,
+    [clientId, companyId, from],
+  );
+  const [obPay] = await rawQuery<Record<string, unknown>>(
+    `SELECT COALESCE(SUM(ip.amount), 0)::float8 AS total
+       FROM invoice_payments ip
+       JOIN invoices i ON i.id = ip."invoiceId" AND i."deletedAt" IS NULL
+      WHERE ip."clientId" = $1 AND ip."companyId" = $2 AND ip."paidAt" < $3`,
+    [clientId, companyId, from],
+  );
+  const openingBalance = Number(obInv?.total ?? 0) - Number(obPay?.total ?? 0);
+
+  const invoices = await rawQuery<Record<string, unknown>>(
+    `SELECT ref, "createdAt" AS date, total::float8 AS debit, 0 AS credit,
+            CONCAT('فاتورة ', ref) AS description
+       FROM invoices
+      WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        AND "createdAt" >= $3 AND "createdAt" < ($4::date + 1)
+      ORDER BY "createdAt"`,
+    [clientId, companyId, from, to],
+  );
+  const payments = await rawQuery<Record<string, unknown>>(
+    `SELECT COALESCE(ip."transactionRef", CONCAT('PAY-', ip.id)) AS ref,
+            ip."paidAt" AS date, 0 AS debit, ip.amount::float8 AS credit,
+            CONCAT('دفعة (', COALESCE(ip.method, 'manual'), ')') AS description
+       FROM invoice_payments ip
+       JOIN invoices i ON i.id = ip."invoiceId" AND i."deletedAt" IS NULL
+      WHERE ip."clientId" = $1 AND ip."companyId" = $2
+        AND ip."paidAt" >= $3 AND ip."paidAt" <= $4
+      ORDER BY ip."paidAt"`,
+    [clientId, companyId, from, to],
+  );
+
+  const all = [...invoices, ...payments].sort(
+    (a, b) => new Date(a.date as string).getTime() - new Date(b.date as string).getTime(),
+  );
+  let running = openingBalance;
+  const items = all.map((m) => {
+    running += Number(m.debit ?? 0) - Number(m.credit ?? 0);
+    return {
+      "التاريخ": m.date ? new Date(m.date as string | Date).toLocaleDateString("ar-SA") : "",
+      "المرجع": (m.ref as string | null) ?? "",
+      "البيان": (m.description as string | null) ?? "",
+      "مدين": Number(m.debit ?? 0),
+      "دائن": Number(m.credit ?? 0),
+      "الرصيد التراكمي": Math.round(running * 100) / 100,
+    };
+  });
+
+  const totalDebit  = items.reduce((s, r) => s + (r["مدين"] as number), 0);
+  const totalCredit = items.reduce((s, r) => s + (r["دائن"] as number), 0);
+
+  return {
+    entity: {
+      id: entityId,
+      ref: `كشف حساب — ${client.name}`,
+      title: `كشف حساب عميل`,
+      clientName: client.name as string,
+      clientPhone: (client.phone as string | null) ?? "",
+      clientVat: (client.vatNumber as string | null) ?? "",
+      date: new Date().toLocaleDateString("ar-SA"),
+      period: `${from} → ${to}`,
+      openingBalance: Math.round(openingBalance * 100) / 100,
+      totalDebit, totalCredit, closingBalance: Math.round(running * 100) / 100,
+    },
+    items,
+  };
+}
+
+// ─── Vendor statement — كشف حساب مورّد ──────────────────────────────────
+export async function loadVendorStatement(companyId: number, entityId: string) {
+  const colonAt = entityId.indexOf(":");
+  const supplierIdRaw = colonAt >= 0 ? entityId.slice(0, colonAt) : entityId;
+  const range = colonAt >= 0 ? entityId.slice(colonAt + 1) : "";
+  const supplierId = Number(supplierIdRaw);
+  if (!Number.isFinite(supplierId) || supplierId <= 0) {
+    return { entity: { id: entityId, title: "كشف حساب مورّد", note: "معرّف المورّد غير صحيح" }, items: [] };
+  }
+  const { startDate, endDate } = parseEntityId(range);
+  const from = startDate || "1900-01-01";
+  const to = endDate || todayISO();
+
+  const [supplier] = await rawQuery<Record<string, unknown>>(
+    `SELECT id, name, phone, email, "taxNumber" FROM suppliers
+     WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+    [supplierId, companyId],
+  );
+  if (!supplier) {
+    return { entity: { id: entityId, title: "كشف حساب مورّد", note: "المورّد غير موجود" }, items: [] };
+  }
+
+  const orders = await rawQuery<Record<string, unknown>>(
+    `SELECT ref, "createdAt" AS date, total::float8 AS credit, 0 AS debit,
+            CONCAT('أمر شراء ', ref) AS description
+       FROM purchase_orders
+      WHERE "supplierId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        AND "createdAt" >= $3 AND "createdAt" < ($4::date + 1)
+      ORDER BY "createdAt"`,
+    [supplierId, companyId, from, to],
+  ).catch(() => []);
+
+  const payments = await rawQuery<Record<string, unknown>>(
+    `SELECT ref, "createdAt" AS date, amount::float8 AS debit, 0 AS credit,
+            CONCAT('سند صرف ', ref) AS description
+       FROM payment_vouchers
+      WHERE "supplierId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        AND "createdAt" >= $3 AND "createdAt" < ($4::date + 1)
+      ORDER BY "createdAt"`,
+    [supplierId, companyId, from, to],
+  ).catch(() => []);
+
+  const all = [...orders, ...payments].sort(
+    (a, b) => new Date(a.date as string).getTime() - new Date(b.date as string).getTime(),
+  );
+  let running = 0;
+  const items = all.map((m) => {
+    running += Number(m.debit ?? 0) - Number(m.credit ?? 0);
+    return {
+      "التاريخ": m.date ? new Date(m.date as string | Date).toLocaleDateString("ar-SA") : "",
+      "المرجع": (m.ref as string | null) ?? "",
+      "البيان": (m.description as string | null) ?? "",
+      "مدين": Number(m.debit ?? 0),
+      "دائن": Number(m.credit ?? 0),
+      "الرصيد التراكمي": Math.round(running * 100) / 100,
+    };
+  });
+
+  const totalDebit  = items.reduce((s, r) => s + (r["مدين"] as number), 0);
+  const totalCredit = items.reduce((s, r) => s + (r["دائن"] as number), 0);
+
+  return {
+    entity: {
+      id: entityId,
+      ref: `كشف حساب — ${supplier.name}`,
+      title: `كشف حساب مورّد`,
+      supplierName: supplier.name as string,
+      supplierPhone: (supplier.phone as string | null) ?? "",
+      supplierTaxNumber: (supplier.taxNumber as string | null) ?? "",
+      date: new Date().toLocaleDateString("ar-SA"),
+      period: `${from} → ${to}`,
+      totalDebit, totalCredit, closingBalance: Math.round(running * 100) / 100,
     },
     items,
   };

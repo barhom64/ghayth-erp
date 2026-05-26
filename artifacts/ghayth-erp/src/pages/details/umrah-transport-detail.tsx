@@ -58,7 +58,7 @@ export default function UmrahTransportDetail() {
 
   const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["umrah-transport-detail", String(id)],
-    id ? `/umrah/transport/${id}` : null
+    `/umrah/transport/${id}`
   );
   const item = data?.data ?? data;
   const pilgrims = item?.pilgrims || [];

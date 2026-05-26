@@ -120,7 +120,7 @@ export function AuditsTab() {
             noToolbar
             pageSize={20}
             renderRowExtras={(a) => {
-              if (editingId === a.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(a.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (editingId === a.id) return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(a.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === a.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(a.id)} onCancel={cancelDelete} isPending={isPending} itemName={a.title} entityType="audit" entityId={a.id} />;
               return null;
             }}

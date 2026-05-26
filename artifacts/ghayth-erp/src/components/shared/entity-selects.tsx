@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { SearchableSelect, SearchableSelectField, type SelectOption } from "./searchable-select";
@@ -10,8 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { FormShell, FormTextField } from "@workspace/ui-core";
 
 interface QuickCreateField {
   key: string;
@@ -39,28 +39,20 @@ function QuickCreateDialog({
   invalidateKey,
   onCreated,
 }: QuickCreateDialogProps) {
-  const [form, setForm] = useState<Record<string, string>>({});
   const { toast } = useToast();
   const createMut = useApiMutation<unknown, Record<string, any>>(apiPath, "POST", [[invalidateKey]]);
 
-  const handleCreate = () => {
-    const missing = fields.filter((f) => f.required && !form[f.key]?.trim()).map((f) => f.label);
-    if (missing.length > 0) {
-      toast({ variant: "destructive", title: `يرجى إدخال: ${missing.join("، ")}` });
-      return;
-    }
-    createMut.mutate(form, {
-      onSuccess: (data: any) => {
-        onCreated?.(data);
-        onOpenChange(false);
-        setForm({});
-        toast({ title: `تم الإنشاء بنجاح` });
-      },
-      onError: (err: any) => {
-        toast({ variant: "destructive", title: "خطأ في الإنشاء", description: err?.fix ?? err?.message });
-      },
-    });
-  };
+  // Build a runtime zod schema and default values from the fields prop.
+  // Required fields gate the submit button via FormShell's built-in
+  // validation — no more "missing fields" toast list.
+  const schemaShape: Record<string, z.ZodString> = {};
+  const defaults: Record<string, string> = {};
+  for (const f of fields) {
+    const s = z.string().trim();
+    schemaShape[f.key] = f.required ? s.min(1, "مطلوب") : s;
+    defaults[f.key] = "";
+  }
+  const quickCreateSchema = z.object(schemaShape);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -68,28 +60,40 @@ function QuickCreateDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 py-2">
+        <FormShell
+          // Remount on open so the form clears between consecutive
+          // create flows without an explicit reset.
+          key={open ? "open" : "closed"}
+          schema={quickCreateSchema as unknown as z.ZodType<Record<string, string>>}
+          defaultValues={defaults}
+          submitLabel={createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}
+          secondaryActions={
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
+          }
+          onSubmit={(values) => {
+            createMut.mutate(values, {
+              onSuccess: (data: any) => {
+                onCreated?.(data);
+                onOpenChange(false);
+                toast({ title: `تم الإنشاء بنجاح` });
+              },
+              onError: (err: any) => {
+                toast({ variant: "destructive", title: "خطأ في الإنشاء", description: err?.fix ?? err?.message });
+              },
+            });
+          }}
+        >
           {fields.map((field) => (
-            <div key={field.key} className="space-y-1">
-              <Label className="text-sm">
-                {field.label}
-                {field.required && <span className="text-red-500 mr-1">*</span>}
-              </Label>
-              <Input
-                type={field.type || "text"}
-                value={form[field.key] || ""}
-                onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
-                placeholder={field.label}
-              />
-            </div>
+            <FormTextField
+              key={field.key}
+              name={field.key}
+              label={field.label}
+              required={field.required}
+              type={field.type as any}
+              placeholder={field.label}
+            />
           ))}
-        </div>
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
-          <Button onClick={handleCreate} disabled={createMut.isPending} rateLimitAware>
-            {createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}
-          </Button>
-        </div>
+        </FormShell>
       </DialogContent>
     </Dialog>
   );

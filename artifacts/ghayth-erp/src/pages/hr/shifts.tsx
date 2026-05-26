@@ -157,7 +157,7 @@ export default function ShiftsPage() {
                     </div>
                     {editingId === s.id && (
                       <div className="mt-3">
-                        <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(s.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
+                        <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(s.id, values)} onCancel={cancelEdit} isPending={isPending} />
                       </div>
                     )}
                     {deletingId === s.id && (

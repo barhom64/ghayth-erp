@@ -294,9 +294,13 @@ export default function TenantDetail() {
 }
 
 function TenantLettersTab({ tenantId }: { tenantId: string }) {
+  // The backend route is `/api/correspondence?entityType=…&entityId=…` —
+  // the older `/api/letters?relatedType=…&relatedId=…` endpoint never
+  // existed (see check-frontend-backend-wiring audit), so the tab
+  // silently 404'd before this fix.
   const { data: lettersResp, isLoading } = useApiQuery<any>(
     ["tenant-letters", tenantId],
-    `/letters?relatedType=tenant&relatedId=${tenantId}`,
+    `/correspondence?entityType=tenant&entityId=${tenantId}`,
     !!tenantId
   );
   const letters = Array.isArray(lettersResp?.data) ? lettersResp.data : Array.isArray(lettersResp) ? lettersResp : [];

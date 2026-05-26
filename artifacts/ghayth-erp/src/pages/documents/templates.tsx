@@ -1,13 +1,20 @@
 import { useState, useCallback } from "react";
+import { useFormContext } from "react-hook-form";
+import { z } from "zod";
 import DOMPurify from "dompurify";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import {
+  FormShell,
+  FormGrid,
+  FormTextField,
+  FormSelectField,
+  FormTextareaField,
+} from "@workspace/ui-core";
 import { FileText, Copy, Search, Layout, Plus, Eye, Edit, Trash2, X, Save, Printer, ChevronLeft, Variable } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApiQuery, useApiMutation, asList, apiFetch } from "@/lib/api";
@@ -17,6 +24,18 @@ import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
+
+const templateSchema = z.object({
+  name: z.string().min(1, "اسم القالب مطلوب"),
+  description: z.string(),
+  content: z.string(),
+  category: z.string(),
+  type: z.string(),
+  htmlContent: z.string(),
+  branchId: z.string(),
+  signatureUrl: z.string(),
+});
+type TemplateValues = z.infer<typeof templateSchema>;
 
 const typeLabels: Record<string, string> = {
   letter: "خطاب",
@@ -44,38 +63,196 @@ const categoryColors: Record<string, string> = {
 
 type ViewMode = "list" | "editor" | "preview";
 
-interface TemplateForm {
-  name: string;
-  description: string;
-  content: string;
-  category: string;
-  type: string;
-  htmlContent: string;
-  variables: Array<{ key: string; label: string }>;
-  branchId: number | null;
-  signatureUrl: string;
+type Variable = { key: string; label: string };
+
+interface EditorSeed {
+  values: TemplateValues;
+  variables: Variable[];
   isActive: boolean;
 }
 
-const emptyForm: TemplateForm = {
-  name: "",
-  description: "",
-  content: "",
-  category: "general",
-  type: "letter",
-  htmlContent: "",
+const EMPTY_EDITOR_SEED: EditorSeed = {
+  values: {
+    name: "",
+    description: "",
+    content: "",
+    category: "general",
+    type: "letter",
+    htmlContent: "",
+    branchId: "_none",
+    signatureUrl: "",
+  },
   variables: [],
-  branchId: null,
-  signatureUrl: "",
   isActive: true,
 };
+
+const CATEGORY_OPTIONS = Object.entries({
+  hr: "الموارد البشرية",
+  general: "عام",
+  sales: "المبيعات",
+  finance: "المالية",
+}).map(([value, label]) => ({ value, label }));
+
+const TYPE_OPTIONS = Object.entries({
+  letter: "خطاب",
+  certificate: "شهادة/تعريف",
+  clearance: "إخلاء طرف",
+  warning: "إنذار",
+  decision: "قرار",
+  contract: "عقد",
+  quotation: "عرض سعر",
+}).map(([value, label]) => ({ value, label }));
+
+const COMMON_VARIABLES: Variable[] = [
+  { key: "employee.name", label: "اسم الموظف" },
+  { key: "employee.empNumber", label: "رقم وظيفي" },
+  { key: "employee.jobTitle", label: "المسمى" },
+  { key: "salary.basic", label: "الراتب" },
+  { key: "company.name", label: "الشركة" },
+  { key: "date.today", label: "اليوم" },
+];
+
+// Save button + preview button: both live in the page header but need
+// access to the form context. They submit by `type="submit"` (button
+// nested in <form> wrapper) or read getValues() for live preview.
+function EditorHeaderActions({
+  editingId,
+  onBack,
+  onPreview,
+}: {
+  editingId: number | null;
+  onBack: () => void;
+  onPreview: (values: TemplateValues) => void;
+}) {
+  const { getValues, formState, watch } = useFormContext<TemplateValues>();
+  const htmlContent = watch("htmlContent");
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <Button type="button" variant="ghost" size="sm" onClick={onBack}>
+          <ChevronLeft className="h-4 w-4 me-1" />رجوع
+        </Button>
+        <h1 className="text-2xl font-bold">{editingId ? "تعديل القالب" : "إنشاء قالب جديد"}</h1>
+      </div>
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" onClick={() => onPreview(getValues())} disabled={!htmlContent}>
+          <Eye className="h-4 w-4 me-1" />معاينة
+        </Button>
+        <GuardedButton type="submit" perm="documents:create" rateLimitAware disabled={formState.isSubmitting}>
+          <Save className="h-4 w-4 me-1" />
+          {formState.isSubmitting ? "جارٍ الحفظ..." : "حفظ"}
+        </GuardedButton>
+      </div>
+    </div>
+  );
+}
+
+// Variables panel: writes to htmlContent via setValue when the operator
+// clicks an existing/common variable to insert it into the body.
+function VariablesPanel({
+  variables,
+  setVariables,
+  newVarKey,
+  setNewVarKey,
+  newVarLabel,
+  setNewVarLabel,
+}: {
+  variables: Variable[];
+  setVariables: (next: Variable[]) => void;
+  newVarKey: string;
+  setNewVarKey: (v: string) => void;
+  newVarLabel: string;
+  setNewVarLabel: (v: string) => void;
+}) {
+  const { getValues, setValue } = useFormContext<TemplateValues>();
+
+  const insertVariable = (key: string) => {
+    const current = getValues("htmlContent") ?? "";
+    setValue("htmlContent", `${current}{{${key}}}`, { shouldDirty: true });
+  };
+
+  const addVariable = () => {
+    if (!newVarKey || !newVarLabel) return;
+    setVariables([...variables, { key: newVarKey, label: newVarLabel }]);
+    setNewVarKey("");
+    setNewVarLabel("");
+  };
+
+  const removeVariable = (index: number) => {
+    setVariables(variables.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Variable className="h-5 w-5" />المتغيرات المتاحة</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+            {variables.map((v, i) => (
+              <div key={i} className="flex items-center justify-between gap-2 p-2 rounded border bg-surface-subtle text-sm">
+                <div className="flex-1 min-w-0">
+                  <button
+                    type="button"
+                    className="font-mono text-xs text-status-info-foreground hover:underline cursor-pointer"
+                    onClick={() => insertVariable(v.key)}
+                    title="إدراج في المحتوى"
+                  >
+                    {`{{${v.key}}}`}
+                  </button>
+                  <span className="text-muted-foreground text-xs block">{v.label}</span>
+                </div>
+                <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:text-status-error-foreground" onClick={() => removeVariable(i)}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          <div className="border-t pt-3 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Input size={1} placeholder="المفتاح" value={newVarKey} onChange={(e) => setNewVarKey(e.target.value)} className="text-xs" dir="ltr" />
+              <Input size={1} placeholder="التسمية" value={newVarLabel} onChange={(e) => setNewVarLabel(e.target.value)} className="text-xs" />
+            </div>
+            <GuardedButton type="button" perm="documents:create" variant="outline" size="sm" className="w-full" onClick={addVariable} disabled={!newVarKey || !newVarLabel}>
+              <Plus className="h-3 w-3 me-1" />إضافة متغير
+            </GuardedButton>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-sm">المتغيرات الشائعة</CardTitle></CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-1">
+            {COMMON_VARIABLES.map((v) => (
+              <button
+                key={v.key}
+                type="button"
+                className="text-xs px-2 py-1 bg-status-info-surface text-status-info-foreground rounded hover:bg-status-info-surface transition-colors"
+                onClick={() => {
+                  insertVariable(v.key);
+                  if (!variables.find((fv) => fv.key === v.key)) {
+                    setVariables([...variables, v]);
+                  }
+                }}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export default function DocumentsTemplates() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState<TemplateForm>(emptyForm);
+  const [editorSeed, setEditorSeed] = useState<EditorSeed>(EMPTY_EDITOR_SEED);
+  const [variables, setVariables] = useState<Variable[]>([]);
+  const [isActive, setIsActive] = useState(true);
   const [previewHtml, setPreviewHtml] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewTitle, setPreviewTitle] = useState("");
@@ -106,39 +283,52 @@ export default function DocumentsTemplates() {
 
   const openEditor = useCallback((template?: any) => {
     if (template) {
-      let vars = [];
+      let vars: Variable[] = [];
       try { vars = typeof template.variables === "string" ? JSON.parse(template.variables) : (template.variables || []); } catch { vars = []; }
-      setForm({
-        name: template.name || "",
-        description: template.description || "",
-        content: template.content || "",
-        category: template.category || "general",
-        type: template.type || "letter",
-        htmlContent: template.htmlContent || "",
+      setEditorSeed({
+        values: {
+          name: template.name || "",
+          description: template.description || "",
+          content: template.content || "",
+          category: template.category || "general",
+          type: template.type || "letter",
+          htmlContent: template.htmlContent || "",
+          branchId: template.branchId ? String(template.branchId) : "_none",
+          signatureUrl: template.signatureUrl || "",
+        },
         variables: vars,
-        branchId: template.branchId || null,
-        signatureUrl: template.signatureUrl || "",
         isActive: template.isActive !== false,
       });
+      setVariables(vars);
+      setIsActive(template.isActive !== false);
       setEditingId(template.id);
     } else {
-      setForm(emptyForm);
+      setEditorSeed(EMPTY_EDITOR_SEED);
+      setVariables([]);
+      setIsActive(true);
       setEditingId(null);
     }
+    setNewVarKey("");
+    setNewVarLabel("");
     setViewMode("editor");
   }, []);
 
-  const handleSave = async () => {
-    if (!form.name) { toast({ variant: "destructive", title: "اسم القالب مطلوب" }); return; }
+  const handleSave = async (values: TemplateValues) => {
+    const payload = {
+      ...values,
+      variables,
+      isActive,
+      branchId: values.branchId === "_none" ? null : Number(values.branchId),
+    };
     try {
       if (editingId) {
         await apiFetch(`/documents/templates/${editingId}`, {
           method: "PUT",
-          body: JSON.stringify(form),
+          body: JSON.stringify(payload),
         });
         toast({ title: "تم تحديث القالب بنجاح" });
       } else {
-        await createMut.mutateAsync(form as any);
+        await createMut.mutateAsync(payload as any);
         toast({ title: "تم إنشاء القالب بنجاح" });
       }
       refetch();
@@ -175,18 +365,20 @@ export default function DocumentsTemplates() {
     }
   };
 
-  const handleLivePreview = () => {
-    const html = form.htmlContent || "";
+  // Substitutes {{key}} placeholders with sample values built from the
+  // current variables list so the operator gets a realistic preview
+  // before save.
+  const handleLivePreview = (values: TemplateValues) => {
+    const html = values.htmlContent || "";
     const sampleData: Record<string, any> = {};
-    form.variables.forEach((v) => {
+    variables.forEach((v) => {
       const parts = v.key.split(".");
       if (parts.length === 2) {
         if (!sampleData[parts[0]]) sampleData[parts[0]] = {};
         sampleData[parts[0]][parts[1]] = `[${v.label}]`;
       }
     });
-    let filled = html;
-    filled = filled.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (match, key) => {
+    const filled = html.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (match, key) => {
       const parts = key.split(".");
       let value: any = sampleData;
       for (const part of parts) {
@@ -196,203 +388,77 @@ export default function DocumentsTemplates() {
       return value != null ? String(value) : match;
     });
     setPreviewHtml(filled);
-    setPreviewTitle(form.name || "معاينة القالب");
+    setPreviewTitle(values.name || "معاينة القالب");
     setPreviewOpen(true);
-  };
-
-  const addVariable = () => {
-    if (!newVarKey || !newVarLabel) return;
-    setForm((prev) => ({
-      ...prev,
-      variables: [...prev.variables, { key: newVarKey, label: newVarLabel }],
-    }));
-    setNewVarKey("");
-    setNewVarLabel("");
-  };
-
-  const removeVariable = (index: number) => {
-    setForm((prev) => ({
-      ...prev,
-      variables: prev.variables.filter((_, i) => i !== index),
-    }));
-  };
-
-  const insertVariable = (key: string) => {
-    setForm((prev) => ({
-      ...prev,
-      htmlContent: prev.htmlContent + `{{${key}}}`,
-    }));
   };
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
   if (viewMode === "editor") {
+    const branchOptions = [
+      { value: "_none", label: "جميع الفروع" },
+      ...branches.map((b: any) => ({ value: String(b.id), label: b.name })),
+    ];
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => { setViewMode("list"); setEditingId(null); }}>
-              <ChevronLeft className="h-4 w-4 me-1" />رجوع
-            </Button>
-            <h1 className="text-2xl font-bold">{editingId ? "تعديل القالب" : "إنشاء قالب جديد"}</h1>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleLivePreview} disabled={!form.htmlContent}>
-              <Eye className="h-4 w-4 me-1" />معاينة
-            </Button>
-            <GuardedButton perm="documents:create" onClick={handleSave} rateLimitAware>
-              <Save className="h-4 w-4 me-1" />حفظ
-            </GuardedButton>
-          </div>
-        </div>
+      <FormShell
+        key={`editor-${editingId ?? "new"}`}
+        schema={templateSchema}
+        defaultValues={editorSeed.values}
+        hideSubmit
+        className="space-y-6"
+        onSubmit={handleSave}
+      >
+        <EditorHeaderActions
+          editingId={editingId}
+          onBack={() => { setViewMode("list"); setEditingId(null); }}
+          onPreview={handleLivePreview}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
             <Card>
               <CardHeader><CardTitle className="text-lg">معلومات القالب</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>اسم القالب *</Label>
-                    <Input className="mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="مثال: تعريف بالراتب" />
-                  </div>
-                  <div>
-                    <Label>المعرف</Label>
-                    <Input className="mt-1" value={form.content} onChange={(e) => setForm({ ...form, content: e.target.value })} placeholder="salary_certificate" />
-                  </div>
-                </div>
-                <div>
-                  <Label>الوصف</Label>
-                  <Input className="mt-1" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="وصف مختصر للقالب" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>التصنيف</Label>
-                    <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(categoryLabels).map(([k, v]) => (
-                          <SelectItem key={k} value={k}>{v}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>النوع</Label>
-                    <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(typeLabels).map(([k, v]) => (
-                          <SelectItem key={k} value={k}>{v}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>الفرع (اختياري)</Label>
-                    <Select value={form.branchId ? String(form.branchId) : "none"} onValueChange={(v) => setForm({ ...form, branchId: v === "none" ? null : Number(v) })}>
-                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">جميع الفروع</SelectItem>
-                        {branches.map((b: any) => (
-                          <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>رابط التوقيع (اختياري)</Label>
-                    <Input className="mt-1" value={form.signatureUrl} onChange={(e) => setForm({ ...form, signatureUrl: e.target.value })} placeholder="https://..." dir="ltr" />
-                  </div>
-                </div>
+                <FormGrid cols={2}>
+                  <FormTextField name="name" label="اسم القالب" placeholder="مثال: تعريف بالراتب" required />
+                  <FormTextField name="content" label="المعرف" placeholder="salary_certificate" />
+                </FormGrid>
+                <FormTextField name="description" label="الوصف" placeholder="وصف مختصر للقالب" />
+                <FormGrid cols={2}>
+                  <FormSelectField name="category" label="التصنيف" options={CATEGORY_OPTIONS} />
+                  <FormSelectField name="type" label="النوع" options={TYPE_OPTIONS} />
+                </FormGrid>
+                <FormGrid cols={2}>
+                  <FormSelectField name="branchId" label="الفرع (اختياري)" options={branchOptions} />
+                  <FormTextField name="signatureUrl" label="رابط التوقيع (اختياري)" placeholder="https://..." />
+                </FormGrid>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader><CardTitle className="text-lg">محتوى القالب</CardTitle></CardHeader>
               <CardContent>
-                <Textarea
-                  className="mt-1 font-mono text-sm min-h-[300px]"
-                  dir="ltr"
-                  value={form.htmlContent}
-                  onChange={(e) => setForm({ ...form, htmlContent: e.target.value })}
+                <FormTextareaField
+                  name="htmlContent"
+                  label=""
+                  rows={12}
+                  className="font-mono text-sm"
                   placeholder='<div style="line-height:2">&#10;  <p>السيد/ة: <strong>{{employee.name}}</strong></p>&#10;</div>'
+                  description="استخدم {{variable.name}} لإدراج المتغيرات الديناميكية"
                 />
-                <p className="text-xs text-muted-foreground mt-2">استخدم {"{{variable.name}}"} لإدراج المتغيرات الديناميكية</p>
               </CardContent>
             </Card>
           </div>
 
-          <div className="space-y-4">
-            <Card>
-              <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Variable className="h-5 w-5" />المتغيرات المتاحة</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                  {form.variables.map((v, i) => (
-                    <div key={i} className="flex items-center justify-between gap-2 p-2 rounded border bg-surface-subtle text-sm">
-                      <div className="flex-1 min-w-0">
-                        <button
-                          className="font-mono text-xs text-status-info-foreground hover:underline cursor-pointer"
-                          onClick={() => insertVariable(v.key)}
-                          title="إدراج في المحتوى"
-                        >
-                          {`{{${v.key}}}`}
-                        </button>
-                        <span className="text-muted-foreground text-xs block">{v.label}</span>
-                      </div>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:text-status-error-foreground" onClick={() => removeVariable(i)}>
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-                <div className="border-t pt-3 space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input size={1} placeholder="المفتاح" value={newVarKey} onChange={(e) => setNewVarKey(e.target.value)} className="text-xs" dir="ltr" />
-                    <Input size={1} placeholder="التسمية" value={newVarLabel} onChange={(e) => setNewVarLabel(e.target.value)} className="text-xs" />
-                  </div>
-                  <GuardedButton perm="documents:create" variant="outline" size="sm" className="w-full" onClick={addVariable} disabled={!newVarKey || !newVarLabel}>
-                    <Plus className="h-3 w-3 me-1" />إضافة متغير
-                  </GuardedButton>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader><CardTitle className="text-sm">المتغيرات الشائعة</CardTitle></CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-1">
-                  {[
-                    { key: "employee.name", label: "اسم الموظف" },
-                    { key: "employee.empNumber", label: "رقم وظيفي" },
-                    { key: "employee.jobTitle", label: "المسمى" },
-                    { key: "salary.basic", label: "الراتب" },
-                    { key: "company.name", label: "الشركة" },
-                    { key: "date.today", label: "اليوم" },
-                  ].map((v) => (
-                    <button
-                      key={v.key}
-                      className="text-xs px-2 py-1 bg-status-info-surface text-status-info-foreground rounded hover:bg-status-info-surface transition-colors"
-                      onClick={() => {
-                        insertVariable(v.key);
-                        if (!form.variables.find((fv) => fv.key === v.key)) {
-                          setForm((prev) => ({
-                            ...prev,
-                            variables: [...prev.variables, v],
-                          }));
-                        }
-                      }}
-                    >
-                      {v.label}
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <VariablesPanel
+            variables={variables}
+            setVariables={setVariables}
+            newVarKey={newVarKey}
+            setNewVarKey={setNewVarKey}
+            newVarLabel={newVarLabel}
+            setNewVarLabel={setNewVarLabel}
+          />
         </div>
 
         {previewOpen && (
@@ -407,7 +473,7 @@ export default function DocumentsTemplates() {
             <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewHtml) }} />
           </PrintPreviewModal>
         )}
-      </div>
+      </FormShell>
     );
   }
 

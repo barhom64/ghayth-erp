@@ -18,7 +18,7 @@ import {
 } from "@workspace/ui-core";
 import { CheckCircle2, Plus, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
+import { useInlineActions, RowActions, InlineEditForm } from "@/components/inline-actions";
 import { formatDateAr } from "@/lib/formatters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -60,7 +60,9 @@ export function CAPATab() {
 
   const filteredItems = applyFilters(items, filters, { searchFields: ["finding", "rootCause", "responsiblePerson"], statusField: "status", dateField: "dueDate" });
 
-  const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
+  // CAPA records are audit artifacts — closed via status change, never
+  // hard-deleted. Backend deliberately exposes only PATCH (no DELETE).
+  const { editingId, editForm, setEditForm, startEdit, cancelEdit, isPending, handleSave } = useInlineActions({
     endpoint: "/governance/capa",
     queryKeys: [["gov-capa"], ["gov-stats"]],
     onSuccess: () => refetch(),
@@ -149,7 +151,7 @@ export function CAPATab() {
                 render: (item) => (
                   <div className="flex items-center gap-1">
                     <Button variant="ghost" size="sm" onClick={() => setPreviewItem(item)}><Eye className="h-4 w-4" /></Button>
-                    <RowActions onEdit={() => startEdit(item.id, { finding: item.finding, responsiblePerson: item.responsiblePerson || "", dueDate: item.dueDate || "", status: item.status || "open" })} onDelete={() => startDelete(item.id)} deletePerm="governance:delete" />
+                    <RowActions onEdit={() => startEdit(item.id, { finding: item.finding, responsiblePerson: item.responsiblePerson || "", dueDate: item.dueDate || "", status: item.status || "open" })} />
                   </div>
                 ),
               },
@@ -163,10 +165,9 @@ export function CAPATab() {
             emptyIcon={<CheckCircle2 className="h-6 w-6 text-slate-400" />}
             noToolbar
             pageSize={20}
-            rowClassName={(item) => cn(editingId === item.id && "bg-muted/50", deletingId === item.id && "bg-destructive/5")}
+            rowClassName={(item) => cn(editingId === item.id && "bg-muted/50")}
             renderRowExtras={(item) => {
-              if (editingId === item.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(item.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
-              if (deletingId === item.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.finding} entityType="capa" entityId={item.id} />;
+              if (editingId === item.id) return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(item.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               return null;
             }}
           />

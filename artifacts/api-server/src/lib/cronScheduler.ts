@@ -1377,17 +1377,18 @@ async function monthlyRentPenalties(): Promise<string> {
     for (const p of overduePayments) {
       const lateDays = Math.floor((Date.now() - new Date(p.dueDate as string | Date).getTime()) / 86400000);
       let targetStage: string | null = null;
-      if (lateDays >= 90) targetStage = 'legal_transfer';
-      else if (lateDays >= 60) targetStage = 'penalty_applied';
-      else if (lateDays >= 30) targetStage = 'escalation';
-      else if (lateDays >= 14) targetStage = 'field_visit';
-      else if (lateDays >= 7) targetStage = 'notification';
-      else if (lateDays >= 3) targetStage = 'alert';
-      if (!targetStage) continue;
+      let targetPhase: number | null = null;
+      if (lateDays >= 90)      { targetStage = 'legal_transfer';  targetPhase = 6; }
+      else if (lateDays >= 60) { targetStage = 'penalty_applied'; targetPhase = 5; }
+      else if (lateDays >= 30) { targetStage = 'escalation';      targetPhase = 4; }
+      else if (lateDays >= 14) { targetStage = 'field_visit';     targetPhase = 3; }
+      else if (lateDays >= 7)  { targetStage = 'notification';    targetPhase = 2; }
+      else if (lateDays >= 3)  { targetStage = 'alert';           targetPhase = 1; }
+      if (!targetStage || targetPhase === null) continue;
 
       const existing = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM late_rent_actions WHERE "paymentId" = $1 AND phase = $2 LIMIT 1`,
-        [p.id, targetStage]
+        [p.id, targetPhase]
       );
       if (existing.length > 0) continue;
 
@@ -1448,7 +1449,7 @@ async function monthlyRentPenalties(): Promise<string> {
       await rawExecute(
         `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes)
          VALUES ($1,$2,$3,$4,NOW(),$5)`,
-        [p.contractId, p.id, targetStage, actionLabel, `تأخر ${lateDays} يوم — ${actionLabel}`]
+        [p.contractId, p.id, targetPhase, actionLabel, `تأخر ${lateDays} يوم — ${actionLabel}`]
       ).catch((e) => logger.error(e, "[cronScheduler] late rent action insert failed"));
 
       try {

@@ -55,7 +55,7 @@ export default function PropertyMaintenanceDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["property-maintenance", String(id)],
-    id ? `/properties/maintenance/${id}` : null,
+    `/properties/maintenance/${id}`,
     !!id,
   );
 

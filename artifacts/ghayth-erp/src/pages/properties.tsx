@@ -160,7 +160,7 @@ export default function Properties() {
             onPageChange={setPage}
             renderRowExtras={(u) => {
               if (editingId === u.id) {
-                return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(u.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+                return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(u.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               }
               if (deletingId === u.id) {
                 return <InlineDeleteConfirm onConfirm={() => handleDelete(u.id)} onCancel={cancelDelete} isPending={isPending} itemName={u.unitNumber} entityType="property-unit" entityId={u.id} />;

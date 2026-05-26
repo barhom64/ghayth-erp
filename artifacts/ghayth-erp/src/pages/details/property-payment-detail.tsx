@@ -66,7 +66,7 @@ export default function PropertyPaymentDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["property-payment", String(id)],
-    id ? `/properties/payments/${id}` : null,
+    `/properties/payments/${id}`,
     !!id
   );
 

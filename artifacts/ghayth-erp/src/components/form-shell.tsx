@@ -20,6 +20,8 @@ import type { ZodType } from "zod";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -95,6 +97,13 @@ export interface FormShellProps<TSchema extends FieldValues> {
   secondaryActions?: ReactNode;
   /** Override disabled-state logic (e.g. disable until a dependency loads). */
   disabled?: boolean;
+  /**
+   * Hide the built-in submit footer entirely. Use when the form's primary
+   * submit button lives outside FormShell's default footer (e.g. the page
+   * header). The button still needs `type="submit"` so the form picks it
+   * up — but FormShell stops rendering its own copy.
+   */
+  hideSubmit?: boolean;
   /** Extra className for the outer form. */
   className?: string;
   /** Form fields. Use `<FormTextField>` etc. or your own components that read from `useFormContext`. */
@@ -109,6 +118,7 @@ export function FormShell<TSchema extends FieldValues>({
   submitVariant = "default",
   secondaryActions,
   disabled,
+  hideSubmit = false,
   className,
   children,
 }: FormShellProps<TSchema>) {
@@ -168,18 +178,20 @@ export function FormShell<TSchema extends FieldValues>({
       >
         <div className="space-y-4">{children}</div>
 
-        <div className="flex items-center justify-between gap-2 pt-4 border-t">
-          <div className="flex items-center gap-2">{secondaryActions}</div>
-          <Button
-            type="submit"
-            variant={submitVariant}
-            disabled={disabled || submitting}
-            className="min-w-[7rem]"
-            rateLimitAware
-          >
-            {submitting ? "جارٍ الحفظ..." : submitLabel}
-          </Button>
-        </div>
+        {!hideSubmit && (
+          <div className="flex items-center justify-between gap-2 pt-4 border-t">
+            <div className="flex items-center gap-2">{secondaryActions}</div>
+            <Button
+              type="submit"
+              variant={submitVariant}
+              disabled={disabled || submitting}
+              className="min-w-[7rem]"
+              rateLimitAware
+            >
+              {submitting ? "جارٍ الحفظ..." : submitLabel}
+            </Button>
+          </div>
+        )}
       </form>
     </FormProvider>
   );
@@ -231,6 +243,10 @@ export interface FormTextFieldProps extends BaseFieldProps {
   autoComplete?: string;
   inputMode?: ComponentProps<typeof Input>["inputMode"];
   disabled?: boolean;
+  /** Forwarded to the underlying <Input>. Useful for number/date inputs. */
+  min?: string | number;
+  max?: string | number;
+  step?: string | number;
 }
 
 export function FormTextField({
@@ -244,6 +260,9 @@ export function FormTextField({
   autoComplete,
   inputMode,
   disabled,
+  min,
+  max,
+  step,
 }: FormTextFieldProps) {
   const { register } = useFormContext();
   return (
@@ -261,6 +280,9 @@ export function FormTextField({
         autoComplete={autoComplete}
         inputMode={inputMode}
         disabled={disabled}
+        min={min}
+        max={max}
+        step={step}
         {...register(name)}
       />
     </FieldWrapper>
@@ -409,6 +431,151 @@ export function FormSelectField({
   );
 }
 
+export interface FormCheckboxFieldProps extends Omit<BaseFieldProps, "label"> {
+  /** Label shown to the right of the checkbox, not above it. */
+  label: string;
+  disabled?: boolean;
+}
+
+/**
+ * Inline checkbox + label. Unlike the other field primitives the label
+ * sits next to the box rather than above it, since that's the visual
+ * convention for booleans across the app.
+ */
+export function FormCheckboxField({
+  name,
+  label,
+  description,
+  className,
+  disabled,
+}: FormCheckboxFieldProps) {
+  const { control, formState } = useFormContext();
+  const error = (formState.errors[name]?.message as string | undefined) ?? undefined;
+  return (
+    <div className={cn("space-y-1.5", className)}>
+      <div className="flex items-center gap-2">
+        <Controller
+          name={name}
+          control={control}
+          render={({ field }) => (
+            <Checkbox
+              id={name}
+              disabled={disabled}
+              checked={Boolean(field.value)}
+              onCheckedChange={(v) => field.onChange(v === true)}
+            />
+          )}
+        />
+        <Label htmlFor={name} className="text-sm font-medium">
+          {label}
+        </Label>
+      </div>
+      {description && !error && (
+        <p className="text-xs text-muted-foreground">{description}</p>
+      )}
+      {error && <p className="text-xs text-status-error-foreground">{error}</p>}
+    </div>
+  );
+}
+
+export interface FormSwitchFieldProps extends Omit<BaseFieldProps, "label"> {
+  label: string;
+  disabled?: boolean;
+}
+
+export function FormSwitchField({
+  name,
+  label,
+  description,
+  className,
+  disabled,
+}: FormSwitchFieldProps) {
+  const { control, formState } = useFormContext();
+  const error = (formState.errors[name]?.message as string | undefined) ?? undefined;
+  return (
+    <div className={cn("space-y-1.5", className)}>
+      <div className="flex items-center gap-2">
+        <Controller
+          name={name}
+          control={control}
+          render={({ field }) => (
+            <Switch
+              id={name}
+              disabled={disabled}
+              checked={Boolean(field.value)}
+              onCheckedChange={(v) => field.onChange(v === true)}
+            />
+          )}
+        />
+        <Label htmlFor={name} className="text-sm font-medium">
+          {label}
+        </Label>
+      </div>
+      {description && !error && (
+        <p className="text-xs text-muted-foreground">{description}</p>
+      )}
+      {error && <p className="text-xs text-status-error-foreground">{error}</p>}
+    </div>
+  );
+}
+
+export interface FormEntitySelectProps extends BaseFieldProps {
+  /**
+   * Existing entity-select component (VehicleSelect, DriverSelect, …)
+   * that exposes a `value`/`onChange` pair returning string ids.
+   */
+  select: React.ComponentType<{
+    value: string;
+    onChange: (v: string) => void;
+    label?: string;
+    required?: boolean;
+    error?: string;
+    placeholder?: string;
+    disabled?: boolean;
+  }>;
+  placeholder?: string;
+  disabled?: boolean;
+}
+
+/**
+ * Bridges an existing app-specific entity picker (VehicleSelect,
+ * EmployeeSelect, …) into FormShell. The wrapped picker keeps its
+ * label/error chrome, so the field reads identical to the original
+ * page after migration.
+ */
+export function FormEntitySelect({
+  name,
+  label,
+  description: _description,
+  required,
+  className,
+  select: SelectComponent,
+  placeholder,
+  disabled,
+}: FormEntitySelectProps) {
+  const { control, formState } = useFormContext();
+  const error = (formState.errors[name]?.message as string | undefined) ?? undefined;
+  return (
+    <div className={cn(className)}>
+      <Controller
+        name={name}
+        control={control}
+        render={({ field }) => (
+          <SelectComponent
+            value={(field.value as string) ?? ""}
+            onChange={field.onChange}
+            label={label}
+            required={required}
+            error={error}
+            placeholder={placeholder}
+            disabled={disabled}
+          />
+        )}
+      />
+    </div>
+  );
+}
+
 /**
  * Grid wrapper for two-column layouts inside FormShell. Pages can use
  * this instead of inline `<div className="grid grid-cols-2 gap-4">`
@@ -419,12 +586,18 @@ export function FormGrid({
   className,
   children,
 }: {
-  cols?: 1 | 2 | 3;
+  cols?: 1 | 2 | 3 | 4;
   className?: string;
   children: ReactNode;
 }) {
   const colClass =
-    cols === 3 ? "md:grid-cols-3" : cols === 2 ? "md:grid-cols-2" : "md:grid-cols-1";
+    cols === 4
+      ? "md:grid-cols-4"
+      : cols === 3
+        ? "md:grid-cols-3"
+        : cols === 2
+          ? "md:grid-cols-2"
+          : "md:grid-cols-1";
   return (
     <div className={cn("grid grid-cols-1 gap-4", colClass, className)}>
       {children}

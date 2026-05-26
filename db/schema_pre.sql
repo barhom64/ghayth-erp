@@ -2,7 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict NBRaaBJcUZhwI8jcWlHvf1SMzkzMwjvHohkUT6KaiqbjaZoO0Zc1cKB4vuq83By
 
 
 SET statement_timeout = 0;
@@ -521,18 +520,6 @@ DROP INDEX IF EXISTS public.official_letters_status_sent_idx;
 DROP INDEX IF EXISTS public.official_letters_ref_idx;
 DROP INDEX IF EXISTS public.official_letters_created_by_idx;
 DROP INDEX IF EXISTS public.official_letters_branch_idx;
-DROP INDEX IF EXISTS public.numbering_schemes_module_idx;
-DROP INDEX IF EXISTS public.numbering_schemes_company_idx;
-DROP INDEX IF EXISTS public.numbering_counters_unique_scope;
-DROP INDEX IF EXISTS public.numbering_counters_company_idx;
-DROP INDEX IF EXISTS public.numbering_audit_logs_scheme_idx;
-DROP INDEX IF EXISTS public.numbering_audit_logs_created_idx;
-DROP INDEX IF EXISTS public.numbering_audit_logs_company_idx;
-DROP INDEX IF EXISTS public.numbering_audit_logs_assignment_idx;
-DROP INDEX IF EXISTS public.numbering_assignments_unique_number;
-DROP INDEX IF EXISTS public.numbering_assignments_status_idx;
-DROP INDEX IF EXISTS public.numbering_assignments_scheme_idx;
-DROP INDEX IF EXISTS public.numbering_assignments_entity_idx;
 DROP INDEX IF EXISTS public.mudad_settlements_journal_idx;
 DROP INDEX IF EXISTS public.leave_balances_employee_idx;
 DROP INDEX IF EXISTS public.leave_balances_company_idx;
@@ -7697,7 +7684,8 @@ CREATE TABLE public.fleet_trips (
     "deletedAt" timestamp with time zone,
     "cancelledAt" timestamp with time zone,
     "cancellationReason" text,
-    "sourceKey" character varying(128)
+    "sourceKey" character varying(128),
+    ref character varying(50)
 );
 
 
@@ -9171,7 +9159,7 @@ CREATE TABLE public.integrations (
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
     CONSTRAINT integrations_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('error'::character varying)::text]))),
-    CONSTRAINT integrations_type_check_v2 CHECK (((type)::text = ANY ((ARRAY['email'::character varying, 'sms'::character varying, 'whatsapp'::character varying, 'webhook'::character varying, 'pbx'::character varying, 'push'::character varying, 'sms_otp'::character varying, 'siem'::character varying, 'zatca'::character varying, 'stt'::character varying, 'storage'::character varying, 'object_storage'::character varying])::text[])))
+    CONSTRAINT integrations_type_check_v2 CHECK (((type)::text = ANY (ARRAY[('email'::character varying)::text, ('sms'::character varying)::text, ('whatsapp'::character varying)::text, ('webhook'::character varying)::text, ('pbx'::character varying)::text, ('push'::character varying)::text, ('sms_otp'::character varying)::text, ('siem'::character varying)::text, ('zatca'::character varying)::text, ('stt'::character varying)::text, ('storage'::character varying)::text, ('object_storage'::character varying)::text])))
 );
 
 
@@ -12676,6 +12664,7 @@ ALTER SEQUENCE public.project_tasks_id_seq OWNED BY public.project_tasks.id;
 CREATE TABLE public.projects (
     id integer NOT NULL,
     "companyId" integer NOT NULL,
+    ref character varying(50),
     name character varying(300) NOT NULL,
     description text,
     "clientId" integer,
@@ -15636,6 +15625,7 @@ CREATE TABLE public.umrah_groups (
     "companyId" integer NOT NULL,
     "branchId" integer,
     "nuskGroupNumber" character varying(30) NOT NULL,
+    "internalRef" character varying(50),
     name character varying(255),
     "agentId" integer,
     "subAgentId" integer,
@@ -16733,7 +16723,7 @@ CREATE TABLE public.vendor_secrets (
     config jsonb DEFAULT '{}'::jsonb NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
-    CONSTRAINT vendor_secrets_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'disabled'::character varying])::text[])))
+    CONSTRAINT vendor_secrets_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disabled'::character varying)::text])))
 );
 
 

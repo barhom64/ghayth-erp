@@ -123,7 +123,7 @@ export function RisksTab() {
             noToolbar
             pageSize={20}
             renderRowExtras={(r) => {
-              if (editingId === r.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(r.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (editingId === r.id) return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(r.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === r.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(r.id)} onCancel={cancelDelete} isPending={isPending} itemName={r.title} entityType="risk" entityId={r.id} />;
               return null;
             }}
