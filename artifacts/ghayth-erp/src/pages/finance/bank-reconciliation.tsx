@@ -13,7 +13,7 @@ import {
   type DataTableColumn,
   PageShell,
 } from "@workspace/ui-core";
-import { Upload, CheckCircle, XCircle, RefreshCw, Landmark, Link2 } from "lucide-react";
+import { Upload, CheckCircle, XCircle, RefreshCw, Landmark, Link2, GitMerge, Activity, FileCheck2 } from "lucide-react";
 import { Link } from "wouter";
 import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -126,6 +126,28 @@ export default function BankReconciliationPage() {
     <PageShell
       title="التسوية البنكية"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "التسوية البنكية" }]}
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/reconciliation-hub">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <GitMerge className="h-3.5 w-3.5 ml-1" />
+              مركز التسويات
+            </Button>
+          </Link>
+          <Link href="/finance/bank-accounts-watch">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Activity className="h-3.5 w-3.5 ml-1" />
+              مراقبة البنوك
+            </Button>
+          </Link>
+          <Link href="/finance/account-recon-workpaper">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <FileCheck2 className="h-3.5 w-3.5 ml-1" />
+              ورقة تسوية
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <div className="grid md:grid-cols-2 gap-4">
         <Card>

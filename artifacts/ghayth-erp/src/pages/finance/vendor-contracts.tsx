@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { Handshake, Plus, AlertTriangle, CalendarCheck, CalendarX } from "lucide-react";
+import { Handshake, Plus, AlertTriangle, CalendarCheck, CalendarX, FileText, Users } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 interface VendorContract {
@@ -202,6 +202,17 @@ export default function VendorContractsPage() {
         { label: "العقود" },
       ]}
       actions={
+        <>
+          <Link href="/finance/vendor-contracts-tracker">
+            <Button variant="outline" size="sm">
+              <FileText className="h-4 w-4 me-2" />متابعة العقود
+            </Button>
+          </Link>
+          <Link href="/finance/vendors">
+            <Button variant="outline" size="sm">
+              <Users className="h-4 w-4 me-2" />الموردون
+            </Button>
+          </Link>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <GuardedButton perm="finance:create">
@@ -269,6 +280,7 @@ export default function VendorContractsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </>
       }
     >
       <FinanceTabsNav />

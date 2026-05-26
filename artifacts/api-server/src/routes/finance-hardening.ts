@@ -940,6 +940,7 @@ financeHardeningRouter.post("/bank-guarantees", authorize({ feature: "finance.ha
         entityKey: "bank_guarantee",
         entityTable: "bank_guarantees",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       ref = issuedBg.number;
     }
@@ -1469,6 +1470,7 @@ financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening
         entityKey: "project",
         entityTable: "projects",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       projectRef = issuedProj.number;
     }

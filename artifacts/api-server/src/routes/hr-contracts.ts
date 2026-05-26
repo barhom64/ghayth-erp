@@ -173,6 +173,7 @@ contractsRouter.post("/", authorize({ feature: "hr.contracts", action: "create" 
         entityKey: "employee_contract",
         entityTable: "employee_contracts",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       const [insertedRow] = await rawQuery<Record<string, unknown>>(
         `INSERT INTO employee_contracts (
@@ -627,6 +628,7 @@ contractsRouter.post("/:id/renew", authorize({ feature: "hr.contracts", action: 
         entityTable: "employee_contracts",
         actorId: scope.userId,
         metadata: { renewalOfContractId: id },
+        expectedTiming: "on_draft",
       });
       const insertRes = await client.query(
         `INSERT INTO employee_contracts (

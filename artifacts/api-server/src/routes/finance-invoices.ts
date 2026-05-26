@@ -617,6 +617,7 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       entityKey: "sales_invoice",
       entityTable: "invoices",
       actorId: scope.userId,
+      expectedTiming: "on_draft",
     });
     const ref = issued.number;
 

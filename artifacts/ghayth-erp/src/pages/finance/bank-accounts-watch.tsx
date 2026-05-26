@@ -9,7 +9,7 @@ import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import {
   Landmark, TrendingUp, TrendingDown, ChevronRight, Download,
-  Activity, AlertTriangle,
+  Activity, AlertTriangle, RefreshCw, Calendar, Banknote,
 } from "lucide-react";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 
@@ -153,6 +153,28 @@ export default function BankAccountsWatchPage() {
     <PageShell
       title="مراقبة الحسابات البنكية"
       subtitle="نظرة فورية على رصيد كل حساب نقدي/بنكي + حركة آخر 30 يوم"
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/bank-reconciliation">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <RefreshCw className="h-3.5 w-3.5 ml-1" />
+              التسوية البنكية
+            </Button>
+          </Link>
+          <Link href="/finance/cash-position-calculator">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Banknote className="h-3.5 w-3.5 ml-1" />
+              مركز السيولة
+            </Button>
+          </Link>
+          <Link href="/finance/cash-calendar">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Calendar className="h-3.5 w-3.5 ml-1" />
+              تقويم النقد
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 
