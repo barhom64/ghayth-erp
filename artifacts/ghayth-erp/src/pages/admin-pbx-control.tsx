@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils";
 import {
   Phone, ListTree, Headphones, Users, MessageSquareText, Plus, RefreshCw,
   PlayCircle, Trash2, FlaskConical, Sparkles, AlertOctagon,
+  Settings, Copy, KeyRound, CheckCircle2,
 } from "lucide-react";
 
 interface ExtensionRow {
@@ -117,6 +118,33 @@ interface Overview {
   transcripts: { pending: number; failed: number; readyForSummary: number };
   recordings: { active: number };
   collectedAt: string;
+}
+
+interface SetupInfo {
+  baseUrl: string;
+  webhooks: Array<{ event: string; url: string; description: string }>;
+  signing: {
+    configured: boolean;
+    algorithm: string;
+    bearerAlternative: string;
+    envVarName: string;
+  };
+  didMappingsActive: number;
+  vendorNotes: Record<string, string>;
+}
+
+interface SignatureTestResult {
+  signatureHeader: string;
+  bearerHeader: string;
+  sampleBody: string;
+  curlExample: string;
+  note: string;
+}
+
+interface GeneratedSecret {
+  secret: string;
+  length: number;
+  notes: string;
 }
 
 function fmtBytes(n: number): string {
@@ -325,6 +353,7 @@ export default function AdminPbxControl() {
         <Tabs value={tab} onValueChange={setTab} className="space-y-4">
           <TabsList>
             <TabsTrigger value="overview"><Phone className="w-4 h-4 me-1" />نظرة عامة</TabsTrigger>
+            <TabsTrigger value="setup"><Settings className="w-4 h-4 me-1" />الإعداد</TabsTrigger>
             <TabsTrigger value="extensions"><Users className="w-4 h-4 me-1" />الامتدادات ({extensions.length})</TabsTrigger>
             <TabsTrigger value="ivr"><ListTree className="w-4 h-4 me-1" />الـ IVR ({menus.length})</TabsTrigger>
             <TabsTrigger value="recordings"><Headphones className="w-4 h-4 me-1" />التسجيلات ({recordings.length})</TabsTrigger>
@@ -405,6 +434,11 @@ export default function AdminPbxControl() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* ── Setup (vendor wiring) ─────────────────────────── */}
+          <TabsContent value="setup" className="space-y-4">
+            <PbxSetupPanel />
           </TabsContent>
 
           {/* ── Extensions ─────────────────────────────────────── */}
@@ -854,5 +888,210 @@ function ViewTranscriptDialog({ transcriptId, onClose, onSummarise }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─────────────────────── Setup panel (vendor wiring) ─────────────────────
+
+function PbxSetupPanel() {
+  const { data: setup, isLoading, error, refetch } = useApiQuery<SetupInfo>(
+    ["pbx-control-setup"], "/admin/pbx-control/setup",
+  );
+  const [generatedSecret, setGeneratedSecret] = useState<string | null>(null);
+  const [testSecret, setTestSecret] = useState("");
+  const [testResult, setTestResult] = useState<SignatureTestResult | null>(null);
+
+  const generate = useMutation({
+    mutationFn: () => apiFetch<GeneratedSecret>("/admin/pbx-control/setup/generate-secret", { method: "POST" }),
+    onSuccess: (r) => { setGeneratedSecret(r.secret); toast({ title: "تم توليد سرّ جديد" }); },
+    onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
+  });
+
+  const testSig = useMutation({
+    mutationFn: (b: { secret: string; body?: string }) => apiFetch<SignatureTestResult>(
+      "/admin/pbx-control/setup/test-signature",
+      { method: "POST", body: JSON.stringify(b) },
+    ),
+    onSuccess: (r) => setTestResult(r),
+    onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
+  });
+
+  const copy = (text: string, label: string) => {
+    navigator.clipboard.writeText(text).then(
+      () => toast({ title: `نُسخ ${label}` }),
+      () => toast({ title: "فشل النسخ", variant: "destructive" }),
+    );
+  };
+
+  return (
+    <PageStateWrapper isLoading={isLoading && !setup} error={error} onRetry={refetch}>
+      {setup && (
+        <div className="space-y-4">
+
+          {/* Signing status banner */}
+          <Card className={cn(
+            "border-0 shadow-sm",
+            setup.signing.configured ? "bg-status-success-surface" : "bg-status-warning-surface/60",
+          )}>
+            <CardContent className="p-4 flex items-center gap-3">
+              {setup.signing.configured
+                ? <CheckCircle2 className="w-8 h-8 text-status-success-foreground" />
+                : <AlertOctagon className="w-8 h-8 text-status-warning-foreground" />}
+              <div className="flex-1">
+                <p className="text-sm font-semibold">
+                  {setup.signing.configured ? "السرّ مضبوط في الخادم" : "السرّ غير مضبوط — الـ webhooks ستُرفض بـ 403"}
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  متغيّر البيئة: <span className="font-mono">{setup.signing.envVarName}</span>
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Webhook URLs */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Phone className="w-4 h-4" />Webhook URLs لمزوّد الـ PBX
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-xs text-muted-foreground mb-2">
+                هذه الـ URLs يضعها مزوّد الـ PBX (Twilio / 3CX / FreePBX / Asterisk) في إعدادات الـ webhooks لديه. كل طلب يجب أن يحمل توقيع HMAC أو Bearer header.
+              </p>
+              {setup.webhooks.map((w) => (
+                <div key={w.event} className="bg-surface-subtle rounded p-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                    <Badge variant="outline" className="font-mono text-xs">{w.event}</Badge>
+                    <Button variant="ghost" size="sm" onClick={() => copy(w.url, w.event)}>
+                      <Copy className="w-3 h-3 me-1" />نسخ
+                    </Button>
+                  </div>
+                  <p className="font-mono text-xs break-all">{w.url}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">{w.description}</p>
+                </div>
+              ))}
+              <div className="bg-status-info-surface rounded p-3 text-xs">
+                <p className="font-semibold mb-1">طريقة المصادقة:</p>
+                <p className="font-mono text-[11px]">{setup.signing.algorithm}</p>
+                <p className="font-mono text-[11px] mt-1">{setup.signing.bearerAlternative}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Generate secret */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <KeyRound className="w-4 h-4" />توليد سرّ webhook جديد
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                ولّد سرّاً عشوائياً قويّاً (32 بايت/64 محرف hex). انسخه إلى <span className="font-mono">PBX_WEBHOOK_SECRET</span> في بيئة الخادم وأعد تشغيله. الـ webhooks بعدها ستُقبَل.
+              </p>
+              <Button rateLimitAware onClick={() => generate.mutate()} disabled={generate.isPending}>
+                <KeyRound className="w-4 h-4 me-1" />ولّد سرّاً
+              </Button>
+              {generatedSecret && (
+                <div className="bg-status-warning-surface/40 border border-status-warning-surface rounded p-3">
+                  <p className="text-xs font-semibold mb-1 text-status-warning-foreground">السرّ — لن يُعرض مرّة أخرى:</p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs font-mono break-all flex-1">{generatedSecret}</code>
+                    <Button variant="ghost" size="sm" onClick={() => copy(generatedSecret, "السرّ")}>
+                      <Copy className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Test signature */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <FlaskConical className="w-4 h-4" />اختبار توقيع HMAC
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                أدخل السرّ الذي وضعته في إعدادات الـ PBX؛ نُولّد لك header التوقيع + أمر curl جاهز للتشغيل من سطر الأوامر. لا يصل أي شيء للـ webhook الفعلي.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  className="flex-1 px-3 py-2 text-sm border border-border rounded font-mono"
+                  value={testSecret}
+                  onChange={(e) => setTestSecret(e.target.value)}
+                  placeholder="السرّ الذي تستخدمه في الـ PBX"
+                />
+                <Button
+                  rateLimitAware
+                  disabled={testSig.isPending || testSecret.length < 8}
+                  onClick={() => testSig.mutate({ secret: testSecret })}
+                >
+                  <FlaskConical className="w-4 h-4 me-1" />ولّد
+                </Button>
+              </div>
+              {testResult && (
+                <div className="space-y-2 mt-2">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Header التوقيع</Label>
+                    <div className="bg-surface-subtle rounded p-2 flex items-center gap-2">
+                      <code className="text-[11px] font-mono break-all flex-1">{testResult.signatureHeader}</code>
+                      <Button variant="ghost" size="sm" onClick={() => copy(testResult.signatureHeader, "header التوقيع")}>
+                        <Copy className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">أمر curl للاختبار</Label>
+                    <div className="bg-surface-subtle rounded p-2 flex items-start gap-2">
+                      <pre className="text-[11px] font-mono whitespace-pre-wrap break-all flex-1">{testResult.curlExample}</pre>
+                      <Button variant="ghost" size="sm" onClick={() => copy(testResult.curlExample, "أمر curl")}>
+                        <Copy className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{testResult.note}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* DID mapping status */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Phone className="w-4 h-4" />ربط أرقام الـ DID
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs">
+                عدد أرقام DID المُسجَّلة لهذه الشركة: <span className="font-mono font-semibold">{setup.didMappingsActive}</span>
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                أضِف أرقام DID من <span className="font-mono">/admin/integrations</span> → integration بنوع <span className="font-mono">pbx</span> + حقل <span className="font-mono">config.did</span>. أرقام DID تحدّد أيّ شركة يُوجَّه إليها الاتصال الوارد عند تعدّد المستأجرين.
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Vendor cheatsheet */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">إرشادات لكل مزوّد</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {Object.entries(setup.vendorNotes).map(([vendor, note]) => (
+                <div key={vendor} className="text-xs">
+                  <span className="font-mono font-semibold">{vendor}:</span> <span className="text-muted-foreground">{note}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </PageStateWrapper>
   );
 }

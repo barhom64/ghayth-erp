@@ -34,7 +34,9 @@ import {
   runPendingTranscription,
 } from "../lib/pbxControl.js";
 import { aiEngine } from "../lib/aiEngine.js";
+import { config } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
+import { createHmac, randomBytes } from "node:crypto";
 
 const router = Router();
 
@@ -630,5 +632,135 @@ router.post("/transcripts/:id/summarise", authorize({ feature: "admin", action: 
     handleRouteError(err, res, "admin/pbx-control/transcripts/summarise");
   }
 });
+
+// ─────────────────────── Telephony vendor setup helper ───────────────────
+//
+// The PBX webhook endpoints (/api/communications/pbx/{incoming,
+// completed, status}) already exist and verify an HMAC signature
+// against PBX_WEBHOOK_SECRET. Until now there was no UI surface to
+// tell the operator what URLs to plug into their telephony vendor,
+// what secret to share, or how to verify the wiring actually works.
+//
+// This trio of endpoints fixes that:
+//   GET  /setup          — vendor-agnostic "give your PBX these"
+//                         payload: webhook URLs, secret status, DID
+//                         mapping count, paste-ready dialplan note
+//   POST /setup/generate-secret — propose a fresh 64-hex-char secret
+//                         the operator can copy into PBX_WEBHOOK_SECRET
+//                         (env), with the matching base64-as-bearer
+//                         alternative for PBXs that don't speak HMAC
+//   POST /setup/test-signature — compute the HMAC-SHA256 of a sample
+//                         body using a secret the operator provides,
+//                         and return both the header value AND a
+//                         curl one-liner that would POST it to
+//                         /pbx/incoming. The operator can run it
+//                         and confirm the round-trip without ever
+//                         leaving the admin UI.
+
+router.get("/setup", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+  try {
+    const cid = req.scope!.companyId;
+    // Resolve the public base URL the same way the verifyBlock + print
+    // links do — Replit-aware, falls back to the request host.
+    const protoHeader = String(req.get("x-forwarded-proto") ?? "");
+    const proto = protoHeader.split(",")[0]?.trim() || (req.secure ? "https" : "http");
+    const host = req.get("x-forwarded-host") ?? req.get("host") ?? "localhost:5000";
+    const baseUrl = `${proto}://${host}`;
+
+    const webhooks = [
+      { event: "incoming", url: `${baseUrl}/api/communications/pbx/incoming`, description: "اتصال وارد جديد — يُستدعى لحظة بداية الرنين" },
+      { event: "completed", url: `${baseUrl}/api/communications/pbx/completed`, description: "اكتمال المكالمة — يحمل duration + recordingUrl" },
+      { event: "status",    url: `${baseUrl}/api/communications/pbx/status`,    description: "تحديث حالة المكالمة (تمّ الرد / تحويل / إنهاء)" },
+    ];
+
+    // DID count — how many integrations rows declare a phone number
+    // mapped to this tenant. The /pbx/incoming handler uses this to
+    // resolve a calledNumber to a companyId before processing.
+    const [didRow] = await rawQuery<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM integrations
+        WHERE "companyId" = $1 AND status = 'active' AND config->>'did' IS NOT NULL`,
+      [cid],
+    ).catch(() => [{ count: "0" }]);
+
+    res.json(maskFields(req, {
+      baseUrl,
+      webhooks,
+      // We never reveal the actual secret value — even a length leak
+      // helps an attacker. Just report "configured" / "missing".
+      signing: {
+        configured: !!config.pbx.webhookSecret,
+        algorithm: "HMAC-SHA256 over raw request body, header: X-PBX-Signature: sha256=<hex>",
+        bearerAlternative: "Authorization: Bearer <secret> (same secret, simpler PBXs)",
+        envVarName: "PBX_WEBHOOK_SECRET",
+      },
+      didMappingsActive: Number(didRow?.count ?? 0),
+      vendorNotes: {
+        twilio:   "Set Voice URLs to /pbx/incoming + /pbx/completed; add Authorization header via TwiML Bin or webhook signer.",
+        freepbx:  "Use dialplan AGI/post-call hooks to POST to the URLs above with the Authorization header.",
+        threeCX:  "Configure CRM template → REST hooks; map call.start → incoming, call.end → completed, dtmf → ivr-action.",
+        asterisk: "Use ARI events or a hook in the dialplan to curl POST the URLs above; sign body with openssl dgst -sha256 -hmac.",
+      },
+    }));
+  } catch (err) {
+    handleRouteError(err, res, "admin/pbx-control/setup");
+  }
+});
+
+router.post("/setup/generate-secret", authorize({ feature: "admin", action: "create" }), async (req, res) => {
+  try {
+    // 32 random bytes = 64 hex chars — enough entropy that brute-force
+    // is not in the threat model. Returned plaintext ONCE; the operator
+    // copies it into PBX_WEBHOOK_SECRET (env) themselves.
+    const hex = randomBytes(32).toString("hex");
+    res.json(maskFields(req, {
+      secret: hex,
+      length: hex.length,
+      notes: "انسخ هذه القيمة إلى متغيّر البيئة PBX_WEBHOOK_SECRET وأعد تشغيل الخادم. لن نخزّنها هنا — لا يمكن استعراضها مرّة أخرى.",
+    }));
+  } catch (err) {
+    handleRouteError(err, res, "admin/pbx-control/setup/generate-secret");
+  }
+});
+
+const testSignatureSchema = z.object({
+  secret: z.string().min(8, "السرّ مطلوب — على الأقل 8 محارف"),
+  body: z.string().default(`{"callId":"TEST-${Date.now()}","callerNumber":"+966500000000","calledNumber":"+966500000001","direction":"inbound"}`),
+});
+
+router.post("/setup/test-signature", authorize({ feature: "admin", action: "create" }), async (req, res) => {
+  try {
+    const body = zodParse(testSignatureSchema.safeParse(req.body));
+    const signature = createHmac("sha256", body.secret).update(body.body).digest("hex");
+
+    const proto = String(req.get("x-forwarded-proto") ?? "").split(",")[0]?.trim() || (req.secure ? "https" : "http");
+    const host = req.get("x-forwarded-host") ?? req.get("host") ?? "localhost:5000";
+    const baseUrl = `${proto}://${host}`;
+
+    res.json(maskFields(req, {
+      signatureHeader: `X-PBX-Signature: sha256=${signature}`,
+      bearerHeader: `Authorization: Bearer ${body.secret}`,
+      sampleBody: body.body,
+      curlExample: [
+        `curl -X POST '${baseUrl}/api/communications/pbx/incoming' \\`,
+        `  -H 'Content-Type: application/json' \\`,
+        `  -H 'X-PBX-Signature: sha256=${signature}' \\`,
+        `  -d '${body.body.replace(/'/g, "'\\''")}'`,
+      ].join("\n"),
+      note: "شغّل أمر الـ curl أعلاه؛ إذا أعاد 200 فالـ signature يعمل. إذا أعاد 403 invalid_signature فالسرّ في الخادم لا يطابق ما أدخلته هنا.",
+    }));
+  } catch (err) {
+    handleRouteError(err, res, "admin/pbx-control/setup/test-signature");
+  }
+});
+
+// NOTE: the vendor-facing /ivr-action webhook is intentionally NOT
+// mounted here. This router runs behind authMiddleware + requireMinLevel(90),
+// which would 401 a telephony vendor's request (no JWT). The public
+// counterpart belongs in communications.ts (where the other signed
+// PBX webhooks already live) or in a dedicated public sub-router —
+// to be added when a real telephony vendor is wired. Until then the
+// /admin/pbx-control/ivr-test endpoint above gives the operator the
+// same resolver behind the admin auth chain, so menu design + testing
+// works end-to-end without touching production telephony.
 
 export default router;
