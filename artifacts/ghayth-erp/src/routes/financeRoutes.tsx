@@ -75,6 +75,7 @@ const VendorsEdit = lazy(() => import("@/pages/create/finance/vendors-edit"));
 const VendorDetail = lazy(() => import("@/pages/finance/vendor-detail"));
 const VendorStatement = lazy(() => import("@/pages/finance/vendor-statement"));
 const VendorStatementPrint = lazy(() => import("@/pages/finance/vendor-statement-print"));
+const Vendor360Sheet = lazy(() => import("@/pages/finance/vendor-360-sheet"));
 const VendorContracts = lazy(() => import("@/pages/finance/vendor-contracts"));
 const VendorSpend = lazy(() => import("@/pages/finance/vendor-spend"));
 const VendorSettlementWorkbench = lazy(() => import("@/pages/finance/vendor-settlement-workbench"));
@@ -248,6 +249,7 @@ export const financeRoutes = [
   { path: "/finance/vendors/:id/edit", component: VendorsEdit, subKey: "vendors" },
   { path: "/finance/vendors/:id/statement", component: VendorStatement, subKey: "vendors" },
   { path: "/finance/vendor-statement-print", component: VendorStatementPrint },
+  { path: "/finance/vendor-360-sheet", component: Vendor360Sheet },
   { path: "/finance/contracts", component: VendorContracts },
   { path: "/finance/vendor-spend", component: VendorSpend },
   { path: "/finance/vendor-settlement-workbench", component: VendorSettlementWorkbench },
