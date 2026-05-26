@@ -115,6 +115,7 @@ const BankGuarantees = lazy(() => import("@/pages/finance/bank-guarantees"));
 const JournalManual = lazy(() => import("@/pages/finance/journal-manual"));
 const GLPostingQueue = lazy(() => import("@/pages/finance/gl-posting-queue"));
 const JournalManualCreate = lazy(() => import("@/pages/create/finance/journal-manual-create"));
+const JournalQuickTemplates = lazy(() => import("@/pages/create/finance/journal-quick-templates"));
 const JournalReversal = lazy(() => import("@/pages/create/finance/journal-reversal"));
 const JournalManualDetail = lazy(() => import("@/pages/finance/journal-manual-detail"));
 const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
@@ -298,6 +299,7 @@ export const financeRoutes = [
   { path: "/finance/bank-guarantees", component: BankGuarantees },
   { path: "/finance/journal-manual", component: JournalManual },
   { path: "/finance/journal-manual/create", component: JournalManualCreate },
+  { path: "/finance/journal-quick-templates", component: JournalQuickTemplates },
   { path: "/finance/journal/reverse", component: JournalReversal },
   { path: "/finance/journal-manual/:id", component: JournalManualDetail },
   { path: "/finance/gl-posting-queue", component: GLPostingQueue },
