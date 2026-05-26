@@ -100,7 +100,7 @@ export default function WhtCategoriesPage() {
       header: "النسبة %",
       sortable: true,
       render: (c) => (
-        <span className="font-mono font-semibold text-amber-700">
+        <span className="font-mono font-semibold text-status-warning-foreground">
           {Number(c.rate).toFixed(2)}%
         </span>
       ),

@@ -293,8 +293,8 @@ export default function AllocationRuleCreate() {
         </CardContent>
       </Card>
 
-      <Card className="mt-4 bg-amber-50/30 border-amber-200">
-        <CardContent className="p-3 text-xs text-amber-800">
+      <Card className="mt-4 bg-status-warning-surface/30 border-status-warning-surface">
+        <CardContent className="p-3 text-xs text-status-warning-foreground">
           ⓘ هذا الـ Form يدعم القواعد البسيطة. للقواعد المعقدة مع
           <code className="bg-white border px-1 mx-1 rounded">conditionsJson</code> أو
           <code className="bg-white border px-1 mx-1 rounded">dimensionStrategyJson</code> أو ربط الحسابات بـ IDs محددة،

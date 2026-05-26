@@ -47,7 +47,7 @@ const CARDS: SettingsCard[] = [
     title: "فئات الاستقطاع (WHT)",
     description: "10 فئات سعودية مبذورة (إتاوات 15% / خدمات فنية 15% / إدارة 20% / فوائد 5% / ...) قابلة للتعديل.",
     icon: Receipt,
-    iconClass: "text-amber-700 bg-amber-50",
+    iconClass: "text-status-warning-foreground bg-status-warning-surface",
     group: "registries",
   },
   {
@@ -73,7 +73,7 @@ const CARDS: SettingsCard[] = [
     title: "كتالوج المنتجات والخدمات",
     description: "Product Accounting Catalog — كل منتج/خدمة له توجيه افتراضي للحساب ومركز التكلفة والكيان المرتبط ينطبق تلقائياً عند الاختيار.",
     icon: Package,
-    iconClass: "text-blue-600 bg-blue-50",
+    iconClass: "text-status-info-foreground bg-status-info-surface",
     group: "allocation",
   },
   {
@@ -91,7 +91,7 @@ const CARDS: SettingsCard[] = [
     title: "أسعار صرف العملات",
     description: "إدارة أسعار الصرف (USD/EUR/AED/...) — يدوية أو من البنك المركزي. تُستخدم في الفواتير متعددة العملات.",
     icon: Globe,
-    iconClass: "text-blue-700 bg-blue-50",
+    iconClass: "text-status-info-foreground bg-status-info-surface",
     group: "currency",
   },
   {
@@ -107,7 +107,7 @@ const CARDS: SettingsCard[] = [
     title: "سجل إعادة التقييم",
     description: "كل قيود FX revaluation اللي أُنشئت — الأثر التراكمي على الأرباح/الخسائر من تذبذب أسعار الصرف عبر الفترات.",
     icon: History,
-    iconClass: "text-blue-700 bg-blue-50",
+    iconClass: "text-status-info-foreground bg-status-info-surface",
     group: "currency",
   },
 
@@ -117,7 +117,7 @@ const CARDS: SettingsCard[] = [
     title: "طلبات الشراء (Purchase Requests)",
     description: "تدفّق طلب الشراء قبل إصدار PO — اعتماد ثم تحويل إلى أمر شراء رسمي. حوكمة مسبقة على الالتزامات.",
     icon: ClipboardList,
-    iconClass: "text-blue-600 bg-blue-50",
+    iconClass: "text-status-info-foreground bg-status-info-surface",
     group: "procurement",
   },
   {
@@ -135,7 +135,7 @@ const CARDS: SettingsCard[] = [
     title: "الفترات المالية",
     description: "تقفيل/فتح الفترات الشهرية — يمنع الترحيل في فترات مقفلة. مع سياسة قفل بعد الإقرار الضريبي.",
     icon: Calendar,
-    iconClass: "text-amber-700 bg-amber-50",
+    iconClass: "text-status-warning-foreground bg-status-warning-surface",
     group: "periods",
   },
   {

@@ -39,8 +39,8 @@ const SOURCE_LABEL: Record<string, string> = {
 const STATUS_INFO: Record<string, { label: string; tone: string; icon: any }> = {
   resolved: { label: "موجَّه", tone: "bg-emerald-100 text-emerald-800", icon: CheckCircle2 },
   manual_override: { label: "تعديل يدوي", tone: "bg-purple-100 text-purple-800", icon: Pencil },
-  partial: { label: "جزئي", tone: "bg-amber-100 text-amber-800", icon: AlertCircle },
-  unmapped: { label: "غير موجَّه", tone: "bg-red-100 text-red-800", icon: AlertCircle },
+  partial: { label: "جزئي", tone: "bg-amber-100 text-status-warning-foreground", icon: AlertCircle },
+  unmapped: { label: "غير موجَّه", tone: "bg-red-100 text-status-error-foreground", icon: AlertCircle },
 };
 
 function getEntityLink(sourceTable: string, sourceLineId: number): string | null {
@@ -151,7 +151,7 @@ export default function AllocationResultsPage() {
       render: (r) => {
         const warnings = Array.isArray(r.warningsJson) ? r.warningsJson : [];
         return warnings.length > 0
-          ? <Badge className="bg-amber-100 text-amber-800 text-[10px]">{warnings.length}</Badge>
+          ? <Badge className="bg-amber-100 text-status-warning-foreground text-[10px]">{warnings.length}</Badge>
           : <span className="text-muted-foreground italic text-xs">—</span>;
       },
     },
@@ -202,10 +202,10 @@ export default function AllocationResultsPage() {
             <p className="text-lg font-bold font-mono text-purple-700">{formatNumber(counts.override)}</p>
           </CardContent>
         </Card>
-        <Card className="border-red-300">
+        <Card className="border-status-error-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">غير موجَّه</p>
-            <p className="text-lg font-bold font-mono text-red-700">{formatNumber(counts.unmapped)}</p>
+            <p className="text-lg font-bold font-mono text-status-error-foreground">{formatNumber(counts.unmapped)}</p>
           </CardContent>
         </Card>
         <Card>
