@@ -4105,6 +4105,7 @@ router.post("/official-letters", authorize({ feature: "hr.organization", action:
       entityKey: "official_letter",
       entityTable: "official_letters",
       actorId: scope.userId,
+      expectedTiming: "on_draft",
     });
     const letterRef = issued.number;
 

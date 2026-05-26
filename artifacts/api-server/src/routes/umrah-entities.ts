@@ -350,6 +350,7 @@ router.put("/sub-agents/:id/link", authorize({ feature: "umrah", action: "create
         entityTable: "clients",
         actorId: scope.userId,
         metadata: { source: "umrah_agent_creation" },
+        expectedTiming: "on_draft",
       });
       const [newClient] = await rawQuery<{ id: number }>(
         `INSERT INTO clients ("companyId", name, phone, classification, source, code, "createdAt")
@@ -632,6 +633,7 @@ router.post("/groups", authorize({ feature: "umrah", action: "create" }), async 
       entityTable: "umrah_groups",
       seasonId: b.seasonId,
       actorId: scope.userId,
+      expectedTiming: "on_draft",
     });
     const rows = await rawQuery<Record<string, unknown>>(
       `INSERT INTO umrah_groups ("companyId","branchId","nuskGroupNumber","internalRef",name,"agentId","subAgentId","seasonId","mutamerCount","programDuration","createdBy")

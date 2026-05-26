@@ -1,6 +1,8 @@
+import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowUpCircle, DollarSign, Calendar, Wallet } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ArrowUpCircle, DollarSign, Calendar, Wallet, Send, Clock } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   DataTable,
@@ -61,6 +63,28 @@ export default function PaymentsPage() {
       subtitle="عرض تجميعي لجميع سندات الصرف — لإنشاء سند جديد استخدم صفحة السندات"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "المدفوعات" }]}
       loading={isLoading}
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/payment-run">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Send className="h-3.5 w-3.5 ml-1" />
+              دفعة جماعية
+            </Button>
+          </Link>
+          <Link href="/finance/ap-payment-calendar">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Calendar className="h-3.5 w-3.5 ml-1" />
+              تقويم الدفعات
+            </Button>
+          </Link>
+          <Link href="/finance/ap-aging">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Clock className="h-3.5 w-3.5 ml-1" />
+              تقادم الموردين
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">

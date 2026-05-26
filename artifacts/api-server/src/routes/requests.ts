@@ -312,6 +312,7 @@ router.post("/", authorize({ feature: "requests.my", action: "create" }), async 
         entityKey: "general_request",
         entityTable: "requests",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       const insertRes = await rawExecute(
         `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments, ref, "requestDate", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,CURRENT_DATE,$12)`,

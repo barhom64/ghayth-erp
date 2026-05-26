@@ -209,6 +209,28 @@ export default function DunningPage() {
         { href: "/finance/receivables", label: "التحصيل" },
         { label: "Dunning" },
       ]}
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/ar-collection-workbench">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Send className="h-3.5 w-3.5 ml-1" />
+              منضدة التحصيل
+            </Button>
+          </Link>
+          <Link href="/finance/ar-aging">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Clock className="h-3.5 w-3.5 ml-1" />
+              تقادم الذمم
+            </Button>
+          </Link>
+          <Link href="/finance/collection">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Gavel className="h-3.5 w-3.5 ml-1" />
+              مراحل التصعيد
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <div className="flex items-end gap-3 mb-4">
         <div>

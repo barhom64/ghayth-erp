@@ -304,6 +304,7 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
         entityKey: "support_ticket",
         entityTable: "support_tickets",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       const result = await rawExecute(
         `INSERT INTO support_tickets ("companyId","branchId",ref,title,description,category,priority,status,"clientId","assigneeId","slaDeadline") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,

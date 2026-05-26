@@ -232,6 +232,7 @@ router.post("/contracts", authorize({ feature: "legal.contracts", action: "creat
         entityKey: "contract",
         entityTable: "legal_contracts",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       contractRef = issuedContract.number;
     }
@@ -670,6 +671,7 @@ router.post("/cases", authorize({ feature: "legal.cases", action: "create" }), a
         entityKey: "case",
         entityTable: "legal_cases",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       caseNumber = issuedCase.number;
     }
