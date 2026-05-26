@@ -9,6 +9,7 @@ import { HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 
 // Local row shapes — hr_overtime_requests not in @workspace/db schema.
 
@@ -324,7 +325,16 @@ router.post("/overtime", authorize({ feature: "hr.overtime", action: "create" })
       throw new ConflictError("يوجد طلب وقت إضافي لنفس الموظف في نفس التاريخ");
     }
 
-    const requestNumber = await generateOvertimeNumber(scope.companyId);
+    // Numbering center (Issue #1141) — overtime request number from authority.
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: emp.branchId ?? scope.branchId ?? null,
+      moduleKey: "hr",
+      entityKey: "overtime",
+      entityTable: "hr_overtime_requests",
+      actorId: scope.userId,
+    });
+    const requestNumber = issued.number;
     const period = b.overtimeDate.substring(0, 7); // YYYY-MM
 
     const { insertId } = await rawExecute(
@@ -342,6 +352,10 @@ router.post("/overtime", authorize({ feature: "hr.overtime", action: "create" })
       ]
     );
     assertInsert(insertId, "hr_overtime_requests");
+    await rawExecute(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [insertId, issued.assignmentId]
+    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to hr_overtime_requests row"));
 
     // ── سلسلة الموافقات ──
     const approvalResult = await initiateApprovalChain({

@@ -2,7 +2,13 @@
 -- PostgreSQL database dump
 --
 
-\restrict zDFIG1Auz2JQApfYXugRb3zFxheStbGRyEbPyfdYKjUNLWjoUMKsaAt3kBHQsa9
+-- \restrict directive stripped: the matching \unrestrict lives in
+-- schema_post.sql, but `\ir schema_post.sql` (in the schema.sql wrapper)
+-- runs in restricted mode and psql refuses backslash commands there,
+-- failing the whole load. dump-schema.sh now strips both directives.
+-- (Conflict re-resolved after main regenerated the dump and reintroduced
+-- the token. The companion dump-schema.sh edit on this branch will keep
+-- future regens clean.)
 
 
 SET statement_timeout = 0;
@@ -7676,7 +7682,8 @@ CREATE TABLE public.fleet_trips (
     "deletedAt" timestamp with time zone,
     "cancelledAt" timestamp with time zone,
     "cancellationReason" text,
-    "sourceKey" character varying(128)
+    "sourceKey" character varying(128),
+    ref character varying(50)
 );
 
 
@@ -12655,6 +12662,7 @@ ALTER SEQUENCE public.project_tasks_id_seq OWNED BY public.project_tasks.id;
 CREATE TABLE public.projects (
     id integer NOT NULL,
     "companyId" integer NOT NULL,
+    ref character varying(50),
     name character varying(300) NOT NULL,
     description text,
     "clientId" integer,
@@ -15615,6 +15623,7 @@ CREATE TABLE public.umrah_groups (
     "companyId" integer NOT NULL,
     "branchId" integer,
     "nuskGroupNumber" character varying(30) NOT NULL,
+    "internalRef" character varying(50),
     name character varying(255),
     "agentId" integer,
     "subAgentId" integer,
