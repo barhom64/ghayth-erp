@@ -409,6 +409,30 @@ function extractFrontendCalls() {
         calls.push({ file: rel, url, line, method: "DELETE", source: "prop" });
       }
     }
+
+    // <ImpactPreviewButton endpoint="/x/impact-preview" ... /> — the
+    // shared shared/impact-preview.tsx wrapper around apiFetch(endpoint,
+    // { method: "POST" }). The `endpoint` is a JSX-string prop the
+    // helper-call scan can't trace, so without this scanner the six
+    // call-sites (invoices-create, expenses-create, purchase-orders-
+    // create, projects-create, properties/contracts-create, hr/leave-
+    // management) all marked their impact-preview endpoints as unused.
+    const impactRe = /\bImpactPreviewButton\b[^/>]*?\bendpoint\s*=\s*/g;
+    for (const m of src.matchAll(impactRe)) {
+      let i = m.index + m[0].length;
+      while (i < src.length && /\s/.test(src[i])) i++;
+      // JSX prop value can be `"…"` (string literal) or `{…}` (expression
+      // — typically a template). Handle the string case directly; the
+      // brace case falls through to readString which handles backticks.
+      if (src[i] === "{") {
+        let depth = 1; i++;
+        while (i < src.length && /\s/.test(src[i])) i++;
+      }
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "POST", source: "prop" });
+    }
   }
   return calls;
 }
