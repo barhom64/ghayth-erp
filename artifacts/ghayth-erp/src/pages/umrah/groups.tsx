@@ -77,7 +77,7 @@ export default function UmrahGroups() {
   const [splitPilgrimIds, setSplitPilgrimIds] = useState<number[]>([]);
   const sourcePilgrimsQ = useApiQuery<{ data: Pilgrim[] }>(
     ["umrah-pilgrims-by-group", String(splitSource?.id ?? 0)],
-    splitSource ? `/umrah/pilgrims?groupId=${splitSource.id}` : null,
+    `/umrah/pilgrims?groupId=${splitSource?.id ?? 0}`,
     { enabled: !!splitSource },
   );
   const splitMutation = useApiMutation<

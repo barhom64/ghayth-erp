@@ -123,7 +123,7 @@ export default function UmrahCommissionPlanEditor() {
 
   const loadQ = useApiQuery<{ data: CommissionPlan }>(
     ["umrah-commission-plan", planId ?? ""],
-    isEditMode ? `/umrah/commission-plans/${planId}` : null,
+    `/umrah/commission-plans/${planId ?? 0}`,
   );
 
   const employeesQ = useApiQuery<{ data: any[] }>(["employees"], "/employees");
@@ -434,7 +434,7 @@ function AssignmentField({ disabled }: { disabled: boolean }) {
   const enabled = !!employeeId && employeeId > 0;
   const assignmentsQ = useApiQuery<{ data: any[] }>(
     ["umrah-employee-assignments", String(employeeId ?? "")],
-    enabled ? `/umrah/employees/${employeeId}/assignments` : null,
+    `/umrah/employees/${employeeId ?? 0}/assignments`,
   );
   const assignments = assignmentsQ.data?.data ?? [];
   return (

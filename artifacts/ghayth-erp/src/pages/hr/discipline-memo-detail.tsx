@@ -69,7 +69,7 @@ export default function DisciplineMemoDetailPage() {
   const { extraTabs, hideTabs } = useRegistryTabs("discipline_memo", id ?? "");
   const { data, isLoading, isError } = useApiQuery<MemoData>(
     ["discipline-memo", String(id ?? "")],
-    id ? `/hr/discipline/memos/${id}` : null
+    `/hr/discipline/memos/${id}`
   );
   const { toast } = useToast();
   const qc = useQueryClient();

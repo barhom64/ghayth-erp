@@ -72,7 +72,13 @@ describe("umrah/commission-plan-editor — full plan editor on FormShell + zod",
   it("AssignmentField is a dependent dropdown — watches employeeId, fetches per-employee", () => {
     expect(SRC).toContain("function AssignmentField(");
     expect(SRC).toMatch(/useWatch<PlanForm,\s*"employeeId">/);
-    expect(SRC).toMatch(/`\/umrah\/employees\/\$\{employeeId\}\/assignments`/);
+    // The URL was `/umrah/employees/${employeeId}/assignments` until
+    // Phase C extension #8 dropped the conditional `enabled ? URL :
+    // null` wrapper that hid the URL from the wiring audit. The bare
+    // template now uses `${employeeId ?? 0}` so the audit can see it;
+    // the `enabled` flag still gates the actual fetch when no employee
+    // is selected.
+    expect(SRC).toMatch(/`\/umrah\/employees\/\$\{employeeId \?\? 0\}\/assignments`/);
     expect(SRC).toMatch(/key=\{`assignment-\$\{employeeId\}`\}/);
   });
 
