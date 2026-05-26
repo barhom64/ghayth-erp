@@ -9,6 +9,7 @@ const AdminMonitoring = lazy(() => import("@/pages/admin-monitoring"));
 const AdminObservability = lazy(() => import("@/pages/admin-observability"));
 const AdminAiGovernance = lazy(() => import("@/pages/admin-ai-governance"));
 const AdminCommunicationControl = lazy(() => import("@/pages/admin-communication-control"));
+const AdminPbxControl = lazy(() => import("@/pages/admin-pbx-control"));
 const AdminViolationsReport = lazy(() => import("@/pages/admin-violations-report"));
 const AdminSystemGovernor = lazy(() => import("@/pages/admin-system-governor"));
 const AdminPolicyEngine = lazy(() => import("@/pages/admin-policy-engine"));
@@ -33,6 +34,7 @@ export const adminRoutes = [
   { path: "/admin/observability", component: AdminObservability },
   { path: "/admin/ai-governance", component: AdminAiGovernance },
   { path: "/admin/communication-control", component: AdminCommunicationControl },
+  { path: "/admin/pbx-control", component: AdminPbxControl },
   { path: "/admin/violations-report", component: AdminViolationsReport },
   { path: "/admin/system-governor", component: AdminSystemGovernor },
   { path: "/admin/policy-engine", component: AdminPolicyEngine },

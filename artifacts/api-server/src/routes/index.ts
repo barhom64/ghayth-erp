@@ -47,6 +47,7 @@ import adminRouter from "./admin.js";
 import adminObservabilityRouter from "./admin-observability.js";
 import adminAiGovernanceRouter from "./admin-ai-governance.js";
 import adminCommControlRouter from "./admin-communication-control.js";
+import adminPbxControlRouter from "./admin-pbx-control.js";
 import permissionsRouter from "./permissions.js";
 import rbacV2Router from "./rbacV2.js";
 import auditLogsRouter from "./auditLogs.js";
@@ -359,6 +360,8 @@ router.use("/admin/ai-governance", requireModule("admin"), requireMinLevel(90), 
 // Communication Control Plane (#1139 §3 — provider failover + DLP +
 // unified inbox).
 router.use("/admin/communication-control", requireModule("admin"), requireMinLevel(90), adminCommControlRouter);
+// PBX/IVR/Recording control plane (#1139 §3 — voice side).
+router.use("/admin/pbx-control", requireModule("admin"), requireMinLevel(90), adminPbxControlRouter);
 // FND-004 — RBAC administration surfaces. permissions.ts is fully
 // authorize()-guarded per route; rbacV2.ts had a few routes without one;
 // gating the mount at level 90 (consistent with /admin) closes the gap
