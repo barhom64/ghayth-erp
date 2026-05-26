@@ -19,6 +19,7 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useToast } from "@/hooks/use-toast";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { ZatcaActions } from "@/components/finance/zatca-actions";
 
 /**
  * ExpenseDetail — unified detail page for a single expense journal entry.
@@ -396,6 +397,23 @@ export default function ExpenseDetail() {
           </Card>
         )}
       </div>
+
+      {id && expense && (
+        <ZatcaActions
+          entityType="expense"
+          subject={{
+            id,
+            ref: expense.ref ?? null,
+            isTaxLinked: expense.isTaxLinked ?? false,
+            invoiceTypeCode: expense.invoiceTypeCode ?? null,
+            taxCategoryCode: expense.taxCategoryCode ?? null,
+            exemptionReason: expense.exemptionReason ?? null,
+            zatcaStatus: expense.zatcaStatus ?? null,
+          }}
+          onRefresh={refetch}
+          invalidateKeys={[["expense", String(id)], ["expenses"]]}
+        />
+      )}
 
       {id && <ApprovalTimeline entityType="expense" entityId={id} />}
 

@@ -32,6 +32,7 @@ import {
 } from "@workspace/ui-core";
 import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
+import { ZatcaActions } from "@/components/finance/zatca-actions";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   ProcessStages,
@@ -352,6 +353,23 @@ export default function InvoiceDetailPage() {
           </Card>
         );
       })()}
+
+      {invoice && id && (
+        <ZatcaActions
+          entityType="invoice"
+          subject={{
+            id: Number(id),
+            ref: invoice.ref ?? null,
+            isTaxLinked: invoice.isTaxLinked ?? false,
+            invoiceTypeCode: invoice.invoiceTypeCode ?? null,
+            taxCategoryCode: invoice.taxCategoryCode ?? null,
+            exemptionReason: invoice.exemptionReason ?? null,
+            zatcaStatus: invoice.zatcaStatus ?? null,
+          }}
+          onRefresh={refetch}
+          invalidateKeys={[["invoice-detail", id], ["invoice", id]]}
+        />
+      )}
 
       {showPayment && (
         <Card>
