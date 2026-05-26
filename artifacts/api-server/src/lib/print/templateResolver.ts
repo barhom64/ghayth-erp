@@ -336,6 +336,19 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   store_product: () => buildWarehouseProductPreset(),
   budget: () => buildBudgetPreset(),
   governance_policy: () => buildGovernancePolicyPreset(),
+  // Aliases — entityRegistry uses slightly different ids than dataLoader's
+  // switch keys; wire them here so the resolver finds the same preset
+  // regardless of which name the call site uses.
+  evaluation_cycle: () => buildEvaluationPreset(),
+  expense_claim: () => buildExpenseClaimPreset(),
+  fuel_log: () => buildFuelLogPreset(),
+  legal_case: () => buildLegalCasePreset(),
+  payroll_run: () => buildPayslipPreset(),
+  recurring_journal: () => buildJournalEntryPreset(),
+  // Final config cards (shift roster, season setup, GL account card).
+  shift: () => buildShiftCardPreset(),
+  umrah_season: () => buildUmrahSeasonPreset(),
+  chart_of_account: () => buildChartOfAccountPreset(),
 };
 
 function buildInvoicePreset(): PrintTemplate {
@@ -2636,6 +2649,85 @@ function buildGovernancePolicyPreset(): PrintTemplate {
   <div>مالك السياسة<br/>____________________</div>
   <div>الشؤون القانونية<br/>____________________</div>
   <div>الإدارة العليا<br/>____________________</div>
+</div>`,
+  });
+}
+
+// ─── Final config-card presets ───────────────────────────────────────────
+
+function buildShiftCardPreset(): PrintTemplate {
+  return makePreset({
+    id: -70, presetKey: "shift_card_classic", entityType: "shift",
+    name: "بطاقة وردية",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة وردية عمل</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>اسم الوردية:</strong> {{entity.name}}</div>
+  <div><strong>الكود:</strong> <span dir="ltr">{{entity.code}}</span></div>
+  <div><strong>وقت البداية:</strong> {{entity.startTime}}</div>
+  <div><strong>وقت النهاية:</strong> {{entity.endTime}}</div>
+  <div><strong>عدد الساعات:</strong> {{entity.totalHours}}</div>
+  <div><strong>أيام العمل:</strong> {{entity.workDays}}</div>
+  <div><strong>أيام الراحة:</strong> {{entity.offDays}}</div>
+  <div><strong>دقائق سماح التأخر:</strong> {{entity.lateGraceMinutes}}</div>
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>`,
+  });
+}
+
+function buildUmrahSeasonPreset(): PrintTemplate {
+  return makePreset({
+    id: -71, presetKey: "umrah_season_classic", entityType: "umrah_season",
+    name: "موسم عمرة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">إعداد موسم عمرة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>اسم الموسم:</strong> {{entity.name}}</div>
+  <div><strong>السنة الهجرية:</strong> {{entity.hijriYear}}</div>
+  <div><strong>السنة الميلادية:</strong> {{entity.gregorianYear}}</div>
+  <div><strong>تاريخ البدء:</strong> {{entity.startDate}}</div>
+  <div><strong>تاريخ النهاية:</strong> {{entity.endDate}}</div>
+  <div><strong>عدد الوكلاء:</strong> {{entity.agentCount}}</div>
+  <div><strong>عدد المعتمرين المتوقَّع:</strong> {{entity.expectedPilgrims}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">ملاحظات الموسم</div>
+  <div style="white-space:pre-wrap">{{entity.notes}}</div>
+</div>`,
+  });
+}
+
+function buildChartOfAccountPreset(): PrintTemplate {
+  return makePreset({
+    id: -72, presetKey: "chart_of_account_classic", entityType: "chart_of_account",
+    name: "بطاقة حساب",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة حساب محاسبي</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}} — <span dir="ltr">{{entity.code}}</span></div>
+<div class="meta-grid">
+  <div><strong>رمز الحساب:</strong> <span dir="ltr">{{entity.code}}</span></div>
+  <div><strong>اسم الحساب:</strong> {{entity.name}}</div>
+  <div><strong>الاسم بالإنجليزية:</strong> <span dir="ltr">{{entity.nameEn}}</span></div>
+  <div><strong>نوع الحساب:</strong> {{entity.type}}</div>
+  <div><strong>المستوى:</strong> {{entity.level}}</div>
+  <div><strong>الحساب الأب:</strong> <span dir="ltr">{{entity.parentCode}}</span></div>
+  <div><strong>تحليلي / تجميعي:</strong> {{entity.isAnalytical}}</div>
+  <div><strong>يسمح بالقيود:</strong> {{entity.allowPosting}}</div>
+  <div><strong>الرصيد الحالي:</strong> {{entity.currentBalance}}</div>
+  <div><strong>العملة:</strong> {{entity.currency}}</div>
+  <div><strong>الحالة:</strong> {{entity.isActive}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
 </div>`,
   });
 }
