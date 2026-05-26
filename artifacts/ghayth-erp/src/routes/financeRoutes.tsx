@@ -84,6 +84,7 @@ const PurchaseOrdersCreate = lazy(() => import("@/pages/create/finance/purchase-
 const PurchaseOrderDetail = lazy(() => import("@/pages/finance/purchase-order-detail"));
 const PaymentRun = lazy(() => import("@/pages/finance/payment-run"));
 const ApPaymentCalendar = lazy(() => import("@/pages/finance/ap-payment-calendar"));
+const CashPositionCalculator = lazy(() => import("@/pages/finance/cash-position-calculator"));
 const FinancialReports = lazy(() => import("@/pages/finance/reports"));
 const IncomeStatementTrend = lazy(() => import("@/pages/finance/income-statement-trend"));
 const IncomeStatementVsBudget = lazy(() => import("@/pages/finance/income-statement-vs-budget"));
@@ -91,6 +92,7 @@ const YoyComparison = lazy(() => import("@/pages/finance/yoy-comparison"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
 const TaxFilingCalendar = lazy(() => import("@/pages/finance/tax-filing-calendar"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
+const CustomerAdvancesWorkbench = lazy(() => import("@/pages/finance/customer-advances-workbench"));
 const CustomerStatementPrint = lazy(() => import("@/pages/finance/customer-statement-print"));
 const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
 const BadDebtProvision = lazy(() => import("@/pages/finance/bad-debt-provision"));
@@ -255,12 +257,14 @@ export const financeRoutes = [
   { path: "/finance/purchase-orders/create", component: PurchaseOrdersCreate },
   { path: "/finance/payment-run", component: PaymentRun },
   { path: "/finance/ap-payment-calendar", component: ApPaymentCalendar },
+  { path: "/finance/cash-position-calculator", component: CashPositionCalculator },
   { path: "/finance/purchase-orders/:id", component: PurchaseOrderDetail },
   { path: "/finance/profitability/vehicle/:id", component: ProfitabilityVehicle },
   { path: "/finance/profitability/property/:id", component: ProfitabilityProperty },
   { path: "/finance/profitability/project/:id", component: ProfitabilityProject },
   { path: "/finance/profitability/umrah-agent/:id", component: ProfitabilityUmrahAgent },
   { path: "/finance/customer-advances", component: CustomerAdvances },
+  { path: "/finance/customer-advances-workbench", component: CustomerAdvancesWorkbench },
   { path: "/finance/customer-advances/create", component: CustomerAdvancesCreate },
   { path: "/finance/customer-advances/:id/apply", component: CustomerAdvancesApply },
   { path: "/finance/dunning", component: Dunning },
