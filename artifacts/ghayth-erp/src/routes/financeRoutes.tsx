@@ -65,6 +65,7 @@ const PurchaseOrders = lazy(() => import("@/pages/finance/purchase-orders"));
 const PurchaseOrdersCreate = lazy(() => import("@/pages/create/finance/purchase-orders-create"));
 const PurchaseOrderDetail = lazy(() => import("@/pages/finance/purchase-order-detail"));
 const PaymentRun = lazy(() => import("@/pages/finance/payment-run"));
+const ApPaymentCalendar = lazy(() => import("@/pages/finance/ap-payment-calendar"));
 const FinancialReports = lazy(() => import("@/pages/finance/reports"));
 const IncomeStatementTrend = lazy(() => import("@/pages/finance/income-statement-trend"));
 const YoyComparison = lazy(() => import("@/pages/finance/yoy-comparison"));
@@ -209,6 +210,7 @@ export const financeRoutes = [
   { path: "/finance/purchase-orders", component: PurchaseOrders },
   { path: "/finance/purchase-orders/create", component: PurchaseOrdersCreate },
   { path: "/finance/payment-run", component: PaymentRun },
+  { path: "/finance/ap-payment-calendar", component: ApPaymentCalendar },
   { path: "/finance/purchase-orders/:id", component: PurchaseOrderDetail },
   { path: "/finance/profitability/vehicle/:id", component: ProfitabilityVehicle },
   { path: "/finance/profitability/property/:id", component: ProfitabilityProperty },
