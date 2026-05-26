@@ -50,6 +50,7 @@ const InvoicesCreate = lazy(() => import("@/pages/create/finance/invoices-create
 const InvoiceDetail = lazy(() => import("@/pages/finance/invoice-detail"));
 const Expenses = lazy(() => import("@/pages/finance/expenses"));
 const ExpenseBurnRate = lazy(() => import("@/pages/finance/expense-burn-rate"));
+const ExpenseBulkApprovals = lazy(() => import("@/pages/finance/expense-bulk-approvals"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
 const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
@@ -82,6 +83,7 @@ const PurchaseOrdersCreate = lazy(() => import("@/pages/create/finance/purchase-
 const PurchaseOrderDetail = lazy(() => import("@/pages/finance/purchase-order-detail"));
 const PaymentRun = lazy(() => import("@/pages/finance/payment-run"));
 const ApPaymentCalendar = lazy(() => import("@/pages/finance/ap-payment-calendar"));
+const CashPositionCalculator = lazy(() => import("@/pages/finance/cash-position-calculator"));
 const FinancialReports = lazy(() => import("@/pages/finance/reports"));
 const IncomeStatementTrend = lazy(() => import("@/pages/finance/income-statement-trend"));
 const IncomeStatementVsBudget = lazy(() => import("@/pages/finance/income-statement-vs-budget"));
@@ -227,6 +229,7 @@ export const financeRoutes = [
   { path: "/finance/invoices/create", component: InvoicesCreate },
   { path: "/finance/invoices/:id", component: InvoiceDetail },
   { path: "/finance/expenses", component: Expenses },
+  { path: "/finance/expense-bulk-approvals", component: ExpenseBulkApprovals },
   { path: "/finance/expense-burn-rate", component: ExpenseBurnRate },
   { path: "/finance/expenses/create", component: ExpensesCreate },
   { path: "/finance/expenses/multi-line", component: MultiLineExpenseCreate },
@@ -252,6 +255,7 @@ export const financeRoutes = [
   { path: "/finance/purchase-orders/create", component: PurchaseOrdersCreate },
   { path: "/finance/payment-run", component: PaymentRun },
   { path: "/finance/ap-payment-calendar", component: ApPaymentCalendar },
+  { path: "/finance/cash-position-calculator", component: CashPositionCalculator },
   { path: "/finance/purchase-orders/:id", component: PurchaseOrderDetail },
   { path: "/finance/profitability/vehicle/:id", component: ProfitabilityVehicle },
   { path: "/finance/profitability/property/:id", component: ProfitabilityProperty },
