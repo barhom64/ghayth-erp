@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatCurrency, formatNumber } from "@/lib/formatters";
+import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import {
   Activity, Clock, TrendingUp, RefreshCw, ExternalLink,
   AlertCircle, Calendar,
@@ -80,9 +80,7 @@ const TYPE_COLOR: Record<string, string> = {
 };
 
 function todayIso(): string {
-  // utc-ok: today's YYYY-MM-DD in local time — accepted by /finance/journal date filters
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return todayLocal();
 }
 
 function relTime(iso: string): string {
