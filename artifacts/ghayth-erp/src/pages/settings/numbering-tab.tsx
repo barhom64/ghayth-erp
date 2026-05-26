@@ -1,19 +1,27 @@
 // Settings → إعدادات الترقيم (Issue #1141)
 //
-// Manages the central numbering authority. The tab is split into
-// three panels:
-//   1. Policies — the `numbering_schemes` rows; click to edit pattern,
-//      prefix, padding, reset/scope/issue timing, manual-edit policy.
-//   2. Counters — per-scope current state for the selected scheme;
-//      shows live next number, allows reset + lock/unlock.
-//   3. Assignment & audit log — search the history of issued numbers
-//      and the audit trail of policy changes / overrides.
-//
-// Every privileged action carries a mandatory reason field and routes
-// through the API guards on `settings.numbering[.override|.reset|.audit]`.
+// Simplified end-user UX (replaces the previous dialog-based version):
+//   * NO popup dialogs — the whole tab uses an inline master/detail
+//     layout. Selecting a policy expands an editor card right below
+//     it (or in the side panel on wide screens).
+//   * Three picker buttons replace the technical fields. The user
+//     picks "كل فرع رقم مستقل" / "رقم واحد للشركة" / "حسب الموسم"
+//     and the corresponding pattern/scope/reset values are written
+//     for them. No need to understand the {PREFIX}-{BRANCH}-{SEQ}
+//     vocabulary.
+//   * A live preview shows exactly what the next number will look
+//     like ("الرقم القادم: REQ-MK-2026-0001") so the operator can
+//     see the effect of their change before saving.
+//   * "إعدادات متقدمة" toggle reveals the raw pattern / padLength /
+//     issueTiming / manualEditPolicy fields for experts that need
+//     them.
+//   * NEW backfill banner — when the scheme has legacy refs from
+//     before the unified center launched, a one-click "جرد المعاملات
+//     السابقة" button inventories them into `numbering_assignments`
+//     and bumps the counter past the highest existing sequence.
 
 import { useState, useMemo } from "react";
-import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,18 +30,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Hash, Lock, Unlock, RotateCcw, Edit, Eye, History } from "lucide-react";
+import {
+  Hash, Lock, Unlock, RotateCcw, Edit, History,
+  Building2, Building, Moon, Globe, Sparkles, AlertTriangle, ChevronDown, ChevronUp, X, CheckCircle,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 interface Scheme {
   id: number;
@@ -52,6 +60,11 @@ interface Scheme {
   lockAfterStatuses: string[] | string;
   branchPrefixOverrides: Record<string, string> | string;
   isActive: boolean;
+  defaultEntityTable: string | null;
+  defaultRefColumn: string | null;
+  lastBackfillAt: string | null;
+  lastBackfillCount: number | null;
+  assignmentCount: number;
   updatedAt: string;
 }
 
@@ -77,7 +90,6 @@ interface Assignment {
   status: string;
   issuedAt: string;
   schemeName: string | null;
-  voidReason: string | null;
 }
 
 interface AuditRow {
@@ -95,41 +107,84 @@ interface AuditRow {
   createdAt: string;
 }
 
-const RESET_LABEL: Record<string, string> = {
-  never: "بدون تصفير",
-  yearly: "سنوي",
-  monthly: "شهري",
-  seasonal: "موسمي",
-  fiscal_year: "سنة مالية",
+// ─── Three simple presets that map to (scope, reset, pattern) ──────
+
+type PresetKey = "per_branch_yearly" | "company_yearly" | "per_season";
+
+interface Preset {
+  key: PresetKey;
+  label: string;
+  description: string;
+  icon: typeof Building;
+  scopePolicy: string;
+  resetPolicy: string;
+  pattern: string;
+}
+
+const PRESETS: Preset[] = [
+  {
+    key: "per_branch_yearly",
+    label: "كل فرع رقم مستقل (سنوي)",
+    description: "مكة: REQ-MK-2026-0001، جدة: REQ-JED-2026-0001 — التسلسل يتجدد كل سنة لكل فرع.",
+    icon: Building,
+    scopePolicy: "branch",
+    resetPolicy: "yearly",
+    pattern: "{PREFIX}-{BRANCH}-{YYYY}-{SEQ}",
+  },
+  {
+    key: "company_yearly",
+    label: "رقم واحد للشركة (سنوي)",
+    description: "INV-2026-0001 يشترك بين كل الفروع — مناسب للفواتير المالية والقيود.",
+    icon: Building2,
+    scopePolicy: "company",
+    resetPolicy: "yearly",
+    pattern: "{PREFIX}-{YYYY}-{SEQ}",
+  },
+  {
+    key: "per_season",
+    label: "حسب الموسم (عمرة)",
+    description: "UMG-1447-MK-0001 — تسلسل مستقل لكل موسم.",
+    icon: Moon,
+    scopePolicy: "season",
+    resetPolicy: "seasonal",
+    pattern: "{PREFIX}-{SEASON}-{BRANCH}-{SEQ}",
+  },
+];
+
+function detectPreset(scheme: Scheme): PresetKey | "custom" {
+  for (const p of PRESETS) {
+    if (
+      p.scopePolicy === scheme.scopePolicy &&
+      p.resetPolicy === scheme.resetPolicy &&
+      p.pattern === scheme.pattern
+    ) {
+      return p.key;
+    }
+  }
+  return "custom";
+}
+
+const EDIT_POLICY_LABELS: Record<string, string> = {
+  disabled: "ممنوع تعديل الرقم نهائيًا",
+  draft_only: "السماح بالتعديل قبل الاعتماد فقط",
+  privileged: "بصلاحية خاصة فقط",
+  legacy_import_only: "أثناء استيراد البيانات القديمة فقط",
 };
-const SCOPE_LABEL: Record<string, string> = {
-  company: "شركة",
-  branch: "فرع",
-  module: "مسار",
-  entity: "نوع",
-  season: "موسم",
-  fiscal_year: "سنة مالية",
-};
-const TIMING_LABEL: Record<string, string> = {
+
+const TIMING_LABELS: Record<string, string> = {
   on_draft: "عند إنشاء المسودة",
   on_submit: "عند التقديم",
   on_approval: "عند الاعتماد",
   on_posting: "عند الترحيل",
 };
-const EDIT_LABEL: Record<string, string> = {
-  disabled: "ممنوع نهائيًا",
-  draft_only: "قبل الاعتماد فقط",
-  privileged: "بصلاحية خاصة",
-  legacy_import_only: "استيراد قديم فقط",
-};
+
+// ─── Main tab component ─────────────────────────────────────────
 
 export function NumberingTab() {
   const { data, refetch, isLoading, isError, error } = useApiQuery<{ data: Scheme[] }>(
     ["numbering-schemes"], "/numbering/schemes",
   );
   const schemes = asList<Scheme>(data);
-  const [editingScheme, setEditingScheme] = useState<Scheme | null>(null);
-  const [viewingScheme, setViewingScheme] = useState<Scheme | null>(null);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
@@ -142,9 +197,14 @@ export function NumberingTab() {
           إعدادات الترقيم الموحد
         </h3>
         <Badge variant="outline" className="text-xs">
-          {schemes.length} سياسة
+          {schemes.length} نوع معاملة
         </Badge>
       </div>
+
+      <p className="text-sm text-muted-foreground">
+        يحدد هذا المركز كيف يصدر النظام أرقام كل المعاملات (الطلبات، الفواتير، السندات، العقود، …)
+        لكل نوع معاملة اختر كيف يتم الترقيم: مستقل لكل فرع، موحد للشركة، أو حسب الموسم — والنظام يتولى الباقي.
+      </p>
 
       <Tabs defaultValue="policies" dir="rtl">
         <TabsList>
@@ -154,65 +214,7 @@ export function NumberingTab() {
         </TabsList>
 
         <TabsContent value="policies" className="space-y-4">
-          <Card><CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-surface-subtle">
-                  <th className="p-3 text-start">المسار / النوع</th>
-                  <th className="p-3 text-start">البادئة</th>
-                  <th className="p-3 text-start">النمط</th>
-                  <th className="p-3 text-start">النطاق</th>
-                  <th className="p-3 text-start">التصفير</th>
-                  <th className="p-3 text-start">التعديل اليدوي</th>
-                  <th className="p-3 text-start">الحالة</th>
-                  <th className="p-3 text-end w-32">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {schemes.map((s) => (
-                  <tr key={s.id} className="border-b hover:bg-surface-subtle">
-                    <td className="p-3">
-                      <div className="font-medium">{s.displayNameAr}</div>
-                      <div className="text-xs text-muted-foreground font-mono">
-                        {s.moduleKey}.{s.entityKey}
-                      </div>
-                    </td>
-                    <td className="p-3 font-mono text-sm">{s.prefix}</td>
-                    <td className="p-3 font-mono text-xs text-muted-foreground">{s.pattern}</td>
-                    <td className="p-3 text-xs">{SCOPE_LABEL[s.scopePolicy] || s.scopePolicy}</td>
-                    <td className="p-3 text-xs">{RESET_LABEL[s.resetPolicy] || s.resetPolicy}</td>
-                    <td className="p-3 text-xs">{EDIT_LABEL[s.manualEditPolicy] || s.manualEditPolicy}</td>
-                    <td className="p-3">
-                      <Badge variant={s.isActive ? "default" : "secondary"} className="text-xs">
-                        {s.isActive ? "نشطة" : "متوقفة"}
-                      </Badge>
-                    </td>
-                    <td className="p-3">
-                      <div className="flex gap-1 justify-end">
-                        <Button variant="ghost" size="sm" onClick={() => setViewingScheme(s)} title="عرض العدادات">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <GuardedButton
-                          perm="settings.numbering:update"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditingScheme(s)}
-                          title="تعديل"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </GuardedButton>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {schemes.length === 0 && (
-                  <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">
-                    لا توجد سياسات ترقيم — قاعدة البيانات لم تصل بعد إلى الـ seed
-                  </td></tr>
-                )}
-              </tbody>
-            </table>
-          </CardContent></Card>
+          <PoliciesPanel schemes={schemes} onChange={refetch} />
         </TabsContent>
 
         <TabsContent value="assignments">
@@ -223,331 +225,556 @@ export function NumberingTab() {
           <AuditPanel />
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
 
-      {editingScheme && (
-        <SchemeEditDialog
-          scheme={editingScheme}
-          onClose={() => { setEditingScheme(null); refetch(); }}
-        />
-      )}
-      {viewingScheme && (
-        <CountersDialog
-          scheme={viewingScheme}
-          onClose={() => setViewingScheme(null)}
+// ─── Policies panel (master + inline editor) ────────────────────
+
+function PoliciesPanel({ schemes, onChange }: { schemes: Scheme[]; onChange: () => void }) {
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const selected = schemes.find((s) => s.id === selectedId) || null;
+
+  return (
+    <div className="space-y-4">
+      <Card><CardContent className="p-0 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-surface-subtle">
+              <th className="p-3 text-start">نوع المعاملة</th>
+              <th className="p-3 text-start">طريقة الترقيم</th>
+              <th className="p-3 text-start">مثال الرقم</th>
+              <th className="p-3 text-start">عدد الأرقام الصادرة</th>
+              <th className="p-3 text-start">الحالة</th>
+              <th className="p-3 text-end w-24"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {schemes.map((s) => {
+              const preset = detectPreset(s);
+              const presetDef = PRESETS.find((p) => p.key === preset);
+              const isSelected = selectedId === s.id;
+              return (
+                <tr
+                  key={s.id}
+                  className={cn(
+                    "border-b hover:bg-surface-subtle cursor-pointer",
+                    isSelected && "bg-status-info-surface/30"
+                  )}
+                  onClick={() => setSelectedId(isSelected ? null : s.id)}
+                >
+                  <td className="p-3">
+                    <div className="font-medium">{s.displayNameAr}</div>
+                  </td>
+                  <td className="p-3 text-sm">
+                    {presetDef ? presetDef.label : <span className="text-muted-foreground">مخصص</span>}
+                  </td>
+                  <td className="p-3 font-mono text-xs text-status-info-foreground">
+                    {samplePreview(s)}
+                  </td>
+                  <td className="p-3 text-sm">{s.assignmentCount.toLocaleString("ar-SA")}</td>
+                  <td className="p-3">
+                    <Badge variant={s.isActive ? "default" : "secondary"} className="text-xs">
+                      {s.isActive ? "نشطة" : "متوقفة"}
+                    </Badge>
+                  </td>
+                  <td className="p-3 text-end">
+                    {isSelected ? <ChevronUp className="h-4 w-4 inline" /> : <ChevronDown className="h-4 w-4 inline" />}
+                  </td>
+                </tr>
+              );
+            })}
+            {schemes.length === 0 && (
+              <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">
+                لا توجد سياسات ترقيم
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </CardContent></Card>
+
+      {selected && (
+        <SchemeEditor
+          key={selected.id}
+          scheme={selected}
+          onClose={() => setSelectedId(null)}
+          onSaved={() => { onChange(); }}
         />
       )}
     </div>
   );
 }
 
-// ─── Scheme edit dialog ──────────────────────────────────────────
+/** Build a quick text-only sample of what the next number would look like.
+ *  The "year" used in the {YYYY} substitution is best-effort — this is a
+ *  client-side label only; the real number is allocated server-side using
+ *  the Asia/Riyadh timezone. utc-ok: client-side label preview only.
+ */
+function samplePreview(s: Scheme): string {
+  const year = new Date().getFullYear(); // utc-ok: client-side display string; the server uses currentYear() in Asia/Riyadh.
+  const seq = String(1).padStart(s.padLength, "0");
+  return s.pattern
+    .replace("{PREFIX}", s.prefix)
+    .replace("{BRANCH}", "BR")
+    .replace("{YYYY}", String(year))
+    .replace("{YY}", String(year).slice(2))
+    .replace("{MM}", "01")
+    .replace("{SEASON}", "1447")
+    .replace("{SEQ}", seq);
+}
 
-function SchemeEditDialog({ scheme, onClose }: { scheme: Scheme; onClose: () => void }) {
+// ─── Inline scheme editor (replaces the old dialog) ─────────────
+
+function SchemeEditor({
+  scheme,
+  onClose,
+  onSaved,
+}: {
+  scheme: Scheme;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const { toast } = useToast();
-  const initial = {
-    displayNameAr: scheme.displayNameAr,
-    prefix: scheme.prefix,
-    pattern: scheme.pattern,
-    padLength: scheme.padLength,
-    resetPolicy: scheme.resetPolicy,
-    scopePolicy: scheme.scopePolicy,
-    issueTiming: scheme.issueTiming,
-    manualEditPolicy: scheme.manualEditPolicy,
-    requiresReasonOnManualEdit: scheme.requiresReasonOnManualEdit,
-    isActive: scheme.isActive,
-    lockAfterStatuses: Array.isArray(scheme.lockAfterStatuses)
-      ? scheme.lockAfterStatuses.join(",")
-      : scheme.lockAfterStatuses,
-  };
-  const [form, setForm] = useState(initial);
+  const initialPreset = detectPreset(scheme);
+
+  const [presetKey, setPresetKey] = useState<PresetKey | "custom">(initialPreset);
+  const [prefix, setPrefix] = useState(scheme.prefix);
+  const [pattern, setPattern] = useState(scheme.pattern);
+  const [padLength, setPadLength] = useState(scheme.padLength);
+  const [scopePolicy, setScopePolicy] = useState(scheme.scopePolicy);
+  const [resetPolicy, setResetPolicy] = useState(scheme.resetPolicy);
+  const [manualEditPolicy, setManualEditPolicy] = useState(scheme.manualEditPolicy);
+  const [isActive, setIsActive] = useState(scheme.isActive);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [reason, setReason] = useState("");
+
+  // Live preview
+  const previewQuery = useApiQuery<{ number: string }>(
+    ["numbering-preview-live", String(scheme.id), prefix, pattern, String(padLength), scopePolicy, resetPolicy],
+    `/numbering/preview?moduleKey=${scheme.moduleKey}&entityKey=${scheme.entityKey}`,
+  );
+  const previewNumber = previewQuery.data?.number || samplePreview({
+    ...scheme,
+    prefix, pattern, padLength, scopePolicy, resetPolicy,
+  });
+
+  const handlePreset = (key: PresetKey) => {
+    const p = PRESETS.find((x) => x.key === key);
+    if (!p) return;
+    setPresetKey(key);
+    setScopePolicy(p.scopePolicy);
+    setResetPolicy(p.resetPolicy);
+    setPattern(p.pattern);
+  };
 
   const saveMut = useApiMutation<any, Record<string, unknown>>(
     `/numbering/schemes/${scheme.id}`, "PATCH",
     [["numbering-schemes"]],
     {
-      successMessage: "تم تحديث السياسة",
-      onSuccess: onClose,
+      successMessage: "تم حفظ السياسة",
+      onSuccess: () => {
+        onSaved();
+        onClose();
+      },
     },
   );
 
   const handleSave = () => {
     if (reason.trim().length < 3) {
-      toast({ title: "السبب مطلوب", description: "يرجى كتابة سبب التعديل (3 أحرف على الأقل)" });
+      toast({ title: "السبب مطلوب", description: "اكتب سبب التعديل (3 أحرف على الأقل)" });
       return;
     }
     saveMut.mutate({
-      ...form,
-      lockAfterStatuses: form.lockAfterStatuses
-        .split(",").map((s) => s.trim()).filter(Boolean),
+      prefix,
+      pattern,
+      padLength,
+      scopePolicy,
+      resetPolicy,
+      manualEditPolicy,
+      isActive,
       reason,
     });
   };
 
   return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>تعديل سياسة الترقيم — {scheme.displayNameAr}</DialogTitle>
-          <DialogDescription>
-            <span className="font-mono text-xs">{scheme.moduleKey}.{scheme.entityKey}</span>
-          </DialogDescription>
-        </DialogHeader>
+    <Card className="border-status-info">
+      <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Edit className="h-4 w-4" />
+          {scheme.displayNameAr}
+          <span className="text-xs text-muted-foreground font-mono ms-2">
+            {scheme.moduleKey}.{scheme.entityKey}
+          </span>
+        </CardTitle>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {/* Backfill banner */}
+        <BackfillBanner scheme={scheme} onDone={onSaved} />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>الاسم بالعربية</Label>
-            <Input value={form.displayNameAr} onChange={(e) => setForm({ ...form, displayNameAr: e.target.value })} />
-          </div>
-          <div>
-            <Label>البادئة</Label>
-            <Input value={form.prefix} onChange={(e) => setForm({ ...form, prefix: e.target.value.toUpperCase() })} />
-          </div>
-          <div className="md:col-span-2">
-            <Label>النمط</Label>
-            <Input value={form.pattern} onChange={(e) => setForm({ ...form, pattern: e.target.value })} dir="ltr" className="font-mono" />
-            <p className="text-xs text-muted-foreground mt-1">
-              الرموز: <code>{"{PREFIX}"}</code> <code>{"{BRANCH}"}</code> <code>{"{YYYY}"}</code> <code>{"{YY}"}</code> <code>{"{MM}"}</code> <code>{"{SEASON}"}</code> <code>{"{SEQ}"}</code>
-            </p>
-          </div>
-          <div>
-            <Label>طول التسلسل (أصفار)</Label>
-            <Input type="number" min={3} max={10}
-              value={form.padLength}
-              onChange={(e) => setForm({ ...form, padLength: Number(e.target.value) || 4 })}
-            />
-          </div>
-          <div>
-            <Label>نطاق العداد</Label>
-            <Select value={form.scopePolicy} onValueChange={(v) => setForm({ ...form, scopePolicy: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(SCOPE_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>إعادة التصفير</Label>
-            <Select value={form.resetPolicy} onValueChange={(v) => setForm({ ...form, resetPolicy: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(RESET_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>توقيت إصدار الرقم</Label>
-            <Select value={form.issueTiming} onValueChange={(v) => setForm({ ...form, issueTiming: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(TIMING_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>سياسة التعديل اليدوي</Label>
-            <Select value={form.manualEditPolicy} onValueChange={(v) => setForm({ ...form, manualEditPolicy: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(EDIT_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="md:col-span-2">
-            <Label>حالات تقفل الرقم بعدها (يفصل بينها فاصلة)</Label>
-            <Input
-              value={form.lockAfterStatuses}
-              onChange={(e) => setForm({ ...form, lockAfterStatuses: e.target.value })}
-              placeholder="approved, posted, sent, closed"
-              dir="ltr" className="font-mono"
-            />
-          </div>
-          <div className="md:col-span-2 flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Switch checked={form.isActive} onCheckedChange={(v) => setForm({ ...form, isActive: v })} />
-              <Label>السياسة نشطة</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={form.requiresReasonOnManualEdit}
-                onCheckedChange={(v) => setForm({ ...form, requiresReasonOnManualEdit: v })}
-              />
-              <Label>إلزام سبب عند التعديل اليدوي</Label>
-            </div>
-          </div>
-          <div className="md:col-span-2">
-            <Label>سبب التعديل (إلزامي)</Label>
-            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
-              placeholder="مثال: تغيير البادئة لكل الفروع بعد قرار المدير العام رقم …" />
+        {/* Live preview */}
+        <div className="rounded-lg border-2 border-status-info border-dashed bg-status-info-surface/20 p-4">
+          <div className="text-xs text-muted-foreground mb-1">الرقم القادم سيكون:</div>
+          <div className="text-2xl font-mono font-bold tracking-wider text-status-info-foreground" dir="ltr">
+            {previewNumber}
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>إلغاء</Button>
-          <Button onClick={handleSave} disabled={saveMut.isPending} rateLimitAware>
-            {saveMut.isPending ? "جاري الحفظ..." : "حفظ التغييرات"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        {/* Step 1 — choose preset */}
+        <div className="space-y-2">
+          <Label className="text-sm font-semibold">١ — اختر طريقة الترقيم:</Label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {PRESETS.map((p) => {
+              const Icon = p.icon;
+              const active = presetKey === p.key;
+              return (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => handlePreset(p.key)}
+                  className={cn(
+                    "text-start rounded-lg border-2 p-3 transition-colors",
+                    active
+                      ? "border-status-info bg-status-info-surface/40"
+                      : "border-border hover:bg-surface-subtle",
+                  )}
+                >
+                  <div className="flex items-center gap-2 font-medium mb-1">
+                    <Icon className="h-4 w-4" />
+                    {p.label}
+                    {active && <CheckCircle className="h-4 w-4 ms-auto text-status-info" />}
+                  </div>
+                  <div className="text-xs text-muted-foreground">{p.description}</div>
+                </button>
+              );
+            })}
+          </div>
+          {presetKey === "custom" && (
+            <div className="text-xs text-status-warning-foreground bg-status-warning-surface/30 rounded-md p-2 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              السياسة الحالية مخصصة (لا تطابق أي قالب جاهز). يمكنك إبقاؤها أو اختيار قالب جاهز من الأعلى.
+            </div>
+          )}
+        </div>
+
+        {/* Step 2 — basics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <Label className="text-sm">٢ — البادئة (اختصار النوع)</Label>
+            <Input
+              value={prefix}
+              onChange={(e) => setPrefix(e.target.value.toUpperCase().slice(0, 8))}
+              placeholder="REQ / INV / CTR"
+              dir="ltr"
+              className="font-mono"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              مثال: <span className="font-mono">REQ</span> للطلبات،
+              <span className="font-mono"> INV</span> للفواتير
+            </p>
+          </div>
+          <div>
+            <Label className="text-sm">٣ — متى تعديل الرقم يدويًا؟</Label>
+            <Select value={manualEditPolicy} onValueChange={setManualEditPolicy}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(EDIT_POLICY_LABELS).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>{v}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Active toggle */}
+        <div className="flex items-center justify-between rounded-lg border bg-surface-subtle/40 p-3">
+          <div>
+            <Label className="text-sm font-medium">السياسة نشطة</Label>
+            <p className="text-xs text-muted-foreground">
+              إيقاف السياسة يمنع إصدار أرقام جديدة لهذا النوع — لكن لا يحذف الأرقام السابقة.
+            </p>
+          </div>
+          <Switch checked={isActive} onCheckedChange={setIsActive} />
+        </div>
+
+        {/* Advanced toggle */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="text-sm text-status-info-foreground flex items-center gap-1 hover:underline"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            إعدادات متقدمة (للخبراء)
+            {showAdvanced ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          {showAdvanced && (
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 bg-surface-subtle/30 rounded-lg p-3 border">
+              <div>
+                <Label className="text-xs">نمط الرقم</Label>
+                <Input
+                  value={pattern}
+                  onChange={(e) => { setPattern(e.target.value); setPresetKey("custom"); }}
+                  dir="ltr"
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  الرموز: <code>{"{PREFIX}"}</code> <code>{"{BRANCH}"}</code> <code>{"{YYYY}"}</code> <code>{"{YY}"}</code> <code>{"{MM}"}</code> <code>{"{SEASON}"}</code> <code>{"{SEQ}"}</code>
+                </p>
+              </div>
+              <div>
+                <Label className="text-xs">طول الرقم (أصفار)</Label>
+                <Input
+                  type="number" min={3} max={10}
+                  value={padLength}
+                  onChange={(e) => setPadLength(Number(e.target.value) || 4)}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">توقيت إصدار الرقم</Label>
+                <Select value={scheme.issueTiming} onValueChange={() => { /* fixed by scheme creator */ }}>
+                  <SelectTrigger><SelectValue placeholder={TIMING_LABELS[scheme.issueTiming]} /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(TIMING_LABELS).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">آخر تعديل</Label>
+                <div className="text-xs text-muted-foreground p-2">{formatDateAr(scheme.updatedAt)}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Reason + Save */}
+        <div className="space-y-2 pt-2 border-t">
+          <Label className="text-sm">سبب التعديل (إلزامي)</Label>
+          <Textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={2}
+            placeholder="مثال: تغيير البادئة بعد توحيد المسميات في الإدارة"
+          />
+          <div className="flex gap-2 pt-1">
+            <Button onClick={handleSave} disabled={saveMut.isPending} rateLimitAware>
+              {saveMut.isPending ? "جاري الحفظ..." : "حفظ التغييرات"}
+            </Button>
+            <Button variant="ghost" onClick={onClose}>إلغاء</Button>
+          </div>
+        </div>
+
+        {/* Counters strip */}
+        <CountersStrip schemeId={scheme.id} />
+      </CardContent>
+    </Card>
   );
 }
 
-// ─── Counters dialog ─────────────────────────────────────────────
+// ─── Backfill banner ─────────────────────────────────────────────
 
-function CountersDialog({ scheme, onClose }: { scheme: Scheme; onClose: () => void }) {
+function BackfillBanner({ scheme, onDone }: { scheme: Scheme; onDone: () => void }) {
   const { toast } = useToast();
-  const { data, refetch, isLoading } = useApiQuery<{ data: Scheme; counters: Counter[] }>(
-    ["numbering-scheme-detail", String(scheme.id)], `/numbering/schemes/${scheme.id}`,
-  );
-  const counters = (data?.counters || []) as Counter[];
-
-  const resetMut = useApiMutation<any, { counterId: number; newValue: number; reason: string; force?: boolean }>(
-    (b) => `/numbering/counters/${b.counterId}/reset`, "POST",
-    [["numbering-scheme-detail", String(scheme.id)]],
-    {
-      successMessage: "تم تصفير العداد",
-      onSuccess: refetch,
-    },
+  const [running, setRunning] = useState(false);
+  const { data: preview, refetch } = useApiQuery<{ pending: number; alreadyAssigned: number }>(
+    ["numbering-backfill-preview", String(scheme.id)],
+    `/numbering/schemes/${scheme.id}/backfill/preview`,
   );
 
-  const lockMut = useApiMutation<any, { counterId: number; reason: string }>(
-    (b) => `/numbering/counters/${b.counterId}/lock`, "POST",
-    [["numbering-scheme-detail", String(scheme.id)]],
-    { onSuccess: refetch, successMessage: "تم قفل العداد" },
-  );
-  const unlockMut = useApiMutation<any, { counterId: number; reason: string }>(
-    (b) => `/numbering/counters/${b.counterId}/unlock`, "POST",
-    [["numbering-scheme-detail", String(scheme.id)]],
-    { onSuccess: refetch, successMessage: "تم فتح العداد" },
-  );
+  if (!preview || (preview.pending === 0 && preview.alreadyAssigned > 0)) {
+    return scheme.lastBackfillAt ? (
+      <div className="rounded-lg border bg-status-success-surface/30 p-3 text-xs text-status-success-foreground flex items-center gap-2">
+        <CheckCircle className="h-4 w-4" />
+        تم جرد المعاملات السابقة ({scheme.lastBackfillCount?.toLocaleString("ar-SA") || 0} معاملة) بتاريخ {formatDateAr(scheme.lastBackfillAt)}.
+      </div>
+    ) : null;
+  }
 
-  const askForReason = (label: string): string | null => {
-    const r = window.prompt(label);
-    if (!r || r.trim().length < 3) {
-      toast({ title: "السبب مطلوب", description: "السبب لا يقل عن 3 أحرف" });
-      return null;
+  const handleBackfill = async () => {
+    setRunning(true);
+    try {
+      const result = await apiFetch<any>(`/numbering/schemes/${scheme.id}/backfill`, { method: "POST" });
+      toast({
+        title: "تم الجرد",
+        description: `تم تسجيل ${result.imported} معاملة قديمة. سيبدأ التسلسل القادم من ${result.nextSequenceAfterBackfill}.`,
+      });
+      refetch();
+      onDone();
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message || "فشل الجرد", variant: "destructive" });
+    } finally {
+      setRunning(false);
     }
-    return r.trim();
   };
 
   return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>عدادات سياسة {scheme.displayNameAr}</DialogTitle>
-          <DialogDescription className="font-mono text-xs">
-            {scheme.moduleKey}.{scheme.entityKey}
-          </DialogDescription>
-        </DialogHeader>
-        {isLoading ? <LoadingSpinner /> : (
-          <Card><CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-surface-subtle">
-                  <th className="p-3 text-start">الفرع</th>
-                  <th className="p-3 text-start">السنة</th>
-                  <th className="p-3 text-start">الموسم</th>
-                  <th className="p-3 text-start">آخر رقم</th>
-                  <th className="p-3 text-start">الرقم القادم</th>
-                  <th className="p-3 text-start">الحالة</th>
-                  <th className="p-3 text-end">إجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {counters.map((c) => (
-                  <tr key={c.id} className="border-b">
-                    <td className="p-3">{c.branchId ?? "—"}</td>
-                    <td className="p-3">{c.fiscalYear ?? "—"}</td>
-                    <td className="p-3">{c.seasonId ?? "—"}</td>
-                    <td className="p-3 font-mono">{c.lastNumber}</td>
-                    <td className="p-3 font-mono font-semibold">{c.nextNumber}</td>
-                    <td className="p-3">
-                      <Badge variant={c.lockedAt ? "destructive" : "default"} className="text-xs">
-                        {c.lockedAt ? "مقفول" : "نشط"}
-                      </Badge>
-                    </td>
-                    <td className="p-3">
-                      <div className="flex gap-1 justify-end">
-                        <GuardedButton
-                          perm="settings.numbering.reset:update"
-                          variant="ghost"
-                          size="sm"
-                          title="تصفير"
-                          onClick={() => {
-                            const r = askForReason("سبب تصفير العداد:");
-                            if (!r) return;
-                            const v = Number(window.prompt("القيمة الجديدة للعداد:", "1"));
-                            if (!Number.isFinite(v) || v < 0) return;
-                            resetMut.mutate({ counterId: c.id, newValue: v, reason: r });
-                          }}
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                        </GuardedButton>
-                        {c.lockedAt ? (
-                          <GuardedButton
-                            perm="settings.numbering:update"
-                            variant="ghost"
-                            size="sm"
-                            title="فتح القفل"
-                            onClick={() => {
-                              const r = askForReason("سبب فتح العداد:");
-                              if (r) unlockMut.mutate({ counterId: c.id, reason: r });
-                            }}
-                          >
-                            <Unlock className="h-4 w-4" />
-                          </GuardedButton>
-                        ) : (
-                          <GuardedButton
-                            perm="settings.numbering:update"
-                            variant="ghost"
-                            size="sm"
-                            title="قفل العداد"
-                            onClick={() => {
-                              const r = askForReason("سبب قفل العداد:");
-                              if (r) lockMut.mutate({ counterId: c.id, reason: r });
-                            }}
-                          >
-                            <Lock className="h-4 w-4" />
-                          </GuardedButton>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {counters.length === 0 && (
-                  <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">
-                    لم يصدر أي رقم بعد لهذه السياسة
-                  </td></tr>
-                )}
-              </tbody>
-            </table>
-          </CardContent></Card>
-        )}
-        <DialogFooter>
-          <Button onClick={onClose}>إغلاق</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <div className="rounded-lg border-2 border-status-warning bg-status-warning-surface/30 p-4 space-y-3">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="h-5 w-5 text-status-warning-foreground shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <div className="font-medium text-status-warning-foreground">
+            توجد {preview.pending.toLocaleString("ar-SA")} معاملة قديمة بلا تتبّع
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            هذه المعاملات أُنشئت قبل تفعيل مركز الترقيم الموحد، فلا تظهر في سجل الأرقام
+            ولا في التدقيق. الجرد سيسجلها مرة واحدة ويحدّث العداد بحيث لا يتعارض
+            الرقم القادم مع رقم قديم. العملية آمنة ولا تعدّل أي بيانات في المعاملات نفسها.
+          </p>
+        </div>
+      </div>
+      <div>
+        <GuardedButton
+          perm="settings.numbering.reset:update"
+          size="sm"
+          onClick={handleBackfill}
+          disabled={running}
+          rateLimitAware
+        >
+          {running ? "جاري الجرد..." : `جرد ${preview.pending.toLocaleString("ar-SA")} معاملة`}
+        </GuardedButton>
+      </div>
+    </div>
+  );
+}
+
+// ─── Counters strip (inline replacement for the dialog) ────────────
+
+function CountersStrip({ schemeId }: { schemeId: number }) {
+  const { toast } = useToast();
+  const { data, refetch, isLoading } = useApiQuery<{ data: Scheme; counters: Counter[] }>(
+    ["numbering-scheme-detail", String(schemeId)],
+    `/numbering/schemes/${schemeId}`,
+  );
+  const counters = (data?.counters || []) as Counter[];
+
+  if (isLoading) return null;
+  if (counters.length === 0) {
+    return (
+      <div className="text-xs text-muted-foreground italic border-t pt-3">
+        لم يصدر أي رقم بعد لهذه السياسة — العداد سيبدأ من 1 لأول إصدار.
+      </div>
+    );
+  }
+
+  const handleReset = async (counterId: number) => {
+    const reason = window.prompt("سبب تصفير العداد:");
+    if (!reason || reason.trim().length < 3) {
+      toast({ title: "السبب مطلوب", description: "السبب لا يقل عن 3 أحرف" });
+      return;
+    }
+    const newValue = Number(window.prompt("القيمة الجديدة للعداد:", "1"));
+    if (!Number.isFinite(newValue) || newValue < 0) return;
+    try {
+      await apiFetch(`/numbering/counters/${counterId}/reset`, {
+        method: "POST",
+        body: JSON.stringify({ newValue, reason }),
+      });
+      toast({ title: "تم التصفير" });
+      refetch();
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message || "فشل التصفير", variant: "destructive" });
+    }
+  };
+
+  const handleLockToggle = async (counter: Counter) => {
+    const op = counter.lockedAt ? "unlock" : "lock";
+    const reason = window.prompt(counter.lockedAt ? "سبب فتح القفل:" : "سبب القفل:");
+    if (!reason || reason.trim().length < 3) {
+      toast({ title: "السبب مطلوب" });
+      return;
+    }
+    try {
+      await apiFetch(`/numbering/counters/${counter.id}/${op}`, {
+        method: "POST",
+        body: JSON.stringify({ reason }),
+      });
+      toast({ title: counter.lockedAt ? "تم الفتح" : "تم القفل" });
+      refetch();
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message || "فشلت العملية", variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="border-t pt-3 space-y-2">
+      <div className="text-sm font-medium flex items-center gap-2">
+        <Hash className="h-4 w-4" /> العدادات الفعلية
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b">
+              <th className="p-2 text-start">الفرع</th>
+              <th className="p-2 text-start">السنة</th>
+              <th className="p-2 text-start">الموسم</th>
+              <th className="p-2 text-start">آخر رقم صدر</th>
+              <th className="p-2 text-start">القادم</th>
+              <th className="p-2 text-start">الحالة</th>
+              <th className="p-2 text-end">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {counters.map((c) => (
+              <tr key={c.id} className="border-b">
+                <td className="p-2">{c.branchId ?? "—"}</td>
+                <td className="p-2">{c.fiscalYear ?? "—"}</td>
+                <td className="p-2">{c.seasonId ?? "—"}</td>
+                <td className="p-2 font-mono">{c.lastNumber}</td>
+                <td className="p-2 font-mono font-semibold text-status-info-foreground">{c.nextNumber}</td>
+                <td className="p-2">
+                  {c.lockedAt ? (
+                    <Badge variant="destructive" className="text-xs">مقفول</Badge>
+                  ) : (
+                    <Badge className="text-xs">نشط</Badge>
+                  )}
+                </td>
+                <td className="p-2 text-end">
+                  <GuardedButton
+                    perm="settings.numbering.reset:update"
+                    variant="ghost"
+                    size="sm"
+                    title="تصفير"
+                    onClick={() => handleReset(c.id)}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </GuardedButton>
+                  <GuardedButton
+                    perm="settings.numbering:update"
+                    variant="ghost"
+                    size="sm"
+                    title={c.lockedAt ? "فتح القفل" : "قفل العداد"}
+                    onClick={() => handleLockToggle(c)}
+                  >
+                    {c.lockedAt ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                  </GuardedButton>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
 // ─── Assignments panel ──────────────────────────────────────────
 
 function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
-  const [filters, setFilters] = useState<{ moduleKey?: string; entityKey?: string; status?: string; q?: string }>({});
+  const [filters, setFilters] = useState<{ moduleKey?: string; status?: string; q?: string }>({});
   const query = useMemo(() => {
     const u = new URLSearchParams();
     if (filters.moduleKey) u.set("moduleKey", filters.moduleKey);
-    if (filters.entityKey) u.set("entityKey", filters.entityKey);
     if (filters.status) u.set("status", filters.status);
     if (filters.q) u.set("q", filters.q);
     return u.toString();
   }, [filters]);
   const url = `/numbering/assignments${query ? `?${query}` : ""}`;
-  const { data, refetch, isLoading } = useApiQuery<{ data: Assignment[] }>(["numbering-assignments", query], url);
+  const { data, isLoading } = useApiQuery<{ data: Assignment[] }>(["numbering-assignments", query], url);
   const rows = (data?.data || []) as Assignment[];
-
   const moduleKeys = useMemo(
     () => Array.from(new Set(schemes.map((s) => s.moduleKey))).sort(),
     [schemes],
@@ -555,7 +782,7 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
 
   return (
     <div className="space-y-3">
-      <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+      <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <Label className="text-xs">المسار</Label>
           <Select value={filters.moduleKey || "all"} onValueChange={(v) => setFilters({ ...filters, moduleKey: v === "all" ? undefined : v })}>
@@ -575,19 +802,23 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
               <SelectItem value="assigned">مخصص</SelectItem>
               <SelectItem value="reserved">محجوز</SelectItem>
               <SelectItem value="voided">ملغي</SelectItem>
-              <SelectItem value="cancelled">تم الإلغاء</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        <div className="md:col-span-2">
+        <div>
           <Label className="text-xs">بحث (رقم / جدول)</Label>
-          <Input value={filters.q || ""} onChange={(e) => setFilters({ ...filters, q: e.target.value })}
-            placeholder="مثال: REQ-MK-2026" dir="ltr" className="font-mono" />
+          <Input
+            value={filters.q || ""}
+            onChange={(e) => setFilters({ ...filters, q: e.target.value })}
+            placeholder="مثال: REQ-MK-2026"
+            dir="ltr"
+            className="font-mono"
+          />
         </div>
       </CardContent></Card>
 
       {isLoading ? <LoadingSpinner /> : (
-        <Card><CardContent className="p-0">
+        <Card><CardContent className="p-0 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-surface-subtle">
@@ -607,7 +838,7 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
                   <td className="p-3 font-mono text-xs text-muted-foreground">{r.entityTable}</td>
                   <td className="p-3">{r.entityId ?? "—"}</td>
                   <td className="p-3">
-                    <Badge variant={r.status === "voided" ? "destructive" : r.status === "reserved" ? "secondary" : "default"} className="text-xs">
+                    <Badge variant={r.status === "voided" ? "destructive" : "default"} className="text-xs">
                       {r.status}
                     </Badge>
                   </td>
@@ -616,7 +847,7 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
               ))}
               {rows.length === 0 && (
                 <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">
-                  لا توجد أرقام صادرة بهذه المعايير
+                  لا توجد أرقام مسجلة بهذه المعايير
                 </td></tr>
               )}
             </tbody>
@@ -635,14 +866,29 @@ function AuditPanel() {
 
   if (isLoading) return <LoadingSpinner />;
 
+  const labelFor = (action: string): string => {
+    const map: Record<string, string> = {
+      issue: "إصدار رقم",
+      reserve: "حجز رقم",
+      assign: "ربط بمستند",
+      override: "تعديل يدوي",
+      void: "إلغاء",
+      reset_counter: "تصفير عداد",
+      lock_counter: "قفل عداد",
+      unlock_counter: "فتح قفل عداد",
+      update_scheme: "تعديل سياسة",
+      backfill: "جرد المعاملات السابقة",
+    };
+    return map[action] || action;
+  };
+
   return (
-    <Card><CardContent className="p-0">
+    <Card><CardContent className="p-0 overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b bg-surface-subtle">
             <th className="p-3 text-start">الإجراء</th>
             <th className="p-3 text-start">السياسة / الرقم</th>
-            <th className="p-3 text-start">قبل / بعد</th>
             <th className="p-3 text-start">السبب</th>
             <th className="p-3 text-start">المستخدم</th>
             <th className="p-3 text-start">التاريخ</th>
@@ -652,15 +898,15 @@ function AuditPanel() {
           {rows.map((r) => (
             <tr key={r.id} className="border-b hover:bg-surface-subtle align-top">
               <td className="p-3">
-                <Badge variant="outline" className="text-xs font-mono">{r.action}</Badge>
+                <Badge variant="outline" className="text-xs">{labelFor(r.action)}</Badge>
               </td>
               <td className="p-3 text-xs">
                 {r.schemeName && <div>{r.schemeName}</div>}
-                {r.entityTable && <div className="font-mono text-muted-foreground">{r.entityTable}#{r.entityId ?? "—"}</div>}
-              </td>
-              <td className="p-3 text-xs font-mono max-w-xs whitespace-pre-wrap">
-                <div className="text-status-error-foreground">{r.before ? JSON.stringify(r.before) : "—"}</div>
-                <div className="text-status-success-foreground">{r.after ? JSON.stringify(r.after) : "—"}</div>
+                {r.entityTable && (
+                  <div className="font-mono text-muted-foreground">
+                    {r.entityTable}{r.entityId !== null ? `#${r.entityId}` : ""}
+                  </div>
+                )}
               </td>
               <td className="p-3 text-xs">{r.reason || "—"}</td>
               <td className="p-3 text-xs">{r.actorName || "—"}</td>
@@ -668,9 +914,9 @@ function AuditPanel() {
             </tr>
           ))}
           {rows.length === 0 && (
-            <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">
+            <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">
               <History className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              لا توجد سجلات تدقيق
+              لا توجد سجلات تدقيق بعد
             </td></tr>
           )}
         </tbody>

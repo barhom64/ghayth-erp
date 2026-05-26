@@ -99,13 +99,13 @@ export default function FinancialReportsPage() {
 
         <TabsContent value="trial-balance"><TrialBalance dateParams={dateParams} startDate={startDate} endDate={endDate} /></TabsContent>
         <TabsContent value="income-statement"><IncomeStatement dateParams={dateParams} startDate={startDate} endDate={endDate} /></TabsContent>
-        <TabsContent value="balance-sheet"><BalanceSheet dateParams={dateParams.replace("startDate", "asOfDate")} /></TabsContent>
-        <TabsContent value="cash-flow"><CashFlow dateParams={dateParams} /></TabsContent>
-        <TabsContent value="cash-bank"><CashBankStatement dateParams={dateParams} /></TabsContent>
+        <TabsContent value="balance-sheet"><BalanceSheet dateParams={dateParams.replace("startDate", "asOfDate")} startDate={startDate} endDate={endDate} /></TabsContent>
+        <TabsContent value="cash-flow"><CashFlow dateParams={dateParams} startDate={startDate} endDate={endDate} /></TabsContent>
+        <TabsContent value="cash-bank"><CashBankStatement dateParams={dateParams} startDate={startDate} endDate={endDate} /></TabsContent>
         <TabsContent value="custody-advances"><CustodyAdvances dateParams={dateParams} /></TabsContent>
         <TabsContent value="expenses-analysis"><ExpensesAnalysis dateParams={dateParams} /></TabsContent>
         <TabsContent value="revenue-analysis"><RevenueAnalysis dateParams={dateParams} /></TabsContent>
-        <TabsContent value="budget-variance"><BudgetVariance /></TabsContent>
+        <TabsContent value="budget-variance"><BudgetVariance startDate={startDate} endDate={endDate} /></TabsContent>
         <TabsContent value="entity-statement"><EntityStatement startDate={startDate} endDate={endDate} /></TabsContent>
         <TabsContent value="revenue-by-activity"><RevenueByActivity dateParams={dateParams} /></TabsContent>
         <TabsContent value="expenses-by-cost-center"><ExpensesByCostCenter dateParams={dateParams} /></TabsContent>
@@ -474,7 +474,7 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
   );
 }
 
-function BalanceSheet({ dateParams }: { dateParams: string }) {
+function BalanceSheet({ dateParams, startDate, endDate }: { dateParams: string; startDate?: string; endDate?: string }) {
   const { data, isLoading, isError } = useApiQuery<any>(["balance-sheet", dateParams], `/finance/reports/balance-sheet${dateParams ? `?${dateParams}` : ""}`);
   const summary = data?.summary || {};
   const assets = data?.assets || [];
@@ -526,7 +526,7 @@ function BalanceSheet({ dateParams }: { dateParams: string }) {
   return (
     <div className="space-y-4 mt-4">
       <div className="flex justify-end gap-2">
-        <PrintButton />
+        <PrintButton entityType="report_balance_sheet" entityId={dateRangeId(startDate, endDate)} />
         <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV([...assets, ...liabilities, ...equity], ["code", "name", "type", "balance"], "balance-sheet.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </GuardedButton>
@@ -572,7 +572,7 @@ function BalanceSheet({ dateParams }: { dateParams: string }) {
   );
 }
 
-function CashFlow({ dateParams }: { dateParams: string }) {
+function CashFlow({ dateParams, startDate, endDate }: { dateParams: string; startDate?: string; endDate?: string }) {
   const { data, isLoading, isError } = useApiQuery<any>(["cash-flow", dateParams], `/finance/reports/cash-flow${dateParams ? `?${dateParams}` : ""}`);
   const summary = data?.summary || {};
   const inflows = data?.inflows || [];
@@ -596,7 +596,7 @@ function CashFlow({ dateParams }: { dateParams: string }) {
   return (
     <div className="space-y-4 mt-4">
       <div className="flex justify-end gap-2">
-        <PrintButton />
+        <PrintButton entityType="report_cash_flow" entityId={dateRangeId(startDate, endDate)} />
         <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV([...inflows.map((f: any) => ({ ...f, type: "وارد" })), ...outflows.map((f: any) => ({ ...f, type: "صادر" }))], ["type", "description", "amount", "date"], "cash-flow.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </GuardedButton>
@@ -654,7 +654,7 @@ function CashFlow({ dateParams }: { dateParams: string }) {
   );
 }
 
-function CashBankStatement({ dateParams }: { dateParams: string }) {
+function CashBankStatement({ dateParams, startDate, endDate }: { dateParams: string; startDate?: string; endDate?: string }) {
   const [accountCode, setAccountCode] = useState("1100");
   const params = `accountCode=${accountCode}${dateParams ? `&${dateParams}` : ""}`;
   const { data, isLoading, isError } = useApiQuery<any>(["cash-bank-statement", params], `/finance/reports/cash-bank-statement?${params}`);
@@ -691,7 +691,7 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
             <SelectItem value="1110">1110 - البنك</SelectItem>
           </SelectContent>
         </Select>
-        <PrintButton />
+        <PrintButton entityType="report_cash_bank" entityId={dateRangeId(startDate, endDate)} />
         <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(entries, ["ref", "description", "debit", "credit", "runningBalance", "date"], `cash-${accountCode}.csv`)}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </GuardedButton>
@@ -951,7 +951,7 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
   );
 }
 
-function BudgetVariance() {
+function BudgetVariance({ startDate, endDate }: { startDate?: string; endDate?: string }) {
   const [period, setPeriod] = useState(currentPeriodRiyadh());
   const { data, isLoading, isError } = useApiQuery<any>(["budget-variance", period], `/finance/reports/budget-variance?period=${period}`);
   const rows = data?.data || [];
@@ -1001,7 +1001,7 @@ function BudgetVariance() {
     <div className="space-y-4 mt-4">
       <div className="flex items-center gap-3">
         <Input type="month" className="w-40" value={period} onChange={(e) => setPeriod(e.target.value)} />
-        <PrintButton />
+        <PrintButton entityType="report_budget_variance" entityId={dateRangeId(startDate, endDate)} />
         <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(rows, ["accountCode", "accountName", "budget", "actual", "variance", "usagePct"], "budget-variance.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </GuardedButton>
