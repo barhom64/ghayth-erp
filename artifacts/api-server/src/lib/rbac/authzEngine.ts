@@ -128,7 +128,7 @@ interface UserGrantRow {
 const grantCache = new Map<string, { grants: RoleGrantRow[]; fields: FieldPolicyRow[]; limits: ApprovalLimitRow[]; userGrants: UserGrantRow[]; expiresAt: number }>();
 const CACHE_TTL_MS = 30_000;
 
-async function loadEffectiveGrants(userId: number, companyId: number): Promise<{
+async function loadEffectiveGrants(userId: number, companyId: number, selectedRoleKey: string | null = null): Promise<{
   grants: RoleGrantRow[];
   fields: FieldPolicyRow[];
   limits: ApprovalLimitRow[];
@@ -139,9 +139,18 @@ async function loadEffectiveGrants(userId: number, companyId: number): Promise<{
     [companyId]
   ).catch(() => [] as { version: number }[]);
   const version = versionRow[0]?.version ?? 0;
-  const cacheKey = `${userId}:${companyId}:${version}`;
+  // Cache key must vary by selected role so picking a different role
+  // doesn't replay the cached full-union grants from the previous request.
+  const cacheKey = `${userId}:${companyId}:${version}:${selectedRoleKey || "*"}`;
   const cached = grantCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached;
+
+  // When the user picked a single role in the header, narrow the
+  // recursive role-tree CTE to just that role_key (and its ancestors).
+  // Falls back to "all assigned roles" when no key is picked or the key
+  // doesn't match any rbac_roles row for this company.
+  const roleFilterSql = selectedRoleKey ? `AND r.role_key = $3` : "";
+  const queryParams: unknown[] = selectedRoleKey ? [userId, companyId, selectedRoleKey] : [userId, companyId];
 
   // Role hierarchy walk: a user's grants include not only their directly
   // assigned roles but every ancestor role in the parent_role_id chain.
@@ -156,6 +165,7 @@ async function loadEffectiveGrants(userId: number, companyId: number): Promise<{
          JOIN rbac_user_roles ur ON ur.role_id = r.id
         WHERE ur."userId" = $1 AND ur."companyId" = $2
           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+          ${roleFilterSql}
        UNION
        SELECT pr.id, pr.parent_role_id
          FROM rbac_roles pr
@@ -165,7 +175,7 @@ async function loadEffectiveGrants(userId: number, companyId: number): Promise<{
      SELECT g.role_id, g.feature_key, g.actions, g.scope, g.conditions
        FROM rbac_role_grants g
        JOIN user_role_tree urt ON urt.id = g.role_id`,
-    [userId, companyId]
+    queryParams
   ).catch(() => [] as RoleGrantRow[]);
 
   const fields = await rawQuery<FieldPolicyRow>(
@@ -175,6 +185,7 @@ async function loadEffectiveGrants(userId: number, companyId: number): Promise<{
          JOIN rbac_user_roles ur ON ur.role_id = r.id
         WHERE ur."userId" = $1 AND ur."companyId" = $2
           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+          ${roleFilterSql}
        UNION
        SELECT pr.id, pr.parent_role_id
          FROM rbac_roles pr
@@ -184,7 +195,7 @@ async function loadEffectiveGrants(userId: number, companyId: number): Promise<{
      SELECT fp.feature_key, fp.field_name, fp.mode
        FROM rbac_field_policies fp
        JOIN user_role_tree urt ON urt.id = fp.role_id`,
-    [userId, companyId]
+    queryParams
   ).catch(() => [] as FieldPolicyRow[]);
 
   const limits = await rawQuery<ApprovalLimitRow>(
@@ -194,6 +205,7 @@ async function loadEffectiveGrants(userId: number, companyId: number): Promise<{
          JOIN rbac_user_roles ur ON ur.role_id = r.id
         WHERE ur."userId" = $1 AND ur."companyId" = $2
           AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
+          ${roleFilterSql}
        UNION
        SELECT pr.id, pr.parent_role_id
          FROM rbac_roles pr
@@ -203,7 +215,7 @@ async function loadEffectiveGrants(userId: number, companyId: number): Promise<{
      SELECT al.feature_key, al.action, al.currency, al.max_amount, al.requires_dual_control
        FROM rbac_approval_limits al
        JOIN user_role_tree urt ON urt.id = al.role_id`,
-    [userId, companyId]
+    queryParams
   ).catch(() => [] as ApprovalLimitRow[]);
 
   // Per-user overrides — JIT elevation grants land here. Engine must
@@ -410,7 +422,7 @@ export async function checkAccess(scope: RequestScope, spec: AccessSpec, columns
     return { allowed: true, fieldPolicy: {}, scopeFilter: null, diagnostics: { matchedRoleIds: [], grantedActions: [spec.action], grantedScope: "self", requiredFix: "self-service" } };
   }
 
-  const { grants, fields, limits, userGrants } = await loadEffectiveGrants(scope.userId, scope.companyId);
+  const { grants, fields, limits, userGrants } = await loadEffectiveGrants(scope.userId, scope.companyId, scope.selectedRoleKey ?? null);
   const ctx = await loadScopeContext(scope);
 
   // Per-user revokes — pull rugs out before anything else.
