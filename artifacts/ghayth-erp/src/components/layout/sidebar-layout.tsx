@@ -16,7 +16,7 @@ import {
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
-  BarChart2, ShieldAlert, Flag, Lock,
+  BarChart2, ShieldAlert, Flag, Lock, Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -165,6 +165,8 @@ const allNavSections: NavSection[] = [
         { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations" },
         { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations" },
         { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations" },
+        { label: "المحاضر — إدارة", path: "/hr/discipline/memos", icon: FileText, subKey: "violations" },
+        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: Scale, subKey: "violations" },
       ]},
       { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, module: "hr", subKey: "employees" },
       { label: "الخطابات الرسمية", path: "/hr/official-letters", icon: FileSignature2, module: "hr", subKey: "employees" },
@@ -183,6 +185,7 @@ const allNavSections: NavSection[] = [
         { label: "القيود اليدوية", path: "/finance/journal-manual", icon: FileSignature },
         { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
         { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus },
+        { label: "طابور ترحيل GL", path: "/finance/gl-posting-queue", icon: Activity },
       ]},
       { label: "الفواتير والسندات", path: "/finance/invoices", icon: Receipt, module: "finance", children: [
         { label: "الفواتير", path: "/finance/invoices", icon: Receipt },
@@ -296,6 +299,11 @@ const allNavSections: NavSection[] = [
         { label: "المخالفات النظامية", path: "/umrah/violations", icon: Shield },
         { label: "النقل والمواصلات", path: "/umrah/transport", icon: Truck },
         { label: "استيراد البيانات", path: "/umrah/import", icon: FileText },
+        { label: "معالج المبيعات", path: "/umrah/sales-wizard", icon: TrendingUp },
+        { label: "كشف اليومي", path: "/umrah/daily-runsheet", icon: Calendar },
+        { label: "المجموعات", path: "/umrah/groups", icon: Users },
+        { label: "مطابقة الحسابات", path: "/umrah/reconciliation", icon: CheckCircle },
+        { label: "المرفقات", path: "/umrah/attachments", icon: FileText },
       ]},
     ],
   },
@@ -385,6 +393,15 @@ const allNavSections: NavSection[] = [
         { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any" },
         { label: "سجل الحركات", path: "/activity-log", icon: Activity },
         { label: "الإشعارات", path: "/notifications", icon: Bell },
+        // Operational/governance dashboards (formerly URL-only)
+        { label: "حاكم النظام", path: "/admin/system-governor", icon: Shield, perm: "admin:read" },
+        { label: "سجل النظام", path: "/admin/system-registry", icon: ScrollText, perm: "admin:read" },
+        { label: "سجل الأحداث", path: "/admin/event-monitor", icon: Activity, perm: "admin:read" },
+        { label: "مراقبة دورات الحياة", path: "/admin/lifecycle-monitor", icon: Activity, perm: "admin:read" },
+        { label: "محرك السياسات", path: "/admin/policy-engine", icon: Shield, perm: "admin:update" },
+        { label: "سجل المجالات", path: "/admin/domain-registry", icon: Layers, perm: "admin:read" },
+        { label: "مطابقة GL", path: "/admin/gl-reconciliation", icon: CheckCircle, perm: ["finance:view", "admin:read"], permMode: "any" },
+        { label: "إخفاقات الترحيل", path: "/admin/posting-failures", icon: AlertTriangle, perm: ["finance:view", "admin:read"], permMode: "any" },
       ]},
       { label: "الأتمتة", path: "/automation", icon: Zap, module: "admin", minRoleLevel: 60, perm: ["admin:update", "automation:write"], permMode: "any" },
       { label: "التقارير المجدولة", path: "/reports/scheduled", icon: CalendarClock, module: "bi", minRoleLevel: 40, perm: ["bi:read", "reports:read"], permMode: "any" },
@@ -450,6 +467,13 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // expandedItems is an array because nested groups can stack (a
+  // top-level group AND its child sub-group can both be open at once).
+  // The accordion behaviour is enforced inside toggleExpand: opening a
+  // new TOP-LEVEL group closes every other top-level group, but the
+  // sub-group it contains stays open. This matches what the user
+  // asked for: "اللي فتحته بس يفتح، الباقي يقفل" — but doesn't
+  // break the deep-nav case (e.g. finance → reports → trial-balance).
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [commandPaletteFilter, setCommandPaletteFilter] = useState<"shortcuts" | null>(null);
@@ -537,27 +561,44 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
   const filteredNavItems = filteredSections.flatMap(s => s.items);
 
+  // Auto-expand the chain of nav items that lead to the current
+  // route. Runs on every location change. To preserve accordion
+  // behaviour, this collapses any TOP-LEVEL group that isn't on the
+  // active chain — so navigating from /finance/x to /hr/y closes the
+  // finance branch automatically.
   useEffect(() => {
-    const toExpand: string[] = [];
-    const checkItem = (item: NavItem) => {
+    const chain: string[] = [];
+    const collect = (item: NavItem) => {
       if (item.children) {
         const isChildActive = item.children.some(
-          (c) => location === c.path || location.startsWith(c.path + "/") || (c.children && c.children.some(gc => location === gc.path || location.startsWith(gc.path + "/")))
+          (c) =>
+            location === c.path ||
+            location.startsWith(c.path + "/") ||
+            (c.children &&
+              c.children.some(
+                (gc) =>
+                  location === gc.path || location.startsWith(gc.path + "/"),
+              )),
         );
-        if (isChildActive && !expandedItems.includes(item.path)) {
-          toExpand.push(item.path);
-        }
-        for (const child of item.children) {
-          checkItem(child);
-        }
+        if (isChildActive) chain.push(item.path);
+        for (const child of item.children) collect(child);
       }
     };
-    for (const item of filteredNavItems) {
-      checkItem(item);
-    }
-    if (toExpand.length > 0) {
-      setExpandedItems((prev) => [...prev, ...toExpand.filter(p => !prev.includes(p))]);
-    }
+    for (const item of filteredNavItems) collect(item);
+    setExpandedItems((prev) => {
+      // Start from `chain` so other top-level groups are closed.
+      // Add any non-top-level entries from `prev` whose ancestor
+      // (the leading path segment) is in the new chain — keeps
+      // user-opened sub-branches alive.
+      const topLevelInChain = chain.filter((p) => topLevelPaths.has(p));
+      const survivors = prev.filter(
+        (p) =>
+          !topLevelPaths.has(p) &&
+          topLevelInChain.some((top) => p.startsWith(top + "/")),
+      );
+      const merged = new Set([...chain, ...survivors]);
+      return [...merged];
+    });
   }, [location]);
 
     useEffect(() => {
@@ -571,10 +612,38 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       }).catch(() => {});
     }, [location, user]);
 
-    const toggleExpand = (path: string) => {
-    setExpandedItems((prev) =>
-      prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]
-    );
+  // Top-level paths come from filteredNavItems (the flat list at the
+  // root of every section). When the user opens one of them, close
+  // any OTHER top-level group — but leave the sub-children of the
+  // newly-opened group expanded (they're identified by being nested
+  // inside the clicked path, e.g. `/finance/reports` lives under
+  // `/finance`). This is the accordion behaviour the user asked for:
+  // only one top-level group open at a time, but deep paths stay
+  // navigable.
+  const topLevelPaths = new Set(filteredNavItems.map((i) => i.path));
+
+  const toggleExpand = (path: string) => {
+    setExpandedItems((prev) => {
+      const isOpen = prev.includes(path);
+      if (isOpen) {
+        // User is collapsing this branch — remove it AND every
+        // descendant (so `/finance/reports` doesn't stay open after
+        // `/finance` collapses).
+        return prev.filter((p) => p !== path && !p.startsWith(path + "/"));
+      }
+      // Opening. If `path` is a top-level group, close every OTHER
+      // top-level group (and their descendants) before adding it.
+      if (topLevelPaths.has(path)) {
+        const kept = prev.filter(
+          (p) =>
+            !topLevelPaths.has(p) || // not a top-level → keep
+            p === path || // already the same group → no-op
+            p.startsWith(path + "/"), // descendant of the new group → keep
+        );
+        return [...kept, path];
+      }
+      return [...prev, path];
+    });
   };
 
   const isItemActive = (item: NavItem): boolean => {
