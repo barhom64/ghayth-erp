@@ -12,6 +12,7 @@ const AdminCommunicationControl = lazy(() => import("@/pages/admin-communication
 const AdminPbxControl = lazy(() => import("@/pages/admin-pbx-control"));
 const AdminMasterPlan = lazy(() => import("@/pages/admin-master-plan"));
 const AdminNotificationRouting = lazy(() => import("@/pages/admin-notification-routing"));
+const AdminVendorSettings = lazy(() => import("@/pages/admin-vendor-settings"));
 const AdminViolationsReport = lazy(() => import("@/pages/admin-violations-report"));
 const AdminSystemGovernor = lazy(() => import("@/pages/admin-system-governor"));
 const AdminPolicyEngine = lazy(() => import("@/pages/admin-policy-engine"));
@@ -39,6 +40,7 @@ export const adminRoutes = [
   { path: "/admin/pbx-control", component: AdminPbxControl },
   { path: "/admin/master-plan", component: AdminMasterPlan },
   { path: "/admin/notification-routing", component: AdminNotificationRouting },
+  { path: "/admin/vendor-settings", component: AdminVendorSettings },
   { path: "/admin/violations-report", component: AdminViolationsReport },
   { path: "/admin/system-governor", component: AdminSystemGovernor },
   { path: "/admin/policy-engine", component: AdminPolicyEngine },

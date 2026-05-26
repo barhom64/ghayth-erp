@@ -50,6 +50,7 @@ import adminCommControlRouter from "./admin-communication-control.js";
 import adminPbxControlRouter from "./admin-pbx-control.js";
 import adminMasterPlanRouter from "./admin-master-plan.js";
 import adminNotificationRoutingRouter from "./admin-notification-routing.js";
+import adminVendorSettingsRouter from "./admin-vendor-settings.js";
 import permissionsRouter from "./permissions.js";
 import rbacV2Router from "./rbacV2.js";
 import auditLogsRouter from "./auditLogs.js";
@@ -374,6 +375,9 @@ router.use("/admin/master-plan", requireModule("admin"), requireMinLevel(90), ad
 // Notification Routing rules + fallback chains UI (existing tables;
 // new admin surface to fulfil #1139 §6 "كل شيء قابل للتحكم من الواجهة").
 router.use("/admin/notification-routing", requireModule("admin"), requireMinLevel(90), adminNotificationRoutingRouter);
+// Vendor Settings hub — every external integration (PBX webhook, WhatsApp,
+// SMTP, VAPID, SIEM, ZATCA) editable from the UI, secrets encrypted at rest.
+router.use("/admin/vendor-settings", requireModule("admin"), requireMinLevel(90), adminVendorSettingsRouter);
 // FND-004 — RBAC administration surfaces. permissions.ts is fully
 // authorize()-guarded per route; rbacV2.ts had a few routes without one;
 // gating the mount at level 90 (consistent with /admin) closes the gap
