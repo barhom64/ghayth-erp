@@ -276,7 +276,16 @@ async function loadVoucher(companyId: number, id: string) {
     `SELECT * FROM vouchers WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
     [id, companyId]
   ).catch(() => [null]);
-  return { entity: voucher ?? { id } };
+  if (!voucher) return { entity: { id } };
+  // Fetch the party (client for receipts, supplier for payments).
+  // Some installations have neither, so each lookup is independent + null-safe.
+  const client = voucher.clientId
+    ? (await rawQuery<Record<string, unknown>>(`SELECT id, name, "taxNumber" FROM clients WHERE id = $1`, [voucher.clientId]))[0] ?? null
+    : null;
+  const supplier = voucher.supplierId
+    ? (await rawQuery<Record<string, unknown>>(`SELECT id, name FROM suppliers WHERE id = $1`, [voucher.supplierId]))[0] ?? null
+    : null;
+  return { entity: voucher, client, supplier };
 }
 
 async function loadPurchaseOrder(companyId: number, id: string) {
@@ -321,9 +330,17 @@ async function loadJournalEntry(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   if (!je) return { entity: { id } };
-  // journal_entry_lines table not yet committed to schema_pre.sql — defer to
-  // generic table fallback when present in live DB.
-  return { entity: je, lines: [] };
+  // journal_lines is the canonical name (was `journal_entry_lines` in older
+  // sketches that never landed). Each row carries debit/credit + an
+  // accountCode used by the printed entry sheet.
+  const lines = await rawQuery<Record<string, unknown>>(
+    `SELECT id, "accountCode", description, debit, credit
+       FROM journal_lines
+      WHERE "journalId" = $1
+      ORDER BY id`,
+    [id]
+  ).catch(() => []);
+  return { entity: je, lines, items: lines };
 }
 
 async function loadAccountStatement(companyId: number, id: string) {
