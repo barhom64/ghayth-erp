@@ -343,12 +343,20 @@ export default function CustomerAdvancesWorkbenchPage() {
                             })}
                           </tbody>
                         </table>
-                        {g.clientId && g.totalRemaining > 0.01 && (
+                        {g.clientId && (
                           <div className="flex justify-end gap-2 mt-3 border-t pt-3">
-                            <Link href={`/finance/receivables/receipt?clientId=${g.clientId}`}>
+                            {g.totalRemaining > 0.01 && (
+                              <Link href={`/finance/receivables/receipt?clientId=${g.clientId}`}>
+                                <Button size="sm" variant="outline">
+                                  <DollarSign className="w-4 h-4 ml-1" />
+                                  تطبيق على فاتورة
+                                </Button>
+                              </Link>
+                            )}
+                            <Link href={`/finance/customer-360-sheet?clientId=${g.clientId}`}>
                               <Button size="sm" variant="outline">
-                                <DollarSign className="w-4 h-4 ml-1" />
-                                تطبيق على فاتورة
+                                <Users className="w-4 h-4 ml-1" />
+                                ملف العميل 360°
                               </Button>
                             </Link>
                           </div>

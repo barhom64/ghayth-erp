@@ -176,6 +176,14 @@ export default function CustomerStatementPrintPage() {
             </div>
           </div>
           <div className="flex gap-2 mt-3 justify-end">
+            {clientId && (
+              <Link href={`/finance/customer-360-sheet?clientId=${clientId}`}>
+                <Button variant="outline" size="sm">
+                  <FileText className="w-4 h-4 ml-1" />
+                  ملف العميل 360°
+                </Button>
+              </Link>
+            )}
             <Button variant="outline" size="sm" onClick={exportCSV} disabled={!data}>
               <Download className="w-4 h-4 ml-1" />
               CSV
