@@ -9159,7 +9159,7 @@ CREATE TABLE public.integrations (
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
     CONSTRAINT integrations_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('error'::character varying)::text]))),
-    CONSTRAINT integrations_type_check_v2 CHECK (((type)::text = ANY ((ARRAY['email'::character varying, 'sms'::character varying, 'whatsapp'::character varying, 'webhook'::character varying, 'pbx'::character varying, 'push'::character varying, 'sms_otp'::character varying, 'siem'::character varying, 'zatca'::character varying, 'stt'::character varying, 'storage'::character varying, 'object_storage'::character varying])::text[])))
+    CONSTRAINT integrations_type_check_v2 CHECK (((type)::text = ANY (ARRAY[('email'::character varying)::text, ('sms'::character varying)::text, ('whatsapp'::character varying)::text, ('webhook'::character varying)::text, ('pbx'::character varying)::text, ('push'::character varying)::text, ('sms_otp'::character varying)::text, ('siem'::character varying)::text, ('zatca'::character varying)::text, ('stt'::character varying)::text, ('storage'::character varying)::text, ('object_storage'::character varying)::text])))
 );
 
 
@@ -16752,7 +16752,7 @@ CREATE TABLE public.vendor_secrets (
     config jsonb DEFAULT '{}'::jsonb NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
-    CONSTRAINT vendor_secrets_status_check CHECK (((status)::text = ANY ((ARRAY['active'::character varying, 'disabled'::character varying])::text[])))
+    CONSTRAINT vendor_secrets_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disabled'::character varying)::text])))
 );
 
 
