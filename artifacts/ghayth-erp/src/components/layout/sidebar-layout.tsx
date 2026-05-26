@@ -211,6 +211,7 @@ const allNavSections: NavSection[] = [
         { label: "الموردين", path: "/finance/vendors", icon: Users },
         { label: "منضدة التسوية 🆕", path: "/finance/vendor-settlement-workbench", icon: Briefcase },
         { label: "كشف حساب مورد للطباعة 🆕", path: "/finance/vendor-statement-print", icon: Printer },
+        { label: "ملف المورد 360° 🆕", path: "/finance/vendor-360-sheet", icon: Users },
         { label: "إنفاق الموردين 🆕", path: "/finance/vendor-spend", icon: BarChart3 },
         { label: "دفعة الدفع", path: "/finance/payment-run", icon: Banknote },
         { label: "تقويم الدفعات 🆕", path: "/finance/ap-payment-calendar", icon: Calendar },
