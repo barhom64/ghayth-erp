@@ -81,7 +81,7 @@ export default function UmrahAgentDetail() {
       { key: "address", label: "العنوان" },
       { key: "notes", label: "ملاحظات" },
     ],
-    invalidateKeys: [["umrah-agent-detail", id || ""], ["umrah-agents"]],
+    invalidateKeys: [["umrah-agent", id || ""], ["umrah-agents"]],
     onSaved: () => refetch(),
   });
 

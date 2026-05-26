@@ -196,7 +196,7 @@ export default function InvoiceDetailPage() {
       { key: "notes", label: "ملاحظات" },
       { key: "dueDate", label: "تاريخ الاستحقاق" },
     ],
-    invalidateKeys: [["invoice", String(id)], ["invoices"]],
+    invalidateKeys: [["invoice-detail", String(id)], ["invoices"]],
     onSaved: () => refetch(),
   });
 

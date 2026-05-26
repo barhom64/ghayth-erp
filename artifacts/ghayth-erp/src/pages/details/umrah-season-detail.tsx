@@ -60,7 +60,7 @@ export default function UmrahSeasonDetail() {
       { key: "capacity", label: "السعة", type: "number" },
       { key: "notes", label: "ملاحظات" },
     ],
-    invalidateKeys: [["umrah-season-detail", id || ""], ["umrah-seasons"]],
+    invalidateKeys: [["umrah-season", id || ""], ["umrah-seasons"]],
     onSaved: () => refetch(),
   });
 

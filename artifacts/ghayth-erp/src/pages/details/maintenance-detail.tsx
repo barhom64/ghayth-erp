@@ -104,7 +104,7 @@ export default function MaintenanceDetail() {
       { key: "odometer", label: "العداد", type: "number" },
       { key: "notes", label: "ملاحظات" },
     ],
-    invalidateKeys: [["maintenance", String(id)], ["maintenance"]],
+    invalidateKeys: [["maintenance-detail", String(id)], ["fleet-maintenance"]],
     onSaved: () => refetch(),
   });
 
