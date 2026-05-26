@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
 import { z } from "zod";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
@@ -14,9 +14,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 // ApprovalActions removed — contracts use direct status PATCH, no approval flow.
-import { Edit, FileText } from "lucide-react";
+import { Edit, FileText, RefreshCw, XCircle } from "lucide-react";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, todayLocal, currentYearRiyadh } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityTags } from "@/components/shared/entity-tags";
 
@@ -75,6 +75,47 @@ export default function LegalContractDetail() {
   );
 
   const contract = data;
+
+  // Renew + Terminate wire the dedicated /:id/renew and /:id/terminate
+  // endpoints (applyTransition pipelines). Both prompt for the minimum
+  // required field; the full overrides are documented on the backend
+  // schemas (newValue/notes for renew, effectiveDate for terminate).
+  const renewMut = useApiMutation<any, { id: number; newEndDate: string }>(
+    (b) => `/legal/contracts/${b.id}/renew`,
+    "POST",
+    [["legal-contract", String(id)], ["legal-contracts"]],
+    { successMessage: "تم تجديد العقد" },
+  );
+  const terminateMut = useApiMutation<any, { id: number; reason: string }>(
+    (b) => `/legal/contracts/${b.id}/terminate`,
+    "POST",
+    [["legal-contract", String(id)], ["legal-contracts"]],
+    { successMessage: "تم إنهاء العقد" },
+  );
+
+  const handleRenew = () => {
+    if (!id) return;
+    // Default-suggest "today + 1y" using Riyadh wall-clock components
+    // (Task #433 — finance-period-drift forbids raw `new Date()` year math).
+    const year = currentYearRiyadh() + 1;
+    const today = todayLocal();          // "YYYY-MM-DD" in Riyadh wall-clock
+    const defaultEnd = `${year}-${today.slice(5)}`;
+    const newEndDate = window.prompt("تاريخ نهاية التجديد (YYYY-MM-DD):", defaultEnd);
+    if (!newEndDate) return;
+    renewMut.mutate({ id, newEndDate });
+  };
+
+  const handleTerminate = () => {
+    if (!id) return;
+    const reason = window.prompt("سبب إنهاء العقد:");
+    if (!reason || !reason.trim()) {
+      if (reason !== null) {
+        toast({ variant: "destructive", title: "سبب الإنهاء مطلوب" });
+      }
+      return;
+    }
+    terminateMut.mutate({ id, reason: reason.trim() });
+  };
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -267,6 +308,27 @@ export default function LegalContractDetail() {
           >
             <Edit className="h-4 w-4 ms-1" />
             تعديل
+          </GuardedButton>
+          <GuardedButton
+            perm="legal:create"
+            variant="outline"
+            size="sm"
+            onClick={handleRenew}
+            disabled={!contract || renewMut.isPending || ["terminated", "renewed", "expired"].includes(contract?.status)}
+          >
+            <RefreshCw className="h-4 w-4 ms-1" />
+            تجديد
+          </GuardedButton>
+          <GuardedButton
+            perm="legal:create"
+            variant="outline"
+            size="sm"
+            className="text-status-error-foreground"
+            onClick={handleTerminate}
+            disabled={!contract || terminateMut.isPending || ["terminated", "renewed", "expired"].includes(contract?.status)}
+          >
+            <XCircle className="h-4 w-4 ms-1" />
+            إنهاء
           </GuardedButton>
         </>
       }
