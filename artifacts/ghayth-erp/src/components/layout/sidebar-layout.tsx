@@ -224,6 +224,7 @@ const allNavSections: NavSection[] = [
         { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
         { label: "منضدة التحصيل 🆕", path: "/finance/ar-collection-workbench", icon: Users },
         { label: "كشف حساب عميل للطباعة 🆕", path: "/finance/customer-statement-print", icon: Printer },
+        { label: "ملف العميل 360° 🆕", path: "/finance/customer-360-sheet", icon: Users },
         { label: "مخاطر العملاء", path: "/finance/customer-risk", icon: AlertTriangle },
         { label: "مخصص ديون مشكوك فيها 🆕", path: "/finance/bad-debt-provision", icon: TrendingUp },
         { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
