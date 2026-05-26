@@ -121,7 +121,7 @@ export default function AllocationRulesPage() {
         : <span className="text-muted-foreground italic">—</span> },
     { key: "requiresEntityLink", header: "يتطلب ربطاً",
       render: (r) => r.requiresEntityLink
-        ? <Badge className="bg-amber-100 text-amber-800 text-[10px]">إلزامي</Badge>
+        ? <Badge className="bg-amber-100 text-status-warning-foreground text-[10px]">إلزامي</Badge>
         : <span className="text-muted-foreground italic">—</span> },
     { key: "autoCreateMissing", header: "إنشاء تلقائي",
       render: (r) => r.autoCreateMissing
@@ -194,12 +194,12 @@ export default function AllocationRulesPage() {
             <p className="text-lg font-bold font-mono text-emerald-700">{formatNumber(activeCount)}</p>
           </CardContent>
         </Card>
-        <Card className="border-amber-300">
+        <Card className="border-status-warning-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <AlertTriangle className="h-3 w-3" /> تتطلب ربطاً
             </p>
-            <p className="text-lg font-bold font-mono text-amber-700">{formatNumber(requiresLink)}</p>
+            <p className="text-lg font-bold font-mono text-status-warning-foreground">{formatNumber(requiresLink)}</p>
           </CardContent>
         </Card>
         <Card>

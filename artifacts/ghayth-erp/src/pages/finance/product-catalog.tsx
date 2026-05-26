@@ -36,8 +36,8 @@ const ITEM_TYPE_LABEL: Record<string, { label: string; tone: string; icon: any }
   product:    { label: "منتج",       tone: "bg-status-info-surface text-status-info-foreground", icon: Package },
   service:    { label: "خدمة",       tone: "bg-emerald-50 text-emerald-700",                    icon: Wrench },
   asset:      { label: "أصل ثابت",   tone: "bg-purple-100 text-purple-800",                     icon: ShoppingBag },
-  consumable: { label: "مستهلك",     tone: "bg-yellow-50 text-yellow-700",                      icon: Package },
-  digital:    { label: "رقمي",        tone: "bg-blue-50 text-blue-700",                          icon: Package },
+  consumable: { label: "مستهلك",     tone: "bg-status-warning-surface text-yellow-700",                      icon: Package },
+  digital:    { label: "رقمي",        tone: "bg-status-info-surface text-status-info-foreground",                          icon: Package },
 };
 
 const STRATEGY_LABEL: Record<string, string> = {
@@ -136,7 +136,7 @@ export default function ProductCatalogPage() {
         if (r.defaultAssetAccountId)     accounts.push(`A:${r.defaultAssetAccountId}`);
         return accounts.length
           ? <span className="font-mono text-[10px]">{accounts.join(" / ")}</span>
-          : <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300">غير موجَّه</Badge>;
+          : <Badge variant="outline" className="text-[10px] text-status-warning-foreground border-status-warning-surface">غير موجَّه</Badge>;
       },
     },
     { key: "defaultTaxCode", header: "رمز الضريبة الافتراضي",
@@ -157,7 +157,7 @@ export default function ProductCatalogPage() {
         if (r.requiresUmrahAgent)  reqs.push("مرشد عمرة");
         if (r.requiresUmrahSeason) reqs.push("موسم عمرة");
         return reqs.length
-          ? <Badge className="bg-amber-100 text-amber-800 text-[10px]">{reqs.join(" + ")}</Badge>
+          ? <Badge className="bg-amber-100 text-status-warning-foreground text-[10px]">{reqs.join(" + ")}</Badge>
           : <span className="text-muted-foreground italic text-xs">—</span>;
       },
     },
@@ -209,10 +209,10 @@ export default function ProductCatalogPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="border-amber-300">
+        <Card className="border-status-warning-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">تتطلب ربطاً تشغيلياً</p>
-            <p className="text-lg font-bold font-mono text-amber-700">{formatNumber(stats.withRequirement)}</p>
+            <p className="text-lg font-bold font-mono text-status-warning-foreground">{formatNumber(stats.withRequirement)}</p>
           </CardContent>
         </Card>
         <Card>

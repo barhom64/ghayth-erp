@@ -13,6 +13,6 @@ export const ACTIVITY_TYPES: Record<string, string> = {
 
 // -- حالات الأنشطة ----------------------------------------------------------
 export const ACTIVITY_STATUS: Record<string, { label: string; color: string }> = {
-  completed: { label: "مكتمل", color: "bg-green-100 text-green-700 border-green-300" },
-  scheduled: { label: "مجدول", color: "bg-blue-100 text-blue-700 border-blue-300" },
+  completed: { label: "مكتمل", color: "bg-green-100 text-status-success-foreground border-status-success-surface" },
+  scheduled: { label: "مجدول", color: "bg-blue-100 text-status-info-foreground border-status-info-surface" },
 };

@@ -21,7 +21,7 @@ export const RECRUITMENT_STAGES: Record<string, { label: string; color: string }
   interview: { label: "مقابلة",       color: "bg-purple-100 text-purple-700 border-purple-300" },
   offer:     { label: "عرض",          color: "bg-green-100 text-status-success-foreground border-status-success-surface" },
   hired:     { label: "تم التوظيف",   color: "bg-emerald-100 text-emerald-700 border-emerald-300" },
-  rejected:  { label: "مرفوض",        color: "bg-red-100 text-status-error-foreground border-red-300" },
+  rejected:  { label: "مرفوض",        color: "bg-red-100 text-status-error-foreground border-status-error-surface" },
 };
 
 // ── أنواع الإجازات ──────────────────────────────────────────────────
@@ -112,7 +112,7 @@ export const LOAN_STATUS: Record<string, { label: string; color: string }> = {
   pending:   { label: "بانتظار الموافقة", color: "bg-amber-100 text-status-warning-foreground border-status-warning-surface" },
   active:    { label: "نشطة",             color: "bg-blue-100 text-status-info-foreground border-status-info-surface"    },
   completed: { label: "مكتملة",           color: "bg-green-100 text-status-success-foreground border-status-success-surface" },
-  rejected:  { label: "مرفوضة",           color: "bg-red-100 text-status-error-foreground border-red-300"       },
+  rejected:  { label: "مرفوضة",           color: "bg-red-100 text-status-error-foreground border-status-error-surface"       },
 };
 
 // ── حالات أقساط السلف ──────────────────────────────────────────────
@@ -128,7 +128,7 @@ export const EXIT_REQUEST_STATUS: Record<string, { label: string; color: string 
   approved:    { label: "معتمد",            color: "bg-blue-100 text-status-info-foreground border-status-info-surface"     },
   in_progress: { label: "جاري التنفيذ",     color: "bg-purple-100 text-purple-700 border-purple-300" },
   completed:   { label: "مكتمل",            color: "bg-green-100 text-status-success-foreground border-status-success-surface"  },
-  rejected:    { label: "مرفوض",            color: "bg-red-100 text-status-error-foreground border-red-300"        },
+  rejected:    { label: "مرفوض",            color: "bg-red-100 text-status-error-foreground border-status-error-surface"        },
   cancelled:   { label: "ملغي",             color: "bg-gray-100 text-muted-foreground border-border"     },
 };
 
@@ -143,7 +143,7 @@ export const CLEARANCE_STATUS: Record<string, { label: string; color: string }> 
 export const APPROVAL_CHAIN_STATUS: Record<string, { label: string; color: string }> = {
   pending:   { label: "معلق",  color: "bg-yellow-100 text-yellow-700 border-yellow-300"  },
   approved:  { label: "موافق", color: "bg-green-100 text-status-success-foreground border-status-success-surface"     },
-  rejected:  { label: "مرفوض", color: "bg-red-100 text-status-error-foreground border-red-300"           },
+  rejected:  { label: "مرفوض", color: "bg-red-100 text-status-error-foreground border-status-error-surface"           },
   escalated: { label: "تصعيد", color: "bg-purple-100 text-purple-700 border-purple-300"  },
 };
 
@@ -162,7 +162,7 @@ export const SEVERITY_LEVELS: Record<string, { label: string; color: string }> =
   low:      { label: "بسيطة",  color: "bg-blue-100 text-status-info-foreground" },
   medium:   { label: "متوسطة", color: "bg-amber-100 text-status-warning-foreground" },
   high:     { label: "جسيمة",  color: "bg-red-100 text-status-error-foreground" },
-  critical: { label: "حرج",    color: "bg-red-200 text-red-800" },
+  critical: { label: "حرج",    color: "bg-red-200 text-status-error-foreground" },
 };
 
 // ── مكونات الرواتب ──────────────────────────────────────────────────
@@ -195,11 +195,11 @@ export const HOLIDAY_COLORS: Record<string, string> = {
 
 // ── مستويات العقوبات ────────────────────────────────────────────────
 export const PENALTY_LEVELS: Record<number, { label: string; color: string; bg: string }> = {
-  1: { label: "تنبيه شفهي",       color: "text-yellow-700", bg: "bg-yellow-50" },
+  1: { label: "تنبيه شفهي",       color: "text-yellow-700", bg: "bg-status-warning-surface" },
   2: { label: "إنذار كتابي أول",  color: "text-orange-700", bg: "bg-orange-50" },
   3: { label: "إنذار كتابي ثاني", color: "text-status-error-foreground",    bg: "bg-status-error-surface" },
   4: { label: "خصم من الراتب",    color: "text-status-error-foreground",    bg: "bg-red-100" },
-  5: { label: "إيقاف مؤقت",       color: "text-red-800",    bg: "bg-red-200" },
+  5: { label: "إيقاف مؤقت",       color: "text-status-error-foreground",    bg: "bg-red-200" },
 };
 
 // ── إجراءات محاضر التحقيق ───────────────────────────────────────────
@@ -278,7 +278,7 @@ export const APPLICANT_SOURCES: ReadonlyArray<{ value: string; label: string }> 
 export const TRANSFER_STATUS: Record<string, { label: string; color: string }> = {
   pending:  { label: "بانتظار الموافقة", color: "bg-amber-100 text-status-warning-foreground border-status-warning-surface" },
   approved: { label: "معتمد",            color: "bg-green-100 text-status-success-foreground border-status-success-surface" },
-  rejected: { label: "مرفوض",            color: "bg-red-100 text-status-error-foreground border-red-300" },
+  rejected: { label: "مرفوض",            color: "bg-red-100 text-status-error-foreground border-status-error-surface" },
 };
 
 // ── حالات خطط التطوير الفردية ──────────────────────────────────────
@@ -286,14 +286,14 @@ export const IDP_STATUS: Record<string, { label: string; color: string }> = {
   planned:     { label: "مخطط",        color: "bg-blue-100 text-status-info-foreground border-status-info-surface" },
   in_progress: { label: "قيد التنفيذ", color: "bg-amber-100 text-status-warning-foreground border-status-warning-surface" },
   completed:   { label: "مكتمل",       color: "bg-green-100 text-status-success-foreground border-status-success-surface" },
-  cancelled:   { label: "ملغي",        color: "bg-red-100 text-status-error-foreground border-red-300" },
+  cancelled:   { label: "ملغي",        color: "bg-red-100 text-status-error-foreground border-status-error-surface" },
 };
 
 // ── حالات الوقت الإضافي ────────────────────────────────────────────
 export const OVERTIME_STATUS: Record<string, { label: string; color: string }> = {
   pending:  { label: "بانتظار الموافقة", color: "bg-amber-100 text-status-warning-foreground border-status-warning-surface" },
   approved: { label: "معتمد",            color: "bg-green-100 text-status-success-foreground border-status-success-surface" },
-  rejected: { label: "مرفوض",            color: "bg-red-100 text-status-error-foreground border-red-300" },
+  rejected: { label: "مرفوض",            color: "bg-red-100 text-status-error-foreground border-status-error-surface" },
   paid:     { label: "تم الصرف",         color: "bg-blue-100 text-status-info-foreground border-status-info-surface" },
 };
 
@@ -304,7 +304,7 @@ export const VIOLATION_STATUS: Record<string, { label: string; color: string }> 
   pending_manager:      { label: "بانتظار المدير",   color: "bg-orange-100 text-orange-700 border-orange-300" },
   pending_hr_decision:  { label: "بانتظار HR",       color: "bg-blue-100 text-status-info-foreground border-status-info-surface" },
   approved:             { label: "مُنفَّذ",          color: "bg-green-100 text-status-success-foreground border-status-success-surface" },
-  rejected:             { label: "مرفوض",            color: "bg-red-100 text-status-error-foreground border-red-300" },
+  rejected:             { label: "مرفوض",            color: "bg-red-100 text-status-error-foreground border-status-error-surface" },
   appealed:             { label: "استئناف",           color: "bg-purple-100 text-purple-700 border-purple-300" },
   cancelled:            { label: "ملغي",             color: "bg-gray-100 text-muted-foreground border-border" },
 };

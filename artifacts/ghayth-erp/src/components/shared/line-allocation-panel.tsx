@@ -47,7 +47,7 @@ interface Props {
 const STATUS_BADGE: Record<AllocationStatus, { label: string; tone: string }> = {
   mapped: { label: "موجَّه", tone: "bg-emerald-100 text-emerald-800" },
   auto_resolved: { label: "موجَّه تلقائياً", tone: "bg-status-info-surface text-status-info-foreground" },
-  unmapped: { label: "غير موجَّه", tone: "bg-amber-100 text-amber-800" },
+  unmapped: { label: "غير موجَّه", tone: "bg-amber-100 text-status-warning-foreground" },
   manual_override: { label: "تعديل يدوي", tone: "bg-purple-100 text-purple-800" },
 };
 
@@ -82,7 +82,7 @@ export function LineAllocationPanel({
         <span className="flex items-center gap-2">
           {status === "mapped" || status === "auto_resolved"
             ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-            : <AlertTriangle className="h-3.5 w-3.5 text-amber-700" />}
+            : <AlertTriangle className="h-3.5 w-3.5 text-status-warning-foreground" />}
           <span className="font-medium">التفاصيل المحاسبية للبند</span>
           <Badge className={`text-[10px] ${badge.tone}`}>{badge.label}</Badge>
           {hasAccount && (
@@ -99,7 +99,7 @@ export function LineAllocationPanel({
       </button>
 
       {warnings.length > 0 && (
-        <div className="mt-2 bg-amber-50 border border-amber-200 rounded px-2 py-1 text-[11px] text-amber-800">
+        <div className="mt-2 bg-status-warning-surface border border-status-warning-surface rounded px-2 py-1 text-[11px] text-status-warning-foreground">
           {warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
         </div>
       )}

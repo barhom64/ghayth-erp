@@ -298,8 +298,8 @@ function DepreciationScheduleCard({ assetId }: { assetId: number }) {
   if (isError) {
     const msg = (error as any)?.message ?? "تعذّر حساب جدول الإهلاك";
     return (
-      <Card className="border-amber-200 bg-amber-50/40">
-        <CardContent className="p-4 text-xs text-amber-800 flex items-center gap-2">
+      <Card className="border-status-warning-surface bg-status-warning-surface/40">
+        <CardContent className="p-4 text-xs text-status-warning-foreground flex items-center gap-2">
           <TrendingDown className="h-4 w-4" /> {msg}
         </CardContent>
       </Card>

@@ -128,7 +128,7 @@ export default function JournalDetailPage() {
         const v = Number(l.credit ?? 0);
         return v === 0
           ? <span className="text-muted-foreground italic">—</span>
-          : <span className="font-mono font-semibold text-red-700">{formatCurrency(v)}</span>;
+          : <span className="font-mono font-semibold text-status-error-foreground">{formatCurrency(v)}</span>;
       },
     },
     {
@@ -198,7 +198,7 @@ export default function JournalDetailPage() {
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">إجمالي الدائن</p>
-            <p className="text-sm font-mono font-bold text-red-700 mt-1">
+            <p className="text-sm font-mono font-bold text-status-error-foreground mt-1">
               {formatCurrency(totalCredit)}
             </p>
           </CardContent>
@@ -206,8 +206,8 @@ export default function JournalDetailPage() {
       </div>
 
       {!balanced && (
-        <Card className="mb-4 border-red-300 bg-red-50">
-          <CardContent className="p-3 text-sm text-red-800">
+        <Card className="mb-4 border-status-error-surface bg-status-error-surface">
+          <CardContent className="p-3 text-sm text-status-error-foreground">
             ⚠ قيد غير متوازن! فرق = {formatCurrency(totalDebit - totalCredit)}
           </CardContent>
         </Card>
@@ -234,7 +234,7 @@ export default function JournalDetailPage() {
       )}
 
       {(je.reversalOf || je.reversedBy) && (
-        <Card className="mb-4 border-amber-300 bg-amber-50/30">
+        <Card className="mb-4 border-status-warning-surface bg-status-warning-surface/30">
           <CardContent className="p-3 text-xs space-y-2">
             <p className="flex items-center gap-2 font-semibold text-amber-900">
               <ArrowLeftRight className="h-3.5 w-3.5" /> سلسلة العكس

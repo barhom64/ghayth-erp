@@ -52,13 +52,13 @@ const STATUS_LABEL: Record<string, string> = {
 
 const STATUS_COLOR: Record<string, string> = {
   draft:     "bg-gray-100 text-gray-800",
-  pending:   "bg-amber-100 text-amber-800",
-  submitted: "bg-blue-100 text-blue-800",
+  pending:   "bg-amber-100 text-status-warning-foreground",
+  submitted: "bg-blue-100 text-status-info-foreground",
   approved:  "bg-emerald-100 text-emerald-800",
-  rejected:  "bg-red-100 text-red-800",
+  rejected:  "bg-red-100 text-status-error-foreground",
   returned:  "bg-orange-100 text-orange-800",
   converted: "bg-purple-100 text-purple-800",
-  cancelled: "bg-gray-100 text-gray-600",
+  cancelled: "bg-gray-100 text-muted-foreground",
 };
 
 export default function PurchaseRequestsPage() {
@@ -175,7 +175,7 @@ export default function PurchaseRequestsPage() {
                 onClick={() => handleApprove(r.id, true)} disabled={approveMut.isPending}>
                 <CheckCircle2 className="h-3 w-3 me-1" /> اعتماد
               </Button>
-              <Button variant="ghost" size="sm" className="h-7 text-xs text-red-700"
+              <Button variant="ghost" size="sm" className="h-7 text-xs text-status-error-foreground"
                 onClick={() => handleApprove(r.id, false)} disabled={approveMut.isPending}>
                 <XCircle className="h-3 w-3 me-1" /> رفض
               </Button>
@@ -239,10 +239,10 @@ export default function PurchaseRequestsPage() {
             <p className="text-lg font-bold font-mono">{formatNumber(draftCount)}</p>
           </CardContent>
         </Card>
-        <Card className="border-amber-300">
+        <Card className="border-status-warning-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">بانتظار الاعتماد</p>
-            <p className="text-lg font-bold font-mono text-amber-700">{formatNumber(pendingCount)}</p>
+            <p className="text-lg font-bold font-mono text-status-warning-foreground">{formatNumber(pendingCount)}</p>
           </CardContent>
         </Card>
         <Card className="border-emerald-300">

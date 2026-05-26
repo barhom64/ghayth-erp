@@ -77,7 +77,7 @@ export default function FxRevaluationHistoryPage() {
             <span className="text-muted-foreground">→</span>
             {fmtRate(r.newRate)}
             {direction === "up" && <TrendingUp className="h-3 w-3 text-emerald-600" />}
-            {direction === "down" && <TrendingDown className="h-3 w-3 text-red-600" />}
+            {direction === "down" && <TrendingDown className="h-3 w-3 text-status-error-foreground" />}
           </span>
         );
       },
@@ -89,7 +89,7 @@ export default function FxRevaluationHistoryPage() {
         const v = Number(r.totalImpact ?? 0);
         if (v === 0) return <span className="text-muted-foreground italic">صفر</span>;
         return (
-          <span className={`font-mono font-semibold ${v > 0 ? "text-emerald-700" : "text-red-700"}`}>
+          <span className={`font-mono font-semibold ${v > 0 ? "text-emerald-700" : "text-status-error-foreground"}`}>
             {v > 0 ? "+" : ""}{formatCurrency(v)}
           </span>
         );
@@ -175,12 +175,12 @@ export default function FxRevaluationHistoryPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="border-red-300">
+        <Card className="border-status-error-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <TrendingDown className="h-3 w-3" /> خسائر تراكمية
             </p>
-            <p className="text-lg font-bold font-mono text-red-700">
+            <p className="text-lg font-bold font-mono text-status-error-foreground">
               {formatCurrency(lossesTotal)}
             </p>
           </CardContent>
@@ -188,7 +188,7 @@ export default function FxRevaluationHistoryPage() {
         <Card className={totalImpact >= 0 ? "border-emerald-400" : "border-red-400"}>
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">صافي الأثر</p>
-            <p className={`text-lg font-bold font-mono ${totalImpact >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+            <p className={`text-lg font-bold font-mono ${totalImpact >= 0 ? "text-emerald-700" : "text-status-error-foreground"}`}>
               {totalImpact > 0 ? "+" : ""}{formatCurrency(totalImpact)}
             </p>
           </CardContent>

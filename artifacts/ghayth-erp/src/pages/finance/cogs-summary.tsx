@@ -106,7 +106,7 @@ function exportCSV(rows: CogsRow[], filename: string) {
 
 const marginColor = (pct: number) =>
   pct >= 30 ? "text-emerald-700"
-  : pct >= 15 ? "text-amber-700"
+  : pct >= 15 ? "text-status-warning-foreground"
   : pct >= 0 ? "text-orange-600"
   : "text-destructive";
 
@@ -263,7 +263,7 @@ export default function CogsSummaryPage() {
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <BarChart3 className="h-5 w-5 text-amber-600 mx-auto mb-1" />
+            <BarChart3 className="h-5 w-5 text-status-warning-foreground mx-auto mb-1" />
             <p className="text-xs text-muted-foreground">هامش الربح %</p>
             <p className={`text-xl font-bold mt-1 ${marginColor(summary.marginPct)}`}>
               {summary.marginPct.toFixed(2)}%

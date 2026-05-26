@@ -172,7 +172,7 @@ export default function ReprintApprovalsPage() {
                             ? new Date(r.approvedAt).toLocaleDateString("ar-SA")
                             : "—"}
                           {r.rejectedReason && (
-                            <div className="text-red-600 mt-1">
+                            <div className="text-status-error-foreground mt-1">
                               <AlertTriangle className="inline h-3 w-3 me-1" />
                               {r.rejectedReason}
                             </div>
@@ -207,8 +207,8 @@ export default function ReprintApprovalsPage() {
                           <span
                             className={
                               r.status === "approved"
-                                ? "text-green-600 text-xs"
-                                : "text-red-600 text-xs"
+                                ? "text-status-success-foreground text-xs"
+                                : "text-status-error-foreground text-xs"
                             }
                           >
                             {r.status === "approved" ? "✓ معتمد" : "✗ مرفوض"}

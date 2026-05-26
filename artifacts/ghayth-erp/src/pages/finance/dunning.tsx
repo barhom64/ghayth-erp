@@ -52,9 +52,9 @@ interface HistoryRow {
 
 const STAGE_INFO: Record<number, { label: string; tone: string; bg: string; icon: any }> = {
   1: { label: "تذكير ودي", tone: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", icon: MessageSquare },
-  2: { label: "إشعار أول", tone: "text-yellow-700", bg: "bg-yellow-50 border-yellow-200", icon: Clock },
+  2: { label: "إشعار أول", tone: "text-yellow-700", bg: "bg-status-warning-surface border-yellow-200", icon: Clock },
   3: { label: "إشعار ثانٍ", tone: "text-orange-700", bg: "bg-orange-50 border-orange-200", icon: AlertTriangle },
-  4: { label: "إشعار نهائي", tone: "text-red-700", bg: "bg-red-50 border-red-200", icon: AlertTriangle },
+  4: { label: "إشعار نهائي", tone: "text-status-error-foreground", bg: "bg-status-error-surface border-status-error-surface", icon: AlertTriangle },
   5: { label: "إجراءات قانونية", tone: "text-red-900", bg: "bg-red-100 border-red-400", icon: Gavel },
 };
 
@@ -145,9 +145,9 @@ export default function DunningPage() {
       render: (r) => <span className="text-xs">{formatDateAr(r.dueDate)}</span> },
     { key: "daysPastDue", header: "أيام التأخر",
       render: (r) => {
-        const tone = r.daysPastDue > 90 ? "text-red-700"
+        const tone = r.daysPastDue > 90 ? "text-status-error-foreground"
           : r.daysPastDue > 60 ? "text-orange-700"
-          : r.daysPastDue > 30 ? "text-amber-700" : "text-yellow-700";
+          : r.daysPastDue > 30 ? "text-status-warning-foreground" : "text-yellow-700";
         return <span className={`font-mono font-bold ${tone}`}>{r.daysPastDue}</span>;
       },
     },
@@ -269,11 +269,11 @@ export default function DunningPage() {
         })}
       </div>
 
-      <Card className="mb-4 border-amber-300 bg-amber-50/30">
+      <Card className="mb-4 border-status-warning-surface bg-status-warning-surface/30">
         <CardContent className="p-3 flex items-center justify-between">
           <div>
             <p className="text-xs text-muted-foreground">إجمالي المبالغ المتأخرة في الفترة المعروضة</p>
-            <p className="text-2xl font-bold font-mono text-amber-700">{formatCurrency(preview.totalOutstanding)}</p>
+            <p className="text-2xl font-bold font-mono text-status-warning-foreground">{formatCurrency(preview.totalOutstanding)}</p>
           </div>
           <p className="text-xs text-muted-foreground">As of: {preview.asOf}</p>
         </CardContent>

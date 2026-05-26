@@ -298,9 +298,9 @@ export default function PrintDiagnosticsPage() {
       </Card>
 
       {flaggedTemplates.length > 0 && (
-        <Card className="mb-4 border-amber-200 bg-amber-50/30">
+        <Card className="mb-4 border-status-warning-surface bg-status-warning-surface/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-amber-700">
+            <CardTitle className="text-sm flex items-center gap-2 text-status-warning-foreground">
               <AlertTriangle className="h-4 w-4" />
               قوالب يُحتمل أن تطبع صفحة فاضية
             </CardTitle>

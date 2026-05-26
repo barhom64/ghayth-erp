@@ -103,7 +103,7 @@ export default function FxRevaluationPage() {
       render: (r) => {
         const v = Number(r.diff);
         return (
-          <span className={`font-mono font-bold ${v >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+          <span className={`font-mono font-bold ${v >= 0 ? "text-emerald-700" : "text-status-error-foreground"}`}>
             {v >= 0 ? "+" : ""}{formatCurrency(v)}
           </span>
         );
@@ -163,11 +163,11 @@ export default function FxRevaluationPage() {
       </div>
 
       {missingRates.length > 0 && (
-        <Card className="mb-4 border-amber-300 bg-amber-50/30">
+        <Card className="mb-4 border-status-warning-surface bg-status-warning-surface/30">
           <CardContent className="p-3 flex items-start gap-2 text-sm">
-            <AlertTriangle className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+            <AlertTriangle className="h-4 w-4 text-status-warning-foreground mt-0.5 shrink-0" />
             <div>
-              <p className="font-semibold text-amber-800">أسعار إقفال مفقودة لـ {missingRates.length} عملة</p>
+              <p className="font-semibold text-status-warning-foreground">أسعار إقفال مفقودة لـ {missingRates.length} عملة</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 البنود بالعملات التالية تم تخطّيها لأنه لا يوجد سعر إقفال للفترة:
                 {missingRates.map(([c]) => <Badge key={c} variant="outline" className="mx-1 text-xs">{c}</Badge>)}
@@ -196,18 +196,18 @@ export default function FxRevaluationPage() {
             <p className="text-lg font-bold font-mono text-emerald-700">{formatCurrency(data.totalGain)}</p>
           </CardContent>
         </Card>
-        <Card className="border-red-300">
+        <Card className="border-status-error-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <TrendingDown className="h-3 w-3" /> إجمالي الخسائر
             </p>
-            <p className="text-lg font-bold font-mono text-red-700">{formatCurrency(data.totalLoss)}</p>
+            <p className="text-lg font-bold font-mono text-status-error-foreground">{formatCurrency(data.totalLoss)}</p>
           </CardContent>
         </Card>
         <Card className={data.netImpact >= 0 ? "border-emerald-400" : "border-red-400"}>
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">صافي الأثر</p>
-            <p className={`text-xl font-bold font-mono ${data.netImpact >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+            <p className={`text-xl font-bold font-mono ${data.netImpact >= 0 ? "text-emerald-700" : "text-status-error-foreground"}`}>
               {data.netImpact >= 0 ? "+" : ""}{formatCurrency(data.netImpact)}
             </p>
           </CardContent>
