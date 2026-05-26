@@ -327,9 +327,9 @@ export default function VendorContractsTrackerPage() {
                               </Button>
                             </Link>
                             {c.vendorId && (
-                              <Link href={`/finance/vendors/${c.vendorId}`}>
+                              <Link href={`/finance/vendor-360-sheet?vendorId=${c.vendorId}`}>
                                 <Button variant="outline" size="sm">
-                                  المورد
+                                  المورد 360°
                                   <ChevronRight className="w-3 h-3 mr-1" />
                                 </Button>
                               </Link>

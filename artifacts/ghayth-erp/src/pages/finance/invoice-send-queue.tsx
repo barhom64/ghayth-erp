@@ -256,7 +256,15 @@ export default function InvoiceSendQueuePage() {
                         return (
                           <tr key={i.id} className="border-b hover:bg-muted/30">
                             <td className="py-2 px-2 font-mono text-xs">{i.ref}</td>
-                            <td className="py-2 px-2">{i.clientName ?? `عميل #${i.clientId ?? "—"}`}</td>
+                            <td className="py-2 px-2">
+                              {i.clientId ? (
+                                <Link href={`/finance/customer-360-sheet?clientId=${i.clientId}`}>
+                                  <span className="hover:underline cursor-pointer">{i.clientName ?? `عميل #${i.clientId}`}</span>
+                                </Link>
+                              ) : (
+                                <span>{i.clientName ?? "—"}</span>
+                              )}
+                            </td>
                             <td className="py-2 px-2 text-end tabular-nums font-semibold">
                               {formatCurrency(Number(i.total))}
                             </td>
