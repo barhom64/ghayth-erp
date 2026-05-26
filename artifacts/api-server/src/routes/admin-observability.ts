@@ -3,18 +3,16 @@
  *
  * Issue #1139 §5 lists six observability concerns: queue monitoring,
  * provider health, worker health, AI costs, SLA breaches, anomaly
- * detection. This router aggregates the five that already have data in
- * the schema (queues / providers / workers / SLA / anomalies) into a
- * single read-only endpoint so an operator can see the system state on
- * one screen without polling six separate routes. AI cost tracking has
- * no schema yet and is intentionally returned as `{ available: false }`
- * so the UI degrades gracefully until that slice lands in its own PR.
+ * detection. This router aggregates all six into a single read-only
+ * endpoint so an operator can see the system state on one screen
+ * without polling six separate routes.
  *
- * Backing tables (no new migrations):
+ * Backing tables:
  *   - event_logs           → eventBus throughput, SLA-flagged events
  *   - event_dlq            → dead-letter queue depth + recent failures
  *   - integration_logs     → per-channel provider health
  *   - cron_logs            → per-job worker health
+ *   - ai_request_logs      → per-call AI usage + cost (migration 213)
  *
  * Anomaly detection is rule-based and pure-function over the same
  * window. The rules live with the response so the UI never has to
@@ -78,6 +76,31 @@ interface WorkerRow {
   lastError: string | null;
 }
 
+interface AiCostByDim {
+  key: string;
+  calls: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  errors: number;
+}
+
+interface AiCostSection {
+  available: true;
+  totals: {
+    callsLast24h: number;
+    callsLast7d: number;
+    errorsLast24h: number;
+    promptTokensLast24h: number;
+    completionTokensLast24h: number;
+    costUsdLast24h: number;
+    costUsdLast7d: number;
+  };
+  byModel: AiCostByDim[];
+  byFeature: AiCostByDim[];
+}
+
 interface Anomaly {
   severity: "critical" | "warning" | "info";
   rule: string;
@@ -130,6 +153,9 @@ router.get(
         slaLast24hRow,
         slaLast7dRow,
         slaByEntityRows,
+        aiTotalsRow,
+        aiByModelRows,
+        aiByFeatureRows,
       ] = await Promise.all([
         // Event throughput — last hour. NULL companyId = system event,
         // surfaced to every tenant operator. The same pattern is used
@@ -332,6 +358,98 @@ router.get(
           logger.warn(e, "observability: SLA by entity query failed");
           return [];
         }),
+
+        // AI usage totals — one row with both 24h and 7d aggregates so
+        // we only hit ai_request_logs once for the headline numbers.
+        rawQuery<{
+          calls24h: string;
+          calls7d: string;
+          errors24h: string;
+          promptTokens24h: string;
+          completionTokens24h: string;
+          costUsd24h: string;
+          costUsd7d: string;
+        }>(
+          `SELECT
+             COUNT(*) FILTER (WHERE "createdAt" > NOW() - INTERVAL '24 hours')::text AS calls24h,
+             COUNT(*) FILTER (WHERE "createdAt" > NOW() - INTERVAL '7 days')::text AS calls7d,
+             COUNT(*) FILTER (WHERE "createdAt" > NOW() - INTERVAL '24 hours' AND status = 'error')::text AS errors24h,
+             COALESCE(SUM("promptTokens")     FILTER (WHERE "createdAt" > NOW() - INTERVAL '24 hours'), 0)::text AS "promptTokens24h",
+             COALESCE(SUM("completionTokens") FILTER (WHERE "createdAt" > NOW() - INTERVAL '24 hours'), 0)::text AS "completionTokens24h",
+             COALESCE(SUM("costUsd")          FILTER (WHERE "createdAt" > NOW() - INTERVAL '24 hours'), 0)::text AS "costUsd24h",
+             COALESCE(SUM("costUsd")          FILTER (WHERE "createdAt" > NOW() - INTERVAL '7 days'),  0)::text AS "costUsd7d"
+           FROM ai_request_logs
+          WHERE "companyId" = $1 OR "companyId" IS NULL`,
+          [cid],
+        ).catch((e) => {
+          logger.warn(e, "observability: AI totals query failed");
+          return [{
+            calls24h: "0", calls7d: "0", errors24h: "0",
+            promptTokens24h: "0", completionTokens24h: "0",
+            costUsd24h: "0", costUsd7d: "0",
+          }];
+        }),
+
+        // AI cost by model — answers "is Sonnet costing us more than
+        // Haiku?". Window is 24h so the operator sees recent state, not
+        // historical accumulation.
+        rawQuery<{
+          model: string;
+          calls: string;
+          promptTokens: string;
+          completionTokens: string;
+          totalTokens: string;
+          costUsd: string;
+          errors: string;
+        }>(
+          `SELECT model,
+                  COUNT(*)::text AS calls,
+                  COALESCE(SUM("promptTokens"),     0)::text AS "promptTokens",
+                  COALESCE(SUM("completionTokens"), 0)::text AS "completionTokens",
+                  COALESCE(SUM("totalTokens"),      0)::text AS "totalTokens",
+                  COALESCE(SUM("costUsd"),          0)::text AS "costUsd",
+                  COUNT(*) FILTER (WHERE status = 'error')::text AS errors
+             FROM ai_request_logs
+            WHERE "createdAt" > NOW() - INTERVAL '24 hours'
+              AND ("companyId" = $1 OR "companyId" IS NULL)
+            GROUP BY model
+            ORDER BY SUM("costUsd") DESC NULLS LAST
+            LIMIT 20`,
+          [cid],
+        ).catch((e) => {
+          logger.warn(e, "observability: AI by-model query failed");
+          return [];
+        }),
+
+        // AI cost by feature — same shape as by-model, answers "which
+        // feature is the budget hog?".
+        rawQuery<{
+          feature: string;
+          calls: string;
+          promptTokens: string;
+          completionTokens: string;
+          totalTokens: string;
+          costUsd: string;
+          errors: string;
+        }>(
+          `SELECT feature,
+                  COUNT(*)::text AS calls,
+                  COALESCE(SUM("promptTokens"),     0)::text AS "promptTokens",
+                  COALESCE(SUM("completionTokens"), 0)::text AS "completionTokens",
+                  COALESCE(SUM("totalTokens"),      0)::text AS "totalTokens",
+                  COALESCE(SUM("costUsd"),          0)::text AS "costUsd",
+                  COUNT(*) FILTER (WHERE status = 'error')::text AS errors
+             FROM ai_request_logs
+            WHERE "createdAt" > NOW() - INTERVAL '24 hours'
+              AND ("companyId" = $1 OR "companyId" IS NULL)
+            GROUP BY feature
+            ORDER BY SUM("costUsd") DESC NULLS LAST
+            LIMIT 20`,
+          [cid],
+        ).catch((e) => {
+          logger.warn(e, "observability: AI by-feature query failed");
+          return [];
+        }),
       ]);
 
       // Normalise — Postgres COUNT() comes back as text to dodge bigint
@@ -394,13 +512,43 @@ router.get(
         })),
       };
 
-      // AI cost tracking — schema not yet provisioned. Returned as a
-      // typed "unavailable" marker so the UI shows a placeholder card
-      // and never has to feature-detect by checking for `undefined`.
-      const aiCosts = {
-        available: false as const,
-        reason:
-          "AI cost tracking schema not yet provisioned — slated for a follow-up PR (#1139 §5).",
+      // AI cost — fed by ai_request_logs (migration 213). Round currency
+      // to 4 decimals so the UI doesn't have to format on the way out;
+      // any micro-cents below that are accounting noise at this scale.
+      const aiTotals = aiTotalsRow[0] ?? {
+        calls24h: "0", calls7d: "0", errors24h: "0",
+        promptTokens24h: "0", completionTokens24h: "0",
+        costUsd24h: "0", costUsd7d: "0",
+      };
+      const aiCosts: AiCostSection = {
+        available: true,
+        totals: {
+          callsLast24h:            Number(aiTotals.calls24h),
+          callsLast7d:             Number(aiTotals.calls7d),
+          errorsLast24h:           Number(aiTotals.errors24h),
+          promptTokensLast24h:     Number(aiTotals.promptTokens24h),
+          completionTokensLast24h: Number(aiTotals.completionTokens24h),
+          costUsdLast24h: Math.round(Number(aiTotals.costUsd24h) * 10000) / 10000,
+          costUsdLast7d:  Math.round(Number(aiTotals.costUsd7d)  * 10000) / 10000,
+        },
+        byModel: aiByModelRows.map((r) => ({
+          key: r.model,
+          calls: Number(r.calls),
+          promptTokens: Number(r.promptTokens),
+          completionTokens: Number(r.completionTokens),
+          totalTokens: Number(r.totalTokens),
+          costUsd: Math.round(Number(r.costUsd) * 10000) / 10000,
+          errors: Number(r.errors),
+        })),
+        byFeature: aiByFeatureRows.map((r) => ({
+          key: r.feature,
+          calls: Number(r.calls),
+          promptTokens: Number(r.promptTokens),
+          completionTokens: Number(r.completionTokens),
+          totalTokens: Number(r.totalTokens),
+          costUsd: Math.round(Number(r.costUsd) * 10000) / 10000,
+          errors: Number(r.errors),
+        })),
       };
 
       // ─────────────── anomaly rules (derived) ────────────────
@@ -477,6 +625,35 @@ router.get(
           value: slaBreaches.last24h,
           threshold: 10,
         });
+      }
+
+      // AI cost rules. Daily run-rate is 7-day average / 7; a spike is
+      // 24h being > 2× that. Error-rate rule is independent: if a
+      // feature stops working, the bill keeps growing but the value
+      // doesn't.
+      const aiDailyAvg7d = aiCosts.totals.costUsdLast7d / 7;
+      if (aiDailyAvg7d > 0 && aiCosts.totals.costUsdLast24h > aiDailyAvg7d * 2) {
+        anomalies.push({
+          severity: "warning",
+          rule: "ai.cost.spike",
+          message: `AI cost in the last 24h ($${aiCosts.totals.costUsdLast24h}) is more than 2× the 7-day daily average ($${aiDailyAvg7d.toFixed(4)}).`,
+          metric: "ai_request_logs.cost_usd_last_24h",
+          value: aiCosts.totals.costUsdLast24h,
+          threshold: Math.round(aiDailyAvg7d * 2 * 10000) / 10000,
+        });
+      }
+      if (aiCosts.totals.callsLast24h >= 20) {
+        const errRate = pct(aiCosts.totals.errorsLast24h, aiCosts.totals.callsLast24h);
+        if (errRate > 25) {
+          anomalies.push({
+            severity: "critical",
+            rule: "ai.error_rate.critical",
+            message: `AI request error rate is ${errRate}% over the last 24h.`,
+            metric: "ai_request_logs.error_rate",
+            value: errRate,
+            threshold: 25,
+          });
+        }
       }
 
       if (queues.eventBus.eventsLastHour === 0 && queues.eventBus.eventsLast24h > 0) {

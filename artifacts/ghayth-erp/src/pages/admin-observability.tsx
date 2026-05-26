@@ -76,6 +76,31 @@ interface SlaByEntity {
   latest: string;
 }
 
+interface AiCostByDim {
+  key: string;
+  calls: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  errors: number;
+}
+
+interface AiCostSection {
+  available: true;
+  totals: {
+    callsLast24h: number;
+    callsLast7d: number;
+    errorsLast24h: number;
+    promptTokensLast24h: number;
+    completionTokensLast24h: number;
+    costUsdLast24h: number;
+    costUsdLast7d: number;
+  };
+  byModel: AiCostByDim[];
+  byFeature: AiCostByDim[];
+}
+
 interface Overview {
   collectedAt: string;
   windowHours: number;
@@ -98,7 +123,7 @@ interface Overview {
     last7d: number;
     byEntity: SlaByEntity[];
   };
-  aiCosts: { available: false; reason: string };
+  aiCosts: AiCostSection;
   anomalies: Anomaly[];
 }
 
@@ -130,6 +155,10 @@ export default function AdminObservability() {
   const providers = data?.providers ?? [];
   const workers = data?.workers ?? [];
   const sla = data?.slaBreaches;
+  const ai = data?.aiCosts;
+  const aiErrorRate = ai && ai.totals.callsLast24h > 0
+    ? Math.round((ai.totals.errorsLast24h / ai.totals.callsLast24h) * 1000) / 10
+    : 0;
 
   const criticalCount = anomalies.filter((a) => a.severity === "critical").length;
   const warningCount = anomalies.filter((a) => a.severity === "warning").length;
@@ -223,6 +252,26 @@ export default function AdminObservability() {
     )},
   ];
 
+  const aiDimColumns: DataTableColumn<AiCostByDim>[] = [
+    { key: "key", header: "المفتاح", searchable: true, render: (r) => (
+      <span className="font-mono text-xs font-medium">{r.key}</span>
+    )},
+    { key: "calls", header: "الطلبات", render: (r) => (
+      <span className="font-mono text-xs">{r.calls}</span>
+    )},
+    { key: "totalTokens", header: "الرموز", render: (r) => (
+      <span className="font-mono text-xs">{r.totalTokens.toLocaleString("ar-SA")}</span>
+    )},
+    { key: "costUsd", header: "التكلفة (USD)", render: (r) => (
+      <span className="font-mono text-xs font-semibold">${r.costUsd.toFixed(4)}</span>
+    )},
+    { key: "errors", header: "أخطاء", render: (r) => (
+      <span className={cn("font-mono text-xs", r.errors > 0 && "text-status-error-foreground font-semibold")}>
+        {r.errors}
+      </span>
+    )},
+  ];
+
   const slaColumns: DataTableColumn<SlaByEntity>[] = [
     { key: "entity", header: "الكيان", searchable: true, render: (r) => (
       <span className="font-medium text-xs">{r.entity}</span>
@@ -250,7 +299,7 @@ export default function AdminObservability() {
         <div className="space-y-6">
 
           {/* ── 1. KPI strip ─────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Card className={cn(
               "border-0 shadow-sm",
               criticalCount > 0 ? "bg-status-error-surface" : warningCount > 0 ? "bg-status-warning-surface/50" : "bg-status-success-surface",
@@ -315,6 +364,21 @@ export default function AdminObservability() {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {sla?.last7d ?? 0} خلال 7 أيام
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-sm bg-status-info-surface">
+              <CardContent className="p-4 flex items-center gap-3">
+                <Bot className="w-8 h-8 text-status-info-foreground" />
+                <div>
+                  <p className="text-sm font-semibold">تكلفة الذكاء الاصطناعي</p>
+                  <p className="text-xs text-muted-foreground font-mono">
+                    ${ai?.totals.costUsdLast24h.toFixed(4) ?? "0.0000"} / 24س
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {ai?.totals.callsLast24h ?? 0} طلب
                   </p>
                 </div>
               </CardContent>
@@ -450,23 +514,85 @@ export default function AdminObservability() {
             </Card>
           )}
 
-          {/* ── 7. AI cost tracking placeholder ──────────────────────── */}
-          <Card className="border-dashed">
-            <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Bot className="w-4 h-4 text-muted-foreground" />
-                تتبّع تكلفة الذكاء الاصطناعي
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-start gap-3 text-sm text-muted-foreground">
-                <Sparkles className="w-5 h-5 mt-0.5 text-muted-foreground/70 shrink-0" />
-                <p>
-                  {data?.aiCosts?.reason ?? "لم يُجهَّز مخطط تتبّع تكلفة الذكاء الاصطناعي بعد. سيُضاف في PR لاحق ضمن خطة #1139 §5."}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          {/* ── 7. AI cost tracking ───────────────────────────────────── */}
+          {ai && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Bot className="w-4 h-4" />
+                  تكلفة الذكاء الاصطناعي
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* AI totals strip */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-status-info-surface rounded p-3">
+                    <p className="text-xs text-muted-foreground">عدد الطلبات (24س)</p>
+                    <p className="text-lg font-semibold font-mono">{ai.totals.callsLast24h.toLocaleString("ar-SA")}</p>
+                    <p className="text-[11px] text-muted-foreground">{ai.totals.callsLast7d.toLocaleString("ar-SA")} خلال 7 أيام</p>
+                  </div>
+                  <div className={cn(
+                    "rounded p-3",
+                    aiErrorRate > 25 ? "bg-status-error-surface" : aiErrorRate > 10 ? "bg-status-warning-surface/60" : "bg-status-success-surface",
+                  )}>
+                    <p className="text-xs text-muted-foreground">نسبة الأخطاء</p>
+                    <p className="text-lg font-semibold font-mono">{aiErrorRate}%</p>
+                    <p className="text-[11px] text-muted-foreground">{ai.totals.errorsLast24h} فشل</p>
+                  </div>
+                  <div className="bg-status-info-surface rounded p-3">
+                    <p className="text-xs text-muted-foreground">الرموز المستهلكة (24س)</p>
+                    <p className="text-lg font-semibold font-mono">{(ai.totals.promptTokensLast24h + ai.totals.completionTokensLast24h).toLocaleString("ar-SA")}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {ai.totals.promptTokensLast24h.toLocaleString("ar-SA")} prompt / {ai.totals.completionTokensLast24h.toLocaleString("ar-SA")} completion
+                    </p>
+                  </div>
+                  <div className="bg-status-info-surface rounded p-3">
+                    <p className="text-xs text-muted-foreground">التكلفة (24س)</p>
+                    <p className="text-lg font-semibold font-mono">${ai.totals.costUsdLast24h.toFixed(4)}</p>
+                    <p className="text-[11px] text-muted-foreground">${ai.totals.costUsdLast7d.toFixed(4)} خلال 7 أيام</p>
+                  </div>
+                </div>
+
+                {/* By model */}
+                {ai.byModel.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-2">
+                      <Sparkles className="w-3 h-3" />
+                      حسب النموذج (24س)
+                    </h4>
+                    <DataTable
+                      columns={aiDimColumns}
+                      data={ai.byModel}
+                      noToolbar
+                      pageSize={0}
+                    />
+                  </div>
+                )}
+
+                {/* By feature */}
+                {ai.byFeature.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-2">
+                      <Sparkles className="w-3 h-3" />
+                      حسب الميزة (24س)
+                    </h4>
+                    <DataTable
+                      columns={aiDimColumns}
+                      data={ai.byFeature}
+                      noToolbar
+                      pageSize={0}
+                    />
+                  </div>
+                )}
+
+                {ai.byModel.length === 0 && ai.byFeature.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    لا توجد طلبات ذكاء اصطناعي خلال آخر 24 ساعة.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {data?.collectedAt && (
             <p className="text-xs text-muted-foreground text-end">
