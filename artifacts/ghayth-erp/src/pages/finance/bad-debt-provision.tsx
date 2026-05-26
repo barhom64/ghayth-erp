@@ -399,6 +399,7 @@ export default function BadDebtProvisionPage() {
                       onClick={handlePost}
                       disabled={postMutation.isPending}
                       className="flex-1"
+                      rateLimitAware
                     >
                       {postMutation.isPending ? "جاري الترحيل..." : "تأكيد وترحيل"}
                     </Button>
