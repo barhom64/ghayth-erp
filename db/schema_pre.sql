@@ -11108,7 +11108,8 @@ CREATE TABLE public.numbering_schemes (
     CONSTRAINT numbering_schemes_pad_check CHECK ((("padLength" >= 3) AND ("padLength" <= 10))),
     CONSTRAINT numbering_schemes_reset_check CHECK (("resetPolicy" = ANY (ARRAY['never'::text, 'yearly'::text, 'monthly'::text, 'seasonal'::text, 'fiscal_year'::text]))),
     CONSTRAINT numbering_schemes_scope_check CHECK (("scopePolicy" = ANY (ARRAY['company'::text, 'branch'::text, 'module'::text, 'entity'::text, 'season'::text, 'fiscal_year'::text]))),
-    CONSTRAINT numbering_schemes_timing_check CHECK (("issueTiming" = ANY (ARRAY['on_draft'::text, 'on_submit'::text, 'on_approval'::text, 'on_posting'::text])))
+    CONSTRAINT numbering_schemes_timing_check CHECK (("issueTiming" = ANY (ARRAY['on_draft'::text, 'on_submit'::text, 'on_approval'::text, 'on_posting'::text]))),
+    CONSTRAINT numbering_schemes_unique_key UNIQUE ("companyId", "moduleKey", "entityKey")
 );
 
 
