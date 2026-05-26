@@ -82,11 +82,20 @@ storage in one PR would create a huge blast radius. The dual-write +
 soak approach lets every reader migrate independently behind a single
 unified storage.
 
-## Phase 5 — Page consolidation (last)
+## Phase 5 — Page consolidation (SHIPPED)
 
-- Deprecate `/communications` for users; redirect to `/inbox`. Keep `/communications` as **admin-only monitor**
-- Pick one create-correspondence path; redirect the other
-- Move PBX control panel under communication-control as a tab
+- **`/communications` is now admin-only.** Non-managers (roleLevel < 40)
+  are redirected to `/inbox` automatically on page load. The sidebar
+  entry only appears for managers, relabelled as "مراقبة الاتصالات".
+- **`/communications/letters/create` deprecated.** The page now redirects
+  to `/correspondence/create`, preserving any query string so deep links
+  from discipline-memo / tenant / project pages keep working.
+  `correspondence-create.tsx` was extended to pick up `relatedType` /
+  `relatedId` from the query and forward them as `entityType` /
+  `entityId` in the POST body.
+- **PBX dashboard:** already lives at `/admin-pbx-control` (admin-only)
+  and `/communications` exposes a "المكالمات" tab pulling the same data,
+  so no move needed.
 
 ## Remaining work
 
