@@ -818,7 +818,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     ],
     "/hr/leaves": [
       { label: "طلب إجازة", icon: Plus, link: "/hr/leaves/create" },
-      { label: "اعتماد الطلبات", icon: CheckSquare, link: "/hr/leaves?tab=pending", minRoleLevel: 40 },
+      { label: "اعتماد الطلبات", icon: CheckSquare, link: "/hr/leaves?status=pending", minRoleLevel: 40 },
     ],
     "/hr/leaves/management": [
       { label: "طلب إجازة", icon: Plus, link: "/hr/leaves/create" },
@@ -923,14 +923,14 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     ],
     "/finance/expenses": [
       { label: "مصروف جديد", icon: Plus, link: "/finance/expenses?action=new" },
-      { label: "اعتماد المصروفات", icon: CheckSquare, link: "/finance/expenses?tab=pending", minRoleLevel: 40 },
+      { label: "اعتماد المصروفات", icon: CheckSquare, link: "/finance/expenses?status=pending", minRoleLevel: 40 },
     ],
     "/finance/vouchers": [
       { label: "سند جديد", icon: Plus, link: "/finance/vouchers/create" },
     ],
     "/finance/purchase-orders": [
       { label: "طلب شراء جديد", icon: Plus, link: "/finance/purchase-orders?action=new" },
-      { label: "اعتماد الطلبات", icon: CheckSquare, link: "/finance/purchase-orders?tab=pending", minRoleLevel: 40 },
+      { label: "اعتماد الطلبات", icon: CheckSquare, link: "/finance/purchase-orders?status=pending", minRoleLevel: 40 },
     ],
     "/tasks": [
       { label: "مهمة جديدة", icon: Plus, link: "/tasks?action=new" },
