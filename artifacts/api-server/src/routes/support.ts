@@ -244,18 +244,12 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
       }
     }
 
-    // Numbering center (Issue #1141) — support ticket number from
-    // the central authority. Scheme: `support.support_ticket`.
-    const issued = await issueNumber({
-      companyId: scope.companyId,
-      branchId: scope.branchId ?? null,
-      moduleKey: "support",
-      entityKey: "support_ticket",
-      entityTable: "support_tickets",
-      actorId: scope.userId,
-    });
-    const ref = issued.number;
-
+    // Numbering center (Issue #1141 closure) — issueNumber +
+    // INSERT + linkback now run in ONE atomic withTransaction below
+    // (lines 302+). Moved the call down so it sits next to the INSERT
+    // it pairs with, instead of allocating a counter slot up here and
+    // potentially burning it on a no-op when priority/assignee
+    // resolution throws later.
     const aiDetectedPriority = detectPriority(`${title} ${b.description || ''}`);
     const priority = b.priority || aiDetectedPriority;
     const slaResponseHours = priority === 'critical' ? 1 : priority === 'high' ? 2 : priority === 'medium' ? 4 : 8;
@@ -300,15 +294,30 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
     // Stamp branchId from the active JWT assignment (migration 171 added
     // the column). Tickets created via the picker now isolate per-branch
     // instead of being visible to every agent in the company.
-    const { insertId } = await rawExecute(
-      `INSERT INTO support_tickets ("companyId","branchId",ref,title,description,category,priority,status,"clientId","assigneeId","slaDeadline") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [scope.companyId, scope.branchId, ref, title, b.description, b.category, priority, 'open', b.clientId ?? null, assigneeId, slaResolutionDeadline]
-    );
-    assertInsert(insertId, "support_tickets");
-    await rawExecute(
-      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
-      [insertId, issued.assignmentId]
-    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to support_tickets row"));
+    // Numbering center (#1141 closure) — issueNumber + INSERT + linkback
+    // in ONE atomic withTransaction. issueNumber joins via SAVEPOINT.
+    const atomic = await withTransaction(async () => {
+      const issued = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "support",
+        entityKey: "support_ticket",
+        entityTable: "support_tickets",
+        actorId: scope.userId,
+      });
+      const result = await rawExecute(
+        `INSERT INTO support_tickets ("companyId","branchId",ref,title,description,category,priority,status,"clientId","assigneeId","slaDeadline") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [scope.companyId, scope.branchId, issued.number, title, b.description, b.category, priority, 'open', b.clientId ?? null, assigneeId, slaResolutionDeadline]
+      );
+      assertInsert(result.insertId, "support_tickets");
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [result.insertId, issued.assignmentId]
+      );
+      return { insertId: result.insertId, ref: issued.number };
+    });
+    const insertId = atomic.insertId;
+    const ref = atomic.ref;
     const [row] = await rawQuery<SupportTicketRow>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     if (assigneeId) {
