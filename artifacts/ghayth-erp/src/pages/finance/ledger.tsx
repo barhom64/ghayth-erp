@@ -4,10 +4,11 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, BookOpen, Download, Printer } from "lucide-react";
+import { ArrowRight, BookOpen, Download } from "lucide-react";
 import {
   DataTable,
   type DataTableColumn,
@@ -71,9 +72,11 @@ export default function LedgerPage() {
           {account && <Badge variant="outline">{typeMap[account.type] || account.type}</Badge>}
           <DatePicker value={startDate} onChange={setStartDate} className="w-40" placeholder="من" />
           <DatePicker value={endDate} onChange={setEndDate} className="w-40" placeholder="إلى" />
-          <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => window.print()}>
-            <Printer className="h-3.5 w-3.5 me-1" />طباعة
-          </GuardedButton>
+          <EntityPrintButton
+            entityType="report_general_ledger"
+            entityId={`${code}:${startDate ?? ""}..${endDate ?? ""}`}
+            formats={["a4"]}
+          />
           <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(entries, ["date", "ref", "description", "debit", "credit", "runningBalance"], `ledger-${code}.csv`)}>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </GuardedButton>
