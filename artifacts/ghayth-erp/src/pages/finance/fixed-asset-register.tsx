@@ -169,6 +169,22 @@ export default function FixedAssetRegisterPage() {
     <PageShell
       title="سجل الأصول الثابتة"
       subtitle="نظرة محفظية على الأصول — توزيع، أعمار، تقدم الإهلاك"
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/fixed-assets">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Package className="h-3.5 w-3.5 ml-1" />
+              إدارة الأصول
+            </Button>
+          </Link>
+          <Link href="/finance/fixed-assets/batch-depreciate">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <TrendingDown className="h-3.5 w-3.5 ml-1" />
+              إهلاك دفعي
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 

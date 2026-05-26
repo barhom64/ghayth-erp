@@ -354,37 +354,44 @@ router.post("/loans", authorize({ feature: "hr.loans", action: "create" }), asyn
       throw new ValidationError(`الحد الأقصى للسلفة ${maxLoan.toLocaleString()} ريال (3 أضعاف الراتب)`, { field: "amount" });
     }
 
-    // Numbering center (Issue #1141) — loan number from central authority.
-    const issued = await issueNumber({
-      companyId: scope.companyId,
-      branchId: emp.branchId ?? scope.branchId ?? null,
-      moduleKey: "hr",
-      entityKey: "loan",
-      entityTable: "hr_employee_loans",
-      actorId: scope.userId,
-    });
-    const loanNumber = issued.number;
     const startPeriod = b.startDeductionPeriod || nextPeriod();
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO hr_employee_loans
-         ("companyId","branchId","assignmentId","employeeId","loanNumber","loanType",
-          amount,"installmentCount","installmentAmount","remainingAmount",
-          reason,status,"requestDate","startDeductionPeriod","createdAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',CURRENT_DATE,$12,NOW())
-       RETURNING id`,
-      [
-        scope.companyId, emp.branchId, b.assignmentId, emp.employeeId,
-        loanNumber, b.loanType || "salary_advance",
-        amount, installmentCount, installmentAmount, amount,
-        b.reason || null, startPeriod,
-      ]
-    );
-    assertInsert(insertId, "hr_employee_loans");
-    await rawExecute(
-      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
-      [insertId, issued.assignmentId]
-    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to hr_employee_loans row"));
+    // Numbering center (#1141 closure) — issueNumber + INSERT + linkback
+    // in ONE atomic withTransaction (SAVEPOINT-reentrant). If the link-
+    // back fails, the loan row rolls back and the counter slot is
+    // released, so we never end up with a loan that has no audit trail.
+    const atomic = await withTransaction(async () => {
+      const issued = await issueNumber({
+        companyId: scope.companyId,
+        branchId: emp.branchId ?? scope.branchId ?? null,
+        moduleKey: "hr",
+        entityKey: "loan",
+        entityTable: "hr_employee_loans",
+        actorId: scope.userId,
+      });
+      const result = await rawExecute(
+        `INSERT INTO hr_employee_loans
+           ("companyId","branchId","assignmentId","employeeId","loanNumber","loanType",
+            amount,"installmentCount","installmentAmount","remainingAmount",
+            reason,status,"requestDate","startDeductionPeriod","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',CURRENT_DATE,$12,NOW())
+         RETURNING id`,
+        [
+          scope.companyId, emp.branchId, b.assignmentId, emp.employeeId,
+          issued.number, b.loanType || "salary_advance",
+          amount, installmentCount, installmentAmount, amount,
+          b.reason || null, startPeriod,
+        ]
+      );
+      assertInsert(result.insertId, "hr_employee_loans");
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [result.insertId, issued.assignmentId]
+      );
+      return { insertId: result.insertId, loanNumber: issued.number };
+    });
+    const insertId = atomic.insertId;
+    const loanNumber = atomic.loanNumber;
 
     // ── سلسلة الموافقات ──
     const approvalResult = await initiateApprovalChain({

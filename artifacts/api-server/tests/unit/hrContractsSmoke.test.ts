@@ -301,8 +301,12 @@ describe("Contract renewal flow", () => {
   });
 
   it("renew links back to old contract via notes", () => {
+    // Window widened to 3500 chars: the atomic-tx wrapper around
+    // issueNumber + INSERT + linkback pushed the linkback note string
+    // past the original 2000-char slice. Same reason as the renewalDate
+    // assertion below.
     const idx = CONTRACTS_ROUTE.indexOf('/:id/renew"');
-    const section = CONTRACTS_ROUTE.slice(idx, idx + 2000);
+    const section = CONTRACTS_ROUTE.slice(idx, idx + 3500);
     expect(section).toContain("تجديد للعقد رقم");
   });
 
