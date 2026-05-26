@@ -8,8 +8,8 @@
 import { test, expect, request as apiRequest } from "@playwright/test";
 import { TEST_API_URL } from "../playwright.config.js";
 
-const EMAIL = process.env.E2E_USER_EMAIL ?? "owner@local.test";
-const PASSWORD = process.env.E2E_USER_PASSWORD ?? "Test1234!";
+const EMAIL = process.env.E2E_USER_EMAIL ?? "admin@ghayth.com";
+const PASSWORD = process.env.E2E_USER_PASSWORD ?? "Admin@123456";
 
 async function authedContext() {
   const ctx = await apiRequest.newContext({ baseURL: TEST_API_URL });
