@@ -55,10 +55,21 @@ pg_dump \
 
 # Strip Replit-specific noise: extension owner comments, role grants on
 # the public schema, etc. Keeps the dump portable.
+#
+# Also strip the `\restrict <token>` / `\unrestrict <token>` psql
+# directives that PostgreSQL 16+ pg_dump emits as a security hardening.
+# Reason: the split-into-two-halves below puts the `\restrict` at the top
+# of schema_pre.sql and the `\unrestrict` at the bottom of schema_post.sql.
+# The wrapper db/schema.sql `\ir`s them in order — but `\ir schema_post.sql`
+# itself runs inside the restricted mode that schema_pre.sql opened, and
+# psql refuses backslash commands there, breaking the entire load.
+# Stripping both keeps the wrapper functional for `psql -f db/schema.sql`.
 FULL="$(mktemp)"
 grep -v '^-- Dumped' "$TMP" \
   | grep -v '^-- TOC entry' \
   | grep -v '^-- Name: SCHEMA public' \
+  | grep -v '^\\restrict ' \
+  | grep -v '^\\unrestrict ' \
   | sed '/./,$!d' \
   > "$FULL"
 
