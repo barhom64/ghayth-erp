@@ -176,7 +176,9 @@ router.get(
     try {
       const scope = req.scope!;
       const settings = await getWpsSettings(scope.companyId);
-      res.json(settings ?? { bankCode: null, bankIban: null, filenameTemplate: null, isActive: false });
+      // bankIban is declared sensitive in featureCatalog; pass through
+      // maskFields so role-level field policies can hide it from view-only.
+      res.json(maskFields(req, settings ?? { bankCode: null, bankIban: null, filenameTemplate: null, isActive: false }));
     } catch (err) {
       handleRouteError(err, res, "Get WPS settings error:");
     }
@@ -247,19 +249,23 @@ router.get(
         totalAmount += amount;
       }
 
-      res.json({
-        payrollRunId: run.id,
-        period: run.period,
-        status: run.status,
-        canGenerate: run.status === "approved" || run.status === "paid",
-        eligibleCount: eligible.length,
-        skippedCount: missingIban.length + missingId.length + invalidIban.length,
-        totalAmount,
-        eligible,
-        missingIban,
-        missingId,
-        invalidIban,
-      });
+      // eligible[].amount is sensitive (declared in featureCatalog) — pass
+      // through maskFields so role field-policies can redact it.
+      res.json(
+        maskFields(req, {
+          payrollRunId: run.id,
+          period: run.period,
+          status: run.status,
+          canGenerate: run.status === "approved" || run.status === "paid",
+          eligibleCount: eligible.length,
+          skippedCount: missingIban.length + missingId.length + invalidIban.length,
+          totalAmount,
+          eligible,
+          missingIban,
+          missingId,
+          invalidIban,
+        }),
+      );
     } catch (err) {
       handleRouteError(err, res, "WPS preflight error:");
     }
@@ -379,6 +385,30 @@ router.post(
         throw new ValidationError("لم يتم تحديد بنك الراتب — يرجى ضبط إعدادات WPS أولاً", {
           field: "bankCode",
         });
+      }
+
+      // Library's createWpsRun is an UPSERT on (companyId, period, bankCode) that
+      // unconditionally resets status to 'draft' and buildAndPersist then
+      // wipes wps_run_lines. If an operator rebuilds for a period that's
+      // already submitted/acknowledged, they'd silently lose the prior
+      // file + bank acks. Gate that here.
+      const [existing] = await rawQuery<{ id: number; status: string }>(
+        `SELECT id, status FROM wps_runs
+          WHERE "companyId" = $1 AND period = $2 AND "bankCode" = $3`,
+        [scope.companyId, run.period, bankCode],
+      );
+      if (existing && existing.status !== "draft") {
+        throw new ConflictError(
+          "يوجد تشغيل WPS لهذه الفترة والبنك بحالة لا تسمح بإعادة التوليد",
+          {
+            meta: {
+              wpsRunId: existing.id,
+              currentStatus: existing.status,
+              period: run.period,
+              bankCode,
+            },
+          },
+        );
       }
 
       const lines = await rawQuery<PayrollLineForWps>(

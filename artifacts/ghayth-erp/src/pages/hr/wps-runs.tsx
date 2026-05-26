@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList, apiUrl } from "@/lib/api";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -154,7 +154,7 @@ export default function WpsRunsPage() {
             </Button>
           </Link>
           {r.recordCount > 0 && (
-            <a href={`/api/hr/wps/runs/${r.id}/file`} download>
+            <a href={apiUrl(`/hr/wps/runs/${r.id}/file`)} download>
               <Button variant="ghost" size="sm" title="تنزيل الملف">
                 <Download className="h-4 w-4" />
               </Button>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRoute } from "wouter";
-import { useApiQuery, useApiMutation, apiFetch, buildErrorToast } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch, apiUrl, buildErrorToast } from "@/lib/api";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -162,7 +162,7 @@ export default function WpsRunDetailPage() {
       actions={
         <div className="flex gap-2">
           {canDownload && (
-            <a href={`/api/hr/wps/runs/${id}/file`} download>
+            <a href={apiUrl(`/hr/wps/runs/${id}/file`)} download>
               <Button variant="outline">
                 <Download className="h-4 w-4 ml-1" /> تنزيل الملف
               </Button>
