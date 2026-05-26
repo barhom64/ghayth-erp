@@ -166,6 +166,10 @@ router.get("/threads", authorize({ feature: "communications", action: "list" }),
   try {
     const cid = req.scope!.companyId;
     const channel = (req.query.channel as string | undefined) ?? null;
+    // folder=starred is special — filters by isStarred=true. The
+    // other folders (inbox/sent/archive/trash/spam) filter the
+    // folder column directly.
+    const folder = (req.query.folder as string | undefined) ?? null;
     const limit = Math.min(200, Math.max(1, Number(req.query.limit ?? 50)));
 
     const params: unknown[] = [cid];
@@ -174,13 +178,21 @@ router.get("/threads", authorize({ feature: "communications", action: "list" }),
       params.push(channel);
       channelCond = ` AND channel = $${params.length}`;
     }
+    let folderCond = "";
+    if (folder === "starred") {
+      folderCond = ` AND "isStarred" = true`;
+    } else if (folder && ["inbox", "sent", "drafts", "archive", "trash", "spam"].includes(folder)) {
+      params.push(folder);
+      folderCond = ` AND folder = $${params.length}`;
+    }
 
     const rows = await rawQuery(
       `WITH peer AS (
          SELECT id, channel, direction,
                 COALESCE(NULLIF("fromNumber",''), "toNumber") AS peer_addr,
                 "fromNumber", "toNumber",
-                subject, body, status, "relatedType", "relatedId", "createdAt",
+                subject, body, status, folder, "isStarred",
+                "relatedType", "relatedId", "createdAt",
                 ROW_NUMBER() OVER (
                   PARTITION BY channel, COALESCE(NULLIF("fromNumber",''), "toNumber")
                   ORDER BY "createdAt" DESC
@@ -193,10 +205,11 @@ router.get("/threads", authorize({ feature: "communications", action: "list" }),
                 ) AS inbound_count
            FROM communications_log
           WHERE "companyId" = $1 AND "deletedAt" IS NULL
-            ${channelCond}
+            ${channelCond}${folderCond}
        )
        SELECT id, channel, direction, peer_addr AS peer, "fromNumber", "toNumber",
               subject, LEFT(body, 300) AS body_preview, status,
+              folder, "isStarred",
               "relatedType", "relatedId", "createdAt",
               total_messages, inbound_count
          FROM peer
@@ -425,6 +438,351 @@ router.get("/templates", authorize({ feature: "communications", action: "list" }
     res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "inbox/templates");
+  }
+});
+
+// ─────────────────────── Phase 2 — Folders / Drafts / Signatures ─────────
+
+/**
+ * POST /inbox/messages/:id/folder — move a message to a folder.
+ * Folders: inbox / sent / drafts / archive / trash / spam.
+ * Tenant-scoped; the underlying communications_log row must belong
+ * to the caller's company.
+ */
+const folderSchema = z.object({
+  folder: z.enum(["inbox", "sent", "drafts", "archive", "trash", "spam"]),
+});
+
+router.post("/messages/:id/folder", authorize({ feature: "communications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const body = zodParse(folderSchema.safeParse(req.body));
+    const { affectedRows } = await rawExecute(
+      `UPDATE communications_log SET folder = $1
+        WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+      [body.folder, id, scope.companyId],
+    );
+    if (!affectedRows) throw new NotFoundError("الرسالة غير موجودة");
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "communications_log", entityId: id,
+      after: { folder: body.folder },
+    }).catch((e) => logger.warn(e, "[audit] message.folder"));
+    res.json({ ok: true, folder: body.folder });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/messages/folder");
+  }
+});
+
+/**
+ * POST /inbox/messages/:id/star — toggle the starred flag.
+ */
+router.post("/messages/:id/star", authorize({ feature: "communications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<{ isStarred: boolean }>(
+      `UPDATE communications_log SET "isStarred" = NOT "isStarred"
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+        RETURNING "isStarred"`,
+      [id, scope.companyId],
+    );
+    if (!row) throw new NotFoundError("الرسالة غير موجودة");
+    res.json({ ok: true, isStarred: row.isStarred });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/messages/star");
+  }
+});
+
+// ─────────────────────── Drafts ───────────────────────────────────────────
+
+const draftSchema = z.object({
+  channel: z.enum(["email", "whatsapp", "sms"]),
+  recipient: z.string().max(300).optional().nullable(),
+  recipientName: z.string().max(200).optional().nullable(),
+  subject: z.string().max(500).optional().nullable(),
+  body: z.string().max(20000).default(""),
+  templateKey: z.string().max(120).optional().nullable(),
+  relatedType: z.string().max(60).optional().nullable(),
+  relatedId: z.number().int().positive().optional().nullable(),
+  scheduledAt: z.string().datetime().optional().nullable(),
+});
+
+router.get("/drafts", authorize({ feature: "communications", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery(
+      `SELECT id, channel, recipient, "recipientName", subject, body, "templateKey",
+              "relatedType", "relatedId", "scheduledAt", "lastSavedAt", "createdAt"
+         FROM email_drafts
+        WHERE "companyId" = $1 AND "userId" = $2
+        ORDER BY "lastSavedAt" DESC
+        LIMIT 100`,
+      [scope.companyId, scope.userId],
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "inbox/drafts/list");
+  }
+});
+
+router.post("/drafts", authorize({ feature: "communications", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(draftSchema.safeParse(req.body));
+    const { insertId } = await rawExecute(
+      `INSERT INTO email_drafts
+         ("companyId", "userId", channel, recipient, "recipientName", subject, body,
+          "templateKey", "relatedType", "relatedId", "scheduledAt", "lastSavedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())`,
+      [
+        scope.companyId, scope.userId, body.channel,
+        body.recipient ?? null, body.recipientName ?? null,
+        body.subject ?? null, body.body, body.templateKey ?? null,
+        body.relatedType ?? null, body.relatedId ?? null,
+        body.scheduledAt ?? null,
+      ],
+    );
+    assertInsert(insertId, "email_drafts");
+    res.status(201).json({ id: insertId });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/drafts/create");
+  }
+});
+
+router.patch("/drafts/:id", authorize({ feature: "communications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const body = zodParse(draftSchema.partial().safeParse(req.body ?? {}));
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+    for (const [col, val] of Object.entries(body)) {
+      if (val === undefined) continue;
+      sets.push(`"${col}" = $${idx++}`);
+      params.push(val);
+    }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
+    sets.push(`"lastSavedAt" = NOW()`);
+    params.push(id, scope.companyId, scope.userId);
+    const [row] = await rawQuery(
+      `UPDATE email_drafts SET ${sets.join(", ")}
+        WHERE id = $${idx++} AND "companyId" = $${idx++} AND "userId" = $${idx}
+       RETURNING *`,
+      params,
+    );
+    if (!row) throw new NotFoundError("المسودة غير موجودة");
+    res.json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "inbox/drafts/update");
+  }
+});
+
+router.delete("/drafts/:id", authorize({ feature: "communications", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(
+      `DELETE FROM email_drafts WHERE id = $1 AND "companyId" = $2 AND "userId" = $3`,
+      [id, scope.companyId, scope.userId],
+    );
+    if (!affectedRows) throw new NotFoundError("المسودة غير موجودة");
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/drafts/delete");
+  }
+});
+
+/**
+ * POST /inbox/drafts/:id/send — finalise a saved draft as an actual
+ * send. Pulls the draft, calls sendMessage(), and deletes the draft
+ * on success.
+ */
+router.post("/drafts/:id/send", authorize({ feature: "communications", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [draft] = await rawQuery<{
+      channel: "email" | "whatsapp" | "sms";
+      recipient: string | null;
+      recipientName: string | null;
+      subject: string | null;
+      body: string;
+      relatedType: string | null;
+      relatedId: number | null;
+      scheduledAt: string | null;
+      templateKey: string | null;
+    }>(
+      `SELECT channel, recipient, "recipientName", subject, body,
+              "relatedType", "relatedId", "scheduledAt", "templateKey"
+         FROM email_drafts
+        WHERE id = $1 AND "companyId" = $2 AND "userId" = $3`,
+      [id, scope.companyId, scope.userId],
+    );
+    if (!draft) throw new NotFoundError("المسودة غير موجودة");
+    if (!draft.recipient || !draft.body) {
+      throw new ValidationError("المسودة لا تحتوي على مستلم أو محتوى");
+    }
+    const result = await sendMessage({
+      channel: draft.channel,
+      recipient: draft.recipient,
+      recipientName: draft.recipientName,
+      subject: draft.subject,
+      body: draft.body,
+      relatedType: draft.relatedType,
+      relatedId: draft.relatedId,
+      scheduledAt: draft.scheduledAt,
+      templateKey: draft.templateKey,
+      companyId: scope.companyId,
+      userId: scope.userId,
+    });
+    if (!result.blocked) {
+      // Only delete the draft on successful queue. If DLP blocked,
+      // the operator can still edit and retry.
+      await rawExecute(`DELETE FROM email_drafts WHERE id = $1`, [id]);
+    }
+    res.status(result.blocked ? 422 : 201).json(maskFields(req, result));
+  } catch (err) {
+    handleRouteError(err, res, "inbox/drafts/send");
+  }
+});
+
+// ─────────────────────── Signatures ──────────────────────────────────────
+
+const signatureSchema = z.object({
+  name: z.string().min(1).max(120),
+  body: z.string().min(1).max(5000),
+  isDefault: z.boolean().default(false),
+});
+
+router.get("/signatures", authorize({ feature: "communications", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery(
+      `SELECT id, name, body, "isDefault", "createdAt", "updatedAt"
+         FROM email_signatures
+        WHERE "companyId" = $1 AND "userId" = $2
+        ORDER BY "isDefault" DESC, name ASC`,
+      [scope.companyId, scope.userId],
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "inbox/signatures/list");
+  }
+});
+
+router.post("/signatures", authorize({ feature: "communications", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(signatureSchema.safeParse(req.body));
+    // If setting default, unset all other defaults first so the
+    // partial unique index never raises.
+    if (body.isDefault) {
+      await rawExecute(
+        `UPDATE email_signatures SET "isDefault" = false
+          WHERE "companyId" = $1 AND "userId" = $2 AND "isDefault" = true`,
+        [scope.companyId, scope.userId],
+      );
+    }
+    const { insertId } = await rawExecute(
+      `INSERT INTO email_signatures ("companyId", "userId", name, body, "isDefault")
+       VALUES ($1, $2, $3, $4, $5)`,
+      [scope.companyId, scope.userId, body.name, body.body, body.isDefault],
+    );
+    assertInsert(insertId, "email_signatures");
+    res.status(201).json({ id: insertId, ...body });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/signatures/create");
+  }
+});
+
+router.patch("/signatures/:id", authorize({ feature: "communications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const body = zodParse(signatureSchema.partial().safeParse(req.body ?? {}));
+    if (body.isDefault === true) {
+      await rawExecute(
+        `UPDATE email_signatures SET "isDefault" = false
+          WHERE "companyId" = $1 AND "userId" = $2 AND "isDefault" = true AND id <> $3`,
+        [scope.companyId, scope.userId, id],
+      );
+    }
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+    for (const [col, val] of Object.entries(body)) {
+      if (val === undefined) continue;
+      sets.push(`"${col}" = $${idx++}`);
+      params.push(val);
+    }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
+    sets.push(`"updatedAt" = NOW()`);
+    params.push(id, scope.companyId, scope.userId);
+    const [row] = await rawQuery(
+      `UPDATE email_signatures SET ${sets.join(", ")}
+        WHERE id = $${idx++} AND "companyId" = $${idx++} AND "userId" = $${idx}
+       RETURNING *`,
+      params,
+    );
+    if (!row) throw new NotFoundError("التوقيع غير موجود");
+    res.json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "inbox/signatures/update");
+  }
+});
+
+router.delete("/signatures/:id", authorize({ feature: "communications", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(
+      `DELETE FROM email_signatures WHERE id = $1 AND "companyId" = $2 AND "userId" = $3`,
+      [id, scope.companyId, scope.userId],
+    );
+    if (!affectedRows) throw new NotFoundError("التوقيع غير موجود");
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/signatures/delete");
+  }
+});
+
+// ─────────────────────── Folder counts (sidebar) ──────────────────────────
+
+router.get("/folder-counts", authorize({ feature: "communications", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [folderRows, draftRow, starredRow] = await Promise.all([
+      rawQuery<{ folder: string; count: string }>(
+        `SELECT folder, COUNT(*)::text AS count FROM communications_log
+          WHERE "companyId" = $1 AND "deletedAt" IS NULL
+          GROUP BY folder`,
+        [scope.companyId],
+      ),
+      rawQuery<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM email_drafts
+          WHERE "companyId" = $1 AND "userId" = $2`,
+        [scope.companyId, scope.userId],
+      ),
+      rawQuery<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM communications_log
+          WHERE "companyId" = $1 AND "isStarred" = true AND "deletedAt" IS NULL`,
+        [scope.companyId],
+      ),
+    ]);
+    const counts: Record<string, number> = {
+      inbox: 0, sent: 0, drafts: 0, archive: 0, trash: 0, spam: 0, starred: 0,
+    };
+    for (const r of folderRows) {
+      counts[r.folder] = Number(r.count);
+    }
+    counts.drafts = Number(draftRow[0]?.count ?? 0);
+    counts.starred = Number(starredRow[0]?.count ?? 0);
+    res.json(maskFields(req, counts));
+  } catch (err) {
+    handleRouteError(err, res, "inbox/folder-counts");
   }
 });
 

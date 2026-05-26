@@ -465,6 +465,7 @@ DROP INDEX IF EXISTS public.uq_fx_realized_postings_triple;
 DROP INDEX IF EXISTS public.uq_fx_rates_company_pair_date;
 DROP INDEX IF EXISTS public.uq_abc_company_product_period;
 DROP INDEX IF EXISTS public.uniq_fleet_trips_source_key;
+DROP INDEX IF EXISTS public.uniq_email_signatures_default_per_user;
 DROP INDEX IF EXISTS public.uniq_ai_prompts_approved_per_slug;
 DROP INDEX IF EXISTS public.umrah_sub_agents_company_nuskcode_idx;
 DROP INDEX IF EXISTS public.umrah_pilgrims_company_nusknum_idx;
@@ -520,6 +521,18 @@ DROP INDEX IF EXISTS public.official_letters_status_sent_idx;
 DROP INDEX IF EXISTS public.official_letters_ref_idx;
 DROP INDEX IF EXISTS public.official_letters_created_by_idx;
 DROP INDEX IF EXISTS public.official_letters_branch_idx;
+DROP INDEX IF EXISTS public.numbering_schemes_module_idx;
+DROP INDEX IF EXISTS public.numbering_schemes_company_idx;
+DROP INDEX IF EXISTS public.numbering_counters_unique_scope;
+DROP INDEX IF EXISTS public.numbering_counters_company_idx;
+DROP INDEX IF EXISTS public.numbering_audit_logs_scheme_idx;
+DROP INDEX IF EXISTS public.numbering_audit_logs_created_idx;
+DROP INDEX IF EXISTS public.numbering_audit_logs_company_idx;
+DROP INDEX IF EXISTS public.numbering_audit_logs_assignment_idx;
+DROP INDEX IF EXISTS public.numbering_assignments_unique_number;
+DROP INDEX IF EXISTS public.numbering_assignments_status_idx;
+DROP INDEX IF EXISTS public.numbering_assignments_scheme_idx;
+DROP INDEX IF EXISTS public.numbering_assignments_entity_idx;
 DROP INDEX IF EXISTS public.mudad_settlements_journal_idx;
 DROP INDEX IF EXISTS public.leave_balances_employee_idx;
 DROP INDEX IF EXISTS public.leave_balances_company_idx;
@@ -934,7 +947,9 @@ DROP INDEX IF EXISTS public.idx_employee_assignments_company;
 DROP INDEX IF EXISTS public.idx_employee_assignments_branch;
 DROP INDEX IF EXISTS public.idx_emp_salary_comp_employee;
 DROP INDEX IF EXISTS public.idx_emp_salary_comp_company;
+DROP INDEX IF EXISTS public.idx_email_signatures_user;
 DROP INDEX IF EXISTS public.idx_email_queue_companyid;
+DROP INDEX IF EXISTS public.idx_email_drafts_user;
 DROP INDEX IF EXISTS public.idx_ect_plan;
 DROP INDEX IF EXISTS public.idx_ecp_company;
 DROP INDEX IF EXISTS public.idx_ecc_plan;
@@ -989,8 +1004,10 @@ DROP INDEX IF EXISTS public.idx_cost_centers_company;
 DROP INDEX IF EXISTS public.idx_correspondence_company;
 DROP INDEX IF EXISTS public.idx_company_documents_company;
 DROP INDEX IF EXISTS public.idx_comp_actions_company;
+DROP INDEX IF EXISTS public.idx_communications_log_starred;
 DROP INDEX IF EXISTS public.idx_communications_log_deletedat;
 DROP INDEX IF EXISTS public.idx_communications_log_companyid;
+DROP INDEX IF EXISTS public.idx_communications_log_company_folder;
 DROP INDEX IF EXISTS public.idx_communication_providers_channel_priority;
 DROP INDEX IF EXISTS public.idx_communication_dlp_rules_company_enabled;
 DROP INDEX IF EXISTS public.idx_collection_follow_ups_companyid;
@@ -1316,6 +1333,7 @@ ALTER TABLE IF EXISTS ONLY public.password_reset_requests DROP CONSTRAINT IF EXI
 ALTER TABLE IF EXISTS ONLY public.onboarding_tasks DROP CONSTRAINT IF EXISTS onboarding_tasks_pkey;
 ALTER TABLE IF EXISTS ONLY public.official_letters DROP CONSTRAINT IF EXISTS official_letters_pkey;
 ALTER TABLE IF EXISTS ONLY public.obligations DROP CONSTRAINT IF EXISTS obligations_pkey;
+ALTER TABLE IF EXISTS ONLY public.numbering_schemes DROP CONSTRAINT IF EXISTS numbering_schemes_unique_key;
 ALTER TABLE IF EXISTS ONLY public.notifications DROP CONSTRAINT IF EXISTS notifications_pkey;
 ALTER TABLE IF EXISTS ONLY public.notification_webhooks DROP CONSTRAINT IF EXISTS notification_webhooks_pkey;
 ALTER TABLE IF EXISTS ONLY public.notification_templates DROP CONSTRAINT IF EXISTS notification_templates_pkey;
@@ -1447,7 +1465,9 @@ ALTER TABLE IF EXISTS ONLY public.employee_commission_tiers DROP CONSTRAINT IF E
 ALTER TABLE IF EXISTS ONLY public.employee_commission_plans DROP CONSTRAINT IF EXISTS employee_commission_plans_pkey;
 ALTER TABLE IF EXISTS ONLY public.employee_commission_calculations DROP CONSTRAINT IF EXISTS employee_commission_calculations_pkey;
 ALTER TABLE IF EXISTS ONLY public.employee_assignments DROP CONSTRAINT IF EXISTS employee_assignments_pkey;
+ALTER TABLE IF EXISTS ONLY public.email_signatures DROP CONSTRAINT IF EXISTS email_signatures_pkey;
 ALTER TABLE IF EXISTS ONLY public.email_queue DROP CONSTRAINT IF EXISTS email_queue_pkey;
+ALTER TABLE IF EXISTS ONLY public.email_drafts DROP CONSTRAINT IF EXISTS email_drafts_pkey;
 ALTER TABLE IF EXISTS ONLY public.dunning_letters DROP CONSTRAINT IF EXISTS dunning_letters_pkey;
 ALTER TABLE IF EXISTS ONLY public.documents DROP CONSTRAINT IF EXISTS documents_pkey;
 ALTER TABLE IF EXISTS ONLY public.document_versions DROP CONSTRAINT IF EXISTS document_versions_pkey;
@@ -1694,6 +1714,10 @@ ALTER TABLE IF EXISTS public.password_reset_requests ALTER COLUMN id DROP DEFAUL
 ALTER TABLE IF EXISTS public.onboarding_tasks ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.official_letters ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.obligations ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.numbering_schemes ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.numbering_counters ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.numbering_audit_logs ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.numbering_assignments ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.notifications ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.notification_webhooks ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.notification_templates ALTER COLUMN id DROP DEFAULT;
@@ -1803,7 +1827,9 @@ ALTER TABLE IF EXISTS public.employee_commission_tiers ALTER COLUMN id DROP DEFA
 ALTER TABLE IF EXISTS public.employee_commission_plans ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_commission_calculations ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.employee_assignments ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.email_signatures ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.email_queue ALTER COLUMN id DROP DEFAULT;
+ALTER TABLE IF EXISTS public.email_drafts ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.dunning_letters ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.documents ALTER COLUMN id DROP DEFAULT;
 ALTER TABLE IF EXISTS public.document_versions ALTER COLUMN id DROP DEFAULT;
@@ -2200,9 +2226,13 @@ DROP SEQUENCE IF EXISTS public.official_letters_id_seq;
 DROP TABLE IF EXISTS public.official_letters;
 DROP SEQUENCE IF EXISTS public.obligations_id_seq;
 DROP TABLE IF EXISTS public.obligations;
+DROP SEQUENCE IF EXISTS public.numbering_schemes_id_seq;
 DROP TABLE IF EXISTS public.numbering_schemes;
+DROP SEQUENCE IF EXISTS public.numbering_counters_id_seq;
 DROP TABLE IF EXISTS public.numbering_counters;
+DROP SEQUENCE IF EXISTS public.numbering_audit_logs_id_seq;
 DROP TABLE IF EXISTS public.numbering_audit_logs;
+DROP SEQUENCE IF EXISTS public.numbering_assignments_id_seq;
 DROP TABLE IF EXISTS public.numbering_assignments;
 DROP SEQUENCE IF EXISTS public.notifications_id_seq;
 DROP TABLE IF EXISTS public.notifications;
@@ -2429,8 +2459,12 @@ DROP SEQUENCE IF EXISTS public.employee_commission_calculations_id_seq;
 DROP TABLE IF EXISTS public.employee_commission_calculations;
 DROP SEQUENCE IF EXISTS public.employee_assignments_id_seq;
 DROP TABLE IF EXISTS public.employee_assignments;
+DROP SEQUENCE IF EXISTS public.email_signatures_id_seq;
+DROP TABLE IF EXISTS public.email_signatures;
 DROP SEQUENCE IF EXISTS public.email_queue_id_seq;
 DROP TABLE IF EXISTS public.email_queue;
+DROP SEQUENCE IF EXISTS public.email_drafts_id_seq;
+DROP TABLE IF EXISTS public.email_drafts;
 DROP SEQUENCE IF EXISTS public.dunning_letters_id_seq;
 DROP TABLE IF EXISTS public.dunning_letters;
 DROP SEQUENCE IF EXISTS public.documents_id_seq;
@@ -4564,7 +4598,9 @@ CREATE TABLE public.communications_log (
     "relatedType" character varying(50),
     "relatedId" integer,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    folder character varying(30) DEFAULT 'inbox'::character varying NOT NULL,
+    "isStarred" boolean DEFAULT false NOT NULL
 );
 
 
@@ -5978,6 +6014,49 @@ ALTER SEQUENCE public.dunning_letters_id_seq OWNED BY public.dunning_letters.id;
 
 
 --
+-- Name: email_drafts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.email_drafts (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "userId" integer NOT NULL,
+    channel character varying(20) NOT NULL,
+    recipient character varying(300),
+    "recipientName" character varying(200),
+    subject character varying(500),
+    body text DEFAULT ''::text NOT NULL,
+    "templateKey" character varying(120),
+    "relatedType" character varying(60),
+    "relatedId" integer,
+    "scheduledAt" timestamp with time zone,
+    "lastSavedAt" timestamp with time zone DEFAULT now(),
+    "createdAt" timestamp with time zone DEFAULT now(),
+    CONSTRAINT email_drafts_channel_check CHECK (((channel)::text = ANY ((ARRAY['email'::character varying, 'sms'::character varying, 'whatsapp'::character varying])::text[])))
+);
+
+
+--
+-- Name: email_drafts_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.email_drafts_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: email_drafts_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.email_drafts_id_seq OWNED BY public.email_drafts.id;
+
+
+--
 -- Name: email_queue; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -6027,6 +6106,42 @@ CREATE SEQUENCE public.email_queue_id_seq
 --
 
 ALTER SEQUENCE public.email_queue_id_seq OWNED BY public.email_queue.id;
+
+
+--
+-- Name: email_signatures; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.email_signatures (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "userId" integer NOT NULL,
+    name character varying(120) NOT NULL,
+    body text NOT NULL,
+    "isDefault" boolean DEFAULT false NOT NULL,
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "updatedAt" timestamp with time zone DEFAULT now()
+);
+
+
+--
+-- Name: email_signatures_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.email_signatures_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: email_signatures_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.email_signatures_id_seq OWNED BY public.email_signatures.id;
 
 
 --
@@ -11032,6 +11147,26 @@ CREATE TABLE public.numbering_assignments (
 
 
 --
+-- Name: numbering_assignments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.numbering_assignments_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: numbering_assignments_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.numbering_assignments_id_seq OWNED BY public.numbering_assignments.id;
+
+
+--
 -- Name: numbering_audit_logs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -11050,6 +11185,26 @@ CREATE TABLE public.numbering_audit_logs (
     reason text,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
+
+
+--
+-- Name: numbering_audit_logs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.numbering_audit_logs_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: numbering_audit_logs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.numbering_audit_logs_id_seq OWNED BY public.numbering_audit_logs.id;
 
 
 --
@@ -11074,6 +11229,26 @@ CREATE TABLE public.numbering_counters (
     CONSTRAINT numbering_counters_last_check CHECK (("lastNumber" >= 0)),
     CONSTRAINT numbering_counters_next_check CHECK (("nextNumber" >= 1))
 );
+
+
+--
+-- Name: numbering_counters_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.numbering_counters_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: numbering_counters_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.numbering_counters_id_seq OWNED BY public.numbering_counters.id;
 
 
 --
@@ -11108,37 +11283,28 @@ CREATE TABLE public.numbering_schemes (
     CONSTRAINT numbering_schemes_pad_check CHECK ((("padLength" >= 3) AND ("padLength" <= 10))),
     CONSTRAINT numbering_schemes_reset_check CHECK (("resetPolicy" = ANY (ARRAY['never'::text, 'yearly'::text, 'monthly'::text, 'seasonal'::text, 'fiscal_year'::text]))),
     CONSTRAINT numbering_schemes_scope_check CHECK (("scopePolicy" = ANY (ARRAY['company'::text, 'branch'::text, 'module'::text, 'entity'::text, 'season'::text, 'fiscal_year'::text]))),
-    CONSTRAINT numbering_schemes_timing_check CHECK (("issueTiming" = ANY (ARRAY['on_draft'::text, 'on_submit'::text, 'on_approval'::text, 'on_posting'::text]))),
-    CONSTRAINT numbering_schemes_unique_key UNIQUE ("companyId", "moduleKey", "entityKey")
+    CONSTRAINT numbering_schemes_timing_check CHECK (("issueTiming" = ANY (ARRAY['on_draft'::text, 'on_submit'::text, 'on_approval'::text, 'on_posting'::text])))
 );
 
 
--- ============================================================
--- Sequences + id DEFAULTs for the four numbering tables (#1141).
--- pg_dump would emit these inline after each CREATE TABLE; we add
--- them in a block at the end of the dump baseline because the tables
--- themselves were appended in earlier PRs without their sequences.
--- ============================================================
+--
+-- Name: numbering_schemes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
 
-CREATE SEQUENCE IF NOT EXISTS public.numbering_schemes_id_seq
-    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+CREATE SEQUENCE public.numbering_schemes_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: numbering_schemes_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
 ALTER SEQUENCE public.numbering_schemes_id_seq OWNED BY public.numbering_schemes.id;
-ALTER TABLE ONLY public.numbering_schemes ALTER COLUMN id SET DEFAULT nextval('public.numbering_schemes_id_seq'::regclass);
-
-CREATE SEQUENCE IF NOT EXISTS public.numbering_counters_id_seq
-    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.numbering_counters_id_seq OWNED BY public.numbering_counters.id;
-ALTER TABLE ONLY public.numbering_counters ALTER COLUMN id SET DEFAULT nextval('public.numbering_counters_id_seq'::regclass);
-
-CREATE SEQUENCE IF NOT EXISTS public.numbering_assignments_id_seq
-    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.numbering_assignments_id_seq OWNED BY public.numbering_assignments.id;
-ALTER TABLE ONLY public.numbering_assignments ALTER COLUMN id SET DEFAULT nextval('public.numbering_assignments_id_seq'::regclass);
-
-CREATE SEQUENCE IF NOT EXISTS public.numbering_audit_logs_id_seq
-    AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
-ALTER SEQUENCE public.numbering_audit_logs_id_seq OWNED BY public.numbering_audit_logs.id;
-ALTER TABLE ONLY public.numbering_audit_logs ALTER COLUMN id SET DEFAULT nextval('public.numbering_audit_logs_id_seq'::regclass);
 
 
 --
