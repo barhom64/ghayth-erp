@@ -1,9 +1,13 @@
+import { useState } from "react";
 import { useRoute } from "wouter";
+import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import {
   DetailPageLayout,
   EntityComments,
 } from "@workspace/entity-kit";
+import { FormGrid, FormTextField, FormTextareaField, FormSelectField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,9 +52,21 @@ function priorityTone(priority?: string | null): Tone {
   return "muted";
 }
 
+const taskEditSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب"),
+  description: z.string().optional().default(""),
+  type: z.string().optional().default(""),
+  priority: z.enum(["low", "medium", "high", "urgent"]),
+  status: z.enum(["pending", "in_progress", "completed", "cancelled"]),
+  scheduledDate: z.string().optional().default(""),
+  notes: z.string().optional().default(""),
+});
+type TaskEditForm = z.infer<typeof taskEditSchema>;
+
 export default function TaskDetail() {
   const [, params] = useRoute("/tasks/:id");
   const id = params?.id ? Number(params.id) : null;
+  const [editOpen, setEditOpen] = useState(false);
   const { toast } = useToast();
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("task", id ?? 0);
 
@@ -158,6 +174,7 @@ export default function TaskDetail() {
   const canComplete = task?.status !== "completed" && task?.status !== "cancelled";
 
   return (
+    <>
     <DetailPageLayout
       title={task?.title || `مهمة #${id}`}
       subtitle={task ? (STATUS_LABELS[task.status] || task.status) : undefined}
@@ -190,9 +207,68 @@ export default function TaskDetail() {
             entityType="task"
             entityId={id ?? 0}
             formats={["a4"]}/>
+          <GuardedButton
+            perm="tasks:write"
+            variant="outline"
+            className="gap-2"
+            onClick={() => setEditOpen(true)}
+            disabled={!task || task?.status === "completed"}
+          >
+            <Edit className="h-4 w-4" />
+            تعديل
+          </GuardedButton>
         </div>
       }
       overview={overview}
     />
+    {task && id && (
+      <EntityEditDialog<TaskEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل المهمة"
+        schema={taskEditSchema}
+        defaultValues={{
+          title: task.title ?? "",
+          description: task.description ?? "",
+          type: task.type ?? "",
+          priority: (task.priority ?? "medium") as TaskEditForm["priority"],
+          status: (task.status ?? "pending") as TaskEditForm["status"],
+          scheduledDate: task.scheduledDate ?? "",
+          notes: task.notes ?? "",
+        }}
+        endpoint={`/tasks/${id}`}
+        invalidateKeys={[["task", String(id)], ["tasks"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="title" label="العنوان" required className="md:col-span-2" />
+          <FormSelectField
+            name="priority"
+            label="الأولوية"
+            options={[
+              { value: "low", label: "منخفضة" },
+              { value: "medium", label: "متوسطة" },
+              { value: "high", label: "عالية" },
+              { value: "urgent", label: "عاجلة" },
+            ]}
+          />
+          <FormSelectField
+            name="status"
+            label="الحالة"
+            options={[
+              { value: "pending", label: "معلقة" },
+              { value: "in_progress", label: "قيد التنفيذ" },
+              { value: "completed", label: "مكتملة" },
+              { value: "cancelled", label: "ملغاة" },
+            ]}
+          />
+          <FormTextField name="scheduledDate" label="التاريخ المجدول" type="date" />
+          <FormTextField name="type" label="النوع" />
+          <FormTextareaField name="description" label="الوصف" className="md:col-span-2" />
+          <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }

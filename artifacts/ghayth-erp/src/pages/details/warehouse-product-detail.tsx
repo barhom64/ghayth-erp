@@ -1,7 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
+import { z } from "zod";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
+import { FormGrid, FormTextField, FormTextareaField, FormNumberField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,9 +38,23 @@ function statusTone(status?: string | null) {
   return "default" as const;
 }
 
+const productEditSchema = z.object({
+  name: z.string().min(1, "اسم المنتج مطلوب"),
+  sku: z.string().min(1, "SKU مطلوب"),
+  description: z.string().optional().default(""),
+  unit: z.string().optional().default(""),
+  costPrice: z.coerce.number().optional().default(0),
+  sellPrice: z.coerce.number().optional().default(0),
+  minStock: z.coerce.number().optional().default(0),
+  maxStock: z.coerce.number().optional().default(0),
+  location: z.string().optional().default(""),
+});
+type ProductEditForm = z.infer<typeof productEditSchema>;
+
 export default function WarehouseProductDetail() {
   const [, params] = useRoute("/warehouse/products/:id");
   const id = params?.id ? Number(params.id) : null;
+  const [editOpen, setEditOpen] = useState(false);
   const { extraTabs, hideTabs } = useRegistryTabs("warehouse_product", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -211,6 +228,7 @@ export default function WarehouseProductDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={product?.name ? product.name : "تفاصيل الصنف"}
       subtitle={product?.sku ? `SKU: ${product.sku}` : undefined}
@@ -243,8 +261,46 @@ export default function WarehouseProductDetail() {
               formats={["label", "a4"]}
               label="طباعة ملصق / باركود"/>
           )}
+          <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={() => setEditOpen(true)} disabled={!product}>
+            <Edit className="h-4 w-4 ms-1" /> تعديل
+          </GuardedButton>
         </>
       }
     />
+    {product && id && (
+      <EntityEditDialog<ProductEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل المنتج"
+        schema={productEditSchema}
+        defaultValues={{
+          name: product.name ?? "",
+          sku: product.sku ?? "",
+          description: product.description ?? "",
+          unit: product.unit ?? "",
+          costPrice: Number(product.costPrice ?? 0),
+          sellPrice: Number(product.sellPrice ?? 0),
+          minStock: Number(product.minStock ?? 0),
+          maxStock: Number(product.maxStock ?? 0),
+          location: product.location ?? "",
+        }}
+        endpoint={`/warehouse/products/${id}`}
+        invalidateKeys={[["warehouse-product", String(id)], ["warehouse-products"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="name" label="اسم المنتج" required />
+          <FormTextField name="sku" label="SKU" required />
+          <FormTextField name="unit" label="الوحدة" />
+          <FormTextField name="location" label="الموقع" />
+          <FormNumberField name="costPrice" label="سعر التكلفة" />
+          <FormNumberField name="sellPrice" label="سعر البيع" />
+          <FormNumberField name="minStock" label="حد أدنى" />
+          <FormNumberField name="maxStock" label="حد أعلى" />
+          <FormTextareaField name="description" label="الوصف" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }

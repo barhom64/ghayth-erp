@@ -1,10 +1,13 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
+import { z } from "zod";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
 } from "@workspace/entity-kit";
+import { FormGrid, FormTextField, FormTextareaField, FormSelectField, FormNumberField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,9 +48,23 @@ function statusTone(status?: string | null) {
   return "default" as const;
 }
 
+const contractEditSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب"),
+  partyName: z.string().min(1, "اسم الطرف الآخر مطلوب"),
+  partyContact: z.string().optional().default(""),
+  contractType: z.string().optional().default(""),
+  value: z.coerce.number().optional().default(0),
+  startDate: z.string().optional().default(""),
+  endDate: z.string().optional().default(""),
+  status: z.enum(["draft", "active", "pending_renewal"]),
+  notes: z.string().optional().default(""),
+});
+type ContractEditForm = z.infer<typeof contractEditSchema>;
+
 export default function LegalContractDetail() {
   const [, params] = useRoute("/legal/contracts/:id");
   const id = params?.id ? Number(params.id) : null;
+  const [editOpen, setEditOpen] = useState(false);
 
   const { toast } = useToast();
 
@@ -209,6 +226,7 @@ export default function LegalContractDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={contract?.title || "تفاصيل العقد"}
       subtitle={contract?.type ? CONTRACT_TYPE_LABELS[contract.type] || contract.type : undefined}
@@ -240,8 +258,61 @@ export default function LegalContractDetail() {
               entityId={contract.id ?? id}
               formats={["a4"]}/>
           )}
+          <GuardedButton
+            perm="legal:update"
+            variant="outline"
+            size="sm"
+            onClick={() => setEditOpen(true)}
+            disabled={!contract || ["terminated", "renewed", "expired"].includes(contract?.status)}
+          >
+            <Edit className="h-4 w-4 ms-1" />
+            تعديل
+          </GuardedButton>
         </>
       }
     />
+    {contract && id && (
+      <EntityEditDialog<ContractEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل العقد"
+        schema={contractEditSchema}
+        defaultValues={{
+          title: contract.title ?? "",
+          partyName: contract.partyName ?? "",
+          partyContact: contract.partyContact ?? "",
+          contractType: contract.contractType ?? "",
+          value: Number(contract.value ?? 0),
+          startDate: contract.startDate ?? "",
+          endDate: contract.endDate ?? "",
+          status: (contract.status === "active" || contract.status === "pending_renewal" ? contract.status : "draft") as ContractEditForm["status"],
+          notes: contract.notes ?? "",
+        }}
+        endpoint={`/legal/contracts/${id}`}
+        invalidateKeys={[["legal-contract", String(id)], ["legal-contracts"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="title" label="عنوان العقد" required className="md:col-span-2" />
+          <FormTextField name="partyName" label="الطرف الآخر" required />
+          <FormTextField name="partyContact" label="جهة الاتصال" />
+          <FormTextField name="contractType" label="نوع العقد" />
+          <FormNumberField name="value" label="القيمة" />
+          <FormTextField name="startDate" label="تاريخ البداية" type="date" />
+          <FormTextField name="endDate" label="تاريخ النهاية" type="date" />
+          <FormSelectField
+            name="status"
+            label="الحالة"
+            options={[
+              { value: "draft", label: "مسودة" },
+              { value: "active", label: "ساري" },
+              { value: "pending_renewal", label: "بانتظار التجديد" },
+            ]}
+          />
+          <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }
