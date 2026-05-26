@@ -430,6 +430,13 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ["view", "list"], availableScopes: ALL_SCOPES, displayOrder: 11 },
   { key: "dashboard.executive", parentKey: "dashboard", moduleKey: "dashboard", labelAr: "لوحة القيادة التنفيذية", icon: "LineChart",
     availableActions: ["view"], availableScopes: ["company", "multi_company", "all"], displayOrder: 12 },
+  // Operational daily command-center — different from my_space (HR personal)
+  // and from action_center (which is approvals-only). Workspace aggregates
+  // today's tasks + unread comms + recent calls + next meetings.
+  { key: "workspace", moduleKey: "dashboard", labelAr: "مساحة العمل", icon: "LayoutGrid",
+    availableActions: ["view"], availableScopes: ["self"], selfService: true, displayOrder: 13 },
+  { key: "workspace.manager", parentKey: "workspace", moduleKey: "dashboard", labelAr: "مساحة المدير", icon: "Users",
+    availableActions: ["view"], availableScopes: ALL_SCOPES, displayOrder: 14 },
 
   // ═══════════════════════════════════════════════════════════════
   // My Space sub-features

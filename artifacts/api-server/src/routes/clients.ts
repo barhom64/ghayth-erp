@@ -439,6 +439,7 @@ router.post("/auto-create", authorize({ feature: "crm.clients", action: "create"
         entityKey: "client_code",
         entityTable: "clients",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       const result = await rawExecute(
         `INSERT INTO clients (name, phone, classification, source, code, "companyId", "isBlacklisted")

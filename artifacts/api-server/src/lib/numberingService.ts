@@ -62,6 +62,15 @@ export interface IssueParams {
   entityTable: string;
   entityId?: number | null;
   actorId: number | null;
+  /**
+   * Lifecycle point at which the calling route is issuing the number.
+   * The service refuses to issue if this disagrees with the scheme's
+   * `issueTiming` — closes the lawyer's review nit #6 ("issueTiming
+   * field exists but is ignored"). Routes that issue immediately on
+   * creation pass `"on_draft"`; routes that defer until submit, approval,
+   * or posting pass the matching value.
+   */
+  expectedTiming: IssueTiming;
   /** Override the year used by the scope/format ({YYYY}). Defaults to currentYear(). */
   fiscalYear?: number;
   /** Override the period bucket used when `resetPolicy = monthly`. Defaults to currentPeriod() (YYYY-MM). */
@@ -292,6 +301,16 @@ export async function issueNumber(params: IssueParams): Promise<IssueResult> {
       `سياسة ترقيم ${scheme.displayNameAr} متوقفة — لا يمكن إصدار رقم جديد حتى يتم تفعيلها`,
     );
   }
+  // Lawyer's review nit #6 — issueTiming enforcement. The route declares
+  // the lifecycle point at which it's issuing; the scheme declares the
+  // point at which numbers SHOULD be issued. If they disagree, the route
+  // is calling at the wrong time. Refuse to issue and tell the operator
+  // which side to fix (route code vs scheme setting from settings UI).
+  if (scheme.issueTiming !== params.expectedTiming) {
+    throw new ValidationError(
+      `توقيت الإصدار في سياسة "${scheme.displayNameAr}" مضبوط على "${scheme.issueTiming}" لكن هذا المسار يحاول الإصدار في "${params.expectedTiming}". عدّل سياسة الترقيم من إعدادات الترقيم لتطابق هذا التوقيت، أو راجع المسار البرمجي.`,
+    );
+  }
   if (scheme.scopePolicy === "season" && (params.seasonId == null)) {
     throw new ValidationError(
       `سياسة ${scheme.displayNameAr} مخصصة لمواسم — يجب تمرير seasonId قبل إصدار الرقم`,
@@ -510,6 +529,11 @@ export async function previewNextNumber(params: {
     ...params,
     entityTable: "(preview)",
     actorId: null,
+    // Preview is a read-only "what would the next number be?" query and
+    // doesn't actually issue. We pass the scheme's own timing so the
+    // check inside issueNumber would pass — but preview never calls
+    // issueNumber; this satisfies the IssueParams type only.
+    expectedTiming: scheme.issueTiming,
   });
   const [counter] = await rawQuery<{ nextNumber: string | number }>(
     `SELECT "nextNumber" FROM numbering_counters

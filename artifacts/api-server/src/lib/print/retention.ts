@@ -1,0 +1,104 @@
+/**
+ * retention — prune old PDF/Excel artifacts from object storage.
+ *
+ * Every printed document is uploaded to GCS and the storage key is recorded
+ * in print_jobs.pdfStorageKey. Without a retention policy this grows
+ * unbounded — a company doing 50 prints/day accumulates ~18k objects/year.
+ *
+ * This module deletes the BLOB but keeps the print_jobs audit row, so the
+ * audit trail (who printed what, when, with which template) stays intact
+ * — only the rendered bytes are evicted. Re-prints generate fresh PDFs
+ * with the same jobId.
+ *
+ * Default policy: keep 90 days. Configurable via the runner caller.
+ *
+ * Safe to run repeatedly — `deletePrintArtifact` ignores missing objects.
+ */
+
+import { rawQuery } from "../rawdb.js";
+import { logger } from "../logger.js";
+import { deletePrintArtifact } from "./printStorage.js";
+
+export interface PruneResult {
+  scanned: number;
+  deleted: number;
+  failed: number;
+  /** Rows whose pdfStorageKey was already null (skipped). */
+  alreadyEmpty: number;
+}
+
+export interface PruneOptions {
+  /** Retention window in days. Rows older than this are eligible. */
+  daysToKeep: number;
+  /** Soft cap so a runaway run can't drop a million objects in one go. */
+  maxPerRun?: number;
+  /** Optional per-company filter — useful for self-service "purge my
+   *  history" admin UI. Omit to prune across all companies. */
+  companyId?: number;
+  /** When true, log which keys would be deleted without actually deleting. */
+  dryRun?: boolean;
+}
+
+export async function prunePrintArtifacts(opts: PruneOptions): Promise<PruneResult> {
+  const days = Math.max(1, Math.floor(opts.daysToKeep));
+  const cap = Math.max(1, Math.min(opts.maxPerRun ?? 1000, 10_000));
+  const params: unknown[] = [days];
+  let whereCompany = "";
+  if (opts.companyId) {
+    params.push(opts.companyId);
+    whereCompany = ` AND "companyId" = $${params.length}`;
+  }
+
+  // Pull eligible rows. We only touch rows that still have a storage key
+  // — rows whose key has been cleared (manual cleanup, previous run)
+  // shouldn't count as "scanned" again. ORDER BY oldest-first so a
+  // capped run nibbles from the tail consistently.
+  const rows = await rawQuery<{ id: number; pdfStorageKey: string | null }>(
+    `SELECT id, "pdfStorageKey"
+       FROM print_jobs
+      WHERE "pdfStorageKey" IS NOT NULL
+        AND "createdAt" < NOW() - ($1::int || ' days')::interval
+        ${whereCompany}
+      ORDER BY "createdAt" ASC
+      LIMIT ${cap}`,
+    params,
+  ).catch((err) => {
+    if ((err as { code?: string })?.code === "42P01") {
+      logger.warn("[print/retention] print_jobs table missing — nothing to prune");
+      return [];
+    }
+    throw err;
+  });
+
+  const result: PruneResult = { scanned: rows.length, deleted: 0, failed: 0, alreadyEmpty: 0 };
+
+  for (const row of rows) {
+    if (!row.pdfStorageKey) {
+      result.alreadyEmpty++;
+      continue;
+    }
+    if (opts.dryRun) {
+      logger.info({ id: row.id, key: row.pdfStorageKey }, "[print/retention] dry-run would delete");
+      result.deleted++;
+      continue;
+    }
+    const ok = await deletePrintArtifact({ storageKey: row.pdfStorageKey });
+    if (!ok) {
+      result.failed++;
+      continue;
+    }
+    // Clear the column so a future call doesn't re-scan this row. We do
+    // this AFTER the storage delete so a failed delete leaves the column
+    // intact and the next run can retry.
+    await rawQuery(
+      `UPDATE print_jobs SET "pdfStorageKey" = NULL WHERE id = $1`,
+      [row.id],
+    ).catch((err) => {
+      logger.warn(err as Error, "[print/retention] failed to clear pdfStorageKey");
+    });
+    result.deleted++;
+  }
+
+  logger.info(result, "[print/retention] prune complete");
+  return result;
+}

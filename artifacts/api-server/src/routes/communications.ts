@@ -734,6 +734,7 @@ router.post("/log/:id/convert", authorize({ feature: "communications", action: "
           entityTable: "support_tickets",
           actorId: scope.userId,
           metadata: { source: "communications", logId },
+          expectedTiming: "on_draft",
         });
         const result = await client.query(
           `INSERT INTO support_tickets ("companyId", title, description, status, priority, ref)
@@ -757,6 +758,7 @@ router.post("/log/:id/convert", authorize({ feature: "communications", action: "
           entityTable: "requests",
           actorId: scope.userId,
           metadata: { source: "communications", logId },
+          expectedTiming: "on_draft",
         });
         const result = await client.query(
           `INSERT INTO requests ("companyId", title, description, status, priority, "requesterName", ref)
