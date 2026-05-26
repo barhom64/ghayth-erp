@@ -270,12 +270,11 @@ const RULES = [
   {
     id: "generateTimeRef-as-official-number",
     scan: [ROUTES_DIR],
-    // The few legitimate uses of generateTimeRef are inside lib/ for
-    // internal tech refs (job ids, dedupe keys). Inside route handlers
-    // there is no legitimate use — every visible ref must come from
-    // numberingService.
+    // Hardened to a hard rule (baseline 0). Every official document
+    // number now routes through `numberingService.issueNumber`; the
+    // few legitimate internal correlation refs (BATCH, BANK, SIG,
+    // PAY-PORTAL) live in `lib/internalRef.ts` outside this scan path.
     regex: /\bgenerateTimeRef\s*\(/,
-    countBaseline: 7,
     message:
       "`generateTimeRef(...)` is a Date.now()-based tech ref, NOT a valid " +
       "official document number (Issue #1141). For executive document " +
