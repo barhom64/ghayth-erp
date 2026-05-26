@@ -88,7 +88,10 @@ let _itemId = 0;
 const nextItemId = () => `item-${++_itemId}-${Date.now()}`;
 
 export default function AccountReconciliationWorkpaperPage() {
-  const [accountCode, setAccountCode] = useState<string>("1110");
+  const initialCode = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("accountCode") ?? "1110"
+    : "1110";
+  const [accountCode, setAccountCode] = useState<string>(initialCode);
   const [year, setYear] = useState<number>(currentYearRiyadh());
   const [month, setMonth] = useState<string>(currentMonthPaddedRiyadh());
   const [externalBalance, setExternalBalance] = useState<string>("0");

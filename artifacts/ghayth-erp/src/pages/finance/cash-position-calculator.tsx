@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -221,6 +222,25 @@ export default function CashPositionCalculatorPage() {
               ))}
             </div>
           </div>
+          <div className="flex-1" />
+          <Link href="/finance/bank-accounts-watch">
+            <Button variant="outline" size="sm">
+              <Banknote className="w-4 h-4 ml-1" />
+              مراقبة البنوك
+            </Button>
+          </Link>
+          <Link href="/finance/ap-payment-calendar">
+            <Button variant="outline" size="sm">
+              <Calendar className="w-4 h-4 ml-1" />
+              تقويم الدفعات
+            </Button>
+          </Link>
+          <Link href="/finance/cash-13week">
+            <Button variant="outline" size="sm">
+              <TrendingUp className="w-4 h-4 ml-1" />
+              توقع 13 أسبوع
+            </Button>
+          </Link>
         </CardContent>
       </Card>
 

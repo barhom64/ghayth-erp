@@ -394,6 +394,11 @@ function AccountDrillDown({
             <TrendingDown className="w-3 h-3 text-status-danger-foreground" />
             <span>أعلى دائن: {formatCurrency(peakCredit)}</span>
           </div>
+          <Link href={`/finance/account-recon-workpaper?accountCode=${code}`}>
+            <Button variant="outline" size="sm" className="h-7 text-xs">
+              تسوية هذا الحساب
+            </Button>
+          </Link>
         </div>
       </div>
       <div className="border rounded max-h-80 overflow-y-auto">

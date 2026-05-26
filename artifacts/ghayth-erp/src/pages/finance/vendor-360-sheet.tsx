@@ -83,7 +83,10 @@ interface PendingResp {
 
 export default function Vendor360SheetPage() {
   const today = todayLocal();
-  const [vendorId, setVendorId] = useState<string>("");
+  const initialVendorId = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("vendorId") ?? ""
+    : "";
+  const [vendorId, setVendorId] = useState<string>(initialVendorId);
 
   const { data: vendor } = useApiQuery<Vendor>(
     ["v360-vendor", vendorId],
