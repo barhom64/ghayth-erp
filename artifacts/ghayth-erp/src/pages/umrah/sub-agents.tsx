@@ -88,6 +88,25 @@ export default function UmrahSubAgents() {
       },
     },
   );
+  // PUT /sub-agents/:id/link is the alternative link endpoint that also
+  // supports `createNew + clientName + clientPhone` to create the client
+  // on the fly. We surface it as a second action only when the operator
+  // wants to create a brand-new client rather than pick an existing one.
+  const linkAndCreateMut = useApiMutation<any, { id: number; createNew: true; clientName: string; clientPhone?: string }>(
+    (body) => `/umrah/sub-agents/${body.id}/link`,
+    "PUT",
+    [["umrah-sub-agents"]],
+    {
+      successMessage: "تم إنشاء العميل وربطه",
+      onSuccess: () => { setLinking(null); setLinkClientId(""); },
+    },
+  );
+  const deleteMut = useApiMutation<any, { id: number }>(
+    (body) => `/umrah/sub-agents/${body.id}`,
+    "DELETE",
+    [["umrah-sub-agents"]],
+    { successMessage: "تم حذف الوكيل الفرعي" },
+  );
 
   const filtered = useMemo(() => {
     return subAgents.filter((s) => {
@@ -178,6 +197,20 @@ export default function UmrahSubAgents() {
             onClick={() => setEditing(s)}
           >
             <Pencil className="h-3.5 w-3.5" />
+          </GuardedButton>
+          <GuardedButton
+            perm="umrah:delete"
+            size="sm"
+            variant="ghost"
+            className="text-status-error-foreground"
+            onClick={() => {
+              if (window.confirm(`حذف الوكيل الفرعي "${s.name}"?`)) {
+                deleteMut.mutate({ id: s.id });
+              }
+            }}
+            disabled={deleteMut.isPending}
+          >
+            حذف
           </GuardedButton>
         </div>
       ),
@@ -371,6 +404,26 @@ export default function UmrahSubAgents() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLinking(null)}>إلغاء</Button>
+            {/* "إنشاء عميل وربط" routes through PUT /sub-agents/:id/link
+                with `createNew: true` + the sub-agent's name as a fresh
+                client record. The plain "ربط" button below uses the
+                POST /link-client variant against an existing pick. */}
+            <GuardedButton
+              perm="umrah:write"
+              variant="outline"
+              disabled={!linking || linkAndCreateMut.isPending}
+              onClick={() => {
+                if (!linking) return;
+                linkAndCreateMut.mutate({
+                  id: linking.id,
+                  createNew: true,
+                  clientName: linking.name,
+                  clientPhone: linking.phone ?? undefined,
+                });
+              }}
+            >
+              إنشاء عميل وربط
+            </GuardedButton>
             <GuardedButton
               perm="umrah:write"
               disabled={!linkClientId || linkMut.isPending}
