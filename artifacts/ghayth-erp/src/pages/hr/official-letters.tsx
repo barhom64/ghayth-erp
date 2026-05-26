@@ -3,6 +3,7 @@ import { z } from "zod";
 import { useLocation } from "wouter";
 import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -21,7 +22,7 @@ import {
   FormSelectField,
   FormGrid,
 } from "@workspace/ui-core";
-import { Plus, FileText, FileSignature, Send, Eye } from "lucide-react";
+import { Plus, FileText, FileSignature, Send, Eye, Trash2 } from "lucide-react";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { PrintPreviewModal } from "@workspace/report-kit";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
@@ -57,6 +58,7 @@ export default function OfficialLettersPage() {
   const [, navigate] = useLocation();
   const [showForm, setShowForm] = useState(false);
   const [previewLetter, setPreviewLetter] = useState<any>(null);
+  const [deleting, setDeleting] = useState<any>(null);
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["official-letters"], "/hr/official-letters");
   const items = data?.data || [];
   // HR-U4 — successMessage بدل buildErrorToast اليدوي.
@@ -92,6 +94,18 @@ export default function OfficialLettersPage() {
           <Button variant="ghost" size="sm" onClick={() => setPreviewLetter(l)} title="معاينة وطباعة">
             <Eye className="h-4 w-4" />
           </Button>
+          {(l.status === "draft" || l.status === "rejected") && (
+            <GuardedButton
+              perm="hr:delete"
+              variant="ghost"
+              size="sm"
+              className="text-status-error-foreground"
+              onClick={() => setDeleting(l)}
+              title="حذف"
+            >
+              <Trash2 className="h-4 w-4" />
+            </GuardedButton>
+          )}
         </div>
       ),
     },
@@ -203,6 +217,21 @@ export default function OfficialLettersPage() {
         emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}
 
       />
+
+      {deleting && (
+        <ConfirmDeleteDialog
+          open={deleting !== null}
+          onOpenChange={(o) => { if (!o) setDeleting(null); }}
+          entity={{
+            type: "official_letter",
+            id: deleting.id,
+            name: deleting.subject || `خطاب #${deleting.id}`,
+          }}
+          deletePath={`/hr/official-letters/${deleting.id}`}
+          invalidateKeys={[["official-letters"]]}
+          onDeleted={() => setDeleting(null)}
+        />
+      )}
 
       {previewLetter && (
         <PrintPreviewModal
