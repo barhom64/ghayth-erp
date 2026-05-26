@@ -10,7 +10,7 @@ import { EntityPrintButton, type PrintSection } from "@/components/shared/entity
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-import { ApprovalActions } from "@workspace/workflow-kit";
+// ApprovalActions removed — contracts use status-direct PATCH, not an approval flow.
 import { Edit, FileText } from "lucide-react";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -217,36 +217,14 @@ export default function LegalContractDetail() {
       </Card>
 
       <div className="space-y-3">
-        {/* Approval actions */}
-        {id && contract && ["draft", "active"].includes(contract.status) && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ApprovalActions
-                entityType="legal-contract"
-                entityId={id}
-                currentStatus={contract.status}
-                approveEndpoint={`/legal/contracts/${id}/approve`}
-                rejectEndpoint={`/legal/contracts/${id}/approve`}
-                returnEndpoint={`/legal/contracts/${id}/approve`}
-                approveMethod="PATCH"
-                rejectMethod="PATCH"
-                returnMethod="PATCH"
-                approveBody={(notes: string) => ({ approved: true, notes: notes || undefined })}
-                rejectBody={(notes: string) => ({ approved: false, notes })}
-                returnBody={(notes: string) => ({ approved: "returned", notes })}
-                pendingStatuses={["pending", "under_review", "returned"]}
-                invalidateKeys={[["legal-cases"]]}
-                onDone={() => {
-                  refetch();
-                  toast({ title: "تم تحديث العقد" });
-                }}
-              />
-            </CardContent>
-          </Card>
-        )}
+        {/* Legal contracts have no approve/reject lifecycle — the status
+            enum is draft/active/expired/terminated/renewed, transitioned
+            via PATCH /:id with status field directly, or via the dedicated
+            /renew and /terminate endpoints. The previous ApprovalActions
+            card called /legal/contracts/:id/approve which doesn't exist
+            on the backend, AND its render-gate (draft|active) never
+            overlapped with its pendingStatuses (pending|under_review|
+            returned) so the buttons would never render anyway. Removed. */}
 
         {/* Additional info card */}
         <Card>

@@ -221,15 +221,15 @@ export default function TicketDetail() {
                 entityType="ticket"
                 entityId={Number(id)}
                 currentStatus={ticket.status}
-                approveEndpoint={`/support/tickets/${id}/approve`}
-                rejectEndpoint={`/support/tickets/${id}/approve`}
-                returnEndpoint={`/support/tickets/${id}/approve`}
+                approveEndpoint={`/support/tickets/${id}`}
+                rejectEndpoint={`/support/tickets/${id}`}
+                returnEndpoint={`/support/tickets/${id}`}
                 approveMethod="PATCH"
                 rejectMethod="PATCH"
                 returnMethod="PATCH"
-                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
-                rejectBody={(notes) => ({ approved: false, notes })}
-                returnBody={(notes) => ({ approved: "returned", notes })}
+                approveBody={() => ({ status: "resolved" })}
+                rejectBody={() => ({ status: "closed" })}
+                returnBody={() => ({ status: "open" })}
                 pendingStatuses={["pending", "open", "returned"]}
                 invalidateKeys={[["support-tickets"], ["support-stats"]]}
                 onDone={() => {

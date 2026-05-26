@@ -202,15 +202,15 @@ export default function ComplianceDetail() {
                 entityType="compliance"
                 entityId={id}
                 currentStatus={compliance.status}
-                approveEndpoint={`/governance/compliance/${id}/approve`}
-                rejectEndpoint={`/governance/compliance/${id}/approve`}
-                returnEndpoint={`/governance/compliance/${id}/approve`}
+                approveEndpoint={`/governance/compliance/${id}`}
+                rejectEndpoint={`/governance/compliance/${id}`}
+                returnEndpoint={`/governance/compliance/${id}`}
                 approveMethod="PATCH"
                 rejectMethod="PATCH"
                 returnMethod="PATCH"
-                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
-                rejectBody={(notes) => ({ approved: false, notes })}
-                returnBody={(notes) => ({ approved: "returned", notes })}
+                approveBody={(notes) => ({ status: "compliant", notes: notes || undefined })}
+                rejectBody={(notes) => ({ status: "non_compliant", notes })}
+                returnBody={(notes) => ({ status: "returned", notes })}
                 pendingStatuses={["pending", "pending_review", "returned"]}
                 invalidateKeys={[["compliance"]]}
                 onDone={() => {

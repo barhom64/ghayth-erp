@@ -649,12 +649,17 @@ export function runAudit() {
       }
     }
     if (!beMethods) {
-      // Prop-source calls (ApprovalActions / ConfirmDeleteDialog) are
-      // best-effort — they surface URLs the helper scan would miss
-      // (raising coverage), but pre-existing FE/BE drift in approval
-      // flows shouldn't break the build. Track them separately so we
-      // can still report them, but skip the orphans hard-gate list.
-      if (c.source === "prop") continue;
+      // Both helper-source and prop-source orphans now hard-fail the
+      // audit. The "best-effort" carve-out existed to ride out pre-
+      // existing FE/BE drift the prop scanner first surfaced
+      // (compliance/legal-contract/ticket/budget detail pages calling
+      // non-existent /:id/approve endpoints). All four have been
+      // fixed — compliance + ticket repointed to PATCH /:id with the
+      // domain's real status enum, legal-contract + budget had dead
+      // cards removed since those domains don't actually have approval
+      // workflows. Locking prop URLs into the same gate now means any
+      // new ApprovalActions reference to a non-existent endpoint will
+      // be caught at audit time instead of 404'ing for the user.
       orphans.push({ ...c, normalised: fe });
       continue;
     }
@@ -688,9 +693,11 @@ export function runAudit() {
         }
       }
     } else {
-      // Same best-effort treatment for prop-source method mismatches
-      // — surface in coverage but skip the hard-gate.
-      if (c.source === "prop") continue;
+      // Same as orphans above — prop-source method mismatches now
+      // hard-fail. Was a temporary carve-out for the audit's first
+      // run when 6 pre-existing method-mismatch URLs in requests-
+      // page.tsx + request-detail.tsx were surfaced (PATCH→POST).
+      // Both have been fixed.
       methodMismatches.push({
         ...c,
         normalised: fe,
