@@ -146,6 +146,12 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadOfficialLetter(companyId, entityId);
     case "employee_contract":
       return await loadEmployeeContract(companyId, entityId);
+    case "discipline_memo":
+      return await loadDisciplineMemo(companyId, entityId);
+    case "exit_settlement":
+      return await loadExitSettlement(companyId, entityId);
+    case "overtime_request":
+      return await loadOvertimeRequest(companyId, entityId);
     // ─── Batch reports (no single row — synthetic entityId encodes filters) ──
     case "report_trial_balance":
       return await loadTrialBalance(companyId, entityId);
@@ -442,4 +448,74 @@ async function loadEmployeeContract(companyId: number, id: string) {
     ? (await rawQuery(`SELECT * FROM employees WHERE id = $1`, [contract.employeeId]))[0]
     : null;
   return { entity: contract, employee };
+}
+
+async function loadDisciplineMemo(companyId: number, id: string) {
+  const [memo] = await rawQuery<Record<string, unknown>>(
+    `SELECT m.*, r.title AS "regulationTitle", r."articleNumber" AS "regulationArticle"
+       FROM hr_inquiry_memos m
+       LEFT JOIN hr_discipline_regulation r ON r.id = m."regulationId"
+      WHERE m.id = $1 AND m."companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!memo) return { entity: { id } };
+  const employee = memo.employeeId
+    ? (await rawQuery(
+        `SELECT id, name, "empNumber", "iqamaNumber", "nationalId" FROM employees WHERE id = $1`,
+        [memo.employeeId]
+      ))[0]
+    : null;
+  const manager = memo.managerId
+    ? (await rawQuery(
+        `SELECT e.id, e.name, ea."jobTitle"
+           FROM employee_assignments ea
+           JOIN employees e ON e.id = ea."employeeId"
+          WHERE ea.id = $1`,
+        [memo.managerId]
+      ))[0]
+    : null;
+  return { entity: memo, employee, manager };
+}
+
+async function loadExitSettlement(companyId: number, id: string) {
+  const [exit] = await rawQuery<Record<string, unknown>>(
+    `SELECT * FROM hr_exit_requests WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!exit) return { entity: { id } };
+  const employee = exit.employeeId
+    ? (await rawQuery(
+        `SELECT id, name, "empNumber", "iqamaNumber", "nationalId", iban, "bankName"
+           FROM employees WHERE id = $1`,
+        [exit.employeeId]
+      ))[0]
+    : null;
+  // Pull the active assignment for job title + hire date (the bits the
+  // settlement letter shows alongside the EOSB calculation).
+  const assignment = exit.employeeId
+    ? (await rawQuery(
+        `SELECT "jobTitle", "hireDate", salary, "departmentId"
+           FROM employee_assignments
+          WHERE "employeeId" = $1 AND "companyId" = $2
+          ORDER BY "isPrimary" DESC, id DESC
+          LIMIT 1`,
+        [exit.employeeId, companyId]
+      ))[0]
+    : null;
+  return { entity: exit, employee, assignment };
+}
+
+async function loadOvertimeRequest(companyId: number, id: string) {
+  const [ot] = await rawQuery<Record<string, unknown>>(
+    `SELECT * FROM hr_overtime_requests WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!ot) return { entity: { id } };
+  const employee = ot.employeeId
+    ? (await rawQuery(
+        `SELECT id, name, "empNumber", "iqamaNumber" FROM employees WHERE id = $1`,
+        [ot.employeeId]
+      ))[0]
+    : null;
+  return { entity: ot, employee };
 }
