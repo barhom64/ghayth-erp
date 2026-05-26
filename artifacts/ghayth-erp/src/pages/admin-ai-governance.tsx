@@ -38,7 +38,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
   Server, Sparkles, ClipboardCheck, BookOpen, Plus, Send, CheckCircle2,
-  XCircle, AlertOctagon, MessageSquare, RefreshCw, Eye,
+  XCircle, AlertOctagon, MessageSquare, RefreshCw, Eye, FlaskConical, PlayCircle, TestTube,
 } from "lucide-react";
 
 interface ProviderRow {
@@ -82,6 +82,45 @@ interface PromptDetail extends PromptRow {
   userTemplate: string | null;
 }
 
+interface TestCaseRow {
+  id: number;
+  promptSlug: string;
+  name: string;
+  description: string | null;
+  input: Record<string, unknown>;
+  expectedContains: string | null;
+  ownerUserId: number | null;
+  enabled: boolean;
+  createdAt: string;
+}
+
+interface EvaluationRow {
+  id: number;
+  promptId: number;
+  promptSlug: string;
+  promptVersion: number;
+  totalCases: number;
+  passedCases: number;
+  failedCases: number;
+  skippedCases: number;
+  totalCostUsd: number;
+  totalTokens: number;
+  durationMs: number;
+  status: "pending" | "running" | "completed" | "failed";
+  startedAt: string;
+  completedAt: string | null;
+}
+
+interface SimulateResult {
+  promptSlug: string;
+  output: string;
+  promptTokens: number;
+  completionTokens: number;
+  costUsdRounded: number;
+  durationMs: number;
+  error?: string;
+}
+
 interface Overview {
   providers: Array<{ status: string; count: number }>;
   prompts: Array<{ status: string; count: number }>;
@@ -109,6 +148,8 @@ export default function AdminAiGovernance() {
   const [newPromptOpen, setNewPromptOpen] = useState(false);
   const [viewPromptId, setViewPromptId] = useState<number | null>(null);
   const [reviewPromptId, setReviewPromptId] = useState<number | null>(null);
+  const [simulatePromptId, setSimulatePromptId] = useState<number | null>(null);
+  const [evaluatePrompt, setEvaluatePrompt] = useState<PromptRow | null>(null);
 
   const { data: overview, isLoading: ovLoading, error: ovError, refetch: refetchOverview } =
     useApiQuery<Overview>(["ai-governance-overview"], "/admin/ai-governance/overview");
@@ -241,6 +282,12 @@ export default function AdminAiGovernance() {
             <XCircle className="w-3 h-3 me-1" />أوقف
           </Button>
         )}
+        <Button variant="ghost" size="sm" onClick={() => setSimulatePromptId(r.id)}>
+          <PlayCircle className="w-3 h-3 me-1" />جرّب
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setEvaluatePrompt(r)}>
+          <FlaskConical className="w-3 h-3 me-1" />قيّم
+        </Button>
       </div>
     )},
   ];
@@ -432,6 +479,14 @@ export default function AdminAiGovernance() {
           onClose={() => setReviewPromptId(null)}
           onSubmit={(b) => reviewPromptId && reviewPrompt.mutate({ id: reviewPromptId, body: b })}
           isSubmitting={reviewPrompt.isPending}
+        />
+        <SimulatePromptDialog
+          promptId={simulatePromptId}
+          onClose={() => setSimulatePromptId(null)}
+        />
+        <EvaluatePromptDialog
+          prompt={evaluatePrompt}
+          onClose={() => setEvaluatePrompt(null)}
         />
       </PageStateWrapper>
     </PageShell>
@@ -706,6 +761,241 @@ function ReviewPromptDialog({ promptId, onClose, onSubmit, isSubmitting }: {
           >
             تسجيل
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SimulatePromptDialog({ promptId, onClose }: {
+  promptId: number | null; onClose: () => void;
+}) {
+  const [userPrompt, setUserPrompt] = useState("");
+  const [result, setResult] = useState<SimulateResult | null>(null);
+  const { data: prompt } = useApiQuery<PromptDetail>(
+    ["ai-governance-prompt-sim", String(promptId ?? 0)],
+    promptId ? `/admin/ai-governance/prompts/${promptId}` : null,
+    { enabled: !!promptId },
+  );
+  const run = useMutation({
+    mutationFn: () => apiFetch<SimulateResult>(`/admin/ai-governance/prompts/${promptId}/simulate`, {
+      method: "POST", body: JSON.stringify({ userPrompt }),
+    }),
+    onSuccess: (r) => setResult(r),
+    onError: (e: Error) => toast({ title: "فشل التشغيل", description: e.message, variant: "destructive" }),
+  });
+  return (
+    <Dialog open={!!promptId} onOpenChange={(v) => { if (!v) { onClose(); setUserPrompt(""); setResult(null); }}}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>
+            {prompt ? <>محاكاة الـ prompt: <span className="font-mono text-sm">{prompt.slug}</span> v{prompt.version}</> : "تحميل..."}
+          </DialogTitle>
+          <DialogDescription>
+            يُشغَّل بالنموذج الإنتاجي (Claude Haiku 4.5) — التكلفة محتسبة وستظهر في مرصد المراقبة.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          {prompt && (
+            <div>
+              <Label className="text-xs text-muted-foreground">System Prompt (مرجعي)</Label>
+              <pre className="bg-surface-subtle p-2 rounded text-[11px] font-mono whitespace-pre-wrap max-h-32 overflow-y-auto">{prompt.systemPrompt}</pre>
+            </div>
+          )}
+          <div>
+            <Label>User Input</Label>
+            <Textarea value={userPrompt} onChange={(e) => setUserPrompt(e.target.value)} rows={5} className="font-mono text-xs" />
+          </div>
+          <Button rateLimitAware disabled={run.isPending || !userPrompt || !prompt} onClick={() => run.mutate()}>
+            <PlayCircle className="w-4 h-4 me-1" />{run.isPending ? "جارٍ التشغيل..." : "شغّل"}
+          </Button>
+          {result && (
+            <div className="space-y-2 border-t pt-3">
+              {result.error ? (
+                <div className="bg-status-error-surface text-status-error-foreground p-2 rounded text-sm">
+                  <AlertOctagon className="w-4 h-4 inline me-1" />{result.error}
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-4 gap-2 text-xs">
+                    <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">المدة</span><br /><span className="font-mono font-semibold">{result.durationMs}ms</span></div>
+                    <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">Prompt tokens</span><br /><span className="font-mono font-semibold">{result.promptTokens}</span></div>
+                    <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">Completion tokens</span><br /><span className="font-mono font-semibold">{result.completionTokens}</span></div>
+                    <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">التكلفة</span><br /><span className="font-mono font-semibold">${result.costUsdRounded.toFixed(4)}</span></div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">المخرَج</Label>
+                    <pre className="bg-surface-subtle p-3 rounded text-xs whitespace-pre-wrap max-h-64 overflow-y-auto">{result.output}</pre>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>إغلاق</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EvaluatePromptDialog({ prompt, onClose }: {
+  prompt: PromptRow | null; onClose: () => void;
+}) {
+  const [newCaseOpen, setNewCaseOpen] = useState(false);
+  const slug = prompt?.slug ?? "";
+  const { data: casesResp, refetch: refetchCases } = useApiQuery<{ data: TestCaseRow[] }>(
+    ["ai-governance-test-cases", slug],
+    prompt ? `/admin/ai-governance/prompts/${encodeURIComponent(slug)}/test-cases` : null,
+    { enabled: !!prompt },
+  );
+  const { data: evalsResp, refetch: refetchEvals } = useApiQuery<{ data: EvaluationRow[] }>(
+    ["ai-governance-evals", String(prompt?.id ?? 0)],
+    prompt ? `/admin/ai-governance/prompts/${prompt.id}/evaluations` : null,
+    { enabled: !!prompt },
+  );
+  const cases = casesResp?.data ?? [];
+  const evals = evalsResp?.data ?? [];
+
+  const run = useMutation({
+    mutationFn: () => apiFetch(`/admin/ai-governance/prompts/${prompt!.id}/evaluate`, { method: "POST" }),
+    onSuccess: () => { toast({ title: "اكتمل التقييم" }); refetchEvals(); },
+    onError: (e: Error) => toast({ title: "فشل التقييم", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={!!prompt} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>
+            {prompt ? <>تقييم الـ prompt: <span className="font-mono text-sm">{prompt.slug}</span> v{prompt.version}</> : ""}
+          </DialogTitle>
+          <DialogDescription>
+            يُشغَّل الـ prompt الحالي ضد كل حالات الاختبار الذهبية المفعّلة للـ slug. اختبارها مفعّلة فقط.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 max-h-[65vh] overflow-y-auto">
+          {/* Test cases */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="text-sm">حالات الاختبار ({cases.length})</Label>
+              <Button variant="outline" size="sm" onClick={() => setNewCaseOpen(true)}>
+                <Plus className="w-3 h-3 me-1" />حالة جديدة
+              </Button>
+            </div>
+            {cases.length > 0 ? (
+              <div className="space-y-1">
+                {cases.map((c) => (
+                  <div key={c.id} className="text-xs bg-surface-subtle p-2 rounded">
+                    <p className="font-medium">{c.name} {c.enabled ? "" : <Badge variant="outline" className="text-[9px] ms-1">معطّلة</Badge>}</p>
+                    {c.description && <p className="text-muted-foreground">{c.description}</p>}
+                    <p className="font-mono text-[10px] text-muted-foreground mt-1">input: {JSON.stringify(c.input).slice(0, 100)}</p>
+                    {c.expectedContains && <p className="text-[10px] text-muted-foreground">expectedContains: "{c.expectedContains}"</p>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">لا توجد حالات اختبار بعد لهذا الـ slug. أضف حالة لبدء التقييم.</p>
+            )}
+            <div className="mt-3">
+              <Button rateLimitAware disabled={run.isPending || cases.length === 0} onClick={() => run.mutate()}>
+                <TestTube className="w-4 h-4 me-1" />{run.isPending ? "جارٍ التقييم..." : `شغّل التقييم (${cases.length} حالة)`}
+              </Button>
+            </div>
+          </div>
+
+          {/* Past evaluation runs */}
+          {evals.length > 0 && (
+            <div className="border-t pt-3">
+              <Label className="text-sm mb-2 block">آخر تقييمات ({evals.length})</Label>
+              <div className="space-y-1">
+                {evals.slice(0, 10).map((e) => (
+                  <div key={e.id} className={cn(
+                    "text-xs p-2 rounded border",
+                    e.failedCases > 0 ? "bg-status-error-surface/40 border-status-error-surface" :
+                    e.skippedCases > 0 ? "bg-status-warning-surface/40 border-status-warning-surface" :
+                    "bg-status-success-surface border-status-success-surface",
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <span>
+                        <Badge variant="outline" className="text-[10px]">v{e.promptVersion}</Badge>
+                        <span className="ms-2">{e.passedCases}/{e.totalCases} نجحت</span>
+                        {e.failedCases > 0 && <span className="ms-2 text-status-error-foreground">{e.failedCases} فشلت</span>}
+                        {e.skippedCases > 0 && <span className="ms-2 text-status-warning-foreground">{e.skippedCases} تخطّت</span>}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        ${e.totalCostUsd.toFixed(4)} · {e.totalTokens} tok · {e.durationMs}ms · {formatDateAr(e.startedAt)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>إغلاق</Button>
+        </DialogFooter>
+        {prompt && (
+          <NewTestCaseDialog
+            open={newCaseOpen}
+            slug={slug}
+            onClose={() => setNewCaseOpen(false)}
+            onSuccess={() => { refetchCases(); setNewCaseOpen(false); }}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function NewTestCaseDialog({ open, slug, onClose, onSuccess }: {
+  open: boolean; slug: string; onClose: () => void; onSuccess: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [inputJson, setInputJson] = useState('{}');
+  const [expectedContains, setExpectedContains] = useState("");
+  const create = useMutation({
+    mutationFn: () => {
+      let input: Record<string, unknown> = {};
+      try { input = JSON.parse(inputJson); }
+      catch { throw new Error("الـ input ليس JSON صالحاً"); }
+      return apiFetch("/admin/ai-governance/test-cases", {
+        method: "POST",
+        body: JSON.stringify({
+          promptSlug: slug, name,
+          description: description || null,
+          input,
+          expectedContains: expectedContains || null,
+        }),
+      });
+    },
+    onSuccess: () => { toast({ title: "أُضيفت الحالة" }); onSuccess(); },
+    onError: (e: Error) => toast({ title: "فشل الإضافة", description: e.message, variant: "destructive" }),
+  });
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>حالة اختبار جديدة لـ {slug}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div><Label>الاسم</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+          <div><Label>الوصف</Label><Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+          <div>
+            <Label>Input (JSON)</Label>
+            <Textarea rows={4} className="font-mono text-xs" value={inputJson} onChange={(e) => setInputJson(e.target.value)} />
+          </div>
+          <div>
+            <Label>Expected Contains (اختياري)</Label>
+            <Input value={expectedContains} onChange={(e) => setExpectedContains(e.target.value)} placeholder="نص يجب أن يحتويه المخرَج" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button rateLimitAware disabled={create.isPending || !name} onClick={() => create.mutate()}>حفظ</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

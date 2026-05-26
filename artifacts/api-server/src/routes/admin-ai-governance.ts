@@ -22,6 +22,7 @@
  * RBAC-gated under feature=admin like the rest of /admin.
  */
 import { Router } from "express";
+import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import {
@@ -36,6 +37,8 @@ import {
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { invalidateAiGovernanceCache } from "../lib/aiGovernance.js";
+import { recordAiUsage } from "../lib/aiUsage.js";
+import { config } from "../lib/config.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -566,6 +569,366 @@ router.get("/overview", authorize({ feature: "admin", action: "list" }), async (
     );
   } catch (err) {
     handleRouteError(err, res, "admin/ai-governance/overview");
+  }
+});
+
+// ─────────────────────── Simulator + Evaluation Lab (#1139 §4) ───────────
+//
+// The simulator runs ONE prompt against ad-hoc input — for the author
+// to preview an edit before submitting it for review. The evaluation
+// lab runs the prompt against every saved golden test case for its
+// slug — for the reviewer to see "v3 passes 18/20 cases" before
+// approving.
+//
+// Cost + usage is recorded through the same recordAiUsage() sink the
+// production AI calls use, so simulator/eval traffic shows up in the
+// observability pane alongside real workload.
+
+const ANTHROPIC_MODEL = "claude-haiku-4-5";
+const ANTHROPIC_MAX_TOKENS = 4096;
+
+let anthropicClient: Anthropic | null = null;
+function getAnthropicClient(): Anthropic | null {
+  if (anthropicClient) return anthropicClient;
+  const apiKey = config.ai.anthropicApiKey;
+  const baseURL = config.ai.anthropicBaseUrl;
+  if (!apiKey) return null;
+  anthropicClient = new Anthropic({ apiKey, baseURL });
+  return anthropicClient;
+}
+
+/**
+ * Run one prompt against one user input, returning the model output
+ * plus the per-call observability fields (tokens, cost, duration).
+ * Records the call through recordAiUsage with feature
+ * 'ai_governance.simulator' so simulator traffic is distinguishable
+ * from production AI workload in the observability pane.
+ */
+async function runOneShot(
+  systemPrompt: string,
+  userPrompt: string,
+  feature: string,
+  ctx: { companyId?: number | null; userId?: number | null },
+): Promise<{
+  output: string;
+  promptTokens: number;
+  completionTokens: number;
+  costUsdRounded: number;
+  durationMs: number;
+  error?: string;
+}> {
+  const startedAt = Date.now();
+  const client = getAnthropicClient();
+  if (!client) {
+    return {
+      output: "",
+      promptTokens: 0,
+      completionTokens: 0,
+      costUsdRounded: 0,
+      durationMs: 0,
+      error: "AI not configured (AI_INTEGRATIONS_ANTHROPIC_API_KEY missing)",
+    };
+  }
+  try {
+    const msg = await client.messages.create({
+      model: ANTHROPIC_MODEL,
+      max_tokens: ANTHROPIC_MAX_TOKENS,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+    });
+    const promptTokens = msg.usage?.input_tokens ?? 0;
+    const completionTokens = msg.usage?.output_tokens ?? 0;
+    const durationMs = Date.now() - startedAt;
+    void recordAiUsage({
+      companyId: ctx.companyId ?? null,
+      userId: ctx.userId ?? null,
+      provider: "anthropic",
+      model: ANTHROPIC_MODEL,
+      feature,
+      promptTokens,
+      completionTokens,
+      durationMs,
+      status: "success",
+    });
+    // Rough cost mirror from aiUsage's PRICING — we don't import the
+    // constant so this stays a pure derivation; aiUsage records the
+    // authoritative number to the DB.
+    const cost = (promptTokens / 1_000_000) * 1.0 + (completionTokens / 1_000_000) * 5.0;
+    const block = msg.content[0];
+    return {
+      output: block?.type === "text" ? block.text : "",
+      promptTokens,
+      completionTokens,
+      costUsdRounded: Math.round(cost * 10000) / 10000,
+      durationMs,
+    };
+  } catch (err) {
+    const durationMs = Date.now() - startedAt;
+    void recordAiUsage({
+      companyId: ctx.companyId ?? null,
+      userId: ctx.userId ?? null,
+      provider: "anthropic",
+      model: ANTHROPIC_MODEL,
+      feature,
+      promptTokens: 0,
+      completionTokens: 0,
+      durationMs,
+      status: "error",
+      errorCode: (err as Error)?.name ?? "AI_ERROR",
+    });
+    return {
+      output: "",
+      promptTokens: 0,
+      completionTokens: 0,
+      costUsdRounded: 0,
+      durationMs,
+      error: (err as Error)?.message ?? "AI error",
+    };
+  }
+}
+
+const simulateSchema = z.object({
+  userPrompt: z.string().min(1, "نص المستخدم مطلوب"),
+});
+
+router.post("/prompts/:id/simulate", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const body = zodParse(simulateSchema.safeParse(req.body));
+    const [prompt] = await rawQuery<{ slug: string; systemPrompt: string }>(
+      `SELECT slug, "systemPrompt" FROM ai_prompts WHERE id = $1`,
+      [id],
+    );
+    if (!prompt) throw new NotFoundError("الـ prompt غير موجود");
+    const result = await runOneShot(
+      prompt.systemPrompt,
+      body.userPrompt,
+      "ai_governance.simulator",
+      { companyId: scope.companyId, userId: scope.userId },
+    );
+    res.json(maskFields(req, { promptSlug: prompt.slug, ...result }));
+  } catch (err) {
+    handleRouteError(err, res, "admin/ai-governance/prompts/simulate");
+  }
+});
+
+// ─────────────────────── Test cases ───────────────────────────────────────
+
+const testCaseSchema = z.object({
+  promptSlug: z.string().min(1).max(120),
+  name: z.string().min(1).max(300),
+  description: z.string().optional().nullable(),
+  input: z.record(z.unknown()).default({}),
+  expectedContains: z.string().optional().nullable(),
+});
+
+router.get("/prompts/:slug/test-cases", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+  try {
+    const slug = String(req.params.slug);
+    const rows = await rawQuery(
+      `SELECT id, "promptSlug", name, description, input, "expectedContains",
+              "ownerUserId", enabled, "createdAt", "updatedAt"
+         FROM ai_prompt_test_cases
+        WHERE "promptSlug" = $1
+        ORDER BY id ASC`,
+      [slug],
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "admin/ai-governance/test-cases/list");
+  }
+});
+
+router.post("/test-cases", authorize({ feature: "admin", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(testCaseSchema.safeParse(req.body));
+    const { insertId } = await rawExecute(
+      `INSERT INTO ai_prompt_test_cases
+         ("promptSlug", name, description, input, "expectedContains", "ownerUserId")
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6)`,
+      [
+        body.promptSlug, body.name, body.description ?? null,
+        JSON.stringify(body.input), body.expectedContains ?? null,
+        scope.userId,
+      ],
+    );
+    assertInsert(insertId, "ai_prompt_test_cases");
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "ai_prompt_test_cases", entityId: insertId, after: body,
+    }).catch((e) => logger.warn(e, "[audit] testcase.created"));
+    res.status(201).json({ id: insertId, ...body });
+  } catch (err) {
+    handleRouteError(err, res, "admin/ai-governance/test-cases/create");
+  }
+});
+
+// ─────────────────────── Evaluation runs ──────────────────────────────────
+
+/**
+ * POST /prompts/:id/evaluate
+ * Runs every enabled test case for the prompt's slug against the
+ * prompt's current version. Records a row in ai_prompt_evaluations
+ * + one row per case in ai_prompt_evaluation_results.
+ *
+ * Pass criterion: when a test case has expectedContains, the case
+ * passes iff the actual output (case-insensitive, whitespace-
+ * collapsed) contains that substring. When no expectedContains, the
+ * case passes iff the call didn't error — i.e. it's a "smoke" case.
+ *
+ * Designed to be invoked synchronously from the admin UI. Cap on
+ * test-case count is enforced by the migration-table-design (no
+ * pagination needed for the typical 5–50 case sets).
+ */
+router.post("/prompts/:id/evaluate", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [prompt] = await rawQuery<{ slug: string; version: number; systemPrompt: string }>(
+      `SELECT slug, version, "systemPrompt" FROM ai_prompts WHERE id = $1`,
+      [id],
+    );
+    if (!prompt) throw new NotFoundError("الـ prompt غير موجود");
+
+    const cases = await rawQuery<{ id: number; input: Record<string, unknown>; expectedContains: string | null }>(
+      `SELECT id, input, "expectedContains" FROM ai_prompt_test_cases
+        WHERE "promptSlug" = $1 AND enabled = true ORDER BY id ASC`,
+      [prompt.slug],
+    );
+    if (cases.length === 0) {
+      throw new ValidationError("لا توجد حالات اختبار مفعّلة لهذا الـ slug");
+    }
+
+    const { insertId: evalId } = await rawExecute(
+      `INSERT INTO ai_prompt_evaluations
+         ("promptId", "promptSlug", "promptVersion", "runByUserId", "totalCases", status)
+       VALUES ($1, $2, $3, $4, $5, 'running')`,
+      [id, prompt.slug, prompt.version, scope.userId, cases.length],
+    );
+
+    const overallStart = Date.now();
+    let passed = 0, failed = 0, skipped = 0;
+    let totalCost = 0, totalTokens = 0;
+
+    for (const c of cases) {
+      // Compose a deterministic user prompt from the JSON input. Most
+      // existing aiEngine helpers build their user prompt from the
+      // input keys; we do the same here so the simulator output
+      // matches production behaviour as closely as possible without
+      // hardcoding per-feature templates.
+      const userPrompt = Object.entries(c.input)
+        .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
+        .join("\n");
+
+      const r = await runOneShot(
+        prompt.systemPrompt,
+        userPrompt,
+        "ai_governance.evaluator",
+        { companyId: scope.companyId, userId: scope.userId },
+      );
+
+      let status: "pass" | "fail" | "error";
+      if (r.error) {
+        status = "error";
+        skipped++;
+      } else if (c.expectedContains) {
+        const haystack = r.output.toLowerCase().replace(/\s+/g, " ");
+        const needle = c.expectedContains.toLowerCase().replace(/\s+/g, " ");
+        if (haystack.includes(needle)) { status = "pass"; passed++; }
+        else { status = "fail"; failed++; }
+      } else {
+        status = "pass"; passed++;
+      }
+
+      totalCost += r.costUsdRounded;
+      totalTokens += r.promptTokens + r.completionTokens;
+
+      await rawExecute(
+        `INSERT INTO ai_prompt_evaluation_results
+           ("evaluationId", "testCaseId", status, "actualOutput", "errorMessage",
+            "durationMs", "costUsd", "tokensUsed")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          evalId, c.id, status,
+          r.output || null, r.error ?? null,
+          r.durationMs, r.costUsdRounded, r.promptTokens + r.completionTokens,
+        ],
+      );
+    }
+
+    const overallDuration = Date.now() - overallStart;
+    await rawExecute(
+      `UPDATE ai_prompt_evaluations
+          SET "passedCases" = $2, "failedCases" = $3, "skippedCases" = $4,
+              "totalCostUsd" = $5, "totalTokens" = $6, "durationMs" = $7,
+              status = 'completed', "completedAt" = NOW()
+        WHERE id = $1`,
+      [evalId, passed, failed, skipped, Math.round(totalCost * 1_000_000) / 1_000_000, totalTokens, overallDuration],
+    );
+
+    void emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "ai_governance.prompt.evaluated",
+      entity: "ai_prompts", entityId: id,
+      details: JSON.stringify({ evalId, passed, failed, skipped, totalCases: cases.length }),
+    }).catch((e) => logger.warn(e, "[event] prompt.evaluated"));
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "submit", entity: "ai_prompt_evaluations", entityId: evalId,
+      after: { promptId: id, passed, failed, skipped },
+    }).catch((e) => logger.warn(e, "[audit] prompt.evaluated"));
+
+    res.json({
+      evaluationId: evalId,
+      totalCases: cases.length,
+      passed, failed, skipped,
+      totalCostUsd: Math.round(totalCost * 10000) / 10000,
+      totalTokens,
+      durationMs: overallDuration,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "admin/ai-governance/prompts/evaluate");
+  }
+});
+
+router.get("/prompts/:id/evaluations", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+  try {
+    const id = parseId(req.params.id, "id");
+    const rows = await rawQuery(
+      `SELECT id, "promptId", "promptSlug", "promptVersion", "runByUserId",
+              "totalCases", "passedCases", "failedCases", "skippedCases",
+              "totalCostUsd", "totalTokens", "durationMs", status,
+              "errorMessage", "startedAt", "completedAt"
+         FROM ai_prompt_evaluations
+        WHERE "promptId" = $1
+        ORDER BY "startedAt" DESC
+        LIMIT 50`,
+      [id],
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "admin/ai-governance/prompts/evaluations/list");
+  }
+});
+
+router.get("/evaluations/:id/results", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+  try {
+    const id = parseId(req.params.id, "id");
+    const rows = await rawQuery(
+      `SELECT r.id, r."testCaseId", r.status, r."actualOutput", r."errorMessage",
+              r."durationMs", r."costUsd", r."tokensUsed", r."createdAt",
+              tc.name AS "testCaseName", tc."expectedContains"
+         FROM ai_prompt_evaluation_results r
+         LEFT JOIN ai_prompt_test_cases tc ON tc.id = r."testCaseId"
+        WHERE r."evaluationId" = $1
+        ORDER BY r.id ASC`,
+      [id],
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "admin/ai-governance/evaluations/results");
   }
 });
 
