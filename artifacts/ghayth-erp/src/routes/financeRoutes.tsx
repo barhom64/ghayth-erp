@@ -60,6 +60,7 @@ const PurchaseOrdersCreate = lazy(() => import("@/pages/create/finance/purchase-
 const PurchaseOrderDetail = lazy(() => import("@/pages/finance/purchase-order-detail"));
 const PaymentRun = lazy(() => import("@/pages/finance/payment-run"));
 const FinancialReports = lazy(() => import("@/pages/finance/reports"));
+const IncomeStatementTrend = lazy(() => import("@/pages/finance/income-statement-trend"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
 const ReceivableDetail = lazy(() => import("@/pages/details/receivable-detail"));
@@ -215,6 +216,7 @@ export const financeRoutes = [
   { path: "/finance/settings", component: SettingsHub },
   { path: "/finance/fx-revaluation", component: FxRevaluation },
   { path: "/finance/reports", component: FinancialReports },
+  { path: "/finance/reports/is-trend", component: IncomeStatementTrend },
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },
   { path: "/finance/receivables/:id", component: ReceivableDetail },
