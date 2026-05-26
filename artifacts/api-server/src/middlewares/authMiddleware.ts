@@ -17,6 +17,14 @@ export interface RequestScope {
   jobTitle: string | null;
   jobTitleId: number | null;
   userName: string;
+  /**
+   * The role key the user explicitly picked in the header dropdown
+   * (تغيير الصفة), validated against their `user_roles` set. When set
+   * and non-owner, it downgrades `role`/`isOwner` for this request so
+   * the authzEngine narrows grants to just this role. `null` means the
+   * picker is unset → full union of all assigned roles applies.
+   */
+  selectedRoleKey: string | null;
 }
 
 declare global {
@@ -43,7 +51,20 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 
   try {
     const payload = verifyToken(token);
-    const scope = await buildScope(payload);
+    // Header "تغيير الصفة" picker — when the user picks a role in the
+    // header dropdown the client sends the chosen key as `x-selected-role`.
+    // We validate it against the user's actually-assigned roles inside
+    // buildScope and, when valid + non-owner, downgrade `scope.role` /
+    // `scope.isOwner` for this request so the authzEngine narrows grants
+    // to just this role. An unknown / unassigned key is ignored (no
+    // privilege escalation, no lockout).
+    const rawHeader = req.headers["x-selected-role"];
+    const headerRole = typeof rawHeader === "string"
+      ? rawHeader.trim()
+      : Array.isArray(rawHeader)
+      ? String(rawHeader[0] ?? "").trim()
+      : "";
+    const scope = await buildScope(payload, headerRole || null);
     req.scope = scope;
     next();
   } catch (err: any) {
@@ -57,7 +78,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
   }
 }
 
-async function buildScope(payload: JWTPayload): Promise<RequestScope> {
+async function buildScope(payload: JWTPayload, requestedRoleKey: string | null = null): Promise<RequestScope> {
   const activeAssignmentId = payload.assignmentId;
 
   const [assignment] = await rawQuery<{
@@ -106,6 +127,20 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
   ];
 
   if (assignment.role === "owner" || assignment.role === "general_manager") {
+    // Owner / general_manager are global-scope by definition — they must
+    // see (and be able to filter to) every company and branch, not just
+    // the ones their single assignment row happens to point at. Without
+    // this expansion, picking any non-default branch in the header
+    // dropdown silently fell through `parseScopeFilters` (the requested
+    // id wasn't in `allowedBranches`, so it was dropped), and the server
+    // returned the user's default scope regardless of what they picked —
+    // the user-reported "فلتر الفروع لا يعمل".
+    const allCompanies = await rawQuery<{ id: number }>(
+      `SELECT id FROM companies WHERE COALESCE(status, 'active') = 'active'`
+    );
+    for (const c of allCompanies) {
+      if (!allowedCompanies.includes(c.id)) allowedCompanies.push(c.id);
+    }
     // Same status filter for the company-wide expansion — owners must
     // not silently regain access to a disabled branch.
     const companyBranches = await rawQuery<{ id: number }>(
@@ -146,6 +181,33 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
     }
   }
 
+  // Validate the picked role against the user's actually-assigned roles
+  // in `user_roles` (the legacy table the header dropdown lists from).
+  // Owner is always included because `employee_assignments.role='owner'`
+  // is the implicit top-level role even when no `user_roles` row exists.
+  // Unknown keys are dropped silently so a tampered header can never
+  // grant a role the user doesn't have.
+  let selectedRoleKey: string | null = null;
+  let effectiveRole = assignment.role;
+  let effectiveIsOwner = assignment.role === "owner";
+  if (requestedRoleKey) {
+    const ownedRoleRows = await rawQuery<{ roleKey: string }>(
+      `SELECT "roleKey" FROM user_roles WHERE "userId" = $1 AND ("companyId" = $2 OR "companyId" IS NULL)`,
+      [payload.userId, assignment.companyId]
+    ).catch(() => [] as { roleKey: string }[]);
+    const ownedKeys = new Set<string>(ownedRoleRows.map((r) => r.roleKey));
+    if (assignment.role) ownedKeys.add(assignment.role);
+    if (ownedKeys.has(requestedRoleKey)) {
+      selectedRoleKey = requestedRoleKey;
+      // Downgrade only — picking a non-owner role drops owner bypass for
+      // this request. Picking "owner" leaves things as-is.
+      if (requestedRoleKey !== "owner") {
+        effectiveRole = requestedRoleKey;
+        effectiveIsOwner = false;
+      }
+    }
+  }
+
   return {
     userId: payload.userId,
     employeeId: assignment.employeeId,
@@ -155,10 +217,11 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
     allowedCompanies,
     allowedBranches,
     allowedAssignments: allAssignments.map((a) => a.id),
-    role: assignment.role,
-    isOwner: assignment.role === "owner",
+    role: effectiveRole,
+    isOwner: effectiveIsOwner,
     jobTitle: assignment.jobTitle || null,
     jobTitleId: assignment.jobTitleId || null,
     userName: assignment.userName ?? "مستخدم",
+    selectedRoleKey,
   };
 }
