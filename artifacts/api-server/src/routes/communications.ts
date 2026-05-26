@@ -277,7 +277,7 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
         [companyId, from, `WhatsApp from ${sender.name}`, msgText, sender.type !== "unknown" ? sender.type : null, sender.id]
       );
 
-      const categorized = await aiEngine.receptionCategorize(msgText, `Sender: ${sender.name} (${sender.type})`);
+      const categorized = await aiEngine.receptionCategorize(msgText, `Sender: ${sender.name} (${sender.type})`, { companyId });
 
       let relatedType: string | null = null;
       let relatedId: number | null = null;

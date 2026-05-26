@@ -8,6 +8,8 @@ import { lazy } from "react";
 // for the cascade to the rest of the module.
 const Dashboard = lazy(() => import("@/pages/finance/dashboard"));
 const CfoCockpit = lazy(() => import("@/pages/finance/cfo-cockpit"));
+const GlHealthScore = lazy(() => import("@/pages/finance/gl-health-score"));
+const ApprovalsInbox = lazy(() => import("@/pages/finance/approvals-inbox"));
 const Accounts = lazy(() => import("@/pages/finance/accounts"));
 const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
@@ -45,6 +47,7 @@ const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
 const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
 const CostSplitter = lazy(() => import("@/pages/create/finance/cost-splitter"));
+const AccountTransfer = lazy(() => import("@/pages/create/finance/account-transfer"));
 const Budget = lazy(() => import("@/pages/finance/budget"));
 const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
@@ -64,6 +67,7 @@ const PurchaseOrderDetail = lazy(() => import("@/pages/finance/purchase-order-de
 const PaymentRun = lazy(() => import("@/pages/finance/payment-run"));
 const FinancialReports = lazy(() => import("@/pages/finance/reports"));
 const IncomeStatementTrend = lazy(() => import("@/pages/finance/income-statement-trend"));
+const YoyComparison = lazy(() => import("@/pages/finance/yoy-comparison"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
 const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
@@ -102,6 +106,7 @@ const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
 const IntercompanyConsolidationCreate = lazy(() => import("@/pages/create/finance/intercompany-consolidation-create"));
 const CashFlowForecast = lazy(() => import("@/pages/finance/cash-flow-forecast"));
 const CashCalendar = lazy(() => import("@/pages/finance/cash-calendar"));
+const Cash13Week = lazy(() => import("@/pages/finance/cash-13week"));
 const ProjectCosting = lazy(() => import("@/pages/finance/project-costing"));
 const ProjectCostingDetail = lazy(() => import("@/pages/finance/project-costing-detail"));
 const CashflowDashboard = lazy(() => import("@/pages/finance/cashflow-dashboard"));
@@ -140,6 +145,8 @@ export const financeRoutes = [
   // to its own explicit path so the two pages don't share a URL.
   { path: "/finance", component: Dashboard },
   { path: "/finance/cfo-cockpit", component: CfoCockpit },
+  { path: "/finance/gl-health", component: GlHealthScore },
+  { path: "/finance/approvals-inbox", component: ApprovalsInbox },
   { path: "/finance/accounts", component: Accounts },
   { path: "/finance/accounts/create", component: AccountsCreate },
   { path: "/finance/accounts/:id/edit", component: AccountsEdit },
@@ -228,6 +235,7 @@ export const financeRoutes = [
   { path: "/finance/fx-revaluation", component: FxRevaluation },
   { path: "/finance/reports", component: FinancialReports },
   { path: "/finance/reports/is-trend", component: IncomeStatementTrend },
+  { path: "/finance/reports/yoy", component: YoyComparison },
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },
   { path: "/finance/customer-risk", component: CustomerRisk },
@@ -266,6 +274,7 @@ export const financeRoutes = [
   { path: "/finance/intercompany/consolidation/create", component: IntercompanyConsolidationCreate },
   { path: "/finance/cash-flow-forecast", component: CashFlowForecast },
   { path: "/finance/cash-calendar", component: CashCalendar },
+  { path: "/finance/cash-13week", component: Cash13Week },
   { path: "/finance/project-costing", component: ProjectCosting },
   { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
@@ -277,4 +286,5 @@ export const financeRoutes = [
   { path: "/finance/recurring-journals/:id", component: RecurringJournalDetail },
   { path: "/finance/year-end-close", component: YearEndClose },
   { path: "/finance/treasury", component: Treasury },
+  { path: "/finance/treasury/transfer", component: AccountTransfer },
 ];
