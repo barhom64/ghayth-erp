@@ -382,6 +382,32 @@ function extractFrontendCalls() {
       calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "DELETE", source: "prop" });
     }
 
+    // EntityEditDialog's `endpoint` prop maps to PATCH (or PUT). The
+    // dialog wraps useApiMutation internally so the URL never appears
+    // in a helper call the scanner can read directly. Without this
+    // pass, every detail-page Edit dialog (governance, legal,
+    // warehouse, finance, admin/ai-prompt-detail, …) had its PATCH
+    // route flagged as "unused" even though clicking save fires it.
+    // Sibling `method="PUT"` on the same element overrides the
+    // default PATCH.
+    const editRe = /\bendpoint\s*=\s*\{/g;
+    for (const m of src.matchAll(editRe)) {
+      let i = m.index + m[0].length;
+      while (i < src.length && /\s/.test(src[i])) i++;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      // Require an EntityEditDialog opening tag in the preceding span
+      // so we don't pick up arbitrary `endpoint=` props on unrelated
+      // components (impact-preview, etc. have their own scanners).
+      const before = src.slice(Math.max(0, m.index - 600), m.index);
+      if (!/<EntityEditDialog\b/.test(before)) continue;
+      const window = src.slice(Math.max(0, m.index - 400), Math.min(src.length, m.index + 400));
+      const methodMatch = window.match(/\bmethod\s*=\s*["'`](PATCH|PUT)["'`]/);
+      const method = methodMatch ? methodMatch[1].toUpperCase() : "PATCH";
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method, source: "prop" });
+    }
+
     // useInlineActions({ endpoint: "/x", ... }) — the shared hook in
     // components/inline-actions.tsx that wraps PATCH /:id + (optionally)
     // DELETE /:id for per-row actions on list pages. The hook itself
