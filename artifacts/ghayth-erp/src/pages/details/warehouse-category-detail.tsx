@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -22,7 +22,6 @@ import { PrintButton } from "@/components/shared/print-button";
  */
 
 export default function WarehouseCategoryDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/warehouse/categories/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("warehouse-category", id ?? 0);

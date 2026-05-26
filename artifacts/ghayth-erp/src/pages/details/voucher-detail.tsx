@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -52,7 +52,6 @@ function statusTone(status?: string | null) {
 }
 
 export default function VoucherDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/vouchers/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("voucher", id ?? 0);

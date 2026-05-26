@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -40,7 +40,6 @@ function statusTone(status?: string | null) {
 }
 
 export default function LegalSessionDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/legal/sessions/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("legal-session", id ?? 0);

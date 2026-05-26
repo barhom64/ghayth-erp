@@ -1,4 +1,4 @@
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, EntityComments } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -31,7 +31,6 @@ function statusTone(status?: string | null) {
 }
 
 export default function WarehouseSupplierDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/warehouse/suppliers/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("warehouse-supplier", id ?? 0);

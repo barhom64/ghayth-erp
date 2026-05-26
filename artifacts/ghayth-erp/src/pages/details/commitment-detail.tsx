@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -51,7 +51,6 @@ function clampPct(n: number): number {
 }
 
 export default function CommitmentDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/commitments/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("commitment", id ?? 0);

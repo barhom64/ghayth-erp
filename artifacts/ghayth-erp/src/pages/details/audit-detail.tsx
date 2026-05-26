@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -53,7 +53,6 @@ function riskTone(risk?: string | null) {
 }
 
 export default function AuditDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/governance/audits/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("audit", id ?? 0);

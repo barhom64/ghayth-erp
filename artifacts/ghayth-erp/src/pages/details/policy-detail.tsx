@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -32,7 +32,6 @@ function statusTone(status?: string | null) {
 }
 
 export default function PolicyDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/governance/policies/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("policy", id ?? 0);

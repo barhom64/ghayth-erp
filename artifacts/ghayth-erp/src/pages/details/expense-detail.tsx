@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -69,7 +69,6 @@ function statusTone(status?: string | null) {
 }
 
 export default function ExpenseDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/expenses/:id");
   const id = params?.id ? Number(params.id) : null;
   const { toast } = useToast();

@@ -1,4 +1,4 @@
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -49,7 +49,6 @@ function priorityTone(priority?: string | null): Tone {
 }
 
 export default function TaskDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/tasks/:id");
   const id = params?.id ? Number(params.id) : null;
   const { toast } = useToast();

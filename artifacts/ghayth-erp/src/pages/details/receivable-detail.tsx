@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -93,7 +93,6 @@ const AGING_CLASS: Record<AgingBucket, string> = {
 };
 
 export default function ReceivableDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/receivables/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("receivable", id ?? 0);

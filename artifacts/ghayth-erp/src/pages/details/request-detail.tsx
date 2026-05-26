@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -49,7 +49,6 @@ function statusTone(status: string) {
 }
 
 export default function RequestDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/requests/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("request", id ?? 0);

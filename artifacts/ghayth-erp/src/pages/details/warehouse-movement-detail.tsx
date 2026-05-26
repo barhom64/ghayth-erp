@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -45,7 +45,6 @@ function typeTone(type?: string | null) {
 }
 
 export default function WarehouseMovementDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/warehouse/movements/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("warehouse-movement", id ?? 0);
