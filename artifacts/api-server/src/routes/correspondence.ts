@@ -11,7 +11,8 @@ import {
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent, currentYear, generateRef as makeRef } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { issueNumber, type IssueResult } from "../lib/numberingService.js";
 import { logger } from "../lib/logger.js";
 
 const correspondenceRouter = Router();
@@ -46,10 +47,6 @@ interface CorrespondenceRow {
 
 interface CorrespondenceListRow extends CorrespondenceRow {
   createdByName: string | null;
-}
-
-interface SeqRow {
-  seq: string | number;
 }
 
 interface CorrespondenceStatsRow {
@@ -96,12 +93,31 @@ const createSchema = z.object({
 });
 
 // ── Generate outgoing/incoming reference ──
-async function generateCorrespondenceRef(direction: "outgoing" | "incoming", companyId: number): Promise<string> {
-  const prefix = direction === "outgoing" ? "OUT" : "IN";
-  const seqName = direction === "outgoing" ? "correspondence_outgoing_seq" : "correspondence_incoming_seq";
-  const [row] = await rawQuery<SeqRow>(`SELECT nextval($1::regclass) AS seq`, [seqName]);
-  if (!row) throw new Error(`فشل في توليد التسلسل: ${seqName}`);
-  return makeRef(prefix, row.seq);
+//
+// Issue #1141 — every correspondence number must come from the central
+// numbering authority. We translate the (direction, branch) tuple into a
+// `(moduleKey, entityKey)` numbering scheme and let the service handle
+// counter allocation, branch scoping, fiscal-year reset, and audit.
+//
+// The previous implementation called nextval() on a flat per-direction
+// sequence, which (a) had no per-branch isolation, (b) skipped audit,
+// and (c) generated a ref via `generateRef` instead of the policy
+// pattern — so changing the format required a code change. Routing
+// through `issueNumber` fixes all three.
+async function issueCorrespondenceNumber(
+  direction: "outgoing" | "incoming",
+  scope: { companyId: number; branchId: number | null; userId: number },
+  branchId: number | null,
+): Promise<IssueResult> {
+  const entityKey = direction === "outgoing" ? "outgoing_letter" : "incoming_letter";
+  return issueNumber({
+    companyId: scope.companyId,
+    branchId: branchId ?? scope.branchId ?? null,
+    moduleKey: "communications",
+    entityKey,
+    entityTable: "correspondence",
+    actorId: scope.userId,
+  });
 }
 
 // ── List correspondence ──
@@ -174,7 +190,12 @@ correspondenceRouter.post("/", authorize({ feature: "communications", action: "c
   try {
     const scope = req.scope!;
     const data = createSchema.parse(req.body);
-    const ref = await generateCorrespondenceRef(data.direction, scope.companyId);
+    const issued = await issueCorrespondenceNumber(
+      data.direction,
+      { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      data.branchId ?? null,
+    );
+    const ref = issued.number;
 
     const [row] = await rawQuery<CorrespondenceRow>(
       `INSERT INTO correspondence (
@@ -195,6 +216,10 @@ correspondenceRouter.post("/", authorize({ feature: "communications", action: "c
         data.notes || null, scope.userId,
       ]
     );
+    await rawExecute(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [row.id, issued.assignmentId]
+    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to correspondence row"));
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "correspondence_created", entity: "correspondence", entityId: row.id, after: { ref, direction: data.direction } });
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "correspondence.created", entity: "correspondence", entityId: row.id, details: JSON.stringify({ ref, direction: data.direction, subject: data.subject }) }).catch((e) => logger.error(e, "correspondence background task failed"));
@@ -296,7 +321,12 @@ correspondenceRouter.post("/:id/respond", authorize({ feature: "communications",
     if (!original) throw new NotFoundError("المراسلة الأصلية غير موجودة");
 
     const responseDirection = original.direction === "outgoing" ? "incoming" : "outgoing";
-    const responseRef = await generateCorrespondenceRef(responseDirection as "outgoing" | "incoming", scope.companyId);
+    const responseIssued = await issueCorrespondenceNumber(
+      responseDirection as "outgoing" | "incoming",
+      { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      original.branchId,
+    );
+    const responseRef = responseIssued.number;
 
     const response = await withTransaction(async (client) => {
       const insertRes = await client.query(
@@ -325,6 +355,11 @@ correspondenceRouter.post("/:id/respond", authorize({ feature: "communications",
 
       return insertRes.rows[0];
     });
+
+    await rawExecute(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [response.id as number, responseIssued.assignmentId]
+    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to response correspondence row"));
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "correspondence_response", entity: "correspondence", entityId: response.id, after: {
       responseRef, originalRef: original.ref,
