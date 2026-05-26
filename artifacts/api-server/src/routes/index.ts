@@ -99,6 +99,7 @@ import { obligationsRouter } from "./obligations.js";
 import { calendarRouter } from "./calendar.js";
 import contractsRouter from "./hr-contracts.js";
 import correspondenceRouter from "./correspondence.js";
+import numberingRouter from "./numbering.js";
 import { requireGuards } from "../lib/systemGovernor.js";
 
 const router: IRouter = Router();
@@ -343,6 +344,10 @@ router.use("/request-catalog", requireModule("requests"), (req, res, next) => {
 });
 router.use("/marketing", requireModule("marketing"), marketingRouter);
 router.use("/settings", requireModule("settings"), requireMinLevel(70), settingsRouter);
+// Numbering center (Issue #1141): admin surface for the central numbering
+// authority. authMiddleware is applied inside the router (it carries
+// per-route authorize() guards on `settings.numbering[.override|.reset|.audit]`).
+router.use("/numbering", requireModule("settings"), requireMinLevel(70), numberingRouter);
 router.use("/rules", requireModule("settings"), requireMinLevel(70), rulesRouter);
 router.use("/module-dashboards", requireModule("bi"), moduleDashboardsRouter);
 router.use("/admin", requireModule("admin"), requireMinLevel(90), adminRouter);

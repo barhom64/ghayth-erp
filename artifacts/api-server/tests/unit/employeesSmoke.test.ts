@@ -351,11 +351,11 @@ describe("Employees — audit, events, and obligations", () => {
     expect(s).toContain("dedupeKey:");
   });
 
-  it("POST / auto-generates EMP-YYYY-NNN employee number from sequence", () => {
+  it("POST / auto-generates employee number via the unified numbering center (Issue #1141)", () => {
     const s = fullHandler('router.post("/",');
-    expect(s).toContain("employee_number_seq");
-    expect(s).toContain("EMP-");
-    expect(s).toContain("padStart(3");
+    expect(s).not.toMatch(/nextval\s*\(\s*['"`]employee_number_seq/);
+    expect(s).toContain('issueNumber({');
+    expect(s).toContain('entityKey: "employee_code"');
   });
 
   it("POST / creates 4 onboarding tasks for the new employee", () => {

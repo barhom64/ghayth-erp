@@ -15,6 +15,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import type { JournalEntryLine } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
 import {
   createNotification,
   emitEvent,
@@ -605,11 +606,19 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       financialEngine.resolveAccountCode(effectiveCompanyId, "invoice_vat_payable", "credit", "2300"),
     ]);
 
-    const [seqRow] = await rawQuery<Record<string, unknown>>(`SELECT nextval('invoice_number_seq') AS seq`);
-    const seqNum = Number(seqRow?.seq ?? Date.now() % 1000000);
-    const year = currentYear();
-    const month = currentMonthPadded();
-    const ref = `INV-${year}${month}-${String(seqNum).padStart(4, "0")}`;
+    // Numbering center (Issue #1141) — invoice number from central authority.
+    // Scheme: `finance.sales_invoice`. Scope policy is `company` so all
+    // branches share the same counter (matches the previous behaviour of
+    // the global `invoice_number_seq`).
+    const issued = await issueNumber({
+      companyId: effectiveCompanyId,
+      branchId: branchId ?? scope.branchId ?? null,
+      moduleKey: "finance",
+      entityKey: "sales_invoice",
+      entityTable: "invoices",
+      actorId: scope.userId,
+    });
+    const ref = issued.number;
 
     // Header-level discount (applied to subtotal BEFORE VAT — Saudi
     // ZATCA convention). discountAmount and discountPercent are
@@ -736,6 +745,13 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
             `مهمة تحصيل فاتورة ${ref} – بعد 30 يوم من تاريخ الاستحقاق`, scope.activeAssignmentId]
         );
       }
+
+      // Link the numbering assignment back to the invoice row id so the
+      // audit log can drill from `numbering_assignments` to the invoice.
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertId, issued.assignmentId]
+      );
     });
 
     // GL entry deferred to approval (POST /invoices/:id/approve)

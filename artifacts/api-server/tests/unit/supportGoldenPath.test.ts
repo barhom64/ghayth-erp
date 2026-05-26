@@ -102,8 +102,10 @@ describe("Support ticket creation contract", () => {
     expect(SUPPORT_ROUTE).toContain("createTicketSchema.safeParse");
   });
 
-  it("generates TKT- reference code via generateTimeRef", () => {
-    expect(SUPPORT_ROUTE).toContain('generateTimeRef("TKT")');
+  it("generates ticket ref via the unified numbering center (Issue #1141)", () => {
+    expect(SUPPORT_ROUTE).not.toMatch(/generateTimeRef\(\s*["']TKT["']\s*\)/);
+    expect(SUPPORT_ROUTE).toContain('issueNumber({');
+    expect(SUPPORT_ROUTE).toContain('entityKey: "support_ticket"');
   });
 
   it("auto-detects priority from text keywords", () => {
