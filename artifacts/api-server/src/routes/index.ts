@@ -64,6 +64,7 @@ import storageRouter from "./storage.js";
 import activityIngestRouter from "./activityIngest.js";
 import mySpaceRouter from "./mySpace.js";
 import actionCenterRouter from "./actionCenter.js";
+import workspaceRouter from "./workspace.js";
 import accountingEngineRouter from "./accounting-engine.js";
 import { financeAlgorithmsRouter } from "./finance-algorithms.js";
 import financeHardeningRouter from "./finance-hardening.js";
@@ -397,6 +398,7 @@ router.use("/workflows", workflowsRouter);
 router.use("/impact-preview", impactPreviewRouter);
 router.use("/my-space", mySpaceRouter);
 router.use("/action-center", actionCenterRouter);
+router.use("/workspace", workspaceRouter);
 router.use("/entity-meta", entityMetaRouter);
 // Mount the umrah limiter once on the /umrah prefix so it runs exactly once per
 // request, regardless of which sub-router (umrahRouter / umrahEntitiesRouter)

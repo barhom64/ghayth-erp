@@ -78,13 +78,14 @@ async function upsertScheme(
        "companyId","moduleKey","entityKey","displayNameAr",prefix,pattern,"padLength",
        "resetPolicy","scopePolicy","issueTiming","manualEditPolicy",
        "lockAfterStatuses","branchPrefixOverrides","isActive"
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'on_submit',$10,$11,'{}'::jsonb,true)
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'on_draft',$10,$11,'{}'::jsonb,true)
      ON CONFLICT ("companyId","moduleKey","entityKey") DO UPDATE
        SET prefix=EXCLUDED.prefix,
            pattern=EXCLUDED.pattern,
            "padLength"=EXCLUDED."padLength",
            "resetPolicy"=EXCLUDED."resetPolicy",
            "scopePolicy"=EXCLUDED."scopePolicy",
+           "issueTiming"='on_draft',
            "manualEditPolicy"=EXCLUDED."manualEditPolicy",
            "lockAfterStatuses"=EXCLUDED."lockAfterStatuses",
            "isActive"=true`,
@@ -155,6 +156,7 @@ d("Numbering center — dynamic (real Postgres)", () => {
           entityKey: "doc",
           entityTable: "concurrent_test_doc",
           actorId: fx.companyA.userId,
+          expectedTiming: "on_draft",
         }),
       );
       const results = await Promise.all(promises);
@@ -188,6 +190,7 @@ d("Numbering center — dynamic (real Postgres)", () => {
           companyId, branchId,
           moduleKey: "shared_test", entityKey: "doc",
           entityTable: "shared_test_doc", actorId: userId,
+          expectedTiming: "on_draft",
         });
       const interleaved = await Promise.all([
         issueFor(fx.companyA.id, fx.companyA.branchId, fx.companyA.userId),
@@ -238,6 +241,7 @@ d("Numbering center — dynamic (real Postgres)", () => {
             moduleKey: "branch_test", entityKey: "doc",
             entityTable: "branch_test_doc",
             actorId: fx.companyA.userId,
+            expectedTiming: "on_draft",
           });
           seqsByBranch[branchId].push(r.sequenceValue);
         }
@@ -267,6 +271,7 @@ d("Numbering center — dynamic (real Postgres)", () => {
           moduleKey: "company_test", entityKey: "doc",
           entityTable: "company_test_doc",
           actorId: fx.companyA.userId,
+          expectedTiming: "on_draft",
         });
         allSeqs.push(r.sequenceValue);
       }
@@ -297,11 +302,13 @@ d("Numbering center — dynamic (real Postgres)", () => {
         companyId: fx.companyA.id, branchId: fx.companyA.branchId,
         moduleKey: "tenant_test", entityKey: "doc",
         entityTable: "tenant_test_doc", actorId: fx.companyA.userId,
+        expectedTiming: "on_draft",
       });
       const b = await issueNumber({
         companyId: fx.companyB.id, branchId: fx.companyB.branchId,
         moduleKey: "tenant_test", entityKey: "doc",
         entityTable: "tenant_test_doc", actorId: fx.companyB.userId,
+        expectedTiming: "on_draft",
       });
       // Same generated number string, but stored as two separate
       // assignments (one per company) — the unique index is per-company.
@@ -326,18 +333,21 @@ d("Numbering center — dynamic (real Postgres)", () => {
         moduleKey: "year_test", entityKey: "doc",
         entityTable: "year_test_doc", actorId: fx.companyA.userId,
         fiscalYear: 2026,
+        expectedTiming: "on_draft",
       });
       const y2026b = await issueNumber({
         companyId: fx.companyA.id, branchId: fx.companyA.branchId,
         moduleKey: "year_test", entityKey: "doc",
         entityTable: "year_test_doc", actorId: fx.companyA.userId,
         fiscalYear: 2026,
+        expectedTiming: "on_draft",
       });
       const y2027a = await issueNumber({
         companyId: fx.companyA.id, branchId: fx.companyA.branchId,
         moduleKey: "year_test", entityKey: "doc",
         entityTable: "year_test_doc", actorId: fx.companyA.userId,
         fiscalYear: 2027,
+        expectedTiming: "on_draft",
       });
       expect(y2026a.sequenceValue).toBe(1);
       expect(y2026b.sequenceValue).toBe(2);
@@ -362,18 +372,21 @@ d("Numbering center — dynamic (real Postgres)", () => {
         moduleKey: "season_test", entityKey: "doc",
         entityTable: "season_test_doc",
         seasonId: 1447, actorId: fx.companyA.userId,
+        expectedTiming: "on_draft",
       });
       const s1447b = await issueNumber({
         companyId: fx.companyA.id, branchId: fx.companyA.branchId,
         moduleKey: "season_test", entityKey: "doc",
         entityTable: "season_test_doc",
         seasonId: 1447, actorId: fx.companyA.userId,
+        expectedTiming: "on_draft",
       });
       const s1448a = await issueNumber({
         companyId: fx.companyA.id, branchId: fx.companyA.branchId,
         moduleKey: "season_test", entityKey: "doc",
         entityTable: "season_test_doc",
         seasonId: 1448, actorId: fx.companyA.userId,
+        expectedTiming: "on_draft",
       });
       expect(s1447a.sequenceValue).toBe(1);
       expect(s1447b.sequenceValue).toBe(2);
@@ -408,6 +421,7 @@ d("Numbering center — dynamic (real Postgres)", () => {
         moduleKey: "lifecycle_test", entityKey: "doc",
         entityTable: "employees", entityId: empId,
         actorId: fx.companyA.userId,
+        expectedTiming: "on_draft",
       });
       // Now try to void — should be refused because employees.status='posted'
       // and the scheme's lockAfterStatuses includes 'posted'.
@@ -447,12 +461,14 @@ d("Numbering center — dynamic (real Postgres)", () => {
         companyId: fx.companyA.id, branchId: fx.companyA.branchId,
         moduleKey: "uniq_test", entityKey: "doc",
         entityTable: "uniq_test_doc", actorId: fx.companyA.userId,
+        expectedTiming: "on_draft",
       });
       // Issue a second one — try to override it to the FIRST number.
       const b = await issueNumber({
         companyId: fx.companyA.id, branchId: fx.companyA.branchId,
         moduleKey: "uniq_test", entityKey: "doc",
         entityTable: "uniq_test_doc", actorId: fx.companyA.userId,
+        expectedTiming: "on_draft",
       });
       let blocked = false;
       try {
@@ -491,6 +507,7 @@ d("Numbering center — dynamic (real Postgres)", () => {
         companyId: fx.companyA.id, branchId: fx.companyA.branchId,
         moduleKey: "audit_test", entityKey: "doc",
         entityTable: "audit_test_doc", actorId: fx.companyA.userId,
+        expectedTiming: "on_draft",
       });
       await overrideNumber({
         companyId: fx.companyA.id, branchId: fx.companyA.branchId,
@@ -531,6 +548,7 @@ d("Numbering center — dynamic (real Postgres)", () => {
           companyId: fx.companyA.id, branchId: fx.companyA.branchId,
           moduleKey: "reset_test", entityKey: "doc",
           entityTable: "reset_test_doc", actorId: fx.companyA.userId,
+          expectedTiming: "on_draft",
         });
       }
       const [counter] = await rawQuery(
@@ -552,6 +570,7 @@ d("Numbering center — dynamic (real Postgres)", () => {
         companyId: fx.companyA.id, branchId: fx.companyA.branchId,
         moduleKey: "reset_test", entityKey: "doc",
         entityTable: "reset_test_doc", actorId: fx.companyA.userId,
+        expectedTiming: "on_draft",
       });
       expect(next.sequenceValue).toBe(100);
     });
@@ -566,6 +585,7 @@ d("Numbering center — dynamic (real Postgres)", () => {
         companyId: fx.companyA.id, branchId: fx.companyA.branchId,
         moduleKey: "reset_test_2", entityKey: "doc",
         entityTable: "reset_test_2_doc", actorId: fx.companyA.userId,
+        expectedTiming: "on_draft",
       });
       const [counter] = await rawQuery(
         `SELECT c.id FROM numbering_counters c
@@ -607,6 +627,7 @@ d("Numbering center — dynamic (real Postgres)", () => {
         companyId: fx.companyA.id, branchId: fx.companyA.branchId,
         moduleKey: "uniq_db_test", entityKey: "doc",
         entityTable: "uniq_db_test_doc", actorId: fx.companyA.userId,
+        expectedTiming: "on_draft",
       });
       // Direct INSERT attempting to duplicate the same number — must fail.
       let blocked = false;
@@ -628,6 +649,69 @@ d("Numbering center — dynamic (real Postgres)", () => {
         expect(err.code === "23505" || /unique/i.test(err.message || "")).toBe(true);
       }
       expect(blocked).toBe(true);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // issueTiming enforcement — lawyer's review nit #6
+  //
+  // The scheme has an `issueTiming` field that was historically silently
+  // ignored. Routes now pass `expectedTiming` and the service refuses
+  // to issue if it disagrees with the scheme's declared timing.
+  // ────────────────────────────────────────────────────────────────────
+
+  describe("issueTiming enforcement", () => {
+    it("refuses to issue when route's expectedTiming disagrees with scheme.issueTiming", async () => {
+      // Seed a scheme then flip its issueTiming to a value the route
+      // (which always passes "on_draft") does not match.
+      await upsertScheme(rawExecute, rawQuery, {
+        companyId: fx.companyA.id,
+        moduleKey: "timing_mismatch_test", entityKey: "doc",
+        scopePolicy: "company", resetPolicy: "yearly",
+      });
+      await rawExecute(
+        `UPDATE numbering_schemes SET "issueTiming" = 'on_posting'
+          WHERE "companyId" = $1 AND "moduleKey" = $2 AND "entityKey" = $3`,
+        [fx.companyA.id, "timing_mismatch_test", "doc"],
+      );
+
+      let threw = false;
+      try {
+        await issueNumber({
+          companyId: fx.companyA.id,
+          branchId: fx.companyA.branchId,
+          moduleKey: "timing_mismatch_test",
+          entityKey: "doc",
+          entityTable: "timing_mismatch_test_doc",
+          actorId: fx.companyA.userId,
+          expectedTiming: "on_draft",
+        });
+      } catch (err: any) {
+        threw = true;
+        expect(err.message).toMatch(/توقيت الإصدار|issueTiming|on_posting|on_draft/);
+      }
+      expect(threw).toBe(true);
+    });
+
+    it("issues normally when expectedTiming matches scheme.issueTiming", async () => {
+      await upsertScheme(rawExecute, rawQuery, {
+        companyId: fx.companyA.id,
+        moduleKey: "timing_match_test", entityKey: "doc",
+        scopePolicy: "company", resetPolicy: "yearly",
+      });
+      // upsertScheme defaults the row to issueTiming='on_draft'; this
+      // matches what the route passes.
+      const issued = await issueNumber({
+        companyId: fx.companyA.id,
+        branchId: fx.companyA.branchId,
+        moduleKey: "timing_match_test",
+        entityKey: "doc",
+        entityTable: "timing_match_test_doc",
+        actorId: fx.companyA.userId,
+        expectedTiming: "on_draft",
+      });
+      expect(issued.number).toMatch(/^TST-/);
+      expect(issued.sequenceValue).toBe(1);
     });
   });
 });

@@ -117,6 +117,7 @@ async function issueCorrespondenceNumber(
     entityKey,
     entityTable: "correspondence",
     actorId: scope.userId,
+    expectedTiming: "on_draft",
   });
 }
 

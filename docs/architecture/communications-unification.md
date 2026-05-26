@@ -1,6 +1,7 @@
-# Communications Unification — Phase 1
+# Communications Unification
 
-> Status: Phase 1 in progress. Send-path seam shipped; queue + page consolidations follow.
+> Status: Phases 1–4 (expand) shipped. Phase 5 (page consolidation) and
+> the contract step of Phase 4 (drop legacy tables) remain.
 
 ## Background
 
@@ -59,11 +60,27 @@ function. DLP is enforced uniformly. Audit + event emission are uniform.
 - `/workspace` — Employee daily view: today's tasks + unread messages + recent calls + meetings
 - `/manager-workspace` — Team activity + approvals queue + KPIs
 
-## Phase 4 — Table consolidation (largest, deferred)
+## Phase 4 — Table consolidation (EXPAND shipped)
 
-- Merge `communications_log` + `notification_log` → `message_log`
-- Merge `email_queue` + `sms_queue` + `whatsapp_queue` → `outbound_queue`
-- Expand-then-contract migration: write to both, read from old, then switch, then drop
+Migration `221_message_log_outbound_queue.sql`:
+
+- **Created** `message_log` (superset of `communications_log` + `notification_log`)
+- **Created** `outbound_queue` (superset of `email_queue` + `sms_queue` + `whatsapp_queue`)
+- **Backfilled** both new tables from legacy rows (idempotent — `NOT EXISTS` clause on `(legacySource, legacyId)`)
+- **`messageSender.sendMessage()` now dual-writes** to both legacy + new tables. Failure on the new table is logged but non-fatal during the soak.
+- **`v_message_log_all`** view exposed for readers to migrate to without breaking older endpoints.
+
+What the **contract** step (next PR) will do:
+
+1. Migrate readers (`inbox.ts /threads`, dashboard counts, BI reports) to read from `message_log` / `v_message_log_all`.
+2. Migrate queue workers (`cronScheduler.ts email_queue_drain` etc.) to poll `outbound_queue` instead of legacy queues.
+3. Once a soak period passes with no traffic on legacy paths, drop `communications_log`, `notification_log`, `email_queue`, `sms_queue`, `whatsapp_queue`.
+
+Why expand-then-contract: the legacy tables back hundreds of code paths
+(BI dashboards, audit exports, cron drains, the public /portal). Flipping
+storage in one PR would create a huge blast radius. The dual-write +
+soak approach lets every reader migrate independently behind a single
+unified storage.
 
 ## Phase 5 — Page consolidation (last)
 
@@ -71,13 +88,8 @@ function. DLP is enforced uniformly. Audit + event emission are uniform.
 - Pick one create-correspondence path; redirect the other
 - Move PBX control panel under communication-control as a tab
 
-## What this PR does NOT yet do
+## Remaining work
 
-- Does not delete any tables (Phase 4)
-- Does not delete `/communications` page (Phase 5)
-- Does not implement IMAP sync (Phase 2)
-- Does not build workspaces (Phase 3)
-
-This PR is **the seam** — every later consolidation depends on it
-existing. Once `sendMessage()` is the sole sender, everything else is
-mechanical refactoring.
+- **Phase 4 contract**: drop legacy log + queue tables once readers and workers migrate.
+- **Phase 5**: deprecate `/communications` for users, unify correspondence creation paths, move PBX control under communication-control as a tab.
+- **Phase 2.x**: IMAP / Microsoft Graph mailbox sync (large, separate slice — OAuth flow + token refresh + thread reconciliation).

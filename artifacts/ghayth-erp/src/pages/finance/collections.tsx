@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Link } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import {
   PageShell,
@@ -132,6 +133,28 @@ export default function CollectionsPage() {
         { href: "/finance", label: "المالية" },
         { label: "التحصيل" },
       ]}
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/ar-collection-workbench">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Mail className="h-3.5 w-3.5 ml-1" />
+              منضدة التحصيل
+            </Button>
+          </Link>
+          <Link href="/finance/dunning">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <History className="h-3.5 w-3.5 ml-1" />
+              متابعة Dunning
+            </Button>
+          </Link>
+          <Link href="/finance/bad-debt-provision">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <FileWarning className="h-3.5 w-3.5 ml-1" />
+              الديون المشكوك بها
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 
