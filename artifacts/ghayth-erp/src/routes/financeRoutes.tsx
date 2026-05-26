@@ -70,6 +70,7 @@ const YoyComparison = lazy(() => import("@/pages/finance/yoy-comparison"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
 const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
+const BadDebtProvision = lazy(() => import("@/pages/finance/bad-debt-provision"));
 const ReceivableDetail = lazy(() => import("@/pages/details/receivable-detail"));
 const Payments = lazy(() => import("@/pages/finance/payments-page"));
 const Commitments = lazy(() => import("@/pages/finance/commitments"));
@@ -236,6 +237,7 @@ export const financeRoutes = [
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },
   { path: "/finance/customer-risk", component: CustomerRisk },
+  { path: "/finance/bad-debt-provision", component: BadDebtProvision },
   { path: "/finance/receivables/:id", component: ReceivableDetail },
   { path: "/finance/payments", component: Payments },
   { path: "/finance/commitments", component: Commitments },
