@@ -6,6 +6,7 @@ const AdminRoles = lazy(() => import("@/pages/admin/roles"));
 const AdminLogs = lazy(() => import("@/pages/admin/logs"));
 const AdminIntegrations = lazy(() => import("@/pages/admin-integrations"));
 const AdminMonitoring = lazy(() => import("@/pages/admin-monitoring"));
+const AdminObservability = lazy(() => import("@/pages/admin-observability"));
 const AdminViolationsReport = lazy(() => import("@/pages/admin-violations-report"));
 const AdminSystemGovernor = lazy(() => import("@/pages/admin-system-governor"));
 const AdminPolicyEngine = lazy(() => import("@/pages/admin-policy-engine"));
@@ -27,6 +28,7 @@ export const adminRoutes = [
   { path: "/admin/logs", component: AdminLogs },
   { path: "/admin/integrations", component: AdminIntegrations },
   { path: "/admin/monitoring", component: AdminMonitoring },
+  { path: "/admin/observability", component: AdminObservability },
   { path: "/admin/violations-report", component: AdminViolationsReport },
   { path: "/admin/system-governor", component: AdminSystemGovernor },
   { path: "/admin/policy-engine", component: AdminPolicyEngine },

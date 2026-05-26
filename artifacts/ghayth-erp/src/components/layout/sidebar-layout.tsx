@@ -381,6 +381,7 @@ const allNavSections: NavSection[] = [
         { label: "الأدوار (الكلاسيكي)", path: "/admin/roles", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
         { label: "مركز التكاملات", path: "/admin/integrations", icon: Mail, perm: "admin:update" },
         { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+        { label: "مرصد المراقبة الموحّد", path: "/admin/observability", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
         { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any" },
         { label: "سجل الحركات", path: "/activity-log", icon: Activity },

@@ -44,6 +44,7 @@ import settingsRouter from "./settings.js";
 import rulesRouter from "./rules.js";
 import moduleDashboardsRouter from "./moduleDashboards.js";
 import adminRouter from "./admin.js";
+import adminObservabilityRouter from "./admin-observability.js";
 import permissionsRouter from "./permissions.js";
 import rbacV2Router from "./rbacV2.js";
 import auditLogsRouter from "./auditLogs.js";
@@ -346,6 +347,10 @@ router.use("/settings", requireModule("settings"), requireMinLevel(70), settings
 router.use("/rules", requireModule("settings"), requireMinLevel(70), rulesRouter);
 router.use("/module-dashboards", requireModule("bi"), moduleDashboardsRouter);
 router.use("/admin", requireModule("admin"), requireMinLevel(90), adminRouter);
+// Observability operator pane (#1139 §5). Mounted under /admin/observability
+// so the same module + minLevel guards apply; each endpoint inside also
+// calls authorize() to stay consistent with the rest of admin.
+router.use("/admin/observability", requireModule("admin"), requireMinLevel(90), adminObservabilityRouter);
 // FND-004 — RBAC administration surfaces. permissions.ts is fully
 // authorize()-guarded per route; rbacV2.ts had a few routes without one;
 // gating the mount at level 90 (consistent with /admin) closes the gap

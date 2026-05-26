@@ -1,0 +1,480 @@
+/**
+ * Admin → Observability operator pane (Issue #1139 §5).
+ *
+ * Single-pane view backed by GET /api/admin/observability/overview.
+ * Six sections, in priority order so the operator sees the worst news
+ * at the top:
+ *   1. Active anomalies   — currently firing derived rules
+ *   2. Queues             — eventBus throughput + DLQ depth
+ *   3. Providers          — per-channel integration health
+ *   4. Workers            — per-cron job health
+ *   5. SLA breaches       — workflow.sla_warning / workflow.escalated
+ *   6. AI cost tracking   — placeholder until the schema lands
+ *
+ * Backed entirely by existing tables; no UI state besides refetch.
+ */
+import {
+  PageShell,
+  DataTable,
+  PageStatusBadge,
+  type DataTableColumn,
+} from "@workspace/ui-core";
+import { useApiQuery } from "@/lib/api";
+import { PageStateWrapper } from "@/components/shared/page-state";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { formatDateAr } from "@/lib/formatters";
+import { cn } from "@/lib/utils";
+import {
+  RefreshCw, AlertTriangle, AlertOctagon, Activity, Inbox,
+  Plug, Cpu, Clock, Bot, Sparkles, CheckCircle2,
+} from "lucide-react";
+
+interface Anomaly {
+  severity: "critical" | "warning" | "info";
+  rule: string;
+  message: string;
+  metric: string | null;
+  value: number | string;
+  threshold: number | string;
+}
+
+interface DlqTop {
+  type: string;
+  eventName: string | null;
+  count: number;
+  latestError: string;
+  latestAt: string;
+}
+
+interface ProviderRow {
+  channel: string;
+  totalLast24h: number;
+  success: number;
+  failed: number;
+  retrying: number;
+  successRate: number;
+  lastFailureAt: string | null;
+  lastFailureError: string | null;
+}
+
+interface WorkerRow {
+  jobName: string;
+  totalLast24h: number;
+  failed: number;
+  avgDurationMs: number;
+  maxDurationMs: number;
+  lastRunAt: string | null;
+  lastStatus: string | null;
+  lastError: string | null;
+}
+
+interface SlaByEntity {
+  entity: string;
+  count: number;
+  latest: string;
+}
+
+interface Overview {
+  collectedAt: string;
+  windowHours: number;
+  queues: {
+    eventBus: {
+      eventsLastHour: number;
+      eventsLast24h: number;
+      topByAction: Array<{ action: string; count: number }>;
+      dlq: {
+        unresolved: number;
+        resolvedLast24h: number;
+        topByType: DlqTop[];
+      };
+    };
+  };
+  providers: ProviderRow[];
+  workers: WorkerRow[];
+  slaBreaches: {
+    last24h: number;
+    last7d: number;
+    byEntity: SlaByEntity[];
+  };
+  aiCosts: { available: false; reason: string };
+  anomalies: Anomaly[];
+}
+
+const SEVERITY_STYLE: Record<Anomaly["severity"], { bg: string; text: string; icon: typeof AlertTriangle }> = {
+  critical: { bg: "bg-status-error-surface", text: "text-status-error-foreground", icon: AlertOctagon },
+  warning: { bg: "bg-status-warning-surface/60", text: "text-status-warning-foreground", icon: AlertTriangle },
+  info: { bg: "bg-status-info-surface", text: "text-status-info-foreground", icon: Activity },
+};
+
+function severityLabel(s: Anomaly["severity"]): string {
+  return s === "critical" ? "حرج" : s === "warning" ? "تحذير" : "ملاحظة";
+}
+
+function fmtMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "0ms";
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+export default function AdminObservability() {
+  const { data, isLoading, error, refetch } = useApiQuery<Overview>(
+    ["admin-observability-overview"],
+    "/admin/observability/overview",
+  );
+
+  const anomalies = data?.anomalies ?? [];
+  const queues = data?.queues?.eventBus;
+  const dlq = queues?.dlq;
+  const providers = data?.providers ?? [];
+  const workers = data?.workers ?? [];
+  const sla = data?.slaBreaches;
+
+  const criticalCount = anomalies.filter((a) => a.severity === "critical").length;
+  const warningCount = anomalies.filter((a) => a.severity === "warning").length;
+
+  const dlqColumns: DataTableColumn<DlqTop>[] = [
+    { key: "type", header: "النوع", searchable: true, render: (r) => (
+      <span className="font-medium text-xs">{r.type}</span>
+    )},
+    { key: "eventName", header: "اسم الحدث", render: (r) => (
+      <span className="font-mono text-xs text-muted-foreground">{r.eventName ?? "—"}</span>
+    )},
+    { key: "count", header: "العدد", render: (r) => (
+      <Badge variant="outline" className="font-mono">{r.count}</Badge>
+    )},
+    { key: "latestError", header: "آخر خطأ", render: (r) => (
+      <span className="text-xs max-w-[400px] truncate block" title={r.latestError}>
+        {r.latestError}
+      </span>
+    )},
+    { key: "latestAt", header: "آخر ظهور", render: (r) => (
+      <span className="text-xs">{formatDateAr(r.latestAt)}</span>
+    )},
+  ];
+
+  const providerColumns: DataTableColumn<ProviderRow>[] = [
+    { key: "channel", header: "القناة", searchable: true, render: (r) => (
+      <span className="font-medium text-xs">{r.channel}</span>
+    )},
+    { key: "totalLast24h", header: "الإجمالي (24س)", render: (r) => (
+      <span className="font-mono text-xs">{r.totalLast24h}</span>
+    )},
+    { key: "successRate", header: "نسبة النجاح", render: (r) => {
+      const ok = r.successRate >= 95;
+      const warn = r.successRate >= 80 && r.successRate < 95;
+      return (
+        <span className={cn(
+          "font-mono text-xs font-semibold",
+          ok && "text-status-success-foreground",
+          warn && "text-status-warning-foreground",
+          !ok && !warn && "text-status-error-foreground",
+        )}>
+          {r.successRate}%
+        </span>
+      );
+    }},
+    { key: "failed", header: "فاشلة", render: (r) => (
+      <span className={cn("font-mono text-xs", r.failed > 0 && "text-status-error-foreground")}>
+        {r.failed}
+      </span>
+    )},
+    { key: "retrying", header: "إعادة محاولة", render: (r) => (
+      <span className="font-mono text-xs">{r.retrying}</span>
+    )},
+    { key: "lastFailureAt", header: "آخر فشل", render: (r) => r.lastFailureAt ? (
+      <span className="text-xs text-muted-foreground" title={r.lastFailureError ?? ""}>
+        {formatDateAr(r.lastFailureAt)}
+      </span>
+    ) : (
+      <span className="text-xs text-status-success-foreground">—</span>
+    )},
+  ];
+
+  const workerColumns: DataTableColumn<WorkerRow>[] = [
+    { key: "jobName", header: "المهمة", searchable: true, render: (r) => (
+      <span className="font-medium text-xs">{r.jobName}</span>
+    )},
+    { key: "totalLast24h", header: "تشغيلات", render: (r) => (
+      <span className="font-mono text-xs">{r.totalLast24h}</span>
+    )},
+    { key: "failed", header: "فاشلة", render: (r) => (
+      <span className={cn("font-mono text-xs", r.failed > 0 && "text-status-error-foreground")}>
+        {r.failed}
+      </span>
+    )},
+    { key: "avgDurationMs", header: "متوسط المدة", render: (r) => (
+      <span className="font-mono text-xs">{fmtMs(r.avgDurationMs)}</span>
+    )},
+    { key: "maxDurationMs", header: "أبطأ مدة", render: (r) => (
+      <span className={cn(
+        "font-mono text-xs",
+        r.maxDurationMs > 60_000 && "text-status-warning-foreground font-semibold",
+      )}>
+        {fmtMs(r.maxDurationMs)}
+      </span>
+    )},
+    { key: "lastStatus", header: "آخر حالة", render: (r) => (
+      r.lastStatus ? <PageStatusBadge status={r.lastStatus} /> : <span className="text-xs">—</span>
+    )},
+    { key: "lastRunAt", header: "آخر تشغيل", render: (r) => (
+      <span className="text-xs">{r.lastRunAt ? formatDateAr(r.lastRunAt) : "—"}</span>
+    )},
+  ];
+
+  const slaColumns: DataTableColumn<SlaByEntity>[] = [
+    { key: "entity", header: "الكيان", searchable: true, render: (r) => (
+      <span className="font-medium text-xs">{r.entity}</span>
+    )},
+    { key: "count", header: "عدد الخروقات", render: (r) => (
+      <Badge variant="outline" className="font-mono text-status-warning-foreground">{r.count}</Badge>
+    )},
+    { key: "latest", header: "أحدث خرق", render: (r) => (
+      <span className="text-xs">{formatDateAr(r.latest)}</span>
+    )},
+  ];
+
+  return (
+    <PageShell
+      title="مرصد المراقبة الموحّد"
+      subtitle="رؤية موحّدة للطوابير، التكاملات، العمّال، خروقات الـ SLA، والشذوذات النشطة"
+      loading={isLoading}
+      actions={
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
+          <RefreshCw className="h-4 w-4 me-1" />تحديث
+        </Button>
+      }
+    >
+      <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>
+        <div className="space-y-6">
+
+          {/* ── 1. KPI strip ─────────────────────────────────────────── */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className={cn(
+              "border-0 shadow-sm",
+              criticalCount > 0 ? "bg-status-error-surface" : warningCount > 0 ? "bg-status-warning-surface/50" : "bg-status-success-surface",
+            )}>
+              <CardContent className="p-4 flex items-center gap-3">
+                {criticalCount > 0 ? <AlertOctagon className="w-8 h-8 text-status-error-foreground" /> :
+                  warningCount > 0 ? <AlertTriangle className="w-8 h-8 text-status-warning-foreground" /> :
+                  <CheckCircle2 className="w-8 h-8 text-status-success-foreground" />}
+                <div>
+                  <p className="text-sm font-semibold">شذوذات نشطة</p>
+                  <p className="text-xs text-muted-foreground">
+                    {criticalCount} حرجة، {warningCount} تحذير
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className={cn(
+              "border-0 shadow-sm",
+              (dlq?.unresolved ?? 0) > 100 ? "bg-status-error-surface" :
+              (dlq?.unresolved ?? 0) > 20 ? "bg-status-warning-surface/50" : "bg-status-info-surface",
+            )}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <Inbox className="w-8 h-8 text-status-info-foreground" />
+                <div>
+                  <p className="text-sm font-semibold">طابور الأحداث الفاشلة</p>
+                  <p className="text-xs text-muted-foreground">
+                    {dlq?.unresolved ?? 0} غير محلولة
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {dlq?.resolvedLast24h ?? 0} حُلّت اليوم
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-sm bg-status-info-surface">
+              <CardContent className="p-4 flex items-center gap-3">
+                <Activity className="w-8 h-8 text-status-info-foreground" />
+                <div>
+                  <p className="text-sm font-semibold">معدّل الأحداث</p>
+                  <p className="text-xs text-muted-foreground">
+                    {queues?.eventsLastHour ?? 0} / ساعة
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {queues?.eventsLast24h ?? 0} / 24 ساعة
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className={cn(
+              "border-0 shadow-sm",
+              (sla?.last24h ?? 0) > 10 ? "bg-status-warning-surface/60" : "bg-status-success-surface",
+            )}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <Clock className="w-8 h-8 text-status-warning-foreground" />
+                <div>
+                  <p className="text-sm font-semibold">خروقات SLA</p>
+                  <p className="text-xs text-muted-foreground">
+                    {sla?.last24h ?? 0} اليوم
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {sla?.last7d ?? 0} خلال 7 أيام
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ── 2. Active anomalies ──────────────────────────────────── */}
+          {anomalies.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <AlertOctagon className="w-4 h-4 text-status-error-foreground" />
+                  الشذوذات النشطة ({anomalies.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {anomalies.map((a, i) => {
+                  const style = SEVERITY_STYLE[a.severity];
+                  const Icon = style.icon;
+                  return (
+                    <div key={i} className={cn("rounded p-3 border border-transparent flex items-start gap-3", style.bg)}>
+                      <Icon className={cn("w-5 h-5 mt-0.5 shrink-0", style.text)} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="outline" className={cn("text-xs font-semibold", style.text)}>
+                            {severityLabel(a.severity)}
+                          </Badge>
+                          <span className="text-xs font-mono text-muted-foreground">{a.rule}</span>
+                        </div>
+                        <p className="text-sm mt-1">{a.message}</p>
+                        {a.metric && (
+                          <p className="text-[11px] text-muted-foreground mt-1 font-mono">
+                            {a.metric}: <span className="font-semibold">{String(a.value)}</span> (حد: {String(a.threshold)})
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── 3. Queues (DLQ detail) ───────────────────────────────── */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Inbox className="w-4 h-4" />
+                طابور الأحداث الفاشلة — تفصيل ({dlq?.topByType?.length ?? 0} نوع)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {dlq && dlq.topByType.length > 0 ? (
+                <DataTable
+                  columns={dlqColumns}
+                  data={dlq.topByType}
+                  noToolbar
+                  pageSize={0}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground p-6 text-center">
+                  لا توجد أحداث فاشلة غير محلولة. النظام نظيف.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── 4. Providers ─────────────────────────────────────────── */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Plug className="w-4 h-4" />
+                صحة مزوّدي الخدمات ({providers.length} قناة)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {providers.length > 0 ? (
+                <DataTable
+                  columns={providerColumns}
+                  data={providers}
+                  noToolbar
+                  pageSize={0}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground p-6 text-center">
+                  لا توجد طلبات تكامل خلال آخر 24 ساعة.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── 5. Workers ───────────────────────────────────────────── */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Cpu className="w-4 h-4" />
+                صحة المهام المجدولة ({workers.length} مهمة)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {workers.length > 0 ? (
+                <DataTable
+                  columns={workerColumns}
+                  data={workers}
+                  noToolbar
+                  pageSize={0}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground p-6 text-center">
+                  لا توجد تشغيلات مهام مجدولة خلال آخر 24 ساعة.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* ── 6. SLA breaches by entity ────────────────────────────── */}
+          {sla && sla.byEntity.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  خروقات SLA حسب الكيان ({sla.byEntity.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <DataTable
+                  columns={slaColumns}
+                  data={sla.byEntity}
+                  noToolbar
+                  pageSize={0}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── 7. AI cost tracking placeholder ──────────────────────── */}
+          <Card className="border-dashed">
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Bot className="w-4 h-4 text-muted-foreground" />
+                تتبّع تكلفة الذكاء الاصطناعي
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-start gap-3 text-sm text-muted-foreground">
+                <Sparkles className="w-5 h-5 mt-0.5 text-muted-foreground/70 shrink-0" />
+                <p>
+                  {data?.aiCosts?.reason ?? "لم يُجهَّز مخطط تتبّع تكلفة الذكاء الاصطناعي بعد. سيُضاف في PR لاحق ضمن خطة #1139 §5."}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {data?.collectedAt && (
+            <p className="text-xs text-muted-foreground text-end">
+              آخر تحديث: {formatDateAr(data.collectedAt)} — نافذة {data.windowHours} ساعة
+            </p>
+          )}
+        </div>
+      </PageStateWrapper>
+    </PageShell>
+  );
+}
