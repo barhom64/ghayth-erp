@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
  *     title="الموظفون"
  *     subtitle="إدارة الموظفين وتعييناتهم"
  *     breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
- *     actions={<Button asChild><Link href="/create/hr/employee">موظف جديد</Link></Button>}
+ *     actions={<Button asChild><Link href="/employees/create">موظف جديد</Link></Button>}
  *     filters={<EmployeeFilters />}
  *   >
  *     <DataTable data={rows} columns={columns} />
