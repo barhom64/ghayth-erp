@@ -53,6 +53,7 @@ const Budget = lazy(() => import("@/pages/finance/budget"));
 const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
 const BudgetVariance = lazy(() => import("@/pages/finance/budget-variance"));
+const BudgetHeatmap = lazy(() => import("@/pages/finance/budget-heatmap"));
 const BudgetApprovals = lazy(() => import("@/pages/finance/budget-approvals"));
 const Vendors = lazy(() => import("@/pages/finance/vendors"));
 const VendorsCreate = lazy(() => import("@/pages/create/finance/vendors-create"));
@@ -66,12 +67,15 @@ const PurchaseOrders = lazy(() => import("@/pages/finance/purchase-orders"));
 const PurchaseOrdersCreate = lazy(() => import("@/pages/create/finance/purchase-orders-create"));
 const PurchaseOrderDetail = lazy(() => import("@/pages/finance/purchase-order-detail"));
 const PaymentRun = lazy(() => import("@/pages/finance/payment-run"));
+const ApPaymentCalendar = lazy(() => import("@/pages/finance/ap-payment-calendar"));
 const FinancialReports = lazy(() => import("@/pages/finance/reports"));
 const IncomeStatementTrend = lazy(() => import("@/pages/finance/income-statement-trend"));
+const IncomeStatementVsBudget = lazy(() => import("@/pages/finance/income-statement-vs-budget"));
 const YoyComparison = lazy(() => import("@/pages/finance/yoy-comparison"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
 const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
+const BadDebtProvision = lazy(() => import("@/pages/finance/bad-debt-provision"));
 const ReceivableDetail = lazy(() => import("@/pages/details/receivable-detail"));
 const Payments = lazy(() => import("@/pages/finance/payments-page"));
 const Commitments = lazy(() => import("@/pages/finance/commitments"));
@@ -89,12 +93,16 @@ const SalaryAdvanceDetail = lazy(() => import("@/pages/details/salary-advance-de
 const Ledger = lazy(() => import("@/pages/finance/ledger"));
 const Entity360 = lazy(() => import("@/pages/finance/entity-360"));
 const ReconciliationHub = lazy(() => import("@/pages/finance/reconciliation-hub"));
+const AccountReconWorkpaper = lazy(() => import("@/pages/finance/account-reconciliation-workpaper"));
 const TbComparison = lazy(() => import("@/pages/finance/trial-balance-comparison"));
+const TbDrilldown = lazy(() => import("@/pages/finance/trial-balance-drilldown"));
 const ArAging = lazy(() => import("@/pages/finance/ar-aging"));
+const ArCollectionWorkbench = lazy(() => import("@/pages/finance/ar-collection-workbench"));
 const ApAging = lazy(() => import("@/pages/finance/ap-aging"));
 const BankReconciliation = lazy(() => import("@/pages/finance/bank-reconciliation"));
 const BankManualMatch = lazy(() => import("@/pages/create/finance/bank-manual-match"));
 const FixedAssets = lazy(() => import("@/pages/finance/fixed-assets"));
+const FixedAssetRegister = lazy(() => import("@/pages/finance/fixed-asset-register"));
 const FixedAssetDetail = lazy(() => import("@/pages/details/fixed-asset-detail"));
 const BatchDepreciate = lazy(() => import("@/pages/create/finance/batch-depreciate"));
 const InventoryCosting = lazy(() => import("@/pages/finance/inventory-costing"));
@@ -102,6 +110,7 @@ const BankGuarantees = lazy(() => import("@/pages/finance/bank-guarantees"));
 const JournalManual = lazy(() => import("@/pages/finance/journal-manual"));
 const GLPostingQueue = lazy(() => import("@/pages/finance/gl-posting-queue"));
 const JournalManualCreate = lazy(() => import("@/pages/create/finance/journal-manual-create"));
+const JournalReversal = lazy(() => import("@/pages/create/finance/journal-reversal"));
 const JournalManualDetail = lazy(() => import("@/pages/finance/journal-manual-detail"));
 const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
 const IntercompanyConsolidationCreate = lazy(() => import("@/pages/create/finance/intercompany-consolidation-create"));
@@ -200,6 +209,7 @@ export const financeRoutes = [
   { path: "/finance/budget/create", component: BudgetCreate },
   { path: "/finance/budget/:id", component: BudgetDetail },
   { path: "/finance/budget-variance", component: BudgetVariance },
+  { path: "/finance/budget-heatmap", component: BudgetHeatmap },
   { path: "/finance/budget-approvals", component: BudgetApprovals },
   { path: "/finance/vendors", component: Vendors },
   { path: "/finance/vendors/create", component: VendorsCreate },
@@ -212,6 +222,7 @@ export const financeRoutes = [
   { path: "/finance/purchase-orders", component: PurchaseOrders },
   { path: "/finance/purchase-orders/create", component: PurchaseOrdersCreate },
   { path: "/finance/payment-run", component: PaymentRun },
+  { path: "/finance/ap-payment-calendar", component: ApPaymentCalendar },
   { path: "/finance/purchase-orders/:id", component: PurchaseOrderDetail },
   { path: "/finance/profitability/vehicle/:id", component: ProfitabilityVehicle },
   { path: "/finance/profitability/property/:id", component: ProfitabilityProperty },
@@ -238,10 +249,12 @@ export const financeRoutes = [
   { path: "/finance/fx-revaluation", component: FxRevaluation },
   { path: "/finance/reports", component: FinancialReports },
   { path: "/finance/reports/is-trend", component: IncomeStatementTrend },
+  { path: "/finance/reports/is-vs-budget", component: IncomeStatementVsBudget },
   { path: "/finance/reports/yoy", component: YoyComparison },
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },
   { path: "/finance/customer-risk", component: CustomerRisk },
+  { path: "/finance/bad-debt-provision", component: BadDebtProvision },
   { path: "/finance/receivables/:id", component: ReceivableDetail },
   { path: "/finance/payments", component: Payments },
   { path: "/finance/commitments", component: Commitments },
@@ -259,18 +272,23 @@ export const financeRoutes = [
   { path: "/finance/ledger/:code", component: Ledger },
   { path: "/finance/entity-360", component: Entity360 },
   { path: "/finance/reconciliation-hub", component: ReconciliationHub },
+  { path: "/finance/account-recon-workpaper", component: AccountReconWorkpaper },
   { path: "/finance/trial-balance-comparison", component: TbComparison },
+  { path: "/finance/trial-balance-drilldown", component: TbDrilldown },
   { path: "/finance/ar-aging", component: ArAging },
+  { path: "/finance/ar-collection-workbench", component: ArCollectionWorkbench },
   { path: "/finance/ap-aging", component: ApAging },
   { path: "/finance/bank-reconciliation", component: BankReconciliation },
   { path: "/finance/bank-reconciliation/manual-match/:batchId/:rowId", component: BankManualMatch },
   { path: "/finance/fixed-assets", component: FixedAssets },
+  { path: "/finance/fixed-asset-register", component: FixedAssetRegister },
   { path: "/finance/fixed-assets/batch-depreciate", component: BatchDepreciate },
   { path: "/finance/fixed-assets/:id", component: FixedAssetDetail },
   { path: "/finance/inventory-costing", component: InventoryCosting },
   { path: "/finance/bank-guarantees", component: BankGuarantees },
   { path: "/finance/journal-manual", component: JournalManual },
   { path: "/finance/journal-manual/create", component: JournalManualCreate },
+  { path: "/finance/journal/reverse", component: JournalReversal },
   { path: "/finance/journal-manual/:id", component: JournalManualDetail },
   { path: "/finance/gl-posting-queue", component: GLPostingQueue },
   { path: "/finance/intercompany", component: Intercompany },
