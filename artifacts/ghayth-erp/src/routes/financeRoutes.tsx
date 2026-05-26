@@ -77,6 +77,7 @@ const PeriodClosePreflight = lazy(() => import("@/pages/finance/period-close-pre
 const SalaryAdvances = lazy(() => import("@/pages/finance/salary-advances"));
 const SalaryAdvanceDetail = lazy(() => import("@/pages/details/salary-advance-detail"));
 const Ledger = lazy(() => import("@/pages/finance/ledger"));
+const Entity360 = lazy(() => import("@/pages/finance/entity-360"));
 const ReconciliationHub = lazy(() => import("@/pages/finance/reconciliation-hub"));
 const ArAging = lazy(() => import("@/pages/finance/ar-aging"));
 const ApAging = lazy(() => import("@/pages/finance/ap-aging"));
@@ -230,6 +231,7 @@ export const financeRoutes = [
   { path: "/finance/salary-advances", component: SalaryAdvances },
   { path: "/finance/salary-advances/:id", component: SalaryAdvanceDetail },
   { path: "/finance/ledger/:code", component: Ledger },
+  { path: "/finance/entity-360", component: Entity360 },
   { path: "/finance/reconciliation-hub", component: ReconciliationHub },
   { path: "/finance/ar-aging", component: ArAging },
   { path: "/finance/ap-aging", component: ApAging },

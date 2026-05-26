@@ -35,6 +35,7 @@ import { AccountingMappingsTab } from "./settings/accounting-mappings-tab";
 import { SystemControlsTab } from "./settings/system-controls-tab";
 import { RolePermissionsTab } from "./settings/role-permissions-tab";
 import { ApprovalWorkflowsTab } from "./settings/approval-workflows-tab";
+import { NumberingTab } from "./settings/numbering-tab";
 
 // GeneralSettings — 11-field edit form. The server stores values as
 // {key, value} rows; mapping happens in the hydration block below.
@@ -304,6 +305,7 @@ export default function SettingsPage() {
           <TabsTrigger value="roles">الصلاحيات</TabsTrigger>
           <TabsTrigger value="workflows">الإجراءات</TabsTrigger>
           <TabsTrigger value="approvals">الموافقات</TabsTrigger>
+          <TabsTrigger value="numbering">الترقيم</TabsTrigger>
           <TabsTrigger value="accounting">التوجيه المحاسبي</TabsTrigger>
           <TabsTrigger value="audit">التدقيق</TabsTrigger>
           <TabsTrigger value="resolved">الوراثة</TabsTrigger>
@@ -320,6 +322,7 @@ export default function SettingsPage() {
         <TabsContent value="roles"><RolePermissionsTab /></TabsContent>
         <TabsContent value="workflows"><WorkflowDefinitionsTab /></TabsContent>
         <TabsContent value="approvals"><ApprovalWorkflowsTab /></TabsContent>
+        <TabsContent value="numbering"><NumberingTab /></TabsContent>
         <TabsContent value="accounting"><AccountingMappingsTab /></TabsContent>
         <TabsContent value="audit"><AuditLogTab /></TabsContent>
         <TabsContent value="resolved"><ResolvedSettingsTab /></TabsContent>

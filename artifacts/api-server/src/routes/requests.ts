@@ -7,7 +7,8 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError, Forbid
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { createAuditLog, createNotification, emitEvent, getLegalResponsible, currentPeriod, currentYear, generateRef } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, getLegalResponsible, currentPeriod } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { logger } from "../lib/logger.js";
 import { MANAGER_ROLES , HR_APPROVAL_ROLES} from "../lib/rbacCatalog.js";
 import type { Request as ExpressRequest } from "express";
@@ -295,13 +296,30 @@ router.post("/", authorize({ feature: "requests.my", action: "create" }), async 
         return !!obj && typeof obj.name === "string" && typeof obj.size === "number" && obj.size <= 5 * 1024 * 1024;
       }).map((a) => ({ name: a.name!, size: a.size!, type: a.type || "", dataUrl: a.dataUrl || "" }));
     }
-    const [seqRow] = await rawQuery<{ seq: number | string }>(`SELECT nextval('request_number_seq') AS seq`).catch((e) => { logger.error(e, "requests query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }] as { seq: number }[]; });
-    const ref = generateRef("REQ", Number(seqRow.seq));
+    // Numbering center (Issue #1141) — every official request number
+    // comes from the central authority. No more `request_number_seq` +
+    // random fallback: if numbering fails, the request creation fails
+    // too. The route surfaces the typed error to the caller.
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "requests",
+      entityKey: "general_request",
+      entityTable: "requests",
+      actorId: scope.userId,
+    });
+    const ref = issued.number;
 
     const r = await rawExecute(
       `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments, ref, "requestDate", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,CURRENT_DATE,$12)`,
       [typeId ? Number(typeId) : null, enforcedRequesterId, resolvedRequesterName ?? null, String(title).trim(), String(description).trim(), "pending", priority || "medium", data ? JSON.stringify(data) : '{}', scope.companyId, JSON.stringify(validatedAttachments), ref, scope.branchId || null]
     );
+    // Link the issued numbering assignment to the new request id so the
+    // audit trail can drill back from `numbering_assignments` to the row.
+    await rawExecute(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [r.insertId, issued.assignmentId]
+    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to requests row"));
     await logCommunication(
       scope.companyId, 'inbound',
       `طلب جديد: ${title} (${ref})`,
