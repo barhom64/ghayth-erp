@@ -61,7 +61,11 @@ interface StatementResp {
 }
 
 export default function VendorStatementPrintPage() {
-  const [supplierId, setSupplierId] = useState<string>("");
+  const initialSupplierId = typeof window !== "undefined"
+    ? (new URLSearchParams(window.location.search).get("vendorId") ??
+       new URLSearchParams(window.location.search).get("supplierId") ?? "")
+    : "";
+  const [supplierId, setSupplierId] = useState<string>(initialSupplierId);
   const [year, setYear] = useState(currentYearRiyadh());
   const [month, setMonth] = useState(currentMonthPaddedRiyadh());
   const [scope, setScope] = useState<"month" | "ytd" | "all">("month");

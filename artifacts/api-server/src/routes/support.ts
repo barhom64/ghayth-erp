@@ -13,6 +13,7 @@ import { logger } from "../lib/logger.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { sendMessage } from "../lib/messageSender.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, LifecycleError, lifecycleErrorResponse, STATE_MACHINES } from "../lib/lifecycleEngine.js";
@@ -637,19 +638,19 @@ router.patch("/tickets/:id", authorize({ feature: "support.tickets", action: "up
           );
           if (client?.email) {
             const scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-            await rawExecute(
-              `INSERT INTO email_queue ("companyId","toEmail","recipientName",subject,body,status,"scheduledAt","createdAt","refType","refId")
-               VALUES ($1,$2,$3,$4,$5,'pending',$6,NOW(),'support_ticket',$7)`,
-              [
-                scope.companyId,
-                client.email,
-                client.name ?? "",
-                `استبيان رضا العميل - التذكرة ${ticket.ref}`,
-                `مرحباً ${client.name ?? ""},\n\nتم حل تذكرتكم رقم ${ticket.ref}.\nنرجو تقييم تجربتكم معنا من خلال الرابط المرفق.\n\nشكراً لثقتكم.`,
-                scheduledAt.toISOString(),
-                ticketId,
-              ]
-            );
+            await sendMessage({
+              channel: "email",
+              recipient: client.email,
+              recipientName: client.name ?? "",
+              subject: `استبيان رضا العميل - التذكرة ${ticket.ref}`,
+              body: `مرحباً ${client.name ?? ""},\n\nتم حل تذكرتكم رقم ${ticket.ref}.\nنرجو تقييم تجربتكم معنا من خلال الرابط المرفق.\n\nشكراً لثقتكم.`,
+              companyId: scope.companyId,
+              userId: scope.userId,
+              relatedType: "support_ticket",
+              relatedId: ticketId,
+              scheduledAt,
+              templateKey: "support.csat.survey",
+            }).catch((e) => logger.error(e, "support csat queue failed"));
             surveyQueued = true;
           }
         } catch (e) {
