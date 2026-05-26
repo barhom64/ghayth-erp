@@ -16,7 +16,7 @@ import {
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
-  BarChart2, ShieldAlert, Flag, Lock, Layers,
+  BarChart2, ShieldAlert, Flag, Lock, Layers, Calculator,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -229,6 +229,7 @@ const allNavSections: NavSection[] = [
         { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
         { label: "تقويم النقدية 🆕", path: "/finance/cash-calendar", icon: Calendar },
         { label: "13-Week Cash 🆕", path: "/finance/cash-13week", icon: TrendingUp },
+        { label: "حاسبة الوضع النقدي 🆕", path: "/finance/cash-position-calculator", icon: Calculator },
       ]},
       { label: "الأصول والعهد", path: "/finance/fixed-assets", icon: Building2, module: "finance", children: [
         { label: "الأصول الثابتة", path: "/finance/fixed-assets", icon: Building2 },
