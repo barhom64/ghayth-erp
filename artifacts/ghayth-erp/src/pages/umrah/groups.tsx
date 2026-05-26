@@ -102,6 +102,8 @@ export default function UmrahGroups() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [deletingGroup, setDeletingGroup] = useState<Group | null>(null);
+  const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  const [editName, setEditName] = useState("");
   const createGroupMut = useApiMutation<unknown, { name: string }>(
     "/umrah/groups",
     "POST",
@@ -118,6 +120,17 @@ export default function UmrahGroups() {
     {
       successMessage: "تم حذف المجموعة",
       onSuccess: () => setDeletingGroup(null),
+    },
+  );
+  // Rename group via PATCH /umrah/groups/:id. The backend accepts a partial
+  // payload — we only send fields the user edited (name for now).
+  const updateGroupMut = useApiMutation<unknown, { id: number; name: string }>(
+    (b) => `/umrah/groups/${b.id}`,
+    "PATCH",
+    [["umrah-groups"]],
+    {
+      successMessage: "تم تحديث المجموعة",
+      onSuccess: () => { setEditingGroup(null); setEditName(""); },
     },
   );
 
@@ -185,6 +198,16 @@ export default function UmrahGroups() {
       header: "إجراءات",
       render: (g) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1"
+            onClick={() => { setEditingGroup(g); setEditName(g.name ?? ""); }}
+            disabled={!!g.salesInvoiceId}
+            rateLimitAware
+          >
+            تعديل
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -385,6 +408,45 @@ export default function UmrahGroups() {
               rateLimitAware
             >
               {createGroupMut.isPending ? "جاري الإنشاء…" : "إنشاء"}
+            </GuardedButton>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Rename group dialog — wires PATCH /umrah/groups/:id which was
+          previously unwired. We only expose name for now; the backend
+          accepts the full {agentId,subAgentId,mutamerCount,programDuration,
+          status} too but those are populated elsewhere (split / merge /
+          season assignment). */}
+      <AlertDialog
+        open={!!editingGroup}
+        onOpenChange={(o) => { if (!o) { setEditingGroup(null); setEditName(""); } }}
+      >
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تعديل المجموعة</AlertDialogTitle>
+            <AlertDialogDescription>
+              {editingGroup?.nuskGroupNumber ? `رقم نسك: ${editingGroup.nuskGroupNumber}` : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2 space-y-2">
+            <Label htmlFor="edit-group-name">اسم المجموعة</Label>
+            <Input
+              id="edit-group-name"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="اسم المجموعة"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <GuardedButton
+              perm="umrah:update"
+              onClick={() => editingGroup && updateGroupMut.mutate({ id: editingGroup.id, name: editName })}
+              disabled={updateGroupMut.isPending || !editingGroup}
+              rateLimitAware
+            >
+              {updateGroupMut.isPending ? "جاري الحفظ…" : "حفظ"}
             </GuardedButton>
           </AlertDialogFooter>
         </AlertDialogContent>
