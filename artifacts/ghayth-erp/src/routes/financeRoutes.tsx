@@ -9,6 +9,7 @@ import { lazy } from "react";
 const Dashboard = lazy(() => import("@/pages/finance/dashboard"));
 const CfoCockpit = lazy(() => import("@/pages/finance/cfo-cockpit"));
 const GlHealthScore = lazy(() => import("@/pages/finance/gl-health-score"));
+const ApprovalsInbox = lazy(() => import("@/pages/finance/approvals-inbox"));
 const Accounts = lazy(() => import("@/pages/finance/accounts"));
 const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
@@ -144,6 +145,7 @@ export const financeRoutes = [
   { path: "/finance", component: Dashboard },
   { path: "/finance/cfo-cockpit", component: CfoCockpit },
   { path: "/finance/gl-health", component: GlHealthScore },
+  { path: "/finance/approvals-inbox", component: ApprovalsInbox },
   { path: "/finance/accounts", component: Accounts },
   { path: "/finance/accounts/create", component: AccountsCreate },
   { path: "/finance/accounts/:id/edit", component: AccountsEdit },
