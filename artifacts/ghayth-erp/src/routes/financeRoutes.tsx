@@ -17,6 +17,7 @@ const CustomerAdvances = lazy(() => import("@/pages/finance/customer-advances"))
 const Collections = lazy(() => import("@/pages/finance/collections"));
 const PurchaseRequests = lazy(() => import("@/pages/finance/purchase-requests"));
 const BudgetApprovals = lazy(() => import("@/pages/finance/budget-approvals"));
+const EntityStatements = lazy(() => import("@/pages/finance/entity-statements"));
 const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
 const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
@@ -99,6 +100,7 @@ export const financeRoutes = [
   { path: "/finance/collections", component: Collections },
   { path: "/finance/purchase-requests", component: PurchaseRequests },
   { path: "/finance/budget-approvals", component: BudgetApprovals },
+  { path: "/finance/entity-statements", component: EntityStatements },
   { path: "/finance/accounts/create", component: AccountsCreate },
   { path: "/finance/accounts/:id/edit", component: AccountsEdit },
   { path: "/finance/accounts/:id", component: AccountDetail },

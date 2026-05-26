@@ -238,6 +238,7 @@ const allNavSections: NavSection[] = [
       { label: "الضرائب والتقارير", path: "/finance/tax", icon: Scale, module: "finance", children: [
         { label: "نظام الضرائب", path: "/finance/tax", icon: Scale },
         { label: "التقارير المالية", path: "/finance/reports", icon: FileBarChart },
+        { label: "كشوف الحسابات", path: "/finance/entity-statements", icon: FileText },
       ]},
       { label: "ارتباطات الموظفين", path: "/finance/salary-advances", icon: DollarSign, module: "finance", children: [
         { label: "سلف الرواتب", path: "/finance/salary-advances", icon: DollarSign },
