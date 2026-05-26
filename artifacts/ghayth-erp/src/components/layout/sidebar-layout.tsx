@@ -34,6 +34,7 @@ import { NotificationDropdown } from "@/components/notification-dropdown";
 import { PolicyBanner } from "@/components/policy-banner";
 import { RateLimitFallbackBanner } from "@/components/rate-limit-fallback-banner";
 import { useKeyboardShortcuts, usePropertyKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { isRegisteredRoute } from "@/routes/registry";
 // CommandPalette is only mounted when the user opens it (Cmd+K or the
 // header button). Lazy-load it so its ~345 lines + icons don't ship in
 // the initial bundle.
@@ -586,7 +587,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         if (item.minRoleLevel && effectiveRoleLevel < item.minRoleLevel) return null;
         if (item.subKey && mod && !canAccessSubPage(mod, item.subKey)) return null;
         if (!itemPermAllowed(item)) return null;
-        if (!item.children) return item;
+        if (!item.children || item.children.length === 0) {
+          if (!isRegisteredRoute(item.path)) return null;
+          return item;
+        }
         const filteredChildren = filterItems(item.children, mod);
         if (filteredChildren.length === 0) return null;
         return { ...item, children: filteredChildren };
