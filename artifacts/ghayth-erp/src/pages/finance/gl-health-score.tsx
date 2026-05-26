@@ -212,6 +212,28 @@ export default function GlHealthScorePage() {
         { href: "/finance", label: "المالية" },
         { label: "صحة النظام" },
       ]}
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/gl-anomaly-detector">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <AlertTriangle className="h-3.5 w-3.5 ml-1" />
+              كاشف الشذوذ
+            </Button>
+          </Link>
+          <Link href="/finance/reports/gl-integrity-gaps">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Shield className="h-3.5 w-3.5 ml-1" />
+              فجوات السلامة
+            </Button>
+          </Link>
+          <Link href="/finance/gl-posting-queue">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Activity className="h-3.5 w-3.5 ml-1" />
+              قائمة الترحيل
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 

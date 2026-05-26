@@ -424,27 +424,36 @@ router.post("/auto-create", authorize({ feature: "crm.clients", action: "create"
     }
 
     const clientName = name || `عميل ${phone.slice(-4)}`;
-    // Numbering center (Issue #1141) — client code from central authority.
-    const issued = await issueNumber({
-      companyId: scope.companyId,
-      branchId: scope.branchId ?? null,
-      moduleKey: "crm",
-      entityKey: "client_code",
-      entityTable: "clients",
-      actorId: scope.userId,
+    // Numbering center (Issue #1141) — atomic flow: issueNumber +
+    // INSERT + link-back inside one withTransaction. SAVEPOINT
+    // reentrancy in rawdb.ts means the inner issueNumber joins this
+    // outer tx, so the entity INSERT and the assignment link-back
+    // either both commit or both roll back. Replaces the previous
+    // .catch(logger.error) swallow that allowed an orphan client row
+    // with no audit assignment.
+    const atomic = await withTransaction(async () => {
+      const issued = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "crm",
+        entityKey: "client_code",
+        entityTable: "clients",
+        actorId: scope.userId,
+      });
+      const result = await rawExecute(
+        `INSERT INTO clients (name, phone, classification, source, code, "companyId", "isBlacklisted")
+         VALUES ($1, $2, 'prospect', $3, $4, $5, false)`,
+        [clientName, phone, source, issued.number, scope.companyId]
+      );
+      assertInsert(result.insertId, "clients");
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [result.insertId, issued.assignmentId]
+      );
+      return { insertId: result.insertId, code: issued.number };
     });
-    const code = issued.number;
-
-    const { insertId } = await rawExecute(
-      `INSERT INTO clients (name, phone, classification, source, code, "companyId", "isBlacklisted")
-       VALUES ($1, $2, 'prospect', $3, $4, $5, false)`,
-      [clientName, phone, source, code, scope.companyId]
-    );
-    assertInsert(insertId, "clients");
-    await rawExecute(
-      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
-      [insertId, issued.assignmentId]
-    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to clients row"));
+    const code = atomic.code;
+    const insertId = atomic.insertId;
 
     const [newClient] = await rawQuery<ClientRow>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     if (!newClient) throw new NotFoundError("فشل في استرجاع العميل");
