@@ -41,131 +41,18 @@ import {
 } from "../lib/errorHandler.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
-import { applyDlp } from "../lib/communicationControl.js";
+import { sendMessage } from "../lib/messageSender.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
 
-// ─────────────────────── shared dispatcher ────────────────────────────────
-
 const channelEnum = z.enum(["email", "whatsapp", "sms"]);
 
-interface DispatchInput {
-  channel: "email" | "whatsapp" | "sms";
-  recipient: string;
-  recipientName?: string | null;
-  subject?: string | null;
-  body: string;
-  relatedType?: string | null;
-  relatedId?: number | null;
-  templateKey?: string | null;
-  companyId: number;
-  userId: number;
-}
-
-interface DispatchResult {
-  logId: number;
-  queued: boolean;
-  blocked: boolean;
-  reason?: string;
-  dlpMatches?: Array<{ rule: string; action: string }>;
-}
-
-/**
- * Sole send-path used by both /send and /reply. Returns a structured
- * result so the caller can surface "blocked by DLP rule X" to the UI
- * without inferring from a 400. Never throws on DLP — failing closed
- * (block) is fine because the operator sees the reason inline.
- */
-async function dispatchSend(input: DispatchInput): Promise<DispatchResult> {
-  // 1. DLP scan first — if blocked, persist a log row marked
-  //    'blocked_dlp' so the audit trail captures the attempt + reason.
-  const dlp = await applyDlp(input.body, input.channel, input.companyId).catch((err) => {
-    logger.error(err, "[inbox] DLP scan failed — failing closed");
-    return { body: input.body, blocked: true, reason: "DLP_SCAN_ERROR", matches: [] };
-  });
-
-  const finalBody = dlp.body;
-  const status = dlp.blocked ? "blocked_dlp" : "queued";
-  const matchSummary = dlp.matches.map((m) => ({ rule: m.ruleName, action: m.action }));
-
-  // 2. Write the communications_log row regardless — we always want
-  //    a record, even of blocked attempts.
-  const { insertId: logId } = await rawExecute(
-    `INSERT INTO communications_log
-       ("companyId", channel, direction, "fromNumber", "toNumber",
-        subject, body, status, "relatedType", "relatedId", "createdAt")
-     VALUES ($1, $2, 'outbound', NULL, $3, $4, $5, $6, $7, $8, NOW())`,
-    [
-      input.companyId, input.channel, input.recipient,
-      input.subject ?? null, finalBody, status,
-      input.relatedType ?? null, input.relatedId ?? null,
-    ],
-  );
-  assertInsert(logId, "communications_log");
-
-  if (dlp.blocked) {
-    void emitEvent({
-      companyId: input.companyId, userId: input.userId,
-      action: "communications.message.blocked_dlp",
-      entity: "communications_log", entityId: logId,
-      details: JSON.stringify({ channel: input.channel, reason: dlp.reason }),
-    }).catch((e) => logger.warn(e, "[event] blocked_dlp"));
-    return {
-      logId, queued: false, blocked: true,
-      reason: dlp.reason ?? "blocked by DLP",
-      dlpMatches: matchSummary,
-    };
-  }
-
-  // 3. Insert into the channel's queue. The existing workers
-  //    (cronScheduler: email_queue_drain etc.) pick from these.
-  switch (input.channel) {
-    case "email":
-      await rawExecute(
-        `INSERT INTO email_queue
-           ("companyId", "toEmail", "recipientName", subject, body, status, "createdAt", "refType", "refId")
-         VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6, $7)`,
-        [
-          input.companyId, input.recipient, input.recipientName ?? "",
-          input.subject ?? "(بدون عنوان)", finalBody,
-          input.relatedType ?? null, input.relatedId ?? null,
-        ],
-      );
-      break;
-    case "sms":
-      await rawExecute(
-        `INSERT INTO sms_queue ("companyId", "recipientPhone", message, status, "createdAt")
-         VALUES ($1, $2, $3, 'pending', NOW())`,
-        [input.companyId, input.recipient, finalBody],
-      );
-      break;
-    case "whatsapp":
-      await rawExecute(
-        `INSERT INTO whatsapp_queue ("companyId", phone, "recipientName", message, status, "createdAt")
-         VALUES ($1, $2, $3, $4, 'pending', NOW())`,
-        [input.companyId, input.recipient, input.recipientName ?? "", finalBody],
-      );
-      break;
-  }
-
-  void emitEvent({
-    companyId: input.companyId, userId: input.userId,
-    action: `communications.${input.channel}.sent`,
-    entity: "communications_log", entityId: logId,
-    details: JSON.stringify({ channel: input.channel, recipient: input.recipient.replace(/.(?=.{4})/g, "*") }),
-  }).catch((e) => logger.warn(e, `[event] ${input.channel}.sent`));
-  void createAuditLog({
-    companyId: input.companyId, userId: input.userId,
-    action: "create", entity: "communications_log", entityId: logId,
-    after: { channel: input.channel, recipient: input.recipient, subject: input.subject },
-  }).catch((e) => logger.warn(e, "[audit] communications.send"));
-
-  return {
-    logId, queued: true, blocked: false,
-    dlpMatches: matchSummary.length > 0 ? matchSummary : undefined,
-  };
-}
+// Note: the actual send happens via lib/messageSender.sendMessage()
+// — this router used to have a private dispatchSend() helper, but
+// the same helper now lives in lib/messageSender.ts as the SINGLE
+// send seam every route (inbox/communications/support/admin/employees)
+// goes through. See docs/architecture/communications-unification.md.
 
 // ─────────────────────── POST /send ───────────────────────────────────────
 
@@ -196,7 +83,7 @@ router.post("/send", authorize({ feature: "communications", action: "create" }),
       throw new ValidationError("عنوان البريد مطلوب", { field: "subject" });
     }
 
-    const result = await dispatchSend({
+    const result = await sendMessage({
       ...body,
       companyId: scope.companyId,
       userId: scope.userId,
@@ -250,8 +137,8 @@ router.post("/threads/:id/reply", authorize({ feature: "communications", action:
       throw new ValidationError(`القناة "${original.channel}" لا تدعم الرد المباشر`);
     }
 
-    const result = await dispatchSend({
-      channel: original.channel,
+    const result = await sendMessage({
+      channel: original.channel as "email" | "whatsapp" | "sms",
       recipient,
       body: body.body,
       relatedType: original.relatedType,
