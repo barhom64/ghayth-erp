@@ -270,7 +270,14 @@ function extractFrontendCalls() {
     // Find every call-site of a known helper and extract its URL arg(s)
     // using the balanced string-literal reader above. The regex just
     // anchors us at the call name; the reader walks the arg list.
-    const re = /\b(apiFetch|apiPatch|apiPost|apiPut|apiDelete|useApiQuery|useApiMutation)\b\s*<[^>]*>?\s*\(/g;
+    // The `(?:<[^>]*>)?` is the OPTIONAL generic-type slot —
+    // `useApiMutation<T, B>(…)` vs the much commoner
+    // `useApiMutation(…)`. The original regex had `<[^>]*>?` which
+    // *required* the `<`, silently dropping every call without an
+    // explicit type argument. That false-negative was big enough to
+    // make the "POST /api/finance/invoices" endpoint look unused even
+    // though invoices-create.tsx calls it on line 151.
+    const re = /\b(apiFetch|apiPatch|apiPost|apiPut|apiDelete|useApiQuery|useApiMutation)\b\s*(?:<[^>]*>)?\s*\(/g;
     for (const m of src.matchAll(re)) {
       const helper = m[1];
       // Cursor sits just past the `(`. Skip whitespace, then read the
@@ -435,6 +442,14 @@ function normaliseFrontendUrl(url) {
   }
   // Strip query string — backend route patterns don't include them.
   u = u.split("?")[0];
+  // Adjacent interpolations `${a}${b}` end up as `:param:param` after
+  // the strip loop above (no `/` separator between them in the source).
+  // The convention in this codebase is that the second interpolation
+  // is a path FRAGMENT starting with `/` (e.g.
+  // `apiFetch(\`/x/${id}${path}\`)` where path === "/approve"). Force
+  // a `/` between adjacent placeholders so the segment count matches
+  // the backend's `/x/:id/:action` shape.
+  u = u.replace(/:param:param/g, ":param/:param");
   // Strip trailing slash.
   u = u.replace(/\/+$/, "") || "/";
   if (!u.startsWith("/api/") && u !== "/api") u = "/api" + (u.startsWith("/") ? u : "/" + u);
@@ -523,19 +538,58 @@ export function runAudit() {
 
   for (const c of frontend) {
     const fe = normaliseFrontendUrl(c.url);
-    // Find a backend path that matches segment-by-segment.
+    // Find every backend path that matches segment-by-segment. When
+    // a frontend `:param` lines up with multiple backend paths that
+    // each use a different placeholder name (`:userId` vs `:id`),
+    // the methods served on those paths must be UNIONed — otherwise
+    // a DELETE on `/api/admin/user-roles/:id` is reported as a
+    // mismatch just because `/api/admin/user-roles/:userId` (GET)
+    // was found first.
     let beMatchedPath = null;
     let beMethods = null;
     if (backendPaths.has(fe)) {
       beMatchedPath = fe;
-      beMethods = backendPaths.get(fe);
+      beMethods = new Set(backendPaths.get(fe));
     } else {
+      const matchedPaths = [];
       for (const [be, methods] of backendPaths) {
-        if (urlsMatch(fe, be)) {
-          beMatchedPath = be;
-          beMethods = methods;
-          break;
-        }
+        if (urlsMatch(fe, be)) matchedPaths.push([be, methods]);
+      }
+      if (matchedPaths.length > 0) {
+        beMatchedPath = matchedPaths[0][0]; // for the touched-by bookkeeping
+        beMethods = new Set();
+        for (const [, ms] of matchedPaths) for (const m of ms) beMethods.add(m);
+      }
+    }
+    // Dynamic-action escape hatch: the frontend builds URLs like
+    // `\`/x/${id}/${action}\`` where `action` is a runtime string
+    // ("approve", "reject", "cancel", …). After normalisation that
+    // becomes `/api/x/:param/:param`, which won't segment-match
+    // backend routes like `/api/x/:id/approve`, `/api/x/:id/reject`.
+    // Treat the call as resolved if the backend has ANY routes
+    // under the same prefix (everything up to the last `:param`),
+    // and union their methods. This matches what's actually true at
+    // runtime — the dispatcher hits one of those routes.
+    if (!beMethods && fe.endsWith("/:param") && fe.lastIndexOf(":param") > fe.indexOf(":param")) {
+      // Strip the trailing `:param` (the dynamic action) and walk the
+      // backend list for routes whose prefix segment-matches the
+      // shorter pattern. Use urlsMatch on the prefix so `:param` here
+      // still matches `:id`, `:requestId`, etc. on the backend side.
+      const fePrefixSegs = fe.split("/").slice(0, -1); // drop final `:param`
+      const fePrefix = fePrefixSegs.join("/");
+      const targetDepth = fe.split("/").length;
+      const sibling = [];
+      for (const [be, ms] of backendPaths) {
+        const beSegs = be.split("/");
+        if (beSegs.length !== targetDepth) continue;
+        // Match every segment except the last (the action).
+        const bePrefix = beSegs.slice(0, -1).join("/");
+        if (urlsMatch(fePrefix, bePrefix)) sibling.push([be, ms]);
+      }
+      if (sibling.length > 0) {
+        beMatchedPath = sibling[0][0];
+        beMethods = new Set();
+        for (const [, ms] of sibling) for (const m of ms) beMethods.add(m);
       }
     }
     if (!beMethods) {
@@ -545,13 +599,31 @@ export function runAudit() {
     // Path matched — check method. "?" (unresolved) is allowed through.
     if (c.method === "?" || beMethods.has(c.method)) {
       resolved.push({ ...c, normalised: fe });
-      // Mark every method the backend serves on this path as touched
-      // when the frontend's method is "?" (unresolved); otherwise just
-      // the specific method the call uses.
-      if (c.method === "?") {
-        for (const m of beMethods) touchedByFrontend.add(`${beMatchedPath}|${m}`);
-      } else {
-        touchedByFrontend.add(`${beMatchedPath}|${c.method}`);
+      // When a frontend `:param` URL matches multiple backend paths
+      // (different placeholder names), we don't know which specific
+      // backend path the call resolves to at runtime — so mark every
+      // matching (path, method) pair as touched. Same for "?" method.
+      const isDynamicAction =
+        fe.endsWith("/:param") && fe.lastIndexOf(":param") > fe.indexOf(":param");
+      for (const [bePath, msSet] of backendPaths) {
+        let isCovered = urlsMatch(fe, bePath);
+        // Dynamic-action variant: trailing `:param` may stand for
+        // multiple sibling routes (`/x/:id/approve`, `/x/:id/reject`).
+        // Treat any same-depth route under the same prefix as covered.
+        if (!isCovered && isDynamicAction) {
+          const fePrefix = fe.split("/").slice(0, -1).join("/");
+          const beSegs = bePath.split("/");
+          if (beSegs.length === fe.split("/").length) {
+            const bePrefix = beSegs.slice(0, -1).join("/");
+            isCovered = urlsMatch(fePrefix, bePrefix);
+          }
+        }
+        if (!isCovered) continue;
+        if (c.method === "?") {
+          for (const m of msSet) touchedByFrontend.add(`${bePath}|${m}`);
+        } else if (msSet.has(c.method)) {
+          touchedByFrontend.add(`${bePath}|${c.method}`);
+        }
       }
     } else {
       methodMismatches.push({
