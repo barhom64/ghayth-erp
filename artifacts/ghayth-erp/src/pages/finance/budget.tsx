@@ -3,7 +3,7 @@ import { useApiQuery } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Plus, FileBarChart, TrendingUp, CheckCircle, PieChart } from "lucide-react";
+import { Plus, FileBarChart, TrendingUp, CheckCircle, PieChart, Grid3x3, Target, ShieldCheck } from "lucide-react";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 import {
   DataTable,
@@ -106,11 +106,28 @@ export default function BudgetPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الميزانية" }]}
       loading={isLoading}
       actions={
-        <Button size="sm" asChild>
-          <Link href="/finance/budget/create">
-            <Plus className="h-4 w-4 me-1" />إضافة بند
+        <>
+          <Link href="/finance/budget-heatmap">
+            <Button variant="outline" size="sm">
+              <Grid3x3 className="h-4 w-4 me-2" />الخريطة الحرارية
+            </Button>
           </Link>
-        </Button>
+          <Link href="/finance/budget-variance">
+            <Button variant="outline" size="sm">
+              <Target className="h-4 w-4 me-2" />الانحرافات
+            </Button>
+          </Link>
+          <Link href="/finance/budget-approvals">
+            <Button variant="outline" size="sm">
+              <ShieldCheck className="h-4 w-4 me-2" />الاعتمادات
+            </Button>
+          </Link>
+          <Button size="sm" asChild>
+            <Link href="/finance/budget/create">
+              <Plus className="h-4 w-4 me-1" />إضافة بند
+            </Link>
+          </Button>
+        </>
       }
     >
       <FinanceTabsNav />
