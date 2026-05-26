@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -84,7 +84,6 @@ function severityCellColor(score: number): string {
 }
 
 export default function RiskDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/governance/risks/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("risk", id ?? 0);
@@ -151,10 +150,6 @@ export default function RiskDetail() {
     return out;
   }, [risk]);
 
-
-  const handleEdit = () => {
-    setLocation(`/governance/risks/${id}/edit`);
-  };
 
   // Risk matrix — rows: impact (critical -> low top to bottom), cols: likelihood (rare -> certain left to right).
   // Highlight the current risk cell.
@@ -422,16 +417,6 @@ export default function RiskDetail() {
               entityId={id ?? 0}
               formats={["a4"]}/>
           )}
-          <GuardedButton
-            perm="governance:update"
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-            disabled={!risk || ["closed"].includes(risk?.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

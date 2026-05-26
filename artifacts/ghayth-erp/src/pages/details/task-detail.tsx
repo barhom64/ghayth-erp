@@ -187,15 +187,6 @@ export default function TaskDetail() {
               تعليم كمكتملة
             </GuardedButton>
           )}
-          <GuardedButton
-            perm="tasks:write"
-            variant="outline"
-            className="gap-2"
-            onClick={() => setLocation(`/tasks/${id}/edit`)}
-          >
-            <Edit className="h-4 w-4" />
-            تعديل
-          </GuardedButton>
           <EntityPrintButton
             entityType="task"
             entityId={id ?? 0}

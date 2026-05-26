@@ -124,10 +124,6 @@ export default function VoucherDetail() {
     : null;
 
 
-  const handleEdit = () => {
-    setLocation(`/finance/vouchers/${id}/edit`);
-  };
-
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
       {/* Primary info — big amount + core metadata */}
@@ -305,18 +301,6 @@ export default function VoucherDetail() {
                 entityId={voucher.id ?? id}
                 formats={["a4", "thermal_80"]}/>
             )}
-            <GuardedButton
-              perm="finance:update"
-              variant="outline"
-              size="sm"
-              onClick={handleEdit}
-              disabled={
-                !voucher || ["posted", "paid", "rejected", "cancelled"].includes(voucher.status)
-              }
-            >
-              <Edit className="h-4 w-4 ms-1" />
-              تعديل
-            </GuardedButton>
           </>
         }
       />

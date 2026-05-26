@@ -120,10 +120,6 @@ export default function CorrespondenceDetail() {
   }, [item]);
 
 
-  const handleEdit = () => {
-    setLocation(`/correspondence/${id}/edit`);
-  };
-
   const DirectionIcon = item?.direction === "outgoing" ? SendHorizonal : Inbox;
   const directionTone = item?.direction === "outgoing" ? "bg-status-info-surface text-status-info-foreground border-status-info-surface" : "bg-emerald-50 text-emerald-700 border-emerald-200";
 
@@ -309,16 +305,6 @@ export default function CorrespondenceDetail() {
                 entityId={item.id ?? id}
                 formats={["a4"]}/>
             )}
-            <GuardedButton
-              perm="comms:update"
-              variant="outline"
-              size="sm"
-              onClick={handleEdit}
-              disabled={!item || item.status !== "draft"}
-            >
-              <Edit className="h-4 w-4 ms-1" />
-              تعديل
-            </GuardedButton>
           </>
         }
       />

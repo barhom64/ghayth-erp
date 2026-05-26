@@ -81,10 +81,6 @@ export default function AuditDetail() {
   }, [audit]);
 
 
-  const handleEdit = () => {
-    setLocation(`/governance/audits/${id}/edit`);
-  };
-
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
       <Card className="md:col-span-2">
@@ -220,16 +216,6 @@ export default function AuditDetail() {
               entityId={id ?? 0}
               formats={["a4"]}/>
           )}
-          <GuardedButton
-            perm="governance:update"
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-            disabled={!audit || ["completed", "cancelled"].includes(audit?.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

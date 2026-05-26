@@ -157,10 +157,6 @@ export default function ReceivableDetail() {
   }, [receivable]);
 
 
-  const handleEdit = () => {
-    setLocation(`/finance/receivables/${id}/edit`);
-  };
-
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
       {/* Primary info — hero total + payment breakdown */}
@@ -358,18 +354,6 @@ export default function ReceivableDetail() {
                 entityId={id ?? 0}
                 formats={["a4"]}/>
             )}
-            <GuardedButton
-              perm="finance:update"
-              variant="outline"
-              size="sm"
-              onClick={handleEdit}
-              disabled={
-                !receivable || ["paid", "cancelled", "written_off"].includes(receivable.status)
-              }
-            >
-              <Edit className="h-4 w-4 ms-1" />
-              تعديل
-            </GuardedButton>
           </>
         }
       />

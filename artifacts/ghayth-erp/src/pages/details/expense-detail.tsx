@@ -179,10 +179,6 @@ export default function ExpenseDetail() {
     : null;
 
 
-  const handleEdit = () => {
-    setLocation(`/finance/expenses/${id}/edit`);
-  };
-
   // Figure out the cost center display: a single chip that summarises
   // which project/vehicle/employee (or raw costCenter text) this expense
   // is charged against. This is one of the headline pieces of context
@@ -423,18 +419,6 @@ export default function ExpenseDetail() {
                 entityId={id ?? 0}
                 formats={["a4"]}/>
             )}
-            <GuardedButton
-              perm="finance:update"
-              variant="outline"
-              size="sm"
-              onClick={handleEdit}
-              disabled={
-                !expense || ["posted", "paid", "rejected", "cancelled"].includes(expense.status)
-              }
-            >
-              <Edit className="h-4 w-4 ms-1" />
-              تعديل
-            </GuardedButton>
           </>
         }
       />

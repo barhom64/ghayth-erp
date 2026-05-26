@@ -53,10 +53,6 @@ export default function WarehouseCategoryDetail() {
     return out;
   }, [category]);
 
-  const handleEdit = () => {
-    setLocation(`/warehouse/categories/${id}/edit`);
-  };
-
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
       <Card className="md:col-span-2">
@@ -160,10 +156,6 @@ export default function WarehouseCategoryDetail() {
       onRetry={refetch}
       actions={
         <div className="flex items-center gap-2">
-          <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!category}>
-          <Edit className="h-4 w-4 ms-1" />
-          تعديل
-        </GuardedButton>
           <PrintButton entityType="warehouse_category" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
         </div>
       }

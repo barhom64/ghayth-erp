@@ -95,10 +95,6 @@ export default function WarehouseProductDetail() {
   }, [product]);
 
 
-  const handleEdit = () => {
-    setLocation(`/warehouse/products/${id}/edit`);
-  };
-
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
       {/* Primary info */}
@@ -248,10 +244,6 @@ export default function WarehouseProductDetail() {
               formats={["label", "a4"]}
               label="طباعة ملصق / باركود"/>
           )}
-          <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!product}>
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

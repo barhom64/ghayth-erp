@@ -69,10 +69,6 @@ export default function LegalSessionDetail() {
   }, [session]);
 
 
-  const handleEdit = () => {
-    setLocation(`/legal/sessions/${id}/edit`);
-  };
-
   const attendeesDisplay = useMemo(() => {
     if (!session?.attendees) return null;
     if (Array.isArray(session.attendees)) return session.attendees.join("، ");
@@ -239,16 +235,6 @@ export default function LegalSessionDetail() {
               entityId={id ?? 0}
               formats={["a4"]}/>
           )}
-          <GuardedButton
-            perm="legal:update"
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-            disabled={!session || ["cancelled", "held"].includes(session?.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

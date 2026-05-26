@@ -49,10 +49,6 @@ export default function WarehouseSupplierDetail() {
   const rating = Number(supplier?.rating ?? 0);
 
 
-  const handleEdit = () => {
-    setLocation(`/warehouse/suppliers/${id}/edit`);
-  };
-
   const ratingStars = (
     <div className="flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map((s) => (
@@ -193,10 +189,6 @@ export default function WarehouseSupplierDetail() {
               entityId={id ?? 0}
               formats={["a4"]}/>
           )}
-          <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!supplier}>
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

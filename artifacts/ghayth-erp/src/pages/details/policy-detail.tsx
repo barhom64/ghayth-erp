@@ -69,10 +69,6 @@ export default function PolicyDetail() {
   }, [policy]);
 
 
-  const handleEdit = () => {
-    setLocation(`/governance/policies/${id}/edit`);
-  };
-
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
       <Card className="md:col-span-2">
@@ -207,16 +203,6 @@ export default function PolicyDetail() {
               entityId={id ?? 0}
               formats={["a4"]}/>
           )}
-          <GuardedButton
-            perm="governance:update"
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-            disabled={!policy || ["archived"].includes(policy?.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

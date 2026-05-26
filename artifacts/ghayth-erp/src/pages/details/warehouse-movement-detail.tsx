@@ -94,10 +94,6 @@ export default function WarehouseMovementDetail() {
   }, [movement]);
 
 
-  const handleEdit = () => {
-    setLocation(`/warehouse/movements/${id}/edit`);
-  };
-
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
       <Card className="md:col-span-2">
@@ -241,10 +237,6 @@ export default function WarehouseMovementDetail() {
               entityId={movement.id ?? id}
               formats={["a4", "label"]}/>
           )}
-          <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!movement}>
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

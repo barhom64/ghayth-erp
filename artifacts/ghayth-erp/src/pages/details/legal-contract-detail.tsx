@@ -96,10 +96,6 @@ export default function LegalContractDetail() {
 
   const { extraTabs, hideTabs } = useRegistryTabs("legal_contract", id ?? 0);
 
-  const handleEdit = () => {
-    setLocation(`/legal/contracts/${id}/edit`);
-  };
-
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
       <Card className="md:col-span-2">
@@ -245,16 +241,6 @@ export default function LegalContractDetail() {
               entityId={contract.id ?? id}
               formats={["a4"]}/>
           )}
-          <GuardedButton
-            perm="legal:update"
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-            disabled={!contract || ["terminated", "expired"].includes(contract?.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

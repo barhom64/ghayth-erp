@@ -114,10 +114,6 @@ export default function CommitmentDetail() {
   }, [commitment]);
 
 
-  const handleEdit = () => {
-    setLocation(`/finance/commitments/${id}/edit`);
-  };
-
   const beneficiaryDisplay =
     commitment?.beneficiary || commitment?.vendorName || null;
 
@@ -305,18 +301,6 @@ export default function CommitmentDetail() {
                 entityId={id ?? 0}
                 formats={["a4"]}/>
             )}
-            <GuardedButton
-              perm="finance:update"
-              variant="outline"
-              size="sm"
-              onClick={handleEdit}
-              disabled={
-                !commitment || ["fulfilled", "cancelled", "expired"].includes(commitment.status)
-              }
-            >
-              <Edit className="h-4 w-4 ms-1" />
-              تعديل
-            </GuardedButton>
           </>
         }
       />
