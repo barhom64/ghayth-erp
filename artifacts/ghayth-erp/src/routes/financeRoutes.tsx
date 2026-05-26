@@ -93,6 +93,7 @@ const TaxFilingCalendar = lazy(() => import("@/pages/finance/tax-filing-calendar
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
 const CustomerAdvancesWorkbench = lazy(() => import("@/pages/finance/customer-advances-workbench"));
 const CustomerStatementPrint = lazy(() => import("@/pages/finance/customer-statement-print"));
+const Customer360Sheet = lazy(() => import("@/pages/finance/customer-360-sheet"));
 const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
 const BadDebtProvision = lazy(() => import("@/pages/finance/bad-debt-provision"));
 const ReceivableDetail = lazy(() => import("@/pages/details/receivable-detail"));
@@ -289,6 +290,7 @@ export const financeRoutes = [
   { path: "/finance/tax-filing-calendar", component: TaxFilingCalendar },
   { path: "/finance/receivables", component: Receivables },
   { path: "/finance/customer-statement-print", component: CustomerStatementPrint },
+  { path: "/finance/customer-360-sheet", component: Customer360Sheet },
   { path: "/finance/customer-risk", component: CustomerRisk },
   { path: "/finance/bad-debt-provision", component: BadDebtProvision },
   { path: "/finance/receivables/:id", component: ReceivableDetail },
