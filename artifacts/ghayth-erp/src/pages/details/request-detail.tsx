@@ -243,11 +243,11 @@ export default function RequestDetail() {
                 entityId={id}
                 currentStatus={request.status}
                 approveEndpoint={`/requests/${id}/approve`}
-                rejectEndpoint={`/requests/${id}/approve`}
-                returnEndpoint={`/requests/${id}/approve`}
-                approveMethod="PATCH"
-                rejectMethod="PATCH"
-                returnMethod="PATCH"
+                rejectEndpoint={`/requests/${id}/reject`}
+                returnEndpoint={`/requests/${id}/return`}
+                approveMethod="POST"
+                rejectMethod="POST"
+                returnMethod="POST"
                 approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
                 rejectBody={(notes) => ({ approved: false, notes })}
                 returnBody={(notes) => ({ approved: "returned", notes })}

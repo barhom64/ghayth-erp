@@ -363,6 +363,9 @@ function RequestsList() {
           approveEndpoint={`/requests/${r.id}/approve`}
           rejectEndpoint={`/requests/${r.id}/reject`}
           returnEndpoint={`/requests/${r.id}/return`}
+          approveMethod="POST"
+          rejectMethod="POST"
+          returnMethod="POST"
           onDone={handleApprovalDone}
         />
       ),

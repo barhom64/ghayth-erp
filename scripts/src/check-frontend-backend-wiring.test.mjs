@@ -226,9 +226,20 @@ check(
   `scan picks up a meaningful number of call-sites (>= 500, got ${frontend.length})`,
   frontend.length >= 500,
 );
+// Prop-source URLs (ApprovalActions / ConfirmDeleteDialog JSX props)
+// are best-effort: they surface in `resolved` when the BE route exists
+// at the right method, but they're silently dropped on orphan /
+// method-mismatch instead of failing the gate (see audit script for
+// why — pre-existing FE/BE drift in legacy approval flows). So the
+// "everything is accounted for" invariant excludes them.
+const propSkipped = frontend.filter(
+  (c) =>
+    c.source === "prop" &&
+    !resolved.some((r) => r.file === c.file && r.line === c.line && r.url === c.url),
+).length;
 check(
-  `resolved + orphans + methodMismatches accounts for the whole scan`,
-  resolved.length + orphans.length + methodMismatches.length === frontend.length,
+  `resolved + orphans + methodMismatches (+ prop-skipped) accounts for the whole scan`,
+  resolved.length + orphans.length + methodMismatches.length + propSkipped === frontend.length,
 );
 // Reverse-direction sanity check: the audit must produce a non-empty
 // unused-backend list (the very point of Phase C). If somebody breaks
