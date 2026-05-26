@@ -13,6 +13,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import {
   emitEvent,
   createAuditLog,
@@ -22,7 +23,6 @@ import {
   computeVat,
   currentPeriod,
   currentDateInTz,
-  generateRef,
   toDateISO,
   roundTo2,
   applyJournalEntryBalances,
@@ -598,9 +598,57 @@ journalRouter.delete("/expenses/:id", authorize({ feature: "finance.journal", ac
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status = 'draft' RETURNING id`, [id, scope.companyId]);
-    if (!row) throw new NotFoundError("المصروف غير موجود");
-    await reverseAccountBalances(scope.companyId, row.id as number);
+    // Wrap the soft-delete + ledger reversal + budget release in ONE
+    // transaction so a partial failure rolls all three back. Without
+    // this, a release that crashed mid-flight could leave the expense
+    // marked deleted but budgets.used still inflated by its amount.
+    const result = await withTransaction(async (client) => {
+      const { rows } = await client.query(
+        `UPDATE journal_entries SET "deletedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status = 'draft'
+          RETURNING id`,
+        [id, scope.companyId]
+      );
+      if (rows.length === 0) return null;
+      const expenseId = Number(rows[0].id);
+
+      // reverseAccountBalances is a no-op on drafts (balancesApplied=false),
+      // so this is belt + braces against a future caller that flips the
+      // status before calling DELETE.
+      await reverseAccountBalances(scope.companyId, expenseId);
+
+      // Budget-release: the CREATE path (finance-journal.ts:474) bumps
+      // `budgets.used` by the expense amount BEFORE the JE is even posted,
+      // so every draft holds a soft reservation. The reject/return path
+      // (finance-journal.ts:672) releases that reservation; DELETE was the
+      // only sibling path that didn't, leaving budgets.used permanently
+      // inflated by the deleted draft's amount. Mirrors the reject-path
+      // SQL exactly so a single bug fix here doesn't drift from there.
+      // GREATEST() floors at zero, matching the reject path's defensive
+      // shape.
+      await client.query(
+        `UPDATE budgets b
+            SET used = GREATEST(0, b.used - sub.total)
+           FROM (
+             SELECT jl."accountCode",
+                    to_char(je."createdAt", 'YYYY-MM') AS period,
+                    SUM(jl.debit) AS total
+               FROM journal_lines jl
+               JOIN journal_entries je ON je.id = jl."journalId"
+              WHERE jl."journalId" = $1
+                AND jl.debit > 0
+                AND jl."deletedAt" IS NULL
+              GROUP BY jl."accountCode", to_char(je."createdAt", 'YYYY-MM')
+           ) sub
+          WHERE b."companyId" = $2
+            AND b."accountCode" = sub."accountCode"
+            AND b.period = sub.period
+            AND b."deletedAt" IS NULL`,
+        [expenseId, scope.companyId]
+      );
+      return expenseId;
+    });
+    if (result === null) throw new NotFoundError("المصروف غير موجود");
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Finance journal error:");
@@ -869,6 +917,55 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     const cashAcct = sourceAccountCode || "1100";
     const outputVatCode = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2300") : "2300";
     const inputVatCode2 = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1400") : "1400";
+
+    // ── WHT computation for payment vouchers w/ purchase-order allocations ──
+    // Walk every allocation pointing at a purchase_order, look up the
+    // PO's supplier, and run computeWHT on the allocation amount (NOT
+    // the PO total — partial payments must withhold proportionally).
+    // Resident suppliers short-circuit inside computeWHT → applies=false.
+    // Receipts (RV-…) never withhold; they're the AR side, not AP.
+    interface AllocWht { wht: number; net: number; rate: number; category: string | null; payableAccountCode: string | null }
+    const allocWht: (AllocWht | null)[] = (allocations ?? []).map(() => null);
+    let totalWht = 0;
+    const whtCreditByAccount = new Map<string, number>();
+    let whtPayableFallback = "2330";
+    if (!isReceipt && allocations && allocations.length > 0) {
+      const { computeWHT } = await import("../lib/withholdingTax.js");
+      whtPayableFallback = await financialEngine.resolveAccountCode(
+        scope.companyId, "wht_payable", "credit", "2330",
+      );
+      for (let i = 0; i < allocations.length; i++) {
+        const a = allocations[i];
+        if (a.obligationType !== "purchase_order") continue;
+        const [po] = await rawQuery<{ supplierId: number | null }>(
+          `SELECT "supplierId" FROM purchase_orders
+            WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+          [a.obligationId, scope.companyId]
+        );
+        if (!po?.supplierId) continue;
+        const split = await computeWHT({
+          companyId: scope.companyId,
+          supplierId: Number(po.supplierId),
+          grossAmount: Number(a.amount),
+        });
+        if (!split.applies || split.wht <= 0) continue;
+        allocWht[i] = {
+          wht: split.wht, net: split.net, rate: split.rate,
+          category: split.category, payableAccountCode: split.payableAccountCode,
+        };
+        totalWht = roundTo2(totalWht + split.wht);
+        const code = split.payableAccountCode || whtPayableFallback;
+        whtCreditByAccount.set(code, roundTo2((whtCreditByAccount.get(code) ?? 0) + split.wht));
+      }
+    }
+
+    // Net cash leaving the company = totalWithVat − totalWht. The
+    // withheld portion sits in WHT Payable until the next ZATCA filing.
+    const netCashOut = roundTo2(totalWithVat - totalWht);
+    const whtCreditLines = Array.from(whtCreditByAccount.entries()).map(
+      ([accountCode, amount]) => ({ accountCode, debit: 0, credit: amount })
+    );
+
     const journalLines: { accountCode: string; debit: number; credit: number }[] = isReceipt
       ? [
           { accountCode: cashAcct, debit: totalWithVat, credit: 0 },
@@ -878,7 +975,8 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
       : [
           { accountCode: subAccountCode || accountCode, debit: baseAmount, credit: 0 },
           ...(computedVat > 0 ? [{ accountCode: inputVatCode2, debit: computedVat, credit: 0 }] : []),
-          { accountCode: cashAcct, debit: 0, credit: totalWithVat },
+          ...whtCreditLines,
+          { accountCode: cashAcct, debit: 0, credit: netCashOut },
         ];
 
     if (isDryRun(req)) {
@@ -894,6 +992,8 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
           baseAmount,
           vatAmount: computedVat,
           totalWithVat,
+          whtAmount: totalWht,
+          netCashOut,
         },
       });
       return;
@@ -903,81 +1003,110 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     // account balances; balances are applied only when the voucher is
     // approved (PATCH /vouchers/:id/approve). A rejected voucher therefore
     // never touches the ledger.
-    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, sourceType: "voucher", sourceId: 0, sourceKey: `finance:voucher:${idempotencyToken}`, lines: journalLines, deferBalances: true });
-    markIdempotencyReplay(req, res, alreadyExists);
+    // Atomicity guarantee: voucher JE, metadata UPDATE, and N
+    // supplier_payment_allocations inserts (with their per-row cap
+    // validation) commit or roll back together. The earlier shape ran
+    // the engine post, then the metadata UPDATE (with .catch logging),
+    // then the allocations loop with per-row throws — so a Validation
+    // Error on allocation #N left allocations #1..#N-1 + the JE
+    // committed, with the route returning 4xx. The voucher then
+    // existed in a partial state: idempotency replay (sourceKey match)
+    // returns alreadyExists=true and SKIPS the allocations loop
+    // entirely (line below), so the missing allocations stay missing
+    // forever. financialEngine.postJournalEntry's internal
+    // withTransaction joins this outer one reentrantly via SAVEPOINT
+    // (rawdb.ts:108).
+    const { journalId, alreadyExists } = await withTransaction(async () => {
+      const posted = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: branchId ?? scope.branchId, createdBy: scope.activeAssignmentId, ref, description: finalDescription, sourceType: "voucher", sourceId: 0, sourceKey: `finance:voucher:${idempotencyToken}`, lines: journalLines, deferBalances: true });
 
-    await rawExecute(
-      `UPDATE journal_entries SET "paymentMethod" = $1, reference = $2, "attachmentUrl" = $3, "attachmentType" = $4, "relatedEntityType" = $5, "relatedEntityId" = $6, "operationType" = $7, "departmentId" = $8 WHERE id = $9 AND "companyId" = $10 AND "deletedAt" IS NULL`,
-      [method ?? "cash", reference ?? null, attachmentUrl ?? null, attachmentType ?? null, relatedEntityType ?? null, relatedEntityId ?? null, operationType ?? type, departmentId ?? null, journalId, scope.companyId]
-    ).catch((err) => logger.error(err, "Failed to update voucher metadata:"));
+      await rawExecute(
+        `UPDATE journal_entries SET "paymentMethod" = $1, reference = $2, "attachmentUrl" = $3, "attachmentType" = $4, "relatedEntityType" = $5, "relatedEntityId" = $6, "operationType" = $7, "departmentId" = $8 WHERE id = $9 AND "companyId" = $10 AND "deletedAt" IS NULL`,
+        [method ?? "cash", reference ?? null, attachmentUrl ?? null, attachmentType ?? null, relatedEntityType ?? null, relatedEntityId ?? null, operationType ?? type, departmentId ?? null, posted.journalId, scope.companyId]
+      );
 
-    // C4 + C5 — link the voucher to the AP obligation(s) it pays. Skip on
-    // idempotent replay (rows already exist from the original insert).
-    if (allocations && allocations.length > 0 && !alreadyExists) {
-      for (const a of allocations) {
-        const allocAmt = roundTo2(Number(a.amount));
+      // C4 + C5 — link the voucher to the AP obligation(s) it pays. Skip
+      // on idempotent replay (rows already exist from the original insert).
+      if (allocations && allocations.length > 0 && !posted.alreadyExists) {
+        for (let i = 0; i < allocations.length; i++) {
+          const a = allocations[i];
+          const wht = allocWht[i];
+          const allocAmt = roundTo2(Number(a.amount));
+          // The obligation is discharged by the FULL gross — the
+          // supplier sees the buyer paid 100K (85K cash + 15K to ZATCA
+          // on its behalf). So `amount` (= cash to supplier) stays net
+          // and the gross-discharged is `allocAmt + wht.wht`.
+          const grossDischarged = roundTo2(allocAmt + (wht?.wht ?? 0));
 
-        // #901 cap: Σ existing allocations to this obligation + the new
-        // amount must not exceed the obligation's total. Without this
-        // check, two vouchers each ≤ their own amount can still
-        // over-allocate a PO/Nusk invoice (e.g. PO=50K → V1 allocates
-        // 40K, V2 allocates 30K → vendor shows -20K outstanding).
-        let obligationCap: number | null = null;
-        if (a.obligationType === "purchase_order") {
-          const [po] = await rawQuery<{ totalAmount: string | number }>(
-            `SELECT "totalAmount" FROM purchase_orders
-              WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-            [a.obligationId, scope.companyId]
-          );
-          if (po) obligationCap = Number(po.totalAmount);
-        } else if (a.obligationType === "nusk_invoice") {
-          const [ni] = await rawQuery<{ totalAmount: string | number; refundAmount: string | number }>(
-            `SELECT "totalAmount", "refundAmount" FROM umrah_nusk_invoices
-              WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-            [a.obligationId, scope.companyId]
-          );
-          if (ni) obligationCap = Number(ni.totalAmount) - Number(ni.refundAmount ?? 0);
-        }
-        if (obligationCap !== null) {
-          const [{ already }] = await rawQuery<{ already: string | number }>(
-            `SELECT COALESCE(SUM(amount), 0) AS already
-               FROM supplier_payment_allocations
-              WHERE "companyId" = $1
-                AND "obligationType" = $2
-                AND "obligationId" = $3
-                AND "deletedAt" IS NULL`,
-            [scope.companyId, a.obligationType, a.obligationId]
-          );
-          const alreadyAllocated = Number(already);
-          if (alreadyAllocated + allocAmt > roundTo2(obligationCap) + 0.005) {
-            throw new ValidationError(
-              `إجمالي التخصيصات (${roundTo2(alreadyAllocated + allocAmt)}) يتجاوز قيمة الالتزام (${roundTo2(obligationCap)})`,
-              {
-                field: "allocations",
-                fix: `الالتزام (${a.obligationType} #${a.obligationId}) قُيِّد له ${roundTo2(alreadyAllocated)} سابقًا. خفّض المبلغ.`,
-              }
+          // #901 cap: Σ existing allocations to this obligation + the new
+          // amount must not exceed the obligation's total. Without this
+          // check, two vouchers each ≤ their own amount can still
+          // over-allocate a PO/Nusk invoice. Σ must include withheld
+          // amounts on previous allocations (gross discharged), so the
+          // SUM picks up amount + whtAmount.
+          let obligationCap: number | null = null;
+          if (a.obligationType === "purchase_order") {
+            const [po] = await rawQuery<{ totalAmount: string | number }>(
+              `SELECT "totalAmount" FROM purchase_orders
+                WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+              [a.obligationId, scope.companyId]
             );
+            if (po) obligationCap = Number(po.totalAmount);
+          } else if (a.obligationType === "nusk_invoice") {
+            const [ni] = await rawQuery<{ totalAmount: string | number; refundAmount: string | number }>(
+              `SELECT "totalAmount", "refundAmount" FROM umrah_nusk_invoices
+                WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+              [a.obligationId, scope.companyId]
+            );
+            if (ni) obligationCap = Number(ni.totalAmount) - Number(ni.refundAmount ?? 0);
           }
-        }
+          if (obligationCap !== null) {
+            const [{ already }] = await rawQuery<{ already: string | number }>(
+              `SELECT COALESCE(SUM(amount + COALESCE("whtAmount", 0)), 0) AS already
+                 FROM supplier_payment_allocations
+                WHERE "companyId" = $1
+                  AND "obligationType" = $2
+                  AND "obligationId" = $3
+                  AND "deletedAt" IS NULL`,
+              [scope.companyId, a.obligationType, a.obligationId]
+            );
+            const alreadyAllocated = Number(already);
+            if (alreadyAllocated + grossDischarged > roundTo2(obligationCap) + 0.005) {
+              throw new ValidationError(
+                `إجمالي التخصيصات (${roundTo2(alreadyAllocated + grossDischarged)}) يتجاوز قيمة الالتزام (${roundTo2(obligationCap)})`,
+                {
+                  field: "allocations",
+                  fix: `الالتزام (${a.obligationType} #${a.obligationId}) قُيِّد له ${roundTo2(alreadyAllocated)} سابقًا. خفّض المبلغ.`,
+                }
+              );
+            }
+          }
 
-        await rawExecute(
-          `INSERT INTO supplier_payment_allocations
-             ("companyId", "branchId", "journalEntryId",
-              "obligationType", "obligationId", amount, notes, "createdBy")
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-          [
-            scope.companyId,
-            branchId ?? scope.branchId ?? null,
-            journalId,
-            a.obligationType,
-            a.obligationId,
-            allocAmt,
-            a.notes ?? null,
-            scope.activeAssignmentId ?? null,
-          ]
-        );
+          await rawExecute(
+            `INSERT INTO supplier_payment_allocations
+               ("companyId", "branchId", "journalEntryId",
+                "obligationType", "obligationId", amount, notes, "createdBy",
+                "whtAmount", "whtRate", "whtCategory")
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            [
+              scope.companyId,
+              branchId ?? scope.branchId ?? null,
+              posted.journalId,
+              a.obligationType,
+              a.obligationId,
+              allocAmt,                              // comment-anchor: amount = net
+              a.notes ?? null,
+              scope.activeAssignmentId ?? null,
+              wht?.wht ?? 0,
+              wht?.rate ?? null,
+              wht?.category ?? null,
+            ]
+          );
+        }
       }
-    }
+
+      return { journalId: posted.journalId, alreadyExists: posted.alreadyExists };
+    });
+    markIdempotencyReplay(req, res, alreadyExists);
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: `voucher.${type}`, entity: "vouchers", entityId: journalId, details: JSON.stringify({ ref, type, amount: baseAmount, vatAmount: computedVat, totalWithVat, accountCode, payee, method }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
 
@@ -1000,7 +1129,55 @@ journalRouter.patch("/vouchers/:id", authorize({ feature: "finance.journal", act
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { description } = zodParse(updateDescriptionSchema.safeParse(req.body ?? {}));
-    const [row] = await rawQuery<Record<string, unknown>>(`UPDATE journal_entries SET description = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL RETURNING *`, [description, id, scope.companyId]);
+
+    // VL-1 — fetch the voucher (and only a voucher, per the RV/PV ref
+    // filter) so we can verify status + period BEFORE any UPDATE. The
+    // ref filter is critical: without it, the route was a generic
+    // "edit description on any journal_entries row" — sending an
+    // expense or manual-journal id would silently rewrite that row's
+    // description, bypassing every domain-specific guard.
+    const [existing] = await rawQuery<{ status: string; entryDate: string }>(
+      `SELECT status, date::text AS "entryDate"
+         FROM journal_entries
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          AND (ref LIKE 'RV%' OR ref LIKE 'PV%')`,
+      [id, scope.companyId]
+    );
+    if (!existing) throw new NotFoundError("السند غير موجود");
+
+    // VL-1 (mirrors PD-4 on PATCH /expenses/:id): an approved or terminal-
+    // state voucher is immutable — corrections happen via a reversing
+    // entry through POST /journal/:id/reverse, never an in-place edit.
+    // Pre-approval states (draft, pending_approval, returned) are still
+    // editable.
+    const TERMINAL_VOUCHER_STATES = new Set([
+      "approved", "rejected", "cancelled", "reversed", "posted",
+    ]);
+    if (TERMINAL_VOUCHER_STATES.has(existing.status)) {
+      throw new ConflictError(
+        `لا يمكن تعديل سند بحالة "${existing.status}" — التصحيح يكون عبر قيد عاكس`,
+        { field: "status", fix: "أنشئ قيداً عاكساً عبر POST /journal/:id/reverse بدلاً من تعديل السند المُرحَّل" }
+      );
+    }
+
+    // Period gate: even a draft voucher whose date sits in a now-closed
+    // period must not be edited — the eventual approval would be blocked
+    // by H2 anyway. Catching it here gives the operator a clear error
+    // pointing at the period, not a confusing "approval failed" later.
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, existing.entryDate);
+    if (!periodCheck.open) {
+      throw new ConflictError(
+        `لا يمكن تعديل سند بتاريخ في فترة مُقفلة: ${periodCheck.periodName ?? existing.entryDate}`,
+        { field: "financialPeriod", meta: { periodName: periodCheck.periodName } }
+      );
+    }
+
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `UPDATE journal_entries SET description = $1
+        WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL
+          AND (ref LIKE 'RV%' OR ref LIKE 'PV%') RETURNING *`,
+      [description, id, scope.companyId]
+    );
     if (!row) throw new NotFoundError("السند غير موجود");
     res.json(row);
   } catch (err) {
@@ -1093,10 +1270,28 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
       return;
     }
 
-    const { journalId, alreadyExists } = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: advanceDescription, type: "salary_advance", sourceType: "salary_advance", sourceId: 0, sourceKey: `finance:salary_advance:${idempotencyToken}`, lines: advanceLines });
+    // Atomicity guarantee: salary-advance JE post, approval-chain init,
+    // and the pending_approval status flip all commit or roll back
+    // together. The earlier shape ran them sequentially — a throw on
+    // initiateApprovalChain (FK / chain definition / amount tier) left
+    // the JE committed without an approval chain (the C3 silent-
+    // corruption pattern that #885 closed on /expenses and #1021
+    // closed on /custodies). Same fix pattern. The engine's internal
+    // withTransaction joins this outer one reentrantly via SAVEPOINT
+    // (rawdb.ts:108).
+    let journalId!: number;
+    let alreadyExists = false;
+    await withTransaction(async () => {
+      const posted = await financialEngine.postJournalEntry({ companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId, ref, description: advanceDescription, type: "salary_advance", sourceType: "salary_advance", sourceId: 0, sourceKey: `finance:salary_advance:${idempotencyToken}`, lines: advanceLines });
+      journalId = posted.journalId;
+      alreadyExists = posted.alreadyExists;
+      const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "advances", refType: "salary_advance", refId: journalId, amount: Number(amount) });
+      if (approvalResult.requiresApproval) {
+        const { affectedRows } = await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`, [journalId, scope.companyId]);
+        if (!affectedRows) throw new NotFoundError("القيد غير موجود");
+      }
+    });
     markIdempotencyReplay(req, res, alreadyExists);
-    const approvalResult = await initiateApprovalChain({ companyId: scope.companyId, branchId: scope.branchId, chainType: "advances", refType: "salary_advance", refId: journalId, amount: Number(amount) });
-    if (approvalResult.requiresApproval) { const { affectedRows } = await rawExecute(`UPDATE journal_entries SET status = 'pending_approval' WHERE id = $1 AND "companyId" = $2 AND status = 'draft' AND "deletedAt" IS NULL`, [journalId, scope.companyId]); if (!affectedRows) throw new NotFoundError("القيد غير موجود"); }
     const [createdAdvance] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
        FROM journal_entries je
@@ -1258,8 +1453,18 @@ journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "
       return;
     }
 
-    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('journal_number_seq') AS seq`).catch((e) => { logger.error(e, "finance journal query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }]; });
-    const ref = generateRef("JE", seqRow.seq, 5);
+    // Numbering center (Issue #1141) — manual journal number from the
+    // central authority (scheme: finance.journal_entry). No random
+    // fallback: if numbering fails, the manual JE creation fails too.
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "finance",
+      entityKey: "journal_entry",
+      entityTable: "journal_entries",
+      actorId: scope.userId,
+    });
+    const ref = issued.number;
     const idempotencyToken = requestIdempotencyToken(req);
 
     // FIN-013 — manual journals now follow a draft → approved → posted
@@ -1461,6 +1666,26 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
         throw new ValidationError("لا يمكن عكس قيد هو أصلاً قيد عاكس");
       }
 
+      // Defense in depth — even if `reversedById` was manually
+      // unset on the original (legacy data, partial recovery), make
+      // sure no OTHER reversal already references this id. Two
+      // active reversals on the same original double-reverse the
+      // chart_of_accounts deltas and corrupt the trial balance.
+      const { rows: [existingReversal] } = await client.query(
+        `SELECT id, ref FROM journal_entries
+          WHERE "reversalOfId" = $1
+            AND "companyId" = $2
+            AND "deletedAt" IS NULL
+          LIMIT 1`,
+        [id, scope.companyId]
+      );
+      if (existingReversal) {
+        throw new ValidationError(
+          `هذا القيد معكوس مسبقاً بالقيد #${existingReversal.id} (${existingReversal.ref}) — لا يمكن إنشاء عكس ثانٍ`,
+          { field: "id", fix: "افحص القيد العاكس القائم أو اعكسه بدلاً من إنشاء واحد جديد" }
+        );
+      }
+
       const { rows: originalLines } = await client.query(
         `SELECT "accountCode", debit, credit, description, "costCenter", "departmentId", "projectId", "employeeId"
          FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL ORDER BY id ASC`,
@@ -1535,6 +1760,44 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
         [id, scope.companyId]
       );
 
+      // Symmetric rollback for the customer side: when reversing a
+      // payment JE that was sourced from a customer invoice, decrement
+      // the invoice's paidAmount + recompute its status. Without this,
+      // the invoice still shows as paid/partial after the reversal —
+      // AR aging + customer statements are wrong.
+      //
+      // The payment JE was created in finance-invoices.ts with
+      // sourceType='invoice' AND type='payment'. The amount to roll
+      // back is the JE's total debit (the cash side of the original
+      // posting).
+      if (original.sourceType === "invoice" && original.type === "payment" && original.sourceId) {
+        const { rows: [paymentTotals] } = await client.query(
+          `SELECT COALESCE(SUM(debit), 0)::text AS total
+             FROM journal_lines
+            WHERE "journalId" = $1 AND "deletedAt" IS NULL`,
+          [id]
+        );
+        const paidDelta = Number(paymentTotals?.total ?? 0);
+        if (paidDelta > 0) {
+          // Decrement paidAmount but never below zero (defensive
+          // floor; matches the existing GREATEST() idiom elsewhere
+          // in the finance code). Re-derive status from the
+          // resulting balance.
+          await client.query(
+            `UPDATE invoices
+                SET "paidAmount" = GREATEST(COALESCE("paidAmount",0) - $1, 0),
+                    status = CASE
+                      WHEN GREATEST(COALESCE("paidAmount",0) - $1, 0) >= total - 0.01 THEN 'paid'
+                      WHEN GREATEST(COALESCE("paidAmount",0) - $1, 0) > 0           THEN 'partial'
+                      ELSE 'draft'
+                    END,
+                    "updatedAt" = NOW()
+              WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+            [paidDelta, original.sourceId, scope.companyId]
+          );
+        }
+      }
+
       return { newJournalId: newId, newRef, originalRef: original.ref as string };
     });
 
@@ -1579,6 +1842,11 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
   const startDate = `${year}-01-01`;
   const endDate = `${year}-12-31`;
 
+  // Use journal_entries.date (the accounting date) rather than
+  // createdAt (the insertion timestamp). A JE backdated to 2025-12-31
+  // but inserted on 2026-01-02 must still belong to 2025's year-end
+  // closing. createdAt was the wrong filter — it bucketed late-inserted
+  // entries into the wrong year's P&L.
   const revenues = await rawQuery<Record<string, unknown>>(
     `SELECT coa.code, coa.name,
             COALESCE(SUM(jl.credit), 0) - COALESCE(SUM(jl.debit), 0) AS balance
@@ -1586,7 +1854,8 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
      LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
      LEFT JOIN journal_entries je ON je.id = jl."journalId"
           AND je."companyId" = $1 AND je."deletedAt" IS NULL
-          AND je."createdAt" >= $2 AND je."createdAt" <= ($3::date + INTERVAL '1 day')
+          AND je."balancesApplied" = true AND je."reversedById" IS NULL
+          AND je.date >= $2 AND je.date <= $3::date
      WHERE coa."companyId" = $1 AND coa.type = 'revenue' AND coa."deletedAt" IS NULL
      GROUP BY coa.code, coa.name
      HAVING COALESCE(SUM(jl.credit), 0) - COALESCE(SUM(jl.debit), 0) <> 0
@@ -1600,7 +1869,8 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
      LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
      LEFT JOIN journal_entries je ON je.id = jl."journalId"
           AND je."companyId" = $1 AND je."deletedAt" IS NULL
-          AND je."createdAt" >= $2 AND je."createdAt" <= ($3::date + INTERVAL '1 day')
+          AND je."balancesApplied" = true AND je."reversedById" IS NULL
+          AND je.date >= $2 AND je.date <= $3::date
      WHERE coa."companyId" = $1 AND coa.type = 'expense' AND coa."deletedAt" IS NULL
      GROUP BY coa.code, coa.name
      HAVING COALESCE(SUM(jl.debit), 0) - COALESCE(SUM(jl.credit), 0) <> 0
@@ -1741,6 +2011,13 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", authorize({ feature
     if (existingYE) throw new ConflictError(`قيد إقفال السنة ${year} موجود مسبقاً`);
     const description = `قيد إقفال السنة المالية ${year} — صافي الدخل ${netIncome.toFixed(2)}`;
     const { financialEngine } = await import("../lib/engines/index.js");
+    // Year-end closing entry: accounting practice dictates the entry is
+    // dated 12/31 of the year being closed (not today). By the time this
+    // endpoint runs all 12 monthly periods of that year are closed (the
+    // route validates this above), so the period gate would otherwise
+    // reject the post — `skipPeriodCheck: true` is the sanctioned escape
+    // hatch for type='closing' specifically (financialEngine enforces the
+    // type guard so the flag can't be used as a generic bypass).
     const { journalId } = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,
@@ -1752,6 +2029,8 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", authorize({ feature
       sourceId: 0,
       sourceKey: `finance:year_end:${scope.companyId}:${year}`,
       lines,
+      postingDate: `${year}-12-31`,
+      skipPeriodCheck: true,
     });
 
     // Mark all fiscal periods for the year as yearEndClosed = true

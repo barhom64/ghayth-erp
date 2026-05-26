@@ -104,8 +104,10 @@ describe("Exit request creation", () => {
   });
 
   it("initiates approval chain for exit requests", () => {
+    // Slice widened from 6000 → 7500: the unified-numbering issueNumber
+    // prelude (#1141 phase 6) pushed initiateApprovalChain further down.
     const idx = EXIT_ROUTE.indexOf('router.post("/exit"');
-    const section = EXIT_ROUTE.slice(idx, idx + 6000);
+    const section = EXIT_ROUTE.slice(idx, idx + 7500);
     expect(section).toContain("initiateApprovalChain");
     expect(section).toContain('chainType: "exit"');
   });
@@ -348,7 +350,11 @@ describe("Loan rejection", () => {
 describe("Loan self-service", () => {
   it("GET /loans/my uses activeAssignmentId scope", () => {
     const idx = LOANS_ROUTE.indexOf('"/loans/my"');
-    const section = LOANS_ROUTE.slice(idx, idx + 500);
+    // Window widened to 1100 after the buildScopedWhere refactor pushed the
+    // params.push(scope.activeAssignmentId) call below the new scope helper
+    // call. The literal `scope.activeAssignmentId` still sits inside the same
+    // handler — just further down the function body.
+    const section = LOANS_ROUTE.slice(idx, idx + 1100);
     expect(section).toContain("scope.activeAssignmentId");
   });
 });
@@ -461,7 +467,10 @@ describe("Overtime monthly summary", () => {
 
   it("summary only includes approved requests", () => {
     const idx = OVERTIME_ROUTE.indexOf('"/overtime/summary"');
-    const section = OVERTIME_ROUTE.slice(idx, idx + 1000);
+    // Window widened from 1000 → 1600 after the buildScopedWhere refactor
+    // pushed the `status = 'approved'` predicate further down past the new
+    // scope-helper block. The assertion content is unchanged.
+    const section = OVERTIME_ROUTE.slice(idx, idx + 1600);
     expect(section).toContain("status = 'approved'");
   });
 });

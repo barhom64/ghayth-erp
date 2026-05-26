@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import {
@@ -6,7 +5,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, CheckCircle2, Clock, User, MapPin, FileText } from "lucide-react";
@@ -69,20 +68,6 @@ export default function TaskDetail() {
     { successMessage: "تم تحديث حالة المهمة" },
   );
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!task) return [];
-    const items: Array<{ label: string; value: string }> = [
-      { label: "رقم المهمة", value: `TSK-${id}` },
-      { label: "العنوان", value: task.title || "-" },
-      { label: "النوع", value: task.type || "-" },
-      { label: "الأولوية", value: PRIORITY_LABELS[task.priority] || task.priority || "-" },
-      { label: "الحالة", value: STATUS_LABELS[task.status] || task.status || "-" },
-      { label: "المُعيَّن إليه", value: task.assignedToName || `#${task.assignedTo ?? "-"}` },
-      { label: "تاريخ الاستحقاق", value: task.scheduledStart ? formatDateAr(task.scheduledStart) : "-" },
-      { label: "الوصف", value: task.description || "-" },
-    ];
-    return [{ kind: "info-grid", items }];
-  }, [task, id]);
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -212,10 +197,9 @@ export default function TaskDetail() {
             تعديل
           </GuardedButton>
           <EntityPrintButton
-            title={task?.title || `مهمة #${id}`}
-            ref={id ? `TSK-${id}` : undefined}
-            sections={printSections}
-          />
+            entityType="task"
+            entityId={id ?? 0}
+            formats={["a4"]}/>
         </div>
       }
       overview={overview}

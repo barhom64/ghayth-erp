@@ -8,7 +8,7 @@ import {
 } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -178,49 +178,6 @@ export default function ExpenseDetail() {
     ? PAYMENT_METHODS[expense.paymentMethod] || expense.paymentMethod
     : null;
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!expense) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: expense.ref || `EXP-${id}` },
-          { label: "المبلغ", value: formatCurrency(amount) },
-          ...(expense.operationType
-            ? [{ label: "نوع العملية", value: OPERATION_LABELS[expense.operationType] || expense.operationType }]
-            : []),
-          ...(expense.expenseType
-            ? [{ label: "تصنيف المصروف", value: expense.expenseType }]
-            : []),
-          ...(paymentMethodLabel
-            ? [{ label: "طريقة الدفع", value: paymentMethodLabel }]
-            : []),
-          ...(expense.costCenter
-            ? [{ label: "مركز التكلفة", value: expense.costCenter }]
-            : []),
-          ...(expense.supplierName
-            ? [{ label: "المورد", value: expense.supplierName }]
-            : []),
-          ...(expense.reference
-            ? [{ label: "المرجع الخارجي", value: expense.reference }]
-            : []),
-          { label: "الحالة", value: STATUS_LABELS[expense.status] || expense.status || "-" },
-          { label: "تاريخ الإنشاء", value: formatDateAr(expense.createdAt) },
-        ],
-      },
-    ];
-    if (expense.description) {
-      sections.push({ kind: "text", title: "وصف المصروف", body: expense.description });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "مقدم المصروف", name: expense.createdByName || "" },
-        { label: "المعتمد", name: expense.approvedByName || expense.reviewedByName || "" },
-      ],
-    });
-    return sections;
-  }, [expense, amount, paymentMethodLabel, id]);
 
   const handleEdit = () => {
     setLocation(`/finance/expenses/${id}/edit`);
@@ -462,12 +419,9 @@ export default function ExpenseDetail() {
           <>
             {expense && (
               <EntityPrintButton
-                branchId={expense.branchId}
-                title={expense.ref ? `مصروف ${expense.ref}` : "مصروف"}
-                ref={expense.ref || `EXP-${id}`}
-                date={formatDateAr(expense.createdAt)}
-                sections={printSections}
-              />
+                entityType="expense"
+                entityId={id ?? 0}
+                formats={["a4"]}/>
             )}
             <GuardedButton
               perm="finance:update"

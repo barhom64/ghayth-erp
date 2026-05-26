@@ -44,6 +44,26 @@ const journalLineSchema = z.object({
   credit: z.coerce.number().min(0).default(0),
   description: z.string().optional().default(""),
   costCenter: z.string().optional(),
+  // Dimensional allocation (#1090 line-level allocation — phase P0/P1
+  // brought dimensions to invoice + PO lines; this lets manual
+  // journal entries carry the same dimensions so trial-balance and
+  // per-entity profitability reports remain consistent across all
+  // journal sources).
+  costCenterId: z.coerce.number().int().positive().optional(),
+  activityType: z.string().optional(),
+  projectId: z.coerce.number().int().positive().optional(),
+  vehicleId: z.coerce.number().int().positive().optional(),
+  propertyId: z.coerce.number().int().positive().optional(),
+  unitId: z.coerce.number().int().positive().optional(),
+  assetId: z.coerce.number().int().positive().optional(),
+  employeeId: z.coerce.number().int().positive().optional(),
+  driverId: z.coerce.number().int().positive().optional(),
+  contractId: z.coerce.number().int().positive().optional(),
+  clientId: z.coerce.number().int().positive().optional(),
+  vendorId: z.coerce.number().int().positive().optional(),
+  umrahSeasonId: z.coerce.number().int().positive().optional(),
+  umrahAgentId: z.coerce.number().int().positive().optional(),
+  manualOverrideReason: z.string().optional(),
 });
 
 const createJournalSchema = z.object({
@@ -630,5 +650,616 @@ accountsRouter.get("/summary", authorize({ feature: "finance.accounts", action: 
     }));
   } catch (err) {
     handleRouteError(err, res, "خطأ غير متوقع");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAX CODES — Migration 205.
+//
+// CRUD for the per-company tax-code registry that drives invoice
+// math + ZATCA categorisation. Default Saudi codes (VAT15, VAT0,
+// EXEMPT, OOS, RCM15) are seeded by migration 205; tenants can edit
+// names/accounts/inclusive defaults or add new codes (e.g. a future
+// VAT5 if rates change).
+//
+// Scoped to feature='finance.accounts' — same RBAC role as chart-of-
+// accounts admin.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TAX_TYPES = ["standard", "zero", "exempt", "out_of_scope", "reverse_charge"] as const;
+
+const upsertTaxCodeSchema = z.object({
+  code: z.string().min(1).max(20),
+  name: z.string().min(1).max(100),
+  nameEn: z.string().max(100).optional().nullable(),
+  rate: z.coerce.number().min(0).max(100),
+  taxType: z.enum(TAX_TYPES),
+  accountId: z.coerce.number().optional().nullable(),
+  inputAccountId: z.coerce.number().optional().nullable(),
+  isInclusiveDefault: z.coerce.boolean().optional().default(false),
+  zatcaCategoryCode: z.string().max(10).optional().nullable(),
+  zatcaExemptionReason: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  isActive: z.coerce.boolean().optional().default(true),
+});
+
+accountsRouter.get("/tax-codes", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { taxType, isActive } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let where = `"companyId" = $1 AND "deletedAt" IS NULL`;
+    if (taxType) {
+      params.push(taxType);
+      where += ` AND "taxType" = $${params.length}`;
+    }
+    if (isActive === "true" || isActive === "false") {
+      params.push(isActive === "true");
+      where += ` AND "isActive" = $${params.length}`;
+    }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM tax_codes WHERE ${where} ORDER BY "taxType", rate DESC, code ASC LIMIT 500`,
+      params
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "List tax codes error:");
+  }
+});
+
+accountsRouter.get("/tax-codes/:id", authorize({ feature: "finance.accounts", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM tax_codes WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("رمز الضريبة غير موجود");
+    res.json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Get tax code error:");
+  }
+});
+
+accountsRouter.post("/tax-codes", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const p = zodParse(upsertTaxCodeSchema.safeParse(req.body));
+    const insRes = await rawExecute(
+      `INSERT INTO tax_codes (
+         "companyId", code, name, "nameEn", rate, "taxType",
+         "accountId", "inputAccountId", "isInclusiveDefault",
+         "zatcaCategoryCode", "zatcaExemptionReason",
+         description, "isActive"
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [
+        scope.companyId, p.code, p.name, p.nameEn ?? null, p.rate, p.taxType,
+        p.accountId ?? null, p.inputAccountId ?? null, p.isInclusiveDefault ?? false,
+        p.zatcaCategoryCode ?? null, p.zatcaExemptionReason ?? null,
+        p.description ?? null, p.isActive ?? true,
+      ]
+    );
+    const newId = insRes.insertId;
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM tax_codes WHERE id = $1`, [newId]);
+
+    // The tax-codes module caches per (companyId, code) — invalidate
+    // so subsequent calls see the new row immediately.
+    const { clearTaxCodeCache } = await import("../lib/taxCodes.js");
+    clearTaxCodeCache(scope.companyId);
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "tax_codes", entityId: Number(newId),
+      after: { code: p.code, name: p.name, rate: p.rate, taxType: p.taxType },
+    }).catch((e) => logger.error(e, "tax code audit failed"));
+
+    res.status(201).json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Create tax code error:");
+  }
+});
+
+accountsRouter.patch("/tax-codes/:id", authorize({ feature: "finance.accounts", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const p = zodParse(upsertTaxCodeSchema.partial().safeParse(req.body));
+
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    const push = (col: string, val: unknown) => {
+      values.push(val);
+      fields.push(`"${col}" = $${values.length}`);
+    };
+    if (p.code !== undefined) push("code", p.code);
+    if (p.name !== undefined) push("name", p.name);
+    if (p.nameEn !== undefined) push("nameEn", p.nameEn ?? null);
+    if (p.rate !== undefined) push("rate", p.rate);
+    if (p.taxType !== undefined) push("taxType", p.taxType);
+    if (p.accountId !== undefined) push("accountId", p.accountId ?? null);
+    if (p.inputAccountId !== undefined) push("inputAccountId", p.inputAccountId ?? null);
+    if (p.isInclusiveDefault !== undefined) push("isInclusiveDefault", p.isInclusiveDefault);
+    if (p.zatcaCategoryCode !== undefined) push("zatcaCategoryCode", p.zatcaCategoryCode ?? null);
+    if (p.zatcaExemptionReason !== undefined) push("zatcaExemptionReason", p.zatcaExemptionReason ?? null);
+    if (p.description !== undefined) push("description", p.description ?? null);
+    if (p.isActive !== undefined) push("isActive", p.isActive);
+    if (fields.length === 0) throw new ValidationError("لا تغييرات لتطبيقها");
+    fields.push(`"updatedAt" = NOW()`);
+
+    values.push(id, scope.companyId);
+    const updRes = await rawExecute(
+      `UPDATE tax_codes SET ${fields.join(", ")}
+        WHERE id = $${values.length - 1} AND "companyId" = $${values.length} AND "deletedAt" IS NULL`,
+      values
+    );
+    if (updRes.affectedRows === 0) throw new NotFoundError("رمز الضريبة غير موجود");
+
+    const { clearTaxCodeCache } = await import("../lib/taxCodes.js");
+    clearTaxCodeCache(scope.companyId);
+
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM tax_codes WHERE id = $1`, [id]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "tax_codes", entityId: id, after: row,
+    }).catch((e) => logger.error(e, "tax code audit failed"));
+    res.json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Update tax code error:");
+  }
+});
+
+accountsRouter.delete("/tax-codes/:id", authorize({ feature: "finance.accounts", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    // Soft delete only — preserves audit / historical line references.
+    const updRes = await rawExecute(
+      `UPDATE tax_codes SET "deletedAt" = NOW(), "isActive" = false
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (updRes.affectedRows === 0) throw new NotFoundError("رمز الضريبة غير موجود");
+    const { clearTaxCodeCache } = await import("../lib/taxCodes.js");
+    clearTaxCodeCache(scope.companyId);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "tax_codes", entityId: id,
+    }).catch((e) => logger.error(e, "tax code audit failed"));
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "Delete tax code error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WHT CATEGORIES — Migration 208 (Saudi Withholding Tax).
+//
+// Per-company registry of WHT rates. Each row maps a ZATCA category
+// (royalties / technical_services / management_fees / etc.) to a
+// rate + a payable account. The defaults are seeded for every
+// company by migration 208; tenants edit them when treaty (DTAA)
+// rates apply or to point at their own GL accounts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WHT_APPLIES_TO = [
+  "royalties", "technical_services", "management_fees",
+  "dividends", "interest", "rent_movable",
+  "telecommunications", "air_tickets", "freight",
+  "insurance_premium", "other",
+] as const;
+
+const upsertWhtCategorySchema = z.object({
+  code: z.string().min(1).max(20),
+  name: z.string().min(1).max(100),
+  nameEn: z.string().max(100).optional().nullable(),
+  rate: z.coerce.number().min(0).max(100),
+  appliesTo: z.enum(WHT_APPLIES_TO),
+  payableAccountId: z.coerce.number().optional().nullable(),
+  description: z.string().optional().nullable(),
+  isActive: z.coerce.boolean().optional().default(true),
+});
+
+accountsRouter.get("/wht-categories", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { appliesTo, isActive } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let where = `"companyId" = $1 AND "deletedAt" IS NULL`;
+    if (appliesTo) { params.push(appliesTo); where += ` AND "appliesTo" = $${params.length}`; }
+    if (isActive === "true" || isActive === "false") {
+      params.push(isActive === "true");
+      where += ` AND "isActive" = $${params.length}`;
+    }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM wht_categories WHERE ${where} ORDER BY "appliesTo", rate DESC, code LIMIT 500`,
+      params
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "List WHT categories error:");
+  }
+});
+
+accountsRouter.get("/wht-categories/:id", authorize({ feature: "finance.accounts", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM wht_categories WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("فئة الاستقطاع غير موجودة");
+    res.json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Get WHT category error:");
+  }
+});
+
+accountsRouter.post("/wht-categories", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const p = zodParse(upsertWhtCategorySchema.safeParse(req.body));
+    const insRes = await rawExecute(
+      `INSERT INTO wht_categories (
+         "companyId", code, name, "nameEn", rate, "appliesTo",
+         "payableAccountId", description, "isActive"
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [scope.companyId, p.code, p.name, p.nameEn ?? null, p.rate, p.appliesTo,
+       p.payableAccountId ?? null, p.description ?? null, p.isActive ?? true]
+    );
+    const newId = insRes.insertId;
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM wht_categories WHERE id = $1`, [newId]);
+
+    const { clearWhtCache } = await import("../lib/withholdingTax.js");
+    clearWhtCache(scope.companyId);
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "wht_categories", entityId: Number(newId),
+      after: { code: p.code, rate: p.rate, appliesTo: p.appliesTo },
+    }).catch((e) => logger.error(e, "WHT category audit failed"));
+
+    res.status(201).json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Create WHT category error:");
+  }
+});
+
+accountsRouter.patch("/wht-categories/:id", authorize({ feature: "finance.accounts", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const p = zodParse(upsertWhtCategorySchema.partial().safeParse(req.body));
+
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    const push = (col: string, val: unknown) => {
+      values.push(val); fields.push(`"${col}" = $${values.length}`);
+    };
+    if (p.code !== undefined) push("code", p.code);
+    if (p.name !== undefined) push("name", p.name);
+    if (p.nameEn !== undefined) push("nameEn", p.nameEn ?? null);
+    if (p.rate !== undefined) push("rate", p.rate);
+    if (p.appliesTo !== undefined) push("appliesTo", p.appliesTo);
+    if (p.payableAccountId !== undefined) push("payableAccountId", p.payableAccountId ?? null);
+    if (p.description !== undefined) push("description", p.description ?? null);
+    if (p.isActive !== undefined) push("isActive", p.isActive);
+    if (fields.length === 0) throw new ValidationError("لا تغييرات لتطبيقها");
+    fields.push(`"updatedAt" = NOW()`);
+
+    values.push(id, scope.companyId);
+    const updRes = await rawExecute(
+      `UPDATE wht_categories SET ${fields.join(", ")}
+        WHERE id = $${values.length - 1} AND "companyId" = $${values.length} AND "deletedAt" IS NULL`,
+      values
+    );
+    if (updRes.affectedRows === 0) throw new NotFoundError("فئة الاستقطاع غير موجودة");
+
+    const { clearWhtCache } = await import("../lib/withholdingTax.js");
+    clearWhtCache(scope.companyId);
+
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM wht_categories WHERE id = $1`, [id]);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "wht_categories", entityId: id, after: row,
+    }).catch((e) => logger.error(e, "WHT category audit failed"));
+    res.json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Update WHT category error:");
+  }
+});
+
+accountsRouter.delete("/wht-categories/:id", authorize({ feature: "finance.accounts", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const updRes = await rawExecute(
+      `UPDATE wht_categories SET "deletedAt" = NOW(), "isActive" = false
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (updRes.affectedRows === 0) throw new NotFoundError("فئة الاستقطاع غير موجودة");
+    const { clearWhtCache } = await import("../lib/withholdingTax.js");
+    clearWhtCache(scope.companyId);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "wht_categories", entityId: id,
+    }).catch((e) => logger.error(e, "WHT category audit failed"));
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "Delete WHT category error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACCOUNTING ALLOCATION RULES — Finance Line-Level Allocation Phase 6.
+//
+// REST CRUD over accounting_allocation_rules (migration 203). Drives the
+// resolver (lib/accountingAllocation.ts) — a row written here turns into
+// per-line account selection on the next invoice / GRN approval.
+//
+// Scoped to feature 'finance.accounts' since rule authoring is the
+// chart-of-accounts admin's concern (same RBAC role).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ALLOCATION_DOCUMENT_TYPES = [
+  "invoice", "credit_memo", "debit_memo",
+  "purchase_order", "purchase_request", "grn", "supplier_invoice",
+  "expense", "payment", "receipt", "journal_entry",
+] as const;
+
+const ALLOCATION_COST_CENTRE_STRATEGIES = [
+  "from_vehicle", "from_property", "from_unit", "from_project",
+  "from_employee", "from_contract", "from_umrah_agent", "from_umrah_season",
+  "explicit", "none",
+] as const;
+
+const upsertRuleSchema = z.object({
+  name: z.string().min(1, "اسم القاعدة مطلوب"),
+  documentType: z.enum(ALLOCATION_DOCUMENT_TYPES, {
+    errorMap: () => ({ message: "نوع المستند غير صالح" }),
+  }),
+  lineType: z.string().optional().nullable(),
+  activityType: z.string().optional().nullable(),
+  entityType: z.string().optional().nullable(),
+  conditionsJson: z.record(z.any()).optional().nullable(),
+  debitAccountId: z.coerce.number().optional().nullable(),
+  creditAccountId: z.coerce.number().optional().nullable(),
+  revenueAccountId: z.coerce.number().optional().nullable(),
+  expenseAccountId: z.coerce.number().optional().nullable(),
+  assetAccountId: z.coerce.number().optional().nullable(),
+  inventoryAccountId: z.coerce.number().optional().nullable(),
+  vatAccountId: z.coerce.number().optional().nullable(),
+  costCenterStrategy: z.enum(ALLOCATION_COST_CENTRE_STRATEGIES).optional().nullable(),
+  dimensionStrategyJson: z.record(z.any()).optional().nullable(),
+  autoCreateMissing: z.coerce.boolean().optional().default(false),
+  requiresEntityLink: z.coerce.boolean().optional().default(false),
+  priority: z.coerce.number().int().optional().default(100),
+  isActive: z.coerce.boolean().optional().default(true),
+});
+
+// GET /finance/allocation-rules?documentType=invoice&isActive=true
+accountsRouter.get("/allocation-rules", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { documentType, isActive } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let where = `"companyId" = $1 AND "deletedAt" IS NULL`;
+    if (documentType) {
+      params.push(documentType);
+      where += ` AND "documentType" = $${params.length}`;
+    }
+    if (isActive === "true" || isActive === "false") {
+      params.push(isActive === "true");
+      where += ` AND "isActive" = $${params.length}`;
+    }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM accounting_allocation_rules
+        WHERE ${where}
+        ORDER BY "documentType", priority ASC, id ASC
+        LIMIT 500`,
+      params
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "List allocation rules error:");
+  }
+});
+
+// GET /finance/allocation-rules/:id
+accountsRouter.get("/allocation-rules/:id", authorize({ feature: "finance.accounts", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM accounting_allocation_rules
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("قاعدة التوجيه غير موجودة");
+    res.json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Get allocation rule error:");
+  }
+});
+
+// POST /finance/allocation-rules
+accountsRouter.post("/allocation-rules", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const p = zodParse(upsertRuleSchema.safeParse(req.body));
+
+    const insRes = await rawExecute(
+      `INSERT INTO accounting_allocation_rules (
+         "companyId", name, "documentType", "lineType", "activityType", "entityType",
+         "conditionsJson",
+         "debitAccountId", "creditAccountId",
+         "revenueAccountId", "expenseAccountId", "assetAccountId", "inventoryAccountId", "vatAccountId",
+         "costCenterStrategy", "dimensionStrategyJson",
+         "autoCreateMissing", "requiresEntityLink",
+         priority, "isActive"
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6,
+         $7,
+         $8, $9,
+         $10, $11, $12, $13, $14,
+         $15, $16,
+         $17, $18,
+         $19, $20
+       )`,
+      [
+        scope.companyId, p.name, p.documentType, p.lineType ?? null, p.activityType ?? null, p.entityType ?? null,
+        p.conditionsJson ? JSON.stringify(p.conditionsJson) : null,
+        p.debitAccountId ?? null, p.creditAccountId ?? null,
+        p.revenueAccountId ?? null, p.expenseAccountId ?? null, p.assetAccountId ?? null,
+        p.inventoryAccountId ?? null, p.vatAccountId ?? null,
+        p.costCenterStrategy ?? null,
+        p.dimensionStrategyJson ? JSON.stringify(p.dimensionStrategyJson) : null,
+        p.autoCreateMissing ?? false, p.requiresEntityLink ?? false,
+        p.priority ?? 100, p.isActive ?? true,
+      ]
+    );
+    const newId = insRes.insertId;
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM accounting_allocation_rules WHERE id = $1`, [newId]
+    );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "accounting_allocation_rules", entityId: Number(newId),
+      after: { name: p.name, documentType: p.documentType, priority: p.priority },
+    }).catch((e) => logger.error(e, "allocation rule audit failed"));
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "finance.allocation_rule.created",
+      entity: "accounting_allocation_rules", entityId: Number(newId),
+      details: JSON.stringify({ name: p.name, documentType: p.documentType }),
+    }).catch((e) => pushToDLQ("event", { action: "finance.allocation_rule.created", entityId: Number(newId) }, e, scope.companyId));
+
+    res.status(201).json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Create allocation rule error:");
+  }
+});
+
+// PATCH /finance/allocation-rules/:id
+accountsRouter.patch("/allocation-rules/:id", authorize({ feature: "finance.accounts", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const p = zodParse(upsertRuleSchema.partial().safeParse(req.body));
+
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    const push = (col: string, val: unknown) => {
+      values.push(val);
+      fields.push(`"${col}" = $${values.length}`);
+    };
+    if (p.name !== undefined) push("name", p.name);
+    if (p.documentType !== undefined) push("documentType", p.documentType);
+    if (p.lineType !== undefined) push("lineType", p.lineType ?? null);
+    if (p.activityType !== undefined) push("activityType", p.activityType ?? null);
+    if (p.entityType !== undefined) push("entityType", p.entityType ?? null);
+    if (p.conditionsJson !== undefined) push("conditionsJson", p.conditionsJson ? JSON.stringify(p.conditionsJson) : null);
+    if (p.debitAccountId !== undefined) push("debitAccountId", p.debitAccountId ?? null);
+    if (p.creditAccountId !== undefined) push("creditAccountId", p.creditAccountId ?? null);
+    if (p.revenueAccountId !== undefined) push("revenueAccountId", p.revenueAccountId ?? null);
+    if (p.expenseAccountId !== undefined) push("expenseAccountId", p.expenseAccountId ?? null);
+    if (p.assetAccountId !== undefined) push("assetAccountId", p.assetAccountId ?? null);
+    if (p.inventoryAccountId !== undefined) push("inventoryAccountId", p.inventoryAccountId ?? null);
+    if (p.vatAccountId !== undefined) push("vatAccountId", p.vatAccountId ?? null);
+    if (p.costCenterStrategy !== undefined) push("costCenterStrategy", p.costCenterStrategy ?? null);
+    if (p.dimensionStrategyJson !== undefined) push("dimensionStrategyJson", p.dimensionStrategyJson ? JSON.stringify(p.dimensionStrategyJson) : null);
+    if (p.autoCreateMissing !== undefined) push("autoCreateMissing", p.autoCreateMissing);
+    if (p.requiresEntityLink !== undefined) push("requiresEntityLink", p.requiresEntityLink);
+    if (p.priority !== undefined) push("priority", p.priority);
+    if (p.isActive !== undefined) push("isActive", p.isActive);
+
+    if (fields.length === 0) throw new ValidationError("لا تغييرات لتطبيقها");
+    fields.push(`"updatedAt" = NOW()`);
+
+    values.push(id, scope.companyId);
+    const updRes = await rawExecute(
+      `UPDATE accounting_allocation_rules
+          SET ${fields.join(", ")}
+        WHERE id = $${values.length - 1}
+          AND "companyId" = $${values.length}
+          AND "deletedAt" IS NULL`,
+      values
+    );
+    if (updRes.affectedRows === 0) throw new NotFoundError("قاعدة التوجيه غير موجودة");
+
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM accounting_allocation_rules WHERE id = $1`, [id]
+    );
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "accounting_allocation_rules", entityId: id,
+      after: row,
+    }).catch((e) => logger.error(e, "allocation rule audit failed"));
+
+    res.json(maskFields(req, row));
+  } catch (err) {
+    handleRouteError(err, res, "Update allocation rule error:");
+  }
+});
+
+// DELETE /finance/allocation-rules/:id  (soft delete)
+accountsRouter.delete("/allocation-rules/:id", authorize({ feature: "finance.accounts", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const updRes = await rawExecute(
+      `UPDATE accounting_allocation_rules
+          SET "deletedAt" = NOW(), "isActive" = false
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (updRes.affectedRows === 0) throw new NotFoundError("قاعدة التوجيه غير موجودة");
+
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "accounting_allocation_rules", entityId: id,
+    }).catch((e) => logger.error(e, "allocation rule audit failed"));
+
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "Delete allocation rule error:");
+  }
+});
+
+// GET /finance/allocation-results — drilldown into past resolutions.
+// Useful for the «show me which rule moved this line» operator query.
+accountsRouter.get("/allocation-results", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { sourceTable, status, ruleId } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let where = `"companyId" = $1`;
+    if (sourceTable) {
+      params.push(sourceTable);
+      where += ` AND "sourceTable" = $${params.length}`;
+    }
+    if (status) {
+      params.push(status);
+      where += ` AND "resolutionStatus" = $${params.length}`;
+    }
+    if (ruleId) {
+      params.push(Number(ruleId));
+      where += ` AND "ruleId" = $${params.length}`;
+    }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM accounting_allocation_results
+        WHERE ${where}
+        ORDER BY "resolvedAt" DESC
+        LIMIT 500`,
+      params
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "List allocation results error:");
   }
 });

@@ -35,6 +35,28 @@ describe("FinancialEngine public API", () => {
       })
     ).rejects.toThrow("sourceKey is required");
   });
+
+  it("rejects skipPeriodCheck on a non-closing entry (escape hatch is YE-only)", async () => {
+    // Year-end closing entries (type='closing') need to post into a
+    // closed December to land dated 12/31 — that's the only sanctioned
+    // use of skipPeriodCheck. A future caller that flips this flag on a
+    // non-closing post is almost certainly trying to silently bypass
+    // the period gate (the very thing PER-2 / H2 / H4 lock down). The
+    // engine rejects that combination loudly.
+    const { financialEngine } = await import("../../src/lib/engines/financialEngine.js");
+    await expect(
+      financialEngine.postJournalEntry({
+        companyId: 1, branchId: 1, createdBy: 1,
+        ref: "TEST-SKIP",
+        description: "non-closing skipPeriodCheck attempt",
+        type: "expense",
+        sourceType: "test", sourceId: 1,
+        sourceKey: "finance:test:skip-guard",
+        lines: [],
+        skipPeriodCheck: true,
+      })
+    ).rejects.toThrow(/skipPeriodCheck is reserved for closing entries/);
+  });
 });
 
 describe("HREngine public API", () => {

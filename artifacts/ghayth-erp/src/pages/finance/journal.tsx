@@ -17,7 +17,18 @@ import {
   PageStatusBadge,
 } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
-import { PromptDialog } from "@/components/shared/prompt-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
@@ -53,6 +64,8 @@ export default function JournalPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const [reversalTarget, setReversalTarget] = useState<any>(null);
+  const [reversalReason, setReversalReason] = useState("");
+  const { toast } = useToast();
 
   const reverseMut = useApiMutation<void, { id: number; reason: string }>(
     (body) => `/finance/journal/${body.id}/reverse`,
@@ -62,6 +75,7 @@ export default function JournalPage() {
       successMessage: "تم عكس القيد بنجاح",
       onSuccess: () => {
         setReversalTarget(null);
+        setReversalReason("");
       },
     },
   );
@@ -152,6 +166,7 @@ export default function JournalPage() {
           onClick={(e) => {
             e.stopPropagation();
             setReversalTarget(j);
+            setReversalReason("");
           }}
         >
           <Undo2 className="h-4 w-4" />
@@ -270,18 +285,56 @@ export default function JournalPage() {
         }}
       />
 
-      <PromptDialog
+      <AlertDialog
         open={!!reversalTarget}
-        title={`عكس القيد ${reversalTarget?.ref || `JE-${reversalTarget?.id ?? ""}`}`}
-        description="سيتم إنشاء قيد جديد بنفس البنود مع عكس المدين والدائن. هذا الإجراء لا يمكن التراجع عنه."
-        placeholder="أدخل سبب عكس القيد..."
-        confirmLabel="تأكيد العكس"
-        onSubmit={(reason) => {
-          if (!reversalTarget) return;
-          reverseMut.mutate({ id: reversalTarget.id, reason });
+        onOpenChange={(open) => {
+          if (!open) {
+            setReversalTarget(null);
+            setReversalReason("");
+          }
         }}
-        onClose={() => setReversalTarget(null)}
-      />
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              عكس القيد {reversalTarget?.ref || `JE-${reversalTarget?.id}`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم إنشاء قيد جديد بنفس البنود مع عكس المدين والدائن. هذا الإجراء
+              لا يمكن التراجع عنه.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <label className="text-sm font-medium mb-1 block">سبب عكس القيد *</label>
+            <Textarea
+              value={reversalReason}
+              onChange={(e) => setReversalReason(e.target.value)}
+              placeholder="أدخل سبب عكس القيد..."
+              rows={3}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 hover:bg-amber-700"
+              onClick={(e) => {
+                e.preventDefault();
+                if (!reversalReason.trim()) {
+                  toast({ variant: "destructive", title: "السبب مطلوب" });
+                  return;
+                }
+                reverseMut.mutate({
+                  id: reversalTarget.id,
+                  reason: reversalReason,
+                });
+              }}
+              disabled={reverseMut.isPending}
+            >
+              {reverseMut.isPending ? "جاري العكس..." : "تأكيد العكس"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 }

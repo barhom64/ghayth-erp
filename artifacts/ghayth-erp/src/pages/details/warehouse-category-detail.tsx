@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Edit, FolderTree } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * WarehouseCategoryDetail — detail page for a single warehouse category.
@@ -158,10 +159,13 @@ export default function WarehouseCategoryDetail() {
       error={error}
       onRetry={refetch}
       actions={
-        <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!category}>
+        <div className="flex items-center gap-2">
+          <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!category}>
           <Edit className="h-4 w-4 ms-1" />
           تعديل
         </GuardedButton>
+          <PrintButton entityType="warehouse_category" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
       }
     />
   );

@@ -1,66 +1,51 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
-import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
-import { useFormContext } from "react-hook-form";
-import {
-  CreatePageLayout,
-  CreationDateField,
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormTextareaField,
-  FormDateField,
-  FormEntitySelect,
-} from "@workspace/ui-core";
+import { DatePicker } from "@/components/ui/date-picker";
 import { CostCenterSelect } from "@/components/shared/entity-selects";
-import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
+import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
+import { formatCurrency, roundMoney , todayLocal } from "@/lib/formatters";
+import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { NumberField } from "@/components/shared/form-field-wrapper";
+import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 
-type JournalLine = { accountCode: string; description: string; debit: number; credit: number };
+type JournalLine = {
+  accountCode: string;
+  description: string;
+  debit: number;
+  credit: number;
+  allocation?: LineAllocation;
+};
 
-const emptyLine = (): JournalLine => ({ accountCode: "", description: "", debit: 0, credit: 0 });
-
-const schema = z.object({
-  description: z.string().min(1, "البيان مطلوب"),
-  date: z.string(),
-  costCenter: z.string().optional(),
-  notes: z.string().optional(),
+const emptyLine = (): JournalLine => ({
+  accountCode: "", description: "", debit: 0, credit: 0,
+  allocation: {} as LineAllocation,
 });
 
-function BalanceBanner({ lines }: { lines: JournalLine[] }) {
-  const totalDebit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.debit), 0));
-  const totalCredit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.credit), 0));
-  const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0;
-  if (totalDebit <= 0) return null;
-  if (isBalanced) {
-    return (
-      <div className="text-sm text-status-success-foreground bg-status-success-surface border border-status-success-surface rounded-lg px-3 py-2">
-        القيد متوازن
-      </div>
-    );
-  }
-  return (
-    <div className="text-sm text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded-lg px-3 py-2">
-      القيد غير متوازن — الفرق: {formatCurrency(Math.abs(totalDebit - totalCredit))}
-    </div>
-  );
-}
-
 export default function JournalManualCreatePage() {
+  const { toast } = useToast();
   const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
 
-  const [lines, setLines] = useState<JournalLine[]>([emptyLine(), emptyLine()]);
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_journal_manual_create", {
+    description: "",
+    date: todayLocal(),
+    costCenter: "",
+    notes: "",
+    lines: [emptyLine(), emptyLine()],
+  });
+  const { fieldErrors, validate } = useFieldErrors();
 
   const { data: coaData, isLoading, isError } = useApiQuery<any>(
     ["chart-of-accounts"],
-    `/finance/chart-of-accounts${scopeSuffix}`,
+    `/finance/chart-of-accounts${scopeSuffix}`
   );
 
   const createMutation = useApiMutation<unknown, any>(
@@ -69,7 +54,7 @@ export default function JournalManualCreatePage() {
     [["journal-manual"]],
     {
       successMessage: "تم إنشاء القيد اليدوي بحالة مسودة",
-      onSuccess: () => { navigate("/finance/journal-manual"); },
+      onSuccess: () => { clearDraft(); navigate("/finance/journal-manual"); },
     },
   );
 
@@ -78,22 +63,42 @@ export default function JournalManualCreatePage() {
 
   const coa = coaData?.data ?? coaData ?? [];
 
-  const totalDebit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.debit), 0));
-  const totalCredit = roundMoney(lines.reduce((s, l) => s + roundMoney(l.credit), 0));
+  const totalDebit = roundMoney(form.lines.reduce((s, l) => s + roundMoney(l.debit), 0));
+  const totalCredit = roundMoney(form.lines.reduce((s, l) => s + roundMoney(l.credit), 0));
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0;
 
   function addLine() {
-    setLines([...lines, emptyLine()]);
+    setForm(f => ({ ...f, lines: [...f.lines, emptyLine()] }));
   }
   function removeLine(i: number) {
-    if (lines.length <= 2) return;
-    setLines(lines.filter((_, idx) => idx !== i));
+    if (form.lines.length <= 2) return;
+    setForm(f => ({ ...f, lines: f.lines.filter((_, idx) => idx !== i) }));
   }
   function updateLine(i: number, field: keyof JournalLine, val: any) {
-    setLines((prev) => {
-      const next = [...prev];
-      next[i] = { ...next[i], [field]: field === "debit" || field === "credit" ? Number(val) || 0 : val };
-      return next;
+    setForm(f => {
+      const lines = [...f.lines];
+      lines[i] = { ...lines[i], [field]: field === "debit" || field === "credit" ? Number(val) || 0 : val };
+      return { ...f, lines };
+    });
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const firstError = validate({
+      description: form.description ? null : "البيان مطلوب",
+      balance: !isBalanced ? "القيد غير متوازن — يجب أن يتساوى مجموع المدين والدائن" : null,
+    });
+    if (firstError) { toast({ variant: "destructive", title: firstError }); return; }
+    createMutation.mutate({
+      ...form,
+      date: form.date || undefined,
+      lines: form.lines.map((l) => ({
+        accountCode: l.accountCode,
+        description: l.description,
+        debit: l.debit,
+        credit: l.credit,
+        ...buildAllocationPayload(l.allocation ?? {}),
+      })),
     });
   }
 
@@ -103,86 +108,118 @@ export default function JournalManualCreatePage() {
       subtitle="أنشئ قيداً يدوياً بحالة مسودة، ثم أرسله للمراجعة والاعتماد"
       backPath="/finance/journal-manual"
     >
-      <CreationDateField />
-      <FormShell
-        schema={schema}
-        defaultValues={{ description: "", date: todayLocal(), costCenter: "", notes: "" }}
-        submitLabel={createMutation.isPending ? "جاري الإنشاء..." : "إنشاء القيد"}
-        disabled={!isBalanced}
-        secondaryActions={
-          <Button type="button" variant="outline" onClick={() => navigate("/finance/journal-manual")}>
-            إلغاء
-          </Button>
-        }
-        onSubmit={async (values) => {
-          createMutation.mutate({ ...values, lines, date: values.date || undefined });
-        }}
-      >
-        <FormGrid cols={2}>
-          <FormTextField name="description" label="البيان" required placeholder="وصف القيد اليدوي" className="md:col-span-2" />
-          <FormDateField name="date" label="التاريخ" />
-          <FormEntitySelect name="costCenter" select={CostCenterSelect} label="مركز التكلفة" />
-        </FormGrid>
-
-        <div className="rounded-xl border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-subtle">
-              <tr>
-                <th className="px-3 py-2 text-right">رمز الحساب</th>
-                <th className="px-3 py-2 text-right">البيان</th>
-                <th className="px-3 py-2 text-right">مدين</th>
-                <th className="px-3 py-2 text-right">دائن</th>
-                <th className="px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line, i) => (
-                <tr key={i} className="border-t">
-                  <td className="px-2 py-1">
-                    <Input
-                      list={`coa-list-${i}`}
-                      value={line.accountCode}
-                      onChange={(e) => updateLine(i, "accountCode", e.target.value)}
-                      placeholder="الحساب"
-                    />
-                    <datalist id={`coa-list-${i}`}>
-                      {(Array.isArray(coa) ? coa : []).map((a: any) => (
-                        <option key={a.code} value={a.code}>{a.code} - {a.name}</option>
-                      ))}
-                    </datalist>
-                  </td>
-                  <td className="px-2 py-1">
-                    <Input value={line.description} onChange={(e) => updateLine(i, "description", e.target.value)} placeholder="البيان" />
-                  </td>
-                  <td className="px-2 py-1">
-                    <NumberField label="مدين" className="w-24" min={0} value={line.debit || ""} onChange={(v) => updateLine(i, "debit", v)} placeholder="0" />
-                  </td>
-                  <td className="px-2 py-1">
-                    <NumberField label="دائن" className="w-24" min={0} value={line.credit || ""} onChange={(v) => updateLine(i, "credit", v)} placeholder="0" />
-                  </td>
-                  <td className="px-2 py-1">
-                    <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-status-error-foreground text-lg leading-none">&times;</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="bg-surface-subtle font-semibold">
-              <tr>
-                <td colSpan={2} className="px-3 py-2 text-muted-foreground">المجموع</td>
-                <td className={`px-3 py-2 ${isBalanced ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(totalDebit)}</td>
-                <td className={`px-3 py-2 ${isBalanced ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(totalCredit)}</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
+      )}
+      <div dir="rtl">
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <CreationDateField />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-sm font-medium mb-1">البيان *</label>
+                <Input required value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف القيد اليدوي" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">التاريخ</label>
+                <DatePicker value={form.date} onChange={v => setForm(f => ({ ...f, date: v }))} />
+              </div>
+              <CostCenterSelect
+                value={form.costCenter}
+                onChange={(v) => setForm(f => ({ ...f, costCenter: v }))}
+              />
+            </div>
 
-        <BalanceBanner lines={lines} />
+            <div className="rounded-xl border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-subtle">
+                  <tr>
+                    <th className="px-3 py-2 text-right">رمز الحساب</th>
+                    <th className="px-3 py-2 text-right">البيان</th>
+                    <th className="px-3 py-2 text-right">مدين</th>
+                    <th className="px-3 py-2 text-right">دائن</th>
+                    <th className="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {form.lines.map((line, i) => (
+                    <>
+                      <tr key={`row-${i}`} className="border-t">
+                        <td className="px-2 py-1">
+                          <Input
+                            list={`coa-list-${i}`}
+                            value={line.accountCode}
+                            onChange={e => updateLine(i, "accountCode", e.target.value)}
+                            placeholder="الحساب"
+                          />
+                          <datalist id={`coa-list-${i}`}>
+                            {(Array.isArray(coa) ? coa : []).map((a: any) => <option key={a.code} value={a.code}>{a.code} - {a.name}</option>)}
+                          </datalist>
+                        </td>
+                        <td className="px-2 py-1">
+                          <Input value={line.description} onChange={e => updateLine(i, "description", e.target.value)} placeholder="البيان" />
+                        </td>
+                        <td className="px-2 py-1">
+                          <NumberField label="مدين" className="w-24" min={0} value={line.debit || ""} onChange={v => updateLine(i, "debit", v)} placeholder="0" />
+                        </td>
+                        <td className="px-2 py-1">
+                          <NumberField label="دائن" className="w-24" min={0} value={line.credit || ""} onChange={v => updateLine(i, "credit", v)} placeholder="0" />
+                        </td>
+                        <td className="px-2 py-1">
+                          <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-status-error-foreground text-lg leading-none">&times;</button>
+                        </td>
+                      </tr>
+                      <tr key={`alloc-${i}`}>
+                        <td colSpan={5} className="px-2 pb-2">
+                          <LineAllocationPanel
+                            value={line.allocation ?? {}}
+                            onChange={(next) => updateLine(i, "allocation" as any, next as any)}
+                            status={deriveAllocationStatus(line.allocation ?? {})}
+                          />
+                        </td>
+                      </tr>
+                    </>
+                  ))}
+                </tbody>
+                <tfoot className="bg-surface-subtle font-semibold">
+                  <tr>
+                    <td colSpan={2} className="px-3 py-2 text-muted-foreground">المجموع</td>
+                    <td className={`px-3 py-2 ${isBalanced ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(totalDebit)}</td>
+                    <td className={`px-3 py-2 ${isBalanced ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(totalCredit)}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
 
-        <Button type="button" variant="outline" size="sm" onClick={addLine}>+ إضافة سطر</Button>
+            {!isBalanced && totalDebit > 0 && (
+              <div className="text-sm text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded-lg px-3 py-2">
+                القيد غير متوازن — الفرق: {formatCurrency(Math.abs(totalDebit - totalCredit))}
+              </div>
+            )}
+            {isBalanced && (
+              <div className="text-sm text-status-success-foreground bg-status-success-surface border border-status-success-surface rounded-lg px-3 py-2">
+                القيد متوازن
+              </div>
+            )}
 
-        <FormTextareaField name="notes" label="ملاحظات" rows={2} placeholder="ملاحظات اختيارية" />
-      </FormShell>
+            <Button type="button" variant="outline" size="sm" onClick={addLine}>+ إضافة سطر</Button>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">ملاحظات</label>
+              <Textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="ملاحظات اختيارية" />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="outline" onClick={() => navigate("/finance/journal-manual")}>إلغاء</Button>
+              <Button type="submit" disabled={createMutation.isPending || !isBalanced} rateLimitAware>
+                {createMutation.isPending ? "جاري الإنشاء..." : "إنشاء القيد"}
+              </Button>
+            </div>
+          </form>
+      </div>
     </CreatePageLayout>
   );
 }

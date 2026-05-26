@@ -7,24 +7,40 @@ import { lazy } from "react";
 // templates (PageShell, PageStatusBadge, useApiMutation) as a reference
 // for the cascade to the rest of the module.
 const Dashboard = lazy(() => import("@/pages/finance/dashboard"));
+const CfoCockpit = lazy(() => import("@/pages/finance/cfo-cockpit"));
+const MonthlyClosePack = lazy(() => import("@/pages/finance/monthly-close-pack"));
+const GlHealthScore = lazy(() => import("@/pages/finance/gl-health-score"));
+const ApprovalsInbox = lazy(() => import("@/pages/finance/approvals-inbox"));
 const Accounts = lazy(() => import("@/pages/finance/accounts"));
-const CostCenters = lazy(() => import("@/pages/finance/cost-centers"));
-const JournalTemplates = lazy(() => import("@/pages/finance/journal-templates"));
-const Fx = lazy(() => import("@/pages/finance/fx"));
-const VendorContracts = lazy(() => import("@/pages/finance/contracts"));
-const SubsidiaryAccounts = lazy(() => import("@/pages/finance/subsidiary-accounts"));
-const CustomerAdvances = lazy(() => import("@/pages/finance/customer-advances"));
-const Collections = lazy(() => import("@/pages/finance/collections"));
-const PurchaseRequests = lazy(() => import("@/pages/finance/purchase-requests"));
-const BudgetApprovals = lazy(() => import("@/pages/finance/budget-approvals"));
-const EntityStatements = lazy(() => import("@/pages/finance/entity-statements"));
 const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create"));
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
 const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
+const CostCenters = lazy(() => import("@/pages/finance/cost-centers"));
+const CostCenterPnl = lazy(() => import("@/pages/finance/cost-center-pnl"));
+const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
+const TaxCodesCreate = lazy(() => import("@/pages/create/finance/tax-codes-create"));
+const WhtCategories = lazy(() => import("@/pages/finance/wht-categories"));
+const WhtCategoriesCreate = lazy(() => import("@/pages/create/finance/wht-categories-create"));
+const TaxCodesEdit = lazy(() => import("@/pages/create/finance/tax-codes-edit"));
+const WhtCategoriesEdit = lazy(() => import("@/pages/create/finance/wht-categories-edit"));
+const LotExpiryAlerts = lazy(() => import("@/pages/finance/lot-expiry-alerts"));
+const CogsSummary = lazy(() => import("@/pages/finance/cogs-summary"));
+const InventoryValuation = lazy(() => import("@/pages/finance/inventory-valuation"));
+const NegativeStock = lazy(() => import("@/pages/finance/negative-stock"));
+const InventoryTurnover = lazy(() => import("@/pages/finance/inventory-turnover"));
+const GlIntegrityGaps = lazy(() => import("@/pages/finance/gl-integrity-gaps"));
+const GlAnomalyDetector = lazy(() => import("@/pages/finance/gl-anomaly-detector"));
+const UnmappedLines = lazy(() => import("@/pages/finance/unmapped-lines"));
+const WhtSummary = lazy(() => import("@/pages/finance/wht-summary"));
+const ZatcaReportsHub = lazy(() => import("@/pages/finance/zatca-reports-hub"));
+const VatReconciliation = lazy(() => import("@/pages/finance/vat-reconciliation"));
+const VatFilingReadiness = lazy(() => import("@/pages/finance/vat-filing-readiness"));
 const Vouchers = lazy(() => import("@/pages/finance/vouchers"));
 const VouchersCreate = lazy(() => import("@/pages/create/finance/vouchers-create"));
 const VoucherDetail = lazy(() => import("@/pages/details/voucher-detail"));
 const Journal = lazy(() => import("@/pages/finance/journal"));
+const JournalDetail = lazy(() => import("@/pages/finance/journal-detail"));
+const PostingActivity = lazy(() => import("@/pages/finance/posting-activity"));
 const JournalCreate = lazy(() => import("@/pages/create/finance/journal-create"));
 const Invoices = lazy(() => import("@/pages/finance/invoices"));
 const InvoicesCreate = lazy(() => import("@/pages/create/finance/invoices-create"));
@@ -32,19 +48,42 @@ const InvoiceDetail = lazy(() => import("@/pages/finance/invoice-detail"));
 const Expenses = lazy(() => import("@/pages/finance/expenses"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
+const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
+const CostSplitter = lazy(() => import("@/pages/create/finance/cost-splitter"));
+const AccountTransfer = lazy(() => import("@/pages/create/finance/account-transfer"));
+// Phase D — pages from the enterprise-hardening branch that don't
+// collide with main's parallel feature work.
+const Collections = lazy(() => import("@/pages/finance/collections"));
+const EntityStatements = lazy(() => import("@/pages/finance/entity-statements"));
+const JournalTemplates = lazy(() => import("@/pages/finance/journal-templates"));
+const SubsidiaryAccounts = lazy(() => import("@/pages/finance/subsidiary-accounts"));
 const Budget = lazy(() => import("@/pages/finance/budget"));
 const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
+const BudgetVariance = lazy(() => import("@/pages/finance/budget-variance"));
+const BudgetHeatmap = lazy(() => import("@/pages/finance/budget-heatmap"));
+const BudgetApprovals = lazy(() => import("@/pages/finance/budget-approvals"));
 const Vendors = lazy(() => import("@/pages/finance/vendors"));
 const VendorsCreate = lazy(() => import("@/pages/create/finance/vendors-create"));
+const VendorsEdit = lazy(() => import("@/pages/create/finance/vendors-edit"));
 const VendorDetail = lazy(() => import("@/pages/finance/vendor-detail"));
+const VendorStatement = lazy(() => import("@/pages/finance/vendor-statement"));
+const VendorContracts = lazy(() => import("@/pages/finance/vendor-contracts"));
+const VendorSpend = lazy(() => import("@/pages/finance/vendor-spend"));
+const PurchaseRequests = lazy(() => import("@/pages/finance/purchase-requests"));
 const PurchaseOrders = lazy(() => import("@/pages/finance/purchase-orders"));
 const PurchaseOrdersCreate = lazy(() => import("@/pages/create/finance/purchase-orders-create"));
 const PurchaseOrderDetail = lazy(() => import("@/pages/finance/purchase-order-detail"));
 const PaymentRun = lazy(() => import("@/pages/finance/payment-run"));
+const ApPaymentCalendar = lazy(() => import("@/pages/finance/ap-payment-calendar"));
 const FinancialReports = lazy(() => import("@/pages/finance/reports"));
+const IncomeStatementTrend = lazy(() => import("@/pages/finance/income-statement-trend"));
+const IncomeStatementVsBudget = lazy(() => import("@/pages/finance/income-statement-vs-budget"));
+const YoyComparison = lazy(() => import("@/pages/finance/yoy-comparison"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
+const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
+const BadDebtProvision = lazy(() => import("@/pages/finance/bad-debt-provision"));
 const ReceivableDetail = lazy(() => import("@/pages/details/receivable-detail"));
 const Payments = lazy(() => import("@/pages/finance/payments-page"));
 const Commitments = lazy(() => import("@/pages/finance/commitments"));
@@ -56,14 +95,22 @@ const CustodyDetail = lazy(() => import("@/pages/finance/custody-detail"));
 const CustodyAgingReport = lazy(() => import("@/pages/finance/custody-aging-report"));
 const FiscalPeriods = lazy(() => import("@/pages/finance/fiscal-periods"));
 const FiscalPeriodsV2 = lazy(() => import("@/pages/finance/fiscal-periods-v2"));
+const PeriodClosePreflight = lazy(() => import("@/pages/finance/period-close-preflight"));
 const SalaryAdvances = lazy(() => import("@/pages/finance/salary-advances"));
 const SalaryAdvanceDetail = lazy(() => import("@/pages/details/salary-advance-detail"));
 const Ledger = lazy(() => import("@/pages/finance/ledger"));
+const Entity360 = lazy(() => import("@/pages/finance/entity-360"));
+const ReconciliationHub = lazy(() => import("@/pages/finance/reconciliation-hub"));
+const AccountReconWorkpaper = lazy(() => import("@/pages/finance/account-reconciliation-workpaper"));
+const TbComparison = lazy(() => import("@/pages/finance/trial-balance-comparison"));
+const TbDrilldown = lazy(() => import("@/pages/finance/trial-balance-drilldown"));
 const ArAging = lazy(() => import("@/pages/finance/ar-aging"));
+const ArCollectionWorkbench = lazy(() => import("@/pages/finance/ar-collection-workbench"));
 const ApAging = lazy(() => import("@/pages/finance/ap-aging"));
 const BankReconciliation = lazy(() => import("@/pages/finance/bank-reconciliation"));
 const BankManualMatch = lazy(() => import("@/pages/create/finance/bank-manual-match"));
 const FixedAssets = lazy(() => import("@/pages/finance/fixed-assets"));
+const FixedAssetRegister = lazy(() => import("@/pages/finance/fixed-asset-register"));
 const FixedAssetDetail = lazy(() => import("@/pages/details/fixed-asset-detail"));
 const BatchDepreciate = lazy(() => import("@/pages/create/finance/batch-depreciate"));
 const InventoryCosting = lazy(() => import("@/pages/finance/inventory-costing"));
@@ -71,10 +118,14 @@ const BankGuarantees = lazy(() => import("@/pages/finance/bank-guarantees"));
 const JournalManual = lazy(() => import("@/pages/finance/journal-manual"));
 const GLPostingQueue = lazy(() => import("@/pages/finance/gl-posting-queue"));
 const JournalManualCreate = lazy(() => import("@/pages/create/finance/journal-manual-create"));
+const JournalReversal = lazy(() => import("@/pages/create/finance/journal-reversal"));
 const JournalManualDetail = lazy(() => import("@/pages/finance/journal-manual-detail"));
 const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
 const IntercompanyConsolidationCreate = lazy(() => import("@/pages/create/finance/intercompany-consolidation-create"));
 const CashFlowForecast = lazy(() => import("@/pages/finance/cash-flow-forecast"));
+const CashCalendar = lazy(() => import("@/pages/finance/cash-calendar"));
+const Cash13Week = lazy(() => import("@/pages/finance/cash-13week"));
+const CashFlowStatement = lazy(() => import("@/pages/finance/cash-flow-statement"));
 const ProjectCosting = lazy(() => import("@/pages/finance/project-costing"));
 const ProjectCostingDetail = lazy(() => import("@/pages/finance/project-costing-detail"));
 const CashflowDashboard = lazy(() => import("@/pages/finance/cashflow-dashboard"));
@@ -82,52 +133,138 @@ const OpeningBalances = lazy(() => import("@/pages/finance/opening-balances"));
 const OpeningBalancesCreate = lazy(() => import("@/pages/create/finance/opening-balances-create"));
 const RecurringJournals = lazy(() => import("@/pages/finance/recurring-journals"));
 const RecurringJournalsCreate = lazy(() => import("@/pages/create/finance/recurring-journals-create"));
+const RecurringCalendar = lazy(() => import("@/pages/finance/recurring-calendar"));
 const RecurringJournalDetail = lazy(() => import("@/pages/finance/recurring-journal-detail"));
 const YearEndClose = lazy(() => import("@/pages/finance/year-end-close"));
 const Treasury = lazy(() => import("@/pages/finance/treasury"));
+const ProfitabilityVehicle = lazy(() => import("@/pages/finance/profitability-vehicle"));
+const ProfitabilityProperty = lazy(() => import("@/pages/finance/profitability-property"));
+const ProfitabilityProject = lazy(() => import("@/pages/finance/profitability-project"));
+const ProfitabilityUmrahAgent = lazy(() => import("@/pages/finance/profitability-umrah-agent"));
+const CustomerAdvances = lazy(() => import("@/pages/finance/customer-advances"));
+const CustomerAdvancesCreate = lazy(() => import("@/pages/create/finance/customer-advances-create"));
+const CustomerAdvancesApply = lazy(() => import("@/pages/create/finance/customer-advances-apply"));
+const Dunning = lazy(() => import("@/pages/finance/dunning"));
+const CollectionStages = lazy(() => import("@/pages/finance/collection-stages"));
+const BadDebt = lazy(() => import("@/pages/finance/bad-debt"));
+const AllocationRules = lazy(() => import("@/pages/finance/allocation-rules"));
+const OverridesReport = lazy(() => import("@/pages/finance/overrides-report"));
+const AllocationResults = lazy(() => import("@/pages/finance/allocation-results"));
+const AllocationCoverage = lazy(() => import("@/pages/finance/allocation-coverage"));
+const AllocationRuleCreate = lazy(() => import("@/pages/create/finance/allocation-rule-create"));
+const AllocationRuleEdit = lazy(() => import("@/pages/create/finance/allocation-rule-edit"));
+const ProductCatalog = lazy(() => import("@/pages/finance/product-catalog"));
+const FxRates = lazy(() => import("@/pages/finance/fx-rates"));
+const FxRevaluationHistory = lazy(() => import("@/pages/finance/fx-revaluation-history"));
+const SettingsHub = lazy(() => import("@/pages/finance/settings-hub"));
+const FxRevaluation = lazy(() => import("@/pages/finance/fx-revaluation"));
 
 export const financeRoutes = [
   // /finance → the new dashboard (R.1.5). The chart of accounts moves
   // to its own explicit path so the two pages don't share a URL.
   { path: "/finance", component: Dashboard },
+  { path: "/finance/cfo-cockpit", component: CfoCockpit },
+  { path: "/finance/monthly-close-pack", component: MonthlyClosePack },
+  { path: "/finance/gl-health", component: GlHealthScore },
+  { path: "/finance/approvals-inbox", component: ApprovalsInbox },
   { path: "/finance/accounts", component: Accounts },
-  { path: "/finance/cost-centers", component: CostCenters },
-  { path: "/finance/journal-templates", component: JournalTemplates },
-  { path: "/finance/fx", component: Fx },
-  { path: "/finance/contracts", component: VendorContracts },
-  { path: "/finance/subsidiary-accounts", component: SubsidiaryAccounts },
-  { path: "/finance/customer-advances", component: CustomerAdvances },
-  { path: "/finance/collections", component: Collections },
-  { path: "/finance/purchase-requests", component: PurchaseRequests },
-  { path: "/finance/budget-approvals", component: BudgetApprovals },
-  { path: "/finance/entity-statements", component: EntityStatements },
   { path: "/finance/accounts/create", component: AccountsCreate },
   { path: "/finance/accounts/:id/edit", component: AccountsEdit },
   { path: "/finance/accounts/:id", component: AccountDetail },
+  // Saudi tax registries — Daftra-style tax codes + WHT categories.
+  // Both pages live under finance/ and use the same PageShell pattern
+  // as accounts.tsx; create pages mirror accounts-create.tsx.
+  { path: "/finance/tax-codes", component: TaxCodes },
+  { path: "/finance/tax-codes/create", component: TaxCodesCreate },
+  { path: "/finance/tax-codes/:id/edit", component: TaxCodesEdit },
+  { path: "/finance/wht-categories", component: WhtCategories },
+  { path: "/finance/wht-categories/create", component: WhtCategoriesCreate },
+  { path: "/finance/wht-categories/:id/edit", component: WhtCategoriesEdit },
+  // GL integrity gaps — period-close pre-flight (#1043).
+  { path: "/finance/reports/gl-integrity-gaps", component: GlIntegrityGaps },
+  { path: "/finance/gl-anomaly-detector", component: GlAnomalyDetector },
+  { path: "/finance/reports/unmapped-lines", component: UnmappedLines },
+  { path: "/finance/reports/wht-summary", component: WhtSummary },
+  // ZATCA & inventory reports hub — landing page (#1059).
+  { path: "/finance/reports/zatca", component: ZatcaReportsHub },
+  { path: "/finance/vat-filing-readiness", component: VatFilingReadiness },
+  // Lot expiry alerts — consumes /reports/lot-expiry-alerts (#1042).
+  { path: "/finance/reports/lot-expiry-alerts", component: LotExpiryAlerts },
+  // Inventory valuation report — consumes /reports/inventory-valuation (#1033).
+  { path: "/finance/reports/inventory-valuation", component: InventoryValuation },
+  // Negative-stock outliers — consumes /reports/negative-stock (#1035).
+  { path: "/finance/reports/negative-stock", component: NegativeStock },
+  // Inventory turnover ratio — consumes /reports/inventory-turnover (#1036).
+  { path: "/finance/reports/inventory-turnover", component: InventoryTurnover },
+  // COGS / margin summary — consumes /reports/cogs-summary (#1034).
+  { path: "/finance/reports/cogs-summary", component: CogsSummary },
+  // VAT reconciliation report — pre-filing sanity check (#1037 backend).
+  { path: "/finance/reports/vat-reconciliation", component: VatReconciliation },
   { path: "/finance/vouchers", component: Vouchers },
   { path: "/finance/vouchers/create", component: VouchersCreate },
   { path: "/finance/vouchers/:id", component: VoucherDetail },
   { path: "/finance/journal", component: Journal },
+  { path: "/finance/journal/activity", component: PostingActivity },
   { path: "/finance/journal/create", component: JournalCreate },
+  { path: "/finance/journal/:id", component: JournalDetail },
   { path: "/finance/invoices", component: Invoices },
   { path: "/finance/invoices/create", component: InvoicesCreate },
   { path: "/finance/invoices/:id", component: InvoiceDetail },
   { path: "/finance/expenses", component: Expenses },
   { path: "/finance/expenses/create", component: ExpensesCreate },
+  { path: "/finance/expenses/multi-line", component: MultiLineExpenseCreate },
+  { path: "/finance/expenses/split", component: CostSplitter },
   { path: "/finance/expenses/:id", component: ExpenseDetail },
   { path: "/finance/budget", component: Budget },
   { path: "/finance/budget/create", component: BudgetCreate },
   { path: "/finance/budget/:id", component: BudgetDetail },
+  { path: "/finance/budget-variance", component: BudgetVariance },
+  { path: "/finance/budget-heatmap", component: BudgetHeatmap },
+  { path: "/finance/budget-approvals", component: BudgetApprovals },
   { path: "/finance/vendors", component: Vendors },
   { path: "/finance/vendors/create", component: VendorsCreate },
+  { path: "/finance/vendors/:id/edit", component: VendorsEdit, subKey: "vendors" },
+  { path: "/finance/vendors/:id/statement", component: VendorStatement, subKey: "vendors" },
+  { path: "/finance/contracts", component: VendorContracts },
+  { path: "/finance/vendor-spend", component: VendorSpend },
   { path: "/finance/vendors/:id", component: VendorDetail, subKey: "vendors" },
+  { path: "/finance/purchase-requests", component: PurchaseRequests },
   { path: "/finance/purchase-orders", component: PurchaseOrders },
   { path: "/finance/purchase-orders/create", component: PurchaseOrdersCreate },
   { path: "/finance/payment-run", component: PaymentRun },
+  { path: "/finance/ap-payment-calendar", component: ApPaymentCalendar },
   { path: "/finance/purchase-orders/:id", component: PurchaseOrderDetail },
+  { path: "/finance/profitability/vehicle/:id", component: ProfitabilityVehicle },
+  { path: "/finance/profitability/property/:id", component: ProfitabilityProperty },
+  { path: "/finance/profitability/project/:id", component: ProfitabilityProject },
+  { path: "/finance/profitability/umrah-agent/:id", component: ProfitabilityUmrahAgent },
+  { path: "/finance/customer-advances", component: CustomerAdvances },
+  { path: "/finance/customer-advances/create", component: CustomerAdvancesCreate },
+  { path: "/finance/customer-advances/:id/apply", component: CustomerAdvancesApply },
+  { path: "/finance/dunning", component: Dunning },
+  { path: "/finance/collection", component: CollectionStages },
+  { path: "/finance/bad-debt", component: BadDebt },
+  { path: "/finance/allocation-rules", component: AllocationRules },
+  { path: "/finance/allocation-rules/create", component: AllocationRuleCreate },
+  { path: "/finance/allocation-rules/:id/edit", component: AllocationRuleEdit },
+  { path: "/finance/overrides-report", component: OverridesReport },
+  { path: "/finance/allocation-results", component: AllocationResults },
+  { path: "/finance/allocation-coverage", component: AllocationCoverage },
+  { path: "/finance/cost-centers", component: CostCenters },
+  { path: "/finance/cost-center-pnl", component: CostCenterPnl },
+  { path: "/finance/product-catalog", component: ProductCatalog },
+  { path: "/finance/fx-rates", component: FxRates },
+  { path: "/finance/fx-revaluation/history", component: FxRevaluationHistory },
+  { path: "/finance/settings", component: SettingsHub },
+  { path: "/finance/fx-revaluation", component: FxRevaluation },
   { path: "/finance/reports", component: FinancialReports },
+  { path: "/finance/reports/is-trend", component: IncomeStatementTrend },
+  { path: "/finance/reports/is-vs-budget", component: IncomeStatementVsBudget },
+  { path: "/finance/reports/yoy", component: YoyComparison },
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },
+  { path: "/finance/customer-risk", component: CustomerRisk },
+  { path: "/finance/bad-debt-provision", component: BadDebtProvision },
   { path: "/finance/receivables/:id", component: ReceivableDetail },
   { path: "/finance/payments", component: Payments },
   { path: "/finance/commitments", component: Commitments },
@@ -139,33 +276,52 @@ export const financeRoutes = [
   { path: "/finance/custodies/:id", component: CustodyDetail },
   { path: "/finance/fiscal-periods", component: FiscalPeriods },
   { path: "/finance/fiscal-periods-v2", component: FiscalPeriodsV2 },
+  { path: "/finance/period-close-preflight", component: PeriodClosePreflight },
   { path: "/finance/salary-advances", component: SalaryAdvances },
   { path: "/finance/salary-advances/:id", component: SalaryAdvanceDetail },
   { path: "/finance/ledger/:code", component: Ledger },
+  { path: "/finance/entity-360", component: Entity360 },
+  { path: "/finance/reconciliation-hub", component: ReconciliationHub },
+  { path: "/finance/account-recon-workpaper", component: AccountReconWorkpaper },
+  { path: "/finance/trial-balance-comparison", component: TbComparison },
+  { path: "/finance/trial-balance-drilldown", component: TbDrilldown },
   { path: "/finance/ar-aging", component: ArAging },
+  { path: "/finance/ar-collection-workbench", component: ArCollectionWorkbench },
   { path: "/finance/ap-aging", component: ApAging },
   { path: "/finance/bank-reconciliation", component: BankReconciliation },
   { path: "/finance/bank-reconciliation/manual-match/:batchId/:rowId", component: BankManualMatch },
   { path: "/finance/fixed-assets", component: FixedAssets },
+  { path: "/finance/fixed-asset-register", component: FixedAssetRegister },
   { path: "/finance/fixed-assets/batch-depreciate", component: BatchDepreciate },
   { path: "/finance/fixed-assets/:id", component: FixedAssetDetail },
   { path: "/finance/inventory-costing", component: InventoryCosting },
   { path: "/finance/bank-guarantees", component: BankGuarantees },
   { path: "/finance/journal-manual", component: JournalManual },
   { path: "/finance/journal-manual/create", component: JournalManualCreate },
+  { path: "/finance/journal/reverse", component: JournalReversal },
   { path: "/finance/journal-manual/:id", component: JournalManualDetail },
   { path: "/finance/gl-posting-queue", component: GLPostingQueue },
   { path: "/finance/intercompany", component: Intercompany },
   { path: "/finance/intercompany/consolidation/create", component: IntercompanyConsolidationCreate },
   { path: "/finance/cash-flow-forecast", component: CashFlowForecast },
+  { path: "/finance/cash-calendar", component: CashCalendar },
+  { path: "/finance/cash-13week", component: Cash13Week },
+  { path: "/finance/reports/cash-flow-statement", component: CashFlowStatement },
   { path: "/finance/project-costing", component: ProjectCosting },
   { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
   { path: "/finance/opening-balances", component: OpeningBalances },
   { path: "/finance/opening-balances/create", component: OpeningBalancesCreate },
   { path: "/finance/recurring-journals", component: RecurringJournals },
+  { path: "/finance/recurring-calendar", component: RecurringCalendar },
   { path: "/finance/recurring-journals/create", component: RecurringJournalsCreate },
   { path: "/finance/recurring-journals/:id", component: RecurringJournalDetail },
   { path: "/finance/year-end-close", component: YearEndClose },
   { path: "/finance/treasury", component: Treasury },
+  { path: "/finance/treasury/transfer", component: AccountTransfer },
+  // Phase D — non-colliding routes from the enterprise-hardening branch
+  { path: "/finance/collections", component: Collections },
+  { path: "/finance/entity-statements", component: EntityStatements },
+  { path: "/finance/journal-templates", component: JournalTemplates },
+  { path: "/finance/subsidiary-accounts", component: SubsidiaryAccounts },
 ];

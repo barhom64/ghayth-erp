@@ -1,5 +1,4 @@
-import { useState, useRef } from "react";
-import { z } from "zod";
+import { useState } from "react";
 import { getCurrencySymbol, formatDateAr, formatCurrency } from "@/lib/formatters";
 import { useRoute, Link, useLocation } from "wouter";
 import { useApiQuery, apiFetch, asList, getErrorMessage } from "@/lib/api";
@@ -7,49 +6,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { STATUSES } from "@/lib/constants";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  PageStatusBadge,
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormNumberField,
-  FormSelectField,
-  FormDateField,
-} from "@workspace/ui-core";
+import { PageStatusBadge } from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
-import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@workspace/report-kit";
-import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PrintButton } from "@/components/shared/print-button";
 import { useAuth } from "@/lib/auth";
 import type { LucideIcon } from "lucide-react";
-import { Target, DollarSign, Calendar, User, TrendingUp, Phone, Mail, MessageSquare, Pencil, Trash2 } from "lucide-react";
-
-const editOppSchema = z.object({
-  stage: z.string(),
-  value: z.string(),
-  probability: z.string(),
-});
-
-const STAGE_OPTIONS = [
-  { value: "lead", label: "عميل محتمل" },
-  { value: "qualified", label: "مؤهل" },
-  { value: "proposal", label: "عرض سعر" },
-  { value: "negotiation", label: "تفاوض" },
-  { value: "closed_won", label: "مغلق (ربح)" },
-  { value: "closed_lost", label: "مغلق (خسارة)" },
-];
-
-const activitySchema = z.object({
-  type: z.string(),
-  description: z.string().min(1, "الوصف مطلوب"),
-  scheduledAt: z.string().min(1, "التاريخ مطلوب"),
-});
-
-const ACTIVITY_TYPE_OPTIONS = [
-  { value: "call", label: "مكالمة" },
-  { value: "meeting", label: "اجتماع" },
-  { value: "email", label: "بريد" },
-  { value: "follow_up", label: "متابعة" },
-];
+import { Target, DollarSign, Calendar, User, TrendingUp, Phone, Mail, MessageSquare, Pencil, Trash2, X, Check } from "lucide-react";
 import {
   DetailPageLayout,
   EntityComments,
@@ -65,22 +29,53 @@ export default function OpportunityDetail() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const printContainerRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
-  const branch = useBranchLetterhead(user?.branchId);
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("crm_opportunity", id ?? 0);
 
   const { data: opportunity, isLoading, isError, error } = useApiQuery<any>(["opportunity-detail", id || ""], `/crm/opportunities/${id}`, !!id);
   const { data: activitiesResp } = useApiQuery<any>(["opportunity-activities", id || ""], `/crm/opportunities/${id}/activities`, !!id && !!opportunity);
   const activities = asList(activitiesResp);
 
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
+
+  const ACT_INITIAL = { type: "call", description: "", scheduledAt: "" };
   const [addingActivity, setAddingActivity] = useState(false);
+  const [savingActivity, setSavingActivity] = useState(false);
+  const [actForm, setActForm] = useState(ACT_INITIAL);
 
   const actTypeMap: Record<string, { label: string; icon: LucideIcon }> = {
     meeting: { label: "اجتماع", icon: User },
     call: { label: "مكالمة", icon: Phone },
     email: { label: "بريد", icon: Mail },
+  };
+
+  const startEdit = () => {
+    setEditForm({
+      title: opportunity.title || "",
+      value: String(opportunity.value || 0),
+      probability: String(opportunity.probability || 50),
+      stage: opportunity.stage || "lead",
+    });
+    setEditing(true);
+  };
+
+  const saveEdit = async () => {
+    try {
+      await apiFetch(`/crm/opportunities/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          stage: editForm.stage,
+          value: Number(editForm.value),
+          probability: Number(editForm.probability),
+        }),
+      });
+      toast({ title: "تم تحديث الفرصة" });
+      setEditing(false);
+      qc.invalidateQueries({ queryKey: ["opportunity-detail", id] });
+      qc.invalidateQueries({ queryKey: ["opportunities"] });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
   };
 
   const handleDelete = async () => {
@@ -93,17 +88,46 @@ export default function OpportunityDetail() {
     }
   };
 
+  const submitActivity = async () => {
+    if (!actForm.description.trim() || !actForm.scheduledAt) {
+      toast({ variant: "destructive", title: "الوصف وتاريخ النشاط مطلوبان" });
+      return;
+    }
+    setSavingActivity(true);
+    try {
+      await apiFetch(`/crm/opportunities/${id}/activities`, {
+        method: "POST",
+        body: JSON.stringify({
+          type: actForm.type,
+          description: actForm.description.trim(),
+          scheduledAt: actForm.scheduledAt,
+        }),
+      });
+      toast({ title: "تمت إضافة النشاط" });
+      setActForm(ACT_INITIAL);
+      setAddingActivity(false);
+      qc.invalidateQueries({ queryKey: ["opportunity-activities", id || ""] });
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+    setSavingActivity(false);
+  };
+
   const value = Number(opportunity?.value) || 0;
   const probability = Number(opportunity?.probability) || 0;
 
   const actions = (
     <div className="flex items-center gap-2 flex-wrap">
       <PageStatusBadge status={opportunity?.stage} />
-      <PrintActions
-        onPreview={() => setShowPreview(true)}
-        onPrint={() => directPrint(printContainerRef.current, `عرض سعر - ${opportunity?.title}`)}
-      />
-      <Button variant="outline" size="sm" onClick={() => setEditing(true)}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
+      {opportunity && (
+        <PrintButton
+          entityType="quotation"
+          entityId={opportunity.id ?? id ?? 0}
+          formats={["a4", "excel"]}
+          label="طباعة عرض السعر"
+        />
+      )}
+      <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
       {deleting ? (
         <div className="flex gap-2">
           <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
@@ -117,46 +141,33 @@ export default function OpportunityDetail() {
 
   const overview = (
     <>
-      {editing && opportunity && (
+      {editing && (
         <Card>
           <CardHeader><CardTitle className="text-base">تعديل الفرصة</CardTitle></CardHeader>
           <CardContent>
-            <FormShell
-              schema={editOppSchema}
-              defaultValues={{
-                stage: opportunity.stage || "lead",
-                value: String(opportunity.value || 0),
-                probability: String(opportunity.probability || 50),
-              }}
-              submitLabel="حفظ"
-              secondaryActions={
-                <Button type="button" variant="outline" onClick={() => setEditing(false)}>إلغاء</Button>
-              }
-              onSubmit={async (values) => {
-                try {
-                  await apiFetch(`/crm/opportunities/${id}`, {
-                    method: "PATCH",
-                    body: JSON.stringify({
-                      stage: values.stage,
-                      value: Number(values.value),
-                      probability: Number(values.probability),
-                    }),
-                  });
-                  toast({ title: "تم تحديث الفرصة" });
-                  setEditing(false);
-                  qc.invalidateQueries({ queryKey: ["opportunity-detail", id] });
-                  qc.invalidateQueries({ queryKey: ["opportunities"] });
-                } catch (err) {
-                  toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
-                }
-              }}
-            >
-              <FormGrid cols={3}>
-                <FormSelectField name="stage" label="المرحلة" options={STAGE_OPTIONS} />
-                <FormNumberField name="value" label={`القيمة ( ${getCurrencySymbol()})`} />
-                <FormNumberField name="probability" label="الاحتمالية (%)" min={0} max={100} />
-              </FormGrid>
-            </FormShell>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-sm font-medium">المرحلة</label>
+                <Select value={editForm.stage} onValueChange={(v) => setEditForm(f => ({...f, stage: v}))}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[["lead", "عميل محتمل"], ["qualified", "مؤهل"], ["proposal", "عرض سعر"], ["negotiation", "تفاوض"], ["closed_won", "مغلق (ربح)"], ["closed_lost", "مغلق (خسارة)"]].map(([k, v]) => <SelectItem key={k} value={k}>{v as string}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">{`القيمة ( ${getCurrencySymbol()})`}</label>
+                <Input type="number" value={editForm.value} onChange={e => setEditForm(f => ({...f, value: e.target.value}))} className="mt-1" dir="ltr" />
+              </div>
+              <div>
+                <label className="text-sm font-medium">الاحتمالية (%)</label>
+                <Input type="number" min="0" max="100" value={editForm.probability} onChange={e => setEditForm(f => ({...f, probability: e.target.value}))} className="mt-1" dir="ltr" />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4 justify-end">
+              <Button onClick={saveEdit}><Check className="h-4 w-4 me-1" />حفظ</Button>
+              <Button variant="outline" onClick={() => setEditing(false)}><X className="h-4 w-4 me-1" />إلغاء</Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -191,38 +202,34 @@ export default function OpportunityDetail() {
             </CardHeader>
             <CardContent className="space-y-3">
               {addingActivity && (
-                <div className="rounded-lg border p-3 bg-surface-subtle">
-                  <FormShell
-                    schema={activitySchema}
-                    defaultValues={{ type: "call", description: "", scheduledAt: "" }}
-                    submitLabel="حفظ النشاط"
-                    secondaryActions={
-                      <Button type="button" size="sm" variant="ghost" onClick={() => setAddingActivity(false)}>إلغاء</Button>
-                    }
-                    onSubmit={async (values) => {
-                      try {
-                        await apiFetch(`/crm/opportunities/${id}/activities`, {
-                          method: "POST",
-                          body: JSON.stringify({
-                            type: values.type,
-                            description: values.description.trim(),
-                            scheduledAt: values.scheduledAt,
-                          }),
-                        });
-                        toast({ title: "تمت إضافة النشاط" });
-                        setAddingActivity(false);
-                        qc.invalidateQueries({ queryKey: ["opportunity-activities", id || ""] });
-                      } catch (err) {
-                        toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
-                      }
-                    }}
-                  >
-                    <FormGrid cols={2}>
-                      <FormSelectField name="type" label="النوع" options={ACTIVITY_TYPE_OPTIONS} />
-                      <FormDateField name="scheduledAt" label="التاريخ" />
-                    </FormGrid>
-                    <FormTextField name="description" label="الوصف" placeholder="وصف النشاط" required />
-                  </FormShell>
+                <div className="rounded-lg border p-3 space-y-3 bg-surface-subtle">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Select value={actForm.type} onValueChange={(v) => setActForm((f) => ({ ...f, type: v }))}>
+                      <SelectTrigger><SelectValue placeholder="النوع" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="call">مكالمة</SelectItem>
+                        <SelectItem value="meeting">اجتماع</SelectItem>
+                        <SelectItem value="email">بريد</SelectItem>
+                        <SelectItem value="follow_up">متابعة</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="date"
+                      value={actForm.scheduledAt}
+                      onChange={(e) => setActForm((f) => ({ ...f, scheduledAt: e.target.value }))}
+                    />
+                  </div>
+                  <Input
+                    placeholder="وصف النشاط"
+                    value={actForm.description}
+                    onChange={(e) => setActForm((f) => ({ ...f, description: e.target.value }))}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => { setAddingActivity(false); setActForm(ACT_INITIAL); }}>إلغاء</Button>
+                    <Button size="sm" disabled={savingActivity} onClick={submitActivity} rateLimitAware>
+                      {savingActivity ? "جاري الحفظ..." : "حفظ النشاط"}
+                    </Button>
+                  </div>
                 </div>
               )}
               {activities.length === 0 && !addingActivity && <p className="text-center text-muted-foreground py-4">لا توجد أنشطة</p>}
@@ -287,107 +294,6 @@ export default function OpportunityDetail() {
         overview={overview}
         actions={actions}
       />
-      {opportunity && (
-        <>
-          <PrintPreviewModal
-            open={showPreview}
-            onClose={() => setShowPreview(false)}
-            branch={branch}
-            documentTitle={opportunity.stage === "proposal" ? "عرض سعر" : "فرصة بيعية"}
-            documentRef={`OPP-${opportunity.id}`}
-            documentDate={opportunity.createdAt ? formatDateAr(opportunity.createdAt) : ""}
-          >
-            <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-              <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                <span className="info-label" style={{ color: "#555" }}>العميل:</span>
-                <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.clientName || opportunity.contactName || "-"}</span>
-              </div>
-              {opportunity.contactPhone && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                <span className="info-label" style={{ color: "#555" }}>الهاتف:</span>
-                <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.contactPhone}</span>
-              </div>}
-              {opportunity.contactEmail && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                <span className="info-label" style={{ color: "#555" }}>البريد:</span>
-                <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.contactEmail}</span>
-              </div>}
-              <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                <span className="info-label" style={{ color: "#555" }}>المرحلة:</span>
-                <span className="info-value" style={{ fontWeight: 600 }}>{STATUSES[opportunity.stage] || opportunity.stage}</span>
-              </div>
-              {opportunity.expectedCloseDate && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                <span className="info-label" style={{ color: "#555" }}>الإغلاق المتوقع:</span>
-                <span className="info-value" style={{ fontWeight: 600 }}>{formatDateAr(opportunity.expectedCloseDate)}</span>
-              </div>}
-              {opportunity.assigneeName && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                <span className="info-label" style={{ color: "#555" }}>المسؤول:</span>
-                <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.assigneeName}</span>
-              </div>}
-            </div>
-
-            <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
-              <tbody>
-                <tr>
-                  <td style={{ color: "#555", border: "none", padding: "4px 8px" }}>قيمة العرض:</td>
-                  <td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{formatCurrency(value)}</td>
-                </tr>
-                <tr>
-                  <td style={{ color: "#555", border: "none", padding: "4px 8px" }}>الاحتمالية:</td>
-                  <td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{probability}%</td>
-                </tr>
-              </tbody>
-            </table>
-
-            {opportunity.notes && <p style={{ marginTop: "16px", color: "#555" }}>ملاحظات: {opportunity.notes}</p>}
-
-            <div className="signature-area" style={{ marginTop: "60px", display: "flex", justifyContent: "space-between" }}>
-              <div className="signature-box" style={{ textAlign: "center", minWidth: "150px" }}>
-                <div className="signature-line" style={{ borderTop: "1px solid #333", marginTop: "40px", paddingTop: "4px", fontSize: "9pt" }}>توقيع المسؤول</div>
-              </div>
-              <div className="signature-box" style={{ textAlign: "center", minWidth: "150px" }}>
-                <div className="signature-line" style={{ borderTop: "1px solid #333", marginTop: "40px", paddingTop: "4px", fontSize: "9pt" }}>توقيع العميل</div>
-              </div>
-            </div>
-          </PrintPreviewModal>
-
-          <div ref={printContainerRef} style={{ position: "absolute", left: "-9999px", top: 0 }}>
-            <PrintDocument branch={branch} documentTitle={opportunity.stage === "proposal" ? "عرض سعر" : "فرصة بيعية"} documentRef={`OPP-${opportunity.id}`} documentDate={opportunity.createdAt ? formatDateAr(opportunity.createdAt) : ""}>
-              <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-                <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                  <span className="info-label" style={{ color: "#555" }}>العميل:</span>
-                  <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.clientName || opportunity.contactName || "-"}</span>
-                </div>
-                {opportunity.contactPhone && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                  <span className="info-label" style={{ color: "#555" }}>الهاتف:</span>
-                  <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.contactPhone}</span>
-                </div>}
-                {opportunity.contactEmail && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                  <span className="info-label" style={{ color: "#555" }}>البريد:</span>
-                  <span className="info-value" style={{ fontWeight: 600 }}>{opportunity.contactEmail}</span>
-                </div>}
-                <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                  <span className="info-label" style={{ color: "#555" }}>المرحلة:</span>
-                  <span className="info-value" style={{ fontWeight: 600 }}>{STATUSES[opportunity.stage] || opportunity.stage}</span>
-                </div>
-              </div>
-              <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
-                <tbody>
-                  <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>قيمة العرض:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{formatCurrency(value)}</td></tr>
-                  <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>الاحتمالية:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{probability}%</td></tr>
-                </tbody>
-              </table>
-              {opportunity.notes && <p style={{ marginTop: "16px", color: "#555" }}>ملاحظات: {opportunity.notes}</p>}
-              <div className="signature-area" style={{ marginTop: "60px", display: "flex", justifyContent: "space-between" }}>
-                <div className="signature-box" style={{ textAlign: "center", minWidth: "150px" }}>
-                  <div className="signature-line" style={{ borderTop: "1px solid #333", marginTop: "40px", paddingTop: "4px", fontSize: "9pt" }}>توقيع المسؤول</div>
-                </div>
-                <div className="signature-box" style={{ textAlign: "center", minWidth: "150px" }}>
-                  <div className="signature-line" style={{ borderTop: "1px solid #333", marginTop: "40px", paddingTop: "4px", fontSize: "9pt" }}>توقيع العميل</div>
-                </div>
-              </div>
-            </PrintDocument>
-          </div>
-        </>
-      )}
     </>
   );
 }

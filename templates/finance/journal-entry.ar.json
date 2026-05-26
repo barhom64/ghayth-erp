@@ -1,0 +1,20 @@
+{
+  "code": "finance.journal-entry",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "journal_entry",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": true,
+  "qr": true,
+  "status": "published",
+  "domain": "finance",
+  "title": "قيد محاسبي",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "journal_entry"
+  },
+  "ownerTeam": "finance"
+}

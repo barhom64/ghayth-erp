@@ -28,7 +28,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { useDirtyGuard } from "@/hooks/use-dirty-guard";
 import { useApiQuery, useApiMutation, ApiError } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
@@ -246,9 +245,19 @@ function DirtyTracker({ onChange }: { onChange: (dirty: boolean) => void }) {
   return null;
 }
 
-// useDirtyGuard moved to src/hooks/use-dirty-guard.tsx so other pages
-// with Dialog + FormShell can adopt the same RTL-friendly discard
-// confirmation pattern.
+/** Confirm-on-dismiss guard. Returns a handler suitable for `onOpenChange`. */
+function makeDirtyGuardedClose(
+  isDirty: boolean,
+  onClose: (open: boolean) => void,
+): (open: boolean) => void {
+  return (next) => {
+    if (!next && isDirty) {
+      const ok = window.confirm("لديك تغييرات لم تُحفظ بعد. هل تريد المغادرة وتجاهل التعديلات؟");
+      if (!ok) return;
+    }
+    onClose(next);
+  };
+}
 
 // ─── Create dialog ────────────────────────────────────────────────────
 
@@ -261,7 +270,6 @@ function CreateDialog({
 }) {
   const { toast } = useToast();
   const [isDirty, setIsDirty] = useState(false);
-  const { guardedClose, discardDialog } = useDirtyGuard(isDirty, onOpenChange);
   const create = useApiMutation<FiscalPeriodV2Row, CreateValues>(
     "/finance/fiscal-periods-v2",
     "POST",
@@ -269,41 +277,38 @@ function CreateDialog({
   );
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={guardedClose}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>فترة مالية جديدة</DialogTitle>
-            <DialogDescription>
-              عرّف اسم الفترة وبداية ونهاية تواريخها. يمكنك إقفالها لاحقًا من
-              صفحة القائمة.
-            </DialogDescription>
-          </DialogHeader>
-          <FormShell
-            schema={createSchema}
-            defaultValues={{ name: "", startDate: "", endDate: "", notes: "" }}
-            submitLabel="إنشاء"
-            onSubmit={async (values, { setFieldError }) => {
-              try {
-                await create.mutateAsync(values);
-                toast({ title: "تم إنشاء الفترة المالية" });
-                setIsDirty(false); // submitted, no longer dirty
-                onOpenChange(false);
-              } catch (err) {
-                handleFormError(err, setFieldError, toast);
-              }
-            }}
-          >
-            <DirtyTracker onChange={setIsDirty} />
-            <FormTextField name="name" label="اسم الفترة" required />
-            <FormDateField name="startDate" label="تاريخ البداية" required />
-            <FormDateField name="endDate" label="تاريخ النهاية" required />
-            <FormTextareaField name="notes" label="ملاحظات (اختياري)" rows={2} />
-          </FormShell>
-        </DialogContent>
-      </Dialog>
-      {discardDialog}
-    </>
+    <Dialog open={open} onOpenChange={makeDirtyGuardedClose(isDirty, onOpenChange)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>فترة مالية جديدة</DialogTitle>
+          <DialogDescription>
+            عرّف اسم الفترة وبداية ونهاية تواريخها. يمكنك إقفالها لاحقًا من
+            صفحة القائمة.
+          </DialogDescription>
+        </DialogHeader>
+        <FormShell
+          schema={createSchema}
+          defaultValues={{ name: "", startDate: "", endDate: "", notes: "" }}
+          submitLabel="إنشاء"
+          onSubmit={async (values, { setFieldError }) => {
+            try {
+              await create.mutateAsync(values);
+              toast({ title: "تم إنشاء الفترة المالية" });
+              setIsDirty(false); // submitted, no longer dirty
+              onOpenChange(false);
+            } catch (err) {
+              handleFormError(err, setFieldError, toast);
+            }
+          }}
+        >
+          <DirtyTracker onChange={setIsDirty} />
+          <FormTextField name="name" label="اسم الفترة" required />
+          <FormDateField name="startDate" label="تاريخ البداية" required />
+          <FormDateField name="endDate" label="تاريخ النهاية" required />
+          <FormTextareaField name="notes" label="ملاحظات (اختياري)" rows={2} />
+        </FormShell>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -319,10 +324,6 @@ function CloseDialog({
   const { toast } = useToast();
   const [pendingCount, setPendingCount] = useState<number | null>(null);
   const [isDirty, setIsDirty] = useState(false);
-  const { guardedClose, discardDialog } = useDirtyGuard(isDirty, (open) => {
-    if (!open) setPendingCount(null);
-    onOpenChange(open);
-  });
   const close = useApiMutation<{ message: string }, CloseValues>(
     () => `/finance/fiscal-periods-v2/${target!.id}/close`,
     "POST",
@@ -330,10 +331,12 @@ function CloseDialog({
   );
 
   return (
-    <>
     <Dialog
       open={!!target}
-      onOpenChange={guardedClose}
+      onOpenChange={makeDirtyGuardedClose(isDirty, (open) => {
+        if (!open) setPendingCount(null);
+        onOpenChange(open);
+      })}
     >
       <DialogContent>
         <DialogHeader>
@@ -354,13 +357,13 @@ function CloseDialog({
         )}
 
         {pendingCount !== null && pendingCount > 0 && (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm flex gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+          <div className="rounded-md border border-status-warning-surface bg-status-warning-surface p-3 text-sm flex gap-2">
+            <AlertTriangle className="h-5 w-5 text-status-warning-foreground shrink-0" />
             <div>
               <div className="font-medium text-amber-900">
                 لا يمكن إقفال الفترة
               </div>
-              <div className="text-amber-800 mt-1">
+              <div className="text-status-warning-foreground mt-1">
                 يوجد <strong>{pendingCount}</strong> قيد يدوي لم يُرحّل بعد
                 داخل هذه الفترة. ارحّل أو احذف القيود اليدوية المعلّقة قبل
                 إقفال الفترة.
@@ -402,8 +405,6 @@ function CloseDialog({
         </FormShell>
       </DialogContent>
     </Dialog>
-    {discardDialog}
-    </>
   );
 }
 
@@ -418,7 +419,6 @@ function ReopenDialog({
 }) {
   const { toast } = useToast();
   const [isDirty, setIsDirty] = useState(false);
-  const { guardedClose, discardDialog } = useDirtyGuard(isDirty, onOpenChange);
   const reopen = useApiMutation<{ message: string }, ReopenValues>(
     () => `/finance/fiscal-periods-v2/${target!.id}/reopen`,
     "POST",
@@ -426,47 +426,44 @@ function ReopenDialog({
   );
 
   return (
-    <>
-      <Dialog open={!!target} onOpenChange={guardedClose}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>إعادة فتح الفترة المالية</DialogTitle>
-            <DialogDescription>
-              سبب إعادة الفتح مطلوب لأغراض التدقيق. سيُسجَّل في سجل الفترة.
-            </DialogDescription>
-          </DialogHeader>
+    <Dialog open={!!target} onOpenChange={makeDirtyGuardedClose(isDirty, onOpenChange)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إعادة فتح الفترة المالية</DialogTitle>
+          <DialogDescription>
+            سبب إعادة الفتح مطلوب لأغراض التدقيق. سيُسجَّل في سجل الفترة.
+          </DialogDescription>
+        </DialogHeader>
 
-          {target && (
-            <div className="rounded-md border bg-muted/30 p-3 text-sm">
-              <div className="font-medium">{target.name}</div>
-              <div className="text-xs text-muted-foreground tabular-nums">
-                {formatDateAr(target.startDate)} – {formatDateAr(target.endDate)}
-              </div>
+        {target && (
+          <div className="rounded-md border bg-muted/30 p-3 text-sm">
+            <div className="font-medium">{target.name}</div>
+            <div className="text-xs text-muted-foreground tabular-nums">
+              {formatDateAr(target.startDate)} – {formatDateAr(target.endDate)}
             </div>
-          )}
+          </div>
+        )}
 
-          <FormShell
-            schema={reopenSchema}
-            defaultValues={{ reason: "" }}
-            submitLabel="إعادة فتح"
-            onSubmit={async (values, { setFieldError }) => {
-              try {
-                await reopen.mutateAsync(values);
-                toast({ title: `تم إعادة فتح الفترة "${target?.name ?? ""}"` });
-                setIsDirty(false);
-                onOpenChange(false);
-              } catch (err) {
-                handleFormError(err, setFieldError, toast);
-              }
-            }}
-          >
-            <DirtyTracker onChange={setIsDirty} />
-            <FormTextareaField name="reason" label="سبب إعادة الفتح" required rows={3} />
-          </FormShell>
-        </DialogContent>
-      </Dialog>
-      {discardDialog}
-    </>
+        <FormShell
+          schema={reopenSchema}
+          defaultValues={{ reason: "" }}
+          submitLabel="إعادة فتح"
+          onSubmit={async (values, { setFieldError }) => {
+            try {
+              await reopen.mutateAsync(values);
+              toast({ title: `تم إعادة فتح الفترة "${target?.name ?? ""}"` });
+              setIsDirty(false);
+              onOpenChange(false);
+            } catch (err) {
+              handleFormError(err, setFieldError, toast);
+            }
+          }}
+        >
+          <DirtyTracker onChange={setIsDirty} />
+          <FormTextareaField name="reason" label="سبب إعادة الفتح" required rows={3} />
+        </FormShell>
+      </DialogContent>
+    </Dialog>
   );
 }
 

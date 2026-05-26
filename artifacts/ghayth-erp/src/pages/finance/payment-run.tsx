@@ -1,25 +1,15 @@
 import { useState } from "react";
-import { z } from "zod";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  DataTable,
-  type DataTableColumn,
-  PageShell,
-  FormShell,
-  FormGrid,
-  FormDateField,
-  FormSelectField,
-  FormTextField,
-} from "@workspace/ui-core";
+import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { usePermission } from "@/components/shared/permission-gate";
-import { Banknote, AlertCircle } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { Banknote, Send, AlertCircle } from "lucide-react";
+import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { BulkCheckbox } from "@/components/shared/bulk-actions";
 
 /**
@@ -59,25 +49,14 @@ interface PendingResp {
   byVendor?: VendorGroup[];
 }
 
-const paymentRunSchema = z.object({
-  paymentDate: z.string(),
-  method: z.string(),
-  reference: z.string(),
-});
-
-const PAYMENT_METHOD_OPTIONS = [
-  { value: "bank_transfer", label: "حوالة بنكية" },
-  { value: "cash", label: "نقدي" },
-  { value: "cheque", label: "شيك" },
-];
-
 export default function PaymentRunPage() {
   const [cutoffDate, setCutoffDate] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [paymentDate, setPaymentDate] = useState(() => todayLocal());
+  const [method, setMethod] = useState("bank_transfer");
+  const [reference, setReference] = useState("");
   const [confirming, setConfirming] = useState(false);
-  const canPay = usePermission("finance.purchase:create");
-  const today = new Date().toISOString().slice(0, 10);
 
   const query = new URLSearchParams();
   if (cutoffDate) query.set("cutoffDate", cutoffDate);
@@ -117,6 +96,7 @@ export default function PaymentRunPage() {
       onSuccess: () => {
         setSelected(new Set());
         setConfirming(false);
+        setReference("");
         refetch();
       },
     },
@@ -139,6 +119,15 @@ export default function PaymentRunPage() {
     { key: "totalAmount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.totalAmount || 0))}</span> },
   ];
 
+  const submit = () => {
+    if (selected.size === 0) return;
+    executeMut.mutate({
+      poIds: Array.from(selected),
+      paymentDate: paymentDate || undefined,
+      method,
+      reference: reference.trim() || undefined,
+    });
+  };
 
   return (
     <PageShell
@@ -203,41 +192,57 @@ export default function PaymentRunPage() {
           {/* Execute block */}
           {selected.size > 0 && (
             <Card className="border-emerald-200 bg-emerald-50/40">
-              <CardContent className="p-4">
-                <div className="text-sm font-semibold mb-3">تنفيذ الدفع لـ{selected.size} أمر — {formatCurrency(selectedTotal)}</div>
-                <FormShell
-                  schema={paymentRunSchema}
-                  defaultValues={{ paymentDate: today, method: "bank_transfer", reference: "" }}
-                  submitLabel={confirming ? "تأكيد التنفيذ" : "تنفيذ الدفع"}
-                  disabled={!canPay}
-                  secondaryActions={confirming ? (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => setConfirming(false)}>إلغاء</Button>
-                  ) : null}
-                  onSubmit={async (values) => {
-                    if (!confirming) {
-                      setConfirming(true);
-                      return;
-                    }
-                    await executeMut.mutateAsync({
-                      poIds: Array.from(selected),
-                      paymentDate: values.paymentDate || undefined,
-                      method: values.method,
-                      reference: values.reference?.trim() || undefined,
-                    });
-                  }}
-                >
-                  <FormGrid cols={3}>
-                    <FormDateField name="paymentDate" label="تاريخ الدفع" />
-                    <FormSelectField name="method" label="طريقة الدفع" options={PAYMENT_METHOD_OPTIONS} />
-                    <FormTextField name="reference" label="المرجع" placeholder="رقم الحوالة / الشيك" />
-                  </FormGrid>
-                  {confirming && (
-                    <div className="flex items-center gap-2 bg-status-warning-surface border border-status-warning-surface rounded-md p-3">
-                      <AlertCircle className="h-4 w-4 shrink-0 text-status-warning-foreground" />
-                      <span className="text-sm text-status-warning-foreground">سيُرحَّل قيد GL واحد لكل مورد — لا يمكن التراجع.</span>
+              <CardContent className="p-4 space-y-3">
+                <div className="text-sm font-semibold">تنفيذ الدفع لـ{selected.size} أمر — {formatCurrency(selectedTotal)}</div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-xs">تاريخ الدفع</Label>
+                    <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} className="mt-1" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">طريقة الدفع</Label>
+                    <Select value={method} onValueChange={setMethod}>
+                      <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bank_transfer">حوالة بنكية</SelectItem>
+                        <SelectItem value="cash">نقدي</SelectItem>
+                        <SelectItem value="cheque">شيك</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">المرجع</Label>
+                    <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="رقم الحوالة / الشيك" className="mt-1" />
+                  </div>
+                </div>
+                {confirming ? (
+                  <div className="flex items-center justify-between gap-3 bg-status-warning-surface border border-status-warning-surface rounded-md p-3">
+                    <div className="flex items-center gap-2 text-sm text-status-warning-foreground">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      <span>سيُرحَّل قيد GL واحد لكل مورد — لا يمكن التراجع.</span>
                     </div>
-                  )}
-                </FormShell>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>إلغاء</Button>
+                      <GuardedButton
+                        perm="finance.purchase:create"
+                        size="sm"
+                        variant="default"
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                        disabled={executeMut.isPending}
+                        onClick={submit}
+                        rateLimitAware
+                      >
+                        {executeMut.isPending ? "جاري التنفيذ..." : "تأكيد التنفيذ"}
+                      </GuardedButton>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-end">
+                    <GuardedButton perm="finance.purchase:create" size="sm" onClick={() => setConfirming(true)} className="gap-1">
+                      <Send className="h-4 w-4" /> تنفيذ الدفع
+                    </GuardedButton>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Wrench } from "lucide-react";
@@ -94,31 +94,6 @@ export default function PropertyMaintenanceDetail() {
     return out;
   }, [item]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!item) return [];
-    return [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "نوع الصيانة", value: TYPE_LABELS[item.type] || item.type || "-" },
-          { label: "الأولوية", value: PRIORITY_LABELS[item.priority] || item.priority || "-" },
-          { label: "الحالة", value: STATUS_LABELS[item.status] || item.status || "-" },
-          { label: "التكلفة", value: item.cost ? formatCurrency(item.cost) : "-" },
-          { label: "تاريخ الطلب", value: formatDateAr(item.createdAt) },
-          ...(item.completedAt ? [{ label: "تاريخ الإنجاز", value: formatDateAr(item.completedAt) }] : []),
-          ...(item.assignedTo ? [{ label: "المسؤول", value: item.assignedTo }] : []),
-        ],
-      },
-      ...(item.description ? [{ kind: "text" as const, title: "الوصف", body: item.description }] : []),
-      {
-        kind: "signature",
-        parties: [
-          { label: "طالب الصيانة", name: item.createdByName || "" },
-          { label: "المنفذ", name: item.assignedTo || "" },
-        ],
-      },
-    ];
-  }, [item]);
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -234,12 +209,9 @@ export default function PropertyMaintenanceDetail() {
       actions={
         <>
           <EntityPrintButton
-            branchId={item?.branchId}
-            title="طلب صيانة"
-            ref={item?.ref || `PMT-${id}`}
-            date={formatDateAr(item?.createdAt)}
-            sections={printSections}
-          />
+            entityType="maintenance_request"
+            entityId={id ?? 0}
+            formats={["a4"]}/>
           <GuardedButton
             perm="properties:update"
             variant="outline"

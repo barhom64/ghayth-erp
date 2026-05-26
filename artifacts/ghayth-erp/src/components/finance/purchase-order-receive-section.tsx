@@ -1,25 +1,14 @@
 import { useState } from "react";
-import { z } from "zod";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  DataTable,
-  type DataTableColumn,
-  FormShell,
-  FormGrid,
-  FormDateField,
-  FormTextField,
-} from "@workspace/ui-core";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { Package, Plus, X, CheckCircle2 } from "lucide-react";
-
-const receiveSchema = z.object({
-  receivedDate: z.string(),
-  qualityNotes: z.string(),
-});
 
 /**
  * FIN-016 — Goods receipt + 3-way match section embedded on the PO
@@ -63,8 +52,9 @@ interface ReceiptRow {
 
 export function PurchaseOrderReceiveSection({ poId, poStatus }: { poId: number | string; poStatus: string | undefined }) {
   const [showForm, setShowForm] = useState(false);
+  const [receivedDate, setReceivedDate] = useState(() => todayLocal());
+  const [qualityNotes, setQualityNotes] = useState("");
   const [perLineQty, setPerLineQty] = useState<Record<number, string>>({});
-  const today = new Date().toISOString().slice(0, 10);
 
   const matchUrl = `/finance/purchase-orders/${poId}/match`;
   const receiptsUrl = `/finance/purchase-orders/${poId}/receipts`;
@@ -81,6 +71,7 @@ export function PurchaseOrderReceiveSection({ poId, poStatus }: { poId: number |
       onSuccess: () => {
         setShowForm(false);
         setPerLineQty({});
+        setQualityNotes("");
         refetchMatch();
         refetchReceipts();
       },
@@ -91,7 +82,7 @@ export function PurchaseOrderReceiveSection({ poId, poStatus }: { poId: number |
   const canReceive = poStatus === "approved" || poStatus === "partially_received";
   const remainingTotal = lines.reduce((s, l) => s + Math.max(0, Number(l.quantity) - Number(l.receivedQty)), 0);
 
-  const submit = async (values: z.infer<typeof receiveSchema>) => {
+  const submit = () => {
     const payload = lines
       .map((l) => {
         const remaining = Math.max(0, Number(l.quantity) - Number(l.receivedQty));
@@ -103,8 +94,8 @@ export function PurchaseOrderReceiveSection({ poId, poStatus }: { poId: number |
       .filter((x): x is { poItemId: number; receivedQty: number } => x !== null);
     if (payload.length === 0) return;
     receiveMut.mutate({
-      receivedDate: values.receivedDate || undefined,
-      qualityNotes: values.qualityNotes.trim() || undefined,
+      receivedDate: receivedDate || undefined,
+      qualityNotes: qualityNotes.trim() || undefined,
       lines: payload,
     });
   };
@@ -124,7 +115,7 @@ export function PurchaseOrderReceiveSection({ poId, poStatus }: { poId: number |
         const tone =
           ord === rec && rec === inv ? "text-emerald-600" :
           rec >= ord && inv >= rec ? "text-emerald-600" :
-          rec < ord ? "text-amber-600" :
+          rec < ord ? "text-status-warning-foreground" :
           inv < rec ? "text-status-info-foreground" :
           "text-muted-foreground";
         const label =
@@ -152,44 +143,45 @@ export function PurchaseOrderReceiveSection({ poId, poStatus }: { poId: number |
         </CardHeader>
         <CardContent>
           {showForm ? (
-            <div className="mb-4 p-3 border rounded-md bg-status-info-surface/30">
-              <FormShell
-                schema={receiveSchema}
-                defaultValues={{ receivedDate: today, qualityNotes: "" }}
-                submitLabel={receiveMut.isPending ? "جاري الحفظ..." : "حفظ الاستلام"}
-                disabled={remainingTotal === 0}
-                secondaryActions={
-                  <Button type="button" variant="outline" size="sm" onClick={() => { setShowForm(false); setPerLineQty({}); }}>
-                    <X className="h-4 w-4 ml-1" /> إلغاء
-                  </Button>
-                }
-                onSubmit={submit}
-              >
-                <FormGrid cols={2}>
-                  <FormDateField name="receivedDate" label="تاريخ الاستلام" />
-                  <FormTextField name="qualityNotes" label="ملاحظات الجودة" placeholder="اختياري" />
-                </FormGrid>
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">حدّد الكمية المستلمة لكل صنف (الافتراضي = الرصيد المتبقّي)</p>
-                  {lines.map((l) => {
-                    const remaining = Math.max(0, Number(l.quantity) - Number(l.receivedQty));
-                    if (remaining === 0) return null;
-                    return (
-                      <div key={l.id} className="grid grid-cols-3 gap-2 items-center text-sm">
-                        <div className="col-span-2"><span className="font-medium">{l.itemName}</span> <span className="text-muted-foreground text-xs">(متبقّي {remaining})</span></div>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={remaining}
-                          dir="ltr"
-                          value={perLineQty[l.id] ?? String(remaining)}
-                          onChange={(e) => setPerLineQty((p) => ({ ...p, [l.id]: e.target.value }))}
-                        />
-                      </div>
-                    );
-                  })}
+            <div className="space-y-3 mb-4 p-3 border rounded-md bg-status-info-surface/30">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">تاريخ الاستلام</Label>
+                  <Input type="date" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} className="mt-1" />
                 </div>
-              </FormShell>
+                <div>
+                  <Label className="text-xs">ملاحظات الجودة</Label>
+                  <Input value={qualityNotes} onChange={(e) => setQualityNotes(e.target.value)} placeholder="اختياري" className="mt-1" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">حدّد الكمية المستلمة لكل صنف (الافتراضي = الرصيد المتبقّي)</p>
+                {lines.map((l) => {
+                  const remaining = Math.max(0, Number(l.quantity) - Number(l.receivedQty));
+                  if (remaining === 0) return null;
+                  return (
+                    <div key={l.id} className="grid grid-cols-3 gap-2 items-center text-sm">
+                      <div className="col-span-2"><span className="font-medium">{l.itemName}</span> <span className="text-muted-foreground text-xs">(متبقّي {remaining})</span></div>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={remaining}
+                        dir="ltr"
+                        value={perLineQty[l.id] ?? String(remaining)}
+                        onChange={(e) => setPerLineQty((p) => ({ ...p, [l.id]: e.target.value }))}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => { setShowForm(false); setPerLineQty({}); }}>
+                  <X className="h-4 w-4 ml-1" /> إلغاء
+                </Button>
+                <GuardedButton perm="finance.purchase:update" size="sm" disabled={receiveMut.isPending || remainingTotal === 0} onClick={submit} rateLimitAware>
+                  {receiveMut.isPending ? "جاري الحفظ..." : "حفظ الاستلام"}
+                </GuardedButton>
+              </div>
             </div>
           ) : null}
 

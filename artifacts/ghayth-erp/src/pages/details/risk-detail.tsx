@@ -1,6 +1,4 @@
-import { useEffect, useMemo } from "react";
-import { useFormContext } from "react-hook-form";
-import { z } from "zod";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import {
@@ -8,19 +6,15 @@ import {
   type RelatedEntity,
   EntityComments,
 } from "@workspace/entity-kit";
-import {
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormDateField,
-  FormSelectField,
-  FormTextareaField,
-} from "@workspace/ui-core";
-import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, AlertTriangle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Edit, AlertTriangle, Save } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -39,37 +33,6 @@ const SEVERITY_LABELS: Record<string, string> = {
   high: "عالي",
   critical: "حرج",
 };
-
-const treatmentSchema = z.object({
-  treatmentPlan: z.string(),
-  treatmentOwner: z.string(),
-  treatmentDueDate: z.string(),
-  treatmentStatus: z.string(),
-});
-type TreatmentForm = z.infer<typeof treatmentSchema>;
-
-const TREATMENT_STATUS_OPTIONS = [
-  { value: "planned", label: "مخطّطة" },
-  { value: "in_progress", label: "قيد التنفيذ" },
-  { value: "done", label: "مُنجزة" },
-  { value: "cancelled", label: "مُلغاة" },
-];
-
-function HydrateTreatmentFromServer({ risk }: { risk: any }) {
-  const { reset } = useFormContext<TreatmentForm>();
-  useEffect(() => {
-    if (risk) {
-      reset({
-        treatmentPlan: risk.treatmentPlan ?? "",
-        treatmentOwner: risk.treatmentOwner ?? "",
-        treatmentDueDate: risk.treatmentDueDate ? String(risk.treatmentDueDate).slice(0, 10) : "",
-        treatmentStatus: risk.treatmentStatus ?? "planned",
-      });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [risk]);
-  return null;
-}
 
 const LIKELIHOOD_LABELS: Record<string, string> = {
   rare: "نادر",
@@ -128,19 +91,33 @@ export default function RiskDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["risk", String(id)],
-    `/governance/risks/${id}`,
+    id ? `/governance/risks/${id}` : null,
     !!id
   );
 
   const risk = data;
 
-  const canEditGovernance = usePermission("governance:update");
   // GOV-RISK-TREAT — PATCH /governance/risks/:id/treatment exposes a
   // separate write surface for the treatment plan fields (plan, owner,
-  // dueDate, status). Defaults are re-seeded from the server record via
-  // HydrateFromServer inside the FormShell so reset() picks up new data
-  // when the risk refetches.
-  const treatmentMut = useApiMutation<unknown, TreatmentForm>(
+  // dueDate, status). The card below mounts the form whenever a risk is
+  // loaded; useEffect re-seeds local state when the fetched record changes.
+  const [treatment, setTreatment] = useState({
+    treatmentPlan: "",
+    treatmentOwner: "",
+    treatmentDueDate: "",
+    treatmentStatus: "planned",
+  });
+  useEffect(() => {
+    if (risk) {
+      setTreatment({
+        treatmentPlan: risk.treatmentPlan ?? "",
+        treatmentOwner: risk.treatmentOwner ?? "",
+        treatmentDueDate: risk.treatmentDueDate ? String(risk.treatmentDueDate).slice(0, 10) : "",
+        treatmentStatus: risk.treatmentStatus ?? "planned",
+      });
+    }
+  }, [risk]);
+  const treatmentMut = useApiMutation<unknown, typeof treatment>(
     () => `/governance/risks/${id}/treatment`,
     "PATCH",
     [["risk", String(id)], ["risks"]],
@@ -174,43 +151,6 @@ export default function RiskDetail() {
     return out;
   }, [risk]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!risk) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: `RISK-${id}` },
-          { label: "العنوان", value: risk.title || "-" },
-          { label: "التصنيف", value: risk.category || "-" },
-          { label: "المسؤول", value: risk.owner || risk.ownerName || "-" },
-          { label: "الاحتمالية", value: LIKELIHOOD_LABELS[risk.likelihood] || risk.likelihood || "-" },
-          { label: "الأثر", value: SEVERITY_LABELS[risk.impact] || risk.impact || "-" },
-          { label: "درجة المخاطرة", value: String(riskScore || "-") },
-          { label: "تاريخ المراجعة", value: formatDateAr(risk.reviewDate) },
-          { label: "القسم", value: risk.department || risk.departmentName || "-" },
-          { label: "الحالة", value: STATUS_LABELS[risk.status] || risk.status || "-" },
-        ],
-      },
-    ];
-    if (risk.description) {
-      sections.push({ kind: "text", title: "وصف المخاطرة", body: risk.description });
-    }
-    if (risk.mitigationPlan) {
-      sections.push({ kind: "text", title: "خطة التخفيف", body: risk.mitigationPlan });
-    }
-    if (risk.residualRisk) {
-      sections.push({ kind: "text", title: "المخاطر المتبقية", body: risk.residualRisk });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "المسؤول", name: risk.owner || risk.ownerName || "" },
-        { label: "المعتمد", name: risk.approvedByName || "" },
-      ],
-    });
-    return sections;
-  }, [risk, id, riskScore]);
 
   const handleEdit = () => {
     setLocation(`/governance/risks/${id}/edit`);
@@ -385,29 +325,61 @@ export default function RiskDetail() {
               <Edit className="h-4 w-4" /> خطة المعالجة
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <FormShell
-              schema={treatmentSchema}
-              defaultValues={{
-                treatmentPlan: risk?.treatmentPlan ?? "",
-                treatmentOwner: risk?.treatmentOwner ?? "",
-                treatmentDueDate: risk?.treatmentDueDate ? String(risk.treatmentDueDate).slice(0, 10) : "",
-                treatmentStatus: risk?.treatmentStatus ?? "planned",
-              }}
-              submitLabel="حفظ الخطة"
-              disabled={!canEditGovernance}
-              onSubmit={async (values) => {
-                await treatmentMut.mutateAsync(values);
-              }}
-            >
-              <HydrateTreatmentFromServer risk={risk} />
-              <FormGrid cols={3}>
-                <FormTextField name="treatmentOwner" label="المسؤول" placeholder="اسم المسؤول" />
-                <FormDateField name="treatmentDueDate" label="تاريخ الاستحقاق" />
-                <FormSelectField name="treatmentStatus" label="الحالة" options={TREATMENT_STATUS_OPTIONS} />
-              </FormGrid>
-              <FormTextareaField name="treatmentPlan" label="الخطة" rows={3} placeholder="وصف خطوات المعالجة المقترحة..." />
-            </FormShell>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs">المسؤول</Label>
+                <Input
+                  value={treatment.treatmentOwner}
+                  onChange={(e) => setTreatment((t) => ({ ...t, treatmentOwner: e.target.value }))}
+                  placeholder="اسم المسؤول"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">تاريخ الاستحقاق</Label>
+                <Input
+                  type="date"
+                  value={treatment.treatmentDueDate}
+                  onChange={(e) => setTreatment((t) => ({ ...t, treatmentDueDate: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">الحالة</Label>
+                <Select value={treatment.treatmentStatus} onValueChange={(v) => setTreatment((t) => ({ ...t, treatmentStatus: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="planned">مخطّطة</SelectItem>
+                    <SelectItem value="in_progress">قيد التنفيذ</SelectItem>
+                    <SelectItem value="done">مُنجزة</SelectItem>
+                    <SelectItem value="cancelled">مُلغاة</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">الخطة</Label>
+              <Textarea
+                value={treatment.treatmentPlan}
+                onChange={(e) => setTreatment((t) => ({ ...t, treatmentPlan: e.target.value }))}
+                placeholder="وصف خطوات المعالجة المقترحة..."
+                rows={3}
+                className="mt-1"
+              />
+            </div>
+            <div className="flex justify-end">
+              <GuardedButton
+                perm="governance:update"
+                size="sm"
+                disabled={treatmentMut.isPending}
+                onClick={() => treatmentMut.mutate(treatment)}
+                rateLimitAware
+              >
+                <Save className="h-4 w-4 ml-1" />
+                {treatmentMut.isPending ? "جاري الحفظ..." : "حفظ الخطة"}
+              </GuardedButton>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -446,12 +418,9 @@ export default function RiskDetail() {
         <>
           {risk && (
             <EntityPrintButton
-              branchId={risk.branchId}
-              title={risk.title || "مخاطرة"}
-              ref={`RISK-${id}`}
-              date={formatDateAr(risk.createdAt)}
-              sections={printSections}
-            />
+              entityType="risk"
+              entityId={id ?? 0}
+              formats={["a4"]}/>
           )}
           <GuardedButton
             perm="governance:update"

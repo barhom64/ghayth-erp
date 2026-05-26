@@ -20,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Edit, Calendar, TrendingDown, Loader2 } from "lucide-react";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, currentPeriodRiyadh } from "@/lib/formatters";
 
 /**
  * Fixed Asset — detail-page actions.
@@ -102,10 +102,8 @@ const editSchema = z.object({
 });
 type EditForm = z.infer<typeof editSchema>;
 
-const currentPeriod = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-};
+// Riyadh-time YYYY-MM — UTC would flip a day early at month-end.
+const currentPeriod = () => currentPeriodRiyadh();
 
 const depreciateSchema = z.object({
   period: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الفترة YYYY-MM"),

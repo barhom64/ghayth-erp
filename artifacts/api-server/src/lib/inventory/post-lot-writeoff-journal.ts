@@ -207,10 +207,16 @@ export async function postLotWriteoffJournal(
     const payload = buildEntry(buildInput);
     const today = todayISO();
 
+    // PD-6 — stable economic-event key. A retried lot writeoff post (network
+    // blip, manual retry) for the same lot + status returns the existing entry
+    // instead of double-posting. The lot itself only transitions through each
+    // writeoff status once, so (lotId, status) is a stable identifier.
+    const ref = `LOT-${status.toUpperCase()}-${opts.lotId}`;
     const ctx: EntryContext = {
       companyId: opts.companyId,
       createdBy: opts.postedBy,
-      ref: `LOT-${status.toUpperCase()}-${opts.lotId}`,
+      ref,
+      sourceKey: ref,
       type: "inventory_writeoff",
       sourceType: "warehouse_stock_lots",
       sourceId: opts.lotId,

@@ -12,6 +12,7 @@
  */
 
 import { logger } from "../logger.js";
+import { config } from "../config.js";
 import { userHasPermission } from "../../middlewares/permissionMiddleware.js";
 import { getEntityPrintProfile } from "../entityRegistry.js";
 import { resolveTemplate } from "./templateResolver.js";
@@ -21,6 +22,7 @@ import { getAdapter } from "./adapters/index.js";
 import { makeWatermark } from "./watermark.js";
 import { writePrintJob, countCopies } from "./printJobsLogger.js";
 import { storePrintArtifact } from "./printStorage.js";
+import { buildVerifyContext } from "./verify.js";
 import type {
   AuditContext,
   PaperSize,
@@ -74,12 +76,29 @@ export async function renderPrint(
     );
   }
 
-  // 1. RBAC
-  const permitted = await userHasPermission(scope, profile.permission);
-  if (!permitted) {
-    throw new PrintPermissionError(
-      `missing permission ${profile.permission} for entity ${req.entityType}`
-    );
+  // 1. RBAC — wrapped because role_permissions/user_permissions queries
+  // can fail on partial migrations and we'd rather show a clear 403 than
+  // bubble a generic 500. The route's own `requirePermission("print:create")`
+  // middleware has already gated the request; this inner check is the
+  // per-entity refinement.
+  //
+  // Ephemeral previews skip the per-entity refinement: the /preview route
+  // already gates on `templates:read`, and template editors (admins iterating
+  // on the layout of an entity they may not personally print) would otherwise
+  // 403 here even though they hold the broader templates:manage perm.
+  if (!req.ephemeral) {
+    let permitted = false;
+    try {
+      permitted = await userHasPermission(scope, profile.permission);
+    } catch (err) {
+      logger.warn(err as Error, "[print] userHasPermission failed — falling back to deny");
+      permitted = false;
+    }
+    if (!permitted) {
+      throw new PrintPermissionError(
+        `missing permission ${profile.permission} for entity ${req.entityType}`
+      );
+    }
   }
 
   // 2. Reprint detection
@@ -105,12 +124,18 @@ export async function renderPrint(
   }
 
   // 3. Template
+  // entityId === "list" is the well-known signal that the caller wants a
+  // list-view render (ListPage exports the visible rows as payload).
+  // resolveTemplate then skips the single-entity bespoke preset and uses
+  // universal so the items table auto-builds from arbitrary row shapes.
+  const isListView = req.entityId === "list" || req.entityId === "_list";
   const template =
     req.overrideTemplate ??
     (await resolveTemplate({
       companyId: scope.companyId,
       branchId: scope.branchId,
       entityType: req.entityType,
+      asList: isListView,
     }));
   if (!template) {
     throw new PrintTemplateMissingError(req.entityType);
@@ -128,6 +153,16 @@ export async function renderPrint(
 
   const watermark = makeWatermark(copyNumber, isReprint);
   const paperSize: PaperSize = (req.paperSize ?? template.paperSize) as PaperSize;
+
+  // Allocate the audit jobId BEFORE we render — so the QR/verify URL we
+  // embed in the document points at the exact same row that
+  // writePrintJob() will insert below. For ephemeral previews we just
+  // pass null and the adapter skips QR rendering. The DB column has a
+  // gen_random_uuid() default, but we override it from JS so the
+  // bytes-on-the-page match the audit row.
+  const verifyCtx = req.ephemeral
+    ? { jobId: null, verifyUrl: null, verifyQrDataUrl: null }
+    : await buildVerifyContext({ baseUrl: config.publicBaseUrl ?? "" });
 
   const ctx: RenderContext = {
     companyId: scope.companyId,
@@ -148,6 +183,9 @@ export async function renderPrint(
     paperSize,
     copyNumber,
     watermark,
+    jobId: verifyCtx.jobId,
+    verifyUrl: verifyCtx.verifyUrl,
+    verifyQrDataUrl: verifyCtx.verifyQrDataUrl,
   };
 
   // 6. Render
@@ -169,7 +207,7 @@ export async function renderPrint(
         userId: scope.userId,
         entityType: req.entityType,
         entityId: req.entityId,
-        templateId: template.id,
+        templateId: template.id > 0 ? template.id : null,
         format,
         paperSize,
         copyNumber,
@@ -188,9 +226,12 @@ export async function renderPrint(
   let storageKey: string | null = null;
   let jobId: string | null = null;
   if (!req.ephemeral) {
+    // Use the pre-allocated jobId from verifyCtx — the QR that's now baked
+    // into `bytes` points at /print/verify/<verifyCtx.jobId>, so the audit
+    // row MUST share the same UUID for verification to resolve correctly.
     storageKey = await storePrintArtifact({
       companyId: scope.companyId,
-      jobId: cryptoUuid(),
+      jobId: verifyCtx.jobId ?? cryptoUuid(),
       format,
       bytes,
       mime,
@@ -201,7 +242,7 @@ export async function renderPrint(
       userId: scope.userId,
       entityType: req.entityType,
       entityId: req.entityId,
-      templateId: template.id,
+      templateId: template.id > 0 ? template.id : null,
       format,
       paperSize,
       copyNumber,
@@ -213,8 +254,28 @@ export async function renderPrint(
       approvedBy: req.reprintApprovedBy ?? null,
       ipAddress: audit.ipAddress,
       userAgent: audit.userAgent,
+      jobIdOverride: verifyCtx.jobId ?? undefined,
     });
     jobId = row?.jobId ?? null;
+
+    // Phase 7 — auto-index into documents so the entity-detail
+    // "Documents" tab surfaces every printed copy. Soft-fail: if the
+    // documents table isn't migrated yet, the print still succeeds and
+    // print_jobs remains the source of truth.
+    if (jobId) {
+      const { linkPrintToDocuments } = await import("./archive.js");
+      await linkPrintToDocuments({
+        companyId: scope.companyId,
+        jobId,
+        entityType: req.entityType,
+        entityId: req.entityId,
+        filename,
+        mime,
+        bytes: bytes.byteLength,
+        storageKey,
+        uploadedBy: scope.userId,
+      });
+    }
   }
 
   return {

@@ -16,6 +16,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -33,7 +34,7 @@ import {
   calculateAllForCompany,
 } from "../lib/umrahCommissionEngine.js";
 import { logger } from "../lib/logger.js";
-import { exportOfficialLetterPdf, exportUmrahStatementPdf, exportUmrahDailyRunsheetPdf } from "../lib/pdfExport.js";
+import { renderPrint } from "../lib/print/printService.js";
 
 const router = Router();
 
@@ -243,23 +244,6 @@ router.post("/sub-agents", authorize({ feature: "umrah", action: "create" }), as
 // Single-row sub-agent fetch. Used by the detail page UI to render
 // the full row (same joined columns the list returns) plus the
 // statement / pricing / attachments panels.
-router.get("/sub-agents/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
-  try {
-    const scope = req.scope!;
-    const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
-         FROM umrah_sub_agents sa
-         LEFT JOIN umrah_agents a ON sa."agentId" = a.id
-         LEFT JOIN clients c ON sa."clientId" = c.id AND c."deletedAt" IS NULL
-        WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
-    res.json(maskFields(req, row));
-  } catch (err) { handleRouteError(err, res, "Get sub-agent"); }
-});
-
 router.get("/sub-agents/unlinked", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -288,6 +272,23 @@ router.get("/sub-agents/unlinked", authorize({ feature: "umrah", action: "list" 
     );
     res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List unlinked sub-agents"); }
+});
+
+router.get("/sub-agents/:id", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
+         FROM umrah_sub_agents sa
+         LEFT JOIN umrah_agents a ON sa."agentId" = a.id
+         LEFT JOIN clients c ON sa."clientId" = c.id AND c."deletedAt" IS NULL
+        WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!row) throw new NotFoundError("الوكيل الفرعي غير موجود");
+    res.json(maskFields(req, row));
+  } catch (err) { handleRouteError(err, res, "Get sub-agent"); }
 });
 
 router.patch("/sub-agents/:id", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
@@ -340,12 +341,26 @@ router.put("/sub-agents/:id/link", authorize({ feature: "umrah", action: "create
 
     if (createNew) {
       if (!clientName) throw new ValidationError("اسم العميل مطلوب عند إنشاء عميل جديد");
-      const [newClient] = await rawQuery(
-        `INSERT INTO clients ("companyId", name, phone, classification, source, "createdAt")
-         VALUES ($1, $2, $3, 'umrah_agent', 'system', NOW()) RETURNING id`,
-        [scope.companyId, clientName, clientPhone || null]
+      // Numbering center (Issue #1141) — client code from authority.
+      const issuedCli = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "crm",
+        entityKey: "client_code",
+        entityTable: "clients",
+        actorId: scope.userId,
+        metadata: { source: "umrah_agent_creation" },
+      });
+      const [newClient] = await rawQuery<{ id: number }>(
+        `INSERT INTO clients ("companyId", name, phone, classification, source, code, "createdAt")
+         VALUES ($1, $2, $3, 'umrah_agent', 'system', $4, NOW()) RETURNING id`,
+        [scope.companyId, clientName, clientPhone || null, issuedCli.number]
       );
       finalClientId = newClient.id;
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [finalClientId, issuedCli.assignmentId]
+      ).catch(() => { /* non-blocking link */ });
     } else {
       if (!clientId) throw new ValidationError("معرف العميل مطلوب");
       const [existingClient] = await rawQuery<{ id: number }>(
@@ -607,13 +622,31 @@ router.post("/groups", authorize({ feature: "umrah", action: "create" }), async 
     const scope = req.scope!;
     const b = zodParse(createGroupSchema.safeParse(req.body));
     await requireOpenSeason(b.seasonId, scope.companyId);
-    const rows = await rawQuery(
-      `INSERT INTO umrah_groups ("companyId","branchId","nuskGroupNumber",name,"agentId","subAgentId","seasonId","mutamerCount","programDuration","createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [scope.companyId, scope.branchId || null, b.nuskGroupNumber, b.name || null, b.agentId || null, b.subAgentId || null, b.seasonId, b.mutamerCount, b.programDuration || null, scope.userId]
+    // Numbering center (Issue #1141) — internalRef is our per-season
+    // counter; nuskGroupNumber stays as the external Nusk portal id.
+    const issuedGrp = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "umrah",
+      entityKey: "umrah_group",
+      entityTable: "umrah_groups",
+      seasonId: b.seasonId,
+      actorId: scope.userId,
+    });
+    const rows = await rawQuery<Record<string, unknown>>(
+      `INSERT INTO umrah_groups ("companyId","branchId","nuskGroupNumber","internalRef",name,"agentId","subAgentId","seasonId","mutamerCount","programDuration","createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [scope.companyId, scope.branchId || null, b.nuskGroupNumber, issuedGrp.number, b.name || null, b.agentId || null, b.subAgentId || null, b.seasonId, b.mutamerCount, b.programDuration || null, scope.userId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_groups", entityId: rows[0]?.id, after: { nuskGroupNumber: b.nuskGroupNumber } }).catch((e) => logger.error(e, "umrah groups bg"));
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.group.created", entity: "umrah_groups", entityId: rows[0]?.id }).catch((e) => logger.error(e, "umrah groups bg"));
+    if (rows[0]?.id) {
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [rows[0].id as number, issuedGrp.assignmentId]
+      ).catch(() => { /* non-blocking link */ });
+    }
+    const groupId = rows[0]?.id as number | undefined;
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_groups", entityId: groupId as number, after: { nuskGroupNumber: b.nuskGroupNumber, internalRef: issuedGrp.number } }).catch((e) => logger.error(e, "umrah groups bg"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.group.created", entity: "umrah_groups", entityId: groupId as number }).catch((e) => logger.error(e, "umrah groups bg"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create group"); }
 });
@@ -645,6 +678,7 @@ router.patch("/groups/:id", authorize({ feature: "umrah", action: "update" }), a
     const [row] = await rawQuery(`SELECT * FROM umrah_groups WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!row) throw new NotFoundError("المجموعة غير موجودة");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_groups", entityId: id }).catch((e) => logger.error(e, "umrah groups bg"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.group.updated", entity: "umrah_groups", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah groups bg"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update group"); }
 });
@@ -664,6 +698,7 @@ router.delete("/groups/:id", authorize({ feature: "umrah", action: "delete" }), 
       [id, scope.companyId, scope.userId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_groups", entityId: id }).catch((e) => logger.error(e, "umrah groups bg"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.group.deleted", entity: "umrah_groups", entityId: id, details: "{}" }).catch((e) => logger.error(e, "umrah groups bg"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete group"); }
 });
@@ -1436,9 +1471,9 @@ router.get("/statements/:subAgentId", authorize({ feature: "umrah", action: "vie
   } catch (err) { handleRouteError(err, res, "Generate statement"); }
 });
 
-// Printable Arabic PDF of the sub-agent statement. Always uses the detailed
-// shape since the summary version aggregates by month and is less useful as
-// a hand-off document. Streams as inline PDF for browser preview + Save.
+// Printable Arabic statement of the sub-agent ledger. Reuses the same data
+// `generateStatement(detailed)` returns to the JSON peer; renderPrint owns
+// the cliché, audit row, and reprint detection from there on.
 router.get("/statements/:subAgentId/pdf", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1450,11 +1485,59 @@ router.get("/statements/:subAgentId/pdf", authorize({ feature: "umrah", action: 
       "detailed",
       from, to
     );
-    // as-any-reason: justified-external - PDF exporter accepts a loose payload shape; `data` is the validated report result and is passed through unchanged
-    const pdf = await exportUmrahStatementPdf(scope.companyId, subAgentId, data as any, { from, to });
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="umrah-statement-${subAgentId}.pdf"`);
-    res.send(pdf);
+    // Sub-agent header info the template renders next to the totals.
+    const [subAgentRow] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, name, "nuskCode", "paymentTerms"
+         FROM umrah_sub_agents
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [subAgentId, scope.companyId],
+    );
+    const sub = subAgentRow as { name?: string; nuskCode?: string | null; paymentTerms?: string | null } | undefined;
+    const closing = Number((data as { closingBalance: number }).closingBalance ?? 0);
+    const totalDebit  = (data as { entries: Array<{ debit: number }> }).entries.reduce((s, e) => s + Number(e.debit  || 0), 0);
+    const totalCredit = (data as { entries: Array<{ credit: number }> }).entries.reduce((s, e) => s + Number(e.credit || 0), 0);
+    const rangeText = from && to ? `${from} → ${to}` : "كل الفترات";
+    const payTermsLabel = sub?.paymentTerms === "prepaid" ? "مقدم" : sub?.paymentTerms === "postpaid" ? "آجل" : (sub?.paymentTerms ?? "-");
+    const closingLabel = closing > 0 ? "الرصيد الختامي (مستحق على الوكيل)" : closing < 0 ? "الرصيد الختامي (دفعة مقدمة من الوكيل)" : "الرصيد الختامي";
+
+    const result = await renderPrint(
+      {
+        companyId: scope.companyId, branchId: scope.branchId ?? null,
+        userId: scope.userId, role: scope.role, isOwner: scope.isOwner,
+      },
+      {
+        entityType: "umrah_statement",
+        entityId: `${subAgentId}:${from ?? ""}..${to ?? ""}`,
+        format: "a4",
+        previewPayload: {
+          entity: {
+            id: subAgentId,
+            subAgentName: sub?.name ?? "",
+            nuskCode: sub?.nuskCode ?? "",
+            paymentTermsLabel: payTermsLabel,
+            rangeText,
+            openingBalance: Number((data as { openingBalance: number }).openingBalance ?? 0).toFixed(2),
+            closingBalance: Math.abs(closing).toFixed(2),
+            closingBalanceLabel: closingLabel,
+            totalDebit: totalDebit.toFixed(2),
+            totalCredit: totalCredit.toFixed(2),
+          },
+          lines: (data as { entries: Array<Record<string, unknown>> }).entries.map((e) => ({
+            "التاريخ": e.date ? String(e.date).slice(0, 10) : "-",
+            "الوصف": e.description,
+            "المرجع": e.reference || "-",
+            "مدين": Number(e.debit  || 0),
+            "دائن": Number(e.credit || 0),
+            "الرصيد": Number(e.balance || 0),
+          })),
+        },
+      },
+      { ipAddress: req.ip, userAgent: req.get("user-agent") ?? undefined },
+    );
+    res.setHeader("Content-Type", result.mime);
+    res.setHeader("Content-Disposition", `inline; filename="umrah-statement-${subAgentId}.${result.mime.includes("html") ? "html" : "pdf"}"`);
+    if (result.jobId) res.setHeader("X-Print-Job-Id", result.jobId);
+    res.send(result.bytes);
   } catch (err) { handleRouteError(err, res, "Statement PDF"); }
 });
 
@@ -1473,6 +1556,9 @@ router.get("/letters/:id/pdf", authorize({ feature: "umrah", action: "view" }), 
       throw new ValidationError("معرّف الخطاب غير صالح");
     }
     // Scope check — letter belongs to the user's company AND is umrah-typed.
+    // The dataLoader will refetch the full row inside renderPrint; we still
+    // do the gate here so the failure mode is a clean 404 instead of an
+    // empty document.
     const [letter] = await rawQuery<{ id: number; type: string }>(
       `SELECT id, type FROM official_letters
         WHERE id=$1 AND "companyId"=$2
@@ -1481,10 +1567,18 @@ router.get("/letters/:id/pdf", authorize({ feature: "umrah", action: "view" }), 
     );
     if (!letter) throw new NotFoundError("الخطاب غير موجود");
 
-    const pdf = await exportOfficialLetterPdf(scope.companyId, id);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="umrah-letter-${id}.pdf"`);
-    res.send(pdf);
+    const result = await renderPrint(
+      {
+        companyId: scope.companyId, branchId: scope.branchId ?? null,
+        userId: scope.userId, role: scope.role, isOwner: scope.isOwner,
+      },
+      { entityType: "official_letter", entityId: String(id), format: "a4" },
+      { ipAddress: req.ip, userAgent: req.get("user-agent") ?? undefined },
+    );
+    res.setHeader("Content-Type", result.mime);
+    res.setHeader("Content-Disposition", `inline; filename="umrah-letter-${id}.${result.mime.includes("html") ? "html" : "pdf"}"`);
+    if (result.jobId) res.setHeader("X-Print-Job-Id", result.jobId);
+    res.send(result.bytes);
   } catch (err) { handleRouteError(err, res, "Letter PDF"); }
 });
 
@@ -1594,11 +1688,48 @@ router.get("/reports/daily-runsheet/pdf", authorize({ feature: "umrah", action: 
     const scope = req.scope!;
     const date = String((req.query.date as string) || todayISO());
     const data = await fetchDailyRunsheet(scope.companyId, date);
-    // as-any-reason: justified-external - PDF exporter accepts a loose payload shape; `data` is the validated runsheet result and is passed through unchanged
-    const pdf = await exportUmrahDailyRunsheetPdf(scope.companyId, date, data as any);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="umrah-runsheet-${date}.pdf"`);
-    res.send(pdf);
+    const arrivals = (data.arrivals as Array<Record<string, unknown>>).map((r) => ({
+      "رقم نسك": r.nuskNumber, "الاسم": r.fullName, "الجنسية": r.nationality ?? "-",
+      "المجموعة": r.groupName ?? "-", "الوكيل الفرعي": r.subAgentName ?? "-",
+      "ميناء": r.entryPort ?? "-", "رحلة": r.entryFlight ?? "-",
+    }));
+    const departures = (data.departures as Array<Record<string, unknown>>).map((r) => ({
+      "رقم نسك": r.nuskNumber, "الاسم": r.fullName, "الجنسية": r.nationality ?? "-",
+      "المجموعة": r.groupName ?? "-", "الوكيل الفرعي": r.subAgentName ?? "-",
+      "ميناء": r.exitPort ?? "-", "رحلة": r.exitFlight ?? "-",
+    }));
+    const overstays = (data.overstays as Array<Record<string, unknown>>).map((r) => ({
+      "رقم نسك": r.nuskNumber, "الاسم": r.fullName, "الجنسية": r.nationality ?? "-",
+      "المجموعة": r.groupName ?? "-", "الوكيل الفرعي": r.subAgentName ?? "-",
+      "أيام التجاوز": r.overstayDays,
+    }));
+
+    const result = await renderPrint(
+      {
+        companyId: scope.companyId, branchId: scope.branchId ?? null,
+        userId: scope.userId, role: scope.role, isOwner: scope.isOwner,
+      },
+      {
+        entityType: "umrah_runsheet",
+        entityId: date,
+        format: "a4",
+        previewPayload: {
+          entity: {
+            id: date,
+            date,
+            arrivalsCount: arrivals.length,
+            departuresCount: departures.length,
+            overstaysCount: overstays.length,
+          },
+          arrivals, departures, overstays,
+        },
+      },
+      { ipAddress: req.ip, userAgent: req.get("user-agent") ?? undefined },
+    );
+    res.setHeader("Content-Type", result.mime);
+    res.setHeader("Content-Disposition", `inline; filename="umrah-runsheet-${date}.${result.mime.includes("html") ? "html" : "pdf"}"`);
+    if (result.jobId) res.setHeader("X-Print-Job-Id", result.jobId);
+    res.send(result.bytes);
   } catch (err) { handleRouteError(err, res, "Daily run-sheet PDF"); }
 });
 
@@ -1718,6 +1849,7 @@ router.delete("/attachments/:id", authorize({ feature: "umrah", action: "delete"
       [id, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_attachments", entityId: id }).catch((e) => logger.error(e, "umrah attachments bg"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.attachment.deleted", entity: "umrah_attachments", entityId: id, details: "{}" }).catch((e) => logger.error(e, "umrah attachments bg"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete attachment"); }
 });

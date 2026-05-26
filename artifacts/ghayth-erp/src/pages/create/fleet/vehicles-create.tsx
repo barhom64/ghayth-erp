@@ -1,166 +1,152 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { z } from "zod";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import {
-  CreatePageLayout,
-  CreationDateField,
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormTextareaField,
-  FormNumberField,
-  FormSelectField,
-  FormDateField,
-} from "@workspace/ui-core";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
+import { DatePicker } from "@/components/ui/date-picker";
+import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
-const schema = z.object({
-  plateNumber: z.string().min(1, "يرجى إدخال رقم اللوحة"),
-  make: z.string().min(1, "الشركة المصنعة مطلوبة"),
-  model: z.string().min(1, "الموديل مطلوب"),
-  year: z.string().optional(),
-  color: z.string().optional(),
-  vinNumber: z.string().optional(),
-  fuelType: z.enum(["gasoline", "diesel", "hybrid", "electric"]),
-  currentMileage: z.string().optional(),
-  fuelCapacity: z.string().optional(),
-  status: z.enum(["available", "in_use", "maintenance", "out_of_service"]),
-  insuranceExpiry: z.string().optional(),
-  registrationExpiry: z.string().optional(),
-  notes: z.string().optional(),
-  registrationNumber: z.string().optional(),
-  plateType: z.string().optional(),
-  sequenceNumber: z.string().optional(),
-  inspectionDate: z.string().optional(),
-  nextInspectionDate: z.string().optional(),
-  purchasePrice: z.string().optional(),
-  purchaseDate: z.string().optional(),
-});
-
-const FUEL_OPTIONS = [
-  { value: "gasoline", label: "بنزين" },
-  { value: "diesel", label: "ديزل" },
-  { value: "hybrid", label: "هجين" },
-  { value: "electric", label: "كهربائي" },
-];
-
-const STATUS_OPTIONS = [
-  { value: "available", label: "متاحة" },
-  { value: "in_use", label: "قيد الاستخدام" },
-  { value: "maintenance", label: "في الصيانة" },
-  { value: "out_of_service", label: "خارج الخدمة" },
-];
-
-const PLATE_OPTIONS = [
-  { value: "private", label: "خاصة" },
-  { value: "commercial", label: "تجارية" },
-  { value: "government", label: "حكومية" },
-  { value: "diplomatic", label: "دبلوماسية" },
-  { value: "motorcycle", label: "دراجة نارية" },
-];
+const DRAFT_KEY = "fleet_vehicles_create";
+const INITIAL = {
+  plateNumber: "", make: "", model: "", year: "", color: "", vinNumber: "",
+  fuelType: "gasoline", currentMileage: "", fuelCapacity: "", status: "available",
+  insuranceExpiry: "", registrationExpiry: "", notes: "",
+  registrationNumber: "", plateType: "", sequenceNumber: "", inspectionDate: "", nextInspectionDate: "",
+  purchasePrice: "", purchaseDate: "",
+};
 
 export default function VehiclesCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const addVehicle = useApiMutation(
-    "/fleet/vehicles",
-    "POST",
-    [["fleet-vehicles"], ["fleet-stats"]],
-  );
+  const addVehicle = useApiMutation("/fleet/vehicles", "POST", [["fleet-vehicles"], ["fleet-stats"]]);
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  const handleSubmit = async () => {
+    const firstError = validate({
+      plateNumber: form.plateNumber.trim() ? null : "يرجى إدخال رقم اللوحة",
+      make: form.make.trim() ? null : "الشركة المصنعة مطلوبة",
+      model: form.model.trim() ? null : "الموديل مطلوب",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
+      return;
+    }
+    try {
+      await addVehicle.mutateAsync({
+        plateNumber: form.plateNumber,
+        make: form.make,
+        model: form.model,
+        year: form.year ? Number(form.year) : undefined,
+        color: form.color || undefined,
+        vinNumber: form.vinNumber || undefined,
+        fuelType: form.fuelType,
+        currentMileage: Number(form.currentMileage) || 0,
+        fuelCapacity: form.fuelCapacity ? Number(form.fuelCapacity) : undefined,
+        status: form.status,
+        insuranceExpiry: form.insuranceExpiry || undefined,
+        registrationExpiry: form.registrationExpiry || undefined,
+        registrationNumber: form.registrationNumber || undefined,
+        plateType: form.plateType || undefined,
+        sequenceNumber: form.sequenceNumber || undefined,
+        inspectionDate: form.inspectionDate || undefined,
+        nextInspectionDate: form.nextInspectionDate || undefined,
+        purchasePrice: form.purchasePrice ? Number(form.purchasePrice) : undefined,
+        purchaseDate: form.purchaseDate || undefined,
+        notes: form.notes || undefined,
+      });
+      clearDraft();
+      toast({ title: "تمت إضافة المركبة بنجاح" });
+      setLocation("/fleet");
+    } catch (err: any) {
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المركبة", description: err?.fix ?? err?.message });
+    }
+  };
 
   return (
     <CreatePageLayout title="إضافة مركبة جديدة" backPath="/fleet">
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <CreationDateField />
       </div>
-      <FormShell
-        schema={schema}
-        defaultValues={{
-          plateNumber: "",
-          make: "",
-          model: "",
-          year: "",
-          color: "",
-          vinNumber: "",
-          fuelType: "gasoline",
-          currentMileage: "",
-          fuelCapacity: "",
-          status: "available",
-          insuranceExpiry: "",
-          registrationExpiry: "",
-          notes: "",
-          registrationNumber: "",
-          plateType: "",
-          sequenceNumber: "",
-          inspectionDate: "",
-          nextInspectionDate: "",
-          purchasePrice: "",
-          purchaseDate: "",
-        }}
-        submitLabel={addVehicle.isPending ? "جاري الإضافة..." : "إضافة"}
-        secondaryActions={
-          <Button type="button" variant="outline" onClick={() => setLocation("/fleet")}>
-            إلغاء
-          </Button>
-        }
-        onSubmit={async (values) => {
-          await addVehicle.mutateAsync({
-            plateNumber: values.plateNumber,
-            make: values.make,
-            model: values.model,
-            year: values.year ? Number(values.year) : undefined,
-            color: values.color || undefined,
-            vinNumber: values.vinNumber || undefined,
-            fuelType: values.fuelType,
-            currentMileage: Number(values.currentMileage) || 0,
-            fuelCapacity: values.fuelCapacity ? Number(values.fuelCapacity) : undefined,
-            status: values.status,
-            insuranceExpiry: values.insuranceExpiry || undefined,
-            registrationExpiry: values.registrationExpiry || undefined,
-            registrationNumber: values.registrationNumber || undefined,
-            plateType: values.plateType || undefined,
-            sequenceNumber: values.sequenceNumber || undefined,
-            inspectionDate: values.inspectionDate || undefined,
-            nextInspectionDate: values.nextInspectionDate || undefined,
-            purchasePrice: values.purchasePrice ? Number(values.purchasePrice) : undefined,
-            purchaseDate: values.purchaseDate || undefined,
-            notes: values.notes || undefined,
-          });
-          toast({ title: "تمت إضافة المركبة بنجاح" });
-          setLocation("/fleet");
-        }}
-      >
-        <FormGrid cols={2}>
-          <FormTextField name="plateNumber" label="رقم اللوحة" required placeholder="ABC 1234" />
-          <FormTextField name="make" label="الشركة المصنعة" required placeholder="تويوتا، هيونداي..." />
-          <FormTextField name="model" label="الموديل" required placeholder="كامري، النترا..." />
-          <FormNumberField name="year" label="سنة الصنع" placeholder="2024" />
-          <FormTextField name="color" label="اللون" placeholder="أبيض، أسود..." />
-          <FormTextField name="vinNumber" label="رقم الهيكل" placeholder="رقم الهيكل" />
-          <FormSelectField name="fuelType" label="نوع الوقود" options={FUEL_OPTIONS} />
-          <FormNumberField name="currentMileage" label="عداد الكيلومترات الحالي" placeholder="٠" />
-          <FormNumberField name="fuelCapacity" label="سعة خزان الوقود (لتر)" placeholder="٠" />
-          <FormSelectField name="status" label="الحالة" options={STATUS_OPTIONS} />
-          <FormDateField name="insuranceExpiry" label="تاريخ انتهاء التأمين" />
-          <FormDateField name="registrationExpiry" label="تاريخ انتهاء الاستمارة" />
-        </FormGrid>
-
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <TextField label="رقم اللوحة" required dir="ltr" value={form.plateNumber} onChange={(v) => setForm((f) => ({ ...f, plateNumber: v }))} placeholder="ABC 1234" error={fieldErrors.plateNumber} />
+          <TextField label="الشركة المصنعة" required value={form.make} onChange={(v) => setForm((f) => ({ ...f, make: v }))} placeholder="تويوتا، هيونداي..." error={fieldErrors.make} />
+          <TextField label="الموديل" required value={form.model} onChange={(v) => setForm((f) => ({ ...f, model: v }))} placeholder="كامري، النترا..." error={fieldErrors.model} />
+          <NumberField label="سنة الصنع" value={form.year} onChange={(v) => setForm((f) => ({ ...f, year: v }))} placeholder="2024" error={fieldErrors.year} />
+          <TextField label="اللون" value={form.color} onChange={(v) => setForm((f) => ({ ...f, color: v }))} placeholder="أبيض، أسود..." />
+          <TextField label="رقم الهيكل" dir="ltr" value={form.vinNumber} onChange={(v) => setForm((f) => ({ ...f, vinNumber: v }))} placeholder="رقم الهيكل" />
+          <FormFieldWrapper label="نوع الوقود">
+            <Select value={form.fuelType} onValueChange={(v) => setForm((f) => ({ ...f, fuelType: v }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gasoline">بنزين</SelectItem>
+                <SelectItem value="diesel">ديزل</SelectItem>
+                <SelectItem value="hybrid">هجين</SelectItem>
+                <SelectItem value="electric">كهربائي</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormFieldWrapper>
+          <NumberField label="عداد الكيلومترات الحالي" value={form.currentMileage} onChange={(v) => setForm((f) => ({ ...f, currentMileage: v }))} placeholder="٠" />
+          <NumberField label="سعة خزان الوقود (لتر)" value={form.fuelCapacity} onChange={(v) => setForm((f) => ({ ...f, fuelCapacity: v }))} placeholder="٠" />
+          <FormFieldWrapper label="الحالة">
+            <Select value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="available">متاحة</SelectItem>
+                <SelectItem value="in_use">قيد الاستخدام</SelectItem>
+                <SelectItem value="maintenance">في الصيانة</SelectItem>
+                <SelectItem value="out_of_service">خارج الخدمة</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormFieldWrapper>
+          <FormFieldWrapper label="تاريخ انتهاء التأمين">
+            <DatePicker value={form.insuranceExpiry} onChange={(v) => setForm((f) => ({ ...f, insuranceExpiry: v }))} />
+          </FormFieldWrapper>
+          <FormFieldWrapper label="تاريخ انتهاء الاستمارة">
+            <DatePicker value={form.registrationExpiry} onChange={(v) => setForm((f) => ({ ...f, registrationExpiry: v }))} />
+          </FormFieldWrapper>
+        </div>
         <div className="border-t pt-4 mt-2">
           <h3 className="text-sm font-semibold text-status-info-foreground mb-3 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-status-info-surface0 inline-block" />
             بيانات التسجيل والفحص — الربط الحكومي (تم)
           </h3>
-          <FormGrid cols={2}>
-            <FormTextField name="registrationNumber" label="رقم الاستمارة" placeholder="رقم الاستمارة" />
-            <FormSelectField name="plateType" label="نوع اللوحة" options={PLATE_OPTIONS} placeholder="— اختياري —" />
-            <FormTextField name="sequenceNumber" label="رقم التسلسل" placeholder="الرقم التسلسلي" />
-            <FormDateField name="inspectionDate" label="تاريخ آخر فحص دوري" />
-            <FormDateField name="nextInspectionDate" label="تاريخ الفحص الدوري القادم" />
-          </FormGrid>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <TextField label="رقم الاستمارة" dir="ltr" value={form.registrationNumber} onChange={(v) => setForm((f) => ({ ...f, registrationNumber: v }))} placeholder="رقم الاستمارة" />
+            <FormFieldWrapper label="نوع اللوحة">
+              <Select value={form.plateType} onValueChange={(v) => setForm((f) => ({ ...f, plateType: v }))}>
+                <SelectTrigger><SelectValue placeholder="— اختياري —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="private">خاصة</SelectItem>
+                  <SelectItem value="commercial">تجارية</SelectItem>
+                  <SelectItem value="government">حكومية</SelectItem>
+                  <SelectItem value="diplomatic">دبلوماسية</SelectItem>
+                  <SelectItem value="motorcycle">دراجة نارية</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+            <TextField label="رقم التسلسل" dir="ltr" value={form.sequenceNumber} onChange={(v) => setForm((f) => ({ ...f, sequenceNumber: v }))} placeholder="الرقم التسلسلي" />
+            <FormFieldWrapper label="تاريخ آخر فحص دوري">
+              <DatePicker value={form.inspectionDate} onChange={(v) => setForm((f) => ({ ...f, inspectionDate: v }))} />
+            </FormFieldWrapper>
+            <FormFieldWrapper label="تاريخ الفحص الدوري القادم">
+              <DatePicker value={form.nextInspectionDate} onChange={(v) => setForm((f) => ({ ...f, nextInspectionDate: v }))} />
+            </FormFieldWrapper>
+          </div>
         </div>
 
         <div className="border-t pt-4 mt-2">
@@ -168,15 +154,21 @@ export default function VehiclesCreate() {
             <span className="w-2 h-2 rounded-full bg-status-info-surface0 inline-block" />
             بيانات الشراء — تُستخدم في تقرير التكلفة الإجمالية وقيد رسملة الأصل
           </h3>
-          <FormGrid cols={2}>
-            <FormNumberField name="purchasePrice" label="سعر الشراء" placeholder="٠٫٠٠" />
-            <FormDateField name="purchaseDate" label="تاريخ الشراء" />
-          </FormGrid>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <NumberField label="سعر الشراء" value={form.purchasePrice} onChange={(v) => setForm((f) => ({ ...f, purchasePrice: v }))} placeholder="٠٫٠٠" />
+            <FormFieldWrapper label="تاريخ الشراء">
+              <DatePicker value={form.purchaseDate} onChange={(v) => setForm((f) => ({ ...f, purchaseDate: v }))} />
+            </FormFieldWrapper>
+          </div>
         </div>
 
-        <FormTextareaField name="notes" label="ملاحظات" placeholder="ملاحظات إضافية..." />
+        <TextAreaField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="ملاحظات إضافية..." />
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
-      </FormShell>
+        <div className="flex justify-end gap-3 pt-4">
+          <Button variant="outline" onClick={() => setLocation("/fleet")}>إلغاء</Button>
+          <Button onClick={handleSubmit} disabled={addVehicle.isPending} rateLimitAware>{addVehicle.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
+        </div>
+      </div>
     </CreatePageLayout>
   );
 }

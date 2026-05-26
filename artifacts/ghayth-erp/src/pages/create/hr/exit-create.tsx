@@ -1,146 +1,110 @@
+import { useMemo } from "react";
 import { useLocation } from "wouter";
-import { z } from "zod";
 import { useApiMutation, useApiQuery, asList } from "@/lib/api";
-import { useFormContext } from "react-hook-form";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  CreatePageLayout,
-  CreationDateField,
-  FormShell,
-  FormGrid,
-  FormTextareaField,
-  FormNumberField,
-  FormSelectField,
-  FormDateField,
-  FormEntitySelect,
-} from "@workspace/ui-core";
+import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { formatCurrency, todayLocal } from "@/lib/formatters";
+import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
+import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { EXIT_TYPES } from "@/lib/hr-type-maps";
-import { Info, DollarSign, AlertTriangle } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
+import { LogOut, Info, DollarSign, AlertTriangle } from "lucide-react";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
+import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { EmployeeSelect } from "@/components/shared/entity-selects";
 
-const schema = z.object({
-  assignmentId: z.string().min(1, "يرجى اختيار الموظف"),
-  exitType: z.string().min(1, "نوع نهاية الخدمة مطلوب"),
-  lastWorkingDay: z
-    .string()
-    .min(1, "آخر يوم عمل مطلوب")
-    .refine(
-      (v) => v >= todayLocal(),
-      "آخر يوم عمل يجب أن يكون اليوم أو في المستقبل",
-    ),
-  exitReason: z.string().optional(),
-  otherDeductions: z.string(),
-});
-
-const EXIT_TYPE_OPTIONS = Object.entries(EXIT_TYPES).map(([k, v]) => ({
-  value: k,
-  label: v,
-}));
-
-function computeEstimatedGratuity(salary: number, yearsOfService: number, exitType: string): number {
-  if (!salary || !yearsOfService) return 0;
-  const first5 = Math.min(yearsOfService, 5);
-  const above5 = Math.max(yearsOfService - 5, 0);
-  let g = (salary / 2) * first5 + salary * above5;
-  if (exitType === "resignation") {
-    if (yearsOfService < 2) g = 0;
-    else if (yearsOfService < 5) g = ((salary / 2) * first5) / 3;
-    else if (yearsOfService < 10) {
-      g = ((salary / 2) * first5 * 2) / 3 + (salary * above5 * 2) / 3;
-    }
-  }
-  return Math.round(g * 100) / 100;
-}
-
-function EmployeeContext({ employees }: { employees: any[] }) {
-  const { watch } = useFormContext();
-  const assignmentId = watch("assignmentId") as string;
-  const selectedEmployee = employees.find(
-    (e: any) => String(e.activeAssignmentId || e.assignmentId) === assignmentId,
-  );
-  if (!selectedEmployee) return null;
-  return <EmployeeContextCard employeeId={selectedEmployee.id} section="loans" />;
-}
-
-function GratuityEstimate({ employees }: { employees: any[] }) {
-  const { watch } = useFormContext();
-  const assignmentId = watch("assignmentId") as string;
-  const exitType = watch("exitType") as string;
-  const otherDeductions = watch("otherDeductions") as string;
-  const selectedEmployee = employees.find(
-    (e: any) => String(e.activeAssignmentId || e.assignmentId) === assignmentId,
-  );
-  if (!selectedEmployee) return null;
-  const salary = Number(selectedEmployee?.salary || selectedEmployee?.basicSalary || 0);
-  if (salary <= 0) return null;
-  const hireDate = selectedEmployee?.hireDate || selectedEmployee?.joinDate;
-  const yearsOfService = hireDate
-    ? (new Date().getTime() - new Date(hireDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
-    : 0;
-  const estimatedGratuity = computeEstimatedGratuity(salary, yearsOfService, exitType);
-  return (
-    <Card className="border-status-error-surface bg-status-error-surface">
-      <CardContent className="p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <DollarSign className="h-4 w-4 text-status-error-foreground" />
-          <span className="text-sm font-semibold text-status-error-foreground">تقدير مبدئي للمستحقات</span>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-          <div>
-            <p className="text-lg font-bold text-status-success-foreground">{formatCurrency(estimatedGratuity)}</p>
-            <p className="text-xs text-muted-foreground">مكافأة نهاية الخدمة</p>
-          </div>
-          <div>
-            <p className="text-lg font-bold text-status-info-foreground">{yearsOfService.toFixed(1)}</p>
-            <p className="text-xs text-muted-foreground">سنوات الخدمة</p>
-          </div>
-          <div>
-            <p className="text-lg font-bold text-status-warning-foreground">{EXIT_TYPES[exitType] || exitType}</p>
-            <p className="text-xs text-muted-foreground">نوع الإنهاء</p>
-          </div>
-          <div>
-            <p className="text-lg font-bold text-status-error-foreground">{formatCurrency(Number(otherDeductions || 0))}</p>
-            <p className="text-xs text-muted-foreground">خصومات أخرى</p>
-          </div>
-        </div>
-        <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
-          <Info className="h-3 w-3" />
-          هذا تقدير مبدئي — الحساب الدقيق يشمل رصيد الإجازات وخصم السلف المتبقية
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function TerminationWarning() {
-  const { watch } = useFormContext();
-  const exitType = watch("exitType") as string;
-  if (exitType !== "termination") return null;
-  return (
-    <div className="flex items-center gap-2 p-3 bg-status-error-surface border border-status-error-surface rounded-lg text-sm text-status-error-foreground">
-      <AlertTriangle className="h-4 w-4 shrink-0" />
-      <span>حالة فصل — يرجى التأكد من استكمال الإجراءات التأديبية قبل المتابعة</span>
-    </div>
-  );
-}
+const DRAFT_KEY = "hr_exit_create";
 
 export default function ExitCreate() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
 
   const createMut = useApiMutation("/hr/exit", "POST", [["hr-exit"]], {
     successMessage: "تم إنشاء طلب نهاية الخدمة بنجاح",
   });
 
   const employeesQ = useApiQuery<any>(["employees-list"], "/employees?limit=500");
+  const employees = asList<any>(employeesQ.data);
+
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
+    assignmentId: "",
+    exitType: "resignation",
+    lastWorkingDay: "",
+    exitReason: "",
+    otherDeductions: "0",
+  });
+
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  const selectedEmployee = useMemo(
+    () => employees.find((e: any) => String(e.activeAssignmentId || e.assignmentId) === form.assignmentId),
+    [employees, form.assignmentId]
+  );
 
   if (employeesQ.isLoading) return <LoadingSpinner />;
   if (employeesQ.isError) return <ErrorState />;
 
-  const employees = asList<any>(employeesQ.data);
+  const salary = Number(selectedEmployee?.salary || selectedEmployee?.basicSalary || 0);
+  const hireDate = selectedEmployee?.hireDate || selectedEmployee?.joinDate;
+  const yearsOfService = hireDate
+    ? (new Date().getTime() - new Date(hireDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+    : 0;
+
+  // تقدير مبدئي لمكافأة نهاية الخدمة وفق نظام العمل السعودي — المادة 84 و 85
+  // الحساب الدقيق يتم في الخادم
+  const estimatedGratuity = useMemo(() => {
+    if (!salary || !yearsOfService) return 0;
+    const first5 = Math.min(yearsOfService, 5);
+    const above5 = Math.max(yearsOfService - 5, 0);
+    let g = (salary / 2) * first5 + salary * above5;
+
+    if (form.exitType === "resignation") {
+      // المادة 85: تخفيض المكافأة عند الاستقالة
+      if (yearsOfService < 2) g = 0;
+      else if (yearsOfService < 5) g = (salary / 2) * first5 / 3;
+      else if (yearsOfService < 10) {
+        g = ((salary / 2) * first5 * 2) / 3 + (salary * above5 * 2) / 3;
+      }
+      // 10+ سنوات: المكافأة كاملة
+    }
+    return Math.round(g * 100) / 100;
+  }, [salary, yearsOfService, form.exitType]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const today = todayLocal();
+    const firstError = validate({
+      assignmentId: form.assignmentId ? null : "يرجى اختيار الموظف",
+      exitType: form.exitType ? null : "نوع نهاية الخدمة مطلوب",
+      lastWorkingDay: !form.lastWorkingDay
+        ? "آخر يوم عمل مطلوب"
+        : form.lastWorkingDay < today
+          ? "آخر يوم عمل يجب أن يكون اليوم أو في المستقبل"
+          : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
+      return;
+    }
+
+    try {
+      await createMut.mutateAsync({
+        assignmentId: Number(form.assignmentId),
+        exitType: form.exitType,
+        lastWorkingDay: form.lastWorkingDay || undefined,
+        exitReason: form.exitReason || undefined,
+        otherDeductions: Number(form.otherDeductions || 0),
+      });
+      clearDraft();
+      setLocation("/hr/exit");
+    } catch (err: any) {
+      setApiError(err);
+    }
+  };
 
   return (
     <CreatePageLayout
@@ -148,55 +112,122 @@ export default function ExitCreate() {
       backPath="/hr/exit"
       backLabel="نهاية الخدمة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      isDirty={Boolean(form.assignmentId)}
     >
-      <CreationDateField />
-      <FormShell
-        schema={schema}
-        defaultValues={{
-          assignmentId: "",
-          exitType: "resignation",
-          lastWorkingDay: "",
-          exitReason: "",
-          otherDeductions: "0",
-        }}
-        submitLabel={createMut.isPending ? "جاري الإنشاء..." : "إنشاء طلب نهاية الخدمة"}
-        submitVariant="destructive"
-        secondaryActions={
-          <Button type="button" variant="outline" onClick={() => setLocation("/hr/exit")}>
-            إلغاء
-          </Button>
-        }
-        onSubmit={async (values) => {
-          await createMut.mutateAsync({
-            assignmentId: Number(values.assignmentId),
-            exitType: values.exitType,
-            lastWorkingDay: values.lastWorkingDay || undefined,
-            exitReason: values.exitReason || undefined,
-            otherDeductions: Number(values.otherDeductions || 0),
-          });
-          setLocation("/hr/exit");
-        }}
-      >
-        <FormGrid cols={2}>
-          <FormEntitySelect name="assignmentId" select={EmployeeSelect} label="الموظف" required />
-          <FormSelectField name="exitType" label="نوع نهاية الخدمة" required options={EXIT_TYPE_OPTIONS} />
-        </FormGrid>
-        <FormGrid cols={2}>
-          <FormDateField name="lastWorkingDay" label="آخر يوم عمل" required />
-          <FormNumberField name="otherDeductions" label="خصومات أخرى" step="0.01" min="0" />
-        </FormGrid>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <CreationDateField />
+        {hasDraft && (
+          <div className="flex items-center gap-2 p-3 bg-status-info-surface border border-status-info-surface rounded-lg text-sm text-status-info-foreground">
+            <Info className="h-4 w-4 shrink-0" />
+            <span>تم استعادة مسودة سابقة — يمكنك متابعة التعبئة أو مسحها</span>
+            <Button type="button" size="sm" variant="ghost" onClick={clearDraft} className="mr-auto text-xs">
+              مسح المسودة
+            </Button>
+          </div>
+        )}
 
-        <EmployeeContext employees={employees} />
-        <GratuityEstimate employees={employees} />
-        <TerminationWarning />
+        {/* بيانات الموظف */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <EmployeeSelect
+            value={form.assignmentId}
+            onChange={(v) => setForm({ ...form, assignmentId: v })}
+            label="الموظف"
+            required
+            error={fieldErrors.assignmentId}
+          />
 
-        <FormTextareaField
-          name="exitReason"
+          <FormFieldWrapper label="نوع نهاية الخدمة" required error={fieldErrors.exitType}>
+            <Select value={form.exitType} onValueChange={(v) => setForm({ ...form, exitType: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(EXIT_TYPES).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>{v}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormFieldWrapper>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormFieldWrapper label="آخر يوم عمل" required error={fieldErrors.lastWorkingDay}>
+            <DatePicker value={form.lastWorkingDay} onChange={(v) => setForm({ ...form, lastWorkingDay: v })} />
+          </FormFieldWrapper>
+
+          <NumberField
+            label="خصومات أخرى"
+            value={form.otherDeductions}
+            onChange={(v) => setForm({ ...form, otherDeductions: v })}
+            step={0.01}
+            min={0}
+          />
+        </div>
+
+        {/* سياق الموظف: سلف نشطة + مخالفات + إجازات مستحقة */}
+        {selectedEmployee && (
+          <EmployeeContextCard employeeId={selectedEmployee.id} section="loans" />
+        )}
+
+        {/* تقدير المستحقات */}
+        {selectedEmployee && salary > 0 && (
+          <Card className="border-status-error-surface bg-status-error-surface">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <DollarSign className="h-4 w-4 text-status-error-foreground" />
+                <span className="text-sm font-semibold text-status-error-foreground">تقدير مبدئي للمستحقات</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div>
+                  <p className="text-lg font-bold text-status-success-foreground">{formatCurrency(estimatedGratuity)}</p>
+                  <p className="text-xs text-muted-foreground">مكافأة نهاية الخدمة</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-status-info-foreground">{yearsOfService.toFixed(1)}</p>
+                  <p className="text-xs text-muted-foreground">سنوات الخدمة</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-status-warning-foreground">{EXIT_TYPES[form.exitType] || form.exitType}</p>
+                  <p className="text-xs text-muted-foreground">نوع الإنهاء</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-status-error-foreground">{formatCurrency(Number(form.otherDeductions || 0))}</p>
+                  <p className="text-xs text-muted-foreground">خصومات أخرى</p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
+                <Info className="h-3 w-3" />
+                هذا تقدير مبدئي — الحساب الدقيق يشمل رصيد الإجازات وخصم السلف المتبقية
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {form.exitType === "termination" && (
+          <div className="flex items-center gap-2 p-3 bg-status-error-surface border border-status-error-surface rounded-lg text-sm text-status-error-foreground">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>حالة فصل — يرجى التأكد من استكمال الإجراءات التأديبية قبل المتابعة</span>
+          </div>
+        )}
+
+        {/* السبب */}
+        <TextAreaField
           label="سبب نهاية الخدمة"
           rows={3}
           placeholder="سبب طلب إنهاء الخدمة..."
+          value={form.exitReason}
+          onChange={(v) => setForm({ ...form, exitReason: v })}
         />
-      </FormShell>
+
+        {/* أزرار الإرسال */}
+        <div className="flex items-center gap-3 pt-4 border-t">
+          <Button type="submit" disabled={createMut.isPending} className="gap-1.5 bg-red-600 hover:bg-red-700" rateLimitAware>
+            <LogOut className="h-4 w-4" />
+            {createMut.isPending ? "جاري الإنشاء..." : "إنشاء طلب نهاية الخدمة"}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => setLocation("/hr/exit")}>
+            إلغاء
+          </Button>
+        </div>
+      </form>
     </CreatePageLayout>
   );
 }

@@ -10,6 +10,7 @@ import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function UmrahViolationDetail() {
   const [, params] = useRoute("/umrah/violations/:id");
@@ -75,7 +76,12 @@ export default function UmrahViolationDetail() {
       isLoading={isLoading}
       error={error}
       onRetry={refetch}
-      actions={<DetailActionButtons hook={editDelete} editPerm="umrah:update" deletePerm="umrah:delete" />}
+      actions={
+        <div className="flex items-center gap-2">
+          <DetailActionButtons hook={editDelete} editPerm="umrah:update" deletePerm="umrah:delete" />
+          <PrintButton entityType="umrah_violation" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
     />
   );
 }

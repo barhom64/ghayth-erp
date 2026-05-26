@@ -1,6 +1,4 @@
 import { useMemo, useState } from "react";
-import { useFormContext, Controller } from "react-hook-form";
-import { z } from "zod";
 import { Link } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,8 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { PageShell, FormShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { PageShell } from "@workspace/ui-core";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -20,41 +18,6 @@ import { formatNumber } from "@/lib/formatters";
 import { Upload, CheckCircle2, AlertTriangle, Link2, ArrowRight, FileSpreadsheet, AlertOctagon } from "lucide-react";
 
 type FileType = "mutamers" | "vouchers";
-
-const linkSubAgentSchema = z.object({
-  clientId: z.string().min(1, "اختر عميلاً"),
-});
-
-function ClientPickerField({ clients }: { clients: any[] }) {
-  const { control, formState } = useFormContext<{ clientId: string }>();
-  const error = formState.errors.clientId?.message as string | undefined;
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor="clientId" className="text-sm font-medium">
-        اختر العميل
-        <span className="text-red-500 ms-1">*</span>
-      </Label>
-      <Controller
-        control={control}
-        name="clientId"
-        render={({ field }) => (
-          <SearchableSelect
-            options={clients.map((c: any) => ({
-              value: String(c.id),
-              label: c.name ?? c.companyName ?? `#${c.id}`,
-              sublabel: c.phone,
-            }))}
-            value={field.value}
-            onValueChange={field.onChange}
-            placeholder="اختر عميلاً..."
-            searchPlaceholder="ابحث في العملاء..."
-          />
-        )}
-      />
-      {error && <p className="text-xs text-status-error-foreground">{error}</p>}
-    </div>
-  );
-}
 
 interface PreviewSummary {
   total?: number;
@@ -87,6 +50,7 @@ export default function UmrahImportWizard() {
   const [confirming, setConfirming] = useState(false);
   const [confirmResult, setConfirmResult] = useState<{ batchId?: string | number } | null>(null);
   const [linkingSubAgent, setLinkingSubAgent] = useState<{ nuskCode: string; name: string } | null>(null);
+  const [linkClientId, setLinkClientId] = useState("");
   const [linking, setLinking] = useState(false);
   // Voucher-only fields (gaps #2 + #3): pick the cash box that funds
   // NUSK payments + optionally override the umrah-nusk-cost DR account.
@@ -207,15 +171,15 @@ export default function UmrahImportWizard() {
     }
   };
 
-  const doLinkSubAgent = async (clientId: string) => {
-    if (!linkingSubAgent || !clientId) return;
+  const doLinkSubAgent = async () => {
+    if (!linkingSubAgent || !linkClientId) return;
     setLinking(true);
     try {
       await apiFetch(`/umrah/sub-agents/link-by-nusk`, {
         method: "POST",
         body: JSON.stringify({
           nuskCode: linkingSubAgent.nuskCode,
-          clientId: Number(clientId),
+          clientId: Number(linkClientId),
         }),
       });
       toast({ title: "تم ربط الوكيل الفرعي بالعميل" });
@@ -223,6 +187,7 @@ export default function UmrahImportWizard() {
         ? { ...p, unlinkedSubAgents: (p.unlinkedSubAgents ?? []).filter((u) => u.nuskCode !== linkingSubAgent.nuskCode) }
         : p);
       setLinkingSubAgent(null);
+      setLinkClientId("");
     } catch (err: any) {
       toast({ variant: "destructive", title: err?.message ?? "تعذّر الربط" });
     } finally {
@@ -421,33 +386,39 @@ export default function UmrahImportWizard() {
                 <p className="text-xs text-muted-foreground mb-3">
                   الوكلاء الفرعيون التاليون موجودون في الملف ولكن غير مربوطين بعملاء في النظام. يمكنك ربطهم الآن قبل التأكيد.
                 </p>
-                <DataTable
-                  data={preview.unlinkedSubAgents}
-                  rowKey={(u) => u.nuskCode}
-                  noToolbar
-                  pageSize={0}
-                  columns={[
-                    { key: "nuskCode", header: "رمز نُسك", className: "font-mono text-xs", ltr: true },
-                    { key: "name", header: "الاسم" },
-                    { key: "rowCount", header: "عدد الصفوف", render: (u) => formatNumber(u.rowCount) },
-                    {
-                      key: "actions",
-                      header: "",
-                      render: (u) => (
-                        <GuardedButton
-                          perm="umrah:write"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setLinkingSubAgent(u)}
-                          className="gap-1"
-                        >
-                          <Link2 className="h-3.5 w-3.5" />
-                          ربط الآن
-                        </GuardedButton>
-                      ),
-                    },
-                  ] satisfies DataTableColumn<typeof preview.unlinkedSubAgents[number]>[]}
-                />
+                <div className="rounded border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40">
+                      <tr>
+                        <th className="p-2 text-start font-medium">رمز نُسك</th>
+                        <th className="p-2 text-start font-medium">الاسم</th>
+                        <th className="p-2 text-start font-medium">عدد الصفوف</th>
+                        <th className="p-2 text-start font-medium"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.unlinkedSubAgents.map((u) => (
+                        <tr key={u.nuskCode} className="border-t">
+                          <td className="p-2 font-mono text-xs" dir="ltr">{u.nuskCode}</td>
+                          <td className="p-2">{u.name}</td>
+                          <td className="p-2">{formatNumber(u.rowCount)}</td>
+                          <td className="p-2">
+                            <GuardedButton
+                              perm="umrah:write"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setLinkingSubAgent(u)}
+                              className="gap-1"
+                            >
+                              <Link2 className="h-3.5 w-3.5" />
+                              ربط الآن
+                            </GuardedButton>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -463,23 +434,26 @@ export default function UmrahImportWizard() {
                 <p className="text-xs text-muted-foreground mb-3">
                   الوكلاء التاليون مذكورون في الملف ولا يوجد لهم سجل في النظام. سيُنشأون تلقائياً عند التأكيد. راجع الأسماء قبل المتابعة لتجنّب إنشاء سجلات مكررة بفروق إملائية.
                 </p>
-                <DataTable
-                  data={preview.newAgentsToCreate}
-                  rowKey={(a, idx) => `${a.nuskAgentNumber ?? "name"}-${idx}`}
-                  noToolbar
-                  pageSize={0}
-                  columns={[
-                    {
-                      key: "nuskAgentNumber",
-                      header: "رقم الوكيل",
-                      className: "font-mono text-xs",
-                      ltr: true,
-                      render: (a) => a.nuskAgentNumber ?? "—",
-                    },
-                    { key: "agentName", header: "الاسم" },
-                    { key: "rowCount", header: "عدد الصفوف", render: (a) => formatNumber(a.rowCount) },
-                  ] satisfies DataTableColumn<typeof preview.newAgentsToCreate[number]>[]}
-                />
+                <div className="rounded border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40">
+                      <tr>
+                        <th className="p-2 text-start font-medium">رقم الوكيل</th>
+                        <th className="p-2 text-start font-medium">الاسم</th>
+                        <th className="p-2 text-start font-medium">عدد الصفوف</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.newAgentsToCreate.map((a, idx) => (
+                        <tr key={`${a.nuskAgentNumber ?? "name"}-${idx}`} className="border-t">
+                          <td className="p-2 font-mono text-xs" dir="ltr">{a.nuskAgentNumber ?? "—"}</td>
+                          <td className="p-2">{a.agentName}</td>
+                          <td className="p-2">{formatNumber(a.rowCount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
           )}
@@ -576,30 +550,43 @@ export default function UmrahImportWizard() {
       )}
 
       {/* Link sub-agent dialog */}
-      <Dialog open={!!linkingSubAgent} onOpenChange={(o) => { if (!o) setLinkingSubAgent(null); }}>
+      <Dialog open={!!linkingSubAgent} onOpenChange={(o) => { if (!o) { setLinkingSubAgent(null); setLinkClientId(""); } }}>
         <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle>ربط الوكيل الفرعي بعميل</DialogTitle>
           </DialogHeader>
-          {linkingSubAgent && (
-            <div className="p-3 rounded bg-muted/30 text-sm mb-3">
-              <p><span className="text-muted-foreground">رمز نُسك:</span> <strong dir="ltr" className="font-mono">{linkingSubAgent.nuskCode}</strong></p>
-              <p><span className="text-muted-foreground">الاسم:</span> <strong>{linkingSubAgent.name}</strong></p>
+          <div className="space-y-3">
+            {linkingSubAgent && (
+              <div className="p-3 rounded bg-muted/30 text-sm">
+                <p><span className="text-muted-foreground">رمز نُسك:</span> <strong dir="ltr" className="font-mono">{linkingSubAgent.nuskCode}</strong></p>
+                <p><span className="text-muted-foreground">الاسم:</span> <strong>{linkingSubAgent.name}</strong></p>
+              </div>
+            )}
+            <div>
+              <Label className="text-xs">اختر العميل</Label>
+              <SearchableSelect
+                options={clients.map((c: any) => ({
+                  value: String(c.id),
+                  label: c.name ?? c.companyName ?? `#${c.id}`,
+                  sublabel: c.phone,
+                }))}
+                value={linkClientId}
+                onValueChange={setLinkClientId}
+                placeholder="اختر عميلاً..."
+                searchPlaceholder="ابحث في العملاء..."
+              />
             </div>
-          )}
-          <FormShell
-            schema={linkSubAgentSchema}
-            defaultValues={{ clientId: "" }}
-            submitLabel={linking ? "جاري الربط..." : "ربط"}
-            secondaryActions={
-              <Button type="button" variant="outline" onClick={() => setLinkingSubAgent(null)}>إلغاء</Button>
-            }
-            onSubmit={async (values) => {
-              await doLinkSubAgent(values.clientId);
-            }}
-          >
-            <ClientPickerField clients={clients} />
-          </FormShell>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setLinkingSubAgent(null); setLinkClientId(""); }}>إلغاء</Button>
+            <GuardedButton
+              perm="umrah:write"
+              disabled={!linkClientId || linking}
+              onClick={doLinkSubAgent}
+            >
+              {linking ? "جاري الربط..." : "ربط"}
+            </GuardedButton>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </PageShell>

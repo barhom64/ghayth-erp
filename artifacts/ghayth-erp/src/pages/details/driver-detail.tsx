@@ -12,7 +12,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle2, Edit, IdCard, Phone, User, Car } from "lucide-react";
@@ -121,28 +121,6 @@ export default function DriverDetail() {
     return out;
   }, [driver, driverWithJoin, assignedVehicle]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!driver) return [];
-    const items: Array<{ label: string; value: string }> = [
-      { label: "الاسم", value: driver.name || "-" },
-      { label: "الهاتف", value: driver.phone || "-" },
-      { label: "رقم الرخصة", value: driver.licenseNumber || "-" },
-    ];
-    if (driver.licenseType) {
-      items.push({ label: "نوع الرخصة", value: LICENSE_TYPE_LABELS[driver.licenseType] || driver.licenseType });
-    }
-    if (driver.licenseExpiry) {
-      items.push({ label: "انتهاء الرخصة", value: formatDateAr(driver.licenseExpiry) });
-    }
-    if (driver.nationalId) {
-      items.push({ label: "الهوية الوطنية", value: driver.nationalId });
-    }
-    items.push({ label: "الحالة", value: STATUS_LABELS[driver.status] || driver.status || "-" });
-    if (assignedVehicle) {
-      items.push({ label: "المركبة المسندة", value: assignedVehicle.plateNumber || `#${assignedVehicle.id}` });
-    }
-    return [{ kind: "info-grid", items }];
-  }, [driver, assignedVehicle]);
 
   const editDelete = useDetailEditDelete({
     entityLabel: "السائق",
@@ -305,12 +283,9 @@ export default function DriverDetail() {
       actions={
         <>
           <EntityPrintButton
-            branchId={driver?.branchId}
-            title={`ملف السائق — ${driver?.name || ""}`}
-            ref={`DRV-${id}`}
-            date={formatDateAr(new Date().toISOString())}
-            sections={printSections}
-          />
+            entityType="driver"
+            entityId={id ?? 0}
+            formats={["a4"]}/>
           <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>
       }

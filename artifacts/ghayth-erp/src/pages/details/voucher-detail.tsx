@@ -7,7 +7,7 @@ import {
 } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -123,46 +123,6 @@ export default function VoucherDetail() {
     ? VOUCHER_TYPE_LABELS[voucher.voucherType] || voucher.voucherType
     : null;
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!voucher) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: voucher.ref || `VCH-${id}` },
-          { label: "المبلغ", value: formatCurrency(amount) },
-          ...(voucherTypeLabel
-            ? [{ label: "نوع السند", value: voucherTypeLabel }]
-            : []),
-          ...(voucher.payeeName
-            ? [{ label: "المستفيد / الدافع", value: voucher.payeeName }]
-            : []),
-          ...(paymentMethodLabel
-            ? [{ label: "طريقة الدفع", value: paymentMethodLabel }]
-            : []),
-          ...(voucher.costCenter
-            ? [{ label: "مركز التكلفة", value: voucher.costCenter }]
-            : []),
-          ...(voucher.reference
-            ? [{ label: "الرقم المرجعي", value: voucher.reference }]
-            : []),
-          { label: "الحالة", value: STATUS_LABELS[voucher.status] || voucher.status || "-" },
-          { label: "تاريخ الإنشاء", value: formatDateAr(voucher.createdAt) },
-        ],
-      },
-    ];
-    if (voucher.description) {
-      sections.push({ kind: "text", title: "وصف السند", body: voucher.description });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "مُعِد السند", name: voucher.createdByName || "" },
-        { label: "المعتمد", name: voucher.approvedByName || "" },
-      ],
-    });
-    return sections;
-  }, [voucher, amount, voucherTypeLabel, paymentMethodLabel, id]);
 
   const handleEdit = () => {
     setLocation(`/finance/vouchers/${id}/edit`);
@@ -341,15 +301,9 @@ export default function VoucherDetail() {
           <>
             {voucher && (
               <EntityPrintButton
-                branchId={voucher.branchId}
-                title={voucher.ref ? `سند ${voucher.ref}` : "سند"}
-                ref={voucher.ref || `VCH-${id}`}
-                date={formatDateAr(voucher.createdAt)}
-                sections={printSections}
                 entityType={voucher.voucherType === "receipt" ? "receipt_voucher" : "payment_voucher"}
                 entityId={voucher.id ?? id}
-                formats={["a4", "thermal_80"]}
-              />
+                formats={["a4", "thermal_80"]}/>
             )}
             <GuardedButton
               perm="finance:update"

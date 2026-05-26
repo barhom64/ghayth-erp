@@ -29,6 +29,7 @@ import {
 } from "@workspace/entity-kit";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { PrintButton } from "@/components/shared/print-button";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Building },
@@ -473,7 +474,7 @@ export default function UnitDetail() {
                 <div className="relative pr-4">
                   {contracts.slice(0, 5).map((c: any, idx: number) => (
                     <div key={c.id || idx} className="relative flex gap-3 pb-4 last:pb-0">
-                      <div className="absolute end-0 top-1 w-2 h-2 rounded-full bg-status-info-surface0" />
+                      <div className="absolute right-0 top-1 w-2 h-2 rounded-full bg-status-info-surface0" />
                       {idx < Math.min(contracts.length, 5) - 1 && <div className="absolute right-[3px] top-3 w-0.5 h-full bg-blue-200" />}
                       <div className="mr-4 flex-1 flex items-center justify-between">
                         <div>
@@ -667,7 +668,12 @@ export default function UnitDetail() {
       updatedAt={unit?.updatedAt}
       hideTabs={registryHideTabs}
       overview={overview}
-      actions={actions}
+      actions={
+        <div className="flex items-center gap-2">
+          {actions}
+          <PrintButton entityType="property_unit" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
     />
   );
 }

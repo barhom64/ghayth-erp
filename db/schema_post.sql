@@ -35,6 +35,55 @@ ALTER TABLE ONLY public.activity_logs ALTER COLUMN id SET DEFAULT nextval('publi
 
 
 --
+-- Name: ai_prompt_evaluation_results id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompt_evaluation_results ALTER COLUMN id SET DEFAULT nextval('public.ai_prompt_evaluation_results_id_seq'::regclass);
+
+
+--
+-- Name: ai_prompt_evaluations id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompt_evaluations ALTER COLUMN id SET DEFAULT nextval('public.ai_prompt_evaluations_id_seq'::regclass);
+
+
+--
+-- Name: ai_prompt_reviews id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompt_reviews ALTER COLUMN id SET DEFAULT nextval('public.ai_prompt_reviews_id_seq'::regclass);
+
+
+--
+-- Name: ai_prompt_test_cases id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompt_test_cases ALTER COLUMN id SET DEFAULT nextval('public.ai_prompt_test_cases_id_seq'::regclass);
+
+
+--
+-- Name: ai_prompts id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompts ALTER COLUMN id SET DEFAULT nextval('public.ai_prompts_id_seq'::regclass);
+
+
+--
+-- Name: ai_providers id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_providers ALTER COLUMN id SET DEFAULT nextval('public.ai_providers_id_seq'::regclass);
+
+
+--
+-- Name: ai_request_logs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_request_logs ALTER COLUMN id SET DEFAULT nextval('public.ai_request_logs_id_seq'::regclass);
+
+
+--
 -- Name: alert_fatigue_settings id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -256,6 +305,20 @@ ALTER TABLE ONLY public.clients ALTER COLUMN id SET DEFAULT nextval('public.clie
 --
 
 ALTER TABLE ONLY public.collection_follow_ups ALTER COLUMN id SET DEFAULT nextval('public.collection_follow_ups_id_seq'::regclass);
+
+
+--
+-- Name: communication_dlp_rules id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.communication_dlp_rules ALTER COLUMN id SET DEFAULT nextval('public.communication_dlp_rules_id_seq'::regclass);
+
+
+--
+-- Name: communication_providers id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.communication_providers ALTER COLUMN id SET DEFAULT nextval('public.communication_providers_id_seq'::regclass);
 
 
 --
@@ -1043,6 +1106,20 @@ ALTER TABLE ONLY public.invoices ALTER COLUMN id SET DEFAULT nextval('public.inv
 
 
 --
+-- Name: ivr_menu_options id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ivr_menu_options ALTER COLUMN id SET DEFAULT nextval('public.ivr_menu_options_id_seq'::regclass);
+
+
+--
+-- Name: ivr_menus id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ivr_menus ALTER COLUMN id SET DEFAULT nextval('public.ivr_menus_id_seq'::regclass);
+
+
+--
 -- Name: job_applications id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -1316,10 +1393,31 @@ ALTER TABLE ONLY public.payroll_runs ALTER COLUMN id SET DEFAULT nextval('public
 
 
 --
+-- Name: pbx_call_recordings id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pbx_call_recordings ALTER COLUMN id SET DEFAULT nextval('public.pbx_call_recordings_id_seq'::regclass);
+
+
+--
+-- Name: pbx_call_transcripts id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pbx_call_transcripts ALTER COLUMN id SET DEFAULT nextval('public.pbx_call_transcripts_id_seq'::regclass);
+
+
+--
 -- Name: pbx_calls id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.pbx_calls ALTER COLUMN id SET DEFAULT nextval('public.pbx_calls_id_seq'::regclass);
+
+
+--
+-- Name: pbx_extensions id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pbx_extensions ALTER COLUMN id SET DEFAULT nextval('public.pbx_extensions_id_seq'::regclass);
 
 
 --
@@ -2306,6 +2404,78 @@ ALTER TABLE ONLY public.activity_logs
 
 
 --
+-- Name: ai_prompt_evaluation_results ai_prompt_evaluation_results_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompt_evaluation_results
+    ADD CONSTRAINT ai_prompt_evaluation_results_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_prompt_evaluations ai_prompt_evaluations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompt_evaluations
+    ADD CONSTRAINT ai_prompt_evaluations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_prompt_reviews ai_prompt_reviews_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompt_reviews
+    ADD CONSTRAINT ai_prompt_reviews_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_prompt_test_cases ai_prompt_test_cases_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompt_test_cases
+    ADD CONSTRAINT ai_prompt_test_cases_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_prompts ai_prompts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompts
+    ADD CONSTRAINT ai_prompts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_prompts ai_prompts_slug_version_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompts
+    ADD CONSTRAINT ai_prompts_slug_version_unique UNIQUE (slug, version);
+
+
+--
+-- Name: ai_providers ai_providers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_providers
+    ADD CONSTRAINT ai_providers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_providers ai_providers_slug_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_providers
+    ADD CONSTRAINT ai_providers_slug_key UNIQUE (slug);
+
+
+--
+-- Name: ai_request_logs ai_request_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_request_logs
+    ADD CONSTRAINT ai_request_logs_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: alert_fatigue_settings alert_fatigue_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2607,6 +2777,30 @@ ALTER TABLE ONLY public.clients
 
 ALTER TABLE ONLY public.collection_follow_ups
     ADD CONSTRAINT collection_follow_ups_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: communication_dlp_rules communication_dlp_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.communication_dlp_rules
+    ADD CONSTRAINT communication_dlp_rules_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: communication_providers communication_providers_channel_slug_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.communication_providers
+    ADD CONSTRAINT communication_providers_channel_slug_unique UNIQUE (channel, slug);
+
+
+--
+-- Name: communication_providers communication_providers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.communication_providers
+    ADD CONSTRAINT communication_providers_pkey PRIMARY KEY (id);
 
 
 --
@@ -3178,6 +3372,14 @@ ALTER TABLE ONLY public.event_logs
 
 
 --
+-- Name: event_outbox event_outbox_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.event_outbox
+    ADD CONSTRAINT event_outbox_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: expense_claims expense_claims_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3610,6 +3812,14 @@ ALTER TABLE ONLY public.inventory_count_items
 
 
 --
+-- Name: inventory_count_items inventory_count_items_count_product_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inventory_count_items
+    ADD CONSTRAINT inventory_count_items_count_product_unique UNIQUE ("countId", "productId");
+
+
+--
 -- Name: inventory_count_items inventory_count_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3671,6 +3881,38 @@ ALTER TABLE ONLY public.invoices
 
 ALTER TABLE ONLY public.invoices
     ADD CONSTRAINT invoices_ref_key UNIQUE (ref);
+
+
+--
+-- Name: ivr_menu_options ivr_menu_options_menu_key_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ivr_menu_options
+    ADD CONSTRAINT ivr_menu_options_menu_key_unique UNIQUE ("menuId", "dtmfKey");
+
+
+--
+-- Name: ivr_menu_options ivr_menu_options_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ivr_menu_options
+    ADD CONSTRAINT ivr_menu_options_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ivr_menus ivr_menus_company_slug_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ivr_menus
+    ADD CONSTRAINT ivr_menus_company_slug_unique UNIQUE ("companyId", slug);
+
+
+--
+-- Name: ivr_menus ivr_menus_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ivr_menus
+    ADD CONSTRAINT ivr_menus_pkey PRIMARY KEY (id);
 
 
 --
@@ -4026,11 +4268,59 @@ ALTER TABLE ONLY public.payroll_runs
 
 
 --
+-- Name: pbx_call_recordings pbx_call_recordings_call_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pbx_call_recordings
+    ADD CONSTRAINT pbx_call_recordings_call_unique UNIQUE ("callId");
+
+
+--
+-- Name: pbx_call_recordings pbx_call_recordings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pbx_call_recordings
+    ADD CONSTRAINT pbx_call_recordings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pbx_call_transcripts pbx_call_transcripts_call_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pbx_call_transcripts
+    ADD CONSTRAINT pbx_call_transcripts_call_unique UNIQUE ("callId");
+
+
+--
+-- Name: pbx_call_transcripts pbx_call_transcripts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pbx_call_transcripts
+    ADD CONSTRAINT pbx_call_transcripts_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: pbx_calls pbx_calls_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.pbx_calls
     ADD CONSTRAINT pbx_calls_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pbx_extensions pbx_extensions_company_ext_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pbx_extensions
+    ADD CONSTRAINT pbx_extensions_company_ext_unique UNIQUE ("companyId", extension);
+
+
+--
+-- Name: pbx_extensions pbx_extensions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pbx_extensions
+    ADD CONSTRAINT pbx_extensions_pkey PRIMARY KEY (id);
 
 
 --
@@ -4746,6 +5036,14 @@ ALTER TABLE ONLY public.subsidiary_accounts
 
 
 --
+-- Name: supplier_payment_allocations supplier_payment_allocations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier_payment_allocations
+    ADD CONSTRAINT supplier_payment_allocations_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: suppliers suppliers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4799,6 +5097,14 @@ ALTER TABLE ONLY public.system_stops
 
 ALTER TABLE ONLY public.tasks
     ADD CONSTRAINT tasks_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: tax_codes tax_codes_company_code_uniq; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tax_codes
+    ADD CONSTRAINT tax_codes_company_code_uniq UNIQUE ("companyId", code);
 
 
 --
@@ -5199,6 +5505,14 @@ ALTER TABLE ONLY public.warehouses
 
 ALTER TABLE ONLY public.whatsapp_queue
     ADD CONSTRAINT whatsapp_queue_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: wht_categories wht_categories_company_code_uniq; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.wht_categories
+    ADD CONSTRAINT wht_categories_company_code_uniq UNIQUE ("companyId", code);
 
 
 --
@@ -5857,6 +6171,90 @@ CREATE INDEX idx_activity_logs_company ON public.activity_logs USING btree ("com
 
 
 --
+-- Name: idx_ai_prompt_evaluation_results_case; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_prompt_evaluation_results_case ON public.ai_prompt_evaluation_results USING btree ("testCaseId", "createdAt" DESC);
+
+
+--
+-- Name: idx_ai_prompt_evaluation_results_eval; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_prompt_evaluation_results_eval ON public.ai_prompt_evaluation_results USING btree ("evaluationId");
+
+
+--
+-- Name: idx_ai_prompt_evaluations_prompt; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_prompt_evaluations_prompt ON public.ai_prompt_evaluations USING btree ("promptId", "startedAt" DESC);
+
+
+--
+-- Name: idx_ai_prompt_evaluations_slug_version; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_prompt_evaluations_slug_version ON public.ai_prompt_evaluations USING btree ("promptSlug", "promptVersion", "startedAt" DESC);
+
+
+--
+-- Name: idx_ai_prompt_reviews_prompt; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_prompt_reviews_prompt ON public.ai_prompt_reviews USING btree ("promptId", "createdAt" DESC);
+
+
+--
+-- Name: idx_ai_prompt_test_cases_slug; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_prompt_test_cases_slug ON public.ai_prompt_test_cases USING btree ("promptSlug", enabled);
+
+
+--
+-- Name: idx_ai_prompts_slug_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_prompts_slug_status ON public.ai_prompts USING btree (slug, status);
+
+
+--
+-- Name: idx_ai_providers_capabilities; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_providers_capabilities ON public.ai_providers USING gin (capabilities);
+
+
+--
+-- Name: idx_ai_providers_status_priority; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_providers_status_priority ON public.ai_providers USING btree (status, priority) WHERE ((status)::text <> 'disabled'::text);
+
+
+--
+-- Name: idx_ai_request_logs_company_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_request_logs_company_created ON public.ai_request_logs USING btree ("companyId", "createdAt" DESC);
+
+
+--
+-- Name: idx_ai_request_logs_feature_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_request_logs_feature_created ON public.ai_request_logs USING btree (feature, "createdAt" DESC);
+
+
+--
+-- Name: idx_ai_request_logs_model_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_request_logs_model_created ON public.ai_request_logs USING btree (model, "createdAt" DESC);
+
+
+--
 -- Name: idx_alert_fatigue_settings_assignment; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6225,6 +6623,20 @@ CREATE INDEX idx_clients_companyid ON public.clients USING btree ("companyId");
 --
 
 CREATE INDEX idx_collection_follow_ups_companyid ON public.collection_follow_ups USING btree ("companyId");
+
+
+--
+-- Name: idx_communication_dlp_rules_company_enabled; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_communication_dlp_rules_company_enabled ON public.communication_dlp_rules USING btree ("companyId", enabled) WHERE (enabled = true);
+
+
+--
+-- Name: idx_communication_providers_channel_priority; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_communication_providers_channel_priority ON public.communication_providers USING btree (channel, priority) WHERE ((status)::text <> 'disabled'::text);
 
 
 --
@@ -7491,7 +7903,21 @@ CREATE INDEX idx_invoices_status ON public.invoices USING btree (status);
 -- Name: idx_invoices_zatca_b2c_reportable; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_invoices_zatca_b2c_reportable ON public.invoices USING btree ("companyId", "createdAt") WHERE (("isTaxLinked" = true) AND ("deletedAt" IS NULL) AND (("zatcaStatus" IS NULL) OR (("zatcaStatus")::text = ANY ((ARRAY['pending'::character varying, 'queued'::character varying, 'error'::character varying])::text[]))) AND ((("invoiceTypeCode")::text = '388'::text) OR ("invoiceTypeCode" IS NULL)));
+CREATE INDEX idx_invoices_zatca_b2c_reportable ON public.invoices USING btree ("companyId", "createdAt") WHERE (("isTaxLinked" = true) AND ("deletedAt" IS NULL) AND (("zatcaStatus" IS NULL) OR (("zatcaStatus")::text = ANY (ARRAY[('pending'::character varying)::text, ('queued'::character varying)::text, ('error'::character varying)::text]))) AND ((("invoiceTypeCode")::text = '388'::text) OR ("invoiceTypeCode" IS NULL)));
+
+
+--
+-- Name: idx_ivr_menu_options_menu; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ivr_menu_options_menu ON public.ivr_menu_options USING btree ("menuId", "sortOrder");
+
+
+--
+-- Name: idx_ivr_menus_company_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ivr_menus_company_status ON public.ivr_menus USING btree ("companyId", status);
 
 
 --
@@ -7922,10 +8348,45 @@ CREATE INDEX idx_payroll_runs_company ON public.payroll_runs USING btree ("compa
 
 
 --
+-- Name: idx_pbx_call_recordings_company_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pbx_call_recordings_company_status ON public.pbx_call_recordings USING btree ("companyId", status);
+
+
+--
+-- Name: idx_pbx_call_recordings_retention; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pbx_call_recordings_retention ON public.pbx_call_recordings USING btree ("retentionExpiresAt") WHERE ((status)::text = 'active'::text);
+
+
+--
+-- Name: idx_pbx_call_transcripts_company_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pbx_call_transcripts_company_status ON public.pbx_call_transcripts USING btree ("companyId", status);
+
+
+--
 -- Name: idx_pbx_calls_companyid; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_pbx_calls_companyid ON public.pbx_calls USING btree ("companyId");
+
+
+--
+-- Name: idx_pbx_extensions_company_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pbx_extensions_company_status ON public.pbx_extensions USING btree ("companyId", status);
+
+
+--
+-- Name: idx_pbx_extensions_employee; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pbx_extensions_employee ON public.pbx_extensions USING btree ("employeeId") WHERE ("employeeId" IS NOT NULL);
 
 
 --
@@ -8486,6 +8947,20 @@ CREATE INDEX idx_smart_alerts_companyid ON public.smart_alerts USING btree ("com
 --
 
 CREATE INDEX idx_sms_queue_companyid ON public.sms_queue USING btree ("companyId");
+
+
+--
+-- Name: idx_spa_journal; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_spa_journal ON public.supplier_payment_allocations USING btree ("journalEntryId");
+
+
+--
+-- Name: idx_spa_obligation; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_spa_obligation ON public.supplier_payment_allocations USING btree ("companyId", "obligationType", "obligationId") WHERE ("deletedAt" IS NULL);
 
 
 --
@@ -9276,7 +9751,7 @@ CREATE INDEX idx_wps_lines_run ON public.wps_run_lines USING btree ("wpsRunId");
 -- Name: idx_wps_runs_delivery_pending; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_wps_runs_delivery_pending ON public.wps_runs USING btree ("deliveryChannel", status, "lastPolledAt") WHERE (("deliveryChannel" IS NOT NULL) AND ((status)::text = ANY ((ARRAY['submitted'::character varying, 'partial'::character varying])::text[])));
+CREATE INDEX idx_wps_runs_delivery_pending ON public.wps_runs USING btree ("deliveryChannel", status, "lastPolledAt") WHERE (("deliveryChannel" IS NOT NULL) AND ((status)::text = ANY (ARRAY[('submitted'::character varying)::text, ('partial'::character varying)::text])));
 
 
 --
@@ -9339,7 +9814,7 @@ CREATE INDEX idx_zatca_settings_companyid ON public.zatca_settings USING btree (
 -- Name: idx_zatca_submission_log_pending; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX idx_zatca_submission_log_pending ON public.zatca_submission_log USING btree ("companyId", "createdAt" DESC) WHERE ((status)::text = ANY ((ARRAY['pending'::character varying, 'submitted'::character varying])::text[]));
+CREATE INDEX idx_zatca_submission_log_pending ON public.zatca_submission_log USING btree ("companyId", "createdAt" DESC) WHERE ((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('submitted'::character varying)::text]));
 
 
 --
@@ -9840,6 +10315,20 @@ CREATE INDEX umrah_sub_agents_company_nuskcode_idx ON public.umrah_sub_agents US
 
 
 --
+-- Name: uniq_ai_prompts_approved_per_slug; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uniq_ai_prompts_approved_per_slug ON public.ai_prompts USING btree (slug) WHERE ((status)::text = 'approved'::text);
+
+
+--
+-- Name: uniq_fleet_trips_source_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uniq_fleet_trips_source_key ON public.fleet_trips USING btree ("companyId", "sourceKey") WHERE ("sourceKey" IS NOT NULL);
+
+
+--
 -- Name: uq_abc_company_product_period; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -10008,6 +10497,38 @@ ALTER TABLE ONLY public.accounting_mappings
 
 ALTER TABLE ONLY public.accounting_mappings
     ADD CONSTRAINT "accounting_mappings_debitAccountId_fkey" FOREIGN KEY ("debitAccountId") REFERENCES public.chart_of_accounts(id) ON DELETE SET NULL;
+
+
+--
+-- Name: ai_prompt_evaluation_results ai_prompt_evaluation_results_evaluationId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompt_evaluation_results
+    ADD CONSTRAINT "ai_prompt_evaluation_results_evaluationId_fkey" FOREIGN KEY ("evaluationId") REFERENCES public.ai_prompt_evaluations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ai_prompt_evaluation_results ai_prompt_evaluation_results_testCaseId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompt_evaluation_results
+    ADD CONSTRAINT "ai_prompt_evaluation_results_testCaseId_fkey" FOREIGN KEY ("testCaseId") REFERENCES public.ai_prompt_test_cases(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ai_prompt_evaluations ai_prompt_evaluations_promptId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompt_evaluations
+    ADD CONSTRAINT "ai_prompt_evaluations_promptId_fkey" FOREIGN KEY ("promptId") REFERENCES public.ai_prompts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ai_prompt_reviews ai_prompt_reviews_promptId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_prompt_reviews
+    ADD CONSTRAINT "ai_prompt_reviews_promptId_fkey" FOREIGN KEY ("promptId") REFERENCES public.ai_prompts(id) ON DELETE CASCADE;
 
 
 --
@@ -11555,6 +12076,22 @@ ALTER TABLE ONLY public.invoices
 
 
 --
+-- Name: ivr_menu_options ivr_menu_options_menuId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ivr_menu_options
+    ADD CONSTRAINT "ivr_menu_options_menuId_fkey" FOREIGN KEY ("menuId") REFERENCES public.ivr_menus(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ivr_menu_options ivr_menu_options_targetMenuId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ivr_menu_options
+    ADD CONSTRAINT "ivr_menu_options_targetMenuId_fkey" FOREIGN KEY ("targetMenuId") REFERENCES public.ivr_menus(id) ON DELETE SET NULL;
+
+
+--
 -- Name: job_applications job_applications_applicantAccountId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -11656,14 +12193,6 @@ ALTER TABLE ONLY public.journal_lines
 
 ALTER TABLE ONLY public.journal_lines
     ADD CONSTRAINT "journal_lines_journalId_fkey" FOREIGN KEY ("journalId") REFERENCES public.journal_entries(id);
-
-
---
--- Name: journal_lines journal_lines_journal_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.journal_lines
-    ADD CONSTRAINT journal_lines_journal_id_fk FOREIGN KEY ("journalId") REFERENCES public.journal_entries(id) ON DELETE CASCADE;
 
 
 --
@@ -11936,6 +12465,22 @@ ALTER TABLE ONLY public.payroll_lines
 
 ALTER TABLE ONLY public.payroll_runs
     ADD CONSTRAINT "payroll_runs_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES public.companies(id);
+
+
+--
+-- Name: pbx_call_recordings pbx_call_recordings_callId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pbx_call_recordings
+    ADD CONSTRAINT "pbx_call_recordings_callId_fkey" FOREIGN KEY ("callId") REFERENCES public.pbx_calls(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pbx_call_transcripts pbx_call_transcripts_callId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pbx_call_transcripts
+    ADD CONSTRAINT "pbx_call_transcripts_callId_fkey" FOREIGN KEY ("callId") REFERENCES public.pbx_calls(id) ON DELETE CASCADE;
 
 
 --
@@ -13358,5 +13903,6 @@ ALTER TABLE ONLY public.zatca_submission_log
 -- PostgreSQL database dump complete
 --
 
-\unrestrict PJZYf5tQGQlQSQsTq0FUcDsPHrPiGC9XO0zojxPgva1FIspPzAXLvMevQgkqaIw
+-- \unrestrict directive stripped — its matching \restrict in schema_pre.sql
+-- was also removed. See dump-schema.sh for the rationale.
 

@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,13 +13,6 @@ import {
   type DataTableColumn,
   PageShell,
   PageStatusBadge,
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormEmailField,
-  FormPhoneField,
-  FormNumberField,
-  FormSelectField,
 } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -53,29 +45,6 @@ const PAYMENT_TERMS_LABEL: Record<PaymentTerms, string> = {
   partial: "جزئي",
 };
 
-const subAgentSchema = z.object({
-  nuskCode: z.string().min(1, "رمز نُسك مطلوب"),
-  name: z.string().min(1, "الاسم مطلوب"),
-  agentId: z.string().min(1, "الوكيل الرئيسي مطلوب"),
-  paymentTerms: z.enum(["prepaid", "postpaid", "partial"]),
-  defaultPricePerMutamer: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().optional(),
-  country: z.string().optional(),
-});
-type SubAgentForm = z.infer<typeof subAgentSchema>;
-
-const SUB_EMPTY: SubAgentForm = {
-  nuskCode: "", name: "", agentId: "", paymentTerms: "prepaid",
-  defaultPricePerMutamer: "", phone: "", email: "", country: "",
-};
-
-const PAYMENT_TERMS_OPTIONS = [
-  { value: "prepaid", label: "مقدم" },
-  { value: "postpaid", label: "مؤجل" },
-  { value: "partial", label: "جزئي" },
-];
-
 export default function UmrahSubAgents() {
   const subAgentsQ = useApiQuery<{ data: SubAgent[] }>(["umrah-sub-agents"], "/umrah/sub-agents");
   const agentsQ = useApiQuery<{ data: any[] }>(["umrah-agents"], "/umrah/agents");
@@ -89,58 +58,23 @@ export default function UmrahSubAgents() {
   const [tab, setTab] = useState<"all" | "linked" | "unlinked">("all");
   const [search, setSearch] = useState("");
   const [agentFilter, setAgentFilter] = useState<string>("");
-  // editingId: null = closed, "new" = create, number = edit row
-  const [editingId, setEditingId] = useState<null | "new" | number>(null);
-  const [editingDefaults, setEditingDefaults] = useState<SubAgentForm>(SUB_EMPTY);
+  const [editing, setEditing] = useState<Partial<SubAgent> | null>(null);
   const [linking, setLinking] = useState<SubAgent | null>(null);
   const [linkClientId, setLinkClientId] = useState<string>("");
-
-  const closeEditor = () => setEditingId(null);
 
   const createMut = useApiMutation<any, Partial<SubAgent>>(
     "/umrah/sub-agents",
     "POST",
     [["umrah-sub-agents"]],
-    { successMessage: "تم حفظ الوكيل الفرعي", onSuccess: closeEditor },
+    { successMessage: "تم حفظ الوكيل الفرعي", onSuccess: () => setEditing(null) },
   );
   const updateMut = useApiMutation<any, Partial<SubAgent>>(
     (body) => `/umrah/sub-agents/${body.id}`,
     "PATCH",
     [["umrah-sub-agents"]],
-    { successMessage: "تم تحديث الوكيل الفرعي", onSuccess: closeEditor },
+    { successMessage: "تم تحديث الوكيل الفرعي", onSuccess: () => setEditing(null) },
   );
-
-  const openCreate = () => {
-    setEditingDefaults(SUB_EMPTY);
-    setEditingId("new");
-  };
-  const openEdit = (sa: SubAgent) => {
-    setEditingDefaults({
-      nuskCode: sa.nuskCode,
-      name: sa.name,
-      agentId: sa.agentId ? String(sa.agentId) : "",
-      paymentTerms: sa.paymentTerms,
-      defaultPricePerMutamer: sa.defaultPricePerMutamer != null ? String(sa.defaultPricePerMutamer) : "",
-      phone: sa.phone ?? "",
-      email: sa.email ?? "",
-      country: sa.country ?? "",
-    });
-    setEditingId(sa.id);
-  };
-  const handleSave = async (values: SubAgentForm) => {
-    const payload: Partial<SubAgent> = {
-      nuskCode: values.nuskCode,
-      name: values.name,
-      agentId: Number(values.agentId),
-      paymentTerms: values.paymentTerms,
-      defaultPricePerMutamer: values.defaultPricePerMutamer ? Number(values.defaultPricePerMutamer) : undefined,
-      phone: values.phone || undefined,
-      email: values.email || undefined,
-      country: values.country || undefined,
-    };
-    if (typeof editingId === "number") await updateMut.mutateAsync({ ...payload, id: editingId });
-    else await createMut.mutateAsync(payload);
-  };
+  const saveMut = { isPending: createMut.isPending || updateMut.isPending, mutate: (body: Partial<SubAgent>) => body.id ? updateMut.mutate(body) : createMut.mutate(body) };
 
   const linkMut = useApiMutation<any, { id: number; clientId: number }>(
     (body) => `/umrah/sub-agents/${body.id}/link-client`,
@@ -241,7 +175,7 @@ export default function UmrahSubAgents() {
             perm="umrah:write"
             size="sm"
             variant="ghost"
-            onClick={() => openEdit(s)}
+            onClick={() => setEditing(s)}
           >
             <Pencil className="h-3.5 w-3.5" />
           </GuardedButton>
@@ -258,7 +192,7 @@ export default function UmrahSubAgents() {
       actions={
         <GuardedButton
           perm="umrah:write"
-          onClick={openCreate}
+          onClick={() => setEditing({ paymentTerms: "prepaid", isActive: true })}
           className="gap-2"
         >
           <Plus className="h-4 w-4" />
@@ -344,40 +278,71 @@ export default function UmrahSubAgents() {
       </PageStateWrapper>
 
       {/* Create / Edit dialog */}
-      <Dialog open={editingId !== null} onOpenChange={(o) => !o && closeEditor()}>
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="max-w-2xl" dir="rtl">
           <DialogHeader>
-            <DialogTitle>{typeof editingId === "number" ? "تعديل وكيل فرعي" : "وكيل فرعي جديد"}</DialogTitle>
+            <DialogTitle>{editing?.id ? "تعديل وكيل فرعي" : "وكيل فرعي جديد"}</DialogTitle>
           </DialogHeader>
-          <FormShell
-            key={String(editingId ?? "closed")}
-            schema={subAgentSchema}
-            defaultValues={editingDefaults}
-            submitLabel={
-              createMut.isPending || updateMut.isPending ? "جاري الحفظ..." : "حفظ"
-            }
-            secondaryActions={
-              <Button type="button" variant="outline" onClick={closeEditor}>إلغاء</Button>
-            }
-            onSubmit={handleSave}
-          >
-            <FormGrid cols={2}>
-              <FormTextField name="nuskCode" label="رمز نُسك" required />
-              <FormTextField name="name" label="الاسم" required />
-              <FormSelectField
-                name="agentId"
-                label="الوكيل الرئيسي"
-                required
-                options={agents.map((a) => ({ value: String(a.id), label: a.name }))}
-                placeholder="اختر الوكيل"
-              />
-              <FormSelectField name="paymentTerms" label="شروط الدفع" options={PAYMENT_TERMS_OPTIONS} />
-              <FormNumberField name="defaultPricePerMutamer" label="السعر الافتراضي للمعتمر" />
-              <FormPhoneField name="phone" label="الهاتف" />
-              <FormEmailField name="email" label="البريد الإلكتروني" />
-              <FormTextField name="country" label="الدولة" />
-            </FormGrid>
-          </FormShell>
+          {editing && (
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>رمز نُسك *</Label>
+                <Input value={editing.nuskCode ?? ""} onChange={(e) => setEditing({ ...editing, nuskCode: e.target.value })} />
+              </div>
+              <div><Label>الاسم *</Label>
+                <Input value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+              </div>
+              <div><Label>الوكيل الرئيسي *</Label>
+                <Select
+                  value={editing.agentId ? String(editing.agentId) : ""}
+                  onValueChange={(v) => setEditing({ ...editing, agentId: Number(v) })}
+                >
+                  <SelectTrigger><SelectValue placeholder="اختر الوكيل" /></SelectTrigger>
+                  <SelectContent>
+                    {agents.map((a) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>شروط الدفع</Label>
+                <Select
+                  value={editing.paymentTerms ?? "prepaid"}
+                  onValueChange={(v) => setEditing({ ...editing, paymentTerms: v as PaymentTerms })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="prepaid">مقدم</SelectItem>
+                    <SelectItem value="postpaid">مؤجل</SelectItem>
+                    <SelectItem value="partial">جزئي</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>السعر الافتراضي للمعتمر</Label>
+                <Input
+                  type="number"
+                  value={editing.defaultPricePerMutamer ?? ""}
+                  onChange={(e) => setEditing({ ...editing, defaultPricePerMutamer: Number(e.target.value) })}
+                />
+              </div>
+              <div><Label>الهاتف</Label>
+                <Input dir="ltr" value={editing.phone ?? ""} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} />
+              </div>
+              <div><Label>البريد الإلكتروني</Label>
+                <Input dir="ltr" value={editing.email ?? ""} onChange={(e) => setEditing({ ...editing, email: e.target.value })} />
+              </div>
+              <div><Label>الدولة</Label>
+                <Input value={editing.country ?? ""} onChange={(e) => setEditing({ ...editing, country: e.target.value })} />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>إلغاء</Button>
+            <GuardedButton
+              perm="umrah:write"
+              disabled={saveMut.isPending || !editing?.nuskCode || !editing?.name || !editing?.agentId}
+              onClick={() => editing && saveMut.mutate(editing)}
+            >
+              {saveMut.isPending ? "جاري الحفظ..." : "حفظ"}
+            </GuardedButton>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

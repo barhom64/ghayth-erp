@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -7,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { PromptDialog } from "@/components/shared/prompt-dialog";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   DetailPageLayout,
@@ -40,34 +39,33 @@ import {
 export default function ContractDetailPage() {
   const [, params] = useRoute("/properties/contracts/:id");
   const [, navigate] = useLocation();
-  const [terminating, setTerminating] = useState(false);
   const id = params?.id || "";
   const { hideTabs: registryHideTabs } = useRegistryTabs("rental_contract", id ?? "");
   const queryClient = useQueryClient();
 
   const { data: contract, isLoading, isError, refetch } = useApiQuery<any>(
     ["properties-contract", id],
-    `/properties/contracts/${id}`,
+    id ? `/properties/contracts/${id}` : null,
     !!id
   );
 
   const { data: scheduleResp } = useApiQuery<any>(
     ["contract-detail-schedule", id],
-    `/properties/contracts/${id}/schedule`,
+    id ? `/properties/contracts/${id}/schedule` : null,
     !!id
   );
   const schedule: any[] = scheduleResp?.data || (Array.isArray(scheduleResp) ? scheduleResp : []);
 
   const { data: maintResp } = useApiQuery<any>(
     ["contract-maintenance", id],
-    `/properties/maintenance?contractId=${id}`,
+    id ? `/properties/maintenance?contractId=${id}` : null,
     !!id
   );
   const maintRequests: any[] = maintResp?.data || [];
 
   const { data: inspResp } = useApiQuery<any>(
     ["contract-inspections", id],
-    `/properties/inspections?contractId=${id}`,
+    id ? `/properties/inspections?contractId=${id}` : null,
     !!id
   );
   const inspections: any[] = inspResp?.data || [];
@@ -142,22 +140,27 @@ export default function ContractDetailPage() {
     }
   };
 
-  // PROP-001: contract termination goes through the dedicated /terminate
-  // endpoint — the server rejects a terminal status set via raw PATCH with
-  // 409. /terminate runs the audited applyTransition (frees the unit,
-  // settles early-termination fees) and requires a non-empty reason.
-  const submitTerminate = async (reason: string) => {
+  const handleTerminate = async () => {
+    // PROP-001: contract termination goes through the dedicated /terminate
+    // endpoint — the server rejects a terminal status set via raw PATCH with
+    // 409. /terminate runs the audited applyTransition (frees the unit,
+    // settles early-termination fees) and requires a non-empty reason.
+    const reason = window.prompt("سبب إنهاء العقد:");
+    if (reason === null) return; // user dismissed the prompt
+    if (!reason.trim()) {
+      toast({ variant: "destructive", title: "سبب الإنهاء مطلوب" });
+      return;
+    }
     try {
       await apiFetch(`/properties/contracts/${id}/terminate`, {
         method: "POST",
         body: JSON.stringify({
-          reason,
+          reason: reason.trim(),
           terminationDate: todayLocal(),
         }),
       });
       queryClient.invalidateQueries({ queryKey: ["properties-contract", id] });
       toast({ title: "تم إنهاء العقد بنجاح" });
-      setTerminating(false);
       navigate("/properties/contracts");
     } catch (err: any) {
       toast({
@@ -248,10 +251,11 @@ export default function ContractDetailPage() {
         <RotateCcw className="h-4 w-4" />
         تجديد
       </GuardedButton>
-      <GuardedButton perm="properties:create" size="sm" variant="outline" onClick={() => setTerminating(true)} className="gap-1" rateLimitAware>
+      <GuardedButton perm="properties:create" size="sm" variant="outline" onClick={handleTerminate} className="gap-1" rateLimitAware>
         <XCircle className="h-4 w-4" />
         إنهاء
       </GuardedButton>
+      <EntityPrintButton entityType="rental_contract" entityId={id ?? ""} formats={["a4"]} />
     </div>
   );
 
@@ -305,35 +309,24 @@ export default function ContractDetailPage() {
   ];
 
   return (
-    <>
-      <DetailPageLayout
-        title={contract?.ejarNumber ? `عقد ${contract.ejarNumber}` : contract ? `عقد #${contract.id}` : "العقد"}
-        subtitle={contract?.tenantName || undefined}
-        backPath="/properties/contracts"
-        backLabel="العودة للعقود"
-        status={contract?.status ? { label: contract.status, tone: statusTone } : undefined}
-        entityType="rental_contract"
-        entityId={id}
-        hideTabs={registryHideTabs}
-        isLoading={isLoading}
-        error={isError ? true : undefined}
-        onRetry={() => refetch()}
-        createdAt={contract?.createdAt}
-        updatedAt={contract?.updatedAt}
-        overview={overview}
-        actions={actions}
-        extraTabs={extraTabs}
-      />
-      <PromptDialog
-        open={terminating}
-        title={contract?.ejarNumber ? `إنهاء عقد ${contract.ejarNumber}` : "إنهاء العقد"}
-        description="سيُحرّر العقد الوحدة، تُسوّى الرسوم المبكرة، ولا يمكن التراجع عن هذا الإجراء."
-        placeholder="سبب إنهاء العقد"
-        confirmLabel="تأكيد الإنهاء"
-        onSubmit={submitTerminate}
-        onClose={() => setTerminating(false)}
-      />
-    </>
+    <DetailPageLayout
+      title={contract?.ejarNumber ? `عقد ${contract.ejarNumber}` : contract ? `عقد #${contract.id}` : "العقد"}
+      subtitle={contract?.tenantName || undefined}
+      backPath="/properties/contracts"
+      backLabel="العودة للعقود"
+      status={contract?.status ? { label: contract.status, tone: statusTone } : undefined}
+      entityType="rental_contract"
+      entityId={id}
+      hideTabs={registryHideTabs}
+      isLoading={isLoading}
+      error={isError ? true : undefined}
+      onRetry={() => refetch()}
+      createdAt={contract?.createdAt}
+      updatedAt={contract?.updatedAt}
+      overview={overview}
+      actions={actions}
+      extraTabs={extraTabs}
+    />
   );
 }
 

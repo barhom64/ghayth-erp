@@ -9,6 +9,7 @@ import { LOAN_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 
 // Local row shapes — hr_employee_loans / hr_loan_installments not in
 // @workspace/db Drizzle schema yet.
@@ -84,6 +85,7 @@ import {
   currentPeriod,
   roundTo2,
 } from "../lib/businessHelpers.js";
+import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { generateSequentialNumber, nextPeriod as nextPeriodHelper, advancePeriod as advancePeriodHelper } from "../lib/hrHelpers.js";
@@ -173,9 +175,20 @@ router.get("/loans", authorize({ feature: "hr.loans", action: "list" }), async (
     const scope = req.scope!;
     const { status, assignmentId } = req.query as Record<string, string | undefined>;
 
-    let where = `l."companyId" = $1 AND l."deletedAt" IS NULL`;
-    const params: unknown[] = [scope.companyId];
-    let idx = 2;
+    // Honor multi-company picker via buildScopedWhere. hr_employee_loans has
+    // no branchId of its own (branch comes from the assignment), so
+    // disableBranchScope: true matches the table shape.
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      parseScopeFilters(req),
+      {
+        companyColumn: 'l."companyId"',
+        disableBranchScope: true,
+        softDeleteColumn: 'l."deletedAt"',
+      },
+    );
+    let where = baseWhere;
+    let idx = nextParamIndex;
 
     if (status) {
       where += ` AND l.status = $${idx}`;
@@ -240,13 +253,27 @@ router.get("/loans/my", authorize({ feature: "hr.loans.my", action: "list" }), a
   try {
     await ensureLoanTables();
     const scope = req.scope!;
+    // Self-service endpoint: assignmentId narrows to the caller's own loans
+    // first, then buildScopedWhere stacks the standard company predicate (and
+    // honors a multi-company picker for users with assignments in more than
+    // one company).
+    const { where: scopeWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      parseScopeFilters(req),
+      {
+        companyColumn: 'l."companyId"',
+        disableBranchScope: true,
+        softDeleteColumn: 'l."deletedAt"',
+      },
+    );
+    params.push(scope.activeAssignmentId);
     const data = await rawQuery<LoanRow>(
       `SELECT l.*, e.name AS "employeeName"
        FROM hr_employee_loans l
        JOIN employees e ON e.id = l."employeeId"
-       WHERE l."assignmentId" = $1 AND l."companyId" = $2 AND l."deletedAt" IS NULL
+       WHERE l."assignmentId" = $${nextParamIndex} AND ${scopeWhere}
        ORDER BY l."createdAt" DESC`,
-      [scope.activeAssignmentId, scope.companyId]
+      params,
     );
     res.json(maskFields(req, { data }));
   } catch (err) {
@@ -327,7 +354,16 @@ router.post("/loans", authorize({ feature: "hr.loans", action: "create" }), asyn
       throw new ValidationError(`الحد الأقصى للسلفة ${maxLoan.toLocaleString()} ريال (3 أضعاف الراتب)`, { field: "amount" });
     }
 
-    const loanNumber = await generateLoanNumber(scope.companyId);
+    // Numbering center (Issue #1141) — loan number from central authority.
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: emp.branchId ?? scope.branchId ?? null,
+      moduleKey: "hr",
+      entityKey: "loan",
+      entityTable: "hr_employee_loans",
+      actorId: scope.userId,
+    });
+    const loanNumber = issued.number;
     const startPeriod = b.startDeductionPeriod || nextPeriod();
 
     const { insertId } = await rawExecute(
@@ -345,6 +381,10 @@ router.post("/loans", authorize({ feature: "hr.loans", action: "create" }), asyn
       ]
     );
     assertInsert(insertId, "hr_employee_loans");
+    await rawExecute(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [insertId, issued.assignmentId]
+    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to hr_employee_loans row"));
 
     // ── سلسلة الموافقات ──
     const approvalResult = await initiateApprovalChain({

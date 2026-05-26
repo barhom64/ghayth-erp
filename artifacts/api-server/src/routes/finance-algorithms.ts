@@ -13,7 +13,8 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
-import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2, roundTo4, generateTimeRef, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, toDateISO, roundTo2, roundTo4, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { internalTechRef } from "../lib/internalRef.js";
 import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
 import { logger } from "../lib/logger.js";
 
@@ -352,7 +353,9 @@ financeAlgorithmsRouter.post("/bank-reconciliation/import", authorize({ feature:
 
     const { rows, accountCode, statementDate } = zodParse(bankImportSchema.safeParse(req.body ?? {}));
 
-    const batchId = generateTimeRef("BANK");
+    // Internal batch id for grouping the statement lines processed
+    // in this run — NOT a customer-visible doc number (Issue #1141).
+    const batchId = internalTechRef("BANK");
     let imported = 0;
 
     await withTransaction(async (client) => {
@@ -955,25 +958,38 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", authorize({ feature
     const newBookValue = Math.max(Number(asset.purchaseCost) - newAccumulated, Number(asset.salvageValue));
 
     let entryId: number | undefined;
+    let journalId: number | undefined;
 
     const { financialEngine } = await import("../lib/engines/index.js");
-    const { journalId } = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId ?? asset.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: `DEP-${asset.code ?? asset.id}-${targetPeriod}`,
-      description: `إهلاك شهري: ${asset.name} — ${targetPeriod}`,
-      type: "depreciation",
-      sourceType: "depreciation",
-      sourceId: asset.id as number,
-      sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
-      lines: [
-        { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}` },
-        { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}` },
-      ],
-    });
-
+    // Atomicity: JE post + depreciation_entries INSERT + fixed_assets
+    // UPDATE all commit or roll back together. The earlier shape called
+    // engine.post FIRST, then opened a withTransaction. A throw from
+    // the txn (FK on assetId, depreciation_entries unique constraint
+    // on (assetId, period)) left the JE committed without a
+    // depreciation_entries row. Retry then hit the engine's sourceKey
+    // check (`finance:depreciation:${assetId}:${period}`) → returned
+    // alreadyExists=true → skipped the JE post → withTransaction still
+    // failed (or succeeded with wrong journalId reference) → silent
+    // mismatch between GL and depreciation schedule. Same fix pattern
+    // as #1004 / #1012 / #1014 / #1015.
     await withTransaction(async (client) => {
+      const posted = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? asset.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `DEP-${asset.code ?? asset.id}-${targetPeriod}`,
+        description: `إهلاك شهري: ${asset.name} — ${targetPeriod}`,
+        type: "depreciation",
+        sourceType: "depreciation",
+        sourceId: asset.id as number,
+        sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
+        lines: [
+          { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}` },
+          { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}` },
+        ],
+      });
+      journalId = posted.journalId;
+
       const entRes = await client.query(
         `INSERT INTO depreciation_entries ("assetId","companyId",period,"depreciationAmount","bookValueAfter","journalEntryId",status,"postedAt")
          VALUES ($1,$2,$3,$4,$5,$6,'posted',NOW()) RETURNING id`,
@@ -1051,27 +1067,33 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature
       const newBookValue = Math.max(Number(asset.purchaseCost) - newAccumulated, Number(asset.salvageValue));
 
       const { financialEngine } = await import("../lib/engines/index.js");
-      const { journalId } = await financialEngine.postJournalEntry({
-        companyId: scope.companyId,
-        branchId: (asset.branchId as number | null) ?? scope.branchId,
-        createdBy: scope.activeAssignmentId,
-        ref: `DEP-${asset.code ?? asset.id}-${targetPeriod}`,
-        description: `إهلاك شهري: ${asset.name} — ${targetPeriod}`,
-        type: "depreciation",
-        sourceType: "depreciation",
-        sourceId: asset.id as number,
-        sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
-        lines: [
-          { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0 },
-          { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount },
-        ],
-      });
-
+      // Per-asset atomicity: same shape as the single-asset depreciation
+      // route above. Engine post + depreciation_entries INSERT + fixed_
+      // assets UPDATE must all commit or roll back together so the GL
+      // and the asset schedule stay in sync. Failing one asset's
+      // depreciation does NOT halt the whole batch (each iteration is
+      // its own txn — intentional design for monthly bulk processing).
       await withTransaction(async (client) => {
+        const posted = await financialEngine.postJournalEntry({
+          companyId: scope.companyId,
+          branchId: (asset.branchId as number | null) ?? scope.branchId,
+          createdBy: scope.activeAssignmentId,
+          ref: `DEP-${asset.code ?? asset.id}-${targetPeriod}`,
+          description: `إهلاك شهري: ${asset.name} — ${targetPeriod}`,
+          type: "depreciation",
+          sourceType: "depreciation",
+          sourceId: asset.id as number,
+          sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
+          lines: [
+            { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0 },
+            { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount },
+          ],
+        });
+
         await client.query(
           `INSERT INTO depreciation_entries ("assetId","companyId",period,"depreciationAmount","bookValueAfter","journalEntryId",status,"postedAt")
            VALUES ($1,$2,$3,$4,$5,$6,'posted',NOW())`,
-          [asset.id, scope.companyId, targetPeriod, depAmount, newBookValue, journalId]
+          [asset.id, scope.companyId, targetPeriod, depAmount, newBookValue, posted.journalId]
         );
         await client.query(
           `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
@@ -1699,32 +1721,43 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
       lines.push({ accountCode: gainCode, debit: 0, credit: v, description: `ربح صرف غير محقق — AP` });
     }
 
-    const { journalId: journalEntryId } = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId ?? 0,
-      createdBy: scope.activeAssignmentId,
-      ref: `FX-REVAL-${period}`,
-      description: `إعادة تقييم العملات الأجنبية — ${period}`,
-      type: "fx_revaluation",
-      sourceType: "fx_revaluation",
-      sourceId: 0,
-      sourceKey: `finance:fx_reval:${scope.companyId}:${period}`,
-      lines,
-    });
-
     const totalGain = lines.filter(l => l.accountCode === gainCode).reduce((s, l) => s + l.credit, 0);
     const totalLoss = lines.filter(l => l.accountCode === lossCode).reduce((s, l) => s + l.debit, 0);
 
+    // Atomicity: FX revaluation JE + per-currency fx_revaluations
+    // audit rows commit or roll back together. Earlier shape posted
+    // the JE first (engine commits), then looped INSERTs into
+    // fx_revaluations. A mid-loop failure (constraint, FK) left the
+    // GL with the FX revaluation entry but only PARTIAL audit rows;
+    // the operator's view of "what was revalued for currency X" then
+    // didn't tie out to the GL movement.
+    let journalEntryId!: number;
     const revalIds: number[] = [];
-    for (const cur of currencies) {
-      const curImpact = details.filter((d: any) => d.currency === cur).reduce((s: number, d: any) => s + d.diff, 0);
-      const [revRow] = await rawQuery<Record<string, unknown>>(
-        `INSERT INTO fx_revaluations ("companyId","currency","revaluationDate","journalEntryId","totalImpact","createdBy")
-         VALUES ($1,$2,$3::date,$4,$5,$6) RETURNING id`,
-        [scope.companyId, cur, periodEnd, journalEntryId, roundTo2(curImpact), scope.activeAssignmentId]
-      );
-      if (revRow?.id) revalIds.push(revRow.id as number);
-    }
+    await withTransaction(async (client) => {
+      const posted = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? 0,
+        createdBy: scope.activeAssignmentId,
+        ref: `FX-REVAL-${period}`,
+        description: `إعادة تقييم العملات الأجنبية — ${period}`,
+        type: "fx_revaluation",
+        sourceType: "fx_revaluation",
+        sourceId: 0,
+        sourceKey: `finance:fx_reval:${scope.companyId}:${period}`,
+        lines,
+      });
+      journalEntryId = posted.journalId;
+
+      for (const cur of currencies) {
+        const curImpact = details.filter((d: any) => d.currency === cur).reduce((s: number, d: any) => s + d.diff, 0);
+        const { rows: revRows } = await client.query(
+          `INSERT INTO fx_revaluations ("companyId","currency","revaluationDate","journalEntryId","totalImpact","createdBy")
+           VALUES ($1,$2,$3::date,$4,$5,$6) RETURNING id`,
+          [scope.companyId, cur, periodEnd, journalEntryId, roundTo2(curImpact), scope.activeAssignmentId]
+        );
+        if (revRows[0]?.id) revalIds.push(revRows[0].id as number);
+      }
+    });
     const revalId = revalIds[0];
 
     // #670 — FX revaluation post audit. Critical P&L-impacting

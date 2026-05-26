@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Gavel } from "lucide-react";
@@ -68,72 +68,6 @@ export default function LegalSessionDetail() {
     return out;
   }, [session]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!session) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم الجلسة", value: `SESS-${id}` },
-          ...(session.caseReference
-            ? [{ label: "مرجع القضية", value: session.caseReference }]
-            : []),
-          ...(session.sessionType
-            ? [{ label: "نوع الجلسة", value: SESSION_TYPE_LABELS[session.sessionType] || session.sessionType }]
-            : []),
-          ...(session.courtName
-            ? [{ label: "المحكمة", value: session.courtName }]
-            : []),
-          ...(session.judge
-            ? [{ label: "القاضي", value: session.judge }]
-            : []),
-          ...(session.sessionDate
-            ? [{ label: "تاريخ الجلسة", value: formatDateAr(session.sessionDate) }]
-            : []),
-          ...(session.sessionTime
-            ? [{ label: "وقت الجلسة", value: session.sessionTime }]
-            : []),
-          ...(session.location
-            ? [{ label: "مكان الانعقاد", value: session.location }]
-            : []),
-          ...(session.subject
-            ? [{ label: "موضوع الجلسة", value: session.subject }]
-            : []),
-          ...(session.nextSessionDate
-            ? [{ label: "تاريخ الجلسة القادمة", value: formatDateAr(session.nextSessionDate) }]
-            : []),
-          { label: "الحالة", value: STATUS_LABELS[session.status] || session.status || "-" },
-        ],
-      },
-    ];
-    if (session.outcome || session.result) {
-      sections.push({
-        kind: "text",
-        title: "نتيجة الجلسة",
-        body: session.outcome || session.result,
-      });
-    }
-    if (session.attendees) {
-      sections.push({
-        kind: "text",
-        title: "الحضور",
-        body: Array.isArray(session.attendees)
-          ? session.attendees.join("، ")
-          : session.attendees,
-      });
-    }
-    if (session.notes) {
-      sections.push({ kind: "text", title: "ملاحظات", body: session.notes });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "مُعد المحضر", name: session.createdByName || "" },
-        { label: "القاضي", name: session.judge || "" },
-      ],
-    });
-    return sections;
-  }, [session, id]);
 
   const handleEdit = () => {
     setLocation(`/legal/sessions/${id}/edit`);
@@ -301,16 +235,9 @@ export default function LegalSessionDetail() {
         <>
           {session && (
             <EntityPrintButton
-              branchId={session.branchId}
-              title={
-                session.subject
-                  ? `جلسة: ${session.subject}`
-                  : `جلسة SESS-${id}`
-              }
-              ref={`SESS-${id}`}
-              date={formatDateAr(session.sessionDate || session.createdAt)}
-              sections={printSections}
-            />
+              entityType="legal_session"
+              entityId={id ?? 0}
+              formats={["a4"]}/>
           )}
           <GuardedButton
             perm="legal:update"

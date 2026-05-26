@@ -1,26 +1,41 @@
 import { useState } from "react";
-import { z } from "zod";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { TrendingDown, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import {
-  CreatePageLayout,
-  FormShell,
-  FormTextField,
-} from "@workspace/ui-core";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
+import { CreatePageLayout } from "@workspace/ui-core";
+import { FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { todayLocal } from "@/lib/formatters";
 
-const schema = z.object({
-  depPeriod: z.string().min(1, "يرجى تحديد الفترة"),
-});
-
 export default function BatchDepreciatePage() {
-  const { toast: _toast } = useToast();
+  const { toast } = useToast();
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_batch_depreciate", {
+    depPeriod: todayLocal().slice(0, 7),
+  });
+  const { fieldErrors, validate } = useFieldErrors();
   const [batchResult, setBatchResult] = useState<any>(null);
+
   const batchDepMutation = useApiMutation("/finance/fixed-assets/depreciate-all", "POST");
 
-  const defaultPeriod = todayLocal().slice(0, 7);
+  async function handleBatchDepreciate() {
+    const firstError = validate({
+      depPeriod: !form.depPeriod ? "يرجى تحديد الفترة" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
+      return;
+    }
+    try {
+      const res = await batchDepMutation.mutateAsync({ period: form.depPeriod });
+      setBatchResult(res);
+      clearDraft();
+    } catch {
+      // error handled by mutation hook toast
+    }
+  }
 
   return (
     <CreatePageLayout
@@ -28,24 +43,27 @@ export default function BatchDepreciatePage() {
       subtitle="إهلاك جميع الأصول الثابتة لفترة محددة"
       backPath="/finance/fixed-assets"
     >
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="space-y-4">
-        <h3 className="flex items-center gap-2 text-lg font-semibold">
-          <TrendingDown className="h-5 w-5 text-orange-500" /> بيانات الإهلاك
-        </h3>
-        <FormShell
-          schema={schema}
-          defaultValues={{ depPeriod: defaultPeriod }}
-          submitLabel={batchDepMutation.isPending ? "جارٍ الإهلاك..." : "إهلاك جميع الأصول"}
-          onSubmit={async (values) => {
-            const res = await batchDepMutation.mutateAsync({ period: values.depPeriod });
-            setBatchResult(res);
-          }}
-        >
+        <div>
+          <h3 className="flex items-center gap-2 text-lg font-semibold mb-3">
+            <TrendingDown className="h-5 w-5 text-orange-500" /> بيانات الإهلاك
+          </h3>
           <div className="max-w-md">
-            <FormTextField name="depPeriod" label="الفترة (سنة-شهر)" type="month" />
+            <FormFieldWrapper label="الفترة (سنة-شهر)">
+              <Input type="month" value={form.depPeriod} onChange={e => setForm(f => ({ ...f, depPeriod: e.target.value }))} />
+            </FormFieldWrapper>
           </div>
-        </FormShell>
-
+        </div>
+        <Button onClick={handleBatchDepreciate} disabled={batchDepMutation.isPending} className="gap-2" rateLimitAware>
+          <Save className="h-4 w-4" />
+          {batchDepMutation.isPending ? "جارٍ الإهلاك..." : `إهلاك جميع الأصول — ${form.depPeriod}`}
+        </Button>
         {batchResult && (
           <div className="bg-status-success-surface p-4 rounded-lg border border-status-success-surface space-y-1">
             <p className="font-semibold text-status-success-foreground">{batchResult.message}</p>

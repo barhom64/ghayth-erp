@@ -1,11 +1,8 @@
-import { useState, useRef } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@workspace/report-kit";
 import { PrintButton } from "@/components/shared/print-button";
-import { extractBranchFromResponse } from "@/lib/branch-utils";
 import {
   DataTable,
   type DataTableColumn,
@@ -13,20 +10,16 @@ import {
 } from "@workspace/ui-core";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ShoppingCart, User, Phone, Mail, Calendar, Package, Copy } from "lucide-react";
-import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PurchaseOrderReceiveSection } from "@/components/finance/purchase-order-receive-section";
-import { PurchaseOrderVendorActions } from "@/components/finance/purchase-order-vendor-actions";
 
 export default function PurchaseOrderDetailPage() {
   const [, params] = useRoute("/finance/purchase-orders/:id");
   const id = params?.id;
   const { extraTabs, hideTabs } = useRegistryTabs("purchase_order", id || "");
   const { data: po, isLoading, isError } = useApiQuery<any>(["po-detail", id || ""], `/finance/purchase-orders/${id}`, !!id);
-  const [showPreview, setShowPreview] = useState(false);
-  const printContainerRef = useRef<HTMLDivElement>(null);
 
   if (!isLoading && !isError && !po) return (
     <div className="text-center py-12">
@@ -36,9 +29,7 @@ export default function PurchaseOrderDetailPage() {
     </div>
   );
 
-  const branch = po ? extractBranchFromResponse(po) : undefined;
   const lines = po?.lines || [];
-  const docDate = po?.createdAt ? formatDateAr(po.createdAt) : "";
 
   const overview = po ? (
     <>
@@ -109,18 +100,6 @@ export default function PurchaseOrderDetailPage() {
         <PurchaseOrderReceiveSection poId={id || po.id} poStatus={po.status} />
       )}
 
-      {po && (
-        <PurchaseOrderVendorActions
-          po={{
-            id: Number(po.id),
-            ref: po.ref || `#${po.id}`,
-            status: po.status,
-            totalAmount: Number(po.totalAmount || 0),
-            supplierName: po.supplierName ?? null,
-          }}
-        />
-      )}
-
       <Card>
         <CardHeader><CardTitle>سجل الإجراءات</CardTitle></CardHeader>
         <CardContent>
@@ -144,16 +123,11 @@ export default function PurchaseOrderDetailPage() {
           <Copy className="h-4 w-4" />نسخ
         </Button>
       </Link>
-      <ExportButton endpoint={`/export/pdf/purchase-order/${id}`} filename={`po-${id}.pdf`} type="pdf" label="ملف طباعي" />
       <PrintButton
         entityType="purchase_order"
         entityId={po.id ?? id}
         formats={["a4", "excel"]}
         label="طباعة"
-      />
-      <PrintActions
-        onPreview={() => setShowPreview(true)}
-        onPrint={() => directPrint(printContainerRef.current, `أمر شراء ${po.ref || po.id}`)}
       />
     </div>
   ) : undefined;
@@ -180,110 +154,6 @@ export default function PurchaseOrderDetailPage() {
        
       />
 
-      {po && (
-        <>
-          <PrintPreviewModal
-            open={showPreview}
-            onClose={() => setShowPreview(false)}
-            branch={branch}
-            documentTitle="أمر شراء"
-            documentRef={po.ref || `#${po.id}`}
-            documentDate={docDate}
-          >
-            <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-              <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                <span className="info-label" style={{ color: "#555" }}>المورد:</span>
-                <span className="info-value" style={{ fontWeight: 600 }}>{po.supplierName || "-"}</span>
-              </div>
-              {po.supplierPhone && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                <span className="info-label" style={{ color: "#555" }}>هاتف المورد:</span>
-                <span className="info-value" style={{ fontWeight: 600 }}>{po.supplierPhone}</span>
-              </div>}
-              <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-                <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(po.status, "purchase")?.label || po.status || "-"}</span>
-              </div>
-              {po.expectedDelivery && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                <span className="info-label" style={{ color: "#555" }}>التسليم المتوقع:</span>
-                <span className="info-value" style={{ fontWeight: 600 }}>{formatDateAr(po.expectedDelivery)}</span>
-              </div>}
-            </div>
-
-            {lines.length > 0 && (
-              <table>
-                <thead><tr>
-                  <th>#</th>
-                  <th>الوصف</th>
-                  <th>الكمية</th>
-                  <th>سعر الوحدة</th>
-                  <th>الإجمالي</th>
-                </tr></thead>
-                <tbody>
-                  {lines.map((l: any, i: number) => (
-                    <tr key={i}>
-                      <td>{i + 1}</td>
-                      <td>{l.description || l.name || "-"}</td>
-                      <td>{l.quantity || 1}</td>
-                      <td>{formatCurrency(Number(l.unitPrice || 0))}</td>
-                      <td style={{ fontWeight: "bold" }}>{formatCurrency(Number(l.lineTotal || l.total || (l.quantity || 1) * (l.unitPrice || 0)))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-
-            <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
-              <tbody>
-                <tr>
-                  <td className="label" style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td>
-                  <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(po.totalAmount || 0))}</td>
-                </tr>
-              </tbody>
-            </table>
-
-            {po.notes && <p style={{ marginTop: "16px", color: "#555" }}>ملاحظات: {po.notes}</p>}
-          </PrintPreviewModal>
-
-          <div ref={printContainerRef} style={{ position: "absolute", left: "-9999px", top: 0 }}>
-            <PrintDocument branch={branch} documentTitle="أمر شراء" documentRef={po.ref || `#${po.id}`} documentDate={docDate}>
-              <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-                <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                  <span className="info-label" style={{ color: "#555" }}>المورد:</span>
-                  <span className="info-value" style={{ fontWeight: 600 }}>{po.supplierName || "-"}</span>
-                </div>
-                {po.supplierPhone && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                  <span className="info-label" style={{ color: "#555" }}>هاتف المورد:</span>
-                  <span className="info-value" style={{ fontWeight: 600 }}>{po.supplierPhone}</span>
-                </div>}
-                <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                  <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-                  <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(po.status, "purchase")?.label || po.status || "-"}</span>
-                </div>
-                {po.expectedDelivery && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-                  <span className="info-label" style={{ color: "#555" }}>التسليم المتوقع:</span>
-                  <span className="info-value" style={{ fontWeight: 600 }}>{formatDateAr(po.expectedDelivery)}</span>
-                </div>}
-              </div>
-              {lines.length > 0 && (
-                <table>
-                  <thead><tr><th>#</th><th>الوصف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead>
-                  <tbody>
-                    {lines.map((l: any, i: number) => (
-                      <tr key={i}><td>{i + 1}</td><td>{l.description || l.name || "-"}</td><td>{l.quantity || 1}</td><td>{formatCurrency(Number(l.unitPrice || 0))}</td><td style={{ fontWeight: "bold" }}>{formatCurrency(Number(l.lineTotal || l.total || (l.quantity || 1) * (l.unitPrice || 0)))}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-              <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
-                <tbody>
-                  <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(po.totalAmount || 0))}</td></tr>
-                </tbody>
-              </table>
-              {po.notes && <p style={{ marginTop: "16px", color: "#555" }}>ملاحظات: {po.notes}</p>}
-            </PrintDocument>
-          </div>
-        </>
-      )}
     </>
   );
 }

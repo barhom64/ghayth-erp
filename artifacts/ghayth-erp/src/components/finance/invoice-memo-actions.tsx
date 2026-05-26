@@ -27,7 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileMinus, FilePlus, History, Send, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFormContext } from "react-hook-form";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 
 /**
  * Invoice — credit/debit memos + send-to-customer actions.
@@ -90,7 +90,11 @@ const memoSchema = z.object({
 });
 type MemoForm = z.infer<typeof memoSchema>;
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+// Local-time date (Riyadh wall-clock) — `todayLocal()` from the shared
+// formatters. `.toISOString().slice(0,10)` would emit the UTC date which
+// is wrong on the late-evening edge cases (would show tomorrow's date
+// for a 9pm Riyadh memo).
+const todayISO = () => todayLocal();
 
 export function InvoiceMemoActions({
   invoice,

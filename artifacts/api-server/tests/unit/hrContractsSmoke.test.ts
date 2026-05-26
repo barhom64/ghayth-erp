@@ -67,9 +67,14 @@ describe("Contract creation", () => {
     expect(section).toContain("لا يوجد تعيين فعّال لهذا الموظف");
   });
 
-  it("generates sequential contract reference number", () => {
-    expect(CONTRACTS_ROUTE).toContain("contract_number_seq");
-    expect(CONTRACTS_ROUTE).toContain('"CTR"');
+  it("generates contract reference number via the unified numbering center (Issue #1141)", () => {
+    // The legacy `nextval('contract_number_seq')` call was removed in
+    // favour of `numberingService.issueNumber` so the audit, per-branch
+    // counter and policy enforcement all apply.
+    expect(CONTRACTS_ROUTE).not.toMatch(/nextval\s*\(\s*['"`]contract_number_seq/);
+    expect(CONTRACTS_ROUTE).toContain('issueNumber({');
+    expect(CONTRACTS_ROUTE).toContain('moduleKey: "hr"');
+    expect(CONTRACTS_ROUTE).toContain('entityKey: "employee_contract"');
   });
 
   it("creates contract with draft status", () => {
@@ -77,8 +82,11 @@ describe("Contract creation", () => {
   });
 
   it("creates audit log on creation", () => {
+    // Window widened to 4500 chars: the numbering center prelude
+    // (issueNumber call + assignment linkback) pushed the createAuditLog
+    // line past the original 3000-char slice.
     const idx = CONTRACTS_ROUTE.indexOf('contractsRouter.post("/",');
-    const section = CONTRACTS_ROUTE.slice(idx, idx + 3000);
+    const section = CONTRACTS_ROUTE.slice(idx, idx + 4500);
     expect(section).toContain("contract_created");
     expect(section).toContain("createAuditLog");
   });
@@ -299,8 +307,10 @@ describe("Contract renewal flow", () => {
   });
 
   it("renew updates old contract's renewalDate", () => {
+    // Window widened to 3500 chars: the numbering center prelude
+    // pushed the renewalDate UPDATE past the original 2000-char slice.
     const idx = CONTRACTS_ROUTE.indexOf('/:id/renew"');
-    const section = CONTRACTS_ROUTE.slice(idx, idx + 2000);
+    const section = CONTRACTS_ROUTE.slice(idx, idx + 3500);
     expect(section).toContain('"renewalDate"');
   });
 
@@ -328,7 +338,11 @@ describe("Contract security", () => {
 
   it("list endpoint has a LIMIT to prevent unbounded queries", () => {
     const idx = CONTRACTS_ROUTE.indexOf('contractsRouter.get("/",');
-    const section = CONTRACTS_ROUTE.slice(idx, idx + 1500);
+    // Window widened from 1500 → 2200 after the buildScopedWhere refactor
+    // (which introduces a multi-line helper-call block before the SQL
+    // template). The `LIMIT 200` is still in the same handler — just
+    // further past the new helper call.
+    const section = CONTRACTS_ROUTE.slice(idx, idx + 2200);
     expect(section).toContain("LIMIT");
   });
 

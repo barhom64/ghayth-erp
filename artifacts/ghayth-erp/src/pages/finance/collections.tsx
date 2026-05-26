@@ -26,6 +26,7 @@ import {
 import { Loader2, Mail, AlertTriangle, History, FileWarning, Calculator, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { currentPeriodRiyadh } from "@/lib/formatters";
 
 /**
  * Finance / Collections — dunning + bad-debt provision.
@@ -119,10 +120,8 @@ const STAGE_VARIANT: Record<number, "default" | "secondary" | "destructive" | "o
   5: "destructive",
 };
 
-const currentPeriod = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-};
+// Riyadh-time YYYY-MM — UTC would flip a day early at month-end.
+const currentPeriod = () => currentPeriodRiyadh();
 
 export default function CollectionsPage() {
   return (

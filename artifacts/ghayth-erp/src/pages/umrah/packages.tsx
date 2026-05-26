@@ -1,24 +1,21 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { z } from "zod";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import {
   DataTable,
   type DataTableColumn,
   PageShell,
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormTextareaField,
-  FormNumberField,
-  FormSelectField,
-  FormSwitchField,
 } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/formatters";
-import { Check, X, Plus, Pencil, Trash2 } from "lucide-react";
+import { Package, Check, X, Plus, Pencil, Trash2 } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
@@ -40,19 +37,18 @@ interface UmrahPackage {
   status?: string;
 }
 
-const packageFormSchema = z.object({
-  name: z.string().min(1, "اسم الباقة مطلوب"),
-  seasonId: z.string().optional(),
-  costPrice: z.string().optional(),
-  sellPrice: z.string().optional(),
-  duration: z.string(),
-  description: z.string().optional(),
-  includesTransport: z.boolean(),
-  includesHotel: z.boolean(),
-  includesMeals: z.boolean(),
-  includesZiyarat: z.boolean(),
-});
-type PackageForm = z.infer<typeof packageFormSchema>;
+interface PackageForm {
+  name: string;
+  seasonId: string;
+  costPrice: string;
+  sellPrice: string;
+  duration: string;
+  description: string;
+  includesTransport: boolean;
+  includesHotel: boolean;
+  includesMeals: boolean;
+  includesZiyarat: boolean;
+}
 
 const emptyForm: PackageForm = {
   name: "", seasonId: "", costPrice: "", sellPrice: "", duration: "7",
@@ -70,38 +66,29 @@ export default function UmrahPackages() {
   const rows = asList(packagesQ.data?.data || packagesQ.data);
   const seasons = asList(seasonsQ.data?.data || seasonsQ.data);
 
-  // editingId discriminates the dialog's three states:
-  //   null    → closed
-  //   "new"   → create a new package
-  //   number  → edit row with that id
-  const [editingId, setEditingId] = useState<null | "new" | number>(null);
-  const [editingDefaults, setEditingDefaults] = useState<PackageForm>(emptyForm);
+  const [editing, setEditing] = useState<UmrahPackage | null>(null);
+  const [isNew, setIsNew] = useState(false);
+  const [form, setForm] = useState<PackageForm>(emptyForm);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-
-  const closeDialog = () => setEditingId(null);
 
   const createMut = useApiMutation<any, any>("/umrah/packages", "POST", [["umrah-packages"]], {
     onSuccess: () => { packagesQ.refetch(); closeDialog(); toast({ title: "تم إنشاء الباقة بنجاح" }); },
   });
-  const updateMut = useApiMutation<any, any>(
-    () => `/umrah/packages/${typeof editingId === "number" ? editingId : ""}`,
-    "PATCH",
-    [["umrah-packages"]],
-    {
-      onSuccess: () => { packagesQ.refetch(); closeDialog(); toast({ title: "تم تحديث الباقة بنجاح" }); },
-    },
-  );
+  const updateMut = useApiMutation<any, any>(() => `/umrah/packages/${editing?.id}`, "PATCH", [["umrah-packages"]], {
+    onSuccess: () => { packagesQ.refetch(); closeDialog(); toast({ title: "تم تحديث الباقة بنجاح" }); },
+  });
   const deleteMut = useApiMutation<any, any>(() => `/umrah/packages/${deleteId}`, "DELETE", [["umrah-packages"]], {
     onSuccess: () => { packagesQ.refetch(); setDeleteId(null); toast({ title: "تم حذف الباقة" }); },
   });
 
   function openCreate() {
-    setEditingDefaults(emptyForm);
-    setEditingId("new");
+    setForm(emptyForm);
+    setEditing({} as UmrahPackage);
+    setIsNew(true);
   }
 
   function openEdit(pkg: UmrahPackage) {
-    setEditingDefaults({
+    setForm({
       name: pkg.name || "",
       seasonId: pkg.seasonId ? String(pkg.seasonId) : "",
       costPrice: pkg.costPrice ? String(pkg.costPrice) : "",
@@ -113,24 +100,30 @@ export default function UmrahPackages() {
       includesMeals: pkg.includesMeals || false,
       includesZiyarat: pkg.includesZiyarat || false,
     });
-    setEditingId(pkg.id);
+    setEditing(pkg);
+    setIsNew(false);
   }
 
-  async function handleSubmit(values: PackageForm) {
+  function closeDialog() {
+    setEditing(null);
+    setIsNew(false);
+  }
+
+  function handleSubmit() {
     const payload = {
-      name: values.name,
-      seasonId: values.seasonId ? Number(values.seasonId) : undefined,
-      costPrice: values.costPrice ? Number(values.costPrice) : 0,
-      sellPrice: values.sellPrice ? Number(values.sellPrice) : 0,
-      duration: values.duration ? Number(values.duration) : 7,
-      description: values.description || undefined,
-      includesTransport: values.includesTransport,
-      includesHotel: values.includesHotel,
-      includesMeals: values.includesMeals,
-      includesZiyarat: values.includesZiyarat,
+      name: form.name,
+      seasonId: form.seasonId ? Number(form.seasonId) : undefined,
+      costPrice: form.costPrice ? Number(form.costPrice) : 0,
+      sellPrice: form.sellPrice ? Number(form.sellPrice) : 0,
+      duration: form.duration ? Number(form.duration) : 7,
+      description: form.description || undefined,
+      includesTransport: form.includesTransport,
+      includesHotel: form.includesHotel,
+      includesMeals: form.includesMeals,
+      includesZiyarat: form.includesZiyarat,
     };
-    if (editingId === "new") await createMut.mutateAsync(payload);
-    else await updateMut.mutateAsync(payload);
+    if (isNew) createMut.mutate(payload);
+    else updateMut.mutate(payload);
   }
 
   const columns: DataTableColumn<UmrahPackage>[] = [
@@ -171,47 +164,68 @@ export default function UmrahPackages() {
       </div>
       <DataTable columns={columns} data={rows} isLoading={packagesQ.isLoading} isError={packagesQ.isError} error={packagesQ.error} onRowClick={(row) => navigate(`/umrah/packages/${row.id}`)} />
 
-      <Dialog open={editingId !== null} onOpenChange={(o) => !o && closeDialog()}>
+      <Dialog open={!!editing} onOpenChange={(o) => !o && closeDialog()}>
         <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingId === "new" ? "إضافة باقة جديدة" : "تعديل الباقة"}</DialogTitle>
-          </DialogHeader>
-          <FormShell
-            key={String(editingId ?? "closed")}
-            schema={packageFormSchema}
-            defaultValues={editingDefaults}
-            submitLabel={
-              createMut.isPending || updateMut.isPending
-                ? "جاري الحفظ..."
-                : editingId === "new"
-                  ? "إنشاء"
-                  : "حفظ"
-            }
-            secondaryActions={
-              <Button type="button" variant="outline" onClick={closeDialog}>إلغاء</Button>
-            }
-            onSubmit={handleSubmit}
-          >
-            <FormTextField name="name" label="اسم الباقة" required />
-            <FormSelectField
-              name="seasonId"
-              label="الموسم"
-              options={seasons.map((s: any) => ({ value: String(s.id), label: s.title }))}
-              placeholder="اختر الموسم"
-            />
-            <FormGrid cols={2}>
-              <FormNumberField name="costPrice" label="سعر التكلفة" />
-              <FormNumberField name="sellPrice" label="سعر البيع" />
-            </FormGrid>
-            <FormNumberField name="duration" label="المدة (أيام)" />
-            <FormTextareaField name="description" label="الوصف" rows={2} />
-            <FormGrid cols={2}>
-              <FormSwitchField name="includesTransport" label="يشمل النقل" />
-              <FormSwitchField name="includesHotel" label="يشمل الفندق" />
-              <FormSwitchField name="includesMeals" label="يشمل الوجبات" />
-              <FormSwitchField name="includesZiyarat" label="يشمل الزيارات" />
-            </FormGrid>
-          </FormShell>
+          <DialogHeader><DialogTitle>{isNew ? "إضافة باقة جديدة" : "تعديل الباقة"}</DialogTitle></DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div>
+              <Label>اسم الباقة *</Label>
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div>
+              <Label>الموسم</Label>
+              <Select value={form.seasonId} onValueChange={(v) => setForm({ ...form, seasonId: v })}>
+                <SelectTrigger><SelectValue placeholder="اختر الموسم" /></SelectTrigger>
+                <SelectContent>
+                  {seasons.map((s: any) => (
+                    <SelectItem key={s.id} value={String(s.id)}>{s.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>سعر التكلفة</Label>
+                <Input type="number" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} />
+              </div>
+              <div>
+                <Label>سعر البيع</Label>
+                <Input type="number" value={form.sellPrice} onChange={(e) => setForm({ ...form, sellPrice: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <Label>المدة (أيام)</Label>
+              <Input type="number" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} />
+            </div>
+            <div>
+              <Label>الوصف</Label>
+              <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center gap-2">
+                <Switch checked={form.includesTransport} onCheckedChange={(v) => setForm({ ...form, includesTransport: v })} />
+                <Label>يشمل النقل</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.includesHotel} onCheckedChange={(v) => setForm({ ...form, includesHotel: v })} />
+                <Label>يشمل الفندق</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.includesMeals} onCheckedChange={(v) => setForm({ ...form, includesMeals: v })} />
+                <Label>يشمل الوجبات</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.includesZiyarat} onCheckedChange={(v) => setForm({ ...form, includesZiyarat: v })} />
+                <Label>يشمل الزيارات</Label>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDialog}>إلغاء</Button>
+            <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending || updateMut.isPending} rateLimitAware>
+              {createMut.isPending || updateMut.isPending ? "جاري الحفظ..." : isNew ? "إنشاء" : "حفظ"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -219,12 +233,12 @@ export default function UmrahPackages() {
         <DialogContent>
           <DialogHeader><DialogTitle>تأكيد الحذف</DialogTitle></DialogHeader>
           <p>هل أنت متأكد من حذف هذه الباقة؟ لا يمكن حذف باقة مرتبطة بمعتمرين.</p>
-          <div className="flex justify-end gap-2 pt-4">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>إلغاء</Button>
             <GuardedButton perm="umrah:delete" variant="destructive" onClick={() => deleteMut.mutate({})} disabled={deleteMut.isPending}>
               {deleteMut.isPending ? "جاري الحذف..." : "حذف"}
             </GuardedButton>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </PageShell>

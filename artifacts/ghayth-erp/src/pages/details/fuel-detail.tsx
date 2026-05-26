@@ -12,7 +12,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Fuel, Gauge } from "lucide-react";
@@ -65,24 +65,6 @@ export default function FuelDetail() {
     return out;
   }, [item]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!item) return [];
-    return [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "المركبة", value: item.plateNumber || "-" },
-          { label: "السائق", value: item.driverName || "-" },
-          { label: "نوع الوقود", value: FUEL_TYPES[item.fuelType] || item.fuelType || "-" },
-          { label: "الكمية (لتر)", value: item.quantity ? `${item.quantity} لتر` : "-" },
-          { label: "التكلفة", value: item.cost ? formatCurrency(item.cost) : "-" },
-          { label: "عداد الكيلومترات", value: item.odometer ? `${item.odometer} كم` : "-" },
-          { label: "المحطة", value: item.station || "-" },
-          { label: "التاريخ", value: formatDateAr(item.date || item.createdAt) },
-        ],
-      },
-    ];
-  }, [item]);
 
   const costPerLiter = item?.cost && item?.quantity ? (Number(item.cost) / Number(item.quantity)).toFixed(2) : null;
 
@@ -227,12 +209,9 @@ export default function FuelDetail() {
       actions={
         <>
           <EntityPrintButton
-            branchId={item?.branchId}
-            title="سجل تعبئة وقود"
-            ref={item?.ref || `FUEL-${id}`}
-            date={formatDateAr(item?.date || item?.createdAt)}
-            sections={printSections}
-          />
+            entityType="fuel"
+            entityId={id ?? 0}
+            formats={["a4"]}/>
           <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>
       }

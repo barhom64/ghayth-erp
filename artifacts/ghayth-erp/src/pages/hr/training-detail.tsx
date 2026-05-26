@@ -1,32 +1,15 @@
-import { useState } from "react";
 import { useRoute } from "wouter";
-import { z } from "zod";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useApiQuery } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   PageStatusBadge,
   DataTable,
   type DataTableColumn,
-  FormShell,
-  FormSelectField,
-  FormTextField,
-  FormGrid,
 } from "@workspace/ui-core";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { GuardedButton } from "@/components/shared/permission-gate";
-import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
-import { EmployeeSelect } from "@/components/shared/entity-selects";
-import { useFormContext } from "react-hook-form";
 import {
   DetailPageLayout,
   ProcessStages,
@@ -34,31 +17,11 @@ import {
 } from "@workspace/entity-kit";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import {
-  GraduationCap, Users, MapPin, User, BookOpen, UserPlus, Trash2, Pencil,
+  GraduationCap, Users, MapPin, User, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-
-const ENROLLMENT_STATUS_OPTIONS = [
-  { value: "enrolled", label: "مسجل" },
-  { value: "in_progress", label: "قيد التنفيذ" },
-  { value: "completed", label: "مكتمل" },
-  { value: "passed", label: "ناجح" },
-  { value: "failed", label: "راسب" },
-  { value: "dropped", label: "منسحب" },
-];
-
-const enrollSchema = z.object({
-  employeeId: z.coerce.number().int().positive("اختر الموظف"),
-  status: z.enum(["enrolled", "in_progress", "completed", "passed", "failed", "dropped"]),
-});
-type EnrollForm = z.infer<typeof enrollSchema>;
-
-const patchEnrollSchema = z.object({
-  status: z.enum(["enrolled", "in_progress", "completed", "passed", "failed", "dropped"]),
-  score: z.coerce.number().min(0).max(100).optional(),
-});
-type PatchEnrollForm = z.infer<typeof patchEnrollSchema>;
+import { PrintButton } from "@/components/shared/print-button";
 
 const TRAINING_LIFECYCLE = [
   { key: "planned",   label: "مخطط" },
@@ -107,9 +70,6 @@ export default function TrainingDetailPage() {
     { enabled: !!id },
   );
   const enrollments = enrollmentsData?.data || [];
-  const [enrolling, setEnrolling] = useState(false);
-  const [editingEnrollment, setEditingEnrollment] = useState<any>(null);
-  const [deletingEnrollment, setDeletingEnrollment] = useState<any>(null);
 
   const kpis = [
     {
@@ -197,31 +157,6 @@ export default function TrainingDetailPage() {
         </span>
       ),
     },
-    {
-      key: "actions",
-      header: "",
-      render: (e) => (
-        <div className="flex gap-1 justify-end">
-          <GuardedButton
-            perm="hr.training:update"
-            size="sm"
-            variant="ghost"
-            onClick={() => setEditingEnrollment(e)}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </GuardedButton>
-          <GuardedButton
-            perm="hr.training:delete"
-            size="sm"
-            variant="ghost"
-            className="text-status-error-foreground"
-            onClick={() => setDeletingEnrollment(e)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </GuardedButton>
-        </div>
-      ),
-    },
   ];
 
   const overview = program ? (
@@ -290,57 +225,19 @@ export default function TrainingDetailPage() {
 
       <Card className="border-0 shadow-sm">
         <CardContent className="p-6">
-          <div className="flex items-center justify-between gap-2 mb-4">
-            <h3 className="text-sm font-semibold text-status-neutral-foreground flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              المشاركون ({enrollments.length})
-            </h3>
-            <GuardedButton
-              perm="hr.training:create"
-              size="sm"
-              onClick={() => setEnrolling(true)}
-              className="gap-1"
-            >
-              <UserPlus className="h-3.5 w-3.5" />
-              تسجيل مشارك
-            </GuardedButton>
-          </div>
+          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-4 flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            المشاركون ({enrollments.length})
+          </h3>
           <DataTable
             columns={enrollmentColumns}
             data={enrollments}
             noToolbar
-            emptyMessage="لا يوجد مشاركون في هذا البرنامج — اضغط 'تسجيل مشارك' للبدء"
+            emptyMessage="لا يوجد مشاركون في هذا البرنامج"
             pageSize={20}
           />
         </CardContent>
       </Card>
-
-      {enrolling && id && (
-        <EnrollDialog
-          programId={Number(id)}
-          onClose={() => setEnrolling(false)}
-        />
-      )}
-      {editingEnrollment && (
-        <EditEnrollmentDialog
-          enrollment={editingEnrollment}
-          onClose={() => setEditingEnrollment(null)}
-        />
-      )}
-      {deletingEnrollment && (
-        <ConfirmDeleteDialog
-          open={deletingEnrollment !== null}
-          onOpenChange={(o) => { if (!o) setDeletingEnrollment(null); }}
-          entity={{
-            type: "training_enrollment",
-            id: deletingEnrollment.id,
-            name: `تسجيل ${deletingEnrollment.employeeName ?? `#${deletingEnrollment.employeeId}`}`,
-          }}
-          deletePath={`/hr/training/enrollments/${deletingEnrollment.id}`}
-          invalidateKeys={[["training-enrollments", String(id ?? "")]]}
-          onDeleted={() => setDeletingEnrollment(null)}
-        />
-      )}
 
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2"><CardTitle className="text-base">إجراءات الاعتماد</CardTitle></CardHeader>
@@ -362,6 +259,7 @@ export default function TrainingDetailPage() {
 
   return (
     <DetailPageLayout
+      actions={<PrintButton entityType="training" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
       title={program?.title || "تفاصيل البرنامج التدريبي"}
       subtitle={program?.description || undefined}
       backPath="/hr/training"
@@ -378,137 +276,5 @@ export default function TrainingDetailPage() {
       createdAt={program?.createdAt}
       updatedAt={program?.updatedAt}
     />
-  );
-}
-
-function EnrollDialog({
-  programId,
-  onClose,
-}: {
-  programId: number;
-  onClose: () => void;
-}) {
-  const mut = useApiMutation<unknown, EnrollForm>(
-    "/hr/training/enrollments",
-    "POST",
-    [["training-enrollments", String(programId)], ["training-program", String(programId)]],
-    { successMessage: "تم تسجيل المشارك", onSuccess: () => onClose() },
-  );
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent dir="rtl" className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UserPlus className="h-4 w-4" />
-            تسجيل مشارك في البرنامج
-          </DialogTitle>
-        </DialogHeader>
-        <FormShell
-          schema={enrollSchema}
-          defaultValues={{ employeeId: 0, status: "enrolled" }}
-          submitLabel="تسجيل"
-          secondaryActions={
-            <Button type="button" variant="outline" onClick={onClose}>
-              إلغاء
-            </Button>
-          }
-          onSubmit={async (values) => {
-            await mut.mutateAsync({ ...values, programId } as any);
-          }}
-        >
-          <EnrollEmployeePicker />
-          <FormSelectField
-            name="status"
-            label="حالة التسجيل"
-            required
-            options={ENROLLMENT_STATUS_OPTIONS}
-          />
-          <p className="text-xs text-muted-foreground">
-            عند الحفظ يزداد عداد المسجلين على البرنامج تلقائياً، ولا يمكن تسجيل نفس الموظف
-            مرتين في نفس البرنامج (يقابل قيد UNIQUE خلف هذا الإجراء).
-          </p>
-        </FormShell>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function EnrollEmployeePicker() {
-  const { watch, setValue, formState } = useFormContext<EnrollForm>();
-  const value = watch("employeeId");
-  const err = formState.errors.employeeId?.message;
-  return (
-    <div className="space-y-1.5">
-      <label className="text-sm font-medium">
-        الموظف <span className="text-status-error-foreground">*</span>
-      </label>
-      <EmployeeSelect
-        value={value ? String(value) : ""}
-        onChange={(v) =>
-          setValue("employeeId", Number(v) || 0, { shouldDirty: true, shouldValidate: true })
-        }
-        placeholder="ابحث عن موظف..."
-      />
-      {err && <p className="text-xs text-status-error-foreground">{String(err)}</p>}
-    </div>
-  );
-}
-
-function EditEnrollmentDialog({
-  enrollment,
-  onClose,
-}: {
-  enrollment: any;
-  onClose: () => void;
-}) {
-  const mut = useApiMutation<unknown, PatchEnrollForm>(
-    `/hr/training/enrollments/${enrollment.id}`,
-    "PATCH",
-    [["training-enrollments", String(enrollment.programId)]],
-    { successMessage: "تم تحديث التسجيل", onSuccess: () => onClose() },
-  );
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent dir="rtl" className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Pencil className="h-4 w-4" />
-            تعديل تسجيل: {enrollment.employeeName ?? `#${enrollment.employeeId}`}
-          </DialogTitle>
-        </DialogHeader>
-        <FormShell
-          schema={patchEnrollSchema}
-          defaultValues={{
-            status: (enrollment.status as PatchEnrollForm["status"]) ?? "enrolled",
-            score: enrollment.score ?? undefined,
-          }}
-          submitLabel="حفظ التعديلات"
-          secondaryActions={
-            <Button type="button" variant="outline" onClick={onClose}>
-              إلغاء
-            </Button>
-          }
-          onSubmit={async (values) => {
-            await mut.mutateAsync(values);
-          }}
-        >
-          <FormGrid cols={2}>
-            <FormSelectField
-              name="status"
-              label="الحالة"
-              required
-              options={ENROLLMENT_STATUS_OPTIONS}
-            />
-            <FormTextField name="score" label="الدرجة (0-100)" type="number" />
-          </FormGrid>
-          <p className="text-xs text-muted-foreground">
-            تحديث الحالة لـ "ناجح" أو "راسب" يثبت نتيجة التدريب في سجل الموظف للتقارير
-            ومتابعة الترقيات.
-          </p>
-        </FormShell>
-      </DialogContent>
-    </Dialog>
   );
 }

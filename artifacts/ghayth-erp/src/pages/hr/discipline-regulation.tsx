@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,42 +17,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { BookOpen, Pencil, RefreshCw, AlertTriangle, Plus, Trash2 } from "lucide-react";
-import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
-import {
-  PageShell,
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormTextareaField,
-} from "@workspace/ui-core";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { BookOpen, Pencil, RefreshCw, AlertTriangle } from "lucide-react";
+import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-
-const articleFormSchema = z.object({
-  title: z.string().min(1, "الوصف مطلوب"),
-  penalty1: z.string().optional(),
-  penalty2: z.string().optional(),
-  penalty3: z.string().optional(),
-  penalty4: z.string().optional(),
-  extraDeduction: z.string().optional(),
-  legalReference: z.string().optional(),
-});
-type ArticleForm = z.infer<typeof articleFormSchema>;
-
-const createArticleSchema = z.object({
-  section: z.enum(["work_time", "work_organization", "conduct"]),
-  articleNumber: z.coerce.number().int().positive("رقم المادة مطلوب"),
-  title: z.string().min(1, "وصف المخالفة مطلوب"),
-  severity: z.enum(["low", "medium", "high", "critical"]),
-  isTermination: z.boolean().optional(),
-  penalty1: z.string().optional(),
-  penalty2: z.string().optional(),
-  penalty3: z.string().optional(),
-  penalty4: z.string().optional(),
-  extraDeduction: z.string().optional(),
-  legalReference: z.string().optional(),
-});
-type CreateArticleForm = z.infer<typeof createArticleSchema>;
 
 const SECTION_LABELS: Record<string, string> = {
   work_time: "مخالفات تتعلق بمواعيد العمل",
@@ -93,20 +62,11 @@ export default function DisciplineRegulationPage() {
     total: number;
   }>(["discipline-regulation"], "/hr/discipline/regulation");
   const [editing, setEditing] = useState<Article | null>(null);
-  const canEdit = usePermission("hr:create");
   // BUG FIX: this was declared after the early returns below, which violates
   // Rules of Hooks (the hook count differs between render passes once data
   // arrives → "Invalid hook call" + "change in order of Hooks" errors). Must
   // stay above any conditional return.
   const [reseedAsk, setReseedAsk] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [deleting, setDeleting] = useState<Article | null>(null);
-  const createMut = useApiMutation<unknown, CreateArticleForm>(
-    "/hr/discipline/regulation",
-    "POST",
-    [["discipline-regulation"]],
-    { successMessage: "تم إضافة المادة", onSuccess: () => setCreating(false) },
-  );
 
   const grouped = data?.grouped ?? { work_time: [], work_organization: [], conduct: [] };
   const total = data?.total ?? 0;
@@ -133,19 +93,19 @@ export default function DisciplineRegulationPage() {
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
-  const handleEditSubmit = async (values: ArticleForm) => {
+  const saveEdit = () => {
     if (!editing) return;
-    await saveMut.mutateAsync({
+    saveMut.mutate({
       id: editing.id,
-      title: values.title,
-      penalty1: values.penalty1 || null,
-      penalty2: values.penalty2 || null,
-      penalty3: values.penalty3 || null,
-      penalty4: values.penalty4 || null,
-      extraDeduction: values.extraDeduction || null,
+      title: editing.title,
+      penalty1: editing.penalty1 ?? null,
+      penalty2: editing.penalty2 ?? null,
+      penalty3: editing.penalty3 ?? null,
+      penalty4: editing.penalty4 ?? null,
+      extraDeduction: editing.extraDeduction ?? null,
       severity: editing.severity,
       isTermination: editing.isTermination,
-      legalReference: values.legalReference || null,
+      legalReference: editing.legalReference ?? null,
     } as any);
   };
 
@@ -196,21 +156,9 @@ export default function DisciplineRegulationPage() {
             <p className="text-xs text-orange-700 mt-2">+ {a.extraDeduction}</p>
           )}
         </div>
-        <div className="flex gap-1 shrink-0">
-          <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>
-            <Pencil className="w-4 h-4" />
-          </Button>
-          {canEdit && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-status-error-foreground"
-              onClick={() => setDeleting(a)}
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
+        <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>
+          <Pencil className="w-4 h-4" />
+        </Button>
       </div>
     </div>
   );
@@ -226,20 +174,10 @@ export default function DisciplineRegulationPage() {
       ]}
       loading={isLoading}
       actions={
-        <div className="flex gap-2">
-          <GuardedButton
-            perm="hr:create"
-            onClick={() => setCreating(true)}
-            className="gap-1"
-          >
-            <Plus className="w-4 h-4" />
-            مادة جديدة
-          </GuardedButton>
-          <GuardedButton perm="hr:create" variant="outline" onClick={reseedDefaults} disabled={reseeding}>
-            <RefreshCw className={`w-4 h-4 me-2 ${reseeding ? "animate-spin" : ""}`} />
-            استنساخ اللائحة الافتراضية
-          </GuardedButton>
-        </div>
+        <GuardedButton perm="hr:create" variant="outline" onClick={reseedDefaults} disabled={reseeding}>
+          <RefreshCw className={`w-4 h-4 me-2 ${reseeding ? "animate-spin" : ""}`} />
+          استنساخ اللائحة الافتراضية
+        </GuardedButton>
       }
     >
       <Tabs defaultValue="work_time" dir="rtl">
@@ -271,116 +209,76 @@ export default function DisciplineRegulationPage() {
         ))}
       </Tabs>
 
-      <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Plus className="w-4 h-4" /> مادة جديدة في اللائحة
-            </DialogTitle>
-          </DialogHeader>
-          <FormShell
-            schema={createArticleSchema}
-            defaultValues={{
-              section: "work_time",
-              articleNumber: (data?.total ?? 0) + 1,
-              title: "",
-              severity: "low",
-              isTermination: false,
-              penalty1: "",
-              penalty2: "",
-              penalty3: "",
-              penalty4: "",
-              extraDeduction: "",
-              legalReference: "",
-            }}
-            submitLabel="إضافة المادة"
-            secondaryActions={
-              <Button type="button" variant="outline" onClick={() => setCreating(false)}>
-                إلغاء
-              </Button>
-            }
-            onSubmit={async (values) => {
-              await createMut.mutateAsync(values);
-            }}
-          >
-            <FormGrid cols={2}>
-              <FormTextField
-                name="section"
-                label="القسم"
-                required
-                placeholder="work_time | work_organization | conduct"
-              />
-              <FormTextField name="articleNumber" label="رقم المادة" type="number" required />
-            </FormGrid>
-            <FormTextField name="title" label="وصف المخالفة" required />
-            <FormGrid cols={2}>
-              <FormTextField name="severity" label="الشدة (low/medium/high/critical)" />
-              <FormTextField name="legalReference" label="المرجع القانوني" />
-            </FormGrid>
-            <FormGrid cols={2}>
-              <FormTextField name="penalty1" label="عقوبة المخالفة الأولى" />
-              <FormTextField name="penalty2" label="عقوبة المخالفة الثانية" />
-              <FormTextField name="penalty3" label="عقوبة المخالفة الثالثة" />
-              <FormTextField name="penalty4" label="عقوبة المخالفة الرابعة" />
-            </FormGrid>
-            <FormTextareaField name="extraDeduction" label="ملاحظات إضافية" rows={2} />
-          </FormShell>
-        </DialogContent>
-      </Dialog>
-
-      {deleting && (
-        <ConfirmDeleteDialog
-          open={deleting !== null}
-          onOpenChange={(o) => { if (!o) setDeleting(null); }}
-          entity={{
-            type: "discipline_regulation_article",
-            id: deleting.id,
-            name: `المادة #${deleting.articleNumber} — ${deleting.title}`,
-          }}
-          deletePath={`/hr/discipline/regulation/${deleting.id}`}
-          invalidateKeys={[["discipline-regulation"]]}
-          onDeleted={() => setDeleting(null)}
-        />
-      )}
-
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>تحرير المادة #{editing?.articleNumber}</DialogTitle>
           </DialogHeader>
           {editing && (
-            <FormShell
-              key={editing.id}
-              schema={articleFormSchema}
-              defaultValues={{
-                title: editing.title,
-                penalty1: editing.penalty1 ?? "",
-                penalty2: editing.penalty2 ?? "",
-                penalty3: editing.penalty3 ?? "",
-                penalty4: editing.penalty4 ?? "",
-                extraDeduction: editing.extraDeduction ?? "",
-                legalReference: editing.legalReference ?? "",
-              }}
-              submitLabel={saving ? "جاري الحفظ..." : "حفظ"}
-              disabled={!canEdit}
-              secondaryActions={
-                <Button type="button" variant="outline" onClick={() => setEditing(null)} disabled={saving}>
-                  إلغاء
-                </Button>
-              }
-              onSubmit={handleEditSubmit}
-            >
-              <FormTextareaField name="title" label="الوصف" required rows={3} />
-              <FormGrid cols={2}>
-                <FormTextField name="penalty1" label="أول مرة" />
-                <FormTextField name="penalty2" label="ثاني مرة" />
-                <FormTextField name="penalty3" label="ثالث مرة" />
-                <FormTextField name="penalty4" label="رابع مرة" />
-              </FormGrid>
-              <FormTextField name="extraDeduction" label="حسم إضافي" placeholder="مثال: بالإضافة إلى حسم أجر دقائق التأخر" />
-              <FormTextField name="legalReference" label="مرجع نظامي" />
-            </FormShell>
+            <div className="space-y-3">
+              <div>
+                <Label>الوصف</Label>
+                <Textarea
+                  value={editing.title}
+                  onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>أول مرة</Label>
+                  <Input
+                    value={editing.penalty1 ?? ""}
+                    onChange={(e) => setEditing({ ...editing, penalty1: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>ثاني مرة</Label>
+                  <Input
+                    value={editing.penalty2 ?? ""}
+                    onChange={(e) => setEditing({ ...editing, penalty2: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>ثالث مرة</Label>
+                  <Input
+                    value={editing.penalty3 ?? ""}
+                    onChange={(e) => setEditing({ ...editing, penalty3: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>رابع مرة</Label>
+                  <Input
+                    value={editing.penalty4 ?? ""}
+                    onChange={(e) => setEditing({ ...editing, penalty4: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>حسم إضافي</Label>
+                <Input
+                  value={editing.extraDeduction ?? ""}
+                  onChange={(e) => setEditing({ ...editing, extraDeduction: e.target.value })}
+                  placeholder="مثال: بالإضافة إلى حسم أجر دقائق التأخر"
+                />
+              </div>
+              <div>
+                <Label>مرجع نظامي</Label>
+                <Input
+                  value={editing.legalReference ?? ""}
+                  onChange={(e) => setEditing({ ...editing, legalReference: e.target.value })}
+                />
+              </div>
+            </div>
           )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)} disabled={saving}>
+              إلغاء
+            </Button>
+            <GuardedButton perm="hr:create" onClick={saveEdit} disabled={saving}>
+              {saving ? "جاري الحفظ..." : "حفظ"}
+            </GuardedButton>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

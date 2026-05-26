@@ -6,7 +6,7 @@ import {
   type RelatedEntity,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ActionHistory } from "@workspace/workflow-kit";
@@ -94,34 +94,6 @@ export default function HrContractDetail() {
     return out;
   }, [contract]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!contract) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: `CNT-${id}` },
-          { label: "اسم الموظف", value: contract.employeeName || "-" },
-          { label: "نوع العقد", value: CONTRACT_TYPE_LABELS[contract.contractType] || contract.contractType || "-" },
-          { label: "تاريخ البداية", value: formatDateAr(contract.startDate) },
-          { label: "تاريخ النهاية", value: formatDateAr(contract.endDate) },
-          { label: "الراتب", value: formatCurrency(contract.salary) },
-          ...((contract.housingAllowance || contract.transportAllowance) ? [{ label: "البدلات", value: formatCurrency((Number(contract.housingAllowance) || 0) + (Number(contract.transportAllowance) || 0)) }] : []),
-          ...(contract.jobTitle ? [{ label: "المسمى الوظيفي", value: contract.jobTitle }] : []),
-          ...(contract.department ? [{ label: "القسم", value: contract.department }] : []),
-          { label: "الحالة", value: STATUS_LABELS[contract.status] || contract.status || "-" },
-        ],
-      },
-    ];
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "الموظف", name: contract.employeeName || "" },
-        { label: "المسؤول", name: contract.createdByName || "" },
-      ],
-    });
-    return sections;
-  }, [contract, id]);
 
   const { extraTabs, hideTabs } = useRegistryTabs("employee_contract", id ?? 0);
 
@@ -257,15 +229,9 @@ export default function HrContractDetail() {
         <>
           {contract && (
             <EntityPrintButton
-              branchId={contract.branchId}
-              title={`عقد CNT-${id}`}
-              ref={`CNT-${id}`}
-              date={formatDateAr(contract.createdAt)}
-              sections={printSections}
               entityType="employee_contract"
               entityId={contract.id ?? id}
-              formats={["a4"]}
-            />
+              formats={["a4"]}/>
           )}
           <GuardedButton
             perm="hr:update"

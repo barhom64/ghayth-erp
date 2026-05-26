@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useLocation, useRoute, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   useDetailEditDelete,
@@ -12,10 +12,11 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { Button } from "@/components/ui/button";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Phone, Mail, MapPin, Users, Wallet } from "lucide-react";
+import { Edit, Phone, Mail, MapPin, Users, Wallet, TrendingUp } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
@@ -65,24 +66,6 @@ export default function UmrahAgentDetail() {
     return out;
   }, [agent, id]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!agent) return [];
-    const items: Array<{ label: string; value: string }> = [
-      { label: "رقم المرجع", value: `AGT-${id}` },
-      { label: "اسم الوكيل", value: agent.name || "-" },
-      { label: "رقم الترخيص", value: agent.licenseNumber || "-" },
-      { label: "الهاتف", value: agent.phone || "-" },
-      { label: "البريد الإلكتروني", value: agent.email || "-" },
-      { label: "العنوان", value: agent.address || "-" },
-      { label: "نسبة العمولة", value: agent.commissionRate ? `${agent.commissionRate}%` : "-" },
-      { label: "إجمالي المعتمرين", value: String(agent.totalPilgrims ?? agent.pilgrimsCount ?? 0) },
-      { label: "الرصيد", value: formatCurrency(Number(agent.balance ?? 0)) },
-      { label: "بداية العقد", value: agent.contractStart ? formatDateAr(agent.contractStart) : "-" },
-      { label: "نهاية العقد", value: agent.contractEnd ? formatDateAr(agent.contractEnd) : "-" },
-      { label: "الحالة", value: STATUS_LABELS[agent.status] || agent.status || "-" },
-    ];
-    return [{ kind: "info-grid", items }];
-  }, [agent, id]);
 
   const editDelete = useDetailEditDelete({
     entityLabel: "الوكيل",
@@ -242,13 +225,17 @@ export default function UmrahAgentDetail() {
           editPerm="umrah:update"
           deletePerm="umrah:delete"
           extra={
-            <EntityPrintButton
-              branchId={agent?.branchId}
-              title={`ملف الوكيل — ${agent?.name || ""}`}
-              ref={`AGT-${id}`}
-              date={formatDateAr(new Date().toISOString())}
-              sections={printSections}
-            />
+            <>
+              <Link href={`/finance/profitability/umrah-agent/${id}`}>
+                <Button variant="outline" size="sm" className="gap-1">
+                  <TrendingUp className="h-4 w-4" /> الربحية
+                </Button>
+              </Link>
+              <EntityPrintButton
+                entityType="umrah_agent"
+                entityId={id ?? 0}
+                formats={["a4"]}/>
+            </>
           }
         />
       }

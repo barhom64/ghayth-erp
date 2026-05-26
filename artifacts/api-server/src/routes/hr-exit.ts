@@ -9,6 +9,7 @@ import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 
 // Local row shapes for hr_exit_requests + hr_exit_clearance.
 
@@ -74,6 +75,7 @@ import {
   toDateISO,
   currentDateInTz,
 } from "../lib/businessHelpers.js";
+import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { submitWorkflow } from "../lib/workflowEngine.js";
 import { generateSequentialNumber } from "../lib/hrHelpers.js";
@@ -178,9 +180,20 @@ router.get("/exit", authorize({ feature: "hr.exit", action: "list" }), async (re
     const scope = req.scope!;
     const { status } = req.query as Record<string, string | undefined>;
 
-    let where = `x."companyId" = $1 AND x."deletedAt" IS NULL`;
-    const params: unknown[] = [scope.companyId];
-    let idx = 2;
+    // Honor multi-company picker via buildScopedWhere. hr_exit_requests has no
+    // branchId of its own (branch is inferred from the linked assignment), so
+    // disableBranchScope: true matches the table shape.
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      parseScopeFilters(req),
+      {
+        companyColumn: 'x."companyId"',
+        disableBranchScope: true,
+        softDeleteColumn: 'x."deletedAt"',
+      },
+    );
+    let where = baseWhere;
+    let idx = nextParamIndex;
 
     if (status) { where += ` AND x.status = $${idx}`; params.push(status); idx++; }
 
@@ -335,7 +348,16 @@ router.post("/exit", authorize({ feature: "hr.exit", action: "create" }), async 
 
     const netSettlement = roundTo2(gratuity + leaveCompensation - loanDeductions - otherDeductions);
 
-    const exitNumber = await generateExitNumber(scope.companyId);
+    // Numbering center (Issue #1141) — exit request number from authority.
+    const issuedExit = await issueNumber({
+      companyId: scope.companyId,
+      branchId: emp.branchId ?? scope.branchId ?? null,
+      moduleKey: "hr",
+      entityKey: "exit",
+      entityTable: "hr_exit_requests",
+      actorId: scope.userId,
+    });
+    const exitNumber = issuedExit.number;
 
     let insertId!: number;
     await withTransaction(async (client) => {
@@ -356,6 +378,11 @@ router.post("/exit", authorize({ feature: "hr.exit", action: "create" }), async 
         ]
       );
       insertId = ins.rows[0].id;
+
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertId, issuedExit.assignmentId]
+      );
 
       for (const dept of DEFAULT_CLEARANCE_DEPARTMENTS) {
         await client.query(

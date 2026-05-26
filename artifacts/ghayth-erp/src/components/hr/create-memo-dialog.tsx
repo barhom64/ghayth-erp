@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { useFormContext } from "react-hook-form";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 
 /**
  * HR / Discipline — create-memo dialog.
@@ -151,7 +151,7 @@ export function CreateMemoDialog({
           defaultValues={{
             assignmentId: 0,
             incidentType: "late",
-            incidentDate: new Date().toISOString().slice(0, 10),
+            incidentDate: todayLocal(),
             incidentDurationMinutes: undefined,
             absenceDays: undefined,
             incidentDescription: "",

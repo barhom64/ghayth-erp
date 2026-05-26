@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function TenantDetail() {
   const [, params] = useRoute("/properties/tenants/:id");
@@ -280,7 +281,12 @@ export default function TenantDetail() {
       error={isError ? true : undefined}
       onRetry={refetch}
       overview={overview}
-      actions={<DetailActionButtons hook={editDelete} editPerm="properties:update" deletePerm="properties:delete" extra={tenantActionsExtra} />}
+      actions={
+        <div className="flex items-center gap-2">
+          <DetailActionButtons hook={editDelete} editPerm="properties:update" deletePerm="properties:delete" extra={tenantActionsExtra} />
+          <PrintButton entityType="tenant" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
       extraTabs={extraTabs}
       hideTabs={registryHideTabs}
     />

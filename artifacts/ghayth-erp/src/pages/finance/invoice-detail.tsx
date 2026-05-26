@@ -1,13 +1,12 @@
-import { useState, useRef } from "react";
-import { z } from "zod";
+import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { PrintPreviewModal, PrintActions, PrintDocument, directPrint } from "@workspace/report-kit";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PrintButton } from "@/components/shared/print-button";
-import { extractBranchFromResponse } from "@/lib/branch-utils";
 import {
   Banknote,
   DollarSign,
@@ -19,21 +18,15 @@ import {
   Copy,
   Zap,
   Send,
+  FileText,
+  FilePlus,
 } from "lucide-react";
 import {
   DataTable,
   type DataTableColumn,
   PageStatusBadge,
-  resolveStatus,
-  FormShell,
-  FormGrid,
-  FormNumberField,
-  FormSelectField,
 } from "@workspace/ui-core";
-import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
-import { ZatcaActions } from "@/components/finance/zatca-actions";
-import { InvoiceMemoActions } from "@/components/finance/invoice-memo-actions";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   ProcessStages,
@@ -48,6 +41,8 @@ import {
   DetailActionButtons,
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
+import { CreditMemoDialog } from "@/components/shared/credit-memo-dialog";
+import { DebitMemoDialog } from "@/components/shared/debit-memo-dialog";
 
 /**
  * Invoice detail page — migrated to DetailPageLayout which provides
@@ -118,29 +113,26 @@ function statusToDetailStatus(status: string | undefined): DetailStatus | undefi
   return map[status] ?? { label: status, tone: "default" };
 }
 
-const paymentFormSchema = z.object({
-  amount: z.string().refine((v) => Number(v) > 0, "المبلغ مطلوب"),
-  method: z.enum(["bank_transfer", "cash", "card", "cheque"]),
-});
-
-const PAYMENT_METHOD_OPTIONS = [
-  { value: "bank_transfer", label: "حوالة بنكية" },
-  { value: "cash", label: "نقداً" },
-  { value: "card", label: "بطاقة" },
-  { value: "cheque", label: "شيك" },
-];
-
 export default function InvoiceDetailPage() {
   const [, params] = useRoute("/finance/invoices/:id");
   const id = params?.id;
   const { data: invoice, isLoading, isError, refetch } = useApiQuery<any>(
     ["invoice-detail", id || ""],
-    `/finance/invoices/${id}`,
+    id ? `/finance/invoices/${id}` : null,
+    !!id,
+  );
+  const { data: memos, refetch: refetchMemos } = useApiQuery<{
+    creditMemos: any[];
+    debitMemos: any[];
+  }>(
+    ["invoice-memos", id || ""],
+    id ? `/finance/invoices/${id}/memos` : null,
     !!id,
   );
   const [showPayment, setShowPayment] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const printContainerRef = useRef<HTMLDivElement>(null);
+  const [showCreditMemo, setShowCreditMemo] = useState(false);
+  const [showDebitMemo, setShowDebitMemo] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
 
   // R.4 iter 4 — both mutations now flow through useApiMutation so
   // typed errors (VALIDATION_ERROR with field, CONFLICT with meta,
@@ -178,9 +170,15 @@ export default function InvoiceDetailPage() {
   const remaining = invoice
     ? Number(invoice.total) - Number(invoice.paidAmount || 0)
     : 0;
-  const branch = invoice ? extractBranchFromResponse(invoice) ?? undefined : undefined;
-  const docDate = invoice?.createdAt ? formatDateAr(invoice.createdAt) : "";
   const lifecycleSteps = buildLifecycleSteps(invoice?.status);
+
+  const handleRecordPayment = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const amount = parseFloat(fd.get("amount") as string);
+    if (!amount || !paymentMethod) return;
+    paymentMut.mutate({ amount, method: paymentMethod });
+  };
 
   const handleZatcaSubmit = () => {
     zatcaMut.mutate({});
@@ -218,27 +216,25 @@ export default function InvoiceDetailPage() {
           تسجيل دفعة
         </GuardedButton>
       )}
+      {invoice && invoice.status !== "draft" && invoice.status !== "cancelled" && remaining > 0 && (
+        <GuardedButton perm="finance:create" variant="outline" size="sm" onClick={() => setShowCreditMemo(true)}>
+          <FileText className="h-4 w-4 me-1" />
+          إصدار إشعار دائن
+        </GuardedButton>
+      )}
+      {invoice && invoice.status !== "draft" && invoice.status !== "cancelled" && (
+        <GuardedButton perm="finance:create" variant="outline" size="sm" onClick={() => setShowDebitMemo(true)}>
+          <FilePlus className="h-4 w-4 me-1" />
+          إصدار إشعار مدين
+        </GuardedButton>
+      )}
       {invoice && (
-        <>
-          <ExportButton
-            endpoint={`/export/pdf/invoice/${id}`}
-            filename={`invoice-${id}.pdf`}
-            type="pdf"
-            label="ملف طباعي"
-          />
-          <PrintButton
-            entityType="invoice"
-            entityId={invoice.id ?? id}
-            formats={["a4", "thermal_80", "excel"]}
-            label="طباعة"
-          />
-          <PrintActions
-            onPreview={() => setShowPreview(true)}
-            onPrint={() =>
-              directPrint(printContainerRef.current, `فاتورة ${invoice.ref}`)
-            }
-          />
-        </>
+        <PrintButton
+          entityType="invoice"
+          entityId={invoice.id ?? id}
+          formats={["a4", "thermal_80", "excel"]}
+          label="طباعة"
+        />
       )}
     </div>
   );
@@ -355,67 +351,35 @@ export default function InvoiceDetailPage() {
         );
       })()}
 
-      {invoice && id && (
-        <ZatcaActions
-          entityType="invoice"
-          subject={{
-            id: Number(id),
-            ref: invoice.ref ?? null,
-            isTaxLinked: invoice.isTaxLinked ?? false,
-            invoiceTypeCode: invoice.invoiceTypeCode ?? null,
-            taxCategoryCode: invoice.taxCategoryCode ?? null,
-            exemptionReason: invoice.exemptionReason ?? null,
-            zatcaStatus: invoice.zatcaStatus ?? null,
-          }}
-          onRefresh={refetch}
-          invalidateKeys={[["invoice-detail", id], ["invoice", id]]}
-        />
-      )}
-
-      {invoice && id && (
-        <InvoiceMemoActions
-          invoice={{
-            id: Number(id),
-            ref: invoice.ref ?? `#${id}`,
-            status: invoice.status,
-            total: invoice.total ?? 0,
-            paidAmount: invoice.paidAmount ?? 0,
-            vatRate: invoice.vatRate ?? null,
-          }}
-          onRefresh={refetch}
-        />
-      )}
-
       {showPayment && (
         <Card>
           <CardHeader><CardTitle>تسجيل دفعة</CardTitle></CardHeader>
           <CardContent>
-            <FormShell
-              schema={paymentFormSchema}
-              defaultValues={{ amount: "", method: "bank_transfer" }}
-              submitLabel={paymentMut.isPending ? "جاري التسجيل..." : "تسجيل"}
-              secondaryActions={
-                <Button type="button" variant="outline" onClick={() => setShowPayment(false)}>
-                  إلغاء
-                </Button>
-              }
-              onSubmit={async (values) => {
-                const amt = parseFloat(values.amount);
-                if (!amt) return;
-                await paymentMut.mutateAsync({ amount: amt, method: values.method });
-              }}
-            >
-              <FormGrid cols={3}>
-                <FormNumberField
-                  name="amount"
-                  label={`المبلغ (المتبقي: ${formatCurrency(remaining)})`}
-                  step="0.01"
-                  max={String(remaining)}
-                  required
-                />
-                <FormSelectField name="method" label="طريقة الدفع" options={PAYMENT_METHOD_OPTIONS} />
-              </FormGrid>
-            </FormShell>
+            <form onSubmit={handleRecordPayment} className="flex gap-4 items-end">
+              <div className="flex-1">
+                <label className="text-sm font-medium">المبلغ</label>
+                <Input name="amount" type="number" step="0.01" max={remaining} required dir="ltr" className="text-start mt-1" />
+                <p className="text-xs text-muted-foreground mt-1">المتبقي: {formatCurrency(remaining)}</p>
+              </div>
+              <div className="w-48">
+                <label className="text-sm font-medium">طريقة الدفع</label>
+                <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v)}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bank_transfer">حوالة بنكية</SelectItem>
+                    <SelectItem value="cash">نقداً</SelectItem>
+                    <SelectItem value="card">بطاقة</SelectItem>
+                    <SelectItem value="cheque">شيك</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <GuardedButton perm="finance:create" type="submit" disabled={paymentMut.isPending} rateLimitAware>
+                {paymentMut.isPending ? "جاري التسجيل..." : "تسجيل"}
+              </GuardedButton>
+              <Button type="button" variant="outline" onClick={() => setShowPayment(false)}>
+                إلغاء
+              </Button>
+            </form>
           </CardContent>
         </Card>
       )}
@@ -484,26 +448,80 @@ export default function InvoiceDetailPage() {
         </CardContent>
       </Card>
 
-      {invoice.status === "draft" && (
+      {((memos?.creditMemos?.length ?? 0) > 0 || (memos?.debitMemos?.length ?? 0) > 0) && (
         <Card>
-          <CardHeader><CardTitle>إجراءات الاعتماد</CardTitle></CardHeader>
-          <CardContent>
-            <ApprovalActions
-              entityType="invoice"
-              entityId={Number(id)}
-              approveEndpoint={`/finance/invoices/${id}/approve`}
-              rejectEndpoint={`/finance/invoices/${id}/reject`}
-              returnEndpoint={`/finance/invoices/${id}/return`}
-              approveMethod="POST"
-              rejectMethod="PATCH"
-              returnMethod="PATCH"
-              approveBody={() => ({})}
-              rejectBody={(r) => ({ notes: r })}
-              returnBody={(r) => ({ notes: r })}
-              invalidateKeys={[["invoice-detail", id || ""], ["invoices"]]}
-            />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-muted-foreground" />
+              الإشعارات (دائنة + مدينة) — {(memos?.creditMemos?.length ?? 0) + (memos?.debitMemos?.length ?? 0)}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {(memos?.creditMemos?.length ?? 0) > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-emerald-700 mb-2">
+                  إشعارات دائنة — {memos!.creditMemos.length}
+                </p>
+                <DataTable
+                  columns={[
+                    { key: "id", header: "#", render: (r) => <span className="font-mono text-xs">{r.id}</span> },
+                    { key: "memoDate", header: "التاريخ", render: (r) => r.memoDate ? formatDateAr(r.memoDate) : "-" },
+                    { key: "amount", header: "الإجمالي", render: (r) => <span className="font-bold text-emerald-700">{formatCurrency(Number(r.amount))}</span> },
+                    { key: "netAmount", header: "الصافي", render: (r) => <span className="font-mono">{formatCurrency(Number(r.netAmount))}</span> },
+                    { key: "vatAmount", header: "الضريبة", render: (r) => <span className="font-mono text-muted-foreground">{formatCurrency(Number(r.vatAmount))}</span> },
+                    { key: "reason", header: "السبب", render: (r) => <span className="text-xs">{r.reason || "—"}</span> },
+                  ] satisfies DataTableColumn<any>[]}
+                  data={memos!.creditMemos}
+                  pageSize={0} noToolbar searchPlaceholder={null} emptyMessage="—"
+                />
+              </div>
+            )}
+            {(memos?.debitMemos?.length ?? 0) > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-orange-700 mb-2">
+                  إشعارات مدينة — {memos!.debitMemos.length}
+                </p>
+                <DataTable
+                  columns={[
+                    { key: "id", header: "#", render: (r) => <span className="font-mono text-xs">{r.id}</span> },
+                    { key: "memoDate", header: "التاريخ", render: (r) => r.memoDate ? formatDateAr(r.memoDate) : "-" },
+                    { key: "amount", header: "الإجمالي", render: (r) => <span className="font-bold text-orange-700">{formatCurrency(Number(r.amount))}</span> },
+                    { key: "netAmount", header: "الصافي", render: (r) => <span className="font-mono">{formatCurrency(Number(r.netAmount))}</span> },
+                    { key: "vatAmount", header: "الضريبة", render: (r) => <span className="font-mono text-muted-foreground">{formatCurrency(Number(r.vatAmount))}</span> },
+                    { key: "reason", header: "السبب", render: (r) => <span className="text-xs">{r.reason || "—"}</span> },
+                  ] satisfies DataTableColumn<any>[]}
+                  data={memos!.debitMemos}
+                  pageSize={0} noToolbar searchPlaceholder={null} emptyMessage="—"
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
+      )}
+
+      {invoice.status === "draft" && (
+        <>
+          <CogsPreviewCard invoiceId={Number(id)} />
+          <Card>
+            <CardHeader><CardTitle>إجراءات الاعتماد</CardTitle></CardHeader>
+            <CardContent>
+              <ApprovalActions
+                entityType="invoice"
+                entityId={Number(id)}
+                approveEndpoint={`/finance/invoices/${id}/approve`}
+                rejectEndpoint={`/finance/invoices/${id}/reject`}
+                returnEndpoint={`/finance/invoices/${id}/return`}
+                approveMethod="POST"
+                rejectMethod="PATCH"
+                returnMethod="PATCH"
+                approveBody={() => ({})}
+                rejectBody={(r) => ({ notes: r })}
+                returnBody={(r) => ({ notes: r })}
+                invalidateKeys={[["invoice-detail", id || ""], ["invoices"]]}
+              />
+            </CardContent>
+          </Card>
+        </>
       )}
 
       <Card>
@@ -522,183 +540,221 @@ export default function InvoiceDetailPage() {
 
       {id && <EntityObligations entityType="invoice" entityId={id} hideWhenEmpty />}
 
-      {/* Print preview modal + hidden print container (kept inside overview
-          so they mount when invoice data is available) */}
-      <PrintPreviewModal
-        open={showPreview}
-        onClose={() => setShowPreview(false)}
-        branch={branch}
-        documentTitle="فاتورة"
-        documentRef={invoice.ref}
-        documentDate={docDate}
-      >
-        <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-          <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>العميل:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{invoice.clientName || "-"}</span>
-          </div>
-          {invoice.clientPhone && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>الهاتف:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{invoice.clientPhone}</span>
-          </div>}
-          <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>تاريخ الاستحقاق:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{invoice.dueDate ? formatDateAr(invoice.dueDate) : "-"}</span>
-          </div>
-          <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-            <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-            <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(invoice.status, "invoice")?.label || invoice.status || "-"}</span>
-          </div>
-        </div>
-
-        {lines.length > 0 && (
-          <table>
-            <thead><tr>
-              <th>#</th>
-              <th>الوصف</th>
-              <th>الكمية</th>
-              <th>سعر الوحدة</th>
-              <th>الإجمالي</th>
-              <th>الضريبة</th>
-              <th>الصافي</th>
-            </tr></thead>
-            <tbody>
-              {lines.map((l: any, i: number) => (
-                <tr key={i}>
-                  <td>{i + 1}</td>
-                  <td>{l.description || "-"}</td>
-                  <td>{l.quantity}</td>
-                  <td>{formatCurrency(Number(l.unitPrice))}</td>
-                  <td>{formatCurrency(Number(l.lineTotal))}</td>
-                  <td>{formatCurrency(Number(l.vatAmount || 0))}</td>
-                  <td style={{ fontWeight: "bold" }}>{formatCurrency(Number(l.lineGross || l.lineTotal))}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
-          <tbody>
-            <tr>
-              <td className="label" style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ قبل الضريبة:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.subtotal || 0))}</td>
-            </tr>
-            <tr>
-              <td className="label" style={{ color: "#555", border: "none", padding: "4px 8px" }}>ضريبة ({invoice.vatRate || 15}%):</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.vatAmount || 0))}</td>
-            </tr>
-            <tr style={{ borderTop: "2px solid #333" }}>
-              <td className="label" style={{ color: "#111", border: "none", padding: "4px 8px", fontWeight: "bold" }}>الإجمالي:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{formatCurrency(Number(invoice.total))}</td>
-            </tr>
-            <tr>
-              <td className="label" style={{ color: "#16a34a", border: "none", padding: "4px 8px" }}>المدفوع:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#16a34a" }}>{formatCurrency(Number(invoice.paidAmount || 0))}</td>
-            </tr>
-            <tr>
-              <td className="label" style={{ color: "#dc2626", border: "none", padding: "4px 8px" }}>المتبقي:</td>
-              <td className="value" style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#dc2626" }}>{formatCurrency(remaining)}</td>
-            </tr>
-          </tbody>
-        </table>
-        {invoice.zatcaQrCode && (
-          <div style={{ marginTop: "24px", display: "flex", alignItems: "flex-start", gap: "12px", borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
-            <div>
-              <p style={{ fontSize: "8pt", color: "#555", marginBottom: "4px" }}>رمز الاستجابة السريعة — هيئة الزكاة والضريبة والجمارك</p>
-              <img
-                src={invoice.zatcaQrCode}
-                alt="رمز الاستجابة السريعة لهيئة الزكاة"
-                style={{ width: "80px", height: "80px", border: "1px solid #ccc" }}
-              />
-            </div>
-            <div style={{ fontSize: "7pt", color: "#777", marginTop: "20px" }}>
-              {invoice.zatcaUuid && <p>المعرف الفريد: {invoice.zatcaUuid}</p>}
-              {invoice.zatcaStatus && <p>حالة الربط مع هيئة الزكاة: {invoice.zatcaStatus}</p>}
-            </div>
-          </div>
-        )}
-      </PrintPreviewModal>
-
-      <div ref={printContainerRef} style={{ position: "absolute", left: "-9999px", top: 0 }}>
-        <PrintDocument branch={branch} documentTitle="فاتورة" documentRef={invoice.ref} documentDate={docDate}>
-          <div className="info-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
-            <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>العميل:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{invoice.clientName || "-"}</span>
-            </div>
-            {invoice.clientPhone && <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>الهاتف:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{invoice.clientPhone}</span>
-            </div>}
-            <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>تاريخ الاستحقاق:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{invoice.dueDate ? formatDateAr(invoice.dueDate) : "-"}</span>
-            </div>
-            <div className="info-item" style={{ display: "flex", gap: "4px" }}>
-              <span className="info-label" style={{ color: "#555" }}>الحالة:</span>
-              <span className="info-value" style={{ fontWeight: 600 }}>{resolveStatus(invoice.status, "invoice")?.label || invoice.status || "-"}</span>
-            </div>
-          </div>
-          {lines.length > 0 && (
-            <table>
-              <thead><tr><th>#</th><th>الوصف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th><th>الضريبة</th><th>الصافي</th></tr></thead>
-              <tbody>
-                {lines.map((l: any, i: number) => (
-                  <tr key={i}><td>{i + 1}</td><td>{l.description || "-"}</td><td>{l.quantity}</td><td>{formatCurrency(Number(l.unitPrice))}</td><td>{formatCurrency(Number(l.lineTotal))}</td><td>{formatCurrency(Number(l.vatAmount || 0))}</td><td style={{ fontWeight: "bold" }}>{formatCurrency(Number(l.lineGross || l.lineTotal))}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          <table className="summary-table" style={{ width: "auto", marginRight: "auto", marginTop: "16px" }}>
-            <tbody>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>المبلغ قبل الضريبة:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.subtotal || 0))}</td></tr>
-              <tr><td style={{ color: "#555", border: "none", padding: "4px 8px" }}>ضريبة ({invoice.vatRate || 15}%):</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px" }}>{formatCurrency(Number(invoice.vatAmount || 0))}</td></tr>
-              <tr style={{ borderTop: "2px solid #333" }}><td style={{ color: "#111", border: "none", padding: "4px 8px", fontWeight: "bold" }}>الإجمالي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", fontSize: "14pt" }}>{formatCurrency(Number(invoice.total))}</td></tr>
-              <tr><td style={{ color: "#16a34a", border: "none", padding: "4px 8px" }}>المدفوع:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#16a34a" }}>{formatCurrency(Number(invoice.paidAmount || 0))}</td></tr>
-              <tr><td style={{ color: "#dc2626", border: "none", padding: "4px 8px" }}>المتبقي:</td><td style={{ fontWeight: "bold", border: "none", padding: "4px 8px", color: "#dc2626" }}>{formatCurrency(remaining)}</td></tr>
-            </tbody>
-          </table>
-          {invoice.zatcaQrCode && (
-            <div style={{ marginTop: "24px", display: "flex", alignItems: "flex-start", gap: "12px", borderTop: "1px solid #e5e7eb", paddingTop: "12px" }}>
-              <div>
-                <p style={{ fontSize: "8pt", color: "#555", marginBottom: "4px" }}>رمز الاستجابة السريعة — هيئة الزكاة والضريبة والجمارك</p>
-                <img
-                  src={invoice.zatcaQrCode}
-                  alt="رمز الاستجابة السريعة لهيئة الزكاة"
-                  style={{ width: "80px", height: "80px", border: "1px solid #ccc" }}
-                />
-              </div>
-              <div style={{ fontSize: "7pt", color: "#777", marginTop: "20px" }}>
-                {invoice.zatcaUuid && <p>المعرّف الفريد: {invoice.zatcaUuid}</p>}
-                {invoice.zatcaStatus && <p>حالة الهيئة: {invoice.zatcaStatus}</p>}
-              </div>
-            </div>
-          )}
-        </PrintDocument>
-      </div>
     </div>
   ) : null;
 
   return (
-    <DetailPageLayout
-      title={invoice?.ref ? `فاتورة ${invoice.ref}` : "فاتورة"}
-      subtitle={invoice?.clientName || undefined}
-      backPath="/finance/invoices"
-      backLabel="العودة للفواتير"
-      status={statusToDetailStatus(invoice?.status)}
-      refNumber={invoice?.ref}
-      createdAt={invoice?.createdAt}
-      updatedAt={invoice?.updatedAt}
-      entityType="invoice"
-      entityId={id || ""}
-      isLoading={isLoading}
-      error={isError && !invoice ? "تعذر تحميل بيانات الفاتورة" : undefined}
-      onRetry={refetch}
-      actions={actions}
-      overview={overview}
-      extraTabs={registryExtraTabs}
-      hideTabs={registryHideTabs}
-    />
+    <>
+      <DetailPageLayout
+        title={invoice?.ref ? `فاتورة ${invoice.ref}` : "فاتورة"}
+        subtitle={invoice?.clientName || undefined}
+        backPath="/finance/invoices"
+        backLabel="العودة للفواتير"
+        status={statusToDetailStatus(invoice?.status)}
+        refNumber={invoice?.ref}
+        createdAt={invoice?.createdAt}
+        updatedAt={invoice?.updatedAt}
+        entityType="invoice"
+        entityId={id || ""}
+        isLoading={isLoading}
+        error={isError && !invoice ? "تعذر تحميل بيانات الفاتورة" : undefined}
+        onRetry={refetch}
+        actions={actions}
+        overview={overview}
+        extraTabs={registryExtraTabs}
+        hideTabs={registryHideTabs}
+      />
+      {invoice && (
+        <>
+          <CreditMemoDialog
+            invoiceId={Number(id)}
+            invoiceRef={invoice.ref}
+            openBalance={remaining}
+            open={showCreditMemo}
+            onOpenChange={setShowCreditMemo}
+            onIssued={() => { refetch(); refetchMemos(); }}
+          />
+          <DebitMemoDialog
+            invoiceId={Number(id)}
+            invoiceRef={invoice.ref}
+            open={showDebitMemo}
+            onOpenChange={setShowDebitMemo}
+            onIssued={() => { refetch(); refetchMemos(); }}
+          />
+        </>
+      )}
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CogsPreviewCard — surfaces the COGS plan + stock-shortage blockers
+// from POST /invoices/:id/preview-posting (#1023) before the operator
+// clicks "اعتماد". A red blocker banner appears when the planner
+// reports insufficient_stock; warnings for product_not_tracked /
+// no_active_lots / no_*_account pin to the offending line.
+// ─────────────────────────────────────────────────────────────────────────────
+interface PreviewLine {
+  accountCode: string;
+  debit: number;
+  credit: number;
+  description?: string;
+}
+
+interface PreviewResponse {
+  invoiceId: number;
+  invoiceRef: string;
+  canApprove: boolean;
+  blockers: Array<{ field: string; message: string }>;
+  warnings: Array<{ field: string; message: string; lineIds?: number[] }>;
+  resolverWarnings: Array<{ lineId: number; code: string; message: string }>;
+  cogsWarnings: Array<{ lineId: number; productId: number | null; reason: string; detail?: string }>;
+  cogsTotal: number;
+  journalLines: PreviewLine[];
+  totals: { debit: number; credit: number; balanced: boolean };
+}
+
+const COGS_REASON_LABEL: Record<string, string> = {
+  insufficient_stock:    "مخزون غير كافٍ",
+  product_not_found:     "المنتج غير موجود",
+  product_not_tracked:   "المنتج غير مرتبط بمخزون",
+  no_active_lots:        "لا توجد تشغيلات نشطة",
+  no_cogs_account:       "حساب COGS غير مهيأ",
+  no_inventory_account:  "حساب المخزون غير مهيأ",
+};
+
+function CogsPreviewCard({ invoiceId }: { invoiceId: number }) {
+  // preview-posting is a POST that takes no body — same shape #1023 ships.
+  const previewMut = useApiMutation<PreviewResponse, any>(
+    `/finance/invoices/${invoiceId}/preview-posting`,
+    "POST",
+    [],
+  );
+  const [data, setData] = useState<PreviewResponse | null>(null);
+
+  const run = async () => {
+    try {
+      const res = await previewMut.mutateAsync({});
+      setData(res as PreviewResponse);
+    } catch (_e) {
+      // Errors surface via the global toast; nothing extra needed.
+    }
+  };
+
+  // Auto-run the first time the card mounts so the operator sees the
+  // status before scrolling.
+  if (!data && !previewMut.isPending && previewMut.isIdle) {
+    run();
+  }
+
+  if (previewMut.isPending && !data) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>معاينة الاعتماد</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">جاري التحقق من المخزون والحسابات...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!data) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>معاينة الاعتماد</CardTitle></CardHeader>
+        <CardContent>
+          <Button onClick={run} variant="outline" size="sm" rateLimitAware>تحديث المعاينة</Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const insufficient = data.cogsWarnings?.filter((w) => w.reason === "insufficient_stock") ?? [];
+  const otherCogsWarnings = (data.cogsWarnings ?? []).filter((w) => w.reason !== "insufficient_stock");
+
+  return (
+    <Card className={data.canApprove
+      ? "border-emerald-300 bg-emerald-50/40"
+      : "border-destructive/40 bg-destructive/5"}>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span>معاينة الاعتماد</span>
+          <span className={`text-xs font-semibold ${data.canApprove ? "text-emerald-700" : "text-destructive"}`}>
+            {data.canApprove ? "✓ جاهز للاعتماد" : "⚠ توجد عوائق"}
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        {/* Blockers */}
+        {data.blockers.length > 0 && (
+          <div className="border border-destructive/30 rounded-md p-3 bg-destructive/5">
+            <p className="font-semibold text-destructive mb-2">عوائق الاعتماد ({data.blockers.length})</p>
+            <ul className="list-disc list-inside space-y-1 text-xs">
+              {data.blockers.map((b, i) => (
+                <li key={i} className="text-destructive">
+                  <span className="font-mono text-xs me-1">[{b.field}]</span>
+                  {b.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* COGS warnings (non-fatal) */}
+        {otherCogsWarnings.length > 0 && (
+          <div className="border border-status-warning-surface rounded-md p-3 bg-status-warning-surface/40">
+            <p className="font-semibold text-status-warning-foreground mb-2">
+              تنبيهات على COGS ({otherCogsWarnings.length}) — الفاتورة ستُعتمد لكن COGS لن يُسجَّل لهذه البنود
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-xs">
+              {otherCogsWarnings.map((w, i) => (
+                <li key={i} className="text-status-warning-foreground">
+                  <span className="font-mono text-xs me-1">سطر #{w.lineId}</span>
+                  {COGS_REASON_LABEL[w.reason] ?? w.reason}
+                  {w.detail && <span className="text-muted-foreground"> — {w.detail}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Insufficient stock — already in blockers above; this is just emphasis */}
+        {insufficient.length > 0 && (
+          <p className="text-xs text-destructive">
+            ⛔ المخزون غير كافٍ على {insufficient.length} بند(ود). عدّل الكميات أو استلم بضاعة قبل الاعتماد.
+          </p>
+        )}
+
+        {/* Document-level warnings */}
+        {data.warnings.length > 0 && (
+          <div className="border border-status-warning-surface rounded-md p-3 bg-status-warning-surface/40">
+            <p className="font-semibold text-status-warning-foreground mb-2">تنبيهات عامة ({data.warnings.length})</p>
+            <ul className="list-disc list-inside space-y-1 text-xs">
+              {data.warnings.map((w, i) => (
+                <li key={i} className="text-status-warning-foreground">{w.message}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Posting summary */}
+        <div className="bg-muted/30 p-3 rounded-md flex flex-wrap items-center gap-4 text-xs">
+          <span>عدد القيود: <span className="font-semibold">{data.journalLines.length}</span></span>
+          <span>إجمالي مدين: <span className="font-semibold text-status-info-foreground">{formatCurrency(data.totals.debit)}</span></span>
+          <span>إجمالي دائن: <span className="font-semibold text-status-info-foreground">{formatCurrency(data.totals.credit)}</span></span>
+          <span>متوازن: <span className={`font-semibold ${data.totals.balanced ? "text-emerald-700" : "text-destructive"}`}>{data.totals.balanced ? "✓" : "✗"}</span></span>
+          {data.cogsTotal > 0 && (
+            <span>إجمالي COGS: <span className="font-semibold text-orange-700">{formatCurrency(data.cogsTotal)}</span></span>
+          )}
+        </div>
+
+        <div>
+          <Button onClick={run} variant="outline" size="sm" rateLimitAware
+            disabled={previewMut.isPending}>
+            {previewMut.isPending ? "..." : "تحديث المعاينة"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

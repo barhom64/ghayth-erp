@@ -1,97 +1,82 @@
 import { useLocation } from "wouter";
-import { z } from "zod";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import {
-  CreatePageLayout,
-  CreationDateField,
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormEmailField,
-  FormPhoneField,
-  FormSelectField,
-} from "@workspace/ui-core";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
+import { TextField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
-const schema = z.object({
-  name: z.string().min(1, "يرجى إدخال اسم المورد"),
-  contactPerson: z.string().optional(),
-  phone: z
-    .string()
-    .optional()
-    .refine(
-      (v) => !v || v.replace(/\D/g, "").length >= 9,
-      "رقم الهاتف يجب أن يكون 9 أرقام على الأقل",
-    ),
-  email: z
-    .string()
-    .optional()
-    .refine(
-      (v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
-      "صيغة البريد الإلكتروني غير صحيحة",
-    ),
-  address: z.string().optional(),
-  taxNumber: z.string().optional(),
-  paymentTerms: z.string().optional(),
-});
-
-const PAYMENT_TERM_OPTIONS = [
-  { value: "0", label: "نقدي" },
-  { value: "15", label: "صافي 15 يوم" },
-  { value: "30", label: "صافي 30 يوم" },
-  { value: "60", label: "صافي 60 يوم" },
-  { value: "90", label: "صافي 90 يوم" },
-];
+const DRAFT_KEY = "warehouse_suppliers_create";
+const INITIAL = { name: "", contactPerson: "", phone: "", email: "", address: "", taxNumber: "", paymentTerms: "" };
 
 export default function SuppliersCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const addSupplier = useApiMutation("/warehouse/suppliers", "POST", [["warehouse-suppliers"]]);
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  const handleSubmit = async () => {
+    const firstError = validate({
+      name: form.name ? null : "يرجى إدخال اسم المورد",
+      email: form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email) ? "صيغة البريد الإلكتروني غير صحيحة" : null,
+      phone: form.phone && form.phone.replace(/\D/g, "").length < 9 ? "رقم الهاتف يجب أن يكون 9 أرقام على الأقل" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
+      return;
+    }
+    try {
+      await addSupplier.mutateAsync(form);
+      clearDraft();
+      toast({ title: "تمت إضافة المورد بنجاح" });
+      setLocation("/warehouse");
+    } catch (err: any) {
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة المورد", description: err?.fix ?? err?.message });
+    }
+  };
 
   return (
     <CreatePageLayout title="إضافة مورد جديد" backPath="/warehouse">
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <CreationDateField />
       </div>
-      <FormShell
-        schema={schema}
-        defaultValues={{
-          name: "",
-          contactPerson: "",
-          phone: "",
-          email: "",
-          address: "",
-          taxNumber: "",
-          paymentTerms: "",
-        }}
-        submitLabel={addSupplier.isPending ? "جاري الإضافة..." : "إضافة"}
-        secondaryActions={
-          <Button type="button" variant="outline" onClick={() => setLocation("/warehouse")}>
-            إلغاء
-          </Button>
-        }
-        onSubmit={async (values) => {
-          await addSupplier.mutateAsync(values);
-          toast({ title: "تمت إضافة المورد بنجاح" });
-          setLocation("/warehouse");
-        }}
-      >
-        <FormGrid cols={2}>
-          <FormTextField name="name" label="اسم المورد" required placeholder="اسم المورد" />
-          <FormTextField name="contactPerson" label="جهة الاتصال" placeholder="جهة الاتصال" />
-          <FormPhoneField name="phone" label="الهاتف" placeholder="05xxxxxxxx" />
-          <FormEmailField name="email" label="البريد الإلكتروني" placeholder="email@example.com" />
-          <FormTextField name="address" label="العنوان" placeholder="المدينة، الحي..." />
-          <FormTextField name="taxNumber" label="الرقم الضريبي" placeholder="الرقم الضريبي" />
-          <FormSelectField
-            name="paymentTerms"
-            label="شروط الدفع"
-            options={PAYMENT_TERM_OPTIONS}
-            placeholder="اختر الشروط"
-          />
-        </FormGrid>
-      </FormShell>
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <TextField label="اسم المورد" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} placeholder="اسم المورد" error={fieldErrors.name} />
+          <TextField label="جهة الاتصال" value={form.contactPerson} onChange={(v) => setForm((f) => ({ ...f, contactPerson: v }))} placeholder="جهة الاتصال" />
+          <TextField label="الهاتف" type="tel" inputMode="tel" dir="ltr" value={form.phone} onChange={(v) => setForm((f) => ({ ...f, phone: v }))} placeholder="05xxxxxxxx" error={fieldErrors.phone} />
+          <TextField label="البريد الإلكتروني" type="email" dir="ltr" value={form.email} onChange={(v) => setForm((f) => ({ ...f, email: v }))} placeholder="email@example.com" error={fieldErrors.email} />
+          <TextField label="العنوان" value={form.address} onChange={(v) => setForm((f) => ({ ...f, address: v }))} placeholder="المدينة، الحي..." />
+          <TextField label="الرقم الضريبي" dir="ltr" value={form.taxNumber} onChange={(v) => setForm((f) => ({ ...f, taxNumber: v }))} placeholder="الرقم الضريبي" />
+          <FormFieldWrapper label="شروط الدفع">
+            <Select value={form.paymentTerms || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, paymentTerms: v === "_none" ? "" : v }))}>
+              <SelectTrigger><SelectValue placeholder="اختر الشروط" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">اختر الشروط</SelectItem>
+                <SelectItem value="0">نقدي</SelectItem>
+                <SelectItem value="15">صافي 15 يوم</SelectItem>
+                <SelectItem value="30">صافي 30 يوم</SelectItem>
+                <SelectItem value="60">صافي 60 يوم</SelectItem>
+                <SelectItem value="90">صافي 90 يوم</SelectItem>
+              </SelectContent>
+            </Select>
+          </FormFieldWrapper>
+        </div>
+        <div className="flex justify-end gap-3 pt-4">
+          <Button variant="outline" onClick={() => setLocation("/warehouse")}>إلغاء</Button>
+          <Button onClick={handleSubmit} disabled={addSupplier.isPending} rateLimitAware>{addSupplier.isPending ? "جاري الإضافة..." : "إضافة"}</Button>
+        </div>
+      </div>
     </CreatePageLayout>
   );
 }

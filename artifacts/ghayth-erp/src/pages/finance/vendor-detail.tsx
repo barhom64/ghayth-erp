@@ -20,12 +20,14 @@ import {
   CreditCard,
   DollarSign,
   Clock,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   useDetailEditDelete,
   DetailActionButtons,
   InlineEditCard,
 } from "@/components/shared/detail-edit-delete-actions";
+import { PrintButton } from "@/components/shared/print-button";
 
 export default function VendorDetailPage() {
   const [, params] = useRoute("/finance/vendors/:id");
@@ -158,6 +160,66 @@ export default function VendorDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* WHT settings — surfaces the fields from #999 (residencyStatus,
+         defaultWhtRate, whtCategoryDefault, taxResidenceCountry). Only
+         shown when the vendor is non-resident — for resident vendors
+         we hide the section to keep the overview clean. */}
+      {vendor && (vendor.residencyStatus === "resident" || !vendor.residencyStatus) && (
+        <Card className="border-muted">
+          <CardContent className="p-4 flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">
+              ⓘ هذا المورد مُسجَّل كـ <strong className="text-foreground">مقيم</strong> — لا استقطاع ضريبة دخل عند الدفع.
+            </span>
+            <Button size="sm" variant="outline" onClick={() => navigate(`/finance/vendors/${id}/edit`)}>
+              <Pencil className="h-3.5 w-3.5 me-1" /> تعديل إعدادات الإقامة الضريبية
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {vendor?.residencyStatus && vendor.residencyStatus !== "resident" && (
+        <Card className="border-status-warning-surface bg-status-warning-surface/40">
+          <CardContent className="p-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <span className="text-status-warning-foreground">💰</span>
+                إعدادات استقطاع ضريبة الدخل (WHT)
+              </h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-status-warning-foreground font-medium">
+                  مورد غير مقيم — يُستقطع منه ضريبة عند الدفع
+                </span>
+                <Button size="sm" variant="outline" onClick={() => navigate(`/finance/vendors/${id}/edit`)}>
+                  <Pencil className="h-3.5 w-3.5 me-1" /> تعديل
+                </Button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-status-warning-surface">
+              <InfoRow label="حالة الإقامة الضريبية"
+                value={
+                  vendor.residencyStatus === "non_resident_gcc" ? "غير مقيم — دول الخليج" :
+                  vendor.residencyStatus === "non_resident_treaty" ? "غير مقيم — معاهدة (DTAA)" :
+                  vendor.residencyStatus === "non_resident_other" ? "غير مقيم — أخرى" :
+                  vendor.residencyStatus
+                } />
+              <InfoRow label="بلد الإقامة الضريبية" value={vendor.taxResidenceCountry || "—"} />
+              <InfoRow label="فئة الاستقطاع الافتراضية"
+                value={vendor.whtCategoryDefault ? (
+                  <span className="font-mono">{vendor.whtCategoryDefault}</span>
+                ) as any : "—"} />
+              <InfoRow label="نسبة استقطاع افتراضية"
+                value={vendor.defaultWhtRate != null
+                  ? (<span className="font-mono font-bold text-status-warning-foreground">{Number(vendor.defaultWhtRate).toFixed(2)}%</span>) as any
+                  : "—"} />
+            </div>
+            <p className="text-xs text-muted-foreground pt-2 border-t border-status-warning-surface">
+              ⓘ عند دفع هذا المورد، سيتم استقطاع النسبة من المبلغ تلقائياً وقيد المستقطع على حساب
+              "زاتكا — ضريبة استقطاع" (افتراضي 2330) ليُسدّد في الإقرار الشهري.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </>
   );
 
@@ -226,7 +288,15 @@ export default function VendorDetailPage() {
       error={isError ? true : undefined}
       onRetry={() => refetch()}
       overview={overview}
-      actions={actions}
+      actions={
+        <div className="flex items-center gap-2">
+          {actions}
+          <Button size="sm" variant="outline" onClick={() => navigate(`/finance/vendors/${id}/statement`)}>
+            <FileSpreadsheet className="h-4 w-4 me-1" /> كشف حساب
+          </Button>
+          <PrintButton entityType="vendor" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
       extraTabs={extraTabs}
     />
   );

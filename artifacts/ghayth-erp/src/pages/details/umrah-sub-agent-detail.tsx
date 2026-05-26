@@ -11,6 +11,7 @@ import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-pan
 import { EntityTags } from "@/components/shared/entity-tags";
 import { UserPlus, FileText, ExternalLink, Phone, Mail, MapPin } from "lucide-react";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
 
 // Detail view for `umrah_sub_agents`. Reuses the polymorphic
 // UmrahAttachmentsPanel + EntityComments + EntityTags helpers so the
@@ -184,6 +185,7 @@ export default function UmrahSubAgentDetail() {
 
   return (
     <DetailPageLayout
+      actions={<PrintButton entityType="umrah_sub_agent" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
       title={sa?.name || "تفاصيل الوكيل الفرعي"}
       subtitle={sa?.nuskCode ? `رمز نسك: ${sa.nuskCode}` : undefined}
       backPath="/umrah/sub-agents"

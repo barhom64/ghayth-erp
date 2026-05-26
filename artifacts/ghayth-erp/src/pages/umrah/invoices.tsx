@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { z } from "zod";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,12 +10,6 @@ import {
   type DataTableColumn,
   AdvancedFilters,
   useFilters,
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormNumberField,
-  FormSelectField,
-  FormDateField,
 } from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,9 +88,9 @@ function AgentInvoicesTab() {
   const paidAmount = items.filter((inv: any) => inv.status === "paid").reduce((sum: number, inv: any) => sum + Number(inv.total || 0), 0);
 
   const kpiCards = [
-    { label: "إجمالي الفواتير", value: items.length, icon: FileText, color: "text-blue-600 bg-blue-50" },
+    { label: "إجمالي الفواتير", value: items.length, icon: FileText, color: "text-status-info-foreground bg-status-info-surface" },
     { label: "الإجمالي (ريال)", value: formatCurrency(totalAmount), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
-    { label: "المدفوع (ريال)", value: formatCurrency(paidAmount), icon: Receipt, color: "text-green-600 bg-green-50" },
+    { label: "المدفوع (ريال)", value: formatCurrency(paidAmount), icon: Receipt, color: "text-status-success-foreground bg-status-success-surface" },
   ];
 
   return (
@@ -111,7 +104,7 @@ function AgentInvoicesTab() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{c.value}</p>
-                <p className="text-xs text-gray-500">{c.label}</p>
+                <p className="text-xs text-muted-foreground">{c.label}</p>
               </div>
             </CardContent>
           </Card>
@@ -166,7 +159,7 @@ function AgentInvoicesTab() {
           { key: "seasonTitle", header: "الموسم" },
           { key: "pilgrimCount", header: "عدد المعتمرين" },
           { key: "servicesTotal", header: "الخدمات (ريال)", render: (inv) => formatCurrency(Number(inv.servicesTotal)) },
-          { key: "penaltiesTotal", header: "الغرامات (ريال)", render: (inv) => <span className="text-red-600">{formatCurrency(Number(inv.penaltiesTotal))}</span> },
+          { key: "penaltiesTotal", header: "الغرامات (ريال)", render: (inv) => <span className="text-status-error-foreground">{formatCurrency(Number(inv.penaltiesTotal))}</span> },
           { key: "total", header: "الإجمالي (ريال)", render: (inv) => <span className="font-bold">{formatCurrency(Number(inv.total))}</span> },
           { key: "status", header: "الحالة", render: (inv) => <PageStatusBadge status={inv.status} /> },
         ] as DataTableColumn<any>[]}
@@ -269,26 +262,7 @@ function SalesInvoicesTab() {
 }
 
 // ─── Tab 3: Nusk invoices (UMR-005 — full CRUD on /umrah/nusk-invoices) ─────
-const nuskSchema = z.object({
-  nuskInvoiceNumber: z.string().min(1, "رقم فاتورة نسك مطلوب"),
-  agentId: z.string().min(1, "الوكيل مطلوب"),
-  subAgentId: z.string().optional(),
-  groupId: z.string().optional(),
-  mutamerCount: z.string(),
-  groundServices: z.string(),
-  visaFees: z.string(),
-  insuranceFees: z.string(),
-  transportTotal: z.string(),
-  hotelTotal: z.string(),
-  additionalServices: z.string(),
-  totalAmount: z.string(),
-  nuskStatus: z.enum(["pending", "paid", "in_progress", "expired", "refunded", "cancelled"]),
-  issueDate: z.string().optional(),
-  expiryDate: z.string().optional(),
-});
-type NuskForm = z.infer<typeof nuskSchema>;
-
-const NUSK_INITIAL: NuskForm = {
+const NUSK_INITIAL = {
   nuskInvoiceNumber: "",
   agentId: "",
   subAgentId: "",
@@ -306,20 +280,11 @@ const NUSK_INITIAL: NuskForm = {
   expiryDate: "",
 };
 
-const NUSK_STATUS_OPTIONS = [
-  { value: "pending", label: "معلقة" },
-  { value: "paid", label: "مدفوعة" },
-  { value: "in_progress", label: "قيد المعالجة" },
-  { value: "expired", label: "منتهية" },
-  { value: "refunded", label: "مُستردة" },
-  { value: "cancelled", label: "ملغية" },
-];
-
 function NuskInvoicesTab() {
   const [showNew, setShowNew] = useState(false);
-  const [formKey, setFormKey] = useState(0);
+  const [form, setForm] = useState(NUSK_INITIAL);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const { toast: _toast } = useToast();
+  const { toast } = useToast();
 
   const { data, isLoading, isError, refetch, error } = useApiQuery<any>(["umrah-nusk-invoices"], "/umrah/nusk-invoices");
   const { data: agents } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
@@ -332,10 +297,7 @@ function NuskInvoicesTab() {
     [["umrah-nusk-invoices"]],
     {
       successMessage: "تم إنشاء فاتورة نسك",
-      onSuccess: () => {
-        setShowNew(false);
-        setFormKey((k) => k + 1);
-      },
+      onSuccess: () => { setShowNew(false); setForm(NUSK_INITIAL); },
     },
   );
 
@@ -346,25 +308,32 @@ function NuskInvoicesTab() {
     { successMessage: "تم حذف الفاتورة", onSuccess: () => setDeleteId(null) },
   );
 
-  const submit = async (values: NuskForm) => {
-    const num = (v: string) => Number(v || 0);
-    await createMut.mutateAsync({
-      nuskInvoiceNumber: values.nuskInvoiceNumber.trim(),
-      agentId: Number(values.agentId),
-      subAgentId: values.subAgentId ? Number(values.subAgentId) : undefined,
-      groupId: values.groupId ? Number(values.groupId) : undefined,
-      mutamerCount: num(values.mutamerCount),
-      groundServices: num(values.groundServices),
-      visaFees: num(values.visaFees),
-      insuranceFees: num(values.insuranceFees),
-      transportTotal: num(values.transportTotal),
-      hotelTotal: num(values.hotelTotal),
-      additionalServices: num(values.additionalServices),
-      totalAmount: num(values.totalAmount),
+  const setField = (k: keyof typeof NUSK_INITIAL) => (v: string) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = () => {
+    if (!form.nuskInvoiceNumber.trim() || !form.agentId) {
+      toast({ variant: "destructive", title: "رقم الفاتورة والوكيل مطلوبان" });
+      return;
+    }
+    const num = (k: keyof typeof NUSK_INITIAL) => Number(form[k] || 0);
+    createMut.mutate({
+      nuskInvoiceNumber: form.nuskInvoiceNumber.trim(),
+      agentId: Number(form.agentId),
+      subAgentId: form.subAgentId ? Number(form.subAgentId) : undefined,
+      groupId: form.groupId ? Number(form.groupId) : undefined,
+      mutamerCount: num("mutamerCount"),
+      groundServices: num("groundServices"),
+      visaFees: num("visaFees"),
+      insuranceFees: num("insuranceFees"),
+      transportTotal: num("transportTotal"),
+      hotelTotal: num("hotelTotal"),
+      additionalServices: num("additionalServices"),
+      totalAmount: num("totalAmount"),
       netCost: 0,
-      nuskStatus: values.nuskStatus,
-      issueDate: values.issueDate || undefined,
-      expiryDate: values.expiryDate || undefined,
+      nuskStatus: form.nuskStatus,
+      issueDate: form.issueDate || undefined,
+      expiryDate: form.expiryDate || undefined,
     });
   };
 
@@ -407,45 +376,59 @@ function NuskInvoicesTab() {
 
       {showNew && (
         <Card className="border-status-info-surface">
-          <CardContent className="p-4">
-            <FormShell
-              key={formKey}
-              schema={nuskSchema}
-              defaultValues={NUSK_INITIAL}
-              submitLabel={createMut.isPending ? "جاري الحفظ..." : "حفظ"}
-              secondaryActions={
-                <Button type="button" variant="outline" onClick={() => setShowNew(false)}>إلغاء</Button>
-              }
-              onSubmit={submit}
-            >
-              <FormGrid cols={3}>
-                <FormTextField name="nuskInvoiceNumber" label="رقم فاتورة نسك" required />
-                <FormSelectField
-                  name="agentId"
-                  label="الوكيل"
-                  required
-                  options={asList(agents?.data).map((a: any) => ({ value: String(a.id), label: a.name }))}
-                  placeholder="اختر الوكيل"
-                />
-                <FormSelectField
-                  name="subAgentId"
-                  label="الوكيل الفرعي"
-                  options={asList(subAgents?.data).map((s: any) => ({ value: String(s.id), label: s.name }))}
-                  placeholder="—"
-                />
-                <FormNumberField name="mutamerCount" label="عدد المعتمرين" />
-                <FormNumberField name="groundServices" label="الخدمات الأرضية" />
-                <FormNumberField name="visaFees" label="رسوم التأشيرة" />
-                <FormNumberField name="insuranceFees" label="رسوم التأمين" />
-                <FormNumberField name="transportTotal" label="إجمالي النقل" />
-                <FormNumberField name="hotelTotal" label="إجمالي الفنادق" />
-                <FormNumberField name="additionalServices" label="خدمات إضافية" />
-                <FormNumberField name="totalAmount" label="الإجمالي" />
-                <FormSelectField name="nuskStatus" label="الحالة" options={NUSK_STATUS_OPTIONS} />
-                <FormDateField name="issueDate" label="تاريخ الإصدار" />
-                <FormDateField name="expiryDate" label="تاريخ الانتهاء" />
-              </FormGrid>
-            </FormShell>
+          <CardContent className="p-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div><Label>رقم فاتورة نسك *</Label><Input value={form.nuskInvoiceNumber} onChange={(e) => setField("nuskInvoiceNumber")(e.target.value)} className="mt-1" /></div>
+              <div>
+                <Label>الوكيل *</Label>
+                <Select value={form.agentId} onValueChange={setField("agentId")}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="اختر الوكيل" /></SelectTrigger>
+                  <SelectContent>
+                    {asList(agents?.data).map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>الوكيل الفرعي</Label>
+                <Select value={form.subAgentId || "none"} onValueChange={(v) => setField("subAgentId")(v === "none" ? "" : v)}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">—</SelectItem>
+                    {asList(subAgents?.data).map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>عدد المعتمرين</Label><Input type="number" dir="ltr" value={form.mutamerCount} onChange={(e) => setField("mutamerCount")(e.target.value)} className="mt-1" /></div>
+              <div><Label>الخدمات الأرضية</Label><Input type="number" dir="ltr" value={form.groundServices} onChange={(e) => setField("groundServices")(e.target.value)} className="mt-1" /></div>
+              <div><Label>رسوم التأشيرة</Label><Input type="number" dir="ltr" value={form.visaFees} onChange={(e) => setField("visaFees")(e.target.value)} className="mt-1" /></div>
+              <div><Label>رسوم التأمين</Label><Input type="number" dir="ltr" value={form.insuranceFees} onChange={(e) => setField("insuranceFees")(e.target.value)} className="mt-1" /></div>
+              <div><Label>إجمالي النقل</Label><Input type="number" dir="ltr" value={form.transportTotal} onChange={(e) => setField("transportTotal")(e.target.value)} className="mt-1" /></div>
+              <div><Label>إجمالي الفنادق</Label><Input type="number" dir="ltr" value={form.hotelTotal} onChange={(e) => setField("hotelTotal")(e.target.value)} className="mt-1" /></div>
+              <div><Label>خدمات إضافية</Label><Input type="number" dir="ltr" value={form.additionalServices} onChange={(e) => setField("additionalServices")(e.target.value)} className="mt-1" /></div>
+              <div><Label>الإجمالي</Label><Input type="number" dir="ltr" value={form.totalAmount} onChange={(e) => setField("totalAmount")(e.target.value)} className="mt-1" /></div>
+              <div>
+                <Label>الحالة</Label>
+                <Select value={form.nuskStatus} onValueChange={setField("nuskStatus")}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">معلقة</SelectItem>
+                    <SelectItem value="paid">مدفوعة</SelectItem>
+                    <SelectItem value="in_progress">قيد المعالجة</SelectItem>
+                    <SelectItem value="expired">منتهية</SelectItem>
+                    <SelectItem value="refunded">مُستردة</SelectItem>
+                    <SelectItem value="cancelled">ملغية</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>تاريخ الإصدار</Label><Input type="date" value={form.issueDate} onChange={(e) => setField("issueDate")(e.target.value)} className="mt-1" /></div>
+              <div><Label>تاريخ الانتهاء</Label><Input type="date" value={form.expiryDate} onChange={(e) => setField("expiryDate")(e.target.value)} className="mt-1" /></div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setShowNew(false); setForm(NUSK_INITIAL); }}>إلغاء</Button>
+              <GuardedButton perm="umrah:create" disabled={createMut.isPending || !form.nuskInvoiceNumber.trim() || !form.agentId} onClick={submit} rateLimitAware>
+                {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
+              </GuardedButton>
+            </div>
           </CardContent>
         </Card>
       )}

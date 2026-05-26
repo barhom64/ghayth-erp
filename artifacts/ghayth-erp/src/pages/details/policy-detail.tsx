@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, FileText } from "lucide-react";
@@ -68,41 +68,6 @@ export default function PolicyDetail() {
     return out;
   }, [policy]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!policy) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: `POL-${id}` },
-          { label: "العنوان", value: policy.title || "-" },
-          { label: "التصنيف", value: policy.category || "-" },
-          { label: "الإصدار", value: policy.version || "-" },
-          { label: "تاريخ السريان", value: formatDateAr(policy.effectiveDate) },
-          { label: "تاريخ المراجعة", value: formatDateAr(policy.reviewDate) },
-          { label: "المسؤول", value: policy.owner || policy.ownerName || "-" },
-          { label: "الحالة", value: STATUS_LABELS[policy.status] || policy.status || "-" },
-        ],
-      },
-    ];
-    if (policy.summary) {
-      sections.push({ kind: "text", title: "الملخص", body: policy.summary });
-    }
-    if (policy.content || policy.fullContent) {
-      sections.push({ kind: "text", title: "المحتوى الكامل", body: policy.content || policy.fullContent });
-    }
-    if (policy.complianceRequirements) {
-      sections.push({ kind: "text", title: "متطلبات الامتثال", body: policy.complianceRequirements });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "المسؤول", name: policy.owner || policy.ownerName || "" },
-        { label: "المعتمد", name: policy.approvedByName || "" },
-      ],
-    });
-    return sections;
-  }, [policy, id]);
 
   const handleEdit = () => {
     setLocation(`/governance/policies/${id}/edit`);
@@ -238,12 +203,9 @@ export default function PolicyDetail() {
         <>
           {policy && (
             <EntityPrintButton
-              branchId={policy.branchId}
-              title={policy.title || "سياسة"}
-              ref={`POL-${id}`}
-              date={formatDateAr(policy.createdAt)}
-              sections={printSections}
-            />
+              entityType="policy"
+              entityId={id ?? 0}
+              formats={["a4"]}/>
           )}
           <GuardedButton
             perm="governance:update"

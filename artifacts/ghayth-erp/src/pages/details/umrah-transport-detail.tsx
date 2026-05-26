@@ -11,6 +11,7 @@ import {
   type StageStep,
 } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Truck, Users, DollarSign } from "lucide-react";
@@ -143,12 +144,15 @@ export default function UmrahTransportDetail() {
       createdAt={item?.createdAt}
       overview={overview}
       actions={
-        <DetailActionButtons
-          hook={editDelete}
-          editPerm="umrah:update"
-          deletePerm="umrah:delete"
-          extra={item ? <Badge className="text-sm px-3 py-1">{st.label}</Badge> : null}
-        />
+        <div className="flex items-center gap-2">
+          <DetailActionButtons
+            hook={editDelete}
+            editPerm="umrah:update"
+            deletePerm="umrah:delete"
+            extra={item ? <Badge className="text-sm px-3 py-1">{st.label}</Badge> : null}
+          />
+          <PrintButton entityType="umrah_transport" entityId={item?.id ?? id ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
       }
     />
   );

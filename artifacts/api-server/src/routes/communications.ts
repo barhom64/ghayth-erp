@@ -9,6 +9,7 @@ import { config } from "../lib/config.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { sendNotification } from "../lib/notificationService.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { aiEngine } from "../lib/aiEngine.js";
@@ -277,7 +278,7 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
         [companyId, from, `WhatsApp from ${sender.name}`, msgText, sender.type !== "unknown" ? sender.type : null, sender.id]
       );
 
-      const categorized = await aiEngine.receptionCategorize(msgText, `Sender: ${sender.name} (${sender.type})`);
+      const categorized = await aiEngine.receptionCategorize(msgText, `Sender: ${sender.name} (${sender.type})`, { companyId });
 
       let relatedType: string | null = null;
       let relatedId: number | null = null;
@@ -686,20 +687,50 @@ router.post("/log/:id/convert", authorize({ feature: "communications", action: "
         createdId = result.rows[0].id;
         targetPath = "/tasks";
       } else if (targetType === "ticket") {
+        // Numbering center (Issue #1141) — comm-linked ticket gets a real
+        // support_ticket ref so the ticket page and the audit log line up.
+        const issuedTk = await issueNumber({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          moduleKey: "support",
+          entityKey: "support_ticket",
+          entityTable: "support_tickets",
+          actorId: scope.userId,
+          metadata: { source: "communications", logId },
+        });
         const result = await client.query(
           `INSERT INTO support_tickets ("companyId", title, description, status, priority, ref)
            VALUES ($1, $2, $3, 'open', 'medium', $4) RETURNING id`,
-          [scope.companyId, fullTitle, fullDesc, `TKT-COMM-${logId}`]
+          [scope.companyId, fullTitle, fullDesc, issuedTk.number]
         );
         createdId = result.rows[0].id;
+        await client.query(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [createdId, issuedTk.assignmentId]
+        );
         targetPath = "/support/tickets";
       } else {
+        // Numbering center (Issue #1141) — comm-linked request gets a real
+        // general_request ref so it threads with the regular requests inbox.
+        const issuedReq = await issueNumber({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          moduleKey: "requests",
+          entityKey: "general_request",
+          entityTable: "requests",
+          actorId: scope.userId,
+          metadata: { source: "communications", logId },
+        });
         const result = await client.query(
-          `INSERT INTO requests ("companyId", title, description, status, priority, "requesterName")
-           VALUES ($1, $2, $3, 'pending', 'medium', $4) RETURNING id`,
-          [scope.companyId, fullTitle, fullDesc, logEntry.fromNumber || "من اتصال"]
+          `INSERT INTO requests ("companyId", title, description, status, priority, "requesterName", ref)
+           VALUES ($1, $2, $3, 'pending', 'medium', $4, $5) RETURNING id`,
+          [scope.companyId, fullTitle, fullDesc, logEntry.fromNumber || "من اتصال", issuedReq.number]
         );
         createdId = result.rows[0].id;
+        await client.query(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [createdId, issuedReq.assignmentId]
+        );
         targetPath = "/requests";
       }
       await client.query(

@@ -14,6 +14,8 @@ import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import type { JournalEntryLine } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
 import {
   createNotification,
   emitEvent,
@@ -40,14 +42,51 @@ import { z } from "zod";
 // ── Zod schemas for POST route validation ──────────────────────────────────
 const createInvoiceSchema = z.object({
   clientId: z.coerce.number({ required_error: "العميل مطلوب" }),
+  // Per-line dimensional fields land on invoice_lines (migration 200) and
+  // flow through to journal_lines on /approve so reports can compute
+  // per-vehicle / per-property / per-project / per-season profitability.
+  // All optional — a line with only description+quantity+unitPrice
+  // still works exactly as today, falling back to the company-level
+  // generic revenue account on approval.
   lines: z.array(z.object({
     description: z.string().optional(),
     quantity: z.coerce.number().optional(),
     unitPrice: z.coerce.number().optional(),
     accountCode: z.string().optional(),
+    accountId: z.coerce.number().optional(),
+    costCenterId: z.coerce.number().optional(),
+    activityType: z.string().optional(),
+    projectId: z.coerce.number().optional(),
+    vehicleId: z.coerce.number().optional(),
+    propertyId: z.coerce.number().optional(),
+    unitId: z.coerce.number().optional(),
+    assetId: z.coerce.number().optional(),
+    employeeId: z.coerce.number().optional(),
+    driverId: z.coerce.number().optional(),
+    contractId: z.coerce.number().optional(),
+    umrahSeasonId: z.coerce.number().optional(),
+    umrahAgentId: z.coerce.number().optional(),
+    productId: z.coerce.number().optional(),
+    taxCode: z.string().optional(),
+    // When true, `unitPrice` (and `total` if given) are gross of VAT
+    // and the helper extracts net + tax. When false (or omitted), the
+    // values are net and tax is added on top. Default inherits from
+    // the invoice header's `taxInclusive` flag (set on the outer
+    // schema below). This is the Daftra-style flow.
+    taxInclusive: z.boolean().optional(),
+    allocationRuleId: z.coerce.number().optional(),
+    dimensionJson: z.record(z.any()).optional(),
+    manualOverrideReason: z.string().optional(),
     total: z.coerce.number().optional(),
   })).min(1, "يجب إضافة بند واحد على الأقل").optional(),
+  // `vatRate` retained for backwards compatibility — old API callers
+  // that don't know about tax_codes can still pass a literal rate.
+  // New flow: pick a `taxCode` (header default) and the line math is
+  // driven by tax_codes.rate. taxInclusive declares whether the entered
+  // amount is gross or net.
   vatRate: z.coerce.number().optional(),
+  taxCode: z.string().optional(),
+  taxInclusive: z.boolean().optional(),
   dueDate: z.string().optional(),
   date: z.string().optional(),
   description: z.string().max(1000).optional(),
@@ -62,6 +101,15 @@ const createInvoiceSchema = z.object({
   taxCategoryCode: z.string().optional(),
   exemptionReason: z.string().optional(),
   costCenter: z.string().optional(),
+  // Header-level discount — choose ONE of:
+  //   discountAmount: flat reduction off subtotal
+  //   discountPercent: percentage of subtotal
+  // Mutually exclusive; both → 422. Discount applies BEFORE VAT
+  // (the standard Saudi ZATCA invoice flow). The result lands on
+  // invoices.discountAmount / invoices.discountPercent (schema
+  // columns since invoices_pre.sql line 22-23).
+  discountAmount: z.coerce.number().min(0).optional(),
+  discountPercent: z.coerce.number().min(0).max(100).optional(),
 });
 
 const createPaymentSchema = z.object({
@@ -74,6 +122,12 @@ const createCreditMemoSchema = z.object({
   reason: z.string().min(1, "السبب مطلوب"),
   vatIncluded: z.boolean().optional(),
   memoDate: z.string().optional(),
+});
+
+// Preview-time schema — same shape, but `reason` is optional since the
+// operator may not have settled on a justification yet when previewing.
+const previewCreditMemoSchema = createCreditMemoSchema.omit({ reason: true }).extend({
+  reason: z.string().optional(),
 });
 
 const createCustomerAdvanceSchema = z.object({
@@ -103,6 +157,12 @@ const createDebitMemoSchema = z.object({
   reason: z.string().min(1, "سبب الإشعار المدين مطلوب"),
   vatIncluded: z.boolean().optional(),
   memoDate: z.string().optional(),
+});
+
+// Preview-time schema — same shape, but `reason` is optional since the
+// operator may not have settled on a justification yet when previewing.
+const previewDebitMemoSchema = createDebitMemoSchema.omit({ reason: true }).extend({
+  reason: z.string().optional(),
 });
 
 const badDebtPostSchema = z.object({
@@ -316,12 +376,34 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
     const parsed = zodParse(createInvoiceSchema.safeParse(req.body));
     const {
       clientId, description, subtotal, total: rawTotal, lines: lineItems,
-      vatRate: rawVatRate, dueDate, date: invoiceBodyDate, paymentTermsDays, branchId, companyId: bodyCompanyId, notes,
+      vatRate: rawVatRate, taxCode: headerTaxCode, taxInclusive: headerTaxInclusive,
+      dueDate, date: invoiceBodyDate, paymentTermsDays, branchId, companyId: bodyCompanyId, notes,
       isTaxLinked, invoiceTypeCode, taxCategoryCode, exemptionReason,
+      discountAmount: rawDiscountAmount, discountPercent: rawDiscountPercent,
       // as-any-reason: justified-pragmatic - destructuring on zodParse inferred type whose property names are not directly indexable at the call site
     } = parsed as any;
-    const vatRate = rawVatRate ?? await getCompanyVatRate(bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId);
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
+
+    // Tax-code-driven flow (preferred):
+    //   - The body declares a header `taxCode` (e.g. "VAT15"). Lines may
+    //     override per-line.
+    //   - `taxInclusive` says whether the input amounts are gross or net.
+    //   - tax_codes.rate is the source of truth — no scattered `15`
+    //     literals.
+    // Backwards-compat: when no taxCode is provided, fall back to the
+    // legacy `vatRate` numeric the route used to expect.
+    const { computeTaxFromTaxCode, splitFromRate, getDefaultTaxCode } = await import("../lib/taxCodes.js");
+    let defaultTaxCode = headerTaxCode as string | undefined;
+    let defaultTaxInclusive: boolean = headerTaxInclusive ?? false;
+    if (!defaultTaxCode && rawVatRate == null) {
+      // No explicit choice — auto-pick the tenant's standard code.
+      const def = await getDefaultTaxCode(effectiveCompanyId);
+      if (def) {
+        defaultTaxCode = def.code;
+        defaultTaxInclusive = def.isInclusiveDefault;
+      }
+    }
+    const vatRate = rawVatRate ?? await getCompanyVatRate(effectiveCompanyId);
 
     if (!clientId) {
       throw new ValidationError("العميل مطلوب لإنشاء الفاتورة", { field: "clientId", fix: "حدد العميل الذي ستُصدر له الفاتورة" });
@@ -375,7 +457,42 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
     }
 
     let baseAmount = 0;
-    let validatedLines: { description: string; quantity: number; unitPrice: number; lineTotal: number; vatAmount: number; lineGross: number }[] = [];
+    // ValidatedLine now carries the per-line dimensional allocation
+    // fields from createInvoiceSchema (migration 200). All optional —
+    // when a line has no `accountCode`, allocationStatus stays
+    // "unmapped" and the approval flow falls back to the company-level
+    // generic revenue account for that line (preserves the original
+    // header-level posting behaviour for legacy callers).
+    type ValidatedLine = {
+      description: string;
+      quantity: number;
+      unitPrice: number;
+      lineTotal: number;
+      vatAmount: number;
+      lineGross: number;
+      accountId: number | null;
+      accountCode: string | null;
+      costCenterId: number | null;
+      activityType: string | null;
+      projectId: number | null;
+      vehicleId: number | null;
+      propertyId: number | null;
+      unitId: number | null;
+      assetId: number | null;
+      employeeId: number | null;
+      driverId: number | null;
+      contractId: number | null;
+      umrahSeasonId: number | null;
+      umrahAgentId: number | null;
+      productId: number | null;
+      taxCode: string | null;
+      taxInclusive: boolean;
+      allocationRuleId: number | null;
+      allocationStatus: string;
+      dimensionJson: Record<string, unknown> | null;
+      manualOverrideReason: string | null;
+    };
+    let validatedLines: ValidatedLine[] = [];
 
     if (Array.isArray(lineItems) && lineItems.length > 0) {
       for (const line of lineItems) {
@@ -385,13 +502,83 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
         if (!line.quantity || line.quantity <= 0) {
           throw new ValidationError("الكمية يجب أن تكون أكبر من صفر", { field: "lines.quantity", fix: "أدخل كمية موجبة لكل بند" });
         }
-        const lineTotal = roundTo2(Number(line.quantity) * Number(line.unitPrice));
-        const lineVatRate = line.vatRate != null ? Number(line.vatRate) : Number(vatRate);
-        const lineVat = line.vatAmount != null
-          ? roundTo2(Number(line.vatAmount))
-          : roundTo2(lineTotal * (lineVatRate / 100));
-        baseAmount += lineTotal;
-        validatedLines.push({ description: line.description ?? "", quantity: Number(line.quantity), unitPrice: Number(line.unitPrice), lineTotal, vatAmount: lineVat, lineGross: lineTotal + lineVat });
+        const rawLineAmount = roundTo2(Number(line.quantity) * Number(line.unitPrice));
+
+        // Tax math — three flows in priority order:
+        //
+        //   1. Line declares a taxCode → look it up, use its rate +
+        //      ZATCA category. Operator can override inclusive flag
+        //      per line (e.g. mixed inclusive + exclusive on one
+        //      invoice).
+        //   2. Header declares a taxCode → inherit it.
+        //   3. Legacy fallback → use the line's `vatRate` literal or
+        //      the company default.
+        //
+        // `rawLineAmount` is the input amount (qty × unitPrice). The
+        // helper produces a balanced { net, tax, gross } that we
+        // store as { lineTotal, vatAmount, lineGross }.
+        const effectiveTaxCode = (line.taxCode ?? defaultTaxCode) as string | undefined;
+        const lineInclusive = (line as any).taxInclusive != null
+          ? Boolean((line as any).taxInclusive)
+          : defaultTaxInclusive;
+        let lineNet: number;
+        let lineVat: number;
+        if (effectiveTaxCode) {
+          const split = await computeTaxFromTaxCode({
+            companyId: effectiveCompanyId,
+            amount: rawLineAmount,
+            taxInclusive: lineInclusive,
+            taxCode: effectiveTaxCode,
+          });
+          lineNet = split.net;
+          lineVat = split.tax;
+        } else {
+          // Legacy path — preserves the old `vatRate` literal behaviour.
+          const lineVatRate = (line as any).vatRate != null ? Number((line as any).vatRate) : Number(vatRate);
+          if (lineInclusive) {
+            const split = splitFromRate(rawLineAmount, true, "LEGACY", lineVatRate);
+            lineNet = split.net;
+            lineVat = split.tax;
+          } else {
+            lineNet = rawLineAmount;
+            lineVat = (line as any).vatAmount != null
+              ? roundTo2(Number((line as any).vatAmount))
+              : roundTo2(rawLineAmount * (lineVatRate / 100));
+          }
+        }
+        baseAmount += lineNet;
+        validatedLines.push({
+          description: line.description ?? "",
+          quantity: Number(line.quantity),
+          unitPrice: Number(line.unitPrice),
+          lineTotal: lineNet,
+          vatAmount: lineVat,
+          lineGross: roundTo2(lineNet + lineVat),
+          accountId: line.accountId ?? null,
+          accountCode: line.accountCode ?? null,
+          costCenterId: line.costCenterId ?? null,
+          activityType: line.activityType ?? null,
+          projectId: line.projectId ?? null,
+          vehicleId: line.vehicleId ?? null,
+          propertyId: line.propertyId ?? null,
+          unitId: line.unitId ?? null,
+          assetId: line.assetId ?? null,
+          employeeId: line.employeeId ?? null,
+          driverId: line.driverId ?? null,
+          contractId: line.contractId ?? null,
+          umrahSeasonId: line.umrahSeasonId ?? null,
+          umrahAgentId: line.umrahAgentId ?? null,
+          productId: line.productId ?? null,
+          taxCode: effectiveTaxCode ?? null,
+          taxInclusive: lineInclusive,
+          allocationRuleId: line.allocationRuleId ?? null,
+          // resolved → caller mapped this line directly to a specific
+          // account; unmapped → falls back to the company-level
+          // invoice_revenue account on approval.
+          allocationStatus: line.accountCode || line.accountId ? "resolved" : "unmapped",
+          dimensionJson: (line.dimensionJson as Record<string, unknown> | undefined) ?? null,
+          manualOverrideReason: line.manualOverrideReason ?? null,
+        });
       }
     } else {
       baseAmount = Number(subtotal ?? rawTotal ?? 0);
@@ -419,16 +606,63 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       financialEngine.resolveAccountCode(effectiveCompanyId, "invoice_vat_payable", "credit", "2300"),
     ]);
 
-    const [seqRow] = await rawQuery<Record<string, unknown>>(`SELECT nextval('invoice_number_seq') AS seq`);
-    const seqNum = Number(seqRow?.seq ?? Date.now() % 1000000);
-    const year = currentYear();
-    const month = currentMonthPadded();
-    const ref = `INV-${year}${month}-${String(seqNum).padStart(4, "0")}`;
+    // Numbering center (Issue #1141) — invoice number from central authority.
+    // Scheme: `finance.sales_invoice`. Scope policy is `company` so all
+    // branches share the same counter (matches the previous behaviour of
+    // the global `invoice_number_seq`).
+    const issued = await issueNumber({
+      companyId: effectiveCompanyId,
+      branchId: branchId ?? scope.branchId ?? null,
+      moduleKey: "finance",
+      entityKey: "sales_invoice",
+      entityTable: "invoices",
+      actorId: scope.userId,
+    });
+    const ref = issued.number;
 
-    const vatAmount = validatedLines.length > 0
-      ? roundTo2(validatedLines.reduce((sum, l) => sum + l.vatAmount, 0))
-      : computeVat(baseAmount, Number(vatRate));
-    const total = roundTo2(baseAmount + vatAmount);
+    // Header-level discount (applied to subtotal BEFORE VAT — Saudi
+    // ZATCA convention). discountAmount and discountPercent are
+    // mutually exclusive; if both are supplied → 422.
+    if (rawDiscountAmount != null && rawDiscountPercent != null) {
+      throw new ValidationError(
+        "لا يمكن إدخال نسبة وقيمة خصم معاً — اختر واحدة فقط",
+        { field: "discount", fix: "أدخل discountAmount (قيمة ثابتة) أو discountPercent (نسبة) لا كليهما" }
+      );
+    }
+    let discountAmount = 0;
+    let discountPercent = 0;
+    if (rawDiscountPercent != null) {
+      discountPercent = roundTo2(Number(rawDiscountPercent));
+      discountAmount = roundTo2(baseAmount * (discountPercent / 100));
+    } else if (rawDiscountAmount != null) {
+      discountAmount = roundTo2(Number(rawDiscountAmount));
+      discountPercent = baseAmount > 0 ? roundTo2((discountAmount / baseAmount) * 100) : 0;
+    }
+    if (discountAmount > baseAmount + 0.005) {
+      throw new ValidationError(
+        `قيمة الخصم (${discountAmount.toFixed(2)}) تتجاوز المبلغ قبل الضريبة (${baseAmount.toFixed(2)})`,
+        { field: "discountAmount", fix: "قلّل قيمة الخصم أو راجع بنود الفاتورة" }
+      );
+    }
+    const discountedSubtotal = roundTo2(baseAmount - discountAmount);
+
+    // VAT now computed against the DISCOUNTED net. Per-line VAT was
+    // calculated against gross-of-discount line totals so it needs
+    // adjustment: scale by (discountedSubtotal / baseAmount) so the
+    // line-level breakdown stays proportional to the new total.
+    let vatAmount: number;
+    if (validatedLines.length > 0) {
+      const grossVat = roundTo2(validatedLines.reduce((sum, l) => sum + l.vatAmount, 0));
+      vatAmount = baseAmount > 0
+        ? roundTo2(grossVat * (discountedSubtotal / baseAmount))
+        : 0;
+    } else {
+      vatAmount = computeVat(discountedSubtotal, Number(vatRate));
+    }
+    const total = roundTo2(discountedSubtotal + vatAmount);
+    // The "subtotal" persisted on the invoice header is the DISCOUNTED
+    // net so downstream reports compute revenue net of discount.
+    baseAmount = discountedSubtotal;
 
     let finalDueDate = dueDate ?? null;
     if (!finalDueDate && parsedTerms != null) {
@@ -442,19 +676,28 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       const invResult = await client.query(
         `INSERT INTO invoices ("companyId","branchId","clientId",ref,description,
                 subtotal,"vatRate","vatAmount",total,"paidAmount",status,"dueDate","createdBy",notes,
-                "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason","costCenter")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
+                "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason","costCenter",
+                "taxCode","taxInclusive","discountAmount","discountPercent")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id`,
         [effectiveCompanyId, branchId ?? scope.branchId, clientId ?? null, ref, description ?? null,
           baseAmount, Number(vatRate), vatAmount, total, finalDueDate, scope.activeAssignmentId, notes ?? null,
           isTaxLinked ? true : false, invoiceTypeCode ?? "388", taxCategoryCode ?? "S", exemptionReason ?? null,
           // as-any-reason: justified-pragmatic - defensive read of optional costCenter field not yet in createInvoiceSchema; behavior unchanged
-          (req.body as any).costCenter ?? null]
+          (req.body as any).costCenter ?? null,
+          defaultTaxCode ?? null,
+          defaultTaxInclusive,
+          discountAmount,
+          discountPercent,
+        ]
       );
       insertId = invResult.rows[0].id;
 
       if (validatedLines.length > 0) {
-        // Single bulk INSERT instead of one round-trip per line.
-        const COLS_PER_ROW = 7;
+        // Single bulk INSERT, now carrying the full per-line allocation
+        // payload (migration 200). Lines that didn't specify an account
+        // land as allocationStatus='unmapped' — the approval flow falls
+        // back to the company-level invoice_revenue for those.
+        const COLS_PER_ROW = 28;
         const valuesSql: string[] = [];
         const params: unknown[] = [];
         for (const l of validatedLines) {
@@ -462,10 +705,25 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
           valuesSql.push(
             `(${Array.from({ length: COLS_PER_ROW }, (_, i) => `$${base + i + 1}`).join(",")})`
           );
-          params.push(insertId, l.description, l.quantity, l.unitPrice, l.lineTotal, l.vatAmount, l.lineGross);
+          params.push(
+            insertId, l.description, l.quantity, l.unitPrice, l.lineTotal, l.vatAmount, l.lineGross,
+            l.accountId, l.accountCode, l.costCenterId, l.activityType,
+            l.projectId, l.vehicleId, l.propertyId, l.unitId, l.assetId,
+            l.employeeId, l.driverId, l.contractId, l.umrahSeasonId, l.umrahAgentId,
+            l.productId, l.taxCode, l.taxInclusive, l.allocationRuleId, l.allocationStatus,
+            l.dimensionJson ? JSON.stringify(l.dimensionJson) : null,
+            l.manualOverrideReason
+          );
         }
         await client.query(
-          `INSERT INTO invoice_lines ("invoiceId",description,quantity,"unitPrice","lineTotal","vatAmount","lineGross")
+          `INSERT INTO invoice_lines (
+             "invoiceId",description,quantity,"unitPrice","lineTotal","vatAmount","lineGross",
+             "accountId","accountCode","costCenterId","activityType",
+             "projectId","vehicleId","propertyId","unitId","assetId",
+             "employeeId","driverId","contractId","umrahSeasonId","umrahAgentId",
+             "productId","taxCode","taxInclusive","allocationRuleId","allocationStatus",
+             "dimensionJson","manualOverrideReason"
+           )
            VALUES ${valuesSql.join(",")}`,
           params
         );
@@ -487,6 +745,13 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
             `مهمة تحصيل فاتورة ${ref} – بعد 30 يوم من تاريخ الاستحقاق`, scope.activeAssignmentId]
         );
       }
+
+      // Link the numbering assignment back to the invoice row id so the
+      // audit log can drill from `numbering_assignments` to the invoice.
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertId, issued.assignmentId]
+      );
     });
 
     // GL entry deferred to approval (POST /invoices/:id/approve)
@@ -632,7 +897,246 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         client,
       });
 
-      // GL entry created ONLY upon approval — BLOCKING (financial integrity guard)
+      // GL entry created ONLY upon approval — BLOCKING (financial integrity guard).
+      //
+      // Phase 1 P0 — per-line revenue posting (Finance Line-Level Allocation).
+      // Read invoice_lines and emit one CR line per (accountCode + dimensions)
+      // bucket. Lines that didn't carry an accountCode (allocationStatus=
+      // 'unmapped') fall back to the company-level invoice_revenue account,
+      // preserving the legacy single-revenue posting for callers that haven't
+      // adopted per-line mapping yet. The AR debit + VAT credit stay
+      // header-level since they are not per-line concepts.
+      const dimLines = await client.query<{
+        id: number;
+        accountCode: string | null;
+        accountId: number | null;
+        lineTotal: string;
+        quantity: string;
+        costCenterId: number | null;
+        activityType: string | null;
+        projectId: number | null;
+        vehicleId: number | null;
+        propertyId: number | null;
+        unitId: number | null;
+        assetId: number | null;
+        employeeId: number | null;
+        driverId: number | null;
+        contractId: number | null;
+        productId: number | null;
+        umrahSeasonId: number | null;
+        umrahAgentId: number | null;
+        taxCode: string | null;
+      }>(
+        `SELECT id, "accountCode", "accountId", "lineTotal"::text AS "lineTotal",
+                quantity::text AS quantity,
+                "costCenterId", "activityType",
+                "projectId", "vehicleId", "propertyId", "unitId", "assetId",
+                "employeeId", "driverId", "contractId", "productId",
+                "umrahSeasonId", "umrahAgentId", "taxCode"
+           FROM invoice_lines
+          WHERE "invoiceId" = $1
+          ORDER BY id`,
+        [id]
+      );
+
+      // Phase 5.3 — run the allocation resolver. For each line that
+      // doesn't already carry an accountCode, the resolver consults
+      // accounting_allocation_rules (#972) to pick the right revenue
+      // account + cost-centre + required dimensions. Lines with
+      // pre-set accountCode return status='manual_override' so the
+      // operator's pin always wins. Lines with no rule match fall
+      // through to the generic invoice_revenue account (legacy
+      // backwards-compat).
+      const { resolveLineAllocation, writeAllocationResult } = await import("../lib/accountingAllocation.js");
+      const lineResolutions = await Promise.all(
+        dimLines.rows.map((ln) =>
+          resolveLineAllocation({
+            companyId: scope.companyId,
+            documentType: "invoice",
+            lineType: "product",
+            accountCode: ln.accountCode,
+            accountId: ln.accountId,
+            costCenterId: ln.costCenterId,
+            taxCode: ln.taxCode,
+            dimensions: {
+              vehicleId: ln.vehicleId,
+              propertyId: ln.propertyId,
+              unitId: ln.unitId,
+              assetId: ln.assetId,
+              projectId: ln.projectId,
+              employeeId: ln.employeeId,
+              driverId: ln.driverId,
+              contractId: ln.contractId,
+              umrahSeasonId: ln.umrahSeasonId,
+              umrahAgentId: ln.umrahAgentId,
+              productId: ln.productId,
+              clientId: invoice.clientId as number | null,
+            },
+            sourceTable: "invoice_lines",
+            sourceLineId: ln.id,
+          })
+        )
+      );
+
+      const totalNet = Number(invoice.total) - Number(invoice.vatAmount || 0);
+      const revenueLines: JournalEntryLine[] = [];
+
+      if (dimLines.rows.length > 0) {
+        // Group lines that share the SAME revenue account + dimension
+        // signature into one journal_line, so the GL stays compact
+        // for tenants with many small lines on the same account.
+        const buckets = new Map<string, {
+          accountCode: string;
+          amount: number;
+          costCenter: string | null;
+          activityType: string | null;
+          projectId: number | null;
+          vehicleId: number | null;
+          propertyId: number | null;
+          employeeId: number | null;
+          driverId: number | null;
+          contractId: number | null;
+          productId: number | null;
+        }>();
+        let postedNet = 0;
+        for (let i = 0; i < dimLines.rows.length; i++) {
+          const ln = dimLines.rows[i];
+          const res = lineResolutions[i];
+          // Resolver picked an account (rule match or manual override);
+          // unmapped lines fall back to the generic invoice_revenue
+          // mapping so the entry still posts. The dimensions used in
+          // the bucket key come from the RESOLVER OUTPUT — for an
+          // 'explicit' or 'from_vehicle' strategy that may differ
+          // from the raw line.
+          const acct = res.resolvedAccountCode || invRevenueCode;
+          const dims = res.dimensions;
+          const cc = res.costCenterId;
+          const key = [
+            acct,
+            cc ?? "",
+            ln.activityType ?? "",
+            dims.projectId ?? "",
+            dims.vehicleId ?? "",
+            dims.propertyId ?? "",
+            dims.employeeId ?? "",
+            dims.driverId ?? "",
+            dims.contractId ?? "",
+            dims.productId ?? "",
+          ].join("|");
+          const amt = roundTo2(Number(ln.lineTotal));
+          postedNet += amt;
+          const prev = buckets.get(key);
+          if (prev) {
+            prev.amount = roundTo2(prev.amount + amt);
+          } else {
+            buckets.set(key, {
+              accountCode: acct,
+              amount: amt,
+              costCenter: cc != null ? String(cc) : null,
+              activityType: ln.activityType,
+              projectId: dims.projectId,
+              vehicleId: dims.vehicleId,
+              propertyId: dims.propertyId,
+              employeeId: dims.employeeId,
+              driverId: dims.driverId,
+              contractId: dims.contractId,
+              productId: dims.productId,
+            });
+          }
+        }
+
+        // If the sum of line totals diverges from invoice.total-vat (e.g.
+        // legacy invoice with header-level total and no lines), let the
+        // remainder fall on the generic account so the entry still
+        // balances against the AR debit.
+        const diff = roundTo2(totalNet - postedNet);
+        if (Math.abs(diff) >= 0.005) {
+          const fallbackKey = `${invRevenueCode}|||||||||`;
+          const prev = buckets.get(fallbackKey);
+          if (prev) {
+            prev.amount = roundTo2(prev.amount + diff);
+          } else {
+            buckets.set(fallbackKey, {
+              accountCode: invRevenueCode, amount: diff,
+              costCenter: null, activityType: null, projectId: null,
+              vehicleId: null, propertyId: null, employeeId: null,
+              driverId: null, contractId: null, productId: null,
+            });
+          }
+        }
+
+        for (const b of buckets.values()) {
+          if (Math.abs(b.amount) < 0.005) continue;
+          revenueLines.push({
+            accountCode: b.accountCode, debit: 0, credit: b.amount,
+            costCenter: b.costCenter ?? undefined,
+            activityType: b.activityType ?? undefined,
+            projectId: b.projectId ?? undefined,
+            vehicleId: b.vehicleId ?? undefined,
+            propertyId: b.propertyId ?? undefined,
+            employeeId: b.employeeId ?? undefined,
+            driverId: b.driverId ?? undefined,
+            contractId: b.contractId ?? undefined,
+            productId: b.productId ?? undefined,
+            clientId: invoice.clientId as number | undefined,
+          } as any);
+        }
+      }
+
+      // Header-level fallback: no invoice_lines stored at all → one
+      // generic-revenue CR line so the JE still balances.
+      if (revenueLines.length === 0) {
+        revenueLines.push({
+          accountCode: invRevenueCode, debit: 0, credit: totalNet,
+          clientId: invoice.clientId as number | undefined,
+        } as any);
+      }
+
+      // ── COGS planning (Audit P1 #7) ────────────────────────────────────
+      // For every invoice line carrying an inventoried productId, run the
+      // valuation picker (FIFO/LIFO/avg per product.costingMethod) to
+      // figure out which lots feed the sale. Returns the DR COGS / CR
+      // Inventory journal lines we splice into the same JE, plus the
+      // per-line snapshot we write back to invoice_lines (so a future
+      // sales-return reversal credits the SAME lots back).
+      const { planCogsForInvoice, applyStockMovements } = await import(
+        "../lib/inventory/cogsPosting.js"
+      );
+      const cogsPlan = await planCogsForInvoice(client as any, {
+        companyId: scope.companyId,
+        invoiceId: id,
+        branchId: scope.branchId ?? null,
+        lines: dimLines.rows.map((r) => ({
+          invoiceLineId: r.id,
+          quantity: Number(r.quantity ?? 0),
+          productId: r.productId,
+          costCenterId: r.costCenterId,
+          projectId: r.projectId,
+          employeeId: r.employeeId,
+        })),
+      });
+      // Hard-block approval on insufficient stock — selling what we
+      // don't have is the bug we're trying to fix, not a fall-through
+      // case. `product_not_tracked` etc. are warnings (logged); only
+      // insufficient_stock is fatal.
+      const shortages = cogsPlan.warnings.filter((w) => w.reason === "insufficient_stock");
+      if (shortages.length > 0) {
+        throw new ValidationError(
+          `مخزون غير كافٍ للسطر #${shortages[0].invoiceLineId}: ${shortages[0].detail ?? ""}`.trim(),
+          { field: "invoice_lines", meta: { shortages } },
+        );
+      }
+      // Other warnings (product_not_found / product_not_tracked / no_active_lots
+      // / no_cogs_account / no_inventory_account) are non-fatal but logged so
+      // ops can clean up the master data. The invoice posts revenue but no
+      // COGS for those lines.
+      if (cogsPlan.warnings.length > 0) {
+        logger.warn(
+          { invoiceId: id, warnings: cogsPlan.warnings },
+          "invoice approve: some lines skipped COGS posting",
+        );
+      }
+
       const result = await financialEngine.postJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId || 0,
@@ -644,15 +1148,79 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         sourceId: id,
         sourceKey: `finance:invoice_approval:${id}`,
         lines: [
-          { accountCode: invArCode, debit: Number(invoice.total), credit: 0 },
-          { accountCode: invRevenueCode, debit: 0, credit: Number(invoice.total) - Number(invoice.vatAmount || 0) },
+          { accountCode: invArCode, debit: Number(invoice.total), credit: 0, clientId: invoice.clientId as number | undefined } as any,
+          ...revenueLines,
           { accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) },
+          ...cogsPlan.journalLines,
         ],
         guardTable: "invoices",
         guardId: id,
       });
       journalId = result.journalId;
       alreadyExists = result.alreadyExists;
+
+      // Persist the JE link on invoices.journalEntryId so tax-summary
+      // and VAT-return queries (which JOIN journal_entries via this
+      // column) can find the invoice's GL row. Without this UPDATE
+      // the column stayed NULL forever and the tax declaration
+      // returned 0 for invoice VAT — silent for any tenant with
+      // real data because guard.sh's check-schema-drift is skipped
+      // in CI (no DATABASE_URL).
+      await client.query(
+        `UPDATE invoices SET "journalEntryId" = $1, "cogsTotal" = $2
+          WHERE id = $3 AND "companyId" = $4 AND "deletedAt" IS NULL`,
+        [journalId, cogsPlan.totalCogs, id, scope.companyId]
+      );
+
+      // ── Apply COGS side-effects (stock + per-line snapshots) ─────────
+      // Done inside the same withTransaction as the JE post so any
+      // failure rolls everything back. Skip on idempotent replay since
+      // the lots were already decremented + snapshots written.
+      if (!alreadyExists && cogsPlan.journalLines.length > 0) {
+        // journalId is already known here — the JE was just posted
+        // above. Pass it so warehouse_movements.journalEntryId carries
+        // the link the auditor needs.
+        await applyStockMovements(
+          client as any, scope.companyId,
+          cogsPlan.stockMovements, scope.activeAssignmentId ?? 0,
+          journalId,
+        );
+        for (const snap of cogsPlan.lineSnapshots) {
+          await client.query(
+            `UPDATE invoice_lines
+                SET "cogsAmount" = $1, "cogsUnitCost" = $2,
+                    "cogsAllocationJson" = $3::jsonb, "cogsPostedAt" = NOW()
+              WHERE id = $4`,
+            [
+              snap.cogsAmount, snap.cogsUnitCost,
+              JSON.stringify(snap.allocations), snap.invoiceLineId,
+            ],
+          );
+        }
+      }
+
+      // Phase 5.3 — persist the allocation resolution per line so the
+      // accounting_allocation_results table reflects which rule moved
+      // each line to which account. Runs after the JE posts so a
+      // failed post doesn't leave orphan resolution rows. UPSERTs on
+      // (sourceTable, sourceLineId, companyId) so re-approving an
+      // invoice (after correction) overwrites the previous result.
+      if (!alreadyExists) {
+        for (let i = 0; i < dimLines.rows.length; i++) {
+          const ln = dimLines.rows[i];
+          const res = lineResolutions[i];
+          await writeAllocationResult(
+            {
+              companyId: scope.companyId,
+              documentType: "invoice",
+              sourceTable: "invoice_lines",
+              sourceLineId: ln.id,
+            },
+            res,
+            scope.activeAssignmentId,
+          );
+        }
+      }
 
       // Update client totalRevenue upon approval (revenue recognition).
       if (invoice.clientId) {
@@ -687,6 +1255,397 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     }
     handleRouteError(err, res, "Approve invoice error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POSTING PREVIEW — Finance Line-Level Allocation Phase 3 P0.
+//
+// Returns the journal lines that WOULD be posted if the operator approved
+// this invoice right now, plus a list of blockers (which prevent approval)
+// and warnings (informational). The shape mirrors the structure built
+// inside /approve so the UI can render the exact same posting.
+//
+// Read-only — no GL movement, no transaction, no idempotency token needed.
+//
+// Blockers (preventing approval):
+//   * Financial period is closed/locked for the invoice's date
+//   * Invoice is in a non-approvable state (paid, cancelled, void, …)
+//
+// Warnings (rendered but non-blocking):
+//   * Some lines have allocationStatus = 'unmapped'    → they will fall
+//     back to the company-level invoice_revenue account
+//   * No invoice_lines stored                          → header-level
+//     single-revenue fallback
+//   * Sum-of-lines differs from invoice.total-vat      → rounding-
+//     difference correction will land on the generic account
+// ─────────────────────────────────────────────────────────────────────────────
+invoicesRouter.post("/invoices/:id/preview-posting", authorize({
+  feature: "finance.invoices",
+  action: "view",
+  resource: { table: "invoices", idParam: "id", columns: ['"companyId"', '"branchId"'] },
+}), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+
+    const [invoice] = await rawQuery<Record<string, unknown>>(
+      `SELECT i.*, c.name AS "clientName"
+         FROM invoices i
+         LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+        WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
+
+    const blockers: { field: string; message: string }[] = [];
+    const warnings: { field: string; message: string; lineIds?: number[] }[] = [];
+
+    // Blocker — invoice not in approvable state.
+    const approvableStates = ["draft", "returned"];
+    if (!approvableStates.includes(String(invoice.status))) {
+      blockers.push({
+        field: "status",
+        message: `الفاتورة بحالة "${invoice.status}" — الاعتماد يتطلب draft أو returned`,
+      });
+    }
+
+    // Blocker — financial period closed/locked for invoice.createdAt.
+    const invoiceDate = (invoice.createdAt as Date | string | null)
+      ? toDateISO(invoice.createdAt as Date | string)
+      : null;
+    if (invoiceDate) {
+      const periodCheck = await checkFinancialPeriodOpen(scope.companyId, invoiceDate);
+      if (!periodCheck.open) {
+        blockers.push({
+          field: "period",
+          message: `الفترة المالية مغلقة (${periodCheck.periodName ?? invoiceDate}) — لا يمكن الاعتماد`,
+        });
+      }
+    }
+
+    // Resolve GL accounts (read-only; doesn't post).
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1200"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+    ]);
+
+    // Read invoice_lines with dimensional fields (migration 200).
+    const lines = await rawQuery<{
+      id: number;
+      description: string | null;
+      lineTotal: string;
+      quantity: string;
+      accountCode: string | null;
+      accountId: number | null;
+      allocationStatus: string | null;
+      costCenterId: number | null;
+      activityType: string | null;
+      projectId: number | null;
+      vehicleId: number | null;
+      propertyId: number | null;
+      unitId: number | null;
+      assetId: number | null;
+      employeeId: number | null;
+      driverId: number | null;
+      contractId: number | null;
+      umrahSeasonId: number | null;
+      umrahAgentId: number | null;
+      productId: number | null;
+      taxCode: string | null;
+    }>(
+      `SELECT id, description,
+              "lineTotal"::text AS "lineTotal",
+              quantity::text     AS quantity,
+              "accountCode", "accountId", "allocationStatus",
+              "costCenterId", "activityType",
+              "projectId", "vehicleId", "propertyId", "unitId", "assetId",
+              "employeeId", "driverId", "contractId",
+              "umrahSeasonId", "umrahAgentId", "productId", "taxCode"
+         FROM invoice_lines
+        WHERE "invoiceId" = $1
+        ORDER BY id`,
+      [id]
+    );
+
+    const totalNet = Number(invoice.total) - Number(invoice.vatAmount || 0);
+
+    // Phase 5.5 — run the same resolver the /approve handler uses so
+    // the preview reflects rule-driven account selection, not just the
+    // raw line's accountCode. A line with no accountCode but a matching
+    // rule shows as "resolved" with the rule's chosen account in the
+    // preview, matching exactly what /approve would post.
+    const { resolveLineAllocation } = await import("../lib/accountingAllocation.js");
+    const lineResolutions = await Promise.all(
+      lines.map((ln) =>
+        resolveLineAllocation({
+          companyId: scope.companyId,
+          documentType: "invoice",
+          lineType: "product",
+          accountCode: ln.accountCode,
+          accountId: ln.accountId,
+          costCenterId: ln.costCenterId,
+          taxCode: ln.taxCode,
+          dimensions: {
+            vehicleId: ln.vehicleId,
+            propertyId: ln.propertyId,
+            unitId: ln.unitId,
+            assetId: ln.assetId,
+            projectId: ln.projectId,
+            employeeId: ln.employeeId,
+            driverId: ln.driverId,
+            contractId: ln.contractId,
+            umrahSeasonId: ln.umrahSeasonId,
+            umrahAgentId: ln.umrahAgentId,
+            productId: ln.productId,
+            clientId: invoice.clientId as number | null,
+          },
+          sourceTable: "invoice_lines",
+          sourceLineId: ln.id,
+        })
+      )
+    );
+
+    // Build the preview journal lines using the SAME algorithm as
+    // /approve. Kept in sync deliberately — if /approve evolves the
+    // preview must match.
+    type PreviewLine = {
+      accountCode: string;
+      debit: number;
+      credit: number;
+      description?: string;
+      dimensions: Record<string, unknown>;
+    };
+    const previewLines: PreviewLine[] = [];
+
+    previewLines.push({
+      accountCode: invArCode,
+      debit: Number(invoice.total),
+      credit: 0,
+      description: `ذمم مدينة — فاتورة ${invoice.ref}`,
+      dimensions: { clientId: invoice.clientId },
+    });
+
+    const unmappedLineIds: number[] = [];
+    // Aggregate resolver warnings so the operator sees them in the preview.
+    const resolverWarnings: Array<{ lineId: number; code: string; message: string }> = [];
+    if (lines.length > 0) {
+      const buckets = new Map<string, PreviewLine & { _amount: number }>();
+      let postedNet = 0;
+      for (let i = 0; i < lines.length; i++) {
+        const ln = lines[i];
+        const res = lineResolutions[i];
+
+        // Resolver output drives the bucket — same as /approve so the
+        // preview shows exactly what would post.
+        const acct = res.resolvedAccountCode || invRevenueCode;
+        const cc = res.costCenterId;
+        const dims = res.dimensions;
+        if (res.status === "unmapped") unmappedLineIds.push(ln.id);
+        for (const w of res.warnings) {
+          resolverWarnings.push({ lineId: ln.id, code: w.code, message: w.message });
+        }
+        const key = [
+          acct, cc ?? "", ln.activityType ?? "",
+          dims.projectId ?? "", dims.vehicleId ?? "", dims.propertyId ?? "",
+          dims.employeeId ?? "", dims.driverId ?? "", dims.contractId ?? "",
+          dims.productId ?? "",
+        ].join("|");
+        const amt = roundTo2(Number(ln.lineTotal));
+        postedNet += amt;
+        const prev = buckets.get(key);
+        if (prev) {
+          prev._amount = roundTo2(prev._amount + amt);
+          prev.credit = prev._amount;
+        } else {
+          buckets.set(key, {
+            accountCode: acct,
+            debit: 0,
+            credit: amt,
+            _amount: amt,
+            description: `إيرادات — ${ln.description ?? ""}`.trim(),
+            dimensions: {
+              clientId: invoice.clientId,
+              costCenterId: cc,
+              activityType: ln.activityType,
+              projectId: dims.projectId,
+              vehicleId: dims.vehicleId,
+              propertyId: dims.propertyId,
+              unitId: dims.unitId,
+              assetId: dims.assetId,
+              employeeId: dims.employeeId,
+              driverId: dims.driverId,
+              contractId: dims.contractId,
+              umrahSeasonId: dims.umrahSeasonId,
+              umrahAgentId: dims.umrahAgentId,
+              productId: dims.productId,
+              ruleId: res.ruleId,
+              resolutionStatus: res.status,
+            },
+          });
+        }
+      }
+      const diff = roundTo2(totalNet - postedNet);
+      if (Math.abs(diff) >= 0.005) {
+        warnings.push({
+          field: "rounding",
+          message: `فرق تقريب ${diff.toFixed(2)} ﷼ سيُرحَّل على حساب الإيرادات العام (${invRevenueCode})`,
+        });
+        const fallbackKey = `${invRevenueCode}|||||||||`;
+        const prev = buckets.get(fallbackKey);
+        if (prev) {
+          prev._amount = roundTo2(prev._amount + diff);
+          prev.credit = prev._amount;
+        } else {
+          buckets.set(fallbackKey, {
+            accountCode: invRevenueCode,
+            debit: 0,
+            credit: diff,
+            _amount: diff,
+            description: `إيرادات — فرق تقريب`,
+            dimensions: { clientId: invoice.clientId },
+          });
+        }
+      }
+      for (const b of buckets.values()) {
+        if (Math.abs(b._amount) < 0.005) continue;
+        // strip the private _amount field before returning to the client
+        const { _amount: _omit, ...clean } = b;
+        previewLines.push(clean);
+      }
+    } else {
+      previewLines.push({
+        accountCode: invRevenueCode,
+        debit: 0,
+        credit: totalNet,
+        description: `إيرادات — فاتورة ${invoice.ref}`,
+        dimensions: { clientId: invoice.clientId },
+      });
+      warnings.push({
+        field: "lines",
+        message: "الفاتورة ليس لها بنود مخزنة — سيتم ترحيل سطر إيرادات عام واحد",
+      });
+    }
+
+    if (Number(invoice.vatAmount || 0) > 0) {
+      previewLines.push({
+        accountCode: invVatPayableCode,
+        debit: 0,
+        credit: Number(invoice.vatAmount || 0),
+        description: `ضريبة قيمة مضافة — فاتورة ${invoice.ref}`,
+        dimensions: {},
+      });
+    }
+
+    if (unmappedLineIds.length > 0) {
+      warnings.push({
+        field: "allocation",
+        message: `${unmappedLineIds.length} بند بدون حساب محدد — سيُرحَّل على حساب الإيرادات العام (${invRevenueCode}). افتح كل بند وأضف الحساب لتوزيع أدق.`,
+        lineIds: unmappedLineIds,
+      });
+    }
+
+    // COGS preview (Audit follow-up to #1013).
+    // Mirror the COGS planner the /approve handler calls so the UI can
+    // show stock shortages BEFORE the operator clicks approve. The
+    // planner only does SELECTs — we pass `pool` directly so the
+    // preview never holds a transaction open. applyStockMovements is
+    // NEVER called from this path.
+    const { planCogsForInvoice } = await import("../lib/inventory/cogsPosting.js");
+    const { pool: cogsPool } = await import("../lib/rawdb.js");
+    type CogsLine = import("../lib/inventory/cogsPosting.js").CogsJournalLine;
+    let cogsPreviewLines: CogsLine[] = [];
+    let cogsTotal = 0;
+    const cogsWarnings: Array<{ lineId: number; productId: number | null; reason: string; detail?: string }> = [];
+    try {
+      // Use the pool directly so the preview never holds a
+      // transaction open. The planner only does SELECTs;
+      // pool.query() is structurally compatible with PoolClient.query.
+      const cogsPlan = await planCogsForInvoice(cogsPool as never, {
+        companyId: scope.companyId,
+        invoiceId: id,
+        branchId: (invoice.branchId as number) ?? null,
+        lines: lines.map((r) => ({
+          invoiceLineId: r.id,
+          quantity: Number(r.quantity ?? 0),
+          productId: r.productId,
+          costCenterId: r.costCenterId,
+          projectId: r.projectId,
+          employeeId: r.employeeId,
+        })),
+      });
+      cogsPreviewLines = cogsPlan.journalLines;
+      cogsTotal = cogsPlan.totalCogs;
+      for (const w of cogsPlan.warnings) {
+        cogsWarnings.push({
+          lineId: w.invoiceLineId, productId: w.productId,
+          reason: w.reason, detail: w.detail,
+        });
+        // insufficient_stock is the same fatal condition /approve treats
+        // as a ValidationError. Surface it as a BLOCKER here so the UI
+        // can disable the approve button and explain WHY.
+        if (w.reason === "insufficient_stock") {
+          blockers.push({
+            field: `invoice_lines[${w.invoiceLineId}]`,
+            message: `مخزون غير كافٍ للسطر #${w.invoiceLineId}${w.detail ? ` — ${w.detail}` : ""}`,
+          });
+        }
+      }
+      // Splice the bucketed DR COGS / CR Inventory pairs into the
+      // preview so the operator sees the COMPLETE JE that will post,
+      // not a half view that hides the inventory side.
+      for (const cl of cogsPreviewLines) {
+        previewLines.push({
+          accountCode: cl.accountCode,
+          debit: cl.debit,
+          credit: cl.credit,
+          description: cl.description,
+          dimensions: {
+            costCenterId: cl.costCenterId,
+            branchId: cl.branchId,
+            projectId: cl.projectId,
+            departmentId: cl.departmentId,
+          },
+        });
+      }
+    } catch (err) {
+      // Don't let a preview-time failure break the rest of the response —
+      // the operator can still see the revenue/AR/VAT view. Surface as a
+      // soft warning so they know COGS isn't shown.
+      logger.warn({ err, invoiceId: id }, "posting-preview: COGS plan failed");
+      warnings.push({
+        field: "cogs",
+        message: "تعذّر حساب تكلفة البضاعة في المعاينة — راجع المخزون قبل الاعتماد",
+      });
+    }
+
+    const totalDebit = roundTo2(previewLines.reduce((s, l) => s + l.debit, 0));
+    const totalCredit = roundTo2(previewLines.reduce((s, l) => s + l.credit, 0));
+    const isBalanced = Math.abs(totalDebit - totalCredit) < 0.005;
+
+    res.json({
+      invoiceId: id,
+      invoiceRef: invoice.ref,
+      canApprove: blockers.length === 0 && isBalanced,
+      blockers,
+      warnings,
+      // Phase 5.5 — per-line resolver warnings (rule matched / no match
+      // / required entity missing) so the UI can pin each warning to
+      // the line it came from. Distinct from `warnings` above which
+      // are document-level (period closed / no lines / rounding diff).
+      resolverWarnings,
+      // Audit follow-up to #1013 — per-line COGS warnings (product not
+      // found / not tracked / insufficient stock). The UI can pin each
+      // to the line so the operator knows which item to fix.
+      cogsWarnings,
+      cogsTotal,
+      journalLines: previewLines,
+      totals: { debit: totalDebit, credit: totalCredit, balanced: isBalanced },
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Preview posting error:");
   }
 });
 
@@ -919,6 +1878,25 @@ invoicesRouter.patch("/invoices/:id", authorize({ feature: "finance.invoices", a
       before.status = existing.status; after.status = status;
     }
     if (description !== undefined && description !== existing.description) {
+      // ZATCA-mutation guard: once an invoice has been submitted to ZATCA
+      // (zatcaStatus IS NOT NULL — values include 'submitted', 'accepted',
+      // 'rejected' per finance-zatca.ts), its description is part of the
+      // record sent to the tax authority (finance-zatca.ts uses
+      // invoice.description as the line-description fallback). Editing it
+      // here creates a local-vs-ZATCA divergence: the regulator's record
+      // shows the original text while the local DB shows the new one.
+      // The sanctioned correction path for a submitted invoice is a credit
+      // memo + re-issue, not an in-place description rewrite.
+      if (existing.zatcaStatus !== null && existing.zatcaStatus !== undefined) {
+        throw new ConflictError(
+          `لا يمكن تعديل وصف فاتورة مُسجَّلة في ZATCA (الحالة: ${existing.zatcaStatus}) — استخدم إشعار دائن + إعادة إصدار`,
+          {
+            field: "description",
+            fix: "أنشئ إشعار دائن (credit memo) ثم أعد إصدار الفاتورة بالوصف الصحيح",
+            meta: { zatcaStatus: existing.zatcaStatus },
+          }
+        );
+      }
       sets.push(`description = $${idx++}`); params.push(description);
       before.description = existing.description; after.description = description;
     }
@@ -1295,6 +2273,149 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action:
 //   CR 2300 VAT payable
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Credit-memo PREVIEW (audit follow-up to #1017).
+//
+// Mirrors the GL + COGS-reversal math the /credit-memo handler runs
+// at commit time, but writes nothing. Lets the UI show:
+//
+//   * the full JE that WILL post (contra-revenue + VAT reversal + AR
+//     credit + DR Inventory / CR COGS),
+//   * blockers (closed period, amount over open balance, …) so the
+//     "Create Memo" button is grey BEFORE the user clicks,
+//   * the per-line COGS-reversal snapshot so the operator can see
+//     exactly which lots will be restocked at what cost.
+//
+// Read-only, no transaction, no idempotency token.
+invoicesRouter.post("/invoices/:id/credit-memo/preview", authorize({
+  feature: "finance.invoices",
+  action: "view",
+  resource: { table: "invoices", idParam: "id", columns: ['"companyId"', '"branchId"'] },
+}), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { amount, vatIncluded = true, memoDate } = zodParse(previewCreditMemoSchema.safeParse(req.body));
+
+    const creditAmount = roundTo2(Number(amount));
+    const memoDateStr = memoDate ? toDateISO(memoDate) : todayISO();
+
+    const blockers: { field: string; message: string }[] = [];
+    const warnings: { field: string; message: string }[] = [];
+
+    const [invoice] = await rawQuery<{
+      id: number; ref: string; total: string | number;
+      paidAmount: string | number; vatRate: string | number | null;
+      branchId: number | null; clientId: number | null;
+    }>(
+      `SELECT id, ref, total, "paidAmount", "vatRate", "branchId", "clientId"
+         FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
+
+    // Period gate — same as the commit-time check.
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, memoDateStr);
+    if (!periodCheck.open) {
+      blockers.push({
+        field: "memoDate",
+        message: `الفترة المالية مغلقة (${periodCheck.periodName ?? memoDateStr}) — لا يمكن إصدار إشعار دائن`,
+      });
+    }
+
+    // Cap-gate — credit can't exceed remaining open balance.
+    const openBalance = roundTo2(Number(invoice.total) - Number(invoice.paidAmount));
+    if (creditAmount > openBalance + 0.01) {
+      blockers.push({
+        field: "amount",
+        message: `المبلغ (${creditAmount}) يتجاوز الرصيد المفتوح (${openBalance})`,
+      });
+    }
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [previewSalesReturnsCode, previewVatPayableCode, previewArCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4100"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "debit", "2300"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1200"),
+    ]);
+
+    const vatRate = Number(invoice.vatRate ?? await getCompanyVatRate(scope.companyId));
+    const previewNet = vatIncluded ? extractBaseFromGross(creditAmount, vatRate) : creditAmount;
+    const previewVat = roundTo2(creditAmount - previewNet);
+
+    // Plan the COGS reversal via the SAME helper /credit-memo uses, so
+    // the preview reflects whatever the commit would do — including
+    // the "remaining unreversed COGS" cap (a third 0.5-memo can't
+    // restock anything).
+    const { planCogsReversal } = await import("../lib/inventory/cogsPosting.js");
+    const { pool: cogsPool } = await import("../lib/rawdb.js");
+    const invoiceTotal = Number(invoice.total) || 0;
+    const reversalRatio = invoiceTotal > 0 ? creditAmount / invoiceTotal : 0;
+    let cogsReversalPreview: Awaited<ReturnType<typeof planCogsReversal>> = {
+      journalLines: [], stockMovements: [], lineUpdates: [], totalReversed: 0,
+      warnings: [],
+    };
+    try {
+      cogsReversalPreview = await planCogsReversal(cogsPool as never, {
+        companyId: scope.companyId,
+        invoiceId: id,
+        ratio: reversalRatio,
+        memoId: 0, // preview only — no memo row yet
+      });
+    } catch (err) {
+      logger.warn({ err, invoiceId: id }, "credit-memo preview: COGS plan failed");
+      warnings.push({
+        field: "cogs",
+        message: "تعذّر حساب عكس تكلفة البضاعة في المعاينة — راجع المخزون قبل الإصدار",
+      });
+    }
+
+    const previewLines = [
+      { accountCode: previewSalesReturnsCode, debit: previewNet, credit: 0,
+        description: `مرتجع مبيعات — فاتورة ${invoice.ref}` },
+      ...(previewVat > 0
+        ? [{ accountCode: previewVatPayableCode, debit: previewVat, credit: 0,
+             description: `استرداد ضريبة قيمة مضافة — فاتورة ${invoice.ref}` }]
+        : []),
+      { accountCode: previewArCode, debit: 0, credit: creditAmount,
+        description: `إشعار دائن — فاتورة ${invoice.ref}` },
+      ...cogsReversalPreview.journalLines,
+    ];
+    const totalDebit = roundTo2(previewLines.reduce((s, l) => s + l.debit, 0));
+    const totalCredit = roundTo2(previewLines.reduce((s, l) => s + l.credit, 0));
+    const isBalanced = Math.abs(totalDebit - totalCredit) < 0.005;
+
+    res.json({
+      invoiceId: id,
+      invoiceRef: invoice.ref,
+      canIssue: blockers.length === 0 && isBalanced,
+      blockers,
+      warnings,
+      memoDate: memoDateStr,
+      creditAmount,
+      netAmount: previewNet,
+      vatAmount: previewVat,
+      reversalRatio: roundTo2(Math.min(reversalRatio, 1)),
+      cogsTotal: cogsReversalPreview.totalReversed,
+      // Per-line snapshot so the UI can show the operator EXACTLY which
+      // lots will be restocked + at what unit cost.
+      cogsLineSnapshots: cogsReversalPreview.lineUpdates.map((u) => ({
+        invoiceLineId: u.invoiceLineId,
+        newReversedAmount: u.newReversedAmount,
+        cogsReversed: u.snapshot.cogsReversed,
+        allocations: u.snapshot.allocations,
+      })),
+      // Lot-status warnings (quarantine / recalled / expired / disposed /
+      // qc-rejected / lot deleted) so the UI can show "review before
+      // approval" BEFORE the operator commits the memo.
+      cogsReversalWarnings: cogsReversalPreview.warnings,
+      journalLines: previewLines,
+      totals: { debit: totalDebit, credit: totalCredit, balanced: isBalanced },
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Credit memo preview error:");
+  }
+});
+
 invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.invoices", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1322,6 +2443,29 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     let invoice: any;
     let net!: number;
     let vat!: number;
+    let memoJournalResult: { journalId: number; alreadyExists: boolean } | null = null;
+    // Plan COGS reversal alongside the financial entries — the planner
+    // runs inside the same withTransaction so a JE failure rolls the
+    // stock restock back automatically. See lib/inventory/cogsPosting.ts.
+    // Initialised to the empty plan so the spread below stays typed
+    // without `?.` narrowing through a closure.
+    type CogsReversalPlanT = import("../lib/inventory/cogsPosting.js").CogsReversalPlan;
+    let cogsReversalPlan: CogsReversalPlanT = {
+      journalLines: [], stockMovements: [], lineUpdates: [], totalReversed: 0,
+      warnings: [],
+    };
+    // Atomicity guarantee: credit_memos INSERT, invoice paidAmount/status
+    // bump, clients.totalRevenue reversal, budgets.used decrement, AND the
+    // GL post all commit or roll back together. The previous shape ran the
+    // first four inside withTransaction and called financialEngine.post
+    // OUTSIDE — a JE post that threw (closed period, missing accounting_
+    // mapping, account allowPosting=false) left the credit_memos row +
+    // counters committed with no ledger movement. Worse, there's no
+    // idempotency on the credit_memos INSERT itself: a retry creates a
+    // duplicate memo row AND double-counts paidAmount + totalRevenue +
+    // budgets.used. financialEngine.postJournalEntry's internal
+    // withTransaction joins this outer one reentrantly via SAVEPOINT
+    // (rawdb.ts:108).
     await withTransaction(async (client) => {
       const invRes = await client.query(
         `SELECT id, ref, "clientId", "companyId", "branchId", total, "vatAmount",
@@ -1405,6 +2549,45 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
         );
       }
 
+      // ── COGS reversal (Audit follow-up to #1002/#1013) ──────────────
+      // Plan the inverted DR Inventory / CR COGS lines + the lot
+      // restock for this memo's slice of the original sale.
+      // ratio = creditAmount / invoice.total → 1.0 for a full return,
+      // < 1 for partials. Skipped (empty plan) when the invoice had
+      // no COGS to begin with (service-only invoice).
+      const { planCogsReversal, applyStockReversals } = await import(
+        "../lib/inventory/cogsPosting.js"
+      );
+      const invoiceTotal = Number(invoice.total) || 0;
+      const reversalRatio = invoiceTotal > 0 ? creditAmount / invoiceTotal : 0;
+      cogsReversalPlan = await planCogsReversal(client as any, {
+        companyId: scope.companyId,
+        invoiceId: id,
+        ratio: reversalRatio,
+        memoId: memoId ?? 0,
+      });
+      if (cogsReversalPlan.lineUpdates.length > 0) {
+        await applyStockReversals(
+          client as any, scope.companyId,
+          cogsReversalPlan.stockMovements, scope.activeAssignmentId ?? 0,
+        );
+        for (const u of cogsReversalPlan.lineUpdates) {
+          await client.query(
+            `UPDATE invoice_lines
+                SET "cogsReversedAmount" = $1,
+                    "cogsReversedAt"     = NOW(),
+                    "cogsReversalJson"   = COALESCE("cogsReversalJson", '[]'::jsonb) || $2::jsonb
+              WHERE id = $3`,
+            [u.newReversedAmount, JSON.stringify([u.snapshot]), u.invoiceLineId],
+          );
+        }
+        await client.query(
+          `UPDATE credit_memos SET "cogsReversedTotal" = $1
+            WHERE id = $2 AND "companyId" = $3`,
+          [cogsReversalPlan.totalReversed, memoId, scope.companyId],
+        );
+      }
+
       // Reverse the budgets.used bump proportional to the memo's net. The
       // approval bumped the revenue budget by the full invoice net for the
       // JE's createdAt month; a credit memo refunds part of that revenue,
@@ -1430,30 +2613,63 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
           );
         }
       }
+
+      // GL post INSIDE the txn so a throw rolls back the memo row +
+      // counter updates. Engine's internal withTransaction joins
+      // reentrantly via SAVEPOINT.
+      memoJournalResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: invoice.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `CM-${invoice.ref}-${memoId}`,
+        description: `إشعار دائن على الفاتورة ${invoice.ref}: ${reason}`,
+        sourceType: "credit_memo",
+        sourceId: memoId ?? 0,
+        sourceKey: `finance:credit_memo:${memoId}`,
+        lines: [
+          { accountCode: salesReturnsCode, debit: net, credit: 0, clientId: invoice.clientId },
+          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: vat, credit: 0, clientId: invoice.clientId }] : []),
+          { accountCode: arCode, debit: 0, credit: creditAmount, clientId: invoice.clientId },
+          // COGS reversal lines (DR Inventory / CR COGS) — only present
+          // when the original sale had inventoried lines. Service-only
+          // invoices keep the byte-identical pre-PR JE shape.
+          ...cogsReversalPlan.journalLines,
+        ],
+        guardTable: "credit_memos",
+        guardId: memoId ?? 0,
+      });
+
+      // Stamp the JE id back on the credit memo inside the same txn so
+      // the credit_memos.journalId FK invariant either lands complete
+      // or rolls back with everything else.
+      if (memoJournalResult.journalId && memoId) {
+        await client.query(
+          `UPDATE credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [memoJournalResult.journalId, memoId, scope.companyId]
+        );
+
+        // Retroactively stamp the JE id onto the warehouse_movements
+        // rows we wrote above (applyStockReversals runs BEFORE the JE
+        // post, so it couldn't pass the id at insert-time). Match by
+        // (companyId, reference, type='return', journalEntryId IS NULL)
+        // — the reference is unique-per-memo so this targets exactly
+        // the rows from this run. Migration 211 added the column.
+        if (cogsReversalPlan.lineUpdates.length > 0) {
+          await client.query(
+            `UPDATE warehouse_movements
+                SET "journalEntryId" = $1
+              WHERE "companyId" = $2
+                AND reference = $3
+                AND type = 'return'
+                AND "journalEntryId" IS NULL`,
+            [memoJournalResult.journalId, scope.companyId, `CM-${memoId}`],
+          );
+        }
+      }
     });
 
-    const memoJournalResult = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: invoice.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: `CM-${invoice.ref}-${memoId}`,
-      description: `إشعار دائن على الفاتورة ${invoice.ref}: ${reason}`,
-      sourceType: "credit_memo",
-      sourceId: memoId ?? 0,
-      sourceKey: `finance:credit_memo:${memoId}`,
-      lines: [
-        { accountCode: salesReturnsCode, debit: net, credit: 0, clientId: invoice.clientId },
-        ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: vat, credit: 0, clientId: invoice.clientId }] : []),
-        { accountCode: arCode, debit: 0, credit: creditAmount, clientId: invoice.clientId },
-      ],
-      guardTable: "credit_memos",
-      guardId: memoId ?? 0,
-    });
-    let journalId: number | null = memoJournalResult.journalId;
-    markIdempotencyReplay(req, res, memoJournalResult.alreadyExists);
-    if (journalId && memoId) {
-      await rawExecute(`UPDATE credit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`, [journalId, memoId, scope.companyId]);
-    }
+    const journalId: number | null = memoJournalResult!.journalId;
+    markIdempotencyReplay(req, res, memoJournalResult!.alreadyExists);
 
     emitEvent({
       companyId: scope.companyId,
@@ -1465,9 +2681,101 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     const [memo] = await rawQuery<Record<string, unknown>>(`SELECT * FROM credit_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
-    res.status(201).json(memo || { memoId, journalId, invoiceId: id, amount: creditAmount, netAmount: net, vatAmount: vat, reason, memoDate: memoDateStr });
+    // cogsReversalWarnings is non-fatal — flagged when a restored lot's
+    // status drifted between sale and return (quarantine / recalled /
+    // expired / disposed / qc-rejected / lot deleted). UI should
+    // surface these for QC review without blocking the refund.
+    const responsePayload: Record<string, unknown> = memo
+      ? { ...memo, cogsReversalWarnings: cogsReversalPlan.warnings }
+      : { memoId, journalId, invoiceId: id, amount: creditAmount, netAmount: net, vatAmount: vat, reason, memoDate: memoDateStr, cogsReversalWarnings: cogsReversalPlan.warnings };
+    res.status(201).json(responsePayload);
   } catch (err) {
     handleRouteError(err, res, "Credit memo error:");
+  }
+});
+
+// Debit-memo PREVIEW (audit follow-up to #1024).
+//
+// AR-side mirror of /credit-memo/preview. Lets the UI render the GL
+// that WILL post + raise period/scope blockers BEFORE the operator
+// commits. No inventory side-effect — a debit memo charges the
+// customer extra; nothing leaves the warehouse.
+//
+// Read-only, no transaction, no idempotency token.
+invoicesRouter.post("/invoices/:id/debit-memo/preview", authorize({
+  feature: "finance.invoices",
+  action: "view",
+  resource: { table: "invoices", idParam: "id", columns: ['"companyId"', '"branchId"'] },
+}), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { amount, vatIncluded = true, memoDate } = zodParse(previewDebitMemoSchema.safeParse(req.body ?? {}));
+
+    const chargeAmount = roundTo2(Number(amount));
+    const memoDateStr = memoDate ? toDateISO(memoDate) : todayISO();
+
+    const blockers: { field: string; message: string }[] = [];
+    const warnings: { field: string; message: string }[] = [];
+
+    const [invoice] = await rawQuery<{
+      id: number; ref: string; vatRate: string | number | null;
+      branchId: number | null; clientId: number | null;
+    }>(
+      `SELECT id, ref, "vatRate", "branchId", "clientId"
+         FROM invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
+
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, memoDateStr);
+    if (!periodCheck.open) {
+      blockers.push({
+        field: "memoDate",
+        message: `الفترة المالية مغلقة (${periodCheck.periodName ?? memoDateStr}) — لا يمكن إصدار إشعار مدين`,
+      });
+    }
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const [arCode, revenueCode, vatPayableCode] = await Promise.all([
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1200"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+    ]);
+
+    const vatRate = Number(invoice.vatRate ?? await getCompanyVatRate(scope.companyId));
+    const previewNet = vatIncluded ? extractBaseFromGross(chargeAmount, vatRate) : chargeAmount;
+    const previewVat = roundTo2(chargeAmount - previewNet);
+
+    const previewLines = [
+      { accountCode: arCode, debit: chargeAmount, credit: 0,
+        description: `إشعار مدين — فاتورة ${invoice.ref}` },
+      { accountCode: revenueCode, debit: 0, credit: previewNet,
+        description: `إيرادات إضافية — فاتورة ${invoice.ref}` },
+      ...(previewVat > 0
+        ? [{ accountCode: vatPayableCode, debit: 0, credit: previewVat,
+             description: `ضريبة قيمة مضافة — إشعار مدين ${invoice.ref}` }]
+        : []),
+    ];
+    const totalDebit = roundTo2(previewLines.reduce((s, l) => s + l.debit, 0));
+    const totalCredit = roundTo2(previewLines.reduce((s, l) => s + l.credit, 0));
+    const isBalanced = Math.abs(totalDebit - totalCredit) < 0.005;
+
+    res.json({
+      invoiceId: id,
+      invoiceRef: invoice.ref,
+      canIssue: blockers.length === 0 && isBalanced,
+      blockers,
+      warnings,
+      memoDate: memoDateStr,
+      chargeAmount,
+      netAmount: previewNet,
+      vatAmount: previewVat,
+      journalLines: previewLines,
+      totals: { debit: totalDebit, credit: totalCredit, balanced: isBalanced },
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Debit memo preview error:");
   }
 });
 
@@ -1510,6 +2818,16 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
     ]);
 
     let memoId: number | null = null;
+    let debitMemoResult: { journalId: number; alreadyExists: boolean } | null = null;
+    // Atomicity guarantee — same shape as credit-memo above: debit_memos
+    // INSERT, invoice subtotal/vat/total bump, clients.totalRevenue
+    // bump, budgets.used bump, AND the GL post all commit or roll back
+    // together. The earlier shape ran the first four inside this
+    // withTransaction and called financialEngine.post AFTER — a JE post
+    // that threw left a half-formed memo + inflated invoice + inflated
+    // client/budget counters with no GL trace. A retry would create a
+    // duplicate memo row (no idempotency on debit_memos INSERT) AND
+    // double-count the counters.
     await withTransaction(async (client) => {
       try {
         const ins = await client.query(
@@ -1577,35 +2895,42 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
           [net, scope.companyId, revenueCode, currentPeriod()]
         );
       }
+
+      // GL post INSIDE the txn so a throw rolls back the memo row +
+      // counter bumps. Engine's internal withTransaction joins
+      // reentrantly via SAVEPOINT.
+      debitMemoResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: invoice.branchId as number,
+        createdBy: scope.activeAssignmentId,
+        ref: `DM-${invoice.ref}-${memoId}`,
+        description: `إشعار مدين على الفاتورة ${invoice.ref}: ${reason}`,
+        sourceType: "debit_memo",
+        sourceId: memoId ?? 0,
+        sourceKey: `finance:debit_memo:${memoId}`,
+        lines: [
+          { accountCode: arCode, debit: chargeAmount, credit: 0, clientId: invoice.clientId as number | undefined },
+          { accountCode: revenueCode, debit: 0, credit: net, clientId: invoice.clientId as number | undefined },
+          ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: 0, credit: vat, clientId: invoice.clientId as number | undefined }] : []),
+        ],
+        guardTable: "debit_memos",
+        guardId: memoId ?? 0,
+      });
+
+      // Link memo → JE inside the same txn so debit_memos.journalId is
+      // never NULL-after-commit. The earlier shape did this via
+      // rawExecute after the txn, so a crash between the txn commit and
+      // the rawExecute left journalId NULL forever.
+      if (debitMemoResult.journalId && memoId) {
+        await client.query(
+          `UPDATE debit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
+          [debitMemoResult.journalId, memoId, scope.companyId]
+        );
+      }
     });
 
-    const debitMemoResult = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: invoice.branchId as number,
-      createdBy: scope.activeAssignmentId,
-      ref: `DM-${invoice.ref}-${memoId}`,
-      description: `إشعار مدين على الفاتورة ${invoice.ref}: ${reason}`,
-      sourceType: "debit_memo",
-      sourceId: memoId ?? 0,
-      sourceKey: `finance:debit_memo:${memoId}`,
-      lines: [
-        { accountCode: arCode, debit: chargeAmount, credit: 0, clientId: invoice.clientId as number | undefined },
-        { accountCode: revenueCode, debit: 0, credit: net, clientId: invoice.clientId as number | undefined },
-        ...(vat > 0 ? [{ accountCode: vatPayableCode, debit: 0, credit: vat, clientId: invoice.clientId as number | undefined }] : []),
-      ],
-      guardTable: "debit_memos",
-      guardId: memoId ?? 0,
-    });
-    let journalId: number | null = debitMemoResult.journalId;
-    markIdempotencyReplay(req, res, debitMemoResult.alreadyExists);
-    if (journalId && memoId) {
-      // Link memo → JE for the audit trail. Previous code only stamped
-      // updatedAt; debit_memos."journalId" stayed NULL forever.
-      await rawExecute(
-        `UPDATE debit_memos SET "journalId" = $1 WHERE id = $2 AND "companyId" = $3`,
-        [journalId, memoId, scope.companyId]
-      );
-    }
+    const journalId: number | null = debitMemoResult!.journalId;
+    markIdempotencyReplay(req, res, debitMemoResult!.alreadyExists);
 
     emitEvent({
       companyId: scope.companyId,
@@ -1951,6 +3276,16 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
 
     let advance: any;
     let invoice: any;
+    let applyResult: { journalId: number; alreadyExists: boolean } | null = null;
+    // Atomicity guarantee: customer_advances.appliedAmount, invoices.paidAmount,
+    // AND the GL posting all commit (or all roll back) together. The earlier
+    // shape did the counter updates inside a withTransaction and then called
+    // financialEngine.postJournalEntry OUTSIDE — so a JE post that threw
+    // (closed period, missing account, network blip during the engine's
+    // own period rawQuery) left counters inflated but no ledger movement.
+    // The engine's internal withTransaction joins this one reentrantly via
+    // SAVEPOINT (rawdb.ts:108), so commits / rollbacks remain atomic across
+    // both layers.
     await withTransaction(async (client: any) => {
       let advRes;
       try {
@@ -2001,26 +3336,35 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
          WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
         [applyAmt, Number(invoiceId), scope.companyId]
       );
+
+      // GL post lives INSIDE the same transaction so a throw here (closed
+      // period, missing account, etc.) rolls the counter updates back.
+      // financialEngine.postJournalEntry's internal withTransaction joins
+      // this one via SAVEPOINT (rawdb.ts:108 reentrant logic), so the
+      // nested call doesn't open a second connection.
+      applyResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: advance.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `ADV-APPLY-${advanceId}-${invoiceId}`,
+        description: `تطبيق دفعة مقدمة على الفاتورة ${invoice.ref}`,
+        sourceType: "advance_application",
+        sourceId: advanceId,
+        sourceKey: `finance:advance_apply:${advanceId}:${invoiceId}`,
+        lines: [
+          { accountCode: advLiabCode, debit: applyAmt, credit: 0, clientId: advance.clientId },
+          { accountCode: arCode, debit: 0, credit: applyAmt, clientId: advance.clientId },
+        ],
+        guardTable: "customer_advances",
+        guardId: advanceId,
+      });
     });
 
-    const applyResult = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: advance.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: `ADV-APPLY-${advanceId}-${invoiceId}`,
-      description: `تطبيق دفعة مقدمة على الفاتورة ${invoice.ref}`,
-      sourceType: "advance_application",
-      sourceId: advanceId,
-      sourceKey: `finance:advance_apply:${advanceId}:${invoiceId}`,
-      lines: [
-        { accountCode: advLiabCode, debit: applyAmt, credit: 0, clientId: advance.clientId },
-        { accountCode: arCode, debit: 0, credit: applyAmt, clientId: advance.clientId },
-      ],
-      guardTable: "customer_advances",
-      guardId: advanceId,
-    });
-    const journalId = applyResult.journalId;
-    markIdempotencyReplay(req, res, applyResult.alreadyExists);
+    // After-commit response wiring. `applyResult` is guaranteed non-null
+    // here — the transaction would have thrown otherwise (and the catch
+    // below would have responded with the error).
+    const journalId = applyResult!.journalId;
+    markIdempotencyReplay(req, res, applyResult!.alreadyExists);
 
     res.json({ advanceId, invoiceId: Number(invoiceId), amount: applyAmt, journalId });
   } catch (err) {
@@ -2069,18 +3413,22 @@ invoicesRouter.get("/customer-advances", authorize({ feature: "finance.invoices"
 // computes eligible invoices and produces the letters to send.
 
 async function ensureDunningTables() {
+  // Schema matches production: stage (int), daysPastDue, outstandingAmount,
+  // letterContent. NO `level`, `subject`, `body`, or `deletedAt` columns.
   await rawQuery(`
     CREATE TABLE IF NOT EXISTS dunning_letters (
       id SERIAL PRIMARY KEY,
       "companyId" INTEGER NOT NULL,
       "invoiceId" INTEGER NOT NULL,
       "clientId" INTEGER,
-      level INTEGER DEFAULT 1,
-      subject VARCHAR(500),
-      body TEXT,
-      "sentAt" TIMESTAMPTZ,
-      "deletedAt" TIMESTAMPTZ,
-      status VARCHAR(50) DEFAULT 'pending'
+      stage INTEGER NOT NULL,
+      "daysPastDue" INTEGER NOT NULL,
+      "outstandingAmount" NUMERIC(18,2) NOT NULL,
+      "letterContent" TEXT,
+      "sentAt" TIMESTAMPTZ DEFAULT NOW(),
+      "sentBy" INTEGER,
+      "sentVia" VARCHAR(16) DEFAULT 'manual',
+      status VARCHAR(16) DEFAULT 'sent'
     )
   `, []);
   await rawQuery(`
@@ -2264,9 +3612,9 @@ invoicesRouter.post("/dunning/send", authorize({ feature: "finance.collection", 
 
       const [row] = await rawQuery<Record<string, unknown>>(
         `INSERT INTO dunning_letters
-         ("companyId","invoiceId","clientId","level",subject,body,"sentAt",status)
-         VALUES ($1,$2,$3,$4,$5,$6,NOW(),'sent') RETURNING id`,
-        [scope.companyId, inv.id, inv.clientId, stg.stage, `تذكير سداد - مرحلة ${stg.stage}`, letter]
+         ("companyId","invoiceId","clientId",stage,"daysPastDue","outstandingAmount","letterContent","sentAt",status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),'sent') RETURNING id`,
+        [scope.companyId, inv.id, inv.clientId, stg.stage, days, outstanding, letter]
       );
       results.push({ invoiceId: inv.id, letterId: row.id, stage: stg.stage, daysPastDue: days, outstanding, status: "sent" });
     }
@@ -2292,7 +3640,7 @@ invoicesRouter.get("/dunning/history", authorize({ feature: "finance.collection"
     let where = `dl."companyId"=$1`;
     if (invoiceId) { params.push(Number(invoiceId)); where += ` AND dl."invoiceId"=$${params.length}`; }
     if (clientId) { params.push(Number(clientId)); where += ` AND dl."clientId"=$${params.length}`; }
-    if (stage) { params.push(Number(stage)); where += ` AND dl.level=$${params.length}`; }
+    if (stage) { params.push(Number(stage)); where += ` AND dl.stage=$${params.length}`; }
 
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT dl.*, i.ref AS "invoiceNumber", c.name AS "clientName"

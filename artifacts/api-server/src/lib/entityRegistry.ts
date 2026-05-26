@@ -491,6 +491,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read"],
     notifications: [],
     reports: ["recruitment_pipeline"],
+    print: { hasTemplate: true, templateKey: "job_posting", formats: ["a4"], defaultFormat: "a4", permission: "hr:read" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1176,6 +1177,23 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     notifications: ["inventory_count_ready", "inventory_count_approved"],
     reports: ["inventory_count_report"],
   },
+  {
+    id: "item_barcode_label",
+    label: "ملصق باركود",
+    domain: "warehouse",
+    table: "warehouse_products",
+    type: "master",
+    owner: "warehouse",
+    origin: [],
+    relatedEntities: ["warehouse_product"],
+    routes: {},
+    attachments: { supported: false },
+    events: [],
+    permissions: ["warehouse:read", "warehouse:update"],
+    notifications: [],
+    reports: [],
+    print: { hasTemplate: true, templateKey: "item_barcode_label", formats: ["label", "a4"], defaultFormat: "label", permission: "warehouse:read" },
+  },
 
   // ═══════════════════════════════════════════════════════════════════════════
   // STORE — المتجر الإلكتروني
@@ -1381,10 +1399,17 @@ export function getEntityPrintProfile(entityType: string): Required<Pick<EntityP
     };
   }
   // Permissive fallback for documents not yet wired into the registry.
+  // We deliberately use the generic `print:create` permission (not
+  // `print:<entity>:create`) here: the synthesized per-entity permission
+  // wouldn't exist in role_permissions for un-seeded entities, so every
+  // unregistered print would 403. Falling back to the broad `print:create`
+  // matches the user-facing intent ("anyone who can print can print this")
+  // while still gating non-printers out. Once the entity is added to the
+  // registry with an explicit `permission`, that explicit value wins.
   return {
     formats: ["a4"] as PrintFormat[],
     defaultFormat: "a4",
-    permission: `print:${entityType}:create`,
+    permission: "print:create",
     requiresApprovalForReprint: false,
     templateKey: undefined,
     registered: false,

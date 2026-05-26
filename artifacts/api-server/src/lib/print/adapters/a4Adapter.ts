@@ -33,8 +33,20 @@ th { background:#f1f5f9; }
 `;
 
 function wrapHtml(body: string, ctx: RenderContext): string {
-  const title = `${ctx.entityType}-${ctx.entityId}`;
-  const cssOverrides = ctx.template.cssOverrides ?? "";
+  // entityId comes from the request body — an attacker can send something
+  // like "</title><script>alert(1)</script>" to escape the title element
+  // and inject script that runs when the browser opens the doc to print.
+  // Self-XSS only (their own session), but cheap to plug.
+  const title = `${ctx.entityType}-${ctx.entityId}`
+    .replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]!));
+  // cssOverrides comes from a template stored by an authenticated user with
+  // templates:write. Even so, anything that closes the <style> tag would
+  // break out into the document and execute as HTML (think "</style><script>
+  // alert(1)</script>" pasted into the custom-CSS field). Strip any closing
+  // </style> sequence — a real stylesheet has no use for one.
+  const cssOverrides = typeof ctx.template.cssOverrides === "string"
+    ? ctx.template.cssOverrides.replace(/<\s*\/\s*style/gi, "")
+    : "";
   return `<!doctype html>
 <html lang="ar" dir="rtl">
 <head>

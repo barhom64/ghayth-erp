@@ -6,7 +6,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ActionHistory } from "@workspace/workflow-kit";
@@ -134,52 +134,6 @@ export default function PayrollDetail() {
     }
   };
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!payroll) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: payroll.reference || payroll.ref || `PAY-${id}` },
-          { label: "الفترة", value: formatPeriod(payroll) },
-          { label: "عدد الموظفين", value: formatNumber(employeeCount) },
-          { label: "الحالة", value: STATUS_LABELS[payroll.status] || payroll.status || "-" },
-          { label: "نفّذه", value: payroll.runByName || "-" },
-          { label: "تاريخ الإنشاء", value: formatDateAr(payroll.createdAt) },
-        ],
-      },
-      {
-        kind: "summary",
-        items: [
-          { label: "إجمالي الراتب الأساسي", value: formatCurrency(totals.basic) },
-          { label: "إجمالي البدلات", value: formatCurrency(totals.allowances) },
-          { label: "إجمالي العمل الإضافي", value: formatCurrency(totals.overtime) },
-          { label: "إجمالي الخصومات", value: formatCurrency(totals.deductions) },
-          { label: "إجمالي صافي المسير", value: formatCurrency(totals.net), bold: true },
-        ],
-      },
-    ];
-    if (lines.length > 0) {
-      sections.push({
-        kind: "text",
-        title: "كشف الموظفين",
-        body: lines
-          .map((l, i) => `${i + 1}. ${l.employeeName || `موظف #${l.id}`} — صافي ${formatCurrency(Number(l.netSalary || 0))}`)
-          .join("\n"),
-      });
-    }
-    if (payroll.notes) {
-      sections.push({ kind: "text", title: "ملاحظات", body: payroll.notes });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "أعدّه", name: payroll.runByName || "" },
-        { label: "المعتمد", name: payroll.approvedByName || "" },
-      ],
-    });
-    return sections;
-  }, [payroll, totals, lines, employeeCount, id]);
 
   const lineColumns: DataTableColumn<PayrollLine>[] = [
     { key: "employeeName", header: "الموظف", render: (l) => <span className="font-medium">{l.employeeName || `موظف #${l.id}`}</span> },
@@ -370,15 +324,9 @@ export default function PayrollDetail() {
       actions={
         payroll ? (
           <EntityPrintButton
-            branchId={payroll.branchId}
-            title={payroll.reference ? `مسير ${payroll.reference}` : "مسير الرواتب"}
-            ref={payroll.reference || `PAY-${id}`}
-            date={formatDateAr(payroll.paidAt || payroll.createdAt)}
-            sections={printSections}
             entityType="payroll"
             entityId={payroll.id ?? id}
-            formats={["a4"]}
-          />
+            formats={["a4"]}/>
         ) : undefined
       }
     />

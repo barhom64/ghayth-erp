@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -44,20 +45,20 @@ export default function LeadDetailPage() {
 
   const { data: lead, isLoading, isError, refetch } = useApiQuery<any>(
     ["crm-lead", id],
-    `/crm/opportunities/${id}`,
+    id ? `/crm/opportunities/${id}` : null,
     !!id
   );
 
   const { data: activitiesResp } = useApiQuery<any>(
     ["crm-lead-activities", id],
-    `/crm/opportunities/${id}/activities`,
+    id ? `/crm/opportunities/${id}/activities` : null,
     !!id
   );
   const activities: any[] = activitiesResp?.data || (Array.isArray(activitiesResp) ? activitiesResp : []);
 
   const { data: relatedResp } = useApiQuery<any>(
     ["crm-lead-deals", id],
-    `/crm/opportunities/${id}/related`,
+    id ? `/crm/opportunities/${id}/related` : null,
     !!id
   );
   const deals: any[] = relatedResp?.data || [];
@@ -199,6 +200,7 @@ export default function LeadDetailPage() {
         <Phone className="h-4 w-4" />
         تسجيل اتصال
       </Button>
+      <EntityPrintButton entityType="crm_lead" entityId={id ?? ""} formats={["a4"]} />
     </div>
   );
 

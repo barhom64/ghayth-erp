@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -113,55 +113,6 @@ export default function CommitmentDetail() {
     return out;
   }, [commitment]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!commitment) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: commitment.ref || `COM-${id}` },
-          ...(commitment.title
-            ? [{ label: "العنوان", value: commitment.title }]
-            : []),
-          { label: "المبلغ", value: formatCurrency(amount) },
-          { label: "نسبة التنفيذ", value: `${fulfillmentPct.toFixed(1)}%` },
-          ...(commitment.beneficiary
-            ? [{ label: "المستفيد", value: commitment.beneficiary }]
-            : commitment.vendorName
-            ? [{ label: "المستفيد", value: commitment.vendorName }]
-            : []),
-          ...(commitment.costCenter
-            ? [{ label: "مركز التكلفة", value: commitment.costCenter }]
-            : []),
-          ...(commitment.projectName
-            ? [{ label: "المشروع", value: commitment.projectName }]
-            : []),
-          ...(commitment.purpose
-            ? [{ label: "الغرض", value: commitment.purpose }]
-            : []),
-          ...(commitment.commitmentDate
-            ? [{ label: "تاريخ الالتزام", value: formatDateAr(commitment.commitmentDate) }]
-            : []),
-          ...(commitment.releaseDate
-            ? [{ label: "تاريخ التحرير", value: formatDateAr(commitment.releaseDate) }]
-            : []),
-          { label: "الحالة", value: STATUS_LABELS[commitment.status] || commitment.status || "-" },
-          { label: "تاريخ الإنشاء", value: formatDateAr(commitment.createdAt) },
-        ],
-      },
-    ];
-    if (commitment.description) {
-      sections.push({ kind: "text", title: "وصف الالتزام", body: commitment.description });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "مُنشئ الالتزام", name: commitment.createdByName || "" },
-        { label: "المعتمد", name: commitment.approvedByName || "" },
-      ],
-    });
-    return sections;
-  }, [commitment, amount, fulfillmentPct, id]);
 
   const handleEdit = () => {
     setLocation(`/finance/commitments/${id}/edit`);
@@ -350,12 +301,9 @@ export default function CommitmentDetail() {
           <>
             {commitment && (
               <EntityPrintButton
-                branchId={commitment.branchId}
-                title={commitment.title || (commitment.ref ? `التزام ${commitment.ref}` : "التزام مالي")}
-                ref={commitment.ref || `COM-${id}`}
-                date={formatDateAr(commitment.createdAt)}
-                sections={printSections}
-              />
+                entityType="commitment"
+                entityId={id ?? 0}
+                formats={["a4"]}/>
             )}
             <GuardedButton
               perm="finance:update"

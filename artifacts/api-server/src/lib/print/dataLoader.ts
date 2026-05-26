@@ -9,6 +9,27 @@
 
 import { rawQuery } from "../rawdb.js";
 import { getEntity } from "../entityRegistry.js";
+import {
+  loadTrialBalance,
+  loadIncomeStatement,
+  loadInvoicesReport,
+  loadPayrollReport,
+  loadAttendanceReport,
+  loadFleetReport,
+  loadFleetTripsReport,
+  loadBalanceSheet,
+  loadCashFlow,
+  loadCashBankStatement,
+  loadBudgetVariance,
+  loadGeneralLedger,
+  loadWhtSummary,
+  loadChartOfAccounts,
+  loadCustodyAdvances,
+  loadExpensesAnalysis,
+  loadRevenueAnalysis,
+  loadRevenueByActivity,
+  loadExpensesByCostCenter,
+} from "./reportLoaders.js";
 
 interface LoaderArgs {
   companyId: number;
@@ -24,17 +45,67 @@ async function loadByTable(table: string, id: string, companyId: number) {
       [id, companyId]
     );
     if (rows[0]) return rows[0];
-  } catch {
-    // table may not have companyId, retry without
+    // First query ran but found no row — return null instead of trying the
+    // unscoped fallback. Otherwise an entity that simply isn't in this
+    // tenant could leak data from another tenant.
+    return null;
+  } catch (err) {
+    // Only fall back to the unscoped query when the failure is "column
+    // companyId doesn't exist" (PG SQLSTATE 42703). For any other error
+    // — bad id syntax, table missing, permission denied — return null so
+    // we don't accidentally serve cross-tenant rows.
+    const e = err as { code?: string };
+    if (e?.code !== "42703") {
+      return null;
+    }
   }
-  const rows = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM ${table} WHERE id = $1 LIMIT 1`,
-    [id]
-  );
-  return rows[0] ?? null;
+  try {
+    // Tables without a companyId column are by definition global/shared
+    // (e.g., reference data, presets). Reaching this branch is rare and
+    // expected to be safe — but we still cap at LIMIT 1 and don't expose
+    // sensitive transactional tables here (the registry doesn't list any
+    // such tables for print).
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM ${table} WHERE id = $1 LIMIT 1`,
+      [id]
+    );
+    return rows[0] ?? null;
+  } catch {
+    // Table missing entirely (migration not applied) or id type mismatch.
+    // Return null and let the engine synthesise a stub document.
+    return null;
+  }
 }
 
 export async function loadEntityData(args: LoaderArgs): Promise<Record<string, unknown>> {
+  return safeLoad(args, () => dispatchLoad(args));
+}
+
+/** Wraps any loader so a DB error (bad ID syntax, missing table, …) becomes
+ *  a stub `{ entity: { id } }` payload instead of bubbling a 500 to the
+ *  user. The Print Engine prefers to render a near-empty document over
+ *  failing the click — universal fallback + auto-tokens will still produce
+ *  the branch letterhead, a title, and an empty "لا توجد بنود" message. */
+async function safeLoad(
+  args: LoaderArgs,
+  fn: () => Promise<Record<string, unknown>>,
+): Promise<Record<string, unknown>> {
+  try {
+    return await fn();
+  } catch (err) {
+    // Re-emit at warn so support can diagnose without it counting as an
+    // unhandled exception in alerting dashboards.
+    // eslint-disable-next-line no-console
+    console.warn("[print/dataLoader] load failed, returning stub", {
+      entityType: args.entityType,
+      entityId: args.entityId,
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return { entity: { id: args.entityId } };
+  }
+}
+
+async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> {
   const { companyId, entityType, entityId } = args;
   const profile = getEntity(entityType);
 
@@ -72,6 +143,9 @@ export async function loadEntityData(args: LoaderArgs): Promise<Record<string, u
       return await loadStockAdjustment(companyId, entityId);
     case "item_barcode_label":
       return await loadItemBarcode(companyId, entityId);
+    case "job":
+    case "job_posting":
+      return await loadJobPosting(companyId, entityId);
     case "leave_request":
       return await loadLeaveRequest(companyId, entityId);
     case "loan_request":
@@ -80,20 +154,113 @@ export async function loadEntityData(args: LoaderArgs): Promise<Record<string, u
     case "maintenance_request":
       return await loadMaintenanceRequest(companyId, entityId);
     case "payroll":
+      return await loadPayrollRun(companyId, entityId);
     case "payslip":
       return await loadPayslip(companyId, entityId);
     case "official_letter":
       return await loadOfficialLetter(companyId, entityId);
     case "employee_contract":
       return await loadEmployeeContract(companyId, entityId);
+    // ─── Batch reports (no single row — synthetic entityId encodes filters) ──
+    case "report_trial_balance":
+      return await loadTrialBalance(companyId, entityId);
+    case "report_income_statement":
+      return await loadIncomeStatement(companyId, entityId);
+    case "report_invoices":
+      return await loadInvoicesReport(companyId, entityId);
+    case "report_payroll":
+      return await loadPayrollReport(companyId, entityId);
+    case "report_attendance":
+      return await loadAttendanceReport(companyId, entityId);
+    case "report_fleet":
+      return await loadFleetReport(companyId, entityId);
+    case "report_fleet_trips":
+      return await loadFleetTripsReport(companyId, entityId);
+    case "report_balance_sheet":
+      return await loadBalanceSheet(companyId, entityId);
+    case "report_cash_flow":
+      return await loadCashFlow(companyId, entityId);
+    case "report_cash_bank":
+      return await loadCashBankStatement(companyId, entityId);
+    case "report_budget_variance":
+      return await loadBudgetVariance(companyId, entityId);
+    case "report_general_ledger":
+      return await loadGeneralLedger(companyId, entityId);
+    case "report_wht_summary":
+      return await loadWhtSummary(companyId, entityId);
+    case "report_chart_of_accounts":
+      return await loadChartOfAccounts(companyId, entityId);
+    case "report_custody_advances":
+      return await loadCustodyAdvances(companyId, entityId);
+    case "report_expenses_analysis":
+      return await loadExpensesAnalysis(companyId, entityId);
+    case "report_revenue_analysis":
+      return await loadRevenueAnalysis(companyId, entityId);
+    case "report_revenue_by_activity":
+      return await loadRevenueByActivity(companyId, entityId);
+    case "report_expenses_by_cost_center":
+      return await loadExpensesByCostCenter(companyId, entityId);
     default:
-      if (profile?.table) {
-        const raw = await loadByTable(profile.table, entityId, companyId);
+      // 1. Entity is in entityRegistry → use its declared table.
+      // 2. Otherwise fall back to the static map below for entities the
+      //    registry doesn't cover yet (added when wiring the 73-page
+      //    universal print coverage). Returning just `{ entity: { id } }`
+      //    leaves the printed doc almost empty, which the user sees as
+      //    "the print button doesn't work" even though it does.
+      const table = profile?.table ?? FALLBACK_TABLE_MAP[entityType];
+      if (table) {
+        const raw = await loadByTable(table, entityId, companyId);
         return raw ? { entity: raw } : { entity: { id: entityId } };
       }
       return { entity: { id: entityId } };
   }
 }
+
+/** Static entityType → table map used by the default case when the
+ *  registry doesn't list the entity. Keep entries pointing at tables
+ *  that exist in db/schema_pre.sql.
+ */
+const FALLBACK_TABLE_MAP: Record<string, string> = {
+  // HR
+  evaluation_360: "evaluation_cycles",
+  training: "training_courses",
+  job: "job_postings",
+  employee: "employees",
+  employee_profile: "employees",
+  overtime_request: "hr_overtime_requests",
+  exit_request: "hr_exit_requests",
+  // Finance
+  project_costing: "project_costs",
+  fixed_asset: "fixed_assets",
+  vendor: "suppliers",
+  // account_statement was already moved off gl_accounts in #1084 (its
+  // dedicated loader uses chart_of_accounts directly). This fallback entry
+  // points to the canonical name so any code path that hits the default
+  // branch still finds a real table.
+  account_statement: "chart_of_accounts",
+  // Property / CRM
+  tenant: "tenants",
+  property_unit: "property_units",
+  rental_contract: "rental_contracts",
+  client: "clients",
+  crm_lead: "crm_opportunities",
+  // Fleet
+  vehicle: "fleet_vehicles",
+  fleet_trip: "fleet_trips",
+  fuel: "fleet_fuel_logs",
+  driver: "drivers",
+  // Legal
+  legal_contract: "legal_contracts",
+  legal_judgment: "legal_cases",
+  legal_session: "legal_sessions",
+  // Inventory / Store
+  warehouse_category: "warehouse_categories",
+  store_product: "warehouse_products",
+  // Umrah
+  umrah_sub_agent: "umrah_sub_agents",
+  umrah_transport: "umrah_transport",
+  umrah_violation: "umrah_violations",
+};
 
 // ─── Focused loaders ────────────────────────────────────────────────────────
 // Each loader returns the shape consumed by the seeded preset templates.
@@ -104,8 +271,22 @@ async function loadInvoice(companyId: number, id: string) {
     [id, companyId]
   );
   if (!invoice) return { entity: { id } };
+  // Select with stable aliases so the invoice template's {{this.totalPrice}}
+  // works regardless of which schema the underlying table uses. invoice_lines
+  // (the canonical table) stores the per-line total as "lineTotal" but the
+  // ZATCA / legacy templates reference "totalPrice" — alias here so we don't
+  // have to fork the preset per table.
   const items = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM invoice_items WHERE "invoiceId" = $1`,
+    `SELECT
+       id,
+       "invoiceId",
+       description,
+       quantity,
+       "unitPrice",
+       "lineTotal"  AS "totalPrice",
+       "vatAmount",
+       "lineGross"
+     FROM invoice_lines WHERE "invoiceId" = $1`,
     [id]
   );
   const client = invoice.clientId
@@ -130,7 +311,10 @@ async function loadDeliveryNote(companyId: number, id: string) {
 }
 
 async function loadCreditNote(companyId: number, id: string) {
-  return await loadGeneric("credit_notes", id, companyId);
+  // The canonical table is `credit_memos` — `credit_notes` was used in an
+  // older migration sketch and never created. Without this alias every
+  // credit-note print resolved to the empty stub.
+  return await loadGeneric("credit_memos", id, companyId);
 }
 
 async function loadGeneric(table: string, id: string, companyId: number) {
@@ -150,7 +334,16 @@ async function loadVoucher(companyId: number, id: string) {
     `SELECT * FROM vouchers WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
     [id, companyId]
   ).catch(() => [null]);
-  return { entity: voucher ?? { id } };
+  if (!voucher) return { entity: { id } };
+  // Fetch the party (client for receipts, supplier for payments).
+  // Some installations have neither, so each lookup is independent + null-safe.
+  const client = voucher.clientId
+    ? (await rawQuery<Record<string, unknown>>(`SELECT id, name, "taxNumber" FROM clients WHERE id = $1`, [voucher.clientId]))[0] ?? null
+    : null;
+  const supplier = voucher.supplierId
+    ? (await rawQuery<Record<string, unknown>>(`SELECT id, name FROM suppliers WHERE id = $1`, [voucher.supplierId]))[0] ?? null
+    : null;
+  return { entity: voucher, client, supplier };
 }
 
 async function loadPurchaseOrder(companyId: number, id: string) {
@@ -159,9 +352,12 @@ async function loadPurchaseOrder(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   if (!po) return { entity: { id } };
-  const items = await rawQuery(`SELECT * FROM purchase_order_items WHERE "poId" = $1`, [id]).catch(() => []);
-  const vendor = po.vendorId
-    ? (await rawQuery(`SELECT id, name FROM vendors WHERE id = $1`, [po.vendorId]))[0]
+  const items = await rawQuery(`SELECT * FROM purchase_order_lines WHERE "purchaseOrderId" = $1`, [id]).catch(() => []);
+  // The column on purchase_orders is "supplierId" (it was renamed from
+  // "vendorId" before #1084 but the loader never caught up). Reading
+  // `po.vendorId` returned undefined so the supplier name never loaded.
+  const vendor = po.supplierId
+    ? (await rawQuery(`SELECT id, name FROM suppliers WHERE id = $1`, [po.supplierId]))[0]
     : null;
   return { entity: po, items, vendor };
 }
@@ -192,14 +388,22 @@ async function loadJournalEntry(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   if (!je) return { entity: { id } };
-  // journal_entry_lines table not yet committed to schema_pre.sql — defer to
-  // generic table fallback when present in live DB.
-  return { entity: je, lines: [] };
+  // journal_lines is the canonical name (was `journal_entry_lines` in older
+  // sketches that never landed). Each row carries debit/credit + an
+  // accountCode used by the printed entry sheet.
+  const lines = await rawQuery<Record<string, unknown>>(
+    `SELECT id, "accountCode", description, debit, credit
+       FROM journal_lines
+      WHERE "journalId" = $1
+      ORDER BY id`,
+    [id]
+  ).catch(() => []);
+  return { entity: je, lines, items: lines };
 }
 
 async function loadAccountStatement(companyId: number, id: string) {
   const [account] = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM gl_accounts WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    `SELECT * FROM chart_of_accounts WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
     [id, companyId]
   ).catch(() => [null]);
   if (!account) return { entity: { id } };
@@ -222,6 +426,17 @@ async function loadItemBarcode(companyId: number, id: string) {
   return { entity: item ?? { id, name: "—", sku: "—", barcode: id, price: 0 } };
 }
 
+async function loadJobPosting(companyId: number, id: string) {
+  const [posting] = await rawQuery<Record<string, unknown>>(
+    `SELECT id, title, department, location, type, description, requirements,
+            "salaryMin", "salaryMax", status, "closingDate", "createdAt",
+            "experienceLevel", education, vacancies, benefits, skills
+     FROM job_postings WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: posting ?? { id } };
+}
+
 async function loadLeaveRequest(companyId: number, id: string) {
   const [lr] = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM hr_leave_requests WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
@@ -236,7 +451,7 @@ async function loadLeaveRequest(companyId: number, id: string) {
 
 async function loadLoanRequest(companyId: number, id: string) {
   const [loan] = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM hr_loans WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    `SELECT * FROM hr_employee_loans WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
     [id, companyId]
   ).catch(() => [null]);
   if (!loan) return { entity: { id } };
@@ -255,8 +470,15 @@ async function loadMaintenanceRequest(companyId: number, id: string) {
 }
 
 async function loadPayslip(companyId: number, id: string) {
+  // entityType "payslip" → single payroll_lines row (one employee, one period).
+  // payroll_lines is keyed by id; the join to payroll_runs gives the period
+  // and the company scope (lines themselves don't carry companyId).
   const [ps] = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM payroll_slips WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    `SELECT pl.*, pr."period", pr."status" AS "runStatus", pr."companyId" AS "_runCompanyId"
+       FROM payroll_lines pl
+       JOIN payroll_runs pr ON pr.id = pl."runId"
+      WHERE pl.id = $1 AND pr."companyId" = $2 AND pl."deletedAt" IS NULL
+      LIMIT 1`,
     [id, companyId]
   ).catch(() => [null]);
   if (!ps) return { entity: { id } };
@@ -264,6 +486,28 @@ async function loadPayslip(companyId: number, id: string) {
     ? (await rawQuery(`SELECT id, name, "empNumber" FROM employees WHERE id = $1`, [ps.employeeId]))[0]
     : null;
   return { entity: ps, employee };
+}
+
+async function loadPayrollRun(companyId: number, id: string) {
+  // entityType "payroll" → the payroll_runs row + all its payroll_lines.
+  // The frontend opens /finance/payroll/:id where id is a payroll_runs.id.
+  // Before this loader existed, the old loadPayslip queried payroll_slips
+  // (a table that was never created) so every payroll print rendered as
+  // an empty stub.
+  const [run] = await rawQuery<Record<string, unknown>>(
+    `SELECT * FROM payroll_runs WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!run) return { entity: { id } };
+  const items = await rawQuery<Record<string, unknown>>(
+    `SELECT pl.*, e.name AS "employeeName", e."empNumber"
+       FROM payroll_lines pl
+       LEFT JOIN employees e ON e.id = pl."employeeId"
+      WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL
+      ORDER BY e."empNumber" NULLS LAST, pl.id`,
+    [id]
+  ).catch(() => []);
+  return { entity: run, items };
 }
 
 async function loadOfficialLetter(companyId: number, id: string) {

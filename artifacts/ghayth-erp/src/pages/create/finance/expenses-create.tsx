@@ -1,26 +1,19 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { z } from "zod";
 import { useApiMutation, useApiQuery } from "@/lib/api";
-import { useFormContext, Controller } from "react-hook-form";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
+import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  CreatePageLayout,
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormNumberField,
-  FormSelectField,
-  FormDateField,
-  FormCheckboxField,
-  FormSwitchField,
-  FormEntitySelect,
-} from "@workspace/ui-core";
+import { Checkbox } from "@/components/ui/checkbox";
+import { CreatePageLayout } from "@workspace/ui-core";
+import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocomplete";
-import { formatCurrency, todayLocal } from "@/lib/formatters";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { AlertCircle, Paperclip, Link2 } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect, EmployeeSelect, VehicleSelect } from "@/components/shared/entity-selects";
@@ -30,6 +23,41 @@ import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+
+interface TaxCodeOption {
+  id: number;
+  code: string;
+  name: string;
+  rate: number | string;
+  taxType: "standard" | "zero" | "exempt" | "out_of_scope" | "reverse_charge";
+  zatcaCategoryCode: string | null;
+  isInclusiveDefault: boolean;
+  isActive: boolean;
+}
+
+function roundMoney(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function expenseTaxSplit(amount: number, rate: number, inclusive: boolean) {
+  if (!amount || !rate) return { net: amount || 0, vat: 0, gross: amount || 0 };
+  if (inclusive) {
+    const net = roundMoney(amount / (1 + rate / 100));
+    return { net, vat: roundMoney(amount - net), gross: amount };
+  }
+  const vat = roundMoney(amount * (rate / 100));
+  return { net: amount, vat, gross: roundMoney(amount + vat) };
+}
+
+const TAX_TYPE_TO_CATEGORY: Record<string, string> = {
+  standard: "standard",
+  reverse_charge: "standard",
+  zero: "zero_rated",
+  exempt: "exempt",
+  out_of_scope: "",
+};
 
 const OPERATION_TYPES = [
   { value: "expense", label: "مصروف عام" },
@@ -74,40 +102,14 @@ const PAYMENT_METHODS = [
 ];
 
 const TAX_CATEGORIES = [
+  { value: "", label: "بدون تصنيف" },
   { value: "exempt", label: "معفى" },
   { value: "zero_rated", label: "نسبة صفرية" },
   { value: "standard", label: "النسبة الأساسية (15%)" },
   { value: "reduced", label: "نسبة مخفضة (5%)" },
 ];
 
-const VAT_OPTIONS = [
-  { value: "5", label: "5%" },
-  { value: "15", label: "15%" },
-];
-
-const RELATED_ENTITY_TYPE_OPTIONS = [
-  { value: "employee", label: "موظف" },
-  { value: "vehicle", label: "مركبة" },
-  { value: "supplier", label: "مورد" },
-  { value: "contract", label: "عقد" },
-  { value: "property", label: "عقار" },
-  { value: "legal_case", label: "قضية قانونية" },
-];
-
-const ATTACHMENT_TYPE_OPTIONS = [
-  { value: "invoice", label: "فاتورة" },
-  { value: "receipt", label: "وصل استلام" },
-  { value: "transfer", label: "إشعار تحويل" },
-  { value: "contract", label: "عقد" },
-  { value: "approval", label: "موافقة" },
-  { value: "other", label: "أخرى" },
-];
-
-const STATUS_OPTIONS = [
-  { value: "draft", label: "مسودة" },
-  { value: "pending", label: "في انتظار الموافقة" },
-  { value: "posted", label: "مرحّل" },
-];
+const ATTACHMENT_REQUIRED_TYPES = ["vendor_invoice", "purchase", "custody_settlement", "advance_claim", "legal_fee"];
 
 const INVOICE_TYPE_CODES = [
   { value: "388", label: "فاتورة ضريبية (388)" },
@@ -121,8 +123,6 @@ const TAX_CATEGORY_CODES = [
   { value: "E", label: "معفى (E)" },
   { value: "O", label: "خارج نطاق الضريبة (O)" },
 ];
-
-const ATTACHMENT_REQUIRED_TYPES = ["vendor_invoice", "purchase", "custody_settlement", "advance_claim", "legal_fee"];
 
 function generateAutoDescription(params: {
   operationType: string;
@@ -163,271 +163,32 @@ function getRelatedEntityLabel(entityType: string, entityId: string, data: {
   legalCases: any[];
 }): string {
   if (!entityId) return "";
+  const id = entityId;
   if (entityType === "employee") {
-    const emp = data.employees.find((e: any) => String(e.id) === entityId);
+    const emp = data.employees.find((e: any) => String(e.id) === id);
     return emp ? `${emp.name} - ${emp.jobTitle || ""}` : "";
   }
   if (entityType === "vehicle") {
-    const v = data.vehicles.find((v: any) => String(v.id) === entityId);
+    const v = data.vehicles.find((v: any) => String(v.id) === id);
     return v ? `${v.plateNumber} - ${v.make} ${v.model}` : "";
   }
   if (entityType === "supplier") {
-    const s = data.suppliers.find((s: any) => String(s.id) === entityId);
+    const s = data.suppliers.find((s: any) => String(s.id) === id);
     return s ? s.name : "";
   }
   if (entityType === "contract") {
-    const c = data.contracts.find((c: any) => String(c.id) === entityId);
+    const c = data.contracts.find((c: any) => String(c.id) === id);
     return c ? `${c.tenantName} - عقد #${c.id}` : "";
   }
   if (entityType === "property") {
-    const u = data.units.find((u: any) => String(u.id) === entityId);
+    const u = data.units.find((u: any) => String(u.id) === id);
     return u ? `${u.unitNumber || u.name} - ${u.type || "وحدة"}` : "";
   }
   if (entityType === "legal_case") {
-    const c = data.legalCases.find((c: any) => String(c.id) === entityId);
+    const c = data.legalCases.find((c: any) => String(c.id) === id);
     return c ? `${c.title || c.caseNumber || `قضية #${c.id}`}` : "";
   }
   return "";
-}
-
-const schema = z.object({
-  accountCode: z.string().min(1, "بند المصروفات مطلوب"),
-  sourceAccountCode: z.string().optional(),
-  amount: z.string().min(1, "المبلغ مطلوب"),
-  description: z.string().optional(),
-  date: z.string(),
-  period: z.string().optional(),
-  operationType: z.string(),
-  expenseType: z.string(),
-  paymentMethod: z.string(),
-  vatRate: z.string().optional(),
-  reference: z.string().optional(),
-  costCenter: z.string().min(1, "مركز التكلفة مطلوب"),
-  branchId: z.string().min(1, "الفرع مطلوب"),
-  companyId: z.string().optional(),
-  departmentId: z.string().optional(),
-  projectId: z.string().optional(),
-  taxCategory: z.string().optional(),
-  relatedEntityType: z.string().optional(),
-  relatedEntityId: z.string().optional(),
-  relatedEntityName: z.string().optional(),
-  attachmentUrl: z.string().optional(),
-  attachmentType: z.string(),
-  isPaid: z.boolean(),
-  autoDescription: z.boolean(),
-  status: z.enum(["draft", "pending", "posted"]),
-  isTaxLinked: z.boolean(),
-  invoiceTypeCode: z.string(),
-  taxCategoryCode: z.string(),
-  exemptionReason: z.string().optional(),
-  govSyncEnabled: z.boolean(),
-  govIntegrationId: z.string().optional(),
-  govEntityType: z.string().optional(),
-  govEntityId: z.string().optional(),
-});
-
-function AccountPicker({ name, options, placeholder, loading }: {
-  name: string;
-  options: AutocompleteOption[];
-  placeholder: string;
-  loading: boolean;
-}) {
-  const { control } = useFormContext();
-  return (
-    <Controller
-      name={name}
-      control={control}
-      render={({ field }) => (
-        <Autocomplete
-          options={options}
-          value={field.value ?? ""}
-          onChange={(v) => field.onChange(String(v))}
-          placeholder={placeholder}
-          loading={loading}
-        />
-      )}
-    />
-  );
-}
-
-function AutoDescriptionEffect() {
-  const { watch, setValue } = useFormContext();
-  const autoDescription = watch("autoDescription") as boolean;
-  const operationType = watch("operationType") as string;
-  const relatedEntityName = watch("relatedEntityName") as string;
-  const period = watch("period") as string;
-  const amount = watch("amount") as string;
-  const expenseType = watch("expenseType") as string;
-  useEffect(() => {
-    if (autoDescription) {
-      setValue("description", generateAutoDescription({
-        operationType,
-        relatedEntityName,
-        period,
-        amount: Number(amount) || undefined,
-        expenseType,
-      }));
-    }
-  }, [autoDescription, operationType, relatedEntityName, period, amount, expenseType, setValue]);
-  return null;
-}
-
-function TotalDisplay() {
-  const { watch } = useFormContext();
-  const amount = watch("amount") as string;
-  const vatRate = watch("vatRate") as string;
-  const vatAmount = vatRate ? Math.round(Number(amount) * (Number(vatRate) / 100) * 100) / 100 : 0;
-  const totalWithVat = Number(amount) + vatAmount;
-  return (
-    <div className="space-y-1.5">
-      <label className="text-sm font-medium">الإجمالي مع الضريبة</label>
-      <div className="p-2 bg-muted rounded-md text-sm font-medium">
-        {vatAmount > 0
-          ? `${formatCurrency(totalWithVat)} (ضريبة: ${formatCurrency(vatAmount)})`
-          : formatCurrency(Number(amount || 0))}
-      </div>
-    </div>
-  );
-}
-
-function AttachmentWarning() {
-  const { watch } = useFormContext();
-  const operationType = watch("operationType") as string;
-  const amount = Number(watch("amount") || 0);
-  const attachmentUrl = watch("attachmentUrl") as string;
-  const required = ATTACHMENT_REQUIRED_TYPES.includes(operationType) ||
-    (operationType === "payment" && amount >= 5000);
-  if (!required || attachmentUrl) return null;
-  return (
-    <div className="flex items-start gap-2 p-3 bg-status-error-surface border border-status-error-surface rounded-md">
-      <AlertCircle className="h-4 w-4 text-status-error mt-0.5 shrink-0" />
-      <p className="text-sm text-status-error-foreground">هذا النوع من العمليات يستوجب إرفاق مستند داعم (فاتورة، وصل استلام، أو إشعار تحويل) قبل الحفظ.</p>
-    </div>
-  );
-}
-
-function RelatedEntityBlock({ data }: { data: any }) {
-  const { watch, setValue } = useFormContext();
-  const relatedEntityType = watch("relatedEntityType") as string;
-  const relatedEntityId = watch("relatedEntityId") as string;
-  if (!relatedEntityType) return null;
-  return (
-    <>
-      <div className="space-y-1.5">
-        <label className="text-sm font-medium">الجهة المرتبطة</label>
-        <Select
-          value={relatedEntityId || "_none"}
-          onValueChange={(v) => {
-            const val = v === "_none" ? "" : v;
-            setValue("relatedEntityId", val);
-            setValue("relatedEntityName", val ? getRelatedEntityLabel(relatedEntityType, val, data) : "");
-          }}
-        >
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="_none">— اختر —</SelectItem>
-            {relatedEntityType === "employee" && data.employees.map((emp: any) => (
-              <SelectItem key={emp.id} value={String(emp.id)}>{emp.name} - {emp.jobTitle || ""}</SelectItem>
-            ))}
-            {relatedEntityType === "vehicle" && data.vehicles.map((v: any) => (
-              <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
-            ))}
-            {relatedEntityType === "supplier" && data.suppliers.map((s: any) => (
-              <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-            ))}
-            {relatedEntityType === "contract" && data.contracts.map((c: any) => (
-              <SelectItem key={c.id} value={String(c.id)}>{c.tenantName} - عقد #{c.id}</SelectItem>
-            ))}
-            {relatedEntityType === "property" && data.units.map((u: any) => (
-              <SelectItem key={u.id} value={String(u.id)}>{u.unitNumber || u.name} - {u.type || "وحدة"}</SelectItem>
-            ))}
-            {relatedEntityType === "legal_case" && data.legalCases.map((c: any) => (
-              <SelectItem key={c.id} value={String(c.id)}>{c.title || c.caseNumber || `قضية #${c.id}`}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      {relatedEntityId && (
-        <div className="md:col-span-3">
-          {relatedEntityType === "employee" && <EmployeeContextCard employeeId={relatedEntityId} />}
-          {relatedEntityType === "vehicle" && <VehicleContextCard vehicleId={relatedEntityId} section="maintenance" />}
-          {relatedEntityType === "supplier" && <SupplierContextCard supplierId={relatedEntityId} />}
-          {relatedEntityType === "property" && <PropertyUnitContextCard unitId={relatedEntityId} section="payment" />}
-        </div>
-      )}
-    </>
-  );
-}
-
-function GovSyncBlock({ govIntegrationsData }: { govIntegrationsData: any }) {
-  const { watch } = useFormContext();
-  const operationType = watch("operationType") as string;
-  const govSyncEnabled = watch("govSyncEnabled") as boolean;
-  const govEntityType = watch("govEntityType") as string;
-  if (!GOV_LINKED_OPERATION_TYPES.includes(operationType)) return null;
-  return (
-    <div className="border border-status-info-surface rounded-lg p-4 space-y-3 bg-status-info-surface">
-      <div className="flex items-center gap-2">
-        <Link2 className="h-4 w-4 text-status-info-foreground" />
-        <h3 className="font-semibold text-sm text-status-info-foreground">الربط بنظام حكومي</h3>
-      </div>
-      <FormCheckboxField name="govSyncEnabled" label="ربط هذا المصروف بنظام حكومي خارجي" />
-      {govSyncEnabled && (
-        <FormGrid cols={2}>
-          <FormSelectField
-            name="govIntegrationId"
-            label="النظام الحكومي"
-            options={(govIntegrationsData?.data || []).filter((gi: any) => gi.enabled).map((gi: any) => ({
-              value: String(gi.id),
-              label: gi.name,
-            }))}
-            placeholder="— اختر النظام —"
-          />
-          <FormSelectField
-            name="govEntityType"
-            label="نوع الكيان المرتبط"
-            options={[
-              { value: "employee", label: "موظف (إقامة / تصريح)" },
-              { value: "vehicle", label: "مركبة (استمارة / فحص)" },
-            ]}
-            placeholder="— اختر النوع —"
-          />
-          {govEntityType === "employee" && (
-            <FormEntitySelect name="govEntityId" select={EmployeeSelect} label="الموظف المرتبط" />
-          )}
-          {govEntityType === "vehicle" && (
-            <FormEntitySelect name="govEntityId" select={VehicleSelect} label="المركبة المرتبطة" />
-          )}
-        </FormGrid>
-      )}
-    </div>
-  );
-}
-
-function TaxLinkedBlock() {
-  const { watch } = useFormContext();
-  const isTaxLinked = watch("isTaxLinked") as boolean;
-  const taxCategoryCode = watch("taxCategoryCode") as string;
-  return (
-    <div className="border rounded-lg p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-sm text-muted-foreground flex items-center gap-2">
-          <span className="text-status-success-foreground">🏛</span>
-          ربط مع هيئة الزكاة والضريبة والجمارك
-        </h3>
-        <FormSwitchField name="isTaxLinked" label={isTaxLinked ? "مفعّل" : "غير مفعّل"} />
-      </div>
-      {isTaxLinked && (
-        <FormGrid cols={3}>
-          <FormSelectField name="invoiceTypeCode" label="نوع الفاتورة الضريبية" options={INVOICE_TYPE_CODES} />
-          <FormSelectField name="taxCategoryCode" label="فئة الضريبة" options={TAX_CATEGORY_CODES} />
-          {(taxCategoryCode === "E" || taxCategoryCode === "Z") && (
-            <FormTextField name="exemptionReason" label="سبب الإعفاء / النسبة الصفرية" placeholder="أدخل سبب الإعفاء..." />
-          )}
-        </FormGrid>
-      )}
-    </div>
-  );
 }
 
 export default function ExpensesCreate() {
@@ -437,22 +198,26 @@ export default function ExpensesCreate() {
   const createMut = useApiMutation("/finance/expenses", "POST", [["expenses"]]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { data: accountsData, isLoading: accountsLoading, isError } = useApiQuery<{ data: any[] }>(["accounts-list"], "/finance/accounts");
+  const { data: taxCodesData } = useApiQuery<{ data: TaxCodeOption[] }>(
+    ["tax-codes", "active"],
+    "/finance/tax-codes?active=true",
+  );
+  const activeTaxCodes = (taxCodesData?.data ?? []).filter((t) => t.isActive !== false);
   const { data: govIntegrationsData } = useApiQuery<{ data: any[] }>(["gov-integrations"], "/gov-integrations");
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
   const { data: vehiclesData } = useApiQuery<{ data: any[] }>(["fleet-vehicles"], "/fleet/vehicles");
   const { data: suppliersData } = useApiQuery<{ data: any[] }>(["suppliers-list"], "/warehouse/suppliers");
+
   const { data: projectsData } = useApiQuery<{ data: any[] }>(["projects-list"], "/projects");
   const { data: contractsData } = useApiQuery<{ data: any[] }>(["contracts-list"], "/properties/contracts");
   const { data: unitsData } = useApiQuery<{ data: any[] }>(["units-list"], "/properties/units");
   const { data: legalCasesData } = useApiQuery<{ data: any[] }>(["legal-cases-list"], "/legal/cases");
-
-  if (accountsLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
-  const accounts = accountsData?.data || [];
   const projects = projectsData?.data || [];
+  const accounts = accountsData?.data || [];
   const expenseAccounts = accounts.filter((a: any) => a.type === "expense" || a.code?.startsWith("5"));
+  // خزائن وبنوك فقط (11xx = نقد، 12xx = بنوك) — لتفادي اختيار حسابات مدينة/ذمم عن طريق الخطأ
   const sourceAccounts = accounts.filter((a: any) => a.code?.startsWith("11") || a.code?.startsWith("12"));
+
   const expenseOptions: AutocompleteOption[] = expenseAccounts.map((a: any) => ({
     value: a.code || String(a.id),
     label: `${a.code} - ${a.name}`,
@@ -462,218 +227,615 @@ export default function ExpensesCreate() {
     label: `${a.code} - ${a.name}`,
   }));
 
-  const relatedData = {
-    employees: employeesData?.data || [],
-    vehicles: vehiclesData?.data || [],
-    suppliers: suppliersData?.data || [],
-    contracts: contractsData?.data || [],
-    units: unitsData?.data || [],
-    legalCases: legalCasesData?.data || [],
+  const defaultForm = {
+    accountCode: "",
+    sourceAccountCode: "",
+    amount: "",
+    description: "",
+    date: todayLocal(),
+    period: todayLocal().slice(0, 7),
+    operationType: "expense",
+    expenseType: "operational",
+    paymentMethod: "cash",
+    vatRate: "",
+    taxCodeId: "",
+    taxInclusive: false,
+    reference: "",
+    costCenter: "",
+    branchId: selectedBranchId ? String(selectedBranchId) : "",
+    companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "",
+    departmentId: "",
+    projectId: "",
+    taxCategory: "",
+    relatedEntityType: "",
+    relatedEntityId: "",
+    relatedEntityName: "",
+    attachmentUrl: "",
+    attachmentType: "invoice",
+    isPaid: true,
+    autoDescription: false,
+    status: "draft",
+    isTaxLinked: false,
+    invoiceTypeCode: "388",
+    taxCategoryCode: "S",
+    exemptionReason: "",
+    govSyncEnabled: false,
+    govIntegrationId: "",
+    govEntityType: "",
+    govEntityId: "",
   };
 
+  const { form, setForm, clearDraft, isDirty, hasDraft } = useAutoDraft("expense-create", defaultForm);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  const attachmentRequired = ATTACHMENT_REQUIRED_TYPES.includes(form.operationType) ||
+    (form.operationType === "payment" && Number(form.amount) >= 5000);
+
+  useEffect(() => {
+    if (form.autoDescription) {
+      const autoDesc = generateAutoDescription({
+        operationType: form.operationType,
+        relatedEntityName: form.relatedEntityName,
+        period: form.period,
+        amount: Number(form.amount) || undefined,
+        expenseType: form.expenseType,
+      });
+      setForm(prev => ({ ...prev, description: autoDesc }));
+    }
+  }, [form.operationType, form.relatedEntityName, form.period, form.amount, form.autoDescription, form.expenseType]);
+
+  if (accountsLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
+
+  const selectedTaxCode = form.taxCodeId
+    ? activeTaxCodes.find((t) => String(t.id) === String(form.taxCodeId))
+    : null;
+  const effectiveRate = selectedTaxCode ? Number(selectedTaxCode.rate) : Number(form.vatRate) || 0;
+  const taxSplit = expenseTaxSplit(Number(form.amount) || 0, effectiveRate, form.taxInclusive);
+  const vatAmount = taxSplit.vat;
+  const totalWithVat = taxSplit.gross;
+
+  const handleTaxCodeChange = (val: string) => {
+    if (val === "_none") {
+      setForm({ ...form, taxCodeId: "", vatRate: "" });
+      return;
+    }
+    const tc = activeTaxCodes.find((t) => String(t.id) === val);
+    if (!tc) return;
+    setForm({
+      ...form,
+      taxCodeId: val,
+      vatRate: String(Number(tc.rate) || 0),
+      taxInclusive: tc.isInclusiveDefault ?? form.taxInclusive,
+      taxCategory: TAX_TYPE_TO_CATEGORY[tc.taxType] ?? form.taxCategory,
+      taxCategoryCode: tc.zatcaCategoryCode ?? form.taxCategoryCode,
+    });
+  };
+
+  const handleSubmit = async () => {
+    const firstError = validate({
+      accountCode: form.accountCode ? null : "بند المصروفات مطلوب",
+      amount: form.amount ? null : "المبلغ مطلوب",
+      branchId: form.branchId ? null : "الفرع مطلوب",
+      costCenter: form.costCenter ? null : "مركز التكلفة مطلوب",
+      attachmentUrl: attachmentRequired && !form.attachmentUrl ? "المرفق إلزامي — هذا النوع من العمليات يتطلب إرفاق مستند داعم" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
+      return;
+    }
+    try {
+      await createMut.mutateAsync({
+        accountCode: form.accountCode || undefined,
+        sourceAccountCode: form.sourceAccountCode || undefined,
+        amount: Number(form.amount),
+        description: form.description,
+        date: form.date || undefined,
+        period: form.period || undefined,
+        operationType: form.operationType,
+        expenseType: form.expenseType,
+        paymentMethod: form.paymentMethod,
+        vatRate: form.vatRate ? Number(form.vatRate) : undefined,
+        taxCodeId: form.taxCodeId ? Number(form.taxCodeId) : undefined,
+        taxInclusive: form.taxCodeId ? form.taxInclusive : undefined,
+        reference: form.reference || undefined,
+        costCenter: form.costCenter || undefined,
+        branchId: form.branchId ? Number(form.branchId) : undefined,
+        companyId: form.companyId ? Number(form.companyId) : undefined,
+        departmentId: form.departmentId ? Number(form.departmentId) : undefined,
+        projectId: form.projectId ? Number(form.projectId) : undefined,
+        taxCategory: form.taxCategory || undefined,
+        relatedEntityType: form.relatedEntityType || undefined,
+        relatedEntityId: form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
+        relatedEntityName: form.relatedEntityName || undefined,
+        attachmentUrl: form.attachmentUrl || undefined,
+        attachmentType: form.attachmentType || undefined,
+        isPaid: form.isPaid,
+        autoDescription: form.autoDescription,
+        isTaxLinked: form.isTaxLinked,
+        invoiceTypeCode: form.isTaxLinked ? form.invoiceTypeCode : undefined,
+        taxCategoryCode: form.isTaxLinked ? form.taxCategoryCode : undefined,
+        exemptionReason: form.isTaxLinked && form.exemptionReason ? form.exemptionReason : undefined,
+        govSyncEnabled: form.govSyncEnabled || undefined,
+        govIntegrationId: form.govIntegrationId ? Number(form.govIntegrationId) : undefined,
+        govEntityType: form.govEntityType || undefined,
+        govEntityId: form.govEntityId ? Number(form.govEntityId) : undefined,
+      });
+      toast({ title: "تم إضافة المصروف بنجاح" });
+      clearDraft();
+      setLocation("/finance/expenses");
+    } catch (err: any) {
+      setApiError(err);
+      toast({ variant: "destructive", title: "خطأ في الحفظ", description: err?.message || "حدث خطأ أثناء إضافة المصروف" });
+    }
+  };
+
+  const journalPreviewLines = (() => {
+    if (!form.accountCode || !form.amount) return [];
+    const base = Number(form.amount) || 0;
+    const vat = vatAmount;
+    const total = base + vat;
+    const sourceAcct = form.sourceAccountCode || "1100";
+    const lines: { account: string; debit: number; credit: number }[] = [
+      { account: form.accountCode, debit: base, credit: 0 },
+    ];
+    if (vat > 0) {
+      lines.push({ account: "1400 (ض.م.م مدخلات)", debit: vat, credit: 0 });
+    }
+    lines.push({ account: sourceAcct || "1100", debit: 0, credit: total });
+    return lines;
+  })();
+
   return (
-    <CreatePageLayout title="إضافة مصروف جديد" backPath="/finance/expenses">
-      <FormShell
-        schema={schema}
-        defaultValues={{
-          accountCode: "",
-          sourceAccountCode: "",
-          amount: "",
-          description: "",
-          date: todayLocal(),
-          period: todayLocal().slice(0, 7),
-          operationType: "expense",
-          expenseType: "operational",
-          paymentMethod: "cash",
-          vatRate: "",
-          reference: "",
-          costCenter: "",
-          branchId: selectedBranchId ? String(selectedBranchId) : "",
-          companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "",
-          departmentId: "",
-          projectId: "",
-          taxCategory: "",
-          relatedEntityType: "",
-          relatedEntityId: "",
-          relatedEntityName: "",
-          attachmentUrl: "",
-          attachmentType: "invoice",
-          isPaid: true,
-          autoDescription: false,
-          status: "draft",
-          isTaxLinked: false,
-          invoiceTypeCode: "388",
-          taxCategoryCode: "S",
-          exemptionReason: "",
-          govSyncEnabled: false,
-          govIntegrationId: "",
-          govEntityType: "",
-          govEntityId: "",
-        }}
-        submitLabel={createMut.isPending ? "جاري الحفظ..." : "حفظ المصروف"}
-        secondaryActions={
-          <Button type="button" variant="outline" onClick={() => setLocation("/finance/expenses")}>
-            إلغاء
-          </Button>
-        }
-        onSubmit={async (values) => {
-          const required = ATTACHMENT_REQUIRED_TYPES.includes(values.operationType) ||
-            (values.operationType === "payment" && Number(values.amount) >= 5000);
-          if (required && !values.attachmentUrl) {
-            toast({ variant: "destructive", title: "المرفق إلزامي — هذا النوع من العمليات يتطلب إرفاق مستند داعم" });
-            return;
-          }
-          await createMut.mutateAsync({
-            accountCode: values.accountCode || undefined,
-            sourceAccountCode: values.sourceAccountCode || undefined,
-            amount: Number(values.amount),
-            description: values.description,
-            date: values.date || undefined,
-            period: values.period || undefined,
-            operationType: values.operationType,
-            expenseType: values.expenseType,
-            paymentMethod: values.paymentMethod,
-            vatRate: values.vatRate ? Number(values.vatRate) : undefined,
-            reference: values.reference || undefined,
-            costCenter: values.costCenter || undefined,
-            branchId: values.branchId ? Number(values.branchId) : undefined,
-            companyId: values.companyId ? Number(values.companyId) : undefined,
-            departmentId: values.departmentId ? Number(values.departmentId) : undefined,
-            projectId: values.projectId ? Number(values.projectId) : undefined,
-            taxCategory: values.taxCategory || undefined,
-            relatedEntityType: values.relatedEntityType || undefined,
-            relatedEntityId: values.relatedEntityId ? Number(values.relatedEntityId) : undefined,
-            relatedEntityName: values.relatedEntityName || undefined,
-            attachmentUrl: values.attachmentUrl || undefined,
-            attachmentType: values.attachmentType || undefined,
-            isPaid: values.isPaid,
-            autoDescription: values.autoDescription,
-            isTaxLinked: values.isTaxLinked,
-            invoiceTypeCode: values.isTaxLinked ? values.invoiceTypeCode : undefined,
-            taxCategoryCode: values.isTaxLinked ? values.taxCategoryCode : undefined,
-            exemptionReason: values.isTaxLinked && values.exemptionReason ? values.exemptionReason : undefined,
-            govSyncEnabled: values.govSyncEnabled || undefined,
-            govIntegrationId: values.govIntegrationId ? Number(values.govIntegrationId) : undefined,
-            govEntityType: values.govEntityType || undefined,
-            govEntityId: values.govEntityId ? Number(values.govEntityId) : undefined,
-          });
-          toast({ title: "تم إضافة المصروف بنجاح" });
-          setLocation("/finance/expenses");
-        }}
-      >
-        <AutoDescriptionEffect />
+    <CreatePageLayout title="إضافة مصروف جديد" backPath="/finance/expenses" isDirty={isDirty}>
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
+      <div data-form>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <FormFieldWrapper label="التاريخ" required>
+            <DatePicker value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
+          </FormFieldWrapper>
+          <TextField label="الفترة المالية" type="month" value={form.period} onChange={(v) => setForm({ ...form, period: v })} />
+        </div>
 
-        <FormGrid cols={2}>
-          <FormDateField name="date" label="التاريخ" required />
-          <FormTextField name="period" label="الفترة المالية" type="month" />
-        </FormGrid>
-
-        <div className="border rounded-lg p-4 space-y-3">
+        <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">تصنيف العملية</h3>
-          <FormGrid cols={3}>
-            <FormSelectField name="operationType" label="نوع العملية" options={OPERATION_TYPES} />
-            <FormSelectField name="expenseType" label="التصنيف التفصيلي" options={EXPENSE_TYPES} />
-            <FormSelectField name="paymentMethod" label="طريقة الدفع" options={PAYMENT_METHODS} />
-          </FormGrid>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormFieldWrapper label="نوع العملية">
+              <Select value={form.operationType} onValueChange={(v) => setForm({ ...form, operationType: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {OPERATION_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="التصنيف التفصيلي">
+              <Select value={form.expenseType} onValueChange={(v) => setForm({ ...form, expenseType: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {EXPENSE_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="طريقة الدفع">
+              <Select value={form.paymentMethod} onValueChange={(v) => setForm({ ...form, paymentMethod: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+          </div>
         </div>
 
-        <div className="border rounded-lg p-4 space-y-3">
+        <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">الحسابات المحاسبية</h3>
-          <FormGrid cols={2}>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">بند المصروفات <span className="text-red-500 ms-1">*</span></label>
-              <AccountPicker name="accountCode" options={expenseOptions} placeholder="ابحث عن بند مصروفات..." loading={accountsLoading} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">مصدر الصرف (الخزنة / البنك)</label>
-              <AccountPicker name="sourceAccountCode" options={sourceOptions} placeholder="ابحث عن مصدر صرف..." loading={accountsLoading} />
-            </div>
-          </FormGrid>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormFieldWrapper label="بند المصروفات" required>
+              <Autocomplete options={expenseOptions} value={form.accountCode}
+                onChange={(val) => setForm(prev => ({ ...prev, accountCode: String(val) }))}
+                placeholder="ابحث عن بند مصروفات..." loading={accountsLoading} />
+            </FormFieldWrapper>
+            <FormFieldWrapper label="مصدر الصرف (الخزنة / البنك)">
+              <Autocomplete options={sourceOptions} value={form.sourceAccountCode}
+                onChange={(val) => setForm(prev => ({ ...prev, sourceAccountCode: String(val) }))}
+                placeholder="ابحث عن مصدر صرف..." loading={accountsLoading} />
+            </FormFieldWrapper>
+          </div>
         </div>
 
-        <div className="border rounded-lg p-4 space-y-3">
-          <h3 className="font-semibold text-sm text-muted-foreground">المبالغ</h3>
-          <FormGrid cols={4}>
-            <FormNumberField name="amount" label="المبلغ (ريال)" required min="0" step="0.01" placeholder="0.00" />
-            <FormSelectField name="vatRate" label="نسبة ضريبة القيمة المضافة (%)" options={VAT_OPTIONS} placeholder="بدون ضريبة" />
-            <FormSelectField name="taxCategory" label="التصنيف الضريبي" options={TAX_CATEGORIES} placeholder="بدون تصنيف" />
-            <TotalDisplay />
-          </FormGrid>
+        <div className="border rounded-lg p-4 mb-4 space-y-3">
+          <h3 className="font-semibold text-sm text-muted-foreground">المبالغ والضريبة</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <NumberField label="المبلغ (ريال)" required value={form.amount}
+              onChange={(v) => setForm({ ...form, amount: v })} min={0} step={0.01} placeholder="0.00" />
+            <FormFieldWrapper label="رمز الضريبة">
+              <Select value={form.taxCodeId || "_none"} onValueChange={handleTaxCodeChange}>
+                <SelectTrigger><SelectValue placeholder="— بدون ضريبة —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— بدون ضريبة —</SelectItem>
+                  {activeTaxCodes.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.code} — {t.name} ({Number(t.rate)}%)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="نمط المبلغ">
+              <div className="flex items-center gap-2 h-10">
+                <Switch
+                  id="expTaxInclusive"
+                  checked={form.taxInclusive}
+                  onCheckedChange={(v) => setForm({ ...form, taxInclusive: v })}
+                  disabled={!form.taxCodeId || effectiveRate === 0}
+                />
+                <Label htmlFor="expTaxInclusive" className="text-sm">
+                  {form.taxInclusive ? "شامل الضريبة" : "غير شامل"}
+                </Label>
+              </div>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="التصنيف الضريبي">
+              <Select value={form.taxCategory || "_none"} onValueChange={(v) => setForm({ ...form, taxCategory: v === "_none" ? "" : v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TAX_CATEGORIES.map(t => <SelectItem key={t.value || "_none"} value={t.value || "_none"}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+          </div>
+          {effectiveRate > 0 && Number(form.amount) > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <span className="px-2 py-1 rounded bg-muted">
+                صافي: <span className="font-mono">{formatCurrency(taxSplit.net)}</span>
+              </span>
+              <span className="px-2 py-1 rounded bg-status-info-surface text-status-info-foreground">
+                ضريبة {effectiveRate}%: <span className="font-mono">{formatCurrency(taxSplit.vat)}</span>
+              </span>
+              <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                الإجمالي: <span className="font-mono">{formatCurrency(taxSplit.gross)}</span>
+              </span>
+              {selectedTaxCode && (
+                <span className="text-muted-foreground">
+                  — {selectedTaxCode.code} ({selectedTaxCode.taxType})
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="border rounded-lg p-4 space-y-3">
+        <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">الجهة المرتبطة ومركز التكلفة</h3>
-          <FormGrid cols={3}>
-            <FormEntitySelect name="branchId" select={BranchSelect} label="الفرع" required />
-            <FormEntitySelect name="departmentId" select={DepartmentSelect} label="القسم / الإدارة" />
-            <FormEntitySelect name="costCenter" select={CostCenterSelect} label="مركز التكلفة" required />
-            <FormEntitySelect name="projectId" select={ProjectSelect} label="المشروع المرتبط" />
-            <FormSelectField name="relatedEntityType" label="نوع الجهة المرتبطة" options={RELATED_ENTITY_TYPE_OPTIONS} placeholder="بدون ربط" />
-            <RelatedEntityBlock data={relatedData} />
-            <FormTextField name="reference" label="رقم المرجع / الفاتورة" placeholder="رقم الفاتورة أو أمر الشراء" />
-          </FormGrid>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <BranchSelect
+              value={form.branchId}
+              onChange={(v) => setForm({ ...form, branchId: v })}
+              label="الفرع"
+              required
+            />
+            <DepartmentSelect
+              value={form.departmentId}
+              onChange={(v) => setForm({ ...form, departmentId: v })}
+              label="القسم / الإدارة"
+            />
+            <CostCenterSelect
+              value={form.costCenter}
+              onChange={(v) => setForm({ ...form, costCenter: v })}
+              required
+            />
+            <ProjectSelect
+              value={form.projectId}
+              onChange={(v) => {
+                const proj = projects.find((p: any) => String(p.id) === v);
+                const costCenter = proj ? `مشروع-${proj.name || proj.title}` : form.costCenter;
+                setForm({ ...form, projectId: v, costCenter });
+              }}
+              label="المشروع المرتبط"
+            />
+            <FormFieldWrapper label="نوع الجهة المرتبطة">
+              <Select value={form.relatedEntityType || "_none"} onValueChange={(v) => setForm({ ...form, relatedEntityType: v === "_none" ? "" : v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">بدون ربط</SelectItem>
+                  <SelectItem value="employee">موظف</SelectItem>
+                  <SelectItem value="vehicle">مركبة</SelectItem>
+                  <SelectItem value="supplier">مورد</SelectItem>
+                  <SelectItem value="contract">عقد</SelectItem>
+                  <SelectItem value="property">عقار</SelectItem>
+                  <SelectItem value="legal_case">قضية قانونية</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+            {form.relatedEntityType && (
+              <FormFieldWrapper label="الجهة المرتبطة">
+                <Select value={form.relatedEntityId || "_none"} onValueChange={(v) => {
+                  const val = v === "_none" ? "" : v;
+                  const label = val ? getRelatedEntityLabel(form.relatedEntityType, val, {
+                    employees: employeesData?.data || [],
+                    vehicles: vehiclesData?.data || [],
+                    suppliers: suppliersData?.data || [],
+                    contracts: contractsData?.data || [],
+                    units: unitsData?.data || [],
+                    legalCases: legalCasesData?.data || [],
+                  }) : "";
+                  setForm({ ...form, relatedEntityId: val, relatedEntityName: label });
+                }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— اختر —</SelectItem>
+                    {form.relatedEntityType === "employee" && (employeesData?.data || []).map((emp: any) => (
+                      <SelectItem key={emp.id} value={String(emp.id)}>{emp.name} - {emp.jobTitle || ""}</SelectItem>
+                    ))}
+                    {form.relatedEntityType === "vehicle" && (vehiclesData?.data || []).map((v: any) => (
+                      <SelectItem key={v.id} value={String(v.id)}>{v.plateNumber} - {v.make} {v.model}</SelectItem>
+                    ))}
+                    {form.relatedEntityType === "supplier" && (suppliersData?.data || []).map((s: any) => (
+                      <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                    ))}
+                    {form.relatedEntityType === "contract" && (contractsData?.data || []).map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.tenantName} - عقد #{c.id}</SelectItem>
+                    ))}
+                    {form.relatedEntityType === "property" && (unitsData?.data || []).map((u: any) => (
+                      <SelectItem key={u.id} value={String(u.id)}>{u.unitNumber || u.name} - {u.type || "وحدة"}</SelectItem>
+                    ))}
+                    {form.relatedEntityType === "legal_case" && (legalCasesData?.data || []).map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.title || c.caseNumber || `قضية #${c.id}`}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormFieldWrapper>
+            )}
+            {form.relatedEntityType && form.relatedEntityId && (
+              <div className="md:col-span-3">
+                {form.relatedEntityType === "employee" && <EmployeeContextCard employeeId={form.relatedEntityId} />}
+                {form.relatedEntityType === "vehicle" && <VehicleContextCard vehicleId={form.relatedEntityId} section="maintenance" />}
+                {form.relatedEntityType === "supplier" && <SupplierContextCard supplierId={form.relatedEntityId} />}
+                {form.relatedEntityType === "property" && <PropertyUnitContextCard unitId={form.relatedEntityId} section="payment" />}
+              </div>
+            )}
+            <TextField label="رقم المرجع / الفاتورة" value={form.reference} onChange={(v) => setForm({ ...form, reference: v })}
+              placeholder="رقم الفاتورة أو أمر الشراء" />
+          </div>
         </div>
 
-        <div className="border rounded-lg p-4 space-y-3">
+        <div className="border rounded-lg p-4 mb-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-sm text-muted-foreground">البيان</h3>
-            <FormCheckboxField name="autoDescription" label="توليد بيان تلقائي" />
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <Checkbox checked={form.autoDescription}
+                onCheckedChange={(v) => setForm({ ...form, autoDescription: v === true })} />
+              توليد بيان تلقائي
+            </label>
           </div>
-          <FormTextField name="description" label="البيان" placeholder="أدخل وصفاً للمصروف" />
+          <TextField label="البيان" value={form.description} onChange={(v) => setForm({ ...form, description: v })}
+            placeholder={form.autoDescription ? "سيتم توليده تلقائياً..." : "أدخل وصفاً للمصروف"}
+            disabled={form.autoDescription} />
         </div>
 
-        <div className="border rounded-lg p-4 space-y-3">
+        <div className="border rounded-lg p-4 mb-4 space-y-3">
           <div className="flex items-center gap-2">
             <Paperclip className="h-4 w-4" />
             <h3 className="font-semibold text-sm text-muted-foreground">المرفقات</h3>
+            {attachmentRequired && <span className="text-xs text-status-error font-medium">(إلزامي لهذا النوع)</span>}
           </div>
-          <AttachmentWarning />
-          <FormGrid cols={2}>
-            <FormTextField name="attachmentUrl" label="رابط المرفق" placeholder="https://... أو مسار الملف" />
-            <FormSelectField name="attachmentType" label="نوع المرفق" options={ATTACHMENT_TYPE_OPTIONS} />
-          </FormGrid>
+          {attachmentRequired && !form.attachmentUrl && (
+            <div className="flex items-start gap-2 p-3 bg-status-error-surface border border-status-error-surface rounded-md">
+              <AlertCircle className="h-4 w-4 text-status-error mt-0.5 shrink-0" />
+              <p className="text-sm text-status-error-foreground">هذا النوع من العمليات يستوجب إرفاق مستند داعم (فاتورة، وصل استلام، أو إشعار تحويل) قبل الحفظ.</p>
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <TextField label="رابط المرفق" value={form.attachmentUrl} onChange={(v) => setForm({ ...form, attachmentUrl: v })}
+              placeholder="https://... أو مسار الملف" />
+            <FormFieldWrapper label="نوع المرفق">
+              <Select value={form.attachmentType} onValueChange={(v) => setForm({ ...form, attachmentType: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="invoice">فاتورة</SelectItem>
+                  <SelectItem value="receipt">وصل استلام</SelectItem>
+                  <SelectItem value="transfer">إشعار تحويل</SelectItem>
+                  <SelectItem value="contract">عقد</SelectItem>
+                  <SelectItem value="approval">موافقة</SelectItem>
+                  <SelectItem value="other">أخرى</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+          </div>
         </div>
 
-        <div className="border rounded-lg p-4 space-y-3">
+        <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">الحالة</h3>
-          <FormGrid cols={2}>
-            <FormSelectField name="status" label="الحالة" options={STATUS_OPTIONS} />
-            <FormCheckboxField name="isPaid" label="تم الدفع" className="pt-6" />
-          </FormGrid>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormFieldWrapper label="الحالة">
+              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">مسودة</SelectItem>
+                  <SelectItem value="pending">في انتظار الموافقة</SelectItem>
+                  <SelectItem value="posted">مرحّل</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+            <div className="flex items-center gap-3 mt-6">
+              <Checkbox id="isPaid" checked={form.isPaid}
+                onCheckedChange={(v) => setForm({ ...form, isPaid: v === true })} />
+              <label htmlFor="isPaid" className="text-sm cursor-pointer">تم الدفع</label>
+            </div>
+          </div>
         </div>
 
-        <GovSyncBlock govIntegrationsData={govIntegrationsData} />
+        {GOV_LINKED_OPERATION_TYPES.includes(form.operationType) && (
+          <div className="border border-status-info-surface rounded-lg p-4 mb-4 space-y-3 bg-status-info-surface">
+            <div className="flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-status-info-foreground" />
+              <h3 className="font-semibold text-sm text-status-info-foreground">الربط بنظام حكومي</h3>
+            </div>
+            <div className="flex items-center gap-3">
+              <Checkbox
+                id="govSyncEnabled"
+                checked={!!form.govSyncEnabled}
+                onCheckedChange={(v) => setForm({ ...form, govSyncEnabled: v === true })}
+              />
+              <label htmlFor="govSyncEnabled" className="text-sm cursor-pointer font-medium">
+                ربط هذا المصروف بنظام حكومي خارجي
+              </label>
+            </div>
+            {form.govSyncEnabled && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormFieldWrapper label="النظام الحكومي">
+                  <Select
+                    value={form.govIntegrationId || "_none"}
+                    onValueChange={(v) => setForm({ ...form, govIntegrationId: v === "_none" ? "" : v })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">— اختر النظام —</SelectItem>
+                      {(govIntegrationsData?.data || []).filter((gi: any) => gi.enabled).map((gi: any) => (
+                        <SelectItem key={gi.id} value={String(gi.id)}>{gi.name}</SelectItem>
+                      ))}
+                      {(govIntegrationsData?.data || []).filter((gi: any) => gi.enabled).length === 0 && (
+                        <SelectItem disabled value="_none">لا توجد أنظمة مفعّلة — فعّل النظام من الإعدادات</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </FormFieldWrapper>
+                <FormFieldWrapper label="نوع الكيان المرتبط">
+                  <Select
+                    value={form.govEntityType || "_none"}
+                    onValueChange={(v) => setForm({ ...form, govEntityType: v === "_none" ? "" : v, govEntityId: "" })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">— اختر النوع —</SelectItem>
+                      <SelectItem value="employee">موظف (إقامة / تصريح)</SelectItem>
+                      <SelectItem value="vehicle">مركبة (استمارة / فحص)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormFieldWrapper>
+                {form.govEntityType === "employee" && (
+                  <EmployeeSelect
+                    value={form.govEntityId}
+                    onChange={(v) => setForm({ ...form, govEntityId: v })}
+                    label="الموظف المرتبط"
+                    allowCreate={false}
+                  />
+                )}
+                {form.govEntityType === "vehicle" && (
+                  <VehicleSelect
+                    value={form.govEntityId}
+                    onChange={(v) => setForm({ ...form, govEntityId: v })}
+                    label="المركبة المرتبطة"
+                    allowCreate={false}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {journalPreviewLines.length > 0 && (
+          <div className="border rounded-lg p-4 mb-4 space-y-3">
+            <h3 className="font-semibold text-sm text-muted-foreground">القيد اليومي المتوقع</h3>
+            <table className="w-full text-sm border">
+              <thead>
+                <tr className="bg-surface-subtle border-b">
+                  <th className="p-2 text-start">الحساب</th>
+                  <th className="p-2 text-start">مدين</th>
+                  <th className="p-2 text-start">دائن</th>
+                </tr>
+              </thead>
+              <tbody>
+                {journalPreviewLines.map((line, idx) => (
+                  <tr key={idx} className="border-b">
+                    <td className="p-2 font-mono text-xs">{line.account}</td>
+                    <td className="p-2 text-status-error-foreground">{line.debit > 0 ? formatCurrency(line.debit) : ""}</td>
+                    <td className="p-2 text-status-success-foreground">{line.credit > 0 ? formatCurrency(line.credit) : ""}</td>
+                  </tr>
+                ))}
+                <tr className="bg-surface-subtle font-semibold">
+                  <td className="p-2">الإجمالي</td>
+                  <td className="p-2 text-status-error-foreground">{formatCurrency(journalPreviewLines.reduce((s, l) => s + l.debit, 0))}</td>
+                  <td className="p-2 text-status-success-foreground">{formatCurrency(journalPreviewLines.reduce((s, l) => s + l.credit, 0))}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
 
         <FileDropZone files={attachments} onFilesChange={setAttachments} />
 
-        <ExpenseImpactPreview />
+        {form.amount && Number(form.amount) > 0 && (
+          <ImpactPreviewButton
+            endpoint="/finance/expenses/impact-preview"
+            payload={{
+              amount: Number(form.amount),
+              expenseType: form.expenseType,
+              paymentMethod: form.paymentMethod,
+              costCenter: form.costCenter,
+              supplierId: form.relatedEntityType === "supplier" && form.relatedEntityId ? Number(form.relatedEntityId) : undefined,
+            }}
+            label="معاينة أثر المصروف"
+          />
+        )}
 
-        <TaxLinkedBlock />
-      </FormShell>
+        <div className="border rounded-lg p-4 mb-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm text-muted-foreground flex items-center gap-2">
+              <span className="text-status-success-foreground">🏛</span>
+              ربط مع هيئة الزكاة والضريبة والجمارك
+            </h3>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <div
+                onClick={() => setForm({ ...form, isTaxLinked: !form.isTaxLinked })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.isTaxLinked ? "bg-green-600" : "bg-gray-300"}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.isTaxLinked ? "translate-x-6" : "translate-x-1"}`} />
+              </div>
+              <span className="text-sm font-medium">{form.isTaxLinked ? "مفعّل" : "غير مفعّل"}</span>
+            </label>
+          </div>
+          {form.isTaxLinked && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t">
+            <FormFieldWrapper label="نوع الفاتورة الضريبية">
+              <Select value={form.invoiceTypeCode} onValueChange={(v) => setForm({ ...form, invoiceTypeCode: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {INVOICE_TYPE_CODES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="فئة الضريبة">
+              <Select value={form.taxCategoryCode} onValueChange={(v) => setForm({ ...form, taxCategoryCode: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TAX_CATEGORY_CODES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+              {(form.taxCategoryCode === "E" || form.taxCategoryCode === "Z") && (
+                <TextField label="سبب الإعفاء / النسبة الصفرية" value={form.exemptionReason}
+                  onChange={(v) => setForm({ ...form, exemptionReason: v })}
+                  placeholder="أدخل سبب الإعفاء..." />
+              )}
+              <div className="md:col-span-3 flex items-start gap-2 p-3 bg-status-success-surface border border-status-success-surface rounded-md">
+                <span className="text-status-success-foreground text-xs mt-0.5">✓</span>
+                <p className="text-xs text-status-success-foreground">سيتم ربط هذا المصروف مع منظومة الفوترة الإلكترونية لهيئة الزكاة والضريبة وتوليد رمز استجابة سريعة متوافق عند الإرسال للهيئة.</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-3 pt-4">
+          <Button variant="outline" onClick={() => setLocation("/finance/expenses")}>إلغاء</Button>
+          <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
+            {createMut.isPending ? "جاري الحفظ..." : "حفظ المصروف"}
+          </Button>
+        </div>
+      </div>
     </CreatePageLayout>
-  );
-}
-
-function ExpenseImpactPreview() {
-  const { watch } = useFormContext();
-  const amount = watch("amount") as string;
-  const expenseType = watch("expenseType") as string;
-  const paymentMethod = watch("paymentMethod") as string;
-  const costCenter = watch("costCenter") as string;
-  const relatedEntityType = watch("relatedEntityType") as string;
-  const relatedEntityId = watch("relatedEntityId") as string;
-  if (!amount || Number(amount) <= 0) return null;
-  return (
-    <ImpactPreviewButton
-      endpoint="/finance/expenses/impact-preview"
-      payload={{
-        amount: Number(amount),
-        expenseType,
-        paymentMethod,
-        costCenter,
-        supplierId: relatedEntityType === "supplier" && relatedEntityId ? Number(relatedEntityId) : undefined,
-      }}
-      label="معاينة أثر المصروف"
-    />
   );
 }

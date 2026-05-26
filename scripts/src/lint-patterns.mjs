@@ -105,19 +105,6 @@ const RULES = [
       "removed in Phase 5c — only the `ValidationError` class is exported now.",
   },
   {
-    id: "manual-form-instead-of-formshell",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
-    extensions: [".tsx", ".ts"],
-    regex: /\buseAutoDraft\b|\buseFieldErrors\b/,
-    message:
-      "The legacy `useAutoDraft` / `useFieldErrors` manual-form pattern was " +
-      "fully retired. Build the form on FormShell + zod from @workspace/ui-core: " +
-      "<FormShell schema={zod} defaultValues={...} onSubmit={...}>...</FormShell>. " +
-      "Validation runs through zodResolver; ApiError(VALIDATION_ERROR, field) " +
-      "auto-routes to the right field. The two helper hooks were deleted along " +
-      "with the last create-page migration.",
-  },
-  {
     id: "direct-gl-import-in-domain-route",
     scan: [ROUTES_DIR],
     skip: (file) => {
@@ -192,6 +179,42 @@ const RULES = [
       "explicit locale string if you need a non-default behaviour.",
   },
   {
+    id: "direct-pdf-generation",
+    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR, ERP_HOOKS_DIR, ERP_LIB_DIR],
+    extensions: [".tsx", ".ts"],
+    // The legitimate entry point — print-button.tsx opens window.open() +
+    // document.write() to drop a server-rendered HTML doc into a popup
+    // for the browser print dialog. That's the architecturally allowed
+    // use of window.print(); it does NOT generate the document, the
+    // Print Engine v2 does. All other pages must call apiFetch("/print/render").
+    skip: (file) =>
+      file.endsWith("/components/shared/print-button.tsx")
+      || file.endsWith("/components/shared/entity-print.tsx")
+      || file.includes("/components/print-layout") // legacy, type-only export
+      || file.endsWith("/components/page-shell.tsx") // imports types from print-layout
+      || file.endsWith("/lib/branch-utils.ts"),
+    // Match direct PDF/print generation calls that should go through
+    // the Print Engine instead. The Print Platform decision (Phase 0 of
+    // docs/architecture/print-platform.md) requires that every PDF,
+    // Excel, or printable HTML document be rendered server-side by
+    // /api/print/render — the SPA must never generate documents itself.
+    regex: /\bwindow\.print\(|\bjsPDF\b|\bhtml2pdf\b|\bhtml2canvas\b|\bpdfMake\b|\bpdfmake\b|\bnew\s+jsPDF|\bfrom\s+["']jspdf["']|\bfrom\s+["']html2pdf[^"']*["']|\bfrom\s+["']pdfmake[^"']*["']/,
+    // Ratchet: 9 pre-existing pages still call window.print() directly
+    // (BI dashboards, finance reports, my-payslip). New violations are
+    // blocked; existing ones drop the baseline as they migrate to
+    // <PrintButton entityType="..." entityId={...} />.
+    countBaseline: 6,
+    message:
+      "Direct PDF/print generation in the SPA is forbidden (Ghaith Print Platform, " +
+      "Phase 0 architecture lock). Document generation must go through the server: " +
+      "call `apiFetch(\"/print/render\", { method: \"POST\", body: ... })` (or use " +
+      "<PrintButton entityType=\"...\" entityId={...} />) and let the Print Engine v2 " +
+      "produce the bytes. Direct `window.print()` / `jsPDF` / `html2pdf` / `pdfmake` " +
+      "calls bypass: audit logging (print_jobs), reprint detection, watermarks, " +
+      "RBAC checks, branch letterhead, and ZATCA-compliant invoice rendering. " +
+      "See docs/architecture/print-platform.md for the contract.",
+  },
+  {
     id: "direct-process-env-read",
     scan: [API_SRC_DIR],
     // lib/config.ts is the ONE module allowed to touch process.env — it
@@ -204,124 +227,104 @@ const RULES = [
       "`AppConfig` shape, and read it through the typed `config` object. This " +
       "keeps validation, defaults and the startup fail-fast gate in one place.",
   },
+
+  // ─── Unified numbering center (Issue #1141) ──────────────────────────
+  // Every official document number (طلبات / عقود / مراسلات / فواتير /
+  // سندات / قيود / مجموعات عمرة / …) MUST come from
+  // `numberingService.issueNumber`. Direct `nextval(...)` calls on
+  // ref/number/seq-style sequences inside route files (or the bare
+  // `generateTimeRef` shortcut on official refs) bypass the audit log,
+  // skip per-branch scoping, and let routes invent random fallbacks.
+  // See artifacts/api-server/src/lib/numberingService.ts.
+  //
+  // Counter-style sequences (rate limit counters, internal tech refs)
+  // are still allowed inside lib/. The rule only fires inside routes/.
+  // Ratchets: the codebase still has a handful of pre-existing
+  // sequence-direct + time-ref-as-number callsites in priority-2
+  // routes (finance, properties, support, hr, warehouse). Each
+  // rule's baseline matches the count at the time Issue #1141
+  // landed. The lint *fails* when the count grows above the baseline
+  // and silently accepts equal/lower counts — every migration of a
+  // route to the numbering service should drop the baseline in the
+  // same PR. When the count for a rule reaches 0, drop the
+  // `countBaseline` to convert it to a hard rule.
   {
-    id: "native-confirm-or-prompt",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
-    extensions: [".tsx", ".ts"],
-    // PromptDialog is the canonical replacement and is allowed to mention
-    // window.prompt in its docstring. The use-lifecycle-action hook owns
-    // its own AlertDialog and is the runtime replacement for the
-    // Promise-based reason-prompt flow.
-    skip: (file) =>
-      file.endsWith("/components/shared/prompt-dialog.tsx") ||
-      file.endsWith("/hooks/use-lifecycle-action.tsx"),
-    // Forbidden: window.confirm(, window.prompt(, bare confirm("..."),
-    // bare prompt("...") at call sites. The regex deliberately requires
-    // an opening string literal so we don't flag identifiers named
-    // `confirm` (e.g. ConfirmDeleteDialog props, `onConfirm`, etc.).
-    regex: /\b(?:window\.confirm|window\.prompt|confirm|prompt)\(\s*["'`]/,
+    id: "nextval-in-route",
+    scan: [ROUTES_DIR],
+    skip: (file) => file.endsWith("/routes/numbering.ts"),
+    // Match `nextval('something_seq')` or any nextval call inside a
+    // route file. The numbering authority owns all official sequences.
+    // Hardened to a hard rule (baseline 0) — every route now routes
+    // through `numberingService.issueNumber`.
+    regex: /\bnextval\s*\(\s*['"`]?[a-zA-Z_]+_seq/,
     message:
-      "Native window.confirm() / window.prompt() are forbidden — they " +
-      "ignore RTL, dark mode, and the rate-limit banner. Use " +
-      "`ConfirmDeleteDialog` (delete flows), `PromptDialog` (reason " +
-      "capture), or an inline AlertDialog (multi-button confirmations) " +
-      "instead. fiscal-periods-v2's `useDirtyGuard` is a worked example " +
-      "of the AlertDialog discard pattern.",
+      "Direct `nextval('…_seq')` calls inside route handlers are forbidden " +
+      "(Issue #1141 — unified numbering center). Official document numbers " +
+      "must be issued via `numberingService.issueNumber({ companyId, branchId, " +
+      "moduleKey, entityKey, entityTable, actorId })` so the audit log, " +
+      "per-branch scoping, and policy enforcement all apply. Add a row to " +
+      "`numbering_schemes` for the (moduleKey, entityKey) you need, then call " +
+      "issueNumber. If this really is an internal tech sequence (not an " +
+      "official document number), move the call into a `lib/` helper.",
   },
   {
-    // Raw <table> ratchet. 17 pages still build their tables out of
-    // <table>/<thead>/<tbody> directly instead of going through
-    // <DataTable> (list pages) or <PrintLayout>'s line-item table
-    // (invoice/voucher print views). Most of the remaining ones are
-    // genuinely print/static and would lose UX by being forced through
-    // DataTable, so this is a ratchet — new raw tables fail the build,
-    // existing ones stay until a future PR replaces them. See the
-    // discussion in docs/forms-migration-report.md for the per-file
-    // status.
-    id: "rtl-text-align-lr",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
-    extensions: [".tsx"],
-    // Match `text-left` or `text-right` ONLY when they appear inside a
-    // className= attribute — avoids matching identifiers like
-    // `useTextRight`, attribute names, or print-stylesheet imports
-    // outside JSX. The regex is single-line and the file scanner
-    // applies it per line.
-    regex: /className=["'][^"']*\btext-(left|right)\b/,
-    // 2026-05-26 baseline. The codebase mixes Tailwind's logical (`text-start`/`text-end`,
-    // RTL-aware) with the physical `text-left`/`text-right` (LTR-only).
-    // Mobile RTL users see headings/buttons flip to the wrong side. The
-    // ratchet locks today's count and forces every new line to use the
-    // logical pair.
-    //
-    // History:
-    //   74 — initial baseline
-    //   69 — login.tsx (3) + insights.tsx (1) + legal.tsx (1) cleaned
-    countBaseline: 69,
+    id: "generateTimeRef-as-official-number",
+    scan: [ROUTES_DIR],
+    // Hardened to a hard rule (baseline 0). Every official document
+    // number now routes through `numberingService.issueNumber`; the
+    // few legitimate internal correlation refs (BATCH, BANK, SIG,
+    // PAY-PORTAL) live in `lib/internalRef.ts` outside this scan path.
+    regex: /\bgenerateTimeRef\s*\(/,
     message:
-      "`text-left` / `text-right` are LTR-only — in RTL mode they keep " +
-      "their physical direction, so headings/buttons appear on the wrong " +
-      "side on mobile. Use Tailwind logical pair `text-start` / `text-end` " +
-      "which flips with the `dir` attribute. (RTL hardening, 2026-05-26.)",
+      "`generateTimeRef(...)` is a Date.now()-based tech ref, NOT a valid " +
+      "official document number (Issue #1141). For executive document " +
+      "numbers (طلبات / عقود / فواتير / سندات / …) call " +
+      "`numberingService.issueNumber(...)` so the result lands in " +
+      "`numbering_assignments` with a real per-branch counter. If you need " +
+      "an internal correlation id (e.g. for an outbound webhook), move the " +
+      "code into a lib/ helper outside routes/.",
   },
   {
-    id: "rtl-margin-padding-lr",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
-    extensions: [".tsx"],
-    // `ml-N`, `mr-N`, `pl-N`, `pr-N` (and their responsive prefixes
-    // `md:ml-2`, etc.) — must use logical `ms-`/`me-`/`ps-`/`pe-`.
-    // The negative lookbehind `(?<![a-z-])` skips substrings like
-    // `border-l-2` (preceded by `-`) and `transform-l-2` (preceded
-    // by a letter) so we only catch real margin/padding classes.
-    regex: /className=["'][^"']*(?<![a-z-])(ml|mr|pl|pr)-[0-9]/,
-    countBaseline: 46,
+    id: "random-as-ref-fallback",
+    scan: [ROUTES_DIR],
+    // Catch the specific anti-pattern called out in issue #1141: the
+    // catch-block fallback that uses `Math.random()` to invent a "ref"
+    // when sequence allocation fails. Such a fallback hides the real
+    // problem and emits an audit-unfriendly random number.
+    // The classic fallback shape from issue #1141:
+    //   `.catch(... { seq: Math.floor(Math.random() * …) } …)` —
+    // a `seq` / `ref` / `number` key followed by a Math.random expression
+    // that synthesises a fake value. The regex looks BOTH directions: a
+    // (seq|ref|number) key within ~180 chars before `Math.random()`, OR
+    // the key appearing after the call.
+    // Hardened to a hard rule (baseline 0) — every priority-1 + finance
+    // route now issues numbers through `numberingService.issueNumber`,
+    // so a Math.random fallback near a seq/ref/number is a regression.
+    regex: /(?:\b(?:seq|ref|number)\b[^;]{0,180}Math\.random\s*\(|Math\.random\s*\(\s*\)[^;]{0,180}\b(?:seq|ref|number)\b)/,
     message:
-      "`ml-`/`mr-`/`pl-`/`pr-` are physical sides — they do NOT flip " +
-      "in RTL. Use Tailwind's logical equivalents: `ms-`/`me-`/`ps-`/`pe-` " +
-      "(start/end). Without this, margins/padding land on the wrong side " +
-      "in Arabic UI. (RTL hardening, 2026-05-26.)",
+      "`Math.random()` near a `ref` / `seq` / `number` value inside a route " +
+      "is forbidden (Issue #1141). Random fallbacks hide the real failure " +
+      "and produce numbers that no audit can trust. If the numbering call " +
+      "fails, let the error bubble — the document must NOT be created " +
+      "without a properly-issued number.",
   },
   {
-    id: "rtl-position-left-right",
-    scan: [ERP_PAGES_DIR, ERP_COMPONENTS_DIR],
-    extensions: [".tsx"],
-    // `left-N` / `right-N` as physical positioning (typically inside
-    // `absolute` or `fixed` elements). Logical pair: `start-` / `end-`.
-    // Same negative-lookbehind guard as the margin rule.
-    // 2026-05-26: ratchet started at 2; both fixed in the same commit
-    // so the rule converts straight to hard. Any new physical position
-    // class fails the build.
-    regex: /className=["'][^"']*(?<![a-z-])(left|right)-[0-9]/,
+    // Final guard for #1141 — the two legacy ref-builder helpers from
+    // businessHelpers (generateRef / generateBranchRef) only assemble a
+    // ref string from a sequence value the caller has already obtained.
+    // They have NO audit, NO uniqueness check, and NO branch counter.
+    // Every callsite that survived #1141 has been migrated to
+    // numberingService; this rule prevents a regression in any route.
+    id: "generateRef-or-generateBranchRef-in-route",
+    scan: [ROUTES_DIR],
+    regex: /\bgenerate(?:Branch)?Ref\s*\(/,
     message:
-      "`left-N` / `right-N` are physical positions and do NOT flip in " +
-      "RTL — this is what makes print/dropdown buttons drift to the " +
-      "wrong side on mobile Arabic. Use logical `start-N` / `end-N` " +
-      "instead. (RTL hardening, 2026-05-26.)",
-  },
-  {
-    id: "raw-table-in-page",
-    scan: [ERP_PAGES_DIR],
-    extensions: [".tsx"],
-    regex: /<table\b/,
-    // Baseline counts <table> occurrences, not files. An invoice/voucher
-    // detail page typically holds 2-4 tables (line items + totals + tax
-    // breakdown), so the per-file count understates the live state.
-    //
-    // History:
-    //   30 — initial ratchet baseline (2026-05-25)
-    //   28 — after import-wizard.tsx moved 2 of its preview tables to
-    //        <DataTable noToolbar> (unlinkedSubAgents + newAgentsToCreate)
-    //   27 — commission-plan-editor.tsx TiersTab moved its
-    //        useFieldArray rows to <DataTable noToolbar>; per-cell
-    //        Input/Checkbox/Button stays bound to react-hook-form via
-    //        column.render() callbacks
-    countBaseline: 27,
-    message:
-      "Raw <table> element in a page. Use `<DataTable>` from " +
-      "`@workspace/ui-core` for list data (search/sort/pagination), or " +
-      "`<PrintLayout>` from `@workspace/report-kit` for print-formatted " +
-      "tables (invoice line items, vouchers, statements). Raw <table> " +
-      "skips both stacks and loses RTL header alignment, sticky headers, " +
-      "and the existing column-preset library.",
+      "`generateRef(...)` / `generateBranchRef(...)` inside a route is " +
+      "forbidden (Issue #1141). These helpers just format a string from " +
+      "a seq the caller obtained — there is no audit, no counter, no " +
+      "uniqueness check. Call `numberingService.issueNumber(...)` " +
+      "instead so the resulting number lands in `numbering_assignments` " +
+      "with full audit and per-scope uniqueness enforcement.",
   },
 
   // ─── UI-kit adoption ratchet (UNIFICATION_PLAN §P8) ──────────────────

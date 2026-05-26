@@ -15,7 +15,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download, Repeat, Printer, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@workspace/ui-core";
-import { PromptDialog } from "@/components/shared/prompt-dialog";
 
 interface JobRow {
   id: number;
@@ -43,7 +42,6 @@ export default function PrintLogPage() {
   const [entityType, setEntityType] = useState<string>("all");
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
-  const [reprintJob, setReprintJob] = useState<JobRow | null>(null);
 
   const { data: branchesData } = useApiQuery<any>(["settings-branches"], "/settings/branches");
   const branches = (branchesData?.data ?? branchesData?.items ?? []) as Array<{ id: number; name: string }>;
@@ -59,15 +57,15 @@ export default function PrintLogPage() {
     `/print/jobs?${qs.toString()}`
   );
 
-  async function submitReprint(reason: string) {
-    if (!reprintJob) return;
+  async function reprint(j: JobRow) {
+    const reason = prompt("سبب طلب إعادة الطباعة:");
+    if (!reason) return;
     try {
       await apiFetch(`/print/reprint-requests`, {
         method: "POST",
-        body: JSON.stringify({ entityType: reprintJob.entityType, entityId: reprintJob.entityId, reason }),
+        body: JSON.stringify({ entityType: j.entityType, entityId: j.entityId, reason }),
       });
       toast({ title: "تم إرسال طلب إعادة الطباعة", description: "بانتظار موافقة المدير." });
-      setReprintJob(null);
     } catch (err: any) {
       toast({ title: "فشل الطلب", description: err.message, variant: "destructive" });
     }
@@ -182,7 +180,7 @@ export default function PrintLogPage() {
                       <td className="p-2">{j.format}</td>
                       <td className="p-2">
                         {j.copyNumber > 1 ? (
-                          <span className="inline-flex items-center gap-1 text-red-600">
+                          <span className="inline-flex items-center gap-1 text-status-error-foreground">
                             <AlertTriangle className="h-3 w-3" /> {j.copyNumber}
                           </span>
                         ) : (
@@ -193,9 +191,9 @@ export default function PrintLogPage() {
                         <span
                           className={
                             j.status === "done"
-                              ? "text-green-600"
+                              ? "text-status-success-foreground"
                               : j.status === "failed"
-                                ? "text-red-600"
+                                ? "text-status-error-foreground"
                                 : "text-muted-foreground"
                           }
                         >
@@ -206,7 +204,7 @@ export default function PrintLogPage() {
                         <Button size="sm" variant="ghost" onClick={() => download(j)} title="إعادة عرض">
                           <Download className="h-3 w-3" />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setReprintJob(j)} title="طلب إعادة طباعة">
+                        <Button size="sm" variant="ghost" onClick={() => reprint(j)} title="طلب إعادة طباعة">
                           <Repeat className="h-3 w-3" />
                         </Button>
                       </td>
@@ -218,16 +216,6 @@ export default function PrintLogPage() {
           )}
         </CardContent>
       </Card>
-
-      <PromptDialog
-        open={!!reprintJob}
-        title="طلب إعادة طباعة"
-        description={reprintJob ? `الوثيقة: ${reprintJob.entityType} #${reprintJob.entityId}` : ""}
-        placeholder="سبب طلب إعادة الطباعة"
-        confirmLabel="إرسال الطلب"
-        onSubmit={submitReprint}
-        onClose={() => setReprintJob(null)}
-      />
     </div>
   );
 }

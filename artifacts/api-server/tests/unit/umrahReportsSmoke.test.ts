@@ -18,11 +18,11 @@ import { join } from "node:path";
 
 const root = join(import.meta.dirname!, "../../../../artifacts/api-server");
 const readRoute = (f: string) => readFileSync(join(root, "src/routes", f), "utf8");
-const readLib = (f: string) => readFileSync(join(root, "src/lib", f), "utf8");
 const readMig = (f: string) => readFileSync(join(root, "src/migrations", f), "utf8");
+const readLib = (f: string) => readFileSync(join(root, "src/lib", f), "utf8");
 
 const UMRAH_ENTITIES = readRoute("umrah-entities.ts");
-const PDF_EXPORT = readLib("pdfExport.ts");
+const TEMPLATE_RESOLVER = readLib("print/templateResolver.ts");
 const MIG_154 = readMig("154_umrah_attachments.sql");
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -203,16 +203,19 @@ describe("umrah-entities — daily run-sheet (PR #305)", () => {
     expect(section).toMatch(/status\s+IN\s*\(\s*'overstayed','violated'\s*\)/);
   });
 
-  it("PDF path delegates to exportUmrahDailyRunsheetPdf (central helper)", () => {
+  it("PDF path proxies through Print Engine v2 (renderPrint) with the umrah_runsheet entityType", () => {
     const idx = UMRAH_ENTITIES.indexOf('"/reports/daily-runsheet/pdf"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 1000);
-    expect(section).toContain("exportUmrahDailyRunsheetPdf");
+    const section = UMRAH_ENTITIES.slice(idx, idx + 2000);
+    expect(section).toContain("renderPrint");
+    expect(section).toContain("umrah_runsheet");
     expect(section).toContain('"Content-Type"');
-    expect(section).toContain('"application/pdf"');
   });
 
-  it("PDF helper sits in central pdfExport.ts (no per-route streaming)", () => {
-    expect(PDF_EXPORT).toContain("export async function exportUmrahDailyRunsheetPdf");
+  it("bespoke runsheet preset is registered in templateResolver (renders 3 sections)", () => {
+    expect(TEMPLATE_RESOLVER).toContain("umrah_runsheet:");
+    expect(TEMPLATE_RESOLVER).toContain("entity.arrivalsTable");
+    expect(TEMPLATE_RESOLVER).toContain("entity.departuresTable");
+    expect(TEMPLATE_RESOLVER).toContain("entity.overstaysTable");
   });
 });
 
@@ -234,14 +237,22 @@ describe("umrah-entities — sub-agent statement PDF (PR #305)", () => {
     expect(section).toContain('"detailed"');
   });
 
-  it("PDF helper sits in central pdfExport.ts (export)", () => {
-    expect(PDF_EXPORT).toContain("export async function exportUmrahStatementPdf");
+  it("PDF path proxies through Print Engine v2 (renderPrint) with the umrah_statement entityType", () => {
+    const idx = UMRAH_ENTITIES.indexOf('"/statements/:subAgentId/pdf"');
+    const section = UMRAH_ENTITIES.slice(idx, idx + 3500);
+    expect(section).toContain("renderPrint");
+    expect(section).toContain("umrah_statement");
   });
 
-  it("statement PDF helper scopes sub-agent lookup by companyId + soft delete", () => {
-    const idx = PDF_EXPORT.indexOf("export async function exportUmrahStatementPdf");
-    const section = PDF_EXPORT.slice(idx, idx + 1200);
+  it("statement PDF route scopes sub-agent header lookup by companyId + soft delete", () => {
+    const idx = UMRAH_ENTITIES.indexOf('"/statements/:subAgentId/pdf"');
+    const section = UMRAH_ENTITIES.slice(idx, idx + 3500);
     expect(section).toMatch(/FROM\s+umrah_sub_agents[\s\S]*?"companyId"\s*=/);
     expect(section).toMatch(/"deletedAt"\s+IS\s+NULL/i);
+  });
+
+  it("bespoke statement preset is registered in templateResolver", () => {
+    expect(TEMPLATE_RESOLVER).toContain("umrah_statement:");
+    expect(TEMPLATE_RESOLVER).toContain("closingBalanceLabel");
   });
 });

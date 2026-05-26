@@ -24,7 +24,7 @@ import {
   VehicleSelect,
 } from "@/components/shared/entity-selects";
 import { SearchableSelect } from "@/components/shared/searchable-select";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 
 /**
  * Finance / Entity Statements & Subsidiary Ledger.
@@ -61,12 +61,20 @@ import { formatCurrency, formatDateAr } from "@/lib/formatters";
  * /finance/reports page.
  */
 
+// Default report range = last 3 months ending today. Use the local-time
+// helper from formatters (Riyadh wall-clock) so the date picker doesn't
+// flip to the UTC date on late-evening loads.
 const defaultStart = () => {
-  const d = new Date();
-  d.setMonth(d.getMonth() - 3);
-  return d.toISOString().slice(0, 10);
+  const today = todayLocal();
+  const [y, m, d] = today.split("-").map(Number);
+  // Subtract 3 months by treating Date as a calendar arithmetic engine.
+  const past = new Date(y, m - 1 - 3, d);
+  const py = past.getFullYear();
+  const pm = String(past.getMonth() + 1).padStart(2, "0");
+  const pd = String(past.getDate()).padStart(2, "0");
+  return `${py}-${pm}-${pd}`;
 };
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = todayLocal;
 
 const ENTITY_TYPES = [
   { value: "employee", label: "موظف" },

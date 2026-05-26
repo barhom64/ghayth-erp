@@ -6,7 +6,7 @@ import {
   type RelatedEntity,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
@@ -61,38 +61,6 @@ export default function ExcuseDetail() {
     return out;
   }, [excuse]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!excuse) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: `EXC-${id}` },
-          { label: "الموظف", value: excuse.employeeName || "-" },
-          { label: "التاريخ", value: formatDateAr(excuse.date) },
-          { label: "وقت البداية", value: excuse.startTime || "-" },
-          { label: "وقت النهاية", value: excuse.endTime || "-" },
-          { label: "المدة", value: excuse.duration || "-" },
-          { label: "الحالة", value: STATUS_LABELS[excuse.status] || excuse.status || "-" },
-          { label: "تاريخ الطلب", value: formatDateAr(excuse.createdAt) },
-        ],
-      },
-    ];
-    if (excuse.reason) {
-      sections.push({ kind: "text", title: "السبب", body: excuse.reason });
-    }
-    if (excuse.notes) {
-      sections.push({ kind: "text", title: "ملاحظات", body: excuse.notes });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "مقدم الطلب", name: excuse.employeeName || "" },
-        { label: "المعتمد", name: excuse.approvedByName || "" },
-      ],
-    });
-    return sections;
-  }, [excuse, id]);
 
   const handleEdit = () => {
     setLocation(`/hr/excuse-requests/${id}/edit`);
@@ -243,12 +211,9 @@ export default function ExcuseDetail() {
         <>
           {excuse && (
             <EntityPrintButton
-              branchId={excuse.branchId}
-              title={`طلب استئذان EXC-${id}`}
-              ref={`EXC-${id}`}
-              date={formatDateAr(excuse.date || excuse.createdAt)}
-              sections={printSections}
-            />
+              entityType="excuse"
+              entityId={id ?? 0}
+              formats={["a4"]}/>
           )}
           <GuardedButton
             perm="hr:update"

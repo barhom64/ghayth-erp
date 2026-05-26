@@ -5,7 +5,17 @@
  */
 
 import { rawQuery } from "../rawdb.js";
+import { logger } from "../logger.js";
 import type { BranchLetterhead } from "./types.js";
+
+async function safeRawQuery<T>(sql: string, params: unknown[]): Promise<T[]> {
+  try {
+    return await rawQuery<T>(sql, params);
+  } catch (err) {
+    logger.warn(err as Error, "[print/branchContext] query failed, returning empty");
+    return [];
+  }
+}
 
 interface BranchRow {
   id: number;
@@ -35,8 +45,11 @@ interface CompanyRow {
 }
 
 export async function loadCompany(companyId: number) {
-  const rows = await rawQuery<CompanyRow>(
-    `SELECT id, name, "nameEn", address, phone, email, "taxNumber", "crNumber", "logoUrl"
+  // companies.vatNumber is the actual column; alias to taxNumber so the
+  // CompanyRow interface and downstream letterhead code stay stable.
+  const rows = await safeRawQuery<CompanyRow>(
+    `SELECT id, name, "nameEn", address, phone, email,
+            "vatNumber" AS "taxNumber", "crNumber", "logoUrl"
      FROM companies WHERE id = $1 LIMIT 1`,
     [companyId]
   );
@@ -45,7 +58,7 @@ export async function loadCompany(companyId: number) {
 
 export async function loadBranch(branchId: number | null) {
   if (!branchId) return null;
-  const rows = await rawQuery<BranchRow>(
+  const rows = await safeRawQuery<BranchRow>(
     `SELECT id, name, "nameEn", address, city, phone, email, website,
             "taxNumber", "crNumber", "logoUrl", "footerText"
      FROM branches WHERE id = $1 LIMIT 1`,

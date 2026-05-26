@@ -83,6 +83,8 @@ interface EmployeeMeRow {
   branchId: number | null;
   companyName: string | null;
   branchName: string | null;
+  preferredCalendar: "hijri" | "gregorian";
+  preferredLocale: "ar" | "en";
 }
 
 interface UserPasswordRow {
@@ -170,6 +172,14 @@ const loginLimiter = rateLimit({
   message: { error: "تم تجاوز الحد الأقصى لمحاولات الدخول. يرجى المحاولة بعد دقيقة" },
   validate: { ip: false, trustProxy: false },
   store: makeRateLimitStore("auth:login"),
+  // The Playwright suite reuses a single test admin across ~8 tests in
+  // parallel + retries, easily exceeding 10/min from a single CI runner.
+  // Skip the limiter in non-production when the canonical e2e marker
+  // header is set — the workflow already attaches `X-E2E-Test: 1` to
+  // every request via playwright.config.ts. Production traffic never
+  // carries this header so abuse protection is unchanged there.
+  skip: (req) =>
+    !config.isProduction && req.headers["x-e2e-test"] === "1",
 });
 
 // Per-user limiter for the authenticated /auth/* endpoints (/me, /logout,
@@ -568,9 +578,11 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
               COALESCE(jt.name, ea."jobTitle") AS "jobTitle",
               ea."jobTitleId", ea.role, ea.salary,
               ea."companyId", ea."branchId",
-              c.name AS "companyName", b.name AS "branchName"
+              c.name AS "companyName", b.name AS "branchName",
+              u."preferredCalendar", u."preferredLocale"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id
+       JOIN users u ON u."employeeId" = e.id
        LEFT JOIN companies c ON c.id = ea."companyId"
        LEFT JOIN branches b ON b.id = ea."branchId"
        LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
@@ -617,6 +629,64 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
     res.json({ ...employee, userRoles });
   } catch (err) {
     handleRouteError(err, res, "GetMe error:");
+  }
+});
+
+// User-controlled UI preferences. Today: calendar (hijri|gregorian) +
+// locale (ar|en). Persisted on `users` so the choice follows the user
+// across devices and is available to server-side formatters (emails,
+// PDFs, scheduled reports). Both fields are optional in the body — a
+// PATCH with only `preferredCalendar` keeps the locale untouched.
+const updatePreferencesSchema = z.object({
+  preferredCalendar: z.enum(["hijri", "gregorian"]).optional(),
+  preferredLocale: z.enum(["ar", "en"]).optional(),
+}).refine(
+  (b) => b.preferredCalendar !== undefined || b.preferredLocale !== undefined,
+  { message: "لم يتم تحديد أي تفضيل لتحديثه" },
+);
+
+router.patch("/me/preferences", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const parsed = updatePreferencesSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
+    }
+    const { preferredCalendar, preferredLocale } = parsed.data;
+
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (preferredCalendar !== undefined) {
+      params.push(preferredCalendar);
+      sets.push(`"preferredCalendar" = $${params.length}`);
+    }
+    if (preferredLocale !== undefined) {
+      params.push(preferredLocale);
+      sets.push(`"preferredLocale" = $${params.length}`);
+    }
+    params.push(scope.userId);
+    const { affectedRows } = await rawExecute(
+      `UPDATE users SET ${sets.join(", ")} WHERE id = $${params.length}`,
+      params
+    );
+    if (!affectedRows) throw new NotFoundError("المستخدم غير موجود");
+
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "update",
+      entity: "users",
+      entityId: scope.userId,
+      after: { preferredCalendar, preferredLocale },
+    }).catch((e) => logger.error(e, "auth background task failed"));
+
+    res.json({
+      success: true,
+      preferredCalendar: preferredCalendar ?? null,
+      preferredLocale: preferredLocale ?? null,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "UpdatePreferences error:");
   }
 });
 

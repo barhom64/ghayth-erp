@@ -1,37 +1,27 @@
 import { useState } from "react";
-import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
+  AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  DataTable,
-  type DataTableColumn,
-  FormShell,
-  FormTextField,
-  FormSelectField,
-} from "@workspace/ui-core";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Users, Split, Merge, ChevronRight } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-
-const splitSchema = z.object({
-  newGroupName: z.string(),
-});
-
-const mergeSchema = z.object({
-  targetGroupId: z.string().min(1, "اختر مجموعة هدف"),
-});
 
 // Umrah groups list + split / merge operations.
 // Wires the existing /umrah/groups endpoints + the new actions:
@@ -74,10 +64,11 @@ export default function UmrahGroups() {
 
   // Split state
   const [splitSource, setSplitSource] = useState<Group | null>(null);
+  const [splitName, setSplitName] = useState("");
   const [splitPilgrimIds, setSplitPilgrimIds] = useState<number[]>([]);
   const sourcePilgrimsQ = useApiQuery<{ data: Pilgrim[] }>(
     ["umrah-pilgrims-by-group", String(splitSource?.id ?? 0)],
-    `/umrah/pilgrims?groupId=${splitSource?.id ?? 0}`,
+    splitSource ? `/umrah/pilgrims?groupId=${splitSource.id}` : null,
     { enabled: !!splitSource },
   );
   const splitMutation = useApiMutation<
@@ -92,6 +83,7 @@ export default function UmrahGroups() {
 
   // Merge state
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeTarget, setMergeTarget] = useState<string>("");
   const mergeMutation = useApiMutation<
     { success: boolean; movedCount: number; mergedSourceIds: number[] },
     { sourceGroupIds: number[]; targetGroupId: number }
@@ -111,49 +103,47 @@ export default function UmrahGroups() {
       return;
     }
     setSplitSource(g);
+    setSplitName("");
     setSplitPilgrimIds([]);
   };
 
-  const handleSplitSubmit = async (values: { newGroupName: string }) => {
+  const handleSplitSubmit = () => {
     if (splitPilgrimIds.length === 0) {
       toast({ variant: "destructive", title: "اختر معتمراً واحداً على الأقل" });
       return;
     }
-    await new Promise<void>((resolve, reject) => {
-      splitMutation.mutate(
-        { pilgrimIds: splitPilgrimIds, newGroupName: values.newGroupName.trim() || undefined },
-        {
-          onSuccess: (res) => {
-            toast({ title: `تم نقل ${res.movedCount} معتمر لمجموعة ${res.newGroup.nuskGroupNumber}` });
-            setSplitSource(null);
-            resolve();
-          },
-          onError: () => reject(),
+    splitMutation.mutate(
+      { pilgrimIds: splitPilgrimIds, newGroupName: splitName.trim() || undefined },
+      {
+        onSuccess: (res) => {
+          toast({ title: `تم نقل ${res.movedCount} معتمر لمجموعة ${res.newGroup.nuskGroupNumber}` });
+          setSplitSource(null);
         },
-      );
-    });
+      },
+    );
   };
 
-  const handleMergeSubmit = async (values: { targetGroupId: string }) => {
-    const targetId = Number(values.targetGroupId);
+  const handleMergeSubmit = () => {
+    const targetId = Number(mergeTarget);
+    if (!targetId) {
+      toast({ variant: "destructive", title: "اختر مجموعة هدف" });
+      return;
+    }
     if (selectedIds.includes(targetId)) {
       toast({ variant: "destructive", title: "المجموعة الهدف لا يمكن أن تكون ضمن المصادر" });
       return;
     }
-    await new Promise<void>((resolve, reject) => {
-      mergeMutation.mutate(
-        { sourceGroupIds: selectedIds, targetGroupId: targetId },
-        {
-          onSuccess: (res) => {
-            toast({ title: `تم دمج ${res.mergedSourceIds.length} مجموعة (${res.movedCount} معتمر)` });
-            setMergeOpen(false);
-            setSelectedIds([]);
-            resolve();
-          },
-          onError: () => reject(),
+    mergeMutation.mutate(
+      { sourceGroupIds: selectedIds, targetGroupId: targetId },
+      {
+        onSuccess: (res) => {
+          toast({ title: `تم دمج ${res.mergedSourceIds.length} مجموعة (${res.movedCount} معتمر)` });
+          setMergeOpen(false);
+          setMergeTarget("");
+          setSelectedIds([]);
         },
-      );
-    });
+      },
+    );
   };
 
   const columns: DataTableColumn<Group>[] = [
@@ -231,22 +221,16 @@ export default function UmrahGroups() {
               ينقل تلقائياً من المصدر.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <FormShell
-            key={splitSource?.id ?? "closed"}
-            schema={splitSchema}
-            defaultValues={{ newGroupName: "" }}
-            submitLabel={splitMutation.isPending ? "جاري التقسيم…" : "تأكيد التقسيم"}
-            disabled={splitPilgrimIds.length === 0}
-            secondaryActions={
-              <Button type="button" variant="outline" onClick={() => setSplitSource(null)}>إلغاء</Button>
-            }
-            onSubmit={handleSplitSubmit}
-          >
-            <FormTextField
-              name="newGroupName"
-              label="اسم المجموعة الجديدة (اختياري)"
-              placeholder={`${splitSource?.name || ""} - تقسيم`}
-            />
+          <div className="space-y-3 py-2">
+            <div>
+              <Label htmlFor="split-name">اسم المجموعة الجديدة (اختياري)</Label>
+              <Input
+                id="split-name"
+                value={splitName}
+                onChange={(e) => setSplitName(e.target.value)}
+                placeholder={`${splitSource?.name || ""} - تقسيم`}
+              />
+            </div>
             <div>
               <Label className="mb-2 inline-block">المعتمرون ({sourcePilgrims.length})</Label>
               {sourcePilgrimsQ.isLoading ? (
@@ -276,7 +260,16 @@ export default function UmrahGroups() {
                 المحدد: {splitPilgrimIds.length} من {sourcePilgrims.length}
               </p>
             </div>
-          </FormShell>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <GuardedButton perm="umrah:approve"
+              onClick={(e: React.MouseEvent) => { e.preventDefault(); handleSplitSubmit(); }}
+              disabled={splitMutation.isPending || splitPilgrimIds.length === 0}
+            >
+              {splitMutation.isPending ? "جاري التقسيم…" : "تأكيد التقسيم"}
+            </GuardedButton>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
@@ -290,27 +283,28 @@ export default function UmrahGroups() {
               لا يمكن الدمج إذا كانت أي مجموعة مصدر مفوترة (الخادم سيرفض 409).
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <FormShell
-            key={mergeOpen ? "open" : "closed"}
-            schema={mergeSchema}
-            defaultValues={{ targetGroupId: "" }}
-            submitLabel={mergeMutation.isPending ? "جاري الدمج…" : "تأكيد الدمج"}
-            secondaryActions={
-              <Button type="button" variant="outline" onClick={() => setMergeOpen(false)}>إلغاء</Button>
-            }
-            onSubmit={handleMergeSubmit}
-          >
-            <FormSelectField
-              name="targetGroupId"
-              label="مجموعة الهدف"
-              placeholder="اختر مجموعة..."
-              required
-              options={mergeTargetOptions.map((g) => ({
-                value: String(g.id),
-                label: `${g.nuskGroupNumber} — ${g.name || "بدون اسم"} (${g.mutamerCount} معتمر)`,
-              }))}
-            />
-          </FormShell>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="merge-target">مجموعة الهدف <span className="text-status-error-foreground">*</span></Label>
+            <Select value={mergeTarget} onValueChange={setMergeTarget}>
+              <SelectTrigger id="merge-target"><SelectValue placeholder="اختر مجموعة..." /></SelectTrigger>
+              <SelectContent>
+                {mergeTargetOptions.map((g) => (
+                  <SelectItem key={g.id} value={String(g.id)}>
+                    {g.nuskGroupNumber} — {g.name || "بدون اسم"} ({g.mutamerCount} معتمر)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <GuardedButton perm="umrah:approve"
+              onClick={(e: React.MouseEvent) => { e.preventDefault(); handleMergeSubmit(); }}
+              disabled={mergeMutation.isPending || !mergeTarget}
+            >
+              {mergeMutation.isPending ? "جاري الدمج…" : "تأكيد الدمج"}
+            </GuardedButton>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

@@ -12,6 +12,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { criticalPathLength } from "../lib/algorithms.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import {
@@ -442,13 +443,26 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
       }
     }
     const managerId = scope.role === "projects_manager" ? scope.employeeId : b.managerId;
+    // Numbering center (Issue #1141) — project ref from central authority.
+    const issuedProject = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "projects",
+      entityKey: "project",
+      entityTable: "projects",
+      actorId: scope.userId,
+    });
     let insertId!: number;
     await withTransaction(async (client) => {
       const ins = await client.query(
-        `INSERT INTO projects ("companyId",name,description,"clientId","managerId","startDate","endDate",budget,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-        [scope.companyId, b.name.trim(), b.description, b.clientId || null, managerId, b.startDate, b.endDate, b.budget || 0, b.status || 'planning']
+        `INSERT INTO projects ("companyId",ref,name,description,"clientId","managerId","startDate","endDate",budget,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+        [scope.companyId, issuedProject.number, b.name.trim(), b.description, b.clientId || null, managerId, b.startDate, b.endDate, b.budget || 0, b.status || 'planning']
       );
       insertId = ins.rows[0].id;
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertId, issuedProject.assignmentId]
+      );
 
       if (b.phases && Array.isArray(b.phases)) {
         for (let i = 0; i < b.phases.length; i++) {

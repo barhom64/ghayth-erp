@@ -43,6 +43,13 @@ export interface EntryContext {
    *  these too on each line if the payload set them. */
   sourceType?: string;
   sourceId?: number;
+  /** Stable idempotency key for the economic event being posted (PD-6).
+   *  When provided, a retried post with the same (companyId, sourceKey)
+   *  returns the existing entry instead of double-posting. Backed by the
+   *  partial UNIQUE index on journal_entries (companyId, sourceKey) WHERE
+   *  sourceKey IS NOT NULL — so even a racy missed pre-check is rejected
+   *  by the database. */
+  sourceKey?: string;
   /** Whether to mark the entry posted immediately (default) or
    *  leave it as a draft for operator review. */
   status?: JournalEntryStatus;
@@ -51,6 +58,9 @@ export interface EntryContext {
 export interface PostedEntry {
   journalEntryId: number;
   status: JournalEntryStatus;
+  /** True when an idempotent retry hit an existing entry (sourceKey
+   *  matched) and no new row was inserted. */
+  alreadyExists?: boolean;
 }
 
 /**
@@ -83,6 +93,29 @@ export async function postJournalEntry(
   }
 
   const status: JournalEntryStatus = ctx.status ?? "posted";
+
+  // PD-6 — sourceKey idempotency. A retried post (scheduler re-fire, network
+  // blip, manual retry) with the same (companyId, sourceKey) returns the
+  // existing entry instead of double-posting. The check here is best-effort
+  // — the partial UNIQUE index on journal_entries (companyId, sourceKey)
+  // WHERE sourceKey IS NOT NULL is the authoritative backstop, so even a
+  // racy missed pre-check is rejected by the database with a unique
+  // violation rather than silently double-counting.
+  if (ctx.sourceKey) {
+    const existing = await rawQuery<{ id: number; status: JournalEntryStatus }>(
+      `SELECT id, status FROM journal_entries
+       WHERE "companyId" = $1 AND "sourceKey" = $2 AND "deletedAt" IS NULL
+       LIMIT 1`,
+      [ctx.companyId, ctx.sourceKey],
+    );
+    if (existing.length > 0) {
+      return {
+        journalEntryId: existing[0].id,
+        status: existing[0].status,
+        alreadyExists: true,
+      };
+    }
+  }
 
   // Financial-period-close gate. A *posted* entry must never land in a
   // closed financial period. Drafts are exempt — the gate is enforced
@@ -129,6 +162,17 @@ export async function postJournalEntry(
     // journal_lines.accountId is the canonical FK).
     const codeById = new Map(accounts.map((a) => [a.id, a.code]));
 
+    // Pre-compute postedBy/postedAt in JS so each $N maps to exactly one
+    // column. A previous design reused $5 (createdBy) inside the postedBy
+    // CASE branch, which trips pg's parameter-type inference on a real
+    // Postgres ("inconsistent types deduced for parameter $5: text versus
+    // integer") because the bare $5 anchors to "createdBy" (int) while the
+    // explicit-cast $5 inside the CASE deduces to unknown/text. Computing
+    // the values here makes the SQL one-$N-per-column and lets every
+    // parameter resolve to its column type unambiguously.
+    const postedBy = status === "posted" ? (ctx.createdBy ?? null) : null;
+    const postedAt = status === "posted" ? new Date() : null;
+
     const [header] = await rawQuery<{ id: number }>(
       // C2 — createdAt is stamped with the effective accounting date (the
       // same value as `date`), not NOW(). Financial reports range-filter on
@@ -136,14 +180,23 @@ export async function postJournalEntry(
       // accounting date (applyHeaderOverrides sets it from postingDate), so
       // a back-dated FX / inventory entry posted here lands in the correct
       // reporting period instead of the period it was physically inserted.
+      // Every $N carries an explicit cast. pg sends bare JS strings with
+      // the wire protocol's TEXT OID, which conflicts with VARCHAR columns
+      // (status, type, ref, sourceType, sourceKey) once PG's
+      // variable_coerce_param_hook tries to deduce the column type from
+      // context. The casts pin each parameter to a single type so the
+      // deducer has nothing to argue about.
       `INSERT INTO journal_entries (
          "companyId", "branchId", ref, description, "createdBy",
-         date, type, status, "sourceType", "sourceId", "postedBy", "postedAt", "createdAt"
-       ) VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE),
-                 COALESCE($7, 'manual'), $8, $9, $10,
-                 CASE WHEN $8 = 'posted' THEN $5 ELSE NULL END,
-                 CASE WHEN $8 = 'posted' THEN NOW() ELSE NULL END,
-                 COALESCE($6::date, CURRENT_DATE))
+         date, type, status, "sourceType", "sourceId", "postedBy", "postedAt", "createdAt",
+         "sourceKey"
+       ) VALUES ($1::int, $2::int, $3::varchar, $4::text, $5::int,
+                 COALESCE($6::date, CURRENT_DATE),
+                 COALESCE($7::varchar, 'manual'),
+                 $8::varchar, $9::varchar, $10::int,
+                 $11::int, $12::timestamptz,
+                 COALESCE($6::date, CURRENT_DATE),
+                 $13::varchar)
        RETURNING id`,
       [
         ctx.companyId,
@@ -156,6 +209,9 @@ export async function postJournalEntry(
         status,
         ctx.sourceType ?? null,
         ctx.sourceId ?? null,
+        postedBy,
+        postedAt,
+        ctx.sourceKey ?? null,
       ],
     );
     const journalEntryId = header.id;

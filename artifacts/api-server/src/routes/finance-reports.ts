@@ -1192,3 +1192,1824 @@ reportsRouter.get("/reports/cash-bank-statement", authorize({ feature: "finance.
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DIMENSIONAL PROFITABILITY REPORTS — Finance Line-Level Allocation Phase 7.
+//
+// All seven reports read DIRECTLY from journal_lines using the
+// dimensional columns landed in migration 201
+// (vehicleId, propertyId, projectId, contractId, employeeId,
+// umrahSeasonId, umrahAgentId, costCenterId, …). The point of the
+// whole Line-Level Allocation campaign is that analytical reports
+// stop having to join back to source documents to recompute the
+// dimension — the GL is the source of truth.
+//
+// Each report applies the standard filters that the trial-balance,
+// income-statement and balance-sheet reports already use:
+//
+//   je."deletedAt" IS NULL
+//   je."balancesApplied" = true
+//   je."reversedById" IS NULL
+//
+// so drafts and reversed entries don't pollute the totals.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 1. ربحية المركبة — GET /reports/profitability/vehicle/:vehicleId
+reportsRouter.get("/reports/profitability/vehicle/:vehicleId", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const vehicleId = parseId(req.params.vehicleId, "vehicleId");
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId, vehicleId];
+    let dateFilter = "";
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT coa.code, coa.name, coa.type,
+              COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit-jl.debit ELSE 0 END),0) AS revenue,
+              COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit-jl.credit ELSE 0 END),0) AS expense
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL${dateFilter}
+         JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = $1
+        WHERE jl."vehicleId" = $2 AND jl."deletedAt" IS NULL
+        GROUP BY coa.code, coa.name, coa.type
+        ORDER BY coa.type, coa.code`,
+      params
+    );
+
+    const totalRevenue = rows.reduce((s, r) => s + Number(r.revenue), 0);
+    const totalExpense = rows.reduce((s, r) => s + Number(r.expense), 0);
+    res.json(maskFields(req, {
+      vehicleId, accounts: rows,
+      summary: { totalRevenue, totalExpense, netProfit: roundTo2(totalRevenue - totalExpense) },
+    }));
+  } catch (err) { handleRouteError(err, res, "Vehicle profitability error:"); }
+});
+
+// 2. ربحية العقار — GET /reports/profitability/property/:propertyId
+reportsRouter.get("/reports/profitability/property/:propertyId", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const propertyId = parseId(req.params.propertyId, "propertyId");
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId, propertyId];
+    let dateFilter = "";
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT coa.code, coa.name, coa.type,
+              COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit-jl.debit ELSE 0 END),0) AS revenue,
+              COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit-jl.credit ELSE 0 END),0) AS expense
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL${dateFilter}
+         JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = $1
+        WHERE jl."propertyId" = $2 AND jl."deletedAt" IS NULL
+        GROUP BY coa.code, coa.name, coa.type
+        ORDER BY coa.type, coa.code`,
+      params
+    );
+
+    const totalRevenue = rows.reduce((s, r) => s + Number(r.revenue), 0);
+    const totalExpense = rows.reduce((s, r) => s + Number(r.expense), 0);
+    res.json(maskFields(req, {
+      propertyId, accounts: rows,
+      summary: { totalRevenue, totalExpense, netProfit: roundTo2(totalRevenue - totalExpense) },
+    }));
+  } catch (err) { handleRouteError(err, res, "Property profitability error:"); }
+});
+
+// 3. ربحية المشروع — GET /reports/profitability/project/:projectId
+reportsRouter.get("/reports/profitability/project/:projectId", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = parseId(req.params.projectId, "projectId");
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId, projectId];
+    let dateFilter = "";
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT coa.code, coa.name, coa.type,
+              COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit-jl.debit ELSE 0 END),0) AS revenue,
+              COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit-jl.credit ELSE 0 END),0) AS expense
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL${dateFilter}
+         JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = $1
+        WHERE jl."projectId" = $2 AND jl."deletedAt" IS NULL
+        GROUP BY coa.code, coa.name, coa.type
+        ORDER BY coa.type, coa.code`,
+      params
+    );
+
+    const totalRevenue = rows.reduce((s, r) => s + Number(r.revenue), 0);
+    const totalExpense = rows.reduce((s, r) => s + Number(r.expense), 0);
+    res.json(maskFields(req, {
+      projectId, accounts: rows,
+      summary: { totalRevenue, totalExpense, netProfit: roundTo2(totalRevenue - totalExpense) },
+    }));
+  } catch (err) { handleRouteError(err, res, "Project profitability error:"); }
+});
+
+// 4. ربحية وكيل العمرة — GET /reports/profitability/umrah-agent/:umrahAgentId
+reportsRouter.get("/reports/profitability/umrah-agent/:umrahAgentId", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const umrahAgentId = parseId(req.params.umrahAgentId, "umrahAgentId");
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId, umrahAgentId];
+    let dateFilter = "";
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT coa.code, coa.name, coa.type,
+              COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit-jl.debit ELSE 0 END),0) AS revenue,
+              COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit-jl.credit ELSE 0 END),0) AS expense
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL${dateFilter}
+         JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = $1
+        WHERE jl."umrahAgentId" = $2 AND jl."deletedAt" IS NULL
+        GROUP BY coa.code, coa.name, coa.type
+        ORDER BY coa.type, coa.code`,
+      params
+    );
+
+    const totalRevenue = rows.reduce((s, r) => s + Number(r.revenue), 0);
+    const totalExpense = rows.reduce((s, r) => s + Number(r.expense), 0);
+    res.json(maskFields(req, {
+      umrahAgentId, accounts: rows,
+      summary: { totalRevenue, totalExpense, netProfit: roundTo2(totalRevenue - totalExpense) },
+    }));
+  } catch (err) { handleRouteError(err, res, "Umrah agent profitability error:"); }
+});
+
+// 5. الإيرادات حسب نوع النشاط — GET /reports/revenue-by-activity-type
+reportsRouter.get("/reports/revenue-by-activity-type", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let dateFilter = "";
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(jl."activityType", '— غير محدد —') AS "activityType",
+              COALESCE(SUM(jl.credit - jl.debit), 0) AS revenue,
+              COUNT(DISTINCT je.id) AS "entryCount"
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL${dateFilter}
+         JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'revenue' AND coa."companyId" = $1
+        WHERE jl."deletedAt" IS NULL
+        GROUP BY jl."activityType"
+        ORDER BY revenue DESC`,
+      params
+    );
+
+    res.json(maskFields(req, { rows, summary: { totalRevenue: rows.reduce((s, r) => s + Number(r.revenue), 0) } }));
+  } catch (err) { handleRouteError(err, res, "Revenue by activity type error:"); }
+});
+
+// 6. المصروفات حسب مركز التكلفة — GET /reports/expenses-by-cost-center
+reportsRouter.get("/reports/expenses-by-cost-center", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { startDate, endDate } = req.query as Record<string, string | undefined>;
+    const params: unknown[] = [scope.companyId];
+    let dateFilter = "";
+    if (startDate) { params.push(startDate); dateFilter += ` AND je."createdAt" >= $${params.length}`; }
+    if (endDate)   { params.push(endDate);   dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
+
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT jl."costCenterId",
+              cc.name AS "costCenterName",
+              cc.code AS "costCenterCode",
+              cc.type AS "costCenterType",
+              COALESCE(SUM(jl.debit - jl.credit), 0) AS expense,
+              COUNT(DISTINCT je.id) AS "entryCount"
+         FROM journal_lines jl
+         JOIN journal_entries je ON je.id = jl."journalId"
+          AND je."companyId" = $1
+          AND je."deletedAt" IS NULL
+          AND je."balancesApplied" = true
+          AND je."reversedById" IS NULL${dateFilter}
+         JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'expense' AND coa."companyId" = $1
+         LEFT JOIN cost_centers cc ON cc.id = jl."costCenterId" AND cc."companyId" = $1
+        WHERE jl."deletedAt" IS NULL
+        GROUP BY jl."costCenterId", cc.name, cc.code, cc.type
+        ORDER BY expense DESC`,
+      params
+    );
+
+    res.json(maskFields(req, { rows, summary: { totalExpense: rows.reduce((s, r) => s + Number(r.expense), 0) } }));
+  } catch (err) { handleRouteError(err, res, "Expenses by cost center error:"); }
+});
+
+// 7. البنود غير الموجَّهة — GET /reports/unmapped-lines
+// Cross-table view of every allocation-eligible line that has not been
+// mapped to a specific account. The single most important governance
+// report for the operator: drives the «what do I still need to
+// allocate before month-end?» workflow.
+reportsRouter.get("/reports/unmapped-lines", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { startDate, endDate, sourceTable } = req.query as Record<string, string | undefined>;
+
+    const params: unknown[] = [scope.companyId];
+    let dateFilter = "";
+    if (startDate) { params.push(startDate); dateFilter += ` AND s."createdAt" >= $${params.length}`; }
+    if (endDate)   { params.push(endDate);   dateFilter += ` AND s."createdAt" < ($${params.length}::date + 1)`; }
+
+    const tableFilter = (table: string) => !sourceTable || sourceTable === table;
+
+    const sections: Array<{ source: string; rows: Record<string, unknown>[] }> = [];
+
+    if (tableFilter("invoice_lines")) {
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT il.id, il."invoiceId", il.description, il."lineTotal", i.ref AS "invoiceRef", i.status,
+                il."allocationStatus", i."createdAt"
+           FROM invoice_lines il
+           JOIN invoices i ON i.id = il."invoiceId"
+          WHERE i."companyId" = $1
+            AND i."deletedAt" IS NULL
+            AND il."allocationStatus" = 'unmapped'${dateFilter.replace(/s\./g, "i.")}
+          ORDER BY i."createdAt" DESC
+          LIMIT 500`,
+        params
+      );
+      sections.push({ source: "invoice_lines", rows });
+    }
+
+    if (tableFilter("purchase_order_items")) {
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT poi.id, poi."orderId", poi."itemName", poi."lineTotal", po.ref AS "orderRef", po.status,
+                poi."allocationStatus", po."createdAt"
+           FROM purchase_order_items poi
+           JOIN purchase_orders po ON po.id = poi."orderId"
+          WHERE po."companyId" = $1
+            AND po."deletedAt" IS NULL
+            AND poi."allocationStatus" = 'unmapped'${dateFilter.replace(/s\./g, "po.")}
+          ORDER BY po."createdAt" DESC
+          LIMIT 500`,
+        params
+      );
+      sections.push({ source: "purchase_order_items", rows });
+    }
+
+    if (tableFilter("goods_receipt_items")) {
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT gri.id, gri."grnId", gri."itemName", gri."lineTotal", grn.ref AS "grnRef", grn.status,
+                gri."allocationStatus", grn."createdAt"
+           FROM goods_receipt_items gri
+           JOIN goods_receipts grn ON grn.id = gri."grnId"
+          WHERE grn."companyId" = $1
+            AND grn."deletedAt" IS NULL
+            AND gri."allocationStatus" = 'unmapped'${dateFilter.replace(/s\./g, "grn.")}
+          ORDER BY grn."createdAt" DESC
+          LIMIT 500`,
+        params
+      );
+      sections.push({ source: "goods_receipt_items", rows });
+    }
+
+    const totalCount = sections.reduce((s, x) => s + x.rows.length, 0);
+    res.json(maskFields(req, { sections, summary: { totalCount } }));
+  } catch (err) { handleRouteError(err, res, "Unmapped lines error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ZATCA WHT summary — Audit follow-up to #999/#1006/#1010.
+//
+// The WHT campaign now snapshots every withheld tax on
+// supplier_payment_allocations (whtAmount/whtRate/whtCategory). Without
+// a queryable report, that data is invisible — operators can't reconcile
+// the WHT-payable balance before the monthly ZATCA filing.
+//
+// This endpoint joins SPA + suppliers + journal_entries and returns:
+//   * grand total: Σ whtAmount across all WHT-bearing allocations
+//   * by-category breakdown (the ZATCA filing demands this split)
+//   * by-supplier breakdown (residency + tax number + total withheld)
+//   * source rows so an auditor can drill down to each payment
+//
+// Read-only, no transaction. Date range defaults to the current
+// Gregorian month (ZATCA WHT is monthly).
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/wht-summary",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { startDate, endDate, supplierId, category } =
+        req.query as Record<string, string | undefined>;
+
+      const params: unknown[] = [scope.companyId];
+      let whereExtra = "";
+      if (startDate) { params.push(startDate); whereExtra += ` AND je."postingDate" >= $${params.length}`; }
+      if (endDate)   { params.push(endDate);   whereExtra += ` AND je."postingDate" < ($${params.length}::date + 1)`; }
+      if (supplierId) {
+        const sid = Number(supplierId);
+        if (Number.isFinite(sid) && sid > 0) {
+          params.push(sid);
+          // SPA points at obligations (PO / nusk-invoice), not the supplier
+          // directly. Filter via the joined supplier.
+          whereExtra += ` AND sup.id = $${params.length}`;
+        }
+      }
+      if (category) { params.push(category); whereExtra += ` AND spa."whtCategory" = $${params.length}`; }
+      const { branchId: requestedBranchId } = req.query as Record<string, string | undefined>;
+      const branchFilter = getBranchCondition(scope, requestedBranchId, params);
+
+      // The SPA row holds the obligation id; suppliers come from the
+      // obligation table (purchase_orders for now — nusk_invoice has
+      // its own agent linkage, not a supplier FK). Only POs carry
+      // residency, so the LEFT JOIN keeps nusk-invoice rows in the
+      // report with NULL supplier fields rather than dropping them.
+      const baseSql = `
+        FROM supplier_payment_allocations spa
+        JOIN journal_entries je
+          ON je.id = spa."journalEntryId"
+         AND je."deletedAt" IS NULL
+         AND je."balancesApplied" = true
+         AND je."reversedById" IS NULL
+        LEFT JOIN purchase_orders po
+          ON po.id = spa."obligationId"
+         AND spa."obligationType" = 'purchase_order'
+         AND po."deletedAt" IS NULL
+        LEFT JOIN suppliers sup
+          ON sup.id = po."supplierId"
+         AND sup."deletedAt" IS NULL
+        LEFT JOIN wht_categories cat
+          ON cat."companyId" = spa."companyId"
+         AND cat.code = spa."whtCategory"
+         AND cat."deletedAt" IS NULL
+        WHERE spa."companyId" = $1
+          AND spa."deletedAt" IS NULL
+          AND COALESCE(spa."whtAmount", 0) > 0
+          ${whereExtra}${branchFilter}
+      `;
+
+      interface DetailRow {
+        allocationId: number;
+        journalEntryId: number;
+        journalRef: string | null;
+        postingDate: string | null;
+        obligationType: string;
+        obligationId: number;
+        amount: string | number;
+        whtAmount: string | number;
+        whtRate: string | number | null;
+        whtCategory: string | null;
+        whtCategoryName: string | null;
+        whtCategoryAppliesTo: string | null;
+        supplierId: number | null;
+        supplierName: string | null;
+        supplierTaxNumber: string | null;
+        supplierResidencyStatus: string | null;
+        supplierTaxResidenceCountry: string | null;
+      }
+
+      const rows = await rawQuery<DetailRow>(
+        `SELECT spa.id           AS "allocationId",
+                spa."journalEntryId",
+                je.ref            AS "journalRef",
+                je."postingDate"::text AS "postingDate",
+                spa."obligationType",
+                spa."obligationId",
+                spa.amount::float8        AS amount,
+                spa."whtAmount"::float8   AS "whtAmount",
+                spa."whtRate"::float8     AS "whtRate",
+                spa."whtCategory",
+                cat.name                  AS "whtCategoryName",
+                cat."appliesTo"           AS "whtCategoryAppliesTo",
+                sup.id                    AS "supplierId",
+                sup.name                  AS "supplierName",
+                sup."taxNumber"           AS "supplierTaxNumber",
+                sup."residencyStatus"     AS "supplierResidencyStatus",
+                sup."taxResidenceCountry" AS "supplierTaxResidenceCountry"
+         ${baseSql}
+         ORDER BY je."postingDate" DESC NULLS LAST, spa.id DESC
+         LIMIT 5000`,
+        params,
+      );
+
+      // Roll-ups (computed in JS to keep the SQL one round-trip).
+      const byCategory = new Map<string, {
+        category: string;
+        categoryName: string | null;
+        appliesTo: string | null;
+        wht: number;
+        gross: number;     // amount + whtAmount
+        net: number;       // amount (cash to supplier)
+        rows: number;
+      }>();
+      const bySupplier = new Map<number, {
+        supplierId: number;
+        supplierName: string | null;
+        taxNumber: string | null;
+        residencyStatus: string | null;
+        taxResidenceCountry: string | null;
+        wht: number;
+        gross: number;
+        net: number;
+        rows: number;
+      }>();
+      let totalWht = 0;
+      let totalNet = 0;
+      let totalGross = 0;
+
+      for (const r of rows) {
+        const wht = Number(r.whtAmount ?? 0);
+        const net = Number(r.amount ?? 0);
+        const gross = net + wht;
+        totalWht += wht;
+        totalNet += net;
+        totalGross += gross;
+
+        const catKey = r.whtCategory ?? "_uncat";
+        const cat = byCategory.get(catKey) ?? {
+          category: catKey, categoryName: r.whtCategoryName,
+          appliesTo: r.whtCategoryAppliesTo,
+          wht: 0, gross: 0, net: 0, rows: 0,
+        };
+        cat.wht += wht; cat.gross += gross; cat.net += net; cat.rows += 1;
+        byCategory.set(catKey, cat);
+
+        if (r.supplierId != null) {
+          const sup = bySupplier.get(r.supplierId) ?? {
+            supplierId: r.supplierId,
+            supplierName: r.supplierName,
+            taxNumber: r.supplierTaxNumber,
+            residencyStatus: r.supplierResidencyStatus,
+            taxResidenceCountry: r.supplierTaxResidenceCountry,
+            wht: 0, gross: 0, net: 0, rows: 0,
+          };
+          sup.wht += wht; sup.gross += gross; sup.net += net; sup.rows += 1;
+          bySupplier.set(r.supplierId, sup);
+        }
+      }
+
+      res.json(maskFields(req, {
+        filters: { startDate, endDate, supplierId, category },
+        summary: {
+          totalWht: roundTo2(totalWht),
+          totalNet: roundTo2(totalNet),
+          totalGross: roundTo2(totalGross),
+          rowCount: rows.length,
+        },
+        byCategory: Array.from(byCategory.values())
+          .map((c) => ({ ...c, wht: roundTo2(c.wht), gross: roundTo2(c.gross), net: roundTo2(c.net) }))
+          .sort((a, b) => b.wht - a.wht),
+        bySupplier: Array.from(bySupplier.values())
+          .map((s) => ({ ...s, wht: roundTo2(s.wht), gross: roundTo2(s.gross), net: roundTo2(s.net) }))
+          .sort((a, b) => b.wht - a.wht),
+        data: rows,
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "WHT summary error:");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lot expiry alerts — FIFO + waste management.
+//
+// Lists active qc-approved lots whose expiryDate falls inside the
+// requested look-ahead window (default 90 days). Each row carries
+// the days-until-expiry, on-hand quantity, exposure value
+// (quantity × unitCost), and the per-warehouse alert thresholds
+// from warehouses.expiryAlertDays so the operator can see whether
+// a row should fire the 30-day / 60-day / 90-day alert.
+//
+// Why operators need this:
+//   * FIFO compliance — sell oldest first or write off.
+//   * Cash exposure — every day past expiry is potential write-off.
+//   * Procurement planning — over-stocked perishables get reorder
+//     paused; under-stocked SKUs surface as well via daysUntil < 0.
+//
+// Already-expired lots (lot.status='expired') are EXCLUDED — those
+// belong on the negative-stock / write-off reports, not the
+// pre-expiry alert. Pass ?includeExpired=true to override.
+//
+// Read-only, no transaction.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/lot-expiry-alerts",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { warehouseId, productId, daysAhead, includeExpired } =
+        req.query as Record<string, string | undefined>;
+
+      // Default look-ahead = 90 days; cap at 365 so a typo doesn't
+      // scan the entire inventory + emit megabytes.
+      const aheadParsed = Number(daysAhead ?? "90");
+      const aheadDays = Number.isFinite(aheadParsed) && aheadParsed > 0
+        ? Math.min(Math.floor(aheadParsed), 365)
+        : 90;
+
+      const params: unknown[] = [scope.companyId, aheadDays];
+      let whereExtra = "";
+      if (warehouseId) {
+        const wid = Number(warehouseId);
+        if (Number.isFinite(wid) && wid > 0) {
+          params.push(wid);
+          whereExtra += ` AND l."warehouseId" = $${params.length}`;
+        }
+      }
+      if (productId) {
+        const pid = Number(productId);
+        if (Number.isFinite(pid) && pid > 0) {
+          params.push(pid);
+          whereExtra += ` AND l."productId" = $${params.length}`;
+        }
+      }
+      // Default: hide already-expired lots — they need a different
+      // workflow (write-off, not pre-expiry alert).
+      const expiredFilter = includeExpired === "true"
+        ? ""
+        : ` AND l.status != 'expired'`;
+      // Branch scope via the warehouse.
+      const branchFilter = getBranchCondition(scope, undefined, params, "w");
+
+      interface ExpiryRow {
+        lotId: number;
+        productId: number;
+        sku: string | null;
+        productName: string;
+        warehouseId: number;
+        warehouseName: string | null;
+        warehouseCode: string | null;
+        expiryAlertDays: number[] | null;
+        lotNumber: string;
+        quantity: string | number;
+        unitCost: string | number;
+        exposureValue: string | number;
+        expiryDate: string;
+        daysUntil: string | number;
+        status: string;
+      }
+
+      const rows = await rawQuery<ExpiryRow>(
+        `SELECT l.id                            AS "lotId",
+                l."productId",
+                p.sku,
+                p.name                          AS "productName",
+                l."warehouseId",
+                w.name                          AS "warehouseName",
+                w.code                          AS "warehouseCode",
+                w."expiryAlertDays"             AS "expiryAlertDays",
+                l."lotNumber",
+                l.quantity::float8              AS quantity,
+                l."unitCost"::float8            AS "unitCost",
+                (l.quantity * l."unitCost")::float8 AS "exposureValue",
+                l."expiryDate"::text            AS "expiryDate",
+                (l."expiryDate" - CURRENT_DATE)::int AS "daysUntil",
+                l.status
+           FROM warehouse_stock_lots l
+           LEFT JOIN warehouses w
+             ON w.id = l."warehouseId" AND w."deletedAt" IS NULL
+           LEFT JOIN warehouse_products p
+             ON p.id = l."productId" AND p."deletedAt" IS NULL
+          WHERE l."companyId" = $1
+            AND l."deletedAt" IS NULL
+            AND l.quantity > 0
+            AND l."qualityControlStatus" = 'approved'
+            AND l."expiryDate" IS NOT NULL
+            AND l."expiryDate" <= (CURRENT_DATE + ($2 || ' days')::interval)
+            ${expiredFilter}${whereExtra}${branchFilter}
+          ORDER BY l."expiryDate" ASC, l.id ASC
+          LIMIT 2000`,
+        params,
+      );
+
+      // Bucket each row into the WORST alert threshold it crosses,
+      // using the warehouse's own expiryAlertDays array (default
+      // seeded with [30, 60, 90] in migration; falls back to that
+      // when the column is null). The "bucket" is the lowest
+      // threshold that the row's daysUntil meets or exceeds — i.e.
+      // a row 25 days out lands in the "30" bucket, a row 55 days
+      // out lands in the "60" bucket, …
+      const DEFAULT_BUCKETS = [30, 60, 90];
+      const bucketCounts = new Map<string, { threshold: number | "overdue"; lotCount: number; exposureValue: number }>();
+
+      let totalExposure = 0;
+      const out = rows.map((r) => {
+        const daysUntil = Number(r.daysUntil ?? 0);
+        const exposure = Number(r.exposureValue ?? 0);
+        totalExposure += exposure;
+        const wbuckets = Array.isArray(r.expiryAlertDays) && r.expiryAlertDays.length > 0
+          ? [...r.expiryAlertDays].sort((a, b) => a - b)
+          : DEFAULT_BUCKETS;
+
+        let bucketLabel: number | "overdue";
+        if (daysUntil < 0) {
+          bucketLabel = "overdue";
+        } else {
+          // Pick the smallest threshold ≥ daysUntil; fall back to the
+          // largest configured threshold if none fits (row still
+          // surfaces but in the "loosest" bucket).
+          const fit = wbuckets.find((t) => daysUntil <= t);
+          bucketLabel = fit ?? wbuckets[wbuckets.length - 1];
+        }
+        const key = String(bucketLabel);
+        const b = bucketCounts.get(key) ?? {
+          threshold: bucketLabel, lotCount: 0, exposureValue: 0,
+        };
+        b.lotCount += 1;
+        b.exposureValue += exposure;
+        bucketCounts.set(key, b);
+        return {
+          ...r,
+          quantity: roundTo2(Number(r.quantity ?? 0)),
+          unitCost: roundTo2(Number(r.unitCost ?? 0)),
+          exposureValue: roundTo2(exposure),
+          daysUntil,
+          alertBucket: bucketLabel,
+        };
+      });
+
+      res.json(maskFields(req, {
+        filters: { warehouseId, productId, daysAhead: aheadDays, includeExpired: includeExpired === "true" },
+        summary: {
+          lotCount: rows.length,
+          totalExposureValue: roundTo2(totalExposure),
+          windowDays: aheadDays,
+        },
+        byBucket: Array.from(bucketCounts.values())
+          .map((b) => ({ ...b, exposureValue: roundTo2(b.exposureValue) }))
+          .sort((a, b) => {
+            // "overdue" first, then ascending threshold (most-urgent first)
+            if (a.threshold === "overdue") return -1;
+            if (b.threshold === "overdue") return 1;
+            return (a.threshold as number) - (b.threshold as number);
+          }),
+        data: out,
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "Lot expiry alerts error:");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inventory turnover ratio — companion to #1033 (inventory valuation)
+// and the COGS summary endpoint.
+//
+//     turnover     = period COGS / inventory value at end of period
+//     daysOnHand   = period days / turnover         (DSI proxy)
+//
+// Period COGS comes from invoice_lines.cogsAmount − cogsReversedAmount
+// (net of returns) filtered on cogsPostedAt; inventory value comes
+// from Σ (lot.quantity × lot.unitCost) on the same active-lot set the
+// valuation report uses. Pure read-only.
+//
+// Per-product roll-up so operators can spot dead-stock SKUs
+// (turnover < 1) and over-stocked best-sellers (high turnover →
+// frequent reorders). The header summary is the company-wide ratio.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/inventory-turnover",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { startDate, endDate, productId, warehouseId } =
+        req.query as Record<string, string | undefined>;
+
+      const start = startDate ?? null;
+      const end = endDate ?? null;
+
+      // ── 1. Period COGS by product ────────────────────────────────────
+      const cogsParams: unknown[] = [scope.companyId];
+      let cogsExtra = "";
+      if (start) { cogsParams.push(start); cogsExtra += ` AND il."cogsPostedAt" >= $${cogsParams.length}`; }
+      if (end)   { cogsParams.push(end);   cogsExtra += ` AND il."cogsPostedAt" < ($${cogsParams.length}::date + 1)`; }
+      if (productId) {
+        const pid = Number(productId);
+        if (Number.isFinite(pid) && pid > 0) {
+          cogsParams.push(pid);
+          cogsExtra += ` AND il."productId" = $${cogsParams.length}`;
+        }
+      }
+      const cogsBranchFilter = getBranchCondition(scope, undefined, cogsParams, "i");
+
+      const cogsRows = await rawQuery<{
+        productId: number;
+        cogsNet: string | number;
+      }>(
+        `SELECT il."productId",
+                SUM(COALESCE(il."cogsAmount", 0) - COALESCE(il."cogsReversedAmount", 0))::float8 AS "cogsNet"
+           FROM invoice_lines il
+           JOIN invoices i ON i.id = il."invoiceId" AND i."deletedAt" IS NULL
+          WHERE i."companyId" = $1
+            AND il."productId" IS NOT NULL
+            AND il."cogsPostedAt" IS NOT NULL
+            AND COALESCE(il."cogsAmount", 0) > 0
+            ${cogsExtra}${cogsBranchFilter}
+          GROUP BY il."productId"`,
+        cogsParams,
+      );
+      const cogsByProduct = new Map<number, number>();
+      for (const r of cogsRows) {
+        cogsByProduct.set(r.productId, Number(r.cogsNet ?? 0));
+      }
+
+      // ── 2. Current inventory value by product ─────────────────────────
+      const invParams: unknown[] = [scope.companyId];
+      let invExtra = "";
+      if (warehouseId) {
+        const wid = Number(warehouseId);
+        if (Number.isFinite(wid) && wid > 0) {
+          invParams.push(wid);
+          invExtra += ` AND l."warehouseId" = $${invParams.length}`;
+        }
+      }
+      if (productId) {
+        const pid = Number(productId);
+        if (Number.isFinite(pid) && pid > 0) {
+          invParams.push(pid);
+          invExtra += ` AND p.id = $${invParams.length}`;
+        }
+      }
+      const invBranchFilter = getBranchCondition(scope, undefined, invParams, "w");
+
+      const invRows = await rawQuery<{
+        productId: number;
+        sku: string | null;
+        name: string;
+        warehouseId: number | null;
+        warehouseName: string | null;
+        onHandQty: string | number;
+        value: string | number;
+      }>(
+        `SELECT p.id                            AS "productId",
+                p.sku,
+                p.name,
+                MAX(l."warehouseId")            AS "warehouseId",
+                MAX(w.name)                     AS "warehouseName",
+                SUM(COALESCE(l.quantity, 0))::float8 AS "onHandQty",
+                SUM(COALESCE(l.quantity, 0) * COALESCE(l."unitCost", 0))::float8 AS value
+           FROM warehouse_products p
+           LEFT JOIN warehouse_stock_lots l
+             ON l."productId" = p.id
+            AND l."companyId" = p."companyId"
+            AND l.status = 'active'
+            AND l."qualityControlStatus" = 'approved'
+            AND l."deletedAt" IS NULL
+           LEFT JOIN warehouses w
+             ON w.id = l."warehouseId"
+            AND w."deletedAt" IS NULL
+          WHERE p."companyId" = $1
+            AND p."deletedAt" IS NULL
+            AND COALESCE(p.status, 'active') = 'active'
+            ${invExtra}${invBranchFilter}
+          GROUP BY p.id, p.sku, p.name`,
+        invParams,
+      );
+
+      // ── 3. Period-day count for daysOnHand ───────────────────────────
+      let periodDays: number | null = null;
+      if (start && end) {
+        const ms = new Date(end).getTime() - new Date(start).getTime();
+        if (Number.isFinite(ms) && ms >= 0) {
+          // +1 because both endpoints are inclusive in our SQL.
+          periodDays = Math.floor(ms / 86400_000) + 1;
+        }
+      }
+
+      // ── 4. Join into per-product turnover rows ────────────────────────
+      interface TurnoverRow {
+        productId: number;
+        sku: string | null;
+        name: string;
+        warehouseId: number | null;
+        warehouseName: string | null;
+        onHandQty: number;
+        currentValue: number;
+        periodCogs: number;
+        turnover: number | null;   // null when value=0 (avoid /0)
+        daysOnHand: number | null; // null when turnover=0 or period unknown
+      }
+
+      const rows: TurnoverRow[] = invRows.map((p) => {
+        const value = Number(p.value ?? 0);
+        const periodCogs = cogsByProduct.get(p.productId) ?? 0;
+        const turnover = value > 0 ? periodCogs / value : null;
+        const daysOnHand = (turnover != null && turnover > 0 && periodDays != null)
+          ? Math.round((periodDays / turnover) * 100) / 100
+          : null;
+        return {
+          productId: p.productId,
+          sku: p.sku,
+          name: p.name,
+          warehouseId: p.warehouseId,
+          warehouseName: p.warehouseName,
+          onHandQty: roundTo2(Number(p.onHandQty ?? 0)),
+          currentValue: roundTo2(value),
+          periodCogs: roundTo2(periodCogs),
+          turnover: turnover != null ? Math.round(turnover * 100) / 100 : null,
+          daysOnHand,
+        };
+      });
+
+      // ── 5. Header summary (company-wide ratio) ───────────────────────
+      const totalValue = rows.reduce((s, r) => s + r.currentValue, 0);
+      const totalCogs  = rows.reduce((s, r) => s + r.periodCogs, 0);
+      const overallTurnover = totalValue > 0
+        ? Math.round((totalCogs / totalValue) * 100) / 100
+        : null;
+      const overallDaysOnHand = (overallTurnover != null && overallTurnover > 0 && periodDays != null)
+        ? Math.round((periodDays / overallTurnover) * 100) / 100
+        : null;
+
+      res.json(maskFields(req, {
+        filters: { startDate, endDate, productId, warehouseId },
+        period: { days: periodDays },
+        summary: {
+          totalCurrentValue: roundTo2(totalValue),
+          totalPeriodCogs:   roundTo2(totalCogs),
+          overallTurnover,
+          overallDaysOnHand,
+          productCount: rows.length,
+        },
+        data: rows.sort((a, b) => (b.turnover ?? -1) - (a.turnover ?? -1)),
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "Inventory turnover report error:");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inventory valuation report — audit follow-up to the COGS campaign.
+//
+// Σ (lot.quantity × lot.unitCost) over every ACTIVE, qc-APPROVED lot
+// owned by the company — i.e. the on-hand stock-asset book value. This
+// is the number the period-end balance sheet's Inventory line should
+// match, and the figure ZATCA expects in the annual return.
+//
+// Why not read warehouse_products.lastWaCost × currentStock?
+//   * lastWaCost is denormalised — a partial recall / write-off that
+//     bypassed the WA recompute leaves it stale.
+//   * currentStock is INT (legacy column) while lots carry NUMERIC(14,3).
+//   * Lots carry the originalQuantity history so a future "as-of" cut
+//     (?asOf=2026-04-30) becomes a one-line WHERE addition.
+//
+// Read-only, no transaction.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/inventory-valuation",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const {
+        warehouseId, categoryId, productId,
+        includeZeroStock,
+      } = req.query as Record<string, string | undefined>;
+
+      const params: unknown[] = [scope.companyId];
+      let whereExtra = "";
+      if (warehouseId) {
+        const wid = Number(warehouseId);
+        if (Number.isFinite(wid) && wid > 0) {
+          params.push(wid);
+          whereExtra += ` AND l."warehouseId" = $${params.length}`;
+        }
+      }
+      if (categoryId) {
+        const cid = Number(categoryId);
+        if (Number.isFinite(cid) && cid > 0) {
+          params.push(cid);
+          whereExtra += ` AND p."categoryId" = $${params.length}`;
+        }
+      }
+      if (productId) {
+        const pid = Number(productId);
+        if (Number.isFinite(pid) && pid > 0) {
+          params.push(pid);
+          whereExtra += ` AND p.id = $${params.length}`;
+        }
+      }
+      // Branch scope honoured via the warehouse it belongs to.
+      const branchFilter = getBranchCondition(scope, undefined, params, "w");
+
+      // Per-product roll-up. Zero-stock products are excluded by default
+      // (their book value is 0 and the list would balloon to thousands
+      // of dormant SKUs); pass ?includeZeroStock=true to surface them
+      // for reorder-alert dashboards.
+      const havingClause = includeZeroStock === "true" ? "" : `HAVING SUM(COALESCE(l.quantity, 0)) > 0`;
+
+      interface ProductRow {
+        productId: number;
+        sku: string | null;
+        name: string;
+        categoryId: number | null;
+        categoryName: string | null;
+        warehouseId: number | null;
+        warehouseName: string | null;
+        warehouseCode: string | null;
+        costingMethod: string | null;
+        lastWaCost: string | number | null;
+        onHandQty: string | number;
+        lotCount: string | number;
+        valuation: string | number;
+        weightedAvgCost: string | number;
+      }
+
+      const rows = await rawQuery<ProductRow>(
+        `SELECT p.id              AS "productId",
+                p.sku,
+                p.name,
+                p."categoryId",
+                cat.name          AS "categoryName",
+                l."warehouseId",
+                w.name            AS "warehouseName",
+                w.code            AS "warehouseCode",
+                p."costingMethod",
+                p."lastWaCost"::float8           AS "lastWaCost",
+                SUM(COALESCE(l.quantity, 0))::float8   AS "onHandQty",
+                COUNT(l.id) FILTER (WHERE l.quantity > 0)::int  AS "lotCount",
+                SUM(COALESCE(l.quantity, 0) * COALESCE(l."unitCost", 0))::float8 AS valuation,
+                CASE WHEN SUM(COALESCE(l.quantity, 0)) > 0
+                     THEN SUM(COALESCE(l.quantity, 0) * COALESCE(l."unitCost", 0))
+                          / SUM(COALESCE(l.quantity, 0))
+                     ELSE 0
+                END::float8       AS "weightedAvgCost"
+           FROM warehouse_products p
+           LEFT JOIN warehouse_stock_lots l
+             ON l."productId" = p.id
+            AND l."companyId" = p."companyId"
+            AND l.status = 'active'
+            AND l."qualityControlStatus" = 'approved'
+            AND l."deletedAt" IS NULL
+           LEFT JOIN warehouses w
+             ON w.id = l."warehouseId"
+            AND w."deletedAt" IS NULL
+           LEFT JOIN warehouse_categories cat
+             ON cat.id = p."categoryId"
+            AND cat."deletedAt" IS NULL
+          WHERE p."companyId" = $1
+            AND p."deletedAt" IS NULL
+            AND COALESCE(p.status, 'active') = 'active'
+            ${whereExtra}${branchFilter}
+          GROUP BY p.id, p.sku, p.name, p."categoryId", cat.name,
+                   l."warehouseId", w.name, w.code,
+                   p."costingMethod", p."lastWaCost"
+          ${havingClause}
+          ORDER BY valuation DESC, p.name ASC
+          LIMIT 10000`,
+        params,
+      );
+
+      // Per-warehouse + per-category rollups (JS keeps the SQL single
+      // round-trip; product-level rows in the response already carry
+      // both keys for client-side regrouping if they want a different cut).
+      const byWarehouse = new Map<number, {
+        warehouseId: number;
+        warehouseName: string | null;
+        warehouseCode: string | null;
+        valuation: number;
+        onHandQty: number;
+        productCount: number;
+        lotCount: number;
+      }>();
+      const byCategory = new Map<number | "_uncat", {
+        categoryId: number | null;
+        categoryName: string | null;
+        valuation: number;
+        onHandQty: number;
+        productCount: number;
+      }>();
+      let totalValuation = 0;
+      let totalOnHandQty = 0;
+      let totalLots = 0;
+
+      for (const r of rows) {
+        const val = Number(r.valuation ?? 0);
+        const qty = Number(r.onHandQty ?? 0);
+        const lots = Number(r.lotCount ?? 0);
+        totalValuation += val;
+        totalOnHandQty += qty;
+        totalLots += lots;
+
+        if (r.warehouseId != null) {
+          const w = byWarehouse.get(r.warehouseId) ?? {
+            warehouseId: r.warehouseId,
+            warehouseName: r.warehouseName,
+            warehouseCode: r.warehouseCode,
+            valuation: 0, onHandQty: 0, productCount: 0, lotCount: 0,
+          };
+          w.valuation += val;
+          w.onHandQty += qty;
+          w.productCount += 1;
+          w.lotCount += lots;
+          byWarehouse.set(r.warehouseId, w);
+        }
+
+        const catKey = r.categoryId ?? "_uncat";
+        const cat = byCategory.get(catKey) ?? {
+          categoryId: r.categoryId,
+          categoryName: r.categoryName,
+          valuation: 0, onHandQty: 0, productCount: 0,
+        };
+        cat.valuation += val;
+        cat.onHandQty += qty;
+        cat.productCount += 1;
+        byCategory.set(catKey, cat);
+      }
+
+      res.json(maskFields(req, {
+        filters: { warehouseId, categoryId, productId, includeZeroStock: includeZeroStock === "true" },
+        summary: {
+          totalValuation: roundTo2(totalValuation),
+          totalOnHandQty: roundTo2(totalOnHandQty),
+          totalLots,
+          productRows: rows.length,
+        },
+        byWarehouse: Array.from(byWarehouse.values())
+          .map((w) => ({ ...w, valuation: roundTo2(w.valuation), onHandQty: roundTo2(w.onHandQty) }))
+          .sort((a, b) => b.valuation - a.valuation),
+        byCategory: Array.from(byCategory.values())
+          .map((c) => ({ ...c, valuation: roundTo2(c.valuation), onHandQty: roundTo2(c.onHandQty) }))
+          .sort((a, b) => b.valuation - a.valuation),
+        data: rows.map((r) => ({
+          ...r,
+          onHandQty: roundTo2(Number(r.onHandQty ?? 0)),
+          valuation: roundTo2(Number(r.valuation ?? 0)),
+          weightedAvgCost: roundTo2(Number(r.weightedAvgCost ?? 0)),
+          lastWaCost: r.lastWaCost == null ? null : roundTo2(Number(r.lastWaCost)),
+        })),
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "Inventory valuation report error:");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COGS / margin summary — audit follow-up to the COGS campaign
+// (#1002/#1013/#1017). The COGS engine now writes per-line cogsAmount
+// + cogsReversedAmount snapshots; this endpoint surfaces them as the
+// gross-margin view operators have been missing.
+//
+// Per-line:
+//   revenue   = invoice_lines.lineTotal                       (billed)
+//   cogs      = cogsAmount − cogsReversedAmount                (net of returns)
+//   profit    = revenue − cogs
+//   marginPct = profit / revenue × 100
+//
+// Rollups: per-product, per-client, per-month.
+//
+// Filters honour startDate / endDate (against invoice approval date),
+// product / client narrowing, and branch scope. Excludes lines from
+// invoices that were reversed or never approved (cogsPostedAt IS NOT NULL).
+//
+// Read-only, no transaction.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/cogs-summary",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { startDate, endDate, productId, clientId } =
+        req.query as Record<string, string | undefined>;
+
+      const params: unknown[] = [scope.companyId];
+      let whereExtra = "";
+      if (startDate) { params.push(startDate); whereExtra += ` AND il."cogsPostedAt" >= $${params.length}`; }
+      if (endDate)   { params.push(endDate);   whereExtra += ` AND il."cogsPostedAt" < ($${params.length}::date + 1)`; }
+      if (productId) {
+        const pid = Number(productId);
+        if (Number.isFinite(pid) && pid > 0) {
+          params.push(pid);
+          whereExtra += ` AND il."productId" = $${params.length}`;
+        }
+      }
+      if (clientId) {
+        const cid = Number(clientId);
+        if (Number.isFinite(cid) && cid > 0) {
+          params.push(cid);
+          whereExtra += ` AND i."clientId" = $${params.length}`;
+        }
+      }
+      const branchFilter = getBranchCondition(scope, undefined, params, "i");
+
+      interface CogsRow {
+        invoiceLineId: number;
+        invoiceId: number;
+        invoiceRef: string;
+        clientId: number | null;
+        clientName: string | null;
+        productId: number | null;
+        productSku: string | null;
+        productName: string | null;
+        cogsPostedAt: string | null;
+        period: string | null;     // YYYY-MM
+        quantity: string | number;
+        revenue: string | number;
+        cogsGross: string | number;
+        cogsReversed: string | number;
+        cogsNet: string | number;
+        profit: string | number;
+      }
+
+      // Only invoice lines that actually had COGS posted by the engine
+      // make it into the report — cogsPostedAt IS NOT NULL guards out
+      // un-approved drafts AND service lines.
+      const rows = await rawQuery<CogsRow>(
+        `SELECT il.id                    AS "invoiceLineId",
+                i.id                     AS "invoiceId",
+                i.ref                    AS "invoiceRef",
+                i."clientId",
+                c.name                   AS "clientName",
+                il."productId",
+                p.sku                    AS "productSku",
+                p.name                   AS "productName",
+                il."cogsPostedAt"::text  AS "cogsPostedAt",
+                to_char(il."cogsPostedAt", 'YYYY-MM') AS period,
+                il.quantity::float8      AS quantity,
+                il."lineTotal"::float8   AS revenue,
+                COALESCE(il."cogsAmount", 0)::float8         AS "cogsGross",
+                COALESCE(il."cogsReversedAmount", 0)::float8 AS "cogsReversed",
+                (COALESCE(il."cogsAmount", 0) - COALESCE(il."cogsReversedAmount", 0))::float8 AS "cogsNet",
+                (il."lineTotal" -
+                   (COALESCE(il."cogsAmount", 0) - COALESCE(il."cogsReversedAmount", 0)))::float8 AS profit
+           FROM invoice_lines il
+           JOIN invoices i ON i.id = il."invoiceId" AND i."deletedAt" IS NULL
+           LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+           LEFT JOIN warehouse_products p ON p.id = il."productId" AND p."deletedAt" IS NULL
+          WHERE i."companyId" = $1
+            AND COALESCE(il."cogsAmount", 0) > 0
+            AND il."cogsPostedAt" IS NOT NULL
+            ${whereExtra}${branchFilter}
+          ORDER BY il."cogsPostedAt" DESC NULLS LAST, il.id DESC
+          LIMIT 10000`,
+        params,
+      );
+
+      const byProduct = new Map<number, {
+        productId: number;
+        sku: string | null;
+        name: string | null;
+        quantity: number;
+        revenue: number;
+        cogsNet: number;
+        profit: number;
+        marginPct: number;
+        rows: number;
+      }>();
+      const byClient = new Map<number, {
+        clientId: number;
+        clientName: string | null;
+        revenue: number;
+        cogsNet: number;
+        profit: number;
+        marginPct: number;
+        rows: number;
+      }>();
+      const byPeriod = new Map<string, {
+        period: string;
+        revenue: number;
+        cogsNet: number;
+        profit: number;
+        marginPct: number;
+        rows: number;
+      }>();
+      let totalRevenue = 0;
+      let totalCogsGross = 0;
+      let totalCogsReversed = 0;
+      let totalProfit = 0;
+
+      for (const r of rows) {
+        const revenue = Number(r.revenue ?? 0);
+        const cogsGross = Number(r.cogsGross ?? 0);
+        const cogsReversed = Number(r.cogsReversed ?? 0);
+        const cogsNet = cogsGross - cogsReversed;
+        const profit = revenue - cogsNet;
+        const quantity = Number(r.quantity ?? 0);
+
+        totalRevenue += revenue;
+        totalCogsGross += cogsGross;
+        totalCogsReversed += cogsReversed;
+        totalProfit += profit;
+
+        if (r.productId != null) {
+          const p = byProduct.get(r.productId) ?? {
+            productId: r.productId, sku: r.productSku, name: r.productName,
+            quantity: 0, revenue: 0, cogsNet: 0, profit: 0, marginPct: 0, rows: 0,
+          };
+          p.quantity += quantity;
+          p.revenue += revenue;
+          p.cogsNet += cogsNet;
+          p.profit += profit;
+          p.rows += 1;
+          byProduct.set(r.productId, p);
+        }
+
+        if (r.clientId != null) {
+          const cl = byClient.get(r.clientId) ?? {
+            clientId: r.clientId, clientName: r.clientName,
+            revenue: 0, cogsNet: 0, profit: 0, marginPct: 0, rows: 0,
+          };
+          cl.revenue += revenue;
+          cl.cogsNet += cogsNet;
+          cl.profit += profit;
+          cl.rows += 1;
+          byClient.set(r.clientId, cl);
+        }
+
+        if (r.period) {
+          const per = byPeriod.get(r.period) ?? {
+            period: r.period,
+            revenue: 0, cogsNet: 0, profit: 0, marginPct: 0, rows: 0,
+          };
+          per.revenue += revenue;
+          per.cogsNet += cogsNet;
+          per.profit += profit;
+          per.rows += 1;
+          byPeriod.set(r.period, per);
+        }
+      }
+
+      const pct = (profit: number, revenue: number) =>
+        revenue > 0 ? roundTo2((profit / revenue) * 100) : 0;
+
+      res.json(maskFields(req, {
+        filters: { startDate, endDate, productId, clientId },
+        summary: {
+          totalRevenue:      roundTo2(totalRevenue),
+          totalCogsGross:    roundTo2(totalCogsGross),
+          totalCogsReversed: roundTo2(totalCogsReversed),
+          totalCogsNet:      roundTo2(totalCogsGross - totalCogsReversed),
+          totalProfit:       roundTo2(totalProfit),
+          marginPct:         pct(totalProfit, totalRevenue),
+          rowCount:          rows.length,
+        },
+        byProduct: Array.from(byProduct.values())
+          .map((p) => ({
+            ...p,
+            quantity: roundTo2(p.quantity),
+            revenue: roundTo2(p.revenue),
+            cogsNet: roundTo2(p.cogsNet),
+            profit: roundTo2(p.profit),
+            marginPct: pct(p.profit, p.revenue),
+          }))
+          .sort((a, b) => b.profit - a.profit),
+        byClient: Array.from(byClient.values())
+          .map((cl) => ({
+            ...cl,
+            revenue: roundTo2(cl.revenue),
+            cogsNet: roundTo2(cl.cogsNet),
+            profit: roundTo2(cl.profit),
+            marginPct: pct(cl.profit, cl.revenue),
+          }))
+          .sort((a, b) => b.profit - a.profit),
+        byPeriod: Array.from(byPeriod.values())
+          .map((per) => ({
+            ...per,
+            revenue: roundTo2(per.revenue),
+            cogsNet: roundTo2(per.cogsNet),
+            profit: roundTo2(per.profit),
+            marginPct: pct(per.profit, per.revenue),
+          }))
+          .sort((a, b) => (a.period < b.period ? -1 : 1)),
+        data: rows,
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "COGS summary error:");
+    }
+  },
+);
+// ─────────────────────────────────────────────────────────────────────────────
+// Negative-stock outliers — companion to the inventory valuation report.
+//
+// A lot row should NEVER go negative. When it does, one of three bugs
+// is at play:
+//
+//   1. A sale was approved without the lot decrement guard catching
+//      insufficient stock (pre-#1013 invoices, or a manual SQL fix).
+//   2. A stocktake adjustment that subtracted more than the on-hand
+//      quantity bypassed the floor.
+//   3. A double-applied stock movement (idempotency replay before #885's
+//      reentrant-tx engine landed).
+//
+// Surfacing these as a queryable list lets ops investigate + correct
+// before the period-end valuation report claims a negative inventory
+// asset. Pairs with the inventory-valuation report (#1033).
+//
+// Read-only, no transaction.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/negative-stock",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { warehouseId, productId } =
+        req.query as Record<string, string | undefined>;
+
+      const params: unknown[] = [scope.companyId];
+      let whereExtra = "";
+      if (warehouseId) {
+        const wid = Number(warehouseId);
+        if (Number.isFinite(wid) && wid > 0) {
+          params.push(wid);
+          whereExtra += ` AND l."warehouseId" = $${params.length}`;
+        }
+      }
+      if (productId) {
+        const pid = Number(productId);
+        if (Number.isFinite(pid) && pid > 0) {
+          params.push(pid);
+          whereExtra += ` AND l."productId" = $${params.length}`;
+        }
+      }
+      // Branch scope via the warehouse the lot belongs to.
+      const branchFilter = getBranchCondition(scope, undefined, params, "w");
+
+      interface NegLotRow {
+        lotId: number;
+        productId: number;
+        sku: string | null;
+        productName: string | null;
+        warehouseId: number;
+        warehouseName: string | null;
+        warehouseCode: string | null;
+        lotNumber: string;
+        quantity: string | number;
+        originalQuantity: string | number;
+        unitCost: string | number;
+        receivedDate: string;
+        status: string;
+        deficitValue: string | number;
+        latestMovementAt: string | null;
+        latestMovementType: string | null;
+        latestJournalEntryId: number | null;
+      }
+
+      const rows = await rawQuery<NegLotRow>(
+        `SELECT l.id                          AS "lotId",
+                l."productId",
+                p.sku,
+                p.name                        AS "productName",
+                l."warehouseId",
+                w.name                        AS "warehouseName",
+                w.code                        AS "warehouseCode",
+                l."lotNumber",
+                l.quantity::float8            AS quantity,
+                l."originalQuantity"::float8  AS "originalQuantity",
+                l."unitCost"::float8          AS "unitCost",
+                l."receivedDate"::text        AS "receivedDate",
+                l.status,
+                -- deficit value = how many SAR the books over-credited
+                -- inventory for. Negative quantity × unit cost magnitude.
+                (ABS(l.quantity) * l."unitCost")::float8 AS "deficitValue",
+                latest."latestMovementAt"::text AS "latestMovementAt",
+                latest."latestMovementType"     AS "latestMovementType",
+                latest."latestJournalEntryId"   AS "latestJournalEntryId"
+           FROM warehouse_stock_lots l
+           LEFT JOIN warehouses w
+             ON w.id = l."warehouseId" AND w."deletedAt" IS NULL
+           LEFT JOIN warehouse_products p
+             ON p.id = l."productId" AND p."deletedAt" IS NULL
+           LEFT JOIN LATERAL (
+             SELECT m."createdAt"     AS "latestMovementAt",
+                    m.type            AS "latestMovementType",
+                    m."journalEntryId" AS "latestJournalEntryId"
+               FROM warehouse_movements m
+              WHERE m."companyId" = l."companyId"
+                AND m."lotId" = l.id
+              ORDER BY m."createdAt" DESC
+              LIMIT 1
+           ) latest ON true
+          WHERE l."companyId" = $1
+            AND l.quantity < 0
+            AND l."deletedAt" IS NULL
+            ${whereExtra}${branchFilter}
+          ORDER BY l.quantity ASC, l.id DESC
+          LIMIT 1000`,
+        params,
+      );
+
+      const totalDeficitValue = rows.reduce(
+        (s, r) => s + Number(r.deficitValue ?? 0), 0
+      );
+      const byWarehouse = new Map<number, {
+        warehouseId: number;
+        warehouseName: string | null;
+        warehouseCode: string | null;
+        lotCount: number;
+        deficitValue: number;
+      }>();
+      for (const r of rows) {
+        const w = byWarehouse.get(r.warehouseId) ?? {
+          warehouseId: r.warehouseId,
+          warehouseName: r.warehouseName,
+          warehouseCode: r.warehouseCode,
+          lotCount: 0,
+          deficitValue: 0,
+        };
+        w.lotCount += 1;
+        w.deficitValue += Number(r.deficitValue ?? 0);
+        byWarehouse.set(r.warehouseId, w);
+      }
+
+      res.json(maskFields(req, {
+        filters: { warehouseId, productId },
+        summary: {
+          lotCount: rows.length,
+          totalDeficitValue: roundTo2(totalDeficitValue),
+        },
+        byWarehouse: Array.from(byWarehouse.values())
+          .map((w) => ({ ...w, deficitValue: roundTo2(w.deficitValue) }))
+          .sort((a, b) => b.deficitValue - a.deficitValue),
+        data: rows,
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "Negative stock report error:");
+    }
+  },
+);
+// ─────────────────────────────────────────────────────────────────────────────
+// VAT reconciliation report — companion to the WHT summary endpoint.
+//
+// Pre-filing sanity check for the monthly ZATCA VAT return. The
+// canonical numbers come from journal_lines:
+//
+//     outputVAT = Σ credit on vat_output account − Σ debit       (sales)
+//     inputVAT  = Σ debit  on vat_input  account − Σ credit       (purchases)
+//     netVATDue = outputVAT − inputVAT
+//
+// We THEN compare netVATDue against the LIVE balance on the vat_output
+// (typically 2300) and vat_input accounts since opening, to flag drift
+// the books vs. our period calculation. If the two disagree, a JE was
+// posted to a wrong account or a reversal escaped the period filter.
+//
+// Per-source breakdown (invoice / credit_memo / debit_memo / voucher)
+// so operators can see "X SAR came from sales invoices, Y from refunds".
+//
+// Read-only, no transaction.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/vat-reconciliation",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { startDate, endDate } =
+        req.query as Record<string, string | undefined>;
+
+      // Resolve canonical VAT accounts (operator may have overridden the
+      // 2300 / 1400 defaults via accounting_mappings).
+      const { financialEngine } = await import("../lib/engines/index.js");
+      const [outputVatCode, inputVatCode] = await Promise.all([
+        financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2300"),
+        financialEngine.resolveAccountCode(scope.companyId, "vat_input",  "debit",  "1400"),
+      ]);
+
+      const params: unknown[] = [scope.companyId, outputVatCode, inputVatCode];
+      let dateFilter = "";
+      if (startDate) { params.push(startDate); dateFilter += ` AND je."postingDate" >= $${params.length}`; }
+      if (endDate)   { params.push(endDate);   dateFilter += ` AND je."postingDate" < ($${params.length}::date + 1)`; }
+      const branchFilter = getBranchCondition(scope, undefined, params, "je");
+
+      // ── 1. Period movement on the two VAT accounts ──────────────────
+      interface SrcRow {
+        sourceType: string | null;
+        accountCode: string;
+        debit: string | number;
+        credit: string | number;
+      }
+      const rows = await rawQuery<SrcRow>(
+        `SELECT COALESCE(je."sourceType", 'other')::text AS "sourceType",
+                jl."accountCode",
+                SUM(COALESCE(jl.debit, 0))::float8  AS debit,
+                SUM(COALESCE(jl.credit, 0))::float8 AS credit
+           FROM journal_lines jl
+           JOIN journal_entries je
+             ON je.id = jl."journalId"
+            AND je."deletedAt" IS NULL
+            AND je."balancesApplied" = true
+            AND je."reversedById" IS NULL
+          WHERE je."companyId" = $1
+            AND jl."accountCode" IN ($2, $3)
+            AND jl."deletedAt" IS NULL
+            ${dateFilter}${branchFilter}
+          GROUP BY je."sourceType", jl."accountCode"`,
+        params,
+      );
+
+      // ── 2. Live ledger balance on each VAT account (since-opening) ──
+      // Same JE guards, NO date filter — the balance carry forward is
+      // what the trial balance shows today.
+      interface BalRow { accountCode: string; balance: string | number }
+      const balParams: unknown[] = [scope.companyId, outputVatCode, inputVatCode];
+      const balBranchFilter = getBranchCondition(scope, undefined, balParams, "je");
+      const balRows = await rawQuery<BalRow>(
+        `SELECT jl."accountCode",
+                SUM(COALESCE(jl.credit, 0) - COALESCE(jl.debit, 0))::float8 AS balance
+           FROM journal_lines jl
+           JOIN journal_entries je
+             ON je.id = jl."journalId"
+            AND je."deletedAt" IS NULL
+            AND je."balancesApplied" = true
+            AND je."reversedById" IS NULL
+          WHERE je."companyId" = $1
+            AND jl."accountCode" IN ($2, $3)
+            AND jl."deletedAt" IS NULL
+            ${balBranchFilter}
+          GROUP BY jl."accountCode"`,
+        balParams,
+      );
+
+      // ── 3. Aggregate ────────────────────────────────────────────────
+      let outputVatPeriod = 0;   // credit − debit on output account
+      let inputVatPeriod  = 0;   // debit  − credit on input  account
+      const bySource = new Map<string, {
+        sourceType: string;
+        outputVat: number;
+        inputVat: number;
+        netVat: number;
+      }>();
+      for (const r of rows) {
+        const debit  = Number(r.debit  ?? 0);
+        const credit = Number(r.credit ?? 0);
+        const src = r.sourceType ?? "other";
+        const bucket = bySource.get(src) ?? {
+          sourceType: src, outputVat: 0, inputVat: 0, netVat: 0,
+        };
+        if (r.accountCode === outputVatCode) {
+          const out = credit - debit;
+          outputVatPeriod += out;
+          bucket.outputVat += out;
+        } else if (r.accountCode === inputVatCode) {
+          const inp = debit - credit;
+          inputVatPeriod += inp;
+          bucket.inputVat += inp;
+        }
+        bucket.netVat = bucket.outputVat - bucket.inputVat;
+        bySource.set(src, bucket);
+      }
+      const netVatDue = outputVatPeriod - inputVatPeriod;
+
+      let outputVatLiveBalance = 0;
+      let inputVatLiveBalance  = 0;   // expressed as credit − debit so it's
+                                      // typically negative for an asset acct
+      for (const r of balRows) {
+        const b = Number(r.balance ?? 0);
+        if (r.accountCode === outputVatCode) outputVatLiveBalance = b;
+        else if (r.accountCode === inputVatCode) inputVatLiveBalance = b;
+      }
+
+      // Drift = (live VAT-payable balance) − (period netVAT due).
+      // A non-zero drift means a JE landed on the VAT account from a
+      // source other than the standard pipeline OR a period boundary
+      // was misposted.
+      const liveNetPayable = outputVatLiveBalance + inputVatLiveBalance;
+      const drift = roundTo2(liveNetPayable - netVatDue);
+
+      res.json(maskFields(req, {
+        filters: { startDate, endDate },
+        accounts: { outputVatCode, inputVatCode },
+        summary: {
+          outputVatPeriod: roundTo2(outputVatPeriod),
+          inputVatPeriod:  roundTo2(inputVatPeriod),
+          netVatDue:       roundTo2(netVatDue),
+          outputVatLiveBalance: roundTo2(outputVatLiveBalance),
+          inputVatLiveBalance:  roundTo2(inputVatLiveBalance),
+          liveNetPayable:       roundTo2(liveNetPayable),
+          drift,
+          driftIsClean: Math.abs(drift) < 0.005,
+        },
+        bySource: Array.from(bySource.values())
+          .map((s) => ({
+            ...s,
+            outputVat: roundTo2(s.outputVat),
+            inputVat:  roundTo2(s.inputVat),
+            netVat:    roundTo2(s.netVat),
+          }))
+          .sort((a, b) => Math.abs(b.netVat) - Math.abs(a.netVat)),
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "VAT reconciliation error:");
+    }
+  },
+);
+// ─────────────────────────────────────────────────────────────────────────────
+// GL integrity gaps — period-close pre-flight check.
+//
+// Surfaces business entities whose canonical journal-entry linkage
+// is broken. The kinds of bugs we catch:
+//
+//   1. invoices.status = 'approved' but journalEntryId IS NULL
+//      → the FIN-007 invariant from the COGS campaign — every
+//        approved invoice MUST point at its JE for VAT-return
+//        and tax-summary queries to find the revenue.
+//   2. credit_memos / debit_memos with journalId IS NULL after
+//      atomic-post wiring (#1015) — should be impossible going
+//      forward, but legacy rows from before #1015 are flagged
+//      here for one-time backfill.
+//   3. payment_runs with journalId IS NULL after #1006 / #1010
+//      payment-run wiring.
+//   4. supplier_payment_allocations pointing at a journal_entry
+//      that's been hard-deleted (FK is soft).
+//
+// Operators run this before period close + before any month-end
+// VAT/WHT filing — anything in the report is a "must reconcile"
+// before close. Read-only.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/gl-integrity-gaps",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { startDate, endDate } =
+        req.query as Record<string, string | undefined>;
+
+      // Each section filters on its own date column so the operator
+      // can scope to a closing window. Defaults: no date filter →
+      // since-opening (necessary for the one-time legacy backfill).
+      interface GapRow {
+        section: string;
+        entityId: number;
+        ref: string | null;
+        gap: string;
+        amount: string | number | null;
+        createdAt: string | null;
+      }
+      const sections: { source: string; rows: GapRow[] }[] = [];
+
+      // ── 1. invoices approved without JE ──────────────────────────────
+      {
+        const params: unknown[] = [scope.companyId];
+        let extra = "";
+        if (startDate) { params.push(startDate); extra += ` AND i."createdAt" >= $${params.length}`; }
+        if (endDate)   { params.push(endDate);   extra += ` AND i."createdAt" < ($${params.length}::date + 1)`; }
+        const rows = await rawQuery<GapRow>(
+          `SELECT 'invoice'::text AS section,
+                  i.id            AS "entityId",
+                  i.ref,
+                  'invoice approved without journalEntryId'::text AS gap,
+                  i.total::float8  AS amount,
+                  i."createdAt"::text AS "createdAt"
+             FROM invoices i
+            WHERE i."companyId" = $1
+              AND i."deletedAt" IS NULL
+              AND i.status IN ('approved','sent','partial','partially_paid','paid','overdue')
+              AND i."journalEntryId" IS NULL
+              ${extra}
+            ORDER BY i."createdAt" DESC NULLS LAST, i.id DESC
+            LIMIT 500`,
+          params,
+        );
+        sections.push({ source: "invoices_missing_je", rows });
+      }
+
+      // ── 2. credit_memos with NULL journalId ──────────────────────────
+      {
+        const params: unknown[] = [scope.companyId];
+        let extra = "";
+        if (startDate) { params.push(startDate); extra += ` AND cm."createdAt" >= $${params.length}`; }
+        if (endDate)   { params.push(endDate);   extra += ` AND cm."createdAt" < ($${params.length}::date + 1)`; }
+        const rows = await rawQuery<GapRow>(
+          `SELECT 'credit_memo'::text AS section,
+                  cm.id               AS "entityId",
+                  NULL::text          AS ref,
+                  'credit memo without journalId'::text AS gap,
+                  cm.amount::float8   AS amount,
+                  cm."createdAt"::text AS "createdAt"
+             FROM credit_memos cm
+            WHERE cm."companyId" = $1
+              AND cm."journalId" IS NULL
+              ${extra}
+            ORDER BY cm."createdAt" DESC NULLS LAST, cm.id DESC
+            LIMIT 500`,
+          params,
+        );
+        sections.push({ source: "credit_memos_missing_je", rows });
+      }
+
+      // ── 3. debit_memos with NULL journalId ───────────────────────────
+      {
+        const params: unknown[] = [scope.companyId];
+        let extra = "";
+        if (startDate) { params.push(startDate); extra += ` AND dm."createdAt" >= $${params.length}`; }
+        if (endDate)   { params.push(endDate);   extra += ` AND dm."createdAt" < ($${params.length}::date + 1)`; }
+        const rows = await rawQuery<GapRow>(
+          `SELECT 'debit_memo'::text  AS section,
+                  dm.id               AS "entityId",
+                  NULL::text          AS ref,
+                  'debit memo without journalId'::text AS gap,
+                  dm.amount::float8   AS amount,
+                  dm."createdAt"::text AS "createdAt"
+             FROM debit_memos dm
+            WHERE dm."companyId" = $1
+              AND dm."journalId" IS NULL
+              ${extra}
+            ORDER BY dm."createdAt" DESC NULLS LAST, dm.id DESC
+            LIMIT 500`,
+          params,
+        );
+        sections.push({ source: "debit_memos_missing_je", rows });
+      }
+
+      // ── 4. payment_runs with NULL journalId (executed but unposted) ──
+      // Table is created lazily by the payment-run handler so we
+      // tolerate it being absent on tenants that never ran one.
+      try {
+        const params: unknown[] = [scope.companyId];
+        let extra = "";
+        if (startDate) { params.push(startDate); extra += ` AND pr."createdAt" >= $${params.length}`; }
+        if (endDate)   { params.push(endDate);   extra += ` AND pr."createdAt" < ($${params.length}::date + 1)`; }
+        const rows = await rawQuery<GapRow>(
+          `SELECT 'payment_run'::text AS section,
+                  pr.id               AS "entityId",
+                  pr.ref,
+                  'payment run executed without journalId'::text AS gap,
+                  pr."totalAmount"::float8 AS amount,
+                  pr."createdAt"::text AS "createdAt"
+             FROM payment_runs pr
+            WHERE pr."companyId" = $1
+              AND pr.status = 'executed'
+              AND pr."journalId" IS NULL
+              ${extra}
+            ORDER BY pr."createdAt" DESC NULLS LAST, pr.id DESC
+            LIMIT 500`,
+          params,
+        );
+        sections.push({ source: "payment_runs_missing_je", rows });
+      } catch (e: any) {
+        // 42P01 — table doesn't exist on this tenant. Emit an empty
+        // section so the response shape stays consistent.
+        if (e?.code !== "42P01") throw e;
+        sections.push({ source: "payment_runs_missing_je", rows: [] });
+      }
+
+      // ── 5. supplier_payment_allocations pointing at deleted JE ───────
+      {
+        const rows = await rawQuery<GapRow>(
+          `SELECT 'spa_orphan'::text  AS section,
+                  spa.id              AS "entityId",
+                  NULL::text          AS ref,
+                  ('allocation points at JE #' || spa."journalEntryId" || ' that no longer exists')::text AS gap,
+                  spa.amount::float8  AS amount,
+                  spa."createdAt"::text AS "createdAt"
+             FROM supplier_payment_allocations spa
+             LEFT JOIN journal_entries je
+               ON je.id = spa."journalEntryId"
+              AND je."deletedAt" IS NULL
+            WHERE spa."companyId" = $1
+              AND spa."deletedAt" IS NULL
+              AND spa."journalEntryId" IS NOT NULL
+              AND je.id IS NULL
+            ORDER BY spa."createdAt" DESC NULLS LAST, spa.id DESC
+            LIMIT 500`,
+          [scope.companyId],
+        );
+        sections.push({ source: "spa_orphans", rows });
+      }
+
+      const totalGaps = sections.reduce((s, x) => s + x.rows.length, 0);
+      const summary = {
+        totalGaps,
+        bySection: sections.map((s) => ({ source: s.source, count: s.rows.length })),
+        isClean: totalGaps === 0,
+      };
+
+      res.json(maskFields(req, {
+        filters: { startDate, endDate },
+        summary,
+        sections,
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "GL integrity gaps error:");
+    }
+  },
+);

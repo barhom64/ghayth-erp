@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, AlertTriangle } from "lucide-react";
@@ -75,24 +75,6 @@ export default function TrafficViolationDetail() {
     return out;
   }, [item]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!item) return [];
-    return [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "المركبة", value: item.plateNumber || "-" },
-          { label: "السائق", value: item.driverName || "-" },
-          { label: "نوع المخالفة", value: item.violationType || "-" },
-          { label: "الدرجة", value: SEVERITY_LABELS[item.severity] || item.severity || "-" },
-          { label: "الغرامة", value: item.fineAmount ? formatCurrency(item.fineAmount) : "-" },
-          { label: "الحالة", value: STATUS_LABELS[item.status] || item.status || "-" },
-          { label: "تاريخ المخالفة", value: formatDateAr(item.violationDate || item.createdAt) },
-          ...(item.location ? [{ label: "الموقع", value: item.location }] : []),
-        ],
-      },
-    ];
-  }, [item]);
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -198,12 +180,9 @@ export default function TrafficViolationDetail() {
       actions={
         <>
           <EntityPrintButton
-            branchId={item?.branchId}
-            title="مخالفة مرورية"
-            ref={item?.ref || `TV-${id}`}
-            date={formatDateAr(item?.violationDate || item?.createdAt)}
-            sections={printSections}
-          />
+            entityType="traffic_violation"
+            entityId={id ?? 0}
+            formats={["a4"]}/>
           <GuardedButton perm="fleet:update" variant="outline" size="sm" onClick={() => setLocation("/fleet/traffic-violations")} disabled={!item}>
             <Edit className="h-4 w-4 ms-1" />
             تعديل

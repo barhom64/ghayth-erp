@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Users, Calendar } from "lucide-react";
@@ -80,53 +80,6 @@ export default function UmrahPenaltyDetail() {
     return out;
   }, [penalty]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!penalty) return [];
-    const items: Array<{ label: string; value: string }> = [
-      { label: "رقم المرجع", value: `PEN-${id}` },
-      ...(penalty.pilgrimName
-        ? [{ label: "المعتمر", value: penalty.pilgrimName }]
-        : []),
-      ...(penalty.agentName
-        ? [{ label: "الوكيل", value: penalty.agentName }]
-        : []),
-      {
-        label: "نوع الغرامة",
-        value:
-          PENALTY_TYPE_LABELS[penalty.type] || penalty.type || "-",
-      },
-      { label: "المبلغ", value: formatCurrency(amount) },
-      ...(penalty.reason ? [{ label: "السبب", value: penalty.reason }] : []),
-      ...(penalty.appliedDate
-        ? [{ label: "تاريخ التطبيق", value: formatDateAr(penalty.appliedDate) }]
-        : []),
-      ...(penalty.dueDate
-        ? [{ label: "تاريخ الاستحقاق", value: formatDateAr(penalty.dueDate) }]
-        : []),
-      {
-        label: "الحالة",
-        value: STATUS_LABELS[penalty.status] || penalty.status || "-",
-      },
-      { label: "تاريخ الإنشاء", value: formatDateAr(penalty.createdAt) },
-    ];
-    const sections: PrintSection[] = [{ kind: "info-grid", items }];
-
-    if (penalty.reason) {
-      sections.push({ kind: "text", title: "تفاصيل السبب", body: penalty.reason });
-    }
-    if (penalty.notes) {
-      sections.push({ kind: "text", title: "ملاحظات", body: penalty.notes });
-    }
-
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "مُصدر الغرامة", name: penalty.createdByName || "" },
-        { label: "المعتمد", name: penalty.approvedByName || "" },
-      ],
-    });
-    return sections;
-  }, [penalty, amount, id]);
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -283,12 +236,9 @@ export default function UmrahPenaltyDetail() {
       actions={
         penalty ? (
           <EntityPrintButton
-            branchId={penalty.branchId}
-            title="غرامة عمرة"
-            ref={`PEN-${id}`}
-            date={formatDateAr(penalty.createdAt)}
-            sections={printSections}
-          />
+            entityType="umrah_penalty"
+            entityId={id ?? 0}
+            formats={["a4"]}/>
         ) : undefined
       }
     />

@@ -11,7 +11,7 @@ import {
   type RelatedEntity,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ActionHistory } from "@workspace/workflow-kit";
@@ -90,31 +90,6 @@ export default function BudgetDetail() {
     return out;
   }, [item]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!item) return [];
-    return [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "اسم الميزانية", value: item.name || item.title || "-" },
-          { label: "التصنيف", value: item.category || "-" },
-          { label: "الفترة", value: PERIOD_LABELS[item.period] || item.period || "-" },
-          { label: "تاريخ البداية", value: formatDateAr(item.startDate) },
-          { label: "تاريخ النهاية", value: formatDateAr(item.endDate) },
-          { label: "الحالة", value: STATUS_LABELS[item.status] || item.status || "-" },
-        ],
-      },
-      {
-        kind: "summary",
-        items: [
-          { label: "المبلغ المخصص", value: formatCurrency(allocated) },
-          { label: "المبلغ المصروف", value: formatCurrency(spent) },
-          { label: "المتبقي", value: formatCurrency(remaining), bold: true },
-          { label: "نسبة الاستخدام", value: `${utilizationPct.toFixed(1)}%` },
-        ],
-      },
-    ];
-  }, [item, allocated, spent, remaining, utilizationPct]);
 
   const editDelete = useDetailEditDelete({
     entityLabel: "الميزانية",
@@ -246,12 +221,11 @@ export default function BudgetDetail() {
           </CardContent>
         </Card>
 
-        {/* Approval flow lives at /finance/budget-approvals — over-budget
+        {/* Budget approval lives at /finance/budget-approvals — over-budget
             requests go through cfo/gm via budget_approval_requests.
             Direct PATCH /budget/:id only edits accountCode/period/amount;
-            there is no status field on the budgets table, so the previous
-            inline ApprovalActions card called endpoints that don't exist
-            (/finance/budgets/:id/approve|reject). Removed. */}
+            no status field on budgets, no /approve|/reject endpoints. */}
+
         {/* Action history */}
         {id && (
           <Card>
@@ -291,12 +265,9 @@ export default function BudgetDetail() {
       actions={
         <>
           <EntityPrintButton
-            branchId={item?.branchId}
-            title="ميزانية"
-            ref={item?.ref || `BUD-${id}`}
-            date={formatDateAr(item?.createdAt)}
-            sections={printSections}
-          />
+            entityType="budget"
+            entityId={id ?? 0}
+            formats={["a4"]}/>
           <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
         </>
       }

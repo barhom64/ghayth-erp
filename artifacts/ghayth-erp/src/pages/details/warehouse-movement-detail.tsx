@@ -8,7 +8,7 @@ import {
 } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, ArrowRightLeft } from "lucide-react";
@@ -93,41 +93,6 @@ export default function WarehouseMovementDetail() {
     return out;
   }, [movement]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!movement) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم الحركة", value: movement.ref || `MVT-${id}` },
-          { label: "النوع", value: TYPE_LABELS[movement.type] || movement.type || "-" },
-          ...(movement.productName ? [{ label: "الصنف", value: movement.productName }] : []),
-          { label: "الكمية", value: String(quantity) },
-          ...(movement.fromLocation ? [{ label: "من", value: movement.fromLocation }] : []),
-          ...(movement.toLocation ? [{ label: "إلى", value: movement.toLocation }] : []),
-          ...(movement.reason ? [{ label: "السبب", value: movement.reason }] : []),
-          ...(movement.reference ? [{ label: "المرجع", value: movement.reference }] : []),
-          { label: "تكلفة الوحدة", value: formatCurrency(unitCost) },
-          { label: "القيمة الإجمالية", value: formatCurrency(totalValue) },
-          { label: "التاريخ", value: formatDateAr(movement.date || movement.createdAt) },
-          ...(movement.performedByName
-            ? [{ label: "بواسطة", value: movement.performedByName }]
-            : []),
-        ],
-      },
-    ];
-    if (movement.notes) {
-      sections.push({ kind: "text", title: "ملاحظات", body: movement.notes });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "منفذ الحركة", name: movement.performedByName || "" },
-        { label: "المعتمد", name: "" },
-      ],
-    });
-    return sections;
-  }, [movement, id, quantity, unitCost, totalValue]);
 
   const handleEdit = () => {
     setLocation(`/warehouse/movements/${id}/edit`);
@@ -272,15 +237,9 @@ export default function WarehouseMovementDetail() {
         <>
           {movement && (
             <EntityPrintButton
-              branchId={movement.branchId}
-              title={movement.ref ? `حركة ${movement.ref}` : "حركة مخزون"}
-              ref={movement.ref || `MVT-${id}`}
-              date={formatDateAr(movement.date || movement.createdAt)}
-              sections={printSections}
               entityType={String(movement.type ?? "").startsWith("adjustment") ? "stock_adjustment" : "stock_transfer"}
               entityId={movement.id ?? id}
-              formats={["a4", "label"]}
-            />
+              formats={["a4", "label"]}/>
           )}
           <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!movement}>
             <Edit className="h-4 w-4 ms-1" />

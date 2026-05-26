@@ -12,20 +12,23 @@ import {
 import { Search, Link2 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 
 export default function BankManualMatchPage() {
   const [, params] = useRoute("/finance/bank-reconciliation/manual-match/:batchId/:rowId") as [boolean, { batchId: string; rowId: string }];
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const [jeSearch, setJeSearch] = useState("");
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_bank_manual_match", { jeSearch: "" });
+  const { fieldErrors, validate } = useFieldErrors();
   const [jeResults, setJeResults] = useState<any[]>([]);
   const [jeSearching, setJeSearching] = useState(false);
   const [matchMsg, setMatchMsg] = useState("");
 
   const { data: batchDetail, isLoading, isError } = useApiQuery<any>(
     ["bank-batch", params?.batchId],
-    `/finance/bank-reconciliation/${params?.batchId}`,
+    params?.batchId ? `/finance/bank-reconciliation/${params.batchId}` : null,
     { enabled: !!params?.batchId }
   );
   const rows = batchDetail?.rows || [];
@@ -37,15 +40,15 @@ export default function BankManualMatchPage() {
   if (isError) return <ErrorState />;
 
   async function searchJournalLines() {
-    if (!jeSearch.trim()) {
-      toast({ variant: "destructive", title: "يرجى إدخال نص للبحث" });
-      return;
-    }
+    const firstError = validate({
+      jeSearch: !form.jeSearch.trim() ? "يرجى إدخال نص للبحث" : null,
+    });
+    if (firstError) return;
     setJeSearching(true);
     try {
       // Must search journal *lines* — manual-match needs a journal_lines.id.
       // /finance/journal returns journal_entries (wrong id type).
-      const res = await apiFetch(`/finance/journal-lines/search?search=${encodeURIComponent(jeSearch)}&pageSize=20`);
+      const res = await apiFetch(`/finance/journal-lines/search?search=${encodeURIComponent(form.jeSearch)}&pageSize=20`);
       setJeResults(res?.data || []);
     } catch {
       setJeResults([]);
@@ -61,6 +64,7 @@ export default function BankManualMatchPage() {
         journalLineId,
       });
       setMatchMsg("تمت المطابقة بنجاح");
+      clearDraft();
       toast({ title: "تمت المطابقة بنجاح" });
       setTimeout(() => setLocation("/finance/bank-reconciliation"), 1500);
     } catch (err: any) {
@@ -86,6 +90,12 @@ export default function BankManualMatchPage() {
       subtitle={row ? (row.description || `سطر #${row.id}`) : "تحميل..."}
       backPath="/finance/bank-reconciliation"
     >
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="space-y-6">
         {row && (
           <div>
@@ -107,8 +117,8 @@ export default function BankManualMatchPage() {
           <div className="flex gap-2">
             <Input
               placeholder="ابحث بالمرجع أو الوصف..."
-              value={jeSearch}
-              onChange={e => setJeSearch(e.target.value)}
+              value={form.jeSearch}
+              onChange={e => setForm(f => ({ ...f, jeSearch: e.target.value }))}
               onKeyDown={e => e.key === "Enter" && searchJournalLines()}
               className="flex-1"
             />
@@ -173,7 +183,7 @@ export default function BankManualMatchPage() {
             </div>
           )}
 
-          {jeResults.length === 0 && !jeSearching && jeSearch && (
+          {jeResults.length === 0 && !jeSearching && form.jeSearch && (
             <p className="text-muted-foreground text-sm text-center">لا توجد نتائج</p>
           )}
 

@@ -4,7 +4,7 @@ import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
@@ -85,35 +85,6 @@ export default function LeaveDetail() {
     return out;
   }, [leave]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!leave) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: leave.ref || `LV-${id}` },
-          { label: "الموظف", value: leave.employeeName || "-" },
-          { label: "نوع الإجازة", value: LEAVE_TYPE_LABELS[leave.leaveType] || leave.leaveType || "-" },
-          { label: "تاريخ البداية", value: formatDateAr(leave.startDate) },
-          { label: "تاريخ النهاية", value: formatDateAr(leave.endDate) },
-          { label: "المدة (أيام)", value: duration ? `${duration} يوم` : "-" },
-          { label: "الحالة", value: STATUS_LABELS[leave.status] || leave.status || "-" },
-          { label: "تاريخ الطلب", value: formatDateAr(leave.createdAt) },
-        ],
-      },
-    ];
-    if (leave.reason || leave.description) {
-      sections.push({ kind: "text", title: "سبب الإجازة", body: leave.reason || leave.description });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "مقدم الطلب", name: leave.employeeName || "" },
-        { label: "المعتمد", name: leave.approvedByName || "" },
-      ],
-    });
-    return sections;
-  }, [leave, duration, id]);
 
   const handleEdit = () => {
     setLocation(`/hr/leaves/${id}/edit`);
@@ -266,15 +237,9 @@ export default function LeaveDetail() {
         <>
           {leave && (
             <EntityPrintButton
-              branchId={leave.branchId}
-              title={leave.ref ? `إجازة ${leave.ref}` : "إجازة"}
-              ref={leave.ref || `LV-${id}`}
-              date={formatDateAr(leave.createdAt)}
-              sections={printSections}
               entityType="leave_request"
               entityId={leave.id ?? id}
-              formats={["a4"]}
-            />
+              formats={["a4"]}/>
           )}
           <GuardedButton
             perm="hr:update"

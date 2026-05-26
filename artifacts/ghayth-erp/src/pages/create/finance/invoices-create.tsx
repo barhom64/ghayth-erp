@@ -1,32 +1,51 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useLocation, useSearch } from "wouter";
-import { z } from "zod";
 import { useApiMutation, useApiQuery } from "@/lib/api";
-import { useFormContext } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  CreatePageLayout,
-  AutoField,
-  CreationDateField,
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormNumberField,
-  FormSelectField,
-  FormDateField,
-  FormSwitchField,
-  FormEntitySelect,
-} from "@workspace/ui-core";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CreatePageLayout, AutoField, CreationDateField } from "@workspace/ui-core";
 import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAppContext } from "@/contexts/app-context";
 import { ClientContextCard } from "@/components/shared/client-context-card";
-import { NumberField } from "@/components/shared/form-field-wrapper";
+import { TextField, NumberField, FormFieldWrapper, fieldErrorClass } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { ClientSelect, BranchSelect, CostCenterSelect } from "@/components/shared/entity-selects";
+import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
+
+interface TaxCode {
+  id: number;
+  code: string;
+  name: string;
+  rate: number | string;
+  taxType: string;
+  isInclusiveDefault?: boolean;
+  isActive: boolean;
+}
+
+/**
+ * Compute net/vat/gross from a line's quantity × unitPrice + the
+ * tax-code's rate, respecting the inclusive/exclusive flag. Mirrors
+ * the backend math in computeTaxFromTaxCode (#989).
+ */
+function lineTaxSplit(qty: number, unitPrice: number, rate: number, inclusive: boolean) {
+  const amount = roundMoney(qty * unitPrice);
+  if (inclusive) {
+    const net = roundMoney(amount / (1 + rate / 100));
+    const vat = roundMoney(amount - net);
+    return { net, vat, gross: amount };
+  }
+  const vat = roundMoney(amount * (rate / 100));
+  return { net: amount, vat, gross: roundMoney(amount + vat) };
+}
 
 const INVOICE_TYPE_CODES = [
   { value: "388", label: "فاتورة ضريبية (388)" },
@@ -42,6 +61,7 @@ const TAX_CATEGORY_CODES = [
 ];
 
 const PAYMENT_TERMS_OPTIONS = [
+  { value: "", label: "اختر شروط الدفع" },
   { value: "0", label: "فوري (عند الاستلام)" },
   { value: "7", label: "7 أيام" },
   { value: "15", label: "15 يوم" },
@@ -50,97 +70,6 @@ const PAYMENT_TERMS_OPTIONS = [
   { value: "60", label: "60 يوم" },
   { value: "90", label: "90 يوم" },
 ];
-
-const schema = z.object({
-  clientId: z.string().min(1, "يرجى اختيار العميل"),
-  description: z.string().optional(),
-  date: z.string(),
-  dueDate: z.string().optional(),
-  vatRate: z.string(),
-  branchId: z.string().min(1, "الفرع مطلوب"),
-  companyId: z.string().optional(),
-  costCenter: z.string().optional(),
-  paymentTermsDays: z.string().optional(),
-  notes: z.string().optional(),
-  isTaxLinked: z.boolean(),
-  invoiceTypeCode: z.string(),
-  taxCategoryCode: z.string(),
-  exemptionReason: z.string().optional(),
-});
-
-function ClientCard() {
-  const { watch } = useFormContext();
-  const clientId = watch("clientId") as string;
-  if (!clientId) return null;
-  return (
-    <div className="mt-3">
-      <ClientContextCard clientId={clientId} section="invoice" />
-    </div>
-  );
-}
-
-function TaxLinkedBlock() {
-  const { watch } = useFormContext();
-  const isTaxLinked = watch("isTaxLinked") as boolean;
-  const taxCategoryCode = watch("taxCategoryCode") as string;
-  return (
-    <div className="border rounded-lg p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-sm text-muted-foreground flex items-center gap-2">
-          <span className="text-status-success-foreground">🏛</span>
-          ربط مع هيئة الزكاة والضريبة والجمارك
-        </h3>
-        <FormSwitchField name="isTaxLinked" label={isTaxLinked ? "مفعّل" : "غير مفعّل"} />
-      </div>
-      {isTaxLinked && (
-        <FormGrid cols={3}>
-          <FormSelectField name="invoiceTypeCode" label="نوع الفاتورة الضريبية" options={INVOICE_TYPE_CODES} />
-          <FormSelectField name="taxCategoryCode" label="فئة الضريبة" options={TAX_CATEGORY_CODES} />
-          {(taxCategoryCode === "E" || taxCategoryCode === "Z") && (
-            <FormTextField name="exemptionReason" label="سبب الإعفاء / النسبة الصفرية" placeholder="أدخل سبب الإعفاء..." />
-          )}
-        </FormGrid>
-      )}
-    </div>
-  );
-}
-
-function InvoiceTotals({ lines }: { lines: any[] }) {
-  const { watch } = useFormContext();
-  const vatRate = watch("vatRate") as string;
-  const subtotal = roundMoney(lines.reduce((sum, l) => sum + roundMoney(Number(l.quantity || 0) * Number(l.unitPrice || 0)), 0));
-  const vatAmount = roundMoney(subtotal * (Number(vatRate) / 100));
-  const total = roundMoney(subtotal + vatAmount);
-  return (
-    <div className="bg-muted/50 p-4 rounded-md text-sm space-y-1">
-      <div className="flex justify-between"><span>المجموع الفرعي:</span><span>{formatCurrency(subtotal)}</span></div>
-      <div className="flex justify-between"><span>الضريبة ({vatRate}%):</span><span>{formatCurrency(vatAmount)}</span></div>
-      <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{formatCurrency(total)}</span></div>
-    </div>
-  );
-}
-
-function ImpactPreview({ lines }: { lines: any[] }) {
-  const { watch } = useFormContext();
-  const clientId = watch("clientId") as string;
-  const vatRate = watch("vatRate") as string;
-  const subtotal = lines.reduce((sum, l) => sum + Number(l.quantity || 0) * Number(l.unitPrice || 0), 0);
-  if (!clientId || subtotal <= 0) return null;
-  return (
-    <ImpactPreviewButton
-      endpoint="/finance/invoices/impact-preview"
-      payload={{
-        clientId: Number(clientId),
-        taxRate: Number(vatRate),
-        lines: lines.map((l) => ({
-          quantity: Number(l.quantity || 0),
-          unitPrice: Number(l.unitPrice || 0),
-        })),
-      }}
-      label="معاينة أثر الفاتورة"
-    />
-  );
-}
 
 export default function InvoicesCreate() {
   const [, setLocation] = useLocation();
@@ -157,145 +86,423 @@ export default function InvoicesCreate() {
     if (copy) { try { return JSON.parse(copy); } catch { /* ignore */ } }
     return null;
   })();
+  const { form, setForm, clearDraft, isDirty, hasDraft } = useAutoDraft("invoice-create", {
+    clientId: copyDefaults?.clientId ? String(copyDefaults.clientId) : "",
+    description: copyDefaults?.description || "",
+    date: todayLocal(),
+    dueDate: "",
+    vatRate: copyDefaults?.vatRate ? String(copyDefaults.vatRate) : "15",
+    branchId: selectedBranchId ? String(selectedBranchId) : "",
+    companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "",
+    costCenter: "",
+    paymentTermsDays: "",
+    notes: copyDefaults?.notes || "",
+    isTaxLinked: false,
+    invoiceTypeCode: "388",
+    taxCategoryCode: "S",
+    exemptionReason: "",
+    // Header-level tax-code default. Per-line tax codes can override.
+    // When the operator picks "VAT15 inclusive" here, every NEW line
+    // inherits it. The Daftra-style flow you asked for.
+    taxCode: "VAT15",
+    taxInclusive: true,
+  });
+  const [lines, setLines] = useState([{
+    description: "", quantity: "1", unitPrice: "",
+    taxCode: "" as string,        // empty → fall back to header taxCode
+    taxInclusive: undefined as boolean | undefined, // empty → fall back to header
+    allocation: {} as LineAllocation,
+  }]);
 
-  const [lines, setLines] = useState([{ description: "", quantity: "1", unitPrice: "" }]);
+  // Load all active tax codes (the 5 seeded Saudi defaults + any custom).
+  const { data: taxCodesData } = useApiQuery<{ data: TaxCode[] }>(
+    ["tax-codes"],
+    "/finance/tax-codes",
+  );
+  const taxCodes = useMemo(() => (taxCodesData?.data ?? []).filter((t) => t.isActive), [taxCodesData]);
+  const taxCodeByCode = useMemo(() => {
+    const m = new Map<string, TaxCode>();
+    for (const t of taxCodes) m.set(t.code, t);
+    return m;
+  }, [taxCodes]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [copied, setCopied] = useState(false);
-  const autoNumberRef = useRef(`INV-${Date.now().toString(36).toUpperCase()}`);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
 
   useEffect(() => {
     if (copySource && !copied) {
       setCopied(true);
+      setForm((prev) => ({
+        ...prev,
+        clientId: String(copySource.clientId || ""),
+        description: copySource.description || "",
+        dueDate: "",
+        vatRate: String(copySource.vatRate ?? "15"),
+        branchId: copySource.branchId ? String(copySource.branchId) : prev.branchId,
+        companyId: copySource.companyId ? String(copySource.companyId) : prev.companyId,
+        paymentTermsDays: "",
+        notes: copySource.notes || "",
+      }));
       if (copySource.lines?.length) {
-        setLines(copySource.lines.map((l: any) => ({
-          description: l.description || "",
-          quantity: String(l.quantity || 1),
-          unitPrice: String(l.unitPrice || ""),
-        })));
+        setLines(copySource.lines.map((l: any) => ({ description: l.description || "", quantity: String(l.quantity || 1), unitPrice: String(l.unitPrice || "") })));
       }
     }
   }, [copySource, copied]);
+  const autoNumberRef = useRef(`INV-${Date.now().toString(36).toUpperCase()}`);
 
-  const addLine = () => setLines([...lines, { description: "", quantity: "1", unitPrice: "" }]);
+  const addLine = () => setLines([...lines, {
+    description: "", quantity: "1", unitPrice: "",
+    taxCode: "", taxInclusive: undefined,
+    allocation: {} as LineAllocation,
+  }]);
   const removeLine = (idx: number) => setLines(lines.filter((_, i) => i !== idx));
-  const updateLine = (idx: number, field: string, value: string) => {
+  const updateLine = (idx: number, field: string, value: any) => {
     const updated = [...lines];
     (updated[idx] as any)[field] = value;
     setLines(updated);
   };
 
+  // Per-line + total math now driven by the tax-code system.
+  // 1. Line picks its own taxCode (or falls back to header).
+  // 2. Line picks its own inclusive flag (or falls back to header).
+  // 3. Rate comes from the resolved taxCode, not a free-text vatRate.
+  // Header `vatRate` is kept in the payload only for legacy DB columns
+  // (server still reads it for the un-coded fallback path).
+  const lineSplits = lines.map((l) => {
+    const code = l.taxCode || form.taxCode;
+    const tc = code ? taxCodeByCode.get(code) : undefined;
+    const rate = tc ? Number(tc.rate) : Number(form.vatRate || 0);
+    const inclusive = l.taxInclusive ?? form.taxInclusive;
+    return lineTaxSplit(Number(l.quantity || 0), Number(l.unitPrice || 0), rate, inclusive);
+  });
+  const subtotal = roundMoney(lineSplits.reduce((s, x) => s + x.net, 0));
+  const vatAmount = roundMoney(lineSplits.reduce((s, x) => s + x.vat, 0));
+  const total = roundMoney(lineSplits.reduce((s, x) => s + x.gross, 0));
+
+  const handleSubmit = async () => {
+    const firstError = validate({
+      clientId: form.clientId ? null : "يرجى اختيار العميل",
+      dueDate: !form.dueDate && !form.paymentTermsDays ? "حدد شروط الدفع أو تاريخ الاستحقاق" : null,
+      lines: lines.length === 0 || !lines[0].unitPrice ? "يرجى إضافة بند واحد على الأقل بسعر" : null,
+      totalAmount: total <= 0 ? "إجمالي الفاتورة يجب أن يكون أكبر من صفر" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
+      return;
+    }
+    if (!form.branchId) {
+      toast({ variant: "destructive", title: "الفرع مطلوب" });
+      return;
+    }
+    try {
+      await createMut.mutateAsync({
+        clientId: Number(form.clientId),
+        description: form.description || undefined,
+        date: form.date || undefined,
+        dueDate: form.dueDate || undefined,
+        vatRate: Number(form.vatRate),
+        subtotal,
+        total,
+        branchId: form.branchId ? Number(form.branchId) : undefined,
+        companyId: form.companyId ? Number(form.companyId) : undefined,
+        costCenter: form.costCenter || undefined,
+        paymentTermsDays: form.paymentTermsDays ? Number(form.paymentTermsDays) : undefined,
+        notes: form.notes || undefined,
+        isTaxLinked: form.isTaxLinked,
+        invoiceTypeCode: form.isTaxLinked ? form.invoiceTypeCode : undefined,
+        taxCategoryCode: form.isTaxLinked ? form.taxCategoryCode : undefined,
+        exemptionReason: form.isTaxLinked && form.exemptionReason ? form.exemptionReason : undefined,
+        // Header-level tax code + inclusive flag — server picks
+        // these up via #989's createInvoiceSchema. Per-line overrides
+        // are applied below.
+        taxCode: form.taxCode || undefined,
+        taxInclusive: form.taxInclusive,
+        lines: lines.map((l) => ({
+          description: l.description,
+          quantity: Number(l.quantity),
+          unitPrice: Number(l.unitPrice),
+          total: Number(l.quantity) * Number(l.unitPrice),
+          taxCode: l.taxCode || undefined,
+          taxInclusive: l.taxInclusive,
+          ...buildAllocationPayload(l.allocation ?? {}),
+        })),
+      });
+      toast({ title: "تم إنشاء الفاتورة بنجاح" });
+      clearDraft();
+      setLocation("/finance/invoices");
+    } catch (err: any) {
+      setApiError(err);
+      toast({ variant: "destructive", title: "حدث خطأ أثناء إنشاء الفاتورة", description: err?.fix ?? err?.message });
+    }
+  };
+
   return (
-    <CreatePageLayout title="فاتورة جديدة" backPath="/finance/invoices">
+    <CreatePageLayout title="فاتورة جديدة" backPath="/finance/invoices" isDirty={isDirty}>
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
+      <div data-form>
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <AutoField label="رقم الفاتورة" value={autoNumberRef.current} />
+        <FormFieldWrapper label="التاريخ" required>
+          <DatePicker value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
+        </FormFieldWrapper>
       </div>
-      <FormShell
-        schema={schema}
-        defaultValues={{
-          clientId: copyDefaults?.clientId ? String(copyDefaults.clientId) : (copySource?.clientId ? String(copySource.clientId) : ""),
-          description: copyDefaults?.description || copySource?.description || "",
-          date: todayLocal(),
-          dueDate: "",
-          vatRate: copyDefaults?.vatRate ? String(copyDefaults.vatRate) : String(copySource?.vatRate ?? "15"),
-          branchId: selectedBranchId ? String(selectedBranchId) : (copySource?.branchId ? String(copySource.branchId) : ""),
-          companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : (copySource?.companyId ? String(copySource.companyId) : ""),
-          costCenter: "",
-          paymentTermsDays: "",
-          notes: copyDefaults?.notes || copySource?.notes || "",
-          isTaxLinked: false,
-          invoiceTypeCode: "388",
-          taxCategoryCode: "S",
-          exemptionReason: "",
-        }}
-        submitLabel={createMut.isPending ? "جاري الحفظ..." : "حفظ"}
-        secondaryActions={
-          <Button type="button" variant="outline" onClick={() => setLocation("/finance/invoices")}>
-            إلغاء
-          </Button>
-        }
-        onSubmit={async (values, { setFieldError }) => {
-          if (!values.dueDate && !values.paymentTermsDays) {
-            setFieldError("dueDate", "حدد شروط الدفع أو تاريخ الاستحقاق");
-            return;
-          }
-          if (lines.length === 0 || !lines[0].unitPrice) {
-            toast({ variant: "destructive", title: "يرجى إضافة بند واحد على الأقل بسعر" });
-            return;
-          }
-          const subtotal = roundMoney(lines.reduce((sum, l) => sum + roundMoney(Number(l.quantity || 0) * Number(l.unitPrice || 0)), 0));
-          const vatAmount = roundMoney(subtotal * (Number(values.vatRate) / 100));
-          const total = roundMoney(subtotal + vatAmount);
-          if (total <= 0) {
-            toast({ variant: "destructive", title: "إجمالي الفاتورة يجب أن يكون أكبر من صفر" });
-            return;
-          }
-          await createMut.mutateAsync({
-            clientId: Number(values.clientId),
-            description: values.description || undefined,
-            date: values.date || undefined,
-            dueDate: values.dueDate || undefined,
-            vatRate: Number(values.vatRate),
-            subtotal,
-            total,
-            branchId: values.branchId ? Number(values.branchId) : undefined,
-            companyId: values.companyId ? Number(values.companyId) : undefined,
-            costCenter: values.costCenter || undefined,
-            paymentTermsDays: values.paymentTermsDays ? Number(values.paymentTermsDays) : undefined,
-            notes: values.notes || undefined,
-            isTaxLinked: values.isTaxLinked,
-            invoiceTypeCode: values.isTaxLinked ? values.invoiceTypeCode : undefined,
-            taxCategoryCode: values.isTaxLinked ? values.taxCategoryCode : undefined,
-            exemptionReason: values.isTaxLinked && values.exemptionReason ? values.exemptionReason : undefined,
-            lines: lines.map((l) => ({
-              description: l.description,
-              quantity: Number(l.quantity),
-              unitPrice: Number(l.unitPrice),
-              total: Number(l.quantity) * Number(l.unitPrice),
-            })),
-          });
-          toast({ title: "تم إنشاء الفاتورة بنجاح" });
-          setLocation("/finance/invoices");
-        }}
-      >
-        <FormGrid cols={2}>
-          <FormDateField name="date" label="التاريخ" required />
-        </FormGrid>
-
-        <FormGrid cols={3}>
-          <div>
-            <FormEntitySelect name="clientId" select={ClientSelect} label="العميل" required />
-            <ClientCard />
-          </div>
-          <FormEntitySelect name="branchId" select={BranchSelect} label="الفرع" required />
-          <FormNumberField name="vatRate" label="نسبة الضريبة %" min="0" max="100" step="0.01" />
-          <FormSelectField name="paymentTermsDays" label="شروط الدفع" required options={PAYMENT_TERMS_OPTIONS} placeholder="اختر شروط الدفع" />
-          <FormDateField name="dueDate" label="تاريخ الاستحقاق" />
-          <FormEntitySelect name="costCenter" select={CostCenterSelect} label="مركز التكلفة" />
-          <FormTextField name="description" label="الوصف" className="md:col-span-3" />
-          <FormTextField name="notes" label="ملاحظات إضافية" placeholder="ملاحظات أو تعليمات للعميل" className="md:col-span-3" />
-        </FormGrid>
-
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div>
-          <Label className="text-base font-semibold">البنود</Label>
-          {lines.map((line, idx) => (
-            <div key={idx} className="grid grid-cols-4 gap-2 mt-2 items-end">
-              <div><Label className="text-xs">الوصف</Label><Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} /></div>
-              <NumberField label="الكمية" value={line.quantity} onChange={(v) => updateLine(idx, "quantity", v)} placeholder="1" />
-              <NumberField label="سعر الوحدة" value={line.unitPrice} onChange={(v) => updateLine(idx, "unitPrice", v)} placeholder="0.00" />
-              <Button type="button" variant="destructive" size="sm" onClick={() => removeLine(idx)} disabled={lines.length <= 1}>حذف</Button>
+          <ClientSelect
+            value={form.clientId}
+            onChange={(v) => setForm((f) => ({ ...f, clientId: v }))}
+            label="العميل"
+            required
+            error={fieldErrors.clientId}
+          />
+          {form.clientId && (
+            <div className="mt-3">
+              <ClientContextCard clientId={form.clientId} section="invoice" />
             </div>
-          ))}
-          <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addLine}>+ إضافة بند</Button>
+          )}
         </div>
+        <BranchSelect
+          value={form.branchId}
+          onChange={(v) => setForm((f) => ({ ...f, branchId: v }))}
+          label="الفرع"
+          required
+        />
+        <FormFieldWrapper label="رمز الضريبة (افتراضي للأسطر الجديدة)">
+          <Select value={form.taxCode || "_none"} onValueChange={(v) =>
+            setForm((f) => {
+              const code = v === "_none" ? "" : v;
+              const tc = taxCodeByCode.get(code);
+              return {
+                ...f,
+                taxCode: code,
+                // Snap the legacy vatRate to match so any line that
+                // hasn't picked its own taxCode still gets the right
+                // number on its fallback path.
+                vatRate: tc ? String(Number(tc.rate)) : f.vatRate,
+              };
+            })}>
+            <SelectTrigger><SelectValue placeholder="اختر رمز الضريبة..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">— بدون —</SelectItem>
+              {taxCodes.map((t) => (
+                <SelectItem key={t.code} value={t.code}>
+                  {t.code} ({Number(t.rate).toFixed(0)}%) — {t.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="نوع السعر">
+          <div className="flex items-center gap-3 h-10">
+            <Switch
+              id="header-tax-inclusive"
+              checked={form.taxInclusive}
+              onCheckedChange={(v) => setForm({ ...form, taxInclusive: v })}
+            />
+            <Label htmlFor="header-tax-inclusive" className="text-sm cursor-pointer">
+              {form.taxInclusive ? "السعر شامل الضريبة" : "السعر غير شامل (سيُضاف عليه)"}
+            </Label>
+          </div>
+        </FormFieldWrapper>
+        <FormFieldWrapper label="شروط الدفع" required>
+          <Select value={form.paymentTermsDays || "_none"} onValueChange={(v) => setForm(prev => ({ ...prev, paymentTermsDays: v === "_none" ? "" : v }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {PAYMENT_TERMS_OPTIONS.map(t => <SelectItem key={t.value || "_none"} value={t.value || "_none"}>{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        <FormFieldWrapper label={`تاريخ الاستحقاق ${!form.paymentTermsDays ? "*" : ""}`} error={fieldErrors.dueDate}>
+          <DatePicker value={form.dueDate} onChange={(v) => setForm({ ...form, dueDate: v })} />
+        </FormFieldWrapper>
+        <CostCenterSelect
+          value={form.costCenter}
+          onChange={(v) => setForm((f) => ({ ...f, costCenter: v }))}
+          label="مركز التكلفة"
+        />
+        <TextField label="الوصف" value={form.description} onChange={(v) => setForm({ ...form, description: v })} className="md:col-span-3" />
+        <TextField label="ملاحظات إضافية" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} placeholder="ملاحظات أو تعليمات للعميل" className="md:col-span-3" />
+      </div>
 
-        <InvoiceTotals lines={lines} />
-        <ImpactPreview lines={lines} />
+      <div className="mb-4">
+        <div className="flex items-center justify-between">
+          <Label className="text-base font-semibold">البنود</Label>
+          <span className="text-xs text-muted-foreground">
+            * كل بند يرث رمز الضريبة + نوع السعر من الترويسة — تقدر تعدّلها هنا.
+          </span>
+        </div>
+        {fieldErrors.lines && <p className="text-xs text-status-error-foreground mt-1">{fieldErrors.lines}</p>}
+        {lines.map((line, idx) => {
+          const split = lineSplits[idx];
+          const lineCode = line.taxCode || form.taxCode;
+          const lineInclusive = line.taxInclusive ?? form.taxInclusive;
+          return (
+            <div key={idx} className="border border-border rounded-md p-3 mt-3 bg-card">
+              <div className="grid grid-cols-12 gap-2 items-end">
+                <div className="col-span-12 md:col-span-4">
+                  <Label className="text-xs">الوصف</Label>
+                  <Input value={line.description}
+                    onChange={(e) => updateLine(idx, "description", e.target.value)} />
+                </div>
+                <div className="col-span-6 md:col-span-1">
+                  <NumberField label="كمية" value={line.quantity}
+                    onChange={(v) => updateLine(idx, "quantity", v)} placeholder="1" />
+                </div>
+                <div className="col-span-6 md:col-span-2">
+                  <NumberField label="سعر الوحدة" value={line.unitPrice}
+                    onChange={(v) => updateLine(idx, "unitPrice", v)} placeholder="0.00" />
+                </div>
+                <div className="col-span-6 md:col-span-2">
+                  <Label className="text-xs">رمز الضريبة</Label>
+                  <Select
+                    value={line.taxCode || "_inherit"}
+                    onValueChange={(v) => updateLine(idx, "taxCode", v === "_inherit" ? "" : v)}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder={form.taxCode ? `↓ ${form.taxCode}` : "بدون"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_inherit">↓ يرث من الترويسة ({form.taxCode || "بدون"})</SelectItem>
+                      {taxCodes.map((t) => (
+                        <SelectItem key={t.code} value={t.code}>
+                          {t.code} ({Number(t.rate).toFixed(0)}%)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-6 md:col-span-2">
+                  <Label className="text-xs">نوع السعر</Label>
+                  <Select
+                    value={line.taxInclusive === undefined ? "_inherit" : line.taxInclusive ? "inclusive" : "exclusive"}
+                    onValueChange={(v) => updateLine(idx, "taxInclusive",
+                      v === "_inherit" ? undefined : v === "inclusive")}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_inherit">↓ يرث ({form.taxInclusive ? "شامل" : "غير شامل"})</SelectItem>
+                      <SelectItem value="inclusive">شامل الضريبة</SelectItem>
+                      <SelectItem value="exclusive">غير شامل</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-12 md:col-span-1">
+                  <Button type="button" variant="ghost" size="sm" className="w-full text-destructive"
+                    onClick={() => removeLine(idx)} disabled={lines.length <= 1}>حذف</Button>
+                </div>
+              </div>
+              {/* Live tax split for THIS line */}
+              {(Number(line.quantity) > 0 && Number(line.unitPrice) > 0) && (
+                <div className="mt-3 pt-3 border-t border-dashed flex flex-wrap items-center gap-3 text-xs">
+                  <Badge variant="outline" className="font-mono">{lineCode || "—"}</Badge>
+                  <Badge variant="secondary">{lineInclusive ? "شامل" : "غير شامل"}</Badge>
+                  <span className="text-muted-foreground">صافي: <span className="font-semibold text-foreground">{formatCurrency(split.net)}</span></span>
+                  <span className="text-muted-foreground">ضريبة: <span className="font-semibold text-status-warning-foreground">{formatCurrency(split.vat)}</span></span>
+                  <span className="text-muted-foreground">إجمالي: <span className="font-semibold text-emerald-700">{formatCurrency(split.gross)}</span></span>
+                </div>
+              )}
+              <LineAllocationPanel
+                value={line.allocation ?? {}}
+                onChange={(next) => updateLine(idx, "allocation", next)}
+                status={deriveAllocationStatus(line.allocation ?? {})}
+                required={false}
+              />
+            </div>
+          );
+        })}
+        <Button type="button" variant="outline" size="sm" className="mt-3" onClick={addLine}>+ إضافة بند</Button>
+      </div>
 
-        <FileDropZone files={attachments} onFilesChange={setAttachments} />
+      <div className={`bg-muted/50 p-4 rounded-md text-sm space-y-1 ${fieldErrorClass(fieldErrors.totalAmount)}`}>
+        <div className="flex justify-between"><span>المجموع الفرعي:</span><span>{formatCurrency(subtotal)}</span></div>
+        <div className="flex justify-between"><span>الضريبة ({form.vatRate}%):</span><span>{formatCurrency(vatAmount)}</span></div>
+        <div className="flex justify-between font-bold"><span>الإجمالي:</span><span>{formatCurrency(total)}</span></div>
+      </div>
+      {fieldErrors.totalAmount && <p className="text-xs text-status-error-foreground mt-1">{fieldErrors.totalAmount}</p>}
 
-        <TaxLinkedBlock />
-      </FormShell>
+      {form.clientId && subtotal > 0 && (
+        <ImpactPreviewButton
+          endpoint="/finance/invoices/impact-preview"
+          payload={{
+            clientId: Number(form.clientId),
+            taxRate: Number(form.vatRate),
+            lines: lines.map((l) => ({
+              quantity: Number(l.quantity || 0),
+              unitPrice: Number(l.unitPrice || 0),
+            })),
+          }}
+          label="معاينة أثر الفاتورة"
+        />
+      )}
+
+      <FileDropZone files={attachments} onFilesChange={setAttachments} />
+
+      <div className="border rounded-lg p-4 mb-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-sm text-muted-foreground flex items-center gap-2">
+            <span className="text-status-success-foreground">🏛</span>
+            ربط مع هيئة الزكاة والضريبة والجمارك
+          </h3>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <div
+              onClick={() => setForm({ ...form, isTaxLinked: !form.isTaxLinked })}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${form.isTaxLinked ? "bg-green-600" : "bg-gray-300"}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${form.isTaxLinked ? "translate-x-6" : "translate-x-1"}`} />
+            </div>
+            <span className="text-sm font-medium">{form.isTaxLinked ? "مفعّل" : "غير مفعّل"}</span>
+          </label>
+        </div>
+        {form.isTaxLinked && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t">
+            <div>
+              <Label>نوع الفاتورة الضريبية</Label>
+              <Select value={form.invoiceTypeCode} onValueChange={(v) => setForm((f) => ({ ...f, invoiceTypeCode: v }))}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {INVOICE_TYPE_CODES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>فئة الضريبة</Label>
+              <Select value={form.taxCategoryCode} onValueChange={(v) => setForm((f) => ({ ...f, taxCategoryCode: v }))}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TAX_CATEGORY_CODES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {(form.taxCategoryCode === "E" || form.taxCategoryCode === "Z") && (
+              <div>
+                <Label>سبب الإعفاء / النسبة الصفرية</Label>
+                <Input className="mt-1" value={form.exemptionReason} onChange={(e) => setForm((f) => ({ ...f, exemptionReason: e.target.value }))} placeholder="أدخل سبب الإعفاء..." />
+              </div>
+            )}
+            <div className="md:col-span-3 flex items-start gap-2 p-3 bg-status-success-surface border border-status-success-surface rounded-md">
+              <span className="text-status-success-foreground text-xs mt-0.5">✓</span>
+              <p className="text-xs text-status-success-foreground">سيتم ربط هذه الفاتورة مع منظومة الفوترة الإلكترونية لهيئة الزكاة والضريبة وتوليد رمز استجابة سريعة متوافق عند الإرسال للهيئة.</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-end gap-3 pt-6">
+        <Button variant="outline" onClick={() => setLocation("/finance/invoices")}>إلغاء</Button>
+        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
+          {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
+        </Button>
+      </div>
+      </div>
     </CreatePageLayout>
   );
 }

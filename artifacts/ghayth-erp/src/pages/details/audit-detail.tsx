@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, ClipboardCheck } from "lucide-react";
@@ -80,41 +80,6 @@ export default function AuditDetail() {
     return out;
   }, [audit]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!audit) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: `AUD-${id}` },
-          { label: "النوع", value: TYPE_LABELS[audit.type] || audit.type || "-" },
-          { label: "المدقق", value: audit.auditor || "-" },
-          { label: "تاريخ البداية", value: formatDateAr(audit.startDate) },
-          { label: "تاريخ النهاية", value: formatDateAr(audit.endDate) },
-          { label: "مستوى المخاطر", value: RISK_LABELS[audit.riskLevel] || audit.riskLevel || "-" },
-          { label: "القسم", value: audit.department || audit.departmentName || "-" },
-          { label: "الحالة", value: STATUS_LABELS[audit.status] || audit.status || "-" },
-        ],
-      },
-    ];
-    if (audit.scope) {
-      sections.push({ kind: "text", title: "نطاق التدقيق", body: audit.scope });
-    }
-    if (audit.findings || audit.findingsSummary) {
-      sections.push({ kind: "text", title: "ملخص النتائج", body: audit.findings || audit.findingsSummary });
-    }
-    if (audit.recommendations) {
-      sections.push({ kind: "text", title: "التوصيات", body: audit.recommendations });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "المدقق", name: audit.auditor || "" },
-        { label: "المعتمد", name: audit.approvedByName || "" },
-      ],
-    });
-    return sections;
-  }, [audit, id]);
 
   const handleEdit = () => {
     setLocation(`/governance/audits/${id}/edit`);
@@ -251,12 +216,9 @@ export default function AuditDetail() {
         <>
           {audit && (
             <EntityPrintButton
-              branchId={audit.branchId}
-              title={audit.title || "تدقيق"}
-              ref={`AUD-${id}`}
-              date={formatDateAr(audit.createdAt)}
-              sections={printSections}
-            />
+              entityType="audit_record"
+              entityId={id ?? 0}
+              formats={["a4"]}/>
           )}
           <GuardedButton
             perm="governance:update"

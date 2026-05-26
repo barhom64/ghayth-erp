@@ -1,16 +1,17 @@
 import { useMemo } from "react";
-import { useRoute } from "wouter";
+import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { FixedAssetActions } from "@/components/finance/fixed-asset-actions";
 import {
   DetailPageLayout,
   type RelatedEntity,
   EntityComments,
 } from "@workspace/entity-kit";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Box } from "lucide-react";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { Edit, Box, TrendingDown } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -40,13 +41,14 @@ function statusTone(status: string) {
 }
 
 export default function FixedAssetDetail() {
+  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/fixed-assets/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("fixed-asset", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["fixed-asset", String(id)],
-    `/finance/fixed-assets/${id}`,
+    id ? `/finance/fixed-assets/${id}` : null,
     !!id,
   );
 
@@ -89,32 +91,6 @@ export default function FixedAssetDetail() {
     return out;
   }, [item]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!item) return [];
-    return [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "اسم الأصل", value: item.name || "-" },
-          { label: "الفئة", value: item.category || "-" },
-          { label: "رقم الأصل", value: item.assetNumber || item.serialNumber || "-" },
-          { label: "تاريخ الشراء", value: formatDateAr(item.purchaseDate) },
-          { label: "العمر الافتراضي", value: item.usefulLife ? `${item.usefulLife} سنة` : "-" },
-          { label: "طريقة الاستهلاك", value: DEPRECIATION_METHODS[item.depreciationMethod] || item.depreciationMethod || "-" },
-          { label: "الموقع", value: item.location || "-" },
-          { label: "الحالة", value: STATUS_LABELS[item.status] || item.status || "-" },
-        ],
-      },
-      {
-        kind: "summary",
-        items: [
-          { label: "تكلفة الشراء", value: formatCurrency(cost) },
-          { label: "الاستهلاك المتراكم", value: formatCurrency(accumulated) },
-          { label: "القيمة الدفترية", value: formatCurrency(netBook), bold: true },
-        ],
-      },
-    ];
-  }, [item, cost, accumulated, netBook]);
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -240,6 +216,8 @@ export default function FixedAssetDetail() {
         )}
       </div>
 
+      {id && <DepreciationScheduleCard assetId={Number(id)} />}
+
       {id && <EntityComments entityType="fixed-asset" entityId={id} />}
       {id && <EntityTags entityType="fixed-asset" entityId={id} />}
     </div>
@@ -268,32 +246,112 @@ export default function FixedAssetDetail() {
       actions={
         <>
           <EntityPrintButton
-            branchId={item?.branchId}
-            title="أصل ثابت"
-            ref={item?.ref || `FA-${id}`}
-            date={formatDateAr(item?.purchaseDate || item?.createdAt)}
-            sections={printSections}
-          />
-          {item && (
-            <FixedAssetActions
-              asset={{
-                id: Number(item.id ?? id),
-                name: item.name,
-                description: item.description ?? null,
-                category: item.category ?? null,
-                salvageValue: item.salvageValue ?? 0,
-                usefulLifeYears: item.usefulLifeYears ?? 0,
-                depreciationMethod: item.depreciationMethod ?? null,
-                status: item.status,
-                purchaseCost: item.purchaseCost ?? item.cost ?? 0,
-                currentBookValue: item.currentBookValue ?? 0,
-                accumulatedDepreciation: item.accumulatedDepreciation ?? 0,
-              }}
-              onRefresh={refetch}
-            />
-          )}
+            entityType="fixed_asset"
+            entityId={id ?? 0}
+            formats={["a4"]}/>
+          <GuardedButton
+            perm="finance:update"
+            variant="outline"
+            size="sm"
+            onClick={() => setLocation("/finance/fixed-assets")}
+            disabled={!item || ["disposed", "sold"].includes(item.status)}
+          >
+            <Edit className="h-4 w-4 ms-1" />
+            تعديل
+          </GuardedButton>
         </>
       }
     />
+  );
+}
+
+interface ScheduleRow {
+  period: string;
+  depreciationAmount: number;
+  accumulatedDepreciation: number;
+  bookValue: number;
+}
+
+interface ScheduleResponse {
+  assetId: number;
+  assetName: string;
+  method?: string;
+  schedule: ScheduleRow[];
+  totalDepreciable: number;
+  note?: string;
+}
+
+function DepreciationScheduleCard({ assetId }: { assetId: number }) {
+  const { data, isLoading, isError, error } = useApiQuery<ScheduleResponse>(
+    ["fixed-asset-schedule", String(assetId)],
+    `/finance/fixed-assets/${assetId}/schedule`,
+    !!assetId,
+  );
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-4 text-xs text-muted-foreground">جاري حساب جدول الإهلاك...</CardContent>
+      </Card>
+    );
+  }
+  if (isError) {
+    const msg = (error as any)?.message ?? "تعذّر حساب جدول الإهلاك";
+    return (
+      <Card className="border-status-warning-surface bg-status-warning-surface/40">
+        <CardContent className="p-4 text-xs text-status-warning-foreground flex items-center gap-2">
+          <TrendingDown className="h-4 w-4" /> {msg}
+        </CardContent>
+      </Card>
+    );
+  }
+  if (!data) return null;
+
+  if (data.note && data.schedule.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <TrendingDown className="h-4 w-4" /> جدول الإهلاك
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="text-xs text-muted-foreground">{data.note}</CardContent>
+      </Card>
+    );
+  }
+
+  const cols: DataTableColumn<ScheduleRow>[] = [
+    { key: "period", header: "الفترة",
+      render: (r) => <span className="font-mono text-xs">{r.period}</span> },
+    { key: "depreciationAmount", header: "إهلاك الفترة",
+      render: (r) => <span className="font-mono">{formatCurrency(Number(r.depreciationAmount))}</span> },
+    { key: "accumulatedDepreciation", header: "الإهلاك المتراكم",
+      render: (r) => <span className="font-mono text-status-error-foreground">{formatCurrency(Number(r.accumulatedDepreciation))}</span> },
+    { key: "bookValue", header: "القيمة الدفترية",
+      render: (r) => <span className="font-mono font-bold text-emerald-700">{formatCurrency(Number(r.bookValue))}</span> },
+  ];
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <TrendingDown className="h-4 w-4" /> جدول الإهلاك
+          </span>
+          <div className="flex items-center gap-2 text-xs font-normal">
+            <Badge variant="outline">{data.schedule.length} فترة</Badge>
+            <span className="text-muted-foreground">
+              قابل للإهلاك: <span className="font-mono font-bold">{formatCurrency(data.totalDepreciable)}</span>
+            </span>
+          </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <DataTable
+          columns={cols} data={data.schedule}
+          pageSize={24} emptyMessage="لا يوجد جدول إهلاك"
+        />
+      </CardContent>
+    </Card>
   );
 }

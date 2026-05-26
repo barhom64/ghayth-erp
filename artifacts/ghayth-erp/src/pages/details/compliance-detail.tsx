@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions } from "@workspace/workflow-kit";
@@ -73,46 +73,6 @@ export default function ComplianceDetail() {
     return out;
   }, [compliance]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!compliance) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: `CMP-${id}` },
-          { label: "المتطلب", value: compliance.requirement || compliance.title || "-" },
-          { label: "الإطار", value: compliance.framework || "-" },
-          { label: "تاريخ التقييم", value: formatDateAr(compliance.assessmentDate) },
-          { label: "تاريخ المراجعة التالية", value: formatDateAr(compliance.nextReview || compliance.nextReviewDate) },
-          {
-            label: "المسؤول",
-            value: compliance.responsibleParty || compliance.responsiblePartyName || "-",
-          },
-          { label: "الحالة", value: STATUS_LABELS[compliance.status] || compliance.status || "-" },
-        ],
-      },
-    ];
-    if (compliance.description) {
-      sections.push({ kind: "text", title: "الوصف", body: compliance.description });
-    }
-    if (compliance.evidence) {
-      sections.push({ kind: "text", title: "الأدلة", body: compliance.evidence });
-    }
-    if (compliance.notes) {
-      sections.push({ kind: "text", title: "ملاحظات", body: compliance.notes });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        {
-          label: "المسؤول",
-          name: compliance.responsibleParty || compliance.responsiblePartyName || "",
-        },
-        { label: "المعتمد", name: compliance.approvedByName || "" },
-      ],
-    });
-    return sections;
-  }, [compliance, id]);
 
   const handleEdit = () => {
     setLocation(`/governance/compliance/${id}/edit`);
@@ -288,12 +248,9 @@ export default function ComplianceDetail() {
         <>
           {compliance && (
             <EntityPrintButton
-              branchId={compliance.branchId}
-              title={compliance.requirement || compliance.title || "امتثال"}
-              ref={`CMP-${id}`}
-              date={formatDateAr(compliance.createdAt)}
-              sections={printSections}
-            />
+              entityType="compliance"
+              entityId={id ?? 0}
+              formats={["a4"]}/>
           )}
           <GuardedButton
             perm="governance:update"

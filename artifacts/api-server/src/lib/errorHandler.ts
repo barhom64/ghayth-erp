@@ -276,6 +276,21 @@ export function classifyDbError(err: unknown): ClassifiedError {
     };
   }
 
+  // 22P02 — invalid input syntax for a column type. Most common: passing a
+  // non-numeric entityId to a loader that selects against an integer column
+  // (e.g. /print/render with entityId="2024-12-01" against invoices.id). The
+  // old fallback was a generic 500 + "حدث خطأ غير متوقع" which left the user
+  // staring at the toast with no recovery path. 400 + a precise message lets
+  // them fix the input instead of pinging support.
+  if (code === "22P02" || msg.includes("invalid input syntax")) {
+    return {
+      status: 400,
+      code: "VALIDATION_ERROR",
+      message: "قيمة غير صالحة لنوع البيانات — تحقّق من المعرّف أو التاريخ المُدخل",
+      fix: "تأكد من اختيار سجل صالح من القائمة قبل المتابعة.",
+    };
+  }
+
   if (msg.includes("timeout") || msg.includes("timed out") || code === "57014") {
     return {
       status: 504,
@@ -292,10 +307,19 @@ export function classifyDbError(err: unknown): ClassifiedError {
     };
   }
 
+  // Fallback — return a message that includes a short hint from the actual
+  // error. "حدث خطأ غير متوقع" alone is a black-box for the user; a 60-char
+  // tail of the real message lets them say "the print engine hit X" to
+  // support without needing server logs. Strips secret-looking fragments
+  // (sql, paths, IDs) defensively.
+  const safeTail = msg
+    .replace(/postgres:\/\/[^\s]+/gi, "[db]")
+    .replace(/\/[\w./-]{20,}/g, "[path]")
+    .slice(0, 80);
   return {
     status: 500,
     code: "SERVER_ERROR",
-    message: "حدث خطأ غير متوقع، يرجى المحاولة لاحقاً",
+    message: `حدث خطأ غير متوقع${safeTail ? ` — ${safeTail}` : ""}، يرجى المحاولة لاحقاً`,
   };
 }
 

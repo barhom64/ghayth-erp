@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#
+# .githooks/post-checkout — auto-run pnpm install when deps changed.
+#
+# Same intent as post-merge, but fires on `git checkout <branch>` /
+# `git switch <branch>`. If switching to a branch that has different
+# deps (new workspace package, bumped lockfile, etc.), reinstall so
+# node_modules + symlinks match the checked-out tree.
+#
+# Args provided by git: $1 = previous HEAD, $2 = new HEAD,
+#                        $3 = 1 if branch checkout, 0 if file checkout.
+# Skip file-level checkouts ($3 = 0) — those don't change deps.
+
+set -e
+
+PREV="$1"
+NEW="$2"
+IS_BRANCH="$3"
+
+[ "$IS_BRANCH" = "1" ] || exit 0
+[ -z "$PREV" ] || [ -z "$NEW" ] && exit 0
+[ "$PREV" = "$NEW" ] && exit 0
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+CHANGED="$(git diff --name-only "$PREV" "$NEW" -- 'package.json' '**/package.json' 'pnpm-lock.yaml' 'pnpm-workspace.yaml' 2>/dev/null || true)"
+
+if [ -n "$CHANGED" ]; then
+  echo "[post-checkout] dependency files changed — running pnpm install:"
+  echo "$CHANGED" | sed 's/^/  - /'
+  pnpm install
+fi

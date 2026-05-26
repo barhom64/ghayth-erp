@@ -11,8 +11,6 @@
  */
 
 import { useState, useMemo, useRef } from "react";
-import { z } from "zod";
-import { useFormContext } from "react-hook-form";
 import { useLocation } from "wouter";
 import { useApiQuery, apiFetch, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -31,8 +29,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Save, Eye, Trash2, Pencil, FileText, Receipt, Tag, Layers } from "lucide-react";
-import { PageHeader, FormShell } from "@workspace/ui-core";
-import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { PageHeader } from "@workspace/ui-core";
 
 const PRINTABLE_ENTITIES = [
   { id: "invoice", label: "فاتورة" },
@@ -80,6 +77,8 @@ interface TemplateRow {
   presetKey: string | null;
   htmlContent: string | null;
   layoutJson: unknown;
+  headerOverride: Record<string, string> | null;
+  footerOverride: Record<string, string> | null;
   isThermal: boolean;
   isDefault: boolean;
   isActive: boolean;
@@ -263,157 +262,29 @@ interface TemplateEditorProps {
   onClose: () => void;
 }
 
-const templateSchema = z.object({
-  name: z.string().min(1, "مطلوب"),
-  entityType: z.string(),
-  branchId: z.number().nullable(),
-  paperSize: z.string(),
-  mode: z.enum(["preset", "html", "visual"]),
-  presetKey: z.string(),
-  htmlContent: z.string(),
-  isDefault: z.boolean(),
-});
-type TemplateForm = z.infer<typeof templateSchema>;
-
-function EditorHeaderActions({
-  templateId,
-  onClose,
-  onDelete,
-}: {
-  templateId: number | null;
-  onClose: () => void;
-  onDelete: () => void;
-}) {
-  const { formState, watch } = useFormContext<TemplateForm>();
-  const name = watch("name");
-  return (
-    <div className="flex gap-2">
-      <Button type="button" variant="outline" onClick={onClose}>إلغاء</Button>
-      {templateId && (
-        <Button type="button" variant="destructive" onClick={onDelete} className="gap-1">
-          <Trash2 className="h-4 w-4" /> حذف
-        </Button>
-      )}
-      <Button type="submit" rateLimitAware disabled={formState.isSubmitting || !name} className="gap-1">
-        <Save className="h-4 w-4" /> حفظ
-      </Button>
-    </div>
-  );
-}
-
-function EntityTypeSelect() {
-  const { watch, setValue } = useFormContext<TemplateForm>();
-  const value = watch("entityType");
-  return (
-    <Select value={value} onValueChange={(v) => setValue("entityType", v, { shouldDirty: true })}>
-      <SelectTrigger><SelectValue /></SelectTrigger>
-      <SelectContent className="max-h-72">
-        {PRINTABLE_ENTITIES.map((e) => (
-          <SelectItem key={e.id} value={e.id}>{e.label}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-function BranchSelect({ branches }: { branches: Array<{ id: number; name: string }> }) {
-  const { watch, setValue } = useFormContext<TemplateForm>();
-  const branchId = watch("branchId");
-  return (
-    <Select
-      value={branchId === null ? "all" : String(branchId)}
-      onValueChange={(v) => setValue("branchId", v === "all" ? null : Number(v), { shouldDirty: true })}
-    >
-      <SelectTrigger><SelectValue /></SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">كل الفروع (افتراضي الشركة)</SelectItem>
-        {branches.map((b) => (
-          <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-function PaperSizeSelect() {
-  const { watch, setValue } = useFormContext<TemplateForm>();
-  const value = watch("paperSize");
-  return (
-    <Select value={value} onValueChange={(v) => setValue("paperSize", v, { shouldDirty: true })}>
-      <SelectTrigger><SelectValue /></SelectTrigger>
-      <SelectContent>
-        {PAPER_SIZES.map((p) => (
-          <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-function IsDefaultSelect() {
-  const { watch, setValue } = useFormContext<TemplateForm>();
-  const value = watch("isDefault");
-  return (
-    <Select value={value ? "1" : "0"} onValueChange={(v) => setValue("isDefault", v === "1", { shouldDirty: true })}>
-      <SelectTrigger><SelectValue /></SelectTrigger>
-      <SelectContent>
-        <SelectItem value="1">نعم (يستخدم تلقائياً)</SelectItem>
-        <SelectItem value="0">لا</SelectItem>
-      </SelectContent>
-    </Select>
-  );
-}
-
-function ModeAndContentTabs({ layout, setLayout }: { layout: VisualBlock[]; setLayout: (next: VisualBlock[]) => void }) {
-  const { watch, setValue, register } = useFormContext<TemplateForm>();
-  const mode = watch("mode");
-  const presetKey = watch("presetKey");
-  return (
-    <Tabs value={mode} onValueChange={(v) => setValue("mode", v as TemplateForm["mode"], { shouldDirty: true })}>
-      <TabsList className="grid grid-cols-3 mb-3">
-        <TabsTrigger value="preset" className="gap-1"><FileText className="h-3 w-3" /> قالب جاهز</TabsTrigger>
-        <TabsTrigger value="html" className="gap-1"><Pencil className="h-3 w-3" /> HTML</TabsTrigger>
-        <TabsTrigger value="visual" className="gap-1"><Layers className="h-3 w-3" /> مرئي</TabsTrigger>
-      </TabsList>
-      <TabsContent value="preset" className="space-y-3">
-        <Label>اختر النمط</Label>
-        <Select value={presetKey} onValueChange={(v) => setValue("presetKey", v, { shouldDirty: true })}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="classic">كلاسيكي</SelectItem>
-            <SelectItem value="modern">عصري</SelectItem>
-            <SelectItem value="compact">مدمج</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          ترويسة الفرع وتذييله يأتيان تلقائياً من إعدادات الفرع. تخصيص الرأس/التذييل المتقدم متاح بعد الحفظ.
-        </p>
-      </TabsContent>
-      <TabsContent value="html" className="space-y-2">
-        <Label>محتوى HTML (يدعم {`{{path.to.value}}`} و {`{{branch.letterhead}}`} و {`{{entity.itemsTable}}`})</Label>
-        <Textarea
-          {...register("htmlContent")}
-          rows={14}
-          className="font-mono text-xs"
-          dir="ltr"
-          placeholder="<div>{{branch.letterhead}}<h2>{{entity.title}}</h2>{{entity.itemsTable}}{{branch.footer}}</div>"
-        />
-        <p className="text-xs text-muted-foreground">
-          متغيرات تلقائية: <code>{`{{branch.letterhead}}`}</code>, <code>{`{{branch.footer}}`}</code>, <code>{`{{entity.itemsTable}}`}</code>, <code>{`{{date.today}}`}</code>
-        </p>
-      </TabsContent>
-      <TabsContent value="visual">
-        <VisualBuilder layout={layout} onChange={setLayout} />
-      </TabsContent>
-    </Tabs>
-  );
-}
-
 function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEditorProps) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const existing = templateId ? templates.find((t) => t.id === templateId) : null;
 
+  const [name, setName] = useState(existing?.name ?? "");
+  const [entityType, setEntityType] = useState(existing?.entityType ?? "invoice");
+  const [branchId, setBranchId] = useState<number | null>(existing?.branchId ?? null);
+  const [paperSize, setPaperSize] = useState(existing?.paperSize ?? "A4");
+  const [mode, setMode] = useState<"preset" | "html" | "visual">(existing?.mode ?? "preset");
+  const [presetKey, setPresetKey] = useState(existing?.presetKey ?? "classic");
+  const [htmlContent, setHtmlContent] = useState(existing?.htmlContent ?? "");
+  const [isDefault, setIsDefault] = useState(existing?.isDefault ?? false);
+
+  // Cliché overrides — when set, these win over the branch's letterhead so a
+  // single branch can host multiple template "looks" (ZATCA invoice with
+  // company logo vs internal voucher with a personalised header).
+  const initialHeaderOv = (existing?.headerOverride as Record<string, string> | undefined) ?? {};
+  const initialFooterOv = (existing?.footerOverride as Record<string, string> | undefined) ?? {};
+  const [overrideLogoUrl, setOverrideLogoUrl] = useState(initialHeaderOv.logoUrl ?? "");
+  const [overrideCompanyName, setOverrideCompanyName] = useState(initialHeaderOv.companyName ?? "");
+  const [overrideTaxNumber, setOverrideTaxNumber] = useState(initialHeaderOv.taxNumber ?? "");
+  const [overrideFooterText, setOverrideFooterText] = useState(initialFooterOv.text ?? "");
   const [layout, setLayout] = useState<VisualBlock[]>(() => {
     const initial = existing?.layoutJson;
     return Array.isArray(initial) ? (initial as VisualBlock[]) : [
@@ -427,20 +298,9 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
     ];
   });
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const defaultValues: TemplateForm = {
-    name: existing?.name ?? "",
-    entityType: existing?.entityType ?? "invoice",
-    branchId: existing?.branchId ?? null,
-    paperSize: existing?.paperSize ?? "A4",
-    mode: existing?.mode ?? "preset",
-    presetKey: existing?.presetKey ?? "classic",
-    htmlContent: existing?.htmlContent ?? "",
-    isDefault: existing?.isDefault ?? false,
-  };
-
-  async function preview(entityType: string) {
+  async function preview() {
     try {
       const blob = await apiFetch<Blob>(`/print/preview`, {
         method: "POST",
@@ -459,12 +319,28 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
     }
   }
 
-  async function save(values: TemplateForm) {
+  async function save() {
+    setSaving(true);
     try {
       const body = {
-        ...values,
-        layoutJson: values.mode === "visual" ? layout : null,
-        isThermal: values.paperSize.startsWith("THERMAL"),
+        name,
+        entityType,
+        branchId,
+        paperSize,
+        mode,
+        presetKey,
+        htmlContent,
+        layoutJson: mode === "visual" ? layout : null,
+        headerOverride: (overrideLogoUrl || overrideCompanyName || overrideTaxNumber)
+          ? {
+              ...(overrideLogoUrl && { logoUrl: overrideLogoUrl }),
+              ...(overrideCompanyName && { companyName: overrideCompanyName }),
+              ...(overrideTaxNumber && { taxNumber: overrideTaxNumber }),
+            }
+          : null,
+        footerOverride: overrideFooterText ? { text: overrideFooterText } : null,
+        isDefault,
+        isThermal: paperSize.startsWith("THERMAL"),
       };
       if (templateId) {
         await apiFetch(`/print/templates/${templateId}`, {
@@ -482,26 +358,40 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
       onClose();
     } catch (err) {
       toast({ title: "فشل الحفظ", description: (err as ApiError).message, variant: "destructive" });
-      throw err;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove() {
+    if (!templateId) return;
+    if (!confirm("هل أنت متأكد من حذف هذا القالب؟")) return;
+    try {
+      await apiFetch(`/print/templates/${templateId}`, { method: "DELETE" });
+      toast({ title: "تم الحذف" });
+      qc.invalidateQueries({ queryKey: ["print-templates"] });
+      onClose();
+    } catch {
+      toast({ title: "فشل الحذف", variant: "destructive" });
     }
   }
 
   return (
-    <FormShell
-      schema={templateSchema}
-      defaultValues={defaultValues}
-      hideSubmit
-      className="space-y-4 p-4"
-      onSubmit={save}
-    >
+    <div className="space-y-4 p-4">
       <PageHeader
         title={templateId ? "تعديل قالب طباعة" : "قالب طباعة جديد"}
         action={
-          <EditorHeaderActions
-            templateId={templateId}
-            onClose={onClose}
-            onDelete={() => setConfirmingDelete(true)}
-          />
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>إلغاء</Button>
+            {templateId && (
+              <Button variant="destructive" onClick={remove} className="gap-1">
+                <Trash2 className="h-4 w-4" /> حذف
+              </Button>
+            )}
+            <Button onClick={save} disabled={saving || !name} className="gap-1">
+              <Save className="h-4 w-4" /> حفظ
+            </Button>
+          </div>
         }
       />
 
@@ -511,25 +401,59 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
             <CardTitle className="text-base">الإعدادات الأساسية</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <NameField />
+            <div className="space-y-1">
+              <Label>اسم القالب</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثلاً: فاتورة فرع جدة الكلاسيكية" />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>الكيان</Label>
-                <EntityTypeSelect />
+                <Select value={entityType} onValueChange={setEntityType}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {PRINTABLE_ENTITIES.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>{e.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label>الفرع</Label>
-                <BranchSelect branches={branches} />
+                <Select
+                  value={branchId === null ? "all" : String(branchId)}
+                  onValueChange={(v) => setBranchId(v === "all" ? null : Number(v))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل الفروع (افتراضي الشركة)</SelectItem>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>حجم الورق</Label>
-                <PaperSizeSelect />
+                <Select value={paperSize} onValueChange={setPaperSize}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PAPER_SIZES.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label>افتراضي</Label>
-                <IsDefaultSelect />
+                <Select value={isDefault ? "1" : "0"} onValueChange={(v) => setIsDefault(v === "1")}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">نعم (يستخدم تلقائياً)</SelectItem>
+                    <SelectItem value="0">لا</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardContent>
@@ -540,64 +464,141 @@ function TemplateEditor({ templateId, templates, branches, onClose }: TemplateEd
             <CardTitle className="text-base">طريقة البناء</CardTitle>
           </CardHeader>
           <CardContent>
-            <ModeAndContentTabs layout={layout} setLayout={setLayout} />
+            {/* as-any-reason: justified-jsx-generic - Tabs onValueChange yields string; mode state is a literal-union; runtime values are guaranteed to be one of the three TabsTrigger values below */}
+            <Tabs value={mode} onValueChange={(v) => setMode(v as any)}>
+              <TabsList className="grid grid-cols-3 mb-3">
+                <TabsTrigger value="preset" className="gap-1"><FileText className="h-3 w-3" /> قالب جاهز</TabsTrigger>
+                <TabsTrigger value="html" className="gap-1"><Pencil className="h-3 w-3" /> HTML</TabsTrigger>
+                <TabsTrigger value="visual" className="gap-1"><Layers className="h-3 w-3" /> مرئي</TabsTrigger>
+              </TabsList>
+              <TabsContent value="preset" className="space-y-3">
+                <Label>اختر النمط</Label>
+                <Select value={presetKey} onValueChange={setPresetKey}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="classic">كلاسيكي</SelectItem>
+                    <SelectItem value="modern">عصري</SelectItem>
+                    <SelectItem value="compact">مدمج</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  ترويسة الفرع وتذييله يأتيان تلقائياً من إعدادات الفرع. تخصيص الرأس/التذييل المتقدم متاح بعد الحفظ.
+                </p>
+              </TabsContent>
+              <TabsContent value="html" className="space-y-2">
+                <Label>محتوى HTML (يدعم {`{{path.to.value}}`} و {`{{branch.letterhead}}`} و {`{{entity.itemsTable}}`})</Label>
+                <Textarea
+                  value={htmlContent}
+                  onChange={(e) => setHtmlContent(e.target.value)}
+                  rows={14}
+                  className="font-mono text-xs"
+                  dir="ltr"
+                  placeholder="<div>{{branch.letterhead}}<h2>{{entity.title}}</h2>{{entity.itemsTable}}{{branch.footer}}</div>"
+                />
+                <p className="text-xs text-muted-foreground">
+                  متغيرات تلقائية: <code>{`{{branch.letterhead}}`}</code>, <code>{`{{branch.footer}}`}</code>, <code>{`{{entity.itemsTable}}`}</code>, <code>{`{{date.today}}`}</code>
+                </p>
+              </TabsContent>
+              <TabsContent value="visual">
+                <VisualBuilder layout={layout} onChange={setLayout} />
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </div>
 
-      <PreviewCard previewHtml={previewHtml} onGenerate={preview} />
-
-      {templateId && (
-        <ConfirmDeleteDialog
-          open={confirmingDelete}
-          onOpenChange={setConfirmingDelete}
-          entity={{ type: "print_template", id: templateId, name: existing?.name ?? "" }}
-          deletePath={`/print/templates/${templateId}`}
-          invalidateKeys={[["print-templates"]]}
-          onDeleted={() => {
-            setConfirmingDelete(false);
-            onClose();
-          }}
-        />
-      )}
-    </FormShell>
-  );
-}
-
-function NameField() {
-  const { register } = useFormContext<TemplateForm>();
-  return (
-    <div className="space-y-1">
-      <Label>اسم القالب</Label>
-      <Input {...register("name")} placeholder="مثلاً: فاتورة فرع جدة الكلاسيكية" />
-    </div>
-  );
-}
-
-function PreviewCard({ previewHtml, onGenerate }: { previewHtml: string | null; onGenerate: (entityType: string) => void }) {
-  const { watch } = useFormContext<TemplateForm>();
-  const entityType = watch("entityType");
-  return (
-    <Card>
-      <CardHeader className="pb-2 flex flex-row items-center justify-between">
-        <CardTitle className="text-base flex items-center gap-2"><Eye className="h-4 w-4" /> المعاينة</CardTitle>
-        <Button type="button" size="sm" variant="outline" onClick={() => onGenerate(entityType)}>توليد المعاينة</Button>
-      </CardHeader>
-      <CardContent>
-        {previewHtml ? (
-          <iframe
-            srcDoc={previewHtml}
-            title="preview"
-            className="w-full border rounded bg-white"
-            style={{ minHeight: 600 }}
-          />
-        ) : (
-          <div className="p-8 text-center text-sm text-muted-foreground border border-dashed rounded">
-            اضغط "توليد المعاينة" لرؤية شكل القالب ببيانات تجريبية.
+      {/* كليشة مخصصة — تتجاوز إعدادات الفرع لهذا القالب فقط */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            كليشتك المخصصة (اختيارية)
+          </CardTitle>
+          <p className="text-xs text-muted-foreground pt-1">
+            عند تعبئة أي حقل هنا، يتجاوز إعدادات الفرع الافتراضية لهذا القالب فقط.
+            اتركها فارغة لاستخدام كليشة فرعك الحالية.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">رابط الشعار (Logo URL)</Label>
+              <Input
+                value={overrideLogoUrl}
+                onChange={(e) => setOverrideLogoUrl(e.target.value)}
+                placeholder="https://example.com/logo.png أو /uploads/logo.png"
+                dir="ltr"
+                className="text-xs"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                ارفع الشعار من إعدادات → ملف الفروع → الشعار. أو الصق رابط مباشر.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">اسم الجهة في الترويسة</Label>
+              <Input
+                value={overrideCompanyName}
+                onChange={(e) => setOverrideCompanyName(e.target.value)}
+                placeholder={"مثلاً: مؤسسة الدور التجارية (يتجاوز اسم الفرع)"}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">الرقم الضريبي (يظهر في الترويسة)</Label>
+              <Input
+                value={overrideTaxNumber}
+                onChange={(e) => setOverrideTaxNumber(e.target.value)}
+                placeholder="300000000000003"
+                dir="ltr"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">نص التذييل</Label>
+              <Input
+                value={overrideFooterText}
+                onChange={(e) => setOverrideFooterText(e.target.value)}
+                placeholder={"مثلاً: شكراً لتعاملكم معنا — للاستفسار: 920000000"}
+              />
+            </div>
           </div>
-        )}
-      </CardContent>
-    </Card>
+          {overrideLogoUrl && (
+            <div className="border rounded p-3 bg-muted/30">
+              <Label className="text-xs">معاينة الشعار:</Label>
+              <div className="mt-2 flex items-center justify-center bg-white border rounded p-2">
+                <img
+                  src={overrideLogoUrl}
+                  alt="معاينة الشعار"
+                  style={{ maxHeight: 80, maxWidth: 240 }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2 flex flex-row items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2"><Eye className="h-4 w-4" /> المعاينة</CardTitle>
+          <Button size="sm" variant="outline" onClick={preview}>توليد المعاينة</Button>
+        </CardHeader>
+        <CardContent>
+          {previewHtml ? (
+            <iframe
+              srcDoc={previewHtml}
+              title="preview"
+              className="w-full border rounded bg-white"
+              style={{ minHeight: 600 }}
+            />
+          ) : (
+            <div className="p-8 text-center text-sm text-muted-foreground border border-dashed rounded">
+              اضغط "توليد المعاينة" لرؤية شكل القالب ببيانات تجريبية.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -739,7 +740,7 @@ function VisualBuilder({ layout, onChange }: VisualBuilderProps) {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); removeBlock(block.id); }}
-                  className="text-red-600 hover:text-red-700 px-1"
+                  className="text-status-error-foreground hover:text-status-error-foreground px-1"
                   title="حذف"
                 ><Trash2 className="h-3 w-3" /></button>
               </div>
@@ -836,7 +837,7 @@ function Inspector({ block, onChange }: { block: VisualBlock; onChange: (patch: 
             <button
               type="button"
               onClick={() => onChange({ items: block.items.filter((_, j) => j !== i) } as Partial<VisualBlock>)}
-              className="text-red-600 px-1"
+              className="text-status-error-foreground px-1"
             ><Trash2 className="h-3 w-3" /></button>
           </div>
         ))}
@@ -897,7 +898,7 @@ function Inspector({ block, onChange }: { block: VisualBlock; onChange: (patch: 
               <button
                 type="button"
                 onClick={() => onChange({ items: block.items.filter((_, j) => j !== i) } as Partial<VisualBlock>)}
-                className="text-red-600 text-xs"
+                className="text-status-error-foreground text-xs"
               >حذف</button>
             </div>
           </div>
@@ -933,7 +934,7 @@ function Inspector({ block, onChange }: { block: VisualBlock; onChange: (patch: 
             <button
               type="button"
               onClick={() => onChange({ parties: block.parties.filter((_, j) => j !== i) } as Partial<VisualBlock>)}
-              className="text-red-600 px-1"
+              className="text-status-error-foreground px-1"
             ><Trash2 className="h-3 w-3" /></button>
           </div>
         ))}

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { z } from "zod";
 import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
 import { formatCurrency } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,26 +9,25 @@ import {
   type DataTableColumn,
   AdvancedFilters,
   useFilters,
-  FormShell,
-  FormTextField,
 } from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { AlertTriangle, DollarSign, Clock, Zap, XCircle, MinusCircle } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
-
-const bulkWaiveSchema = z.object({
-  reason: z.string().min(1, "سبب الإعفاء مطلوب"),
-});
 
 export default function UmrahPenalties() {
   const [, navigate] = useLocation();
@@ -51,6 +49,7 @@ export default function UmrahPenalties() {
   // so the UI can surface a non-atomic summary instead of a binary toast.
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkReason, setBulkReason] = useState("");
   const bulkWaiveMutation = useApiMutation<
     { successCount: number; successIds: number[]; totalWaivedAmount: number; skipped: { id: number; reason: string }[]; errors: { id: number; error: string }[] },
     { penaltyIds: number[]; reason: string }
@@ -118,27 +117,28 @@ export default function UmrahPenalties() {
     },
   ];
 
-  const handleBulkSubmit = async (reason: string) => {
-    await new Promise<void>((resolve, reject) => {
-      bulkWaiveMutation.mutate(
-        { penaltyIds: selectedIds, reason },
-        {
-          onSuccess: (res) => {
-            const parts = [
-              `أُعفيت ${res.successCount} غرامة`,
-              res.totalWaivedAmount > 0 ? `بمبلغ ${formatCurrency(res.totalWaivedAmount)} ر.س` : null,
-              res.skipped.length > 0 ? `تخطّي ${res.skipped.length}` : null,
-              res.errors.length > 0 ? `أخطاء ${res.errors.length}` : null,
-            ].filter(Boolean);
-            toast({ title: parts.join(" • ") });
-            setBulkOpen(false);
-            setSelectedIds([]);
-            resolve();
-          },
-          onError: () => reject(),
+  const handleBulkSubmit = () => {
+    if (!bulkReason.trim()) {
+      toast({ variant: "destructive", title: "سبب الإعفاء مطلوب" });
+      return;
+    }
+    bulkWaiveMutation.mutate(
+      { penaltyIds: selectedIds, reason: bulkReason.trim() },
+      {
+        onSuccess: (res) => {
+          const parts = [
+            `أُعفيت ${res.successCount} غرامة`,
+            res.totalWaivedAmount > 0 ? `بمبلغ ${formatCurrency(res.totalWaivedAmount)} ر.س` : null,
+            res.skipped.length > 0 ? `تخطّي ${res.skipped.length}` : null,
+            res.errors.length > 0 ? `أخطاء ${res.errors.length}` : null,
+          ].filter(Boolean);
+          toast({ title: parts.join(" • ") });
+          setBulkOpen(false);
+          setBulkReason("");
+          setSelectedIds([]);
         },
-      );
-    });
+      },
+    );
   };
 
   return (
@@ -211,30 +211,36 @@ export default function UmrahPenalties() {
         onRowClick={(row) => navigate(`/umrah/penalties/${row.id}`)}
       />
 
-      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
-        <DialogContent dir="rtl">
-          <DialogHeader>
-            <DialogTitle>إعفاء جماعي للغرامات</DialogTitle>
-            <DialogDescription>
+      <AlertDialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>إعفاء جماعي للغرامات</AlertDialogTitle>
+            <AlertDialogDescription>
               ستُعفى {selectedIds.length} غرامة. الصفوف بحالة "مدفوع" أو "معفاة" تُتخطى تلقائياً.
               قيد عكسي مالي يُرحَّل لكل صف ناجح عبر `postPenaltyWaiverGL` المركزي.
-            </DialogDescription>
-          </DialogHeader>
-          <FormShell
-            schema={bulkWaiveSchema}
-            defaultValues={{ reason: "" }}
-            submitLabel={bulkWaiveMutation.isPending ? "جارٍ الإعفاء..." : "تأكيد الإعفاء"}
-            secondaryActions={
-              <Button type="button" variant="outline" onClick={() => setBulkOpen(false)}>إلغاء</Button>
-            }
-            onSubmit={async (values) => {
-              await handleBulkSubmit(values.reason.trim());
-            }}
-          >
-            <FormTextField name="reason" label="سبب الإعفاء" placeholder="مثال: قرار إداري" required />
-          </FormShell>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="bulk-waive-reason">سبب الإعفاء <span className="text-status-error-foreground">*</span></Label>
+            <Input
+              id="bulk-waive-reason"
+              value={bulkReason}
+              onChange={(e) => setBulkReason(e.target.value)}
+              placeholder="مثال: قرار إداري"
+              autoFocus
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <GuardedButton perm="umrah:approve"
+              onClick={(e: React.MouseEvent) => { e.preventDefault(); handleBulkSubmit(); }}
+              disabled={bulkWaiveMutation.isPending}
+            >
+              {bulkWaiveMutation.isPending ? "جارٍ الإعفاء..." : "تأكيد الإعفاء"}
+            </GuardedButton>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

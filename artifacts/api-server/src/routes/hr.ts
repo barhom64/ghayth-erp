@@ -12,6 +12,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { haversineKm } from "../lib/algorithms.js";
@@ -28,7 +29,6 @@ import {
   currentYear,
   currentMonthPadded,
   combineDateAndShiftTime,
-  generateRef,
   toDateISO,
   roundTo2,
   softDeleteJournalEntry,
@@ -2608,8 +2608,13 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
 
     const earningComponents = salaryComponents.filter((c) => c.type === 'earning' && !c.isGosi);
 
+    // Pull departmentId alongside the basics so the payroll GL post
+    // can carry it through to journal_lines.departmentId — the
+    // dimensional field that makes per-department payroll cost
+    // reports possible.
     const assignments = await rawQuery<Record<string, unknown>>(
-      `SELECT ea.id AS "assignmentId", ea."employeeId", ea.salary, ea."branchId"
+      `SELECT ea.id AS "assignmentId", ea."employeeId", ea.salary, ea."branchId",
+              ea."departmentId"
        FROM employee_assignments ea
        WHERE ea."companyId" = $1 AND ea.status = 'active'`,
       [scope.companyId]
@@ -2709,6 +2714,9 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       gross: number; gosiEmployee: number; gosiEmployer: number;
       lateDeduction: number; absenceDeduction: number; violationDeduction: number;
       loanDeduction: number; overtime: number; overtimeHours: number; net: number;
+      // Departmental dimension carried through to journal_lines.departmentId
+      // on the per-employee payroll breakdown.
+      departmentId: number | null; branchId: number | null;
     }[] = [];
 
     for (const asn of assignments) {
@@ -2769,6 +2777,8 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
         basic, housingAllowance, transportAllowance, gross,
         gosiEmployee, gosiEmployer, lateDeduction, absenceDeduction,
         violationDeduction, loanDeduction, overtime, overtimeHours, net,
+        departmentId: asn.departmentId != null ? Number(asn.departmentId) : null,
+        branchId: asn.branchId != null ? Number(asn.branchId) : null,
       });
     }
 
@@ -2878,6 +2888,21 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
           totalBankPayout,
           totalGosiPayable,
           totalOtherDeductions,
+          // Per-employee breakdown — the engine splits salary + OT +
+          // GOSI debit lines per employee with departmentId stamped
+          // on each, so payroll cost is dimensional. Liabilities stay
+          // aggregated.
+          breakdown: lines.map((l) => ({
+            employeeId: l.employeeId,
+            departmentId: l.departmentId,
+            branchId: l.branchId,
+            // Use the GROSS (basic + allowances) as the salary-expense
+            // basis so the per-employee split matches the totalGross
+            // aggregate the engine computes from credit liabilities.
+            basic: l.gross,
+            overtime: l.overtime,
+            gosiEmployer: l.gosiEmployer,
+          })),
         }
       );
     } catch (journalErr) {
@@ -4071,8 +4096,17 @@ router.post("/official-letters", authorize({ feature: "hr.organization", action:
       });
     }
 
-    const [seqRow] = await rawQuery<Record<string, unknown>>(`SELECT nextval('letter_number_seq') AS seq`).catch((e) => { logger.error(e, "letter sequence query failed"); return [{ seq: Date.now() % 1000000 }]; });
-    const letterRef = generateRef("LTR", seqRow.seq as string | number);
+    // Numbering center (Issue #1141) — official letter number from
+    // the central authority. Scheme: `hr.official_letter`.
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "hr",
+      entityKey: "official_letter",
+      entityTable: "official_letters",
+      actorId: scope.userId,
+    });
+    const letterRef = issued.number;
 
     let insertId!: number;
     await withTransaction(async (client) => {
@@ -4082,6 +4116,10 @@ router.post("/official-letters", authorize({ feature: "hr.organization", action:
         [scope.companyId, Number(employeeId), type ?? "general", String(subject).trim(), String(content).trim(), status ?? "draft", scope.activeAssignmentId, letterRef, scope.branchId || null]
       );
       insertId = ins.rows[0].id;
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertId, issued.assignmentId]
+      );
     });
 
     const approvalResult = await initiateApprovalChain({

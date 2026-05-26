@@ -21,6 +21,7 @@ import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
 import { INCIDENT_LABELS, MEMO_ACTION_LABELS } from "@/lib/hr-type-maps";
+import { PrintButton } from "@/components/shared/print-button";
 
 // HR-U3 — حُذفت STATUS_STYLES المحلية. حالات المذكرات التأديبية موحّدة في
 // STATUS_MAP.memo + STATUS_MAP.shared (draft/expired).
@@ -467,7 +468,12 @@ export default function DisciplineMemoDetailPage() {
         hideTabs={hideTabs}
         isLoading={isLoading}
         error={isError ? true : undefined}
-        actions={headerActions}
+        actions={
+        <div className="flex items-center gap-2">
+          headerActions
+          <PrintButton entityType="discipline_memo" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
+      }
         overview={overview}
       />
       <PromptDialog

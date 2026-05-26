@@ -1,24 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { useRoute } from "wouter";
-import { z } from "zod";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  FormShell,
-  FormTextField,
-  FormTextareaField,
-  FormGrid,
-} from "@workspace/ui-core";
-import { GuardedButton } from "@/components/shared/permission-gate";
-import { ArrowLeftRight as SettleIcon } from "lucide-react";
 import {
   KeyRound,
   DollarSign,
@@ -37,6 +21,7 @@ import {
   type StageStep,
 } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { PrintButton } from "@/components/shared/print-button";
 
 const timelineIcons: Record<string, any> = {
   created: KeyRound,
@@ -85,47 +70,28 @@ export default function CustodyDetailPage() {
   const id = params?.id;
   const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["custody-detail", id || ""],
-    `/finance/custodies/${id}`,
+    id ? `/finance/custodies/${id}` : null,
     !!id,
   );
 
-  const [showSettle, setShowSettle] = useState(false);
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("custody", id || "");
 
   const progressPercent =
     data?.amount > 0 ? Math.min(100, Math.round((data.settledAmount / data.amount) * 100)) : 0;
   const lifecycleSteps = buildLifecycleSteps(data?.status);
 
-  const canSettle =
-    data &&
-    Number(data.remainingAmount ?? 0) > 0 &&
-    !["pending", "rejected", "settled"].includes(data.status);
-
   const overview = (
     <>
       <Card className="border-0 shadow-sm">
-        <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex-1 min-w-[200px]">
-            <p className="text-xs font-medium text-muted-foreground mb-2">
-              دورة تسوية العهدة
+        <CardContent className="p-4">
+          <p className="text-xs font-medium text-muted-foreground mb-2">
+            دورة تسوية العهدة
+          </p>
+          <ProcessStages steps={lifecycleSteps} />
+          {data?.daysOverdue > 0 && (
+            <p className="text-xs text-status-error-foreground mt-2">
+              ⚠️ متأخرة بـ {data.daysOverdue} يوم عن تاريخ الإرجاع المتوقع
             </p>
-            <ProcessStages steps={lifecycleSteps} />
-            {data?.daysOverdue > 0 && (
-              <p className="text-xs text-status-error-foreground mt-2">
-                ⚠️ متأخرة بـ {data.daysOverdue} يوم عن تاريخ الإرجاع المتوقع
-              </p>
-            )}
-          </div>
-          {canSettle && id && (
-            <GuardedButton
-              perm="finance.custodies:create"
-              size="sm"
-              onClick={() => setShowSettle(true)}
-              className="gap-1.5"
-            >
-              <SettleIcon className="h-4 w-4" />
-              تسوية العهدة
-            </GuardedButton>
           )}
         </CardContent>
       </Card>
@@ -340,20 +306,8 @@ export default function CustodyDetailPage() {
   );
 
   return (
-    <>
-      {showSettle && id && data && (
-        <SettleCustodyByIdDialog
-          custodyId={Number(id)}
-          ref_={data.ref ?? `#${id}`}
-          remaining={Number(data.remainingAmount ?? 0)}
-          onClose={() => setShowSettle(false)}
-          onSettled={() => {
-            setShowSettle(false);
-            refetch();
-          }}
-        />
-      )}
     <DetailPageLayout
+      actions={<PrintButton entityType="custody" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
       title={data?.ref ? `عهدة ${data.ref}` : "العهدة"}
       subtitle={data?.description || data?.purpose || undefined}
       backPath="/finance/custodies"
@@ -371,83 +325,6 @@ export default function CustodyDetailPage() {
       extraTabs={registryExtraTabs}
       hideTabs={registryHideTabs}
     />
-    </>
-  );
-}
-
-// Settle a single custody via /custodies/:id/settle — alternative to
-// the bulk ref-based /custodies/settle used on the list page. Since we
-// already have the id from the URL params, this is the direct path.
-const settleByIdSchema = (max: number) =>
-  z.object({
-    amount: z.coerce
-      .number()
-      .positive("المبلغ يجب أن يكون موجباً")
-      .max(max, `لا يمكن تسوية أكثر من المتبقي (${max})`),
-    description: z.string().optional(),
-  });
-
-function SettleCustodyByIdDialog({
-  custodyId,
-  ref_,
-  remaining,
-  onClose,
-  onSettled,
-}: {
-  custodyId: number;
-  ref_: string;
-  remaining: number;
-  onClose: () => void;
-  onSettled: () => void;
-}) {
-  const schema = settleByIdSchema(remaining);
-  type Form = z.infer<typeof schema>;
-  const mut = useApiMutation<unknown, Form>(
-    `/finance/custodies/${custodyId}/settle`,
-    "POST",
-    [["custody-detail", String(custodyId)], ["custodies"]],
-    { successMessage: "تمت تسوية العهدة" },
-  );
-
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent dir="rtl" className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>تسوية العهدة {ref_}</DialogTitle>
-        </DialogHeader>
-        <div className="rounded-md bg-surface-subtle p-3 text-sm space-y-1 mb-3">
-          <div className="flex justify-between">
-            <span>المتبقي للتسوية:</span>
-            <span className="font-semibold text-status-info-foreground">
-              {remaining.toLocaleString("ar-SA")} ر.س
-            </span>
-          </div>
-        </div>
-        <FormShell
-          schema={schema}
-          defaultValues={{ amount: remaining, description: "" } as Form}
-          submitLabel="حفظ التسوية"
-          secondaryActions={
-            <Button type="button" variant="outline" onClick={onClose}>
-              إلغاء
-            </Button>
-          }
-          onSubmit={async (values) => {
-            await mut.mutateAsync(values);
-            onSettled();
-          }}
-        >
-          <FormGrid cols={1}>
-            <FormTextField name="amount" label="المبلغ" type="number" required />
-          </FormGrid>
-          <FormTextareaField name="description" label="ملاحظات" rows={2} />
-          <p className="text-xs text-muted-foreground">
-            ستُنشأ قيود محاسبية تُغلق العهدة جزئياً أو كلياً حسب المبلغ. التسوية الكاملة تنقل
-            الحالة إلى "مسوّاة"؛ التسوية الجزئية تبقي الباقي مفتوحاً.
-          </p>
-        </FormShell>
-      </DialogContent>
-    </Dialog>
   );
 }
 

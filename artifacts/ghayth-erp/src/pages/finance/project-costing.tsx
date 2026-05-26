@@ -11,20 +11,13 @@ import {
   PageShell,
   FormShell,
   FormNumberField,
-  FormTextField,
   FormTextareaField,
   FormDateField,
   FormSelectField,
   FormGrid,
 } from "@workspace/ui-core";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { formatCurrency, todayLocal } from "@/lib/formatters";
-import { Plus, FolderPlus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 
 // projectId stays a string until the submit handler casts to number.
@@ -46,20 +39,6 @@ const CATEGORY_OPTIONS = [
   { value: "materials", label: "مواد" },
 ];
 
-// Creating a project uses the finance-hardening endpoint POST
-// /finance/projects (separate from /projects which is the core
-// projects module — finance only tracks budgets vs. journal
-// entries tagged with projectId).
-const projectSchema = z.object({
-  name: z.string().trim().min(1, "اسم المشروع مطلوب"),
-  description: z.string().optional(),
-  budget: z.coerce.number().nonnegative("الميزانية لا يمكن أن تكون سالبة"),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  ref: z.string().optional(),
-});
-type ProjectForm = z.infer<typeof projectSchema>;
-
 type Project = {
   id: number;
   ref: string;
@@ -78,13 +57,6 @@ export default function ProjectCostingPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const [showAddCost, setShowAddCost] = useState(false);
-  const [showCreateProject, setShowCreateProject] = useState(false);
-  const createProjectMut = useApiMutation<unknown, ProjectForm>(
-    "/finance/projects",
-    "POST",
-    [["projects-finance"]],
-    { successMessage: "تم إنشاء المشروع" },
-  );
   // FIN-010: the cost is recorded by POST /projects/:id/costs (projects.ts) —
   // there is no POST under /finance/projects/:id/costs (finance-hardening
   // exposes only the GET), so the old URL 404'd on every "add cost".
@@ -127,21 +99,10 @@ export default function ProjectCostingPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "تكاليف المشاريع" }]}
       loading={isLoading}
       actions={
-        <div className="flex gap-2">
-          <GuardedButton
-            perm="finance:create"
-            variant="outline"
-            onClick={() => setShowCreateProject(true)}
-            className="gap-1"
-          >
-            <FolderPlus className="h-4 w-4" />
-            مشروع جديد
-          </GuardedButton>
-          <GuardedButton perm="finance:create" onClick={() => setShowAddCost(true)} disabled={list.length === 0}>
-            <Plus className="h-4 w-4 ms-2" />
-            تسجيل تكلفة
-          </GuardedButton>
-        </div>
+        <GuardedButton perm="finance:create" onClick={() => setShowAddCost(true)} disabled={list.length === 0}>
+          <Plus className="h-4 w-4 ml-2" />
+          تسجيل تكلفة
+        </GuardedButton>
       }
     >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -213,49 +174,6 @@ export default function ProjectCostingPage() {
           </div>
         </Card>
       )}
-
-      <Dialog open={showCreateProject} onOpenChange={setShowCreateProject}>
-        <DialogContent dir="rtl" className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FolderPlus className="h-4 w-4" />
-              مشروع جديد
-            </DialogTitle>
-          </DialogHeader>
-          <FormShell
-            schema={projectSchema}
-            defaultValues={{
-              name: "",
-              description: "",
-              budget: 0,
-              startDate: "",
-              endDate: "",
-              ref: "",
-            }}
-            submitLabel="إنشاء المشروع"
-            secondaryActions={
-              <Button type="button" variant="outline" onClick={() => setShowCreateProject(false)}>
-                إلغاء
-              </Button>
-            }
-            onSubmit={async (values) => {
-              await createProjectMut.mutateAsync(values);
-              setShowCreateProject(false);
-            }}
-          >
-            <FormGrid cols={2}>
-              <FormTextField name="name" label="اسم المشروع" required />
-              <FormTextField name="ref" label="الرمز (اختياري)" placeholder="PRJ-…" />
-            </FormGrid>
-            <FormNumberField name="budget" label="الميزانية" />
-            <FormGrid cols={2}>
-              <FormDateField name="startDate" label="تاريخ البداية" />
-              <FormDateField name="endDate" label="تاريخ النهاية" />
-            </FormGrid>
-            <FormTextareaField name="description" label="الوصف" rows={3} />
-          </FormShell>
-        </DialogContent>
-      </Dialog>
 
       {showAddCost && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowAddCost(false)}>

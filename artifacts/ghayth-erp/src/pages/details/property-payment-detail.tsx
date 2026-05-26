@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -133,53 +133,6 @@ export default function PropertyPaymentDetail() {
     return out;
   }, [payment]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!payment) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: payment.ref || `PAY-${id}` },
-          { label: "المبلغ", value: formatCurrency(amount) },
-          ...(typeLabel ? [{ label: "نوع الدفعة", value: typeLabel }] : []),
-          ...(payment.tenantName
-            ? [{ label: "المستأجر", value: payment.tenantName }]
-            : []),
-          ...(payment.unitNumber
-            ? [{ label: "رقم الوحدة", value: payment.unitNumber }]
-            : []),
-          ...(payment.dueDate
-            ? [{ label: "تاريخ الاستحقاق", value: formatDateAr(payment.dueDate) }]
-            : []),
-          ...(payment.paidDate
-            ? [{ label: "تاريخ الدفع", value: formatDateAr(payment.paidDate) }]
-            : []),
-          ...(paymentMethodLabel
-            ? [{ label: "طريقة الدفع", value: paymentMethodLabel }]
-            : []),
-          ...(payment.reference
-            ? [{ label: "الرقم المرجعي", value: payment.reference }]
-            : []),
-          ...(periodLabel
-            ? [{ label: "الفترة المغطاة", value: periodLabel }]
-            : []),
-          { label: "الحالة", value: STATUS_LABELS[payment.status] || payment.status || "-" },
-          { label: "تاريخ الإنشاء", value: formatDateAr(payment.createdAt) },
-        ],
-      },
-    ];
-    if (payment.notes) {
-      sections.push({ kind: "text", title: "ملاحظات", body: payment.notes });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "المستأجر", name: payment.tenantName || "" },
-        { label: "المستلم", name: payment.receivedByName || payment.createdByName || "" },
-      ],
-    });
-    return sections;
-  }, [payment, amount, typeLabel, paymentMethodLabel, periodLabel, id]);
 
   const handleEdit = () => {
     setLocation(`/properties/payments/${id}/edit`);
@@ -368,15 +321,9 @@ export default function PropertyPaymentDetail() {
           <>
             {payment && (
               <EntityPrintButton
-                branchId={payment.branchId}
-                title={payment.ref ? `دفعة ${payment.ref}` : "دفعة"}
-                ref={payment.ref || `PAY-${id}`}
-                date={formatDateAr(payment.paidDate || payment.dueDate || payment.createdAt)}
-                sections={printSections}
                 entityType="receipt_voucher"
                 entityId={payment.id ?? id}
-                formats={["a4", "thermal_80"]}
-              />
+                formats={["a4", "thermal_80"]}/>
             )}
             <GuardedButton
               perm="properties:update"

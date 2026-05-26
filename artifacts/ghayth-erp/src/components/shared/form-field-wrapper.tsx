@@ -1,24 +1,22 @@
 import { ReactNode } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { UnifiedDateInput, type DateInputVariant, type DateInputMode } from "@/components/ui/unified-date-input";
 import { cn } from "@/lib/utils";
 
 /**
- * Shared form field wrappers — what's left of the original collection
- * after the FormShell migration. FormShell + zod from @workspace/ui-core
- * is the canonical create/edit form pattern; this file now only carries
- * the fallback widgets used inside dynamic line-item arrays
- * (invoice/journal/PO lines) where FormShell's named-field primitives
- * don't fit because the array isn't a flat RHF value.
+ * Shared form field wrappers — unify the 30+ custom Label/Input/FieldHint
+ * variations across create pages.
  *
- * Usage (line-item rows only):
- *   <NumberField label="السعر" value={item.unitPrice}
- *                onChange={v => updateItem(i, "unitPrice", v)} />
+ * Usage:
+ *   <FormFieldWrapper label="الاسم" required error={fieldErrors.name}>
+ *     <Input value={form.name} onChange={...} />
+ *   </FormFieldWrapper>
  *
- * For everything else use the FormShell primitives:
- *   <FormTextField name="x" label="..." required />
- *   <FormNumberField name="amount" min="0" step="0.01" />
- *   <FormSelectField name="status" options={STATUS_OPTIONS} />
+ * For quick cases:
+ *   <TextField label="الهاتف" dir="ltr" value={form.phone} onChange={...}
+ *              error={fieldErrors.phone} required />
  */
 
 interface FormFieldWrapperProps {
@@ -118,6 +116,45 @@ export function TextField({
   );
 }
 
+interface TextAreaFieldProps extends Omit<TextFieldProps, "type" | "dir"> {
+  rows?: number;
+}
+
+export function TextAreaField({
+  label,
+  value,
+  onChange,
+  error,
+  required,
+  placeholder,
+  disabled,
+  hint,
+  className,
+  id,
+  rows = 3,
+}: TextAreaFieldProps) {
+  return (
+    <FormFieldWrapper
+      label={label}
+      required={required}
+      error={error}
+      hint={hint}
+      className={className}
+      htmlFor={id}
+    >
+      <Textarea
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        rows={rows}
+        className={fieldErrorClass(error)}
+      />
+    </FormFieldWrapper>
+  );
+}
+
 interface NumberFieldProps {
   label: string;
   value: number | string;
@@ -169,6 +206,73 @@ export function NumberField({
         step={step}
         disabled={disabled}
         className={fieldErrorClass(error)}
+      />
+    </FormFieldWrapper>
+  );
+}
+
+interface DateFieldProps {
+  label: string;
+  value: string;
+  onChange: (iso: string) => void;
+  error?: string;
+  required?: boolean;
+  placeholder?: string;
+  disabled?: boolean;
+  hint?: ReactNode;
+  className?: string;
+  id?: string;
+  variant?: DateInputVariant;
+  mode?: DateInputMode;
+  minDate?: string;
+  maxDate?: string;
+  noFuture?: boolean;
+  noPast?: boolean;
+}
+
+export function DateField({
+  label,
+  value,
+  onChange,
+  error,
+  required,
+  placeholder,
+  disabled,
+  hint,
+  className,
+  id,
+  variant = "default",
+  mode,
+  minDate,
+  maxDate,
+  noFuture,
+  noPast,
+}: DateFieldProps) {
+  return (
+    <FormFieldWrapper
+      label={label}
+      required={required}
+      error={error}
+      hint={hint}
+      className={className}
+      htmlFor={id}
+    >
+      <UnifiedDateInput
+        id={id}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        disabled={disabled}
+        variant={variant}
+        mode={mode}
+        required={required}
+        minDate={minDate}
+        maxDate={maxDate}
+        noFuture={noFuture}
+        noPast={noPast}
+        externalError={error}
+        showDualCalendar
+        showPresets
       />
     </FormFieldWrapper>
   );

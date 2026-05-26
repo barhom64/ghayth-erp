@@ -12,7 +12,9 @@ import {
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, generateRef } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
+import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { logger } from "../lib/logger.js";
 
 const contractsRouter = Router();
@@ -54,20 +56,34 @@ contractsRouter.get("/", authorize({ feature: "hr.contracts", action: "list" }),
   try {
     const scope = req.scope!;
     const { status, employeeId, search } = req.query as Record<string, string>;
-    const params: unknown[] = [scope.companyId];
-    let where = `ec."companyId" = $1 AND ec."deletedAt" IS NULL`;
+    // Honor multi-company + branch picker via buildScopedWhere; ec.branchId is
+    // the branch the contract was signed at, so enforceBranchScope keeps
+    // branch_managers limited to their assigned branches.
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      parseScopeFilters(req),
+      {
+        companyColumn: 'ec."companyId"',
+        branchColumn: 'ec."branchId"',
+        enforceBranchScope: true,
+        softDeleteColumn: 'ec."deletedAt"',
+      },
+    );
+    let where = baseWhere;
+    let paramIdx = nextParamIndex;
 
     if (status) {
       params.push(status);
-      where += ` AND ec."approvalStatus" = $${params.length}`;
+      where += ` AND ec."approvalStatus" = $${paramIdx++}`;
     }
     if (employeeId) {
       params.push(Number(employeeId));
-      where += ` AND ec."employeeId" = $${params.length}`;
+      where += ` AND ec."employeeId" = $${paramIdx++}`;
     }
     if (search?.trim()) {
       params.push(`%${search.trim()}%`);
-      where += ` AND (e.name ILIKE $${params.length} OR ec.ref ILIKE $${params.length})`;
+      where += ` AND (e.name ILIKE $${paramIdx} OR ec.ref ILIKE $${paramIdx})`;
+      paramIdx++;
     }
 
     const rows = await rawQuery<Record<string, unknown>>(
@@ -148,8 +164,17 @@ contractsRouter.post("/", authorize({ feature: "hr.contracts", action: "create" 
       throw new NotFoundError("لا يوجد تعيين فعّال لهذا الموظف. يرجى إنشاء تعيين أولاً.");
     }
 
-    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('contract_number_seq') AS seq`);
-    const ref = generateRef("CTR", seqRow.seq);
+    // Numbering center (Issue #1141) — contract number comes from the
+    // central authority, scoped to (company, branch).
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: data.branchId ?? scope.branchId ?? null,
+      moduleKey: "hr",
+      entityKey: "employee_contract",
+      entityTable: "employee_contracts",
+      actorId: scope.userId,
+    });
+    const ref = issued.number;
 
     const [row] = await rawQuery<Record<string, unknown>>(
       `INSERT INTO employee_contracts (
@@ -167,6 +192,10 @@ contractsRouter.post("/", authorize({ feature: "hr.contracts", action: "create" 
         data.templateId || null, data.branchId || null, data.notes || null, ref,
       ]
     );
+    await rawExecute(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [row.id as number, issued.assignmentId]
+    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to employee_contracts row"));
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_created", entity: "employee_contract", entityId: row.id as number, after: { ref, employeeName: emp.name } });
     // #683 Cluster A — emit event so the notification engine, BI,
@@ -581,8 +610,18 @@ contractsRouter.post("/:id/renew", authorize({ feature: "hr.contracts", action: 
     );
     if (!contract) throw new NotFoundError("الع��د غير موجود");
 
-    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('contract_number_seq') AS seq`);
-    const ref = generateRef("CTR", seqRow.seq);
+    // Numbering center (Issue #1141) — renewal issues a fresh contract
+    // number from the central authority.
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: (contract.branchId as number | null) ?? scope.branchId ?? null,
+      moduleKey: "hr",
+      entityKey: "employee_contract",
+      entityTable: "employee_contracts",
+      actorId: scope.userId,
+      metadata: { renewalOfContractId: id },
+    });
+    const ref = issued.number;
 
     const newStart = contract.endDate || todayISO();
 
@@ -611,6 +650,11 @@ contractsRouter.post("/:id/renew", authorize({ feature: "hr.contracts", action: 
 
       return insertRes.rows[0];
     });
+
+    await rawExecute(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [newContract.id as number, issued.assignmentId]
+    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to renewed contract row"));
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_renewed", entity: "employee_contract", entityId: newContract.id, after: {
       ref, previousRef: contract.ref,

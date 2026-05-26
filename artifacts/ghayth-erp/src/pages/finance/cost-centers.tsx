@@ -1,321 +1,315 @@
 import { useState } from "react";
-import { z } from "zod";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   PageShell,
   DataTable,
   type DataTableColumn,
-  FormShell,
-  FormTextField,
-  FormSelectField,
-  FormGrid,
-  AdvancedFilters,
-  useFilters,
-  applyFilters,
 } from "@workspace/ui-core";
-import { GuardedButton } from "@/components/shared/permission-gate";
-import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
-import { PageStateWrapper } from "@/components/shared/page-state";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, GitBranch } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import { formatCurrency, formatNumber } from "@/lib/formatters";
+import { useToast } from "@/hooks/use-toast";
+import { Layers, Plus, Building, Car, User, Briefcase, MapPin } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
-/**
- * Finance / Cost Centers — list + create + edit + delete.
- *
- * Closes 5 of the unused-backend endpoints the reverse wiring audit
- * (Phase C) surfaced. The backend has lived in
- * `routes/finance-cost-centers.ts` since the Saudi-compliance work
- * landed; no UI ever consumed it, so cost-center allocation could
- * only happen through journal-entry forms that picked from a flat
- * autocomplete. Now the registry is editable directly from the UI.
- *
- * Endpoints wired:
- *   GET    /finance/cost-centers
- *   POST   /finance/cost-centers
- *   GET    /finance/cost-centers/:id      (fetched implicitly via list row)
- *   PATCH  /finance/cost-centers/:id
- *   DELETE /finance/cost-centers/:id
- */
-
-interface CostCenterRow {
+interface CostCenter {
   id: number;
   code: string | null;
   name: string;
-  type: string;
+  type: string | null;
   parentId: number | null;
+  relatedEntityType: string | null;
+  relatedEntityId: number | null;
+  relatedEntityName: string | null;
   allocatedAmount: number | string | null;
   status: string;
-  relatedEntityType: string | null;
-  relatedEntityName: string | null;
+  createdAt: string;
 }
 
-const TYPE_OPTIONS = [
-  { value: "general", label: "عام" },
-  { value: "branch", label: "فرع" },
-  { value: "department", label: "قسم" },
-  { value: "project", label: "مشروع" },
-  { value: "vehicle", label: "مركبة" },
-  { value: "employee", label: "موظف" },
-];
+const ENTITY_TYPE_LABEL: Record<string, string> = {
+  project:    "مشروع",
+  vehicle:    "مركبة",
+  employee:   "موظف",
+  department: "إدارة",
+  branch:     "فرع",
+};
 
-const TYPE_LABEL: Record<string, string> = Object.fromEntries(
-  TYPE_OPTIONS.map((t) => [t.value, t.label]),
-);
-
-// One schema serves both create and edit — `id` is implicit (from the
-// row being edited) and never shows up in the form. Status only flips
-// on edit, so the form's `status` field is wired but hidden in create.
-const costCenterSchema = z.object({
-  code: z.string().trim(),
-  name: z.string().trim().min(1, "اسم مركز التكلفة مطلوب"),
-  type: z.enum(["general", "branch", "department", "project", "vehicle", "employee"]),
-  allocatedAmount: z.coerce.number().nonnegative().optional(),
-});
-type CostCenterForm = z.infer<typeof costCenterSchema>;
-
-const EMPTY_DEFAULTS: CostCenterForm = {
-  code: "",
-  name: "",
-  type: "general",
-  allocatedAmount: 0,
+const ENTITY_TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  project:    Briefcase,
+  vehicle:    Car,
+  employee:   User,
+  department: Layers,
+  branch:     MapPin,
 };
 
 export default function CostCentersPage() {
-  const { data, isLoading, error, refetch } = useApiQuery<{ data: CostCenterRow[] }>(
-    ["finance-cost-centers"],
-    "/finance/cost-centers",
-  );
-  const rows: CostCenterRow[] = data?.data ?? [];
-  const [filters, setFilters] = useFilters();
-  const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState<CostCenterRow | null>(null);
-  const [deleting, setDeleting] = useState<CostCenterRow | null>(null);
+  const { toast } = useToast();
+  const [typeFilter, setTypeFilter] = useState<string>("");
+  const [createOpen, setCreateOpen] = useState(false);
 
-  const filtered = applyFilters(rows, filters, {
-    searchFields: ["code", "name", "relatedEntityName"],
+  const { data, isLoading, isError } = useApiQuery<{ data: CostCenter[] }>(
+    ["cost-centers"],
+    `/finance/cost-centers`,
+  );
+
+  const createMut = useApiMutation("/finance/cost-centers", "POST", [["cost-centers"]]);
+
+  const [form, setForm] = useState({
+    code: "",
+    name: "",
+    type: "department",
+    parentId: "",
+    allocatedAmount: "",
   });
 
-  const columns: DataTableColumn<CostCenterRow>[] = [
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
+
+  const rows = data?.data ?? [];
+
+  const filtered = typeFilter
+    ? rows.filter((r) => (r.relatedEntityType ?? "general") === typeFilter)
+    : rows;
+
+  const linkedCount = rows.filter((r) => r.relatedEntityType).length;
+  const totalAllocated = rows.reduce((s, r) => s + Number(r.allocatedAmount ?? 0), 0);
+  const types = Array.from(new Set(rows.map((r) => r.relatedEntityType ?? "general"))).sort();
+
+  const submitCreate = async () => {
+    if (!form.name.trim()) {
+      toast({ variant: "destructive", title: "اسم مركز التكلفة مطلوب" });
+      return;
+    }
+    try {
+      await createMut.mutateAsync({
+        code: form.code || undefined,
+        name: form.name,
+        type: form.type,
+        parentId: form.parentId ? Number(form.parentId) : null,
+        allocatedAmount: form.allocatedAmount ? Number(form.allocatedAmount) : undefined,
+      });
+      toast({ title: "تم إنشاء مركز التكلفة" });
+      setCreateOpen(false);
+      setForm({ code: "", name: "", type: "department", parentId: "", allocatedAmount: "" });
+    } catch (err) {
+      toast({ variant: "destructive", title: "تعذّر الحفظ", description: getErrorMessage(err) });
+    }
+  };
+
+  const cols: DataTableColumn<CostCenter>[] = [
     {
       key: "code",
       header: "الرمز",
-      className: "font-mono text-xs",
-      ltr: true,
-      render: (r) => r.code || "—",
+      render: (r) => r.code
+        ? <span className="font-mono text-xs">{r.code}</span>
+        : <span className="text-muted-foreground italic text-xs">—</span>,
     },
-    { key: "name", header: "الاسم", className: "font-medium" },
+    {
+      key: "name",
+      header: "الاسم",
+      render: (r) => <span className="font-medium text-sm">{r.name}</span>,
+    },
     {
       key: "type",
       header: "النوع",
-      render: (r) => <Badge variant="outline">{TYPE_LABEL[r.type] ?? r.type}</Badge>,
+      render: (r) => r.type
+        ? <Badge variant="outline" className="text-[10px]">{r.type}</Badge>
+        : <span className="text-muted-foreground italic">—</span>,
     },
     {
-      key: "relatedEntityName",
-      header: "مرتبط بـ",
-      render: (r) =>
-        r.relatedEntityName ? (
-          <span className="text-sm text-muted-foreground">{r.relatedEntityName}</span>
-        ) : (
-          "—"
-        ),
+      key: "linkedEntity",
+      header: "الكيان المرتبط",
+      render: (r) => {
+        if (!r.relatedEntityType) return <span className="text-muted-foreground italic text-xs">—</span>;
+        const Icon = ENTITY_TYPE_ICON[r.relatedEntityType] ?? Building;
+        return (
+          <div className="inline-flex items-center gap-1.5">
+            <Icon className="h-3 w-3 text-muted-foreground" />
+            <Badge variant="outline" className="text-[10px]">
+              {ENTITY_TYPE_LABEL[r.relatedEntityType] ?? r.relatedEntityType}
+            </Badge>
+            {r.relatedEntityName && (
+              <span className="text-xs text-muted-foreground">{r.relatedEntityName}</span>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "allocatedAmount",
-      header: "المبلغ المخصص",
-      render: (r) =>
-        r.allocatedAmount != null && Number(r.allocatedAmount) > 0
-          ? Number(r.allocatedAmount).toLocaleString("ar-SA")
-          : "—",
+      header: "الميزانية المخصصة",
+      render: (r) => {
+        const v = Number(r.allocatedAmount ?? 0);
+        return v === 0
+          ? <span className="text-muted-foreground italic text-xs">—</span>
+          : <span className="font-mono text-xs">{formatCurrency(v)}</span>;
+      },
     },
     {
       key: "status",
       header: "الحالة",
-      render: (r) => (
-        <Badge variant={r.status === "active" ? "default" : "secondary"}>
-          {r.status === "active" ? "نشط" : r.status === "inactive" ? "متوقف" : r.status}
-        </Badge>
-      ),
-    },
-    {
-      key: "actions",
-      header: "",
-      render: (r) => (
-        <div className="flex gap-1 justify-end">
-          <GuardedButton
-            perm="finance.cost_centers:update"
-            size="sm"
-            variant="ghost"
-            onClick={() => setEditing(r)}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </GuardedButton>
-          <GuardedButton
-            perm="finance.cost_centers:delete"
-            size="sm"
-            variant="ghost"
-            className="text-status-error-foreground"
-            onClick={() => setDeleting(r)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </GuardedButton>
-        </div>
-      ),
+      render: (r) => r.status === "active"
+        ? <Badge className="bg-emerald-100 text-emerald-800 text-xs">نشط</Badge>
+        : <Badge variant="outline" className="text-xs">{r.status}</Badge>,
     },
   ];
 
   return (
     <PageShell
       title="مراكز التكلفة"
-      subtitle="إدارة مراكز التكلفة المستخدمة في توجيه القيود المحاسبية"
-      breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "مراكز التكلفة" }]}
+      subtitle="cost_centers — تستخدم كأبعاد محاسبية لتحليل المصاريف والأرباح حسب المشروع / المركبة / الموظف / الإدارة"
+      breadcrumbs={[
+        { href: "/finance", label: "المالية" },
+        { href: "/finance/accounts", label: "الحسابات" },
+        { label: "مراكز التكلفة" },
+      ]}
       actions={
-        <GuardedButton
-          perm="finance.cost_centers:create"
-          onClick={() => setCreating(true)}
-          className="gap-1.5"
-        >
-          <Plus className="h-4 w-4" /> مركز تكلفة جديد
-        </GuardedButton>
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogTrigger asChild>
+            <GuardedButton perm="finance:create">
+              <Plus className="h-4 w-4 me-1" /> مركز جديد
+            </GuardedButton>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>مركز تكلفة جديد</DialogTitle></DialogHeader>
+            <div className="grid gap-3 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">الرمز</Label>
+                  <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="CC-001" />
+                </div>
+                <div>
+                  <Label className="text-xs">النوع</Label>
+                  <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="department">إدارة</SelectItem>
+                      <SelectItem value="project">مشروع</SelectItem>
+                      <SelectItem value="vehicle">مركبة</SelectItem>
+                      <SelectItem value="branch">فرع</SelectItem>
+                      <SelectItem value="general">عام</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">الاسم *</Label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="مثال: نقل قطاع البناء" />
+              </div>
+              <div>
+                <Label className="text-xs">الميزانية المخصصة (اختياري)</Label>
+                <Input type="number" value={form.allocatedAmount} onChange={(e) => setForm({ ...form, allocatedAmount: e.target.value })} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCreateOpen(false)}>إلغاء</Button>
+              <Button onClick={submitCreate} disabled={createMut.isPending}>
+                {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       }
     >
       <FinanceTabsNav />
 
-      <PageStateWrapper isLoading={isLoading} error={error} onRetry={() => refetch()}>
-        <AdvancedFilters values={filters} onChange={setFilters} />
-        <DataTable
-          columns={columns}
-          data={filtered}
-          rowKey={(r) => r.id}
-          emptyMessage="لا توجد مراكز تكلفة — اضغط 'مركز تكلفة جديد' للبدء"
-        />
-      </PageStateWrapper>
+      <Card className="mb-4 border-status-info-surface bg-status-info-surface/30">
+        <CardContent className="p-4 text-sm">
+          <p className="font-semibold mb-1 flex items-center gap-2">
+            <Layers className="h-4 w-4" /> ما هي مراكز التكلفة؟
+          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            مراكز التكلفة هي الأبعاد المحاسبية اللي يربط بها كل بند في الـ JE (مع
+            الحساب). تحليل الأرباح/الخسائر "حسب المشروع" أو "حسب المركبة" يعتمد على
+            هذي الأبعاد. الـ allocation engine في
+            <code className="bg-muted px-1 rounded mx-1">lib/accountingAllocation.ts</code>
+            ينتج الـ costCenterId تلقائياً حسب استراتيجية القاعدة (from_vehicle /
+            from_project / ...).
+          </p>
+        </CardContent>
+      </Card>
 
-      <CostCenterDialog
-        open={creating}
-        onOpenChange={setCreating}
-        mode="create"
-        initial={null}
-        onSaved={() => {
-          setCreating(false);
-          refetch();
-        }}
-      />
-      <CostCenterDialog
-        open={editing !== null}
-        onOpenChange={(o) => { if (!o) setEditing(null); }}
-        mode="edit"
-        initial={editing}
-        onSaved={() => {
-          setEditing(null);
-          refetch();
-        }}
-      />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <Card>
+          <CardContent className="p-3 text-center">
+            <p className="text-xs text-muted-foreground">إجمالي المراكز</p>
+            <p className="text-lg font-bold font-mono">{formatNumber(rows.length)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-emerald-300">
+          <CardContent className="p-3 text-center">
+            <p className="text-xs text-muted-foreground">نشط</p>
+            <p className="text-lg font-bold font-mono text-emerald-700">
+              {formatNumber(rows.filter((r) => r.status === "active").length)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-status-info-surface">
+          <CardContent className="p-3 text-center">
+            <p className="text-xs text-muted-foreground">مرتبط بكيان</p>
+            <p className="text-lg font-bold font-mono text-status-info-foreground">{formatNumber(linkedCount)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3 text-center">
+            <p className="text-xs text-muted-foreground">إجمالي الميزانية</p>
+            <p className="text-lg font-bold font-mono">{formatCurrency(totalAllocated)}</p>
+          </CardContent>
+        </Card>
+      </div>
 
-      {deleting && (
-        <ConfirmDeleteDialog
-          open={deleting !== null}
-          onOpenChange={(o) => { if (!o) setDeleting(null); }}
-          entity={{ type: "cost_center", id: deleting.id, name: deleting.name }}
-          deletePath={`/finance/cost-centers/${deleting.id}`}
-          invalidateKeys={[["finance-cost-centers"]]}
-          onDeleted={() => {
-            setDeleting(null);
-            refetch();
-          }}
-        />
+      {types.length > 1 && (
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <span className="text-xs text-muted-foreground">نوع الكيان:</span>
+          <Badge variant={typeFilter === "" ? "default" : "outline"}
+            className="cursor-pointer text-xs"
+            onClick={() => setTypeFilter("")}>الكل ({rows.length})</Badge>
+          {types.map((t) => {
+            const count = rows.filter((r) => (r.relatedEntityType ?? "general") === t).length;
+            return (
+              <Badge key={t}
+                variant={typeFilter === t ? "default" : "outline"}
+                className="cursor-pointer text-xs"
+                onClick={() => setTypeFilter(t)}>
+                {ENTITY_TYPE_LABEL[t] ?? t} ({count})
+              </Badge>
+            );
+          })}
+        </div>
       )}
-    </PageShell>
-  );
-}
 
-function CostCenterDialog({
-  open,
-  onOpenChange,
-  mode,
-  initial,
-  onSaved,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  mode: "create" | "edit";
-  initial: CostCenterRow | null;
-  onSaved: () => void;
-}) {
-  // Pull the create/edit endpoint into the same component so the dialog
-  // owns its mutation. The hook signature changes between create
-  // (POST) and edit (PATCH /:id), so we instantiate both and pick at
-  // submit time.
-  const createMut = useApiMutation<CostCenterRow, CostCenterForm>(
-    "/finance/cost-centers",
-    "POST",
-    [["finance-cost-centers"]],
-    { successMessage: "تم إنشاء مركز التكلفة" },
-  );
-  const updateMut = useApiMutation<CostCenterRow, CostCenterForm & { __id: number }>(
-    (body) => `/finance/cost-centers/${body.__id}`,
-    "PATCH",
-    [["finance-cost-centers"]],
-    { successMessage: "تم تحديث مركز التكلفة" },
-  );
-
-  const defaults: CostCenterForm = initial
-    ? {
-        code: initial.code ?? "",
-        name: initial.name,
-        type: (initial.type as CostCenterForm["type"]) ?? "general",
-        allocatedAmount: Number(initial.allocatedAmount ?? 0),
-      }
-    : EMPTY_DEFAULTS;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <GitBranch className="h-4 w-4" />
-            {mode === "create" ? "مركز تكلفة جديد" : `تعديل: ${initial?.name ?? ""}`}
-          </DialogTitle>
-        </DialogHeader>
-        <FormShell
-          key={initial?.id ?? "new"}
-          schema={costCenterSchema}
-          defaultValues={defaults}
-          submitLabel={mode === "create" ? "إنشاء" : "حفظ"}
-          secondaryActions={
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              إلغاء
-            </Button>
-          }
-          onSubmit={async (values) => {
-            if (mode === "create") {
-              await createMut.mutateAsync(values);
-            } else if (initial) {
-              await updateMut.mutateAsync({ ...values, __id: initial.id });
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">مراكز التكلفة ({filtered.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <DataTable
+            columns={cols} data={filtered}
+            pageSize={50}
+            emptyMessage={
+              typeFilter
+                ? `لا توجد مراكز تكلفة بهذا النوع`
+                : "لا توجد مراكز تكلفة — اضغط 'مركز جديد' للبدء"
             }
-            onSaved();
-          }}
-        >
-          <FormGrid cols={2}>
-            <FormTextField name="code" label="الرمز (اختياري)" placeholder="CC-001" />
-            <FormSelectField name="type" label="النوع" required options={TYPE_OPTIONS} />
-          </FormGrid>
-          <FormTextField name="name" label="الاسم" required placeholder="مثلاً: قسم المبيعات" />
-          <FormTextField
-            name="allocatedAmount"
-            label="المبلغ المخصص (اختياري)"
-            type="number"
-            placeholder="0"
           />
-        </FormShell>
-      </DialogContent>
-    </Dialog>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4 bg-status-warning-surface/30 border-status-warning-surface">
+        <CardContent className="p-3 text-xs text-status-warning-foreground">
+          ⓘ التعديل والحذف + ربط الكيانات (vehicle/project/...) follow-up PR.
+          المسارات PATCH/DELETE /finance/cost-centers/:id موجودة في الـ backend.
+        </CardContent>
+      </Card>
+    </PageShell>
   );
 }

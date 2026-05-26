@@ -81,11 +81,35 @@ else
 fi
 run_step "audit:boundaries"   node scripts/src/audit-domain-boundaries.mjs
 run_step "audit:domain-routes" node scripts/src/audit-domain-routes.mjs
+# Stop-Ship gate for #1141: every route that INSERTs into an executive
+# document table must also call `numberingService.issueNumber`. A pure
+# lint regex can't catch a fresh INSERT into invoices/contracts/etc.
+# that simply doesn't import issueNumber at all — this audit can.
+run_step "audit:numbering-coverage" node scripts/src/audit-numbering-coverage.mjs
 run_step "check:duplicate-migrations" node scripts/src/check-duplicate-migrations.mjs
 # Pure-logic fixtures for the breaking-change detection — no DB needed,
 # guards the guard itself (same pattern as check:ghost-rows:tests above).
 run_step "check:migration-policy:tests" node scripts/src/check-migration-policy.test.mjs
 run_step "check:migration-policy" node scripts/src/check-migration-policy.mjs
+# Two previously-dormant guards now activated after main was brought
+# clean against them (PR #574 originally proposed activating all four;
+# this PR activates the two that pass today and leaves the remaining
+# two — `check-finance-period-drift` and `check-workflow-silent-failures`
+# — dormant until their separate cleanup PRs land, since each still has
+# real findings unrelated to the guard wiring itself).
+run_step "check:utc-time-drift" node scripts/src/check-utc-time-drift.mjs
+run_step "check:workflow-pnpm-filters" node scripts/src/check-workflow-pnpm-filters.mjs
+run_step "check:workflow-silent-failures" node scripts/src/check-workflow-silent-failures.mjs
+# Fourth of the four originally-dormant guards from PR #574 — finally
+# active after the 51-site finance-period-drift cleanup landed across
+# PRs #1019 (frontend batch 1), #1026 (frontend batch 2), and #1028
+# (bi.ts + finance-budget.ts route files).
+run_step "check:finance-period-drift" node scripts/src/check-finance-period-drift.mjs
+# Stop-Ship compliance scan (#1139 §8): every write endpoint must have an
+# RBAC guard. File-level audit/event gaps are reported as warnings (the
+# global auditMiddleware provides baseline coverage) and don't fail the
+# build. Route-level exemptions live in scripts/src/audit-stop-ship.mjs.
+run_step "audit:stop-ship"    node scripts/src/audit-stop-ship.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test
 
 END=$(date +%s)

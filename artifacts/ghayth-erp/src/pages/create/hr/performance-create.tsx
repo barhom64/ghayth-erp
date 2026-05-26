@@ -1,25 +1,18 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { z } from "zod";
 import { useApiMutation, useApiQuery } from "@/lib/api";
-import { useFormContext, Controller } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  CreatePageLayout,
-  CreationDateField,
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormTextareaField,
-  FormEntitySelect,
-} from "@workspace/ui-core";
+import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { Star, Target, TrendingUp, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
+import { TextField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { EmployeeSelect } from "@/components/shared/entity-selects";
 
 interface Competency {
@@ -62,71 +55,34 @@ const scoreLabels: Record<number, string> = {
   5: "متميز",
 };
 
-const schema = z.object({
-  assignmentId: z.string().min(1, "يرجى اختيار الموظف"),
-  period: z.string().min(1, "الفترة مطلوبة"),
-  overallScore: z.number(),
-  notes: z.string(),
-  strengths: z.string(),
-  improvements: z.string(),
-  goals: z.string(),
-});
-
-function OverallScoreField() {
-  const { control } = useFormContext();
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-sm font-medium">التقييم العام</Label>
-      <Controller
-        name="overallScore"
-        control={control}
-        render={({ field }) => (
-          <div className="flex items-center gap-3">
-            <StarRating value={Number(field.value) || 0} onChange={field.onChange} />
-            {Number(field.value) > 0 && (
-              <span className={cn(
-                "text-sm font-medium px-2 py-0.5 rounded",
-                Number(field.value) >= 4 ? "bg-status-success-surface text-status-success-foreground" :
-                Number(field.value) >= 3 ? "bg-status-warning-surface text-status-warning-foreground" :
-                "bg-status-error-surface text-status-error-foreground",
-              )}>
-                {scoreLabels[Number(field.value)]}
-              </span>
-            )}
-          </div>
-        )}
-      />
-    </div>
-  );
-}
-
-function EmployeeContext({ employees }: { employees: any[] }) {
-  const { watch } = useFormContext();
-  const assignmentId = watch("assignmentId") as string;
-  const selectedEmployee = employees.find(
-    (e: any) => String(e.assignmentId || e.id) === assignmentId,
-  );
-  if (!selectedEmployee) return null;
-  return (
-    <div className="mt-4">
-      <EmployeeContextCard employeeId={selectedEmployee.id} section="violations" />
-    </div>
-  );
-}
+const DRAFT_KEY = "hr_performance_create";
 
 export default function PerformanceCreate() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
+  // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
+  // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
   const createMut = useApiMutation("/hr/performance", "POST", [["performance"]], {
     successMessage: "تم إضافة التقييم بنجاح",
   });
   const { data: empData, isLoading, isError } = useApiQuery<{ data: any[] }>(["employees-list"], "/employees");
+  const employees = empData?.data || [];
+
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
+    assignmentId: "",
+    period: "",
+    overallScore: 0,
+    notes: "",
+    strengths: "",
+    improvements: "",
+    goals: "",
+  });
   const [competencies, setCompetencies] = useState<Competency[]>(defaultCompetencies.map((c) => ({ ...c })));
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
-
-  const employees = empData?.data || [];
 
   const avgScore = competencies.filter((c) => c.score > 0).length > 0
     ? (competencies.reduce((sum, c) => sum + c.score, 0) / competencies.filter((c) => c.score > 0).length)
@@ -138,72 +94,108 @@ export default function PerformanceCreate() {
     setCompetencies(updated);
   };
 
+  const selectedEmployee = employees.find((e: any) => String(e.assignmentId || e.id) === form.assignmentId);
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  const handleSubmit = () => {
+    const firstError = validate({
+      assignmentId: form.assignmentId ? null : "يرجى اختيار الموظف",
+      period: form.period ? null : "الفترة مطلوبة",
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
+      return;
+    }
+    const finalScore = form.overallScore || Math.round(avgScore * 10) / 10;
+    createMut.mutate(
+      {
+        assignmentId: Number(form.assignmentId),
+        period: form.period,
+        overallScore: finalScore || undefined,
+        notes: [
+          form.notes,
+          form.strengths ? `نقاط القوة: ${form.strengths}` : "",
+          form.improvements ? `مجالات التحسين: ${form.improvements}` : "",
+          form.goals ? `الأهداف المستقبلية: ${form.goals}` : "",
+          competencies.some((c) => c.score > 0)
+            ? `الكفاءات: ${competencies.filter((c) => c.score > 0).map((c) => `${c.name} (${c.score}/5)`).join("، ")}`
+            : "",
+        ].filter(Boolean).join("\n") || undefined,
+      },
+      {
+        onSuccess: () => {
+          clearDraft();
+          setLocation("/hr/performance");
+        },
+        onError: (err: any) => {
+          setApiError(err);
+        },
+      },
+    );
+  };
+
   return (
     <CreatePageLayout title="تقييم أداء جديد" backPath="/hr/performance">
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <CreationDateField />
       </div>
 
-      <FormShell
-        schema={schema}
-        defaultValues={{
-          assignmentId: "",
-          period: "",
-          overallScore: 0,
-          notes: "",
-          strengths: "",
-          improvements: "",
-          goals: "",
-        }}
-        submitLabel={createMut.isPending ? "جاري الحفظ..." : "حفظ التقييم"}
-        secondaryActions={
-          <Button type="button" variant="outline" onClick={() => setLocation("/hr/performance")}>
-            إلغاء
-          </Button>
-        }
-        onSubmit={async (values) => {
-          const finalScore = values.overallScore || Math.round(avgScore * 10) / 10;
-          await new Promise<void>((resolve, reject) =>
-            createMut.mutate(
-              {
-                assignmentId: Number(values.assignmentId),
-                period: values.period,
-                overallScore: finalScore || undefined,
-                notes: [
-                  values.notes,
-                  values.strengths ? `نقاط القوة: ${values.strengths}` : "",
-                  values.improvements ? `مجالات التحسين: ${values.improvements}` : "",
-                  values.goals ? `الأهداف المستقبلية: ${values.goals}` : "",
-                  competencies.some((c) => c.score > 0)
-                    ? `الكفاءات: ${competencies.filter((c) => c.score > 0).map((c) => `${c.name} (${c.score}/5)`).join("، ")}`
-                    : "",
-                ].filter(Boolean).join("\n") || undefined,
-              },
-              {
-                onSuccess: () => {
-                  setLocation("/hr/performance");
-                  resolve();
-                },
-                onError: (err) => reject(err),
-              },
-            ),
-          );
-        }}
-      >
-        <h3 className="text-sm font-semibold text-status-neutral-foreground flex items-center gap-2">
-          <Target className="w-4 h-4" /> معلومات التقييم الأساسية
-        </h3>
-        <FormGrid cols={3}>
-          <FormEntitySelect name="assignmentId" select={EmployeeSelect} label="الموظف" required />
-          <FormTextField name="period" label="فترة التقييم" required placeholder="الربع الأول ٢٠٢٦" />
-          <OverallScoreField />
-        </FormGrid>
-        <EmployeeContext employees={employees} />
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
+            <Target className="w-4 h-4" />
+            معلومات التقييم الأساسية
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <EmployeeSelect
+              value={form.assignmentId}
+              onChange={(v) => setForm((f) => ({ ...f, assignmentId: v }))}
+              label="الموظف"
+              required
+              error={fieldErrors.assignmentId}
+            />
+            <TextField
+              label="فترة التقييم"
+              required
+              value={form.period}
+              onChange={(v) => setForm((f) => ({ ...f, period: v }))}
+              placeholder="الربع الأول ٢٠٢٦"
+              error={fieldErrors.period}
+            />
+            <FormFieldWrapper label="التقييم العام">
+              <div className="flex items-center gap-3">
+                <StarRating value={form.overallScore} onChange={(v) => setForm((f) => ({ ...f, overallScore: v }))} />
+                {form.overallScore > 0 && (
+                  <span className={cn(
+                    "text-sm font-medium px-2 py-0.5 rounded",
+                    form.overallScore >= 4 ? "bg-status-success-surface text-status-success-foreground" :
+                    form.overallScore >= 3 ? "bg-status-warning-surface text-status-warning-foreground" :
+                    "bg-status-error-surface text-status-error-foreground"
+                  )}>
+                    {scoreLabels[form.overallScore]}
+                  </span>
+                )}
+              </div>
+            </FormFieldWrapper>
+          </div>
+          {selectedEmployee && (
+            <div className="mt-4">
+              <EmployeeContextCard employeeId={selectedEmployee.id} section="violations" />
+            </div>
+          )}
+        </div>
 
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
-              <TrendingUp className="w-4 h-4" /> تقييم الكفاءات
+              <TrendingUp className="w-4 h-4" />
+              تقييم الكفاءات
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -221,27 +213,41 @@ export default function PerformanceCreate() {
             {avgScore > 0 && (
               <div className="mt-4 pt-3 border-t flex items-center justify-between">
                 <span className="text-sm font-medium">متوسط الكفاءات</span>
-                <span className={cn(
-                  "text-lg font-bold",
-                  avgScore >= 4 ? "text-status-success-foreground" : avgScore >= 3 ? "text-status-warning-foreground" : "text-status-error-foreground",
-                )}>
-                  {avgScore.toFixed(1)}/5
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "text-lg font-bold",
+                    avgScore >= 4 ? "text-status-success-foreground" : avgScore >= 3 ? "text-status-warning-foreground" : "text-status-error-foreground"
+                  )}>
+                    {avgScore.toFixed(1)}/5
+                  </span>
+                </div>
               </div>
             )}
           </CardContent>
         </Card>
 
-        <h3 className="text-sm font-semibold text-status-neutral-foreground flex items-center gap-2">
-          <BookOpen className="w-4 h-4" /> التفاصيل والملاحظات
-        </h3>
-        <FormTextareaField name="strengths" label="نقاط القوة" placeholder="ما يتميز به الموظف..." rows={2} />
-        <FormTextareaField name="improvements" label="مجالات التحسين" placeholder="المجالات التي تحتاج تطوير..." rows={2} />
-        <FormTextareaField name="goals" label="الأهداف المستقبلية" placeholder="الأهداف المتوقعة للفترة القادمة..." rows={2} />
-        <FormTextareaField name="notes" label="ملاحظات عامة" placeholder="أي ملاحظات إضافية..." rows={2} />
+        <div>
+          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-3 flex items-center gap-2">
+            <BookOpen className="w-4 h-4" />
+            التفاصيل والملاحظات
+          </h3>
+          <div className="grid grid-cols-1 gap-4">
+            <TextAreaField label="نقاط القوة" value={form.strengths} onChange={(v) => setForm((f) => ({ ...f, strengths: v }))} placeholder="ما يتميز به الموظف..." rows={2} />
+            <TextAreaField label="مجالات التحسين" value={form.improvements} onChange={(v) => setForm((f) => ({ ...f, improvements: v }))} placeholder="المجالات التي تحتاج تطوير..." rows={2} />
+            <TextAreaField label="الأهداف المستقبلية" value={form.goals} onChange={(v) => setForm((f) => ({ ...f, goals: v }))} placeholder="الأهداف المتوقعة للفترة القادمة..." rows={2} />
+            <TextAreaField label="ملاحظات عامة" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="أي ملاحظات إضافية..." rows={2} />
+          </div>
+        </div>
+      </div>
 
-        <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات التقييم" />
-      </FormShell>
+      <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات التقييم" />
+
+      <div className="flex justify-end gap-3 pt-6">
+        <Button variant="outline" onClick={() => setLocation("/hr/performance")}>إلغاء</Button>
+        <Button onClick={handleSubmit} disabled={createMut.isPending} size="lg" rateLimitAware>
+          {createMut.isPending ? "جاري الحفظ..." : "حفظ التقييم"}
+        </Button>
+      </div>
     </CreatePageLayout>
   );
 }

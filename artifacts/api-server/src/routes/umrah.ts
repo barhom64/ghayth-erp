@@ -23,9 +23,8 @@ import {
   emitEvent,
   createAuditLog,
   todayISO,
-  generateTimeRef,
-  generateBranchRef,
 } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
 import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, logSensitiveAccess } from "../lib/fieldEncryption.js";
@@ -859,6 +858,22 @@ router.post("/import/preview", authorize({ feature: "umrah", action: "create" })
       : [];
     const linkedSet = new Set(linkedAgents.map((a) => a.nuskCode));
     const unlinkedSubAgents = nuskCodes.filter((c) => !linkedSet.has(c)).map((c) => ({ nuskCode: c }));
+    // Preview is read-only but worth tracking so operators can spot
+    // patterns (e.g. repeated previews of the same broken file, files
+    // with high duplicate counts) before they commit. The event carries
+    // counts only — no row data — so it stays small in the DLQ.
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.import.previewed", entity: "umrah_pilgrims", entityId: 0,
+      details: JSON.stringify({
+        seasonId, fileType,
+        totalRows: importRows.length,
+        newRecords: newRows.length,
+        duplicateRecords: duplicateRows.length,
+        errorRecords: errorRows.length,
+        unlinkedSubAgentCount: unlinkedSubAgents.length,
+      }),
+    }).catch((e) => logger.error(e, "umrah import preview bg"));
     res.json({
       totalRows: importRows.length,
       newRecords: newRows.length,
@@ -877,9 +892,14 @@ router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }
     const scope = req.scope!;
     const { seasonId, rows: importRows } = zodParse(importMutamersSchema.safeParse(req.body));
     const importBody = { seasonId, rows: importRows, fileType: "mutamers", fileName: "import-mutamers" };
-    const fakeReq = { ...req, body: importBody };
     // Reuse existing import logic via internal redirect
     const result = await doImport(scope, importBody);
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.import.mutamers.completed", entity: "umrah_import_logs",
+      entityId: (result as { batchId?: number } | null)?.batchId ?? 0,
+      details: JSON.stringify({ seasonId, rowCount: importRows.length }),
+    }).catch((e) => logger.error(e, "umrah import bg"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import mutamers error"); }
 });
@@ -988,7 +1008,14 @@ async function doImport(scope: any, body: { seasonId: number; rows: any[]; fileT
 router.post("/import", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const result = await doImport(scope, zodParse(importSchema.safeParse(req.body)));
+    const body = zodParse(importSchema.safeParse(req.body));
+    const result = await doImport(scope, body);
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "umrah.import.completed", entity: "umrah_import_logs",
+      entityId: (result as { batchId?: number } | null)?.batchId ?? 0,
+      details: JSON.stringify({ seasonId: body.seasonId, fileType: body.fileType, rowCount: body.rows?.length ?? 0 }),
+    }).catch((e) => logger.error(e, "umrah import bg"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import error"); }
 });
@@ -1394,10 +1421,20 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
     const subtotal = servicesTotal + penaltiesTotal;
     const commission = subtotal * (Number(agent?.profitMargin || 0) / 100);
     const total = subtotal - commission;
-    // Per-branch invoice numbering (PR #529): branches can override the
-    // umrah-invoice prefix via system_settings; we keep "UMRAH-INV" as
-    // the fallback so existing tenants don't see a behaviour change.
-    const ref = await generateBranchRef(scope, "invoice_prefix", "UMRAH-INV");
+    // Numbering center (Issue #1141) — umrah agent invoice ref from
+    // central authority. Scheme `umrah.umrah_agent_invoice` is scoped
+    // by season + branch, so the seasonId param is mandatory.
+    const issuedInv = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "umrah",
+      entityKey: "umrah_agent_invoice",
+      entityTable: "umrah_agent_invoices",
+      seasonId,
+      actorId: scope.userId,
+      metadata: { agentId },
+    });
+    const ref = issuedInv.number;
     let invoiceRow: any;
     await withTransaction(async (client) => {
       // C1: generated directly as 'sent'. The umrah_agent_invoices state
@@ -1410,6 +1447,10 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
         [scope.companyId, agentId, seasonId, ref, pilgrimCount, penaltiesTotal, servicesTotal, subtotal, commission, total]
       );
       invoiceRow = insRes.rows[0];
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [invoiceRow.id, issuedInv.assignmentId]
+      );
       if (penaltiesTotal > 0) {
         // The SUM that produced `penaltiesTotal` (line 1382) excludes
         // soft-deleted penalties. This UPDATE must match the same set,

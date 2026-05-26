@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Scale } from "lucide-react";
@@ -80,53 +80,6 @@ export default function LegalJudgmentDetail() {
   const hasMonetaryAmount =
     judgment?.amount != null && Number(judgment.amount) > 0;
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!judgment) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم الحكم", value: judgment.judgmentNumber || `JDG-${id}` },
-          ...(judgment.caseReference
-            ? [{ label: "مرجع القضية", value: judgment.caseReference }]
-            : []),
-          ...(judgment.judgmentDate
-            ? [{ label: "تاريخ الحكم", value: formatDateAr(judgment.judgmentDate) }]
-            : []),
-          ...(judgment.court
-            ? [{ label: "المحكمة", value: judgment.court }]
-            : []),
-          ...(judgment.outcome
-            ? [{ label: "نتيجة الحكم", value: OUTCOME_LABELS[judgment.outcome] || judgment.outcome }]
-            : []),
-          ...(hasMonetaryAmount
-            ? [{ label: "المبلغ", value: formatCurrency(Number(judgment.amount)) }]
-            : []),
-          ...(judgment.executionStatus
-            ? [{ label: "حالة التنفيذ", value: judgment.executionStatus }]
-            : []),
-          ...(judgment.appealDeadline
-            ? [{ label: "الموعد النهائي للاستئناف", value: formatDateAr(judgment.appealDeadline) }]
-            : []),
-          { label: "الحالة", value: STATUS_LABELS[judgment.status] || judgment.status || "-" },
-        ],
-      },
-    ];
-    if (judgment.summary) {
-      sections.push({ kind: "text", title: "ملخص الحكم", body: judgment.summary });
-    }
-    if (judgment.notes) {
-      sections.push({ kind: "text", title: "ملاحظات", body: judgment.notes });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "المستشار القانوني", name: judgment.createdByName || "" },
-        { label: "المدير", name: judgment.approvedByName || "" },
-      ],
-    });
-    return sections;
-  }, [judgment, id, hasMonetaryAmount]);
 
   const handleEdit = () => {
     setLocation(`/legal/judgments/${id}/edit`);
@@ -286,16 +239,9 @@ export default function LegalJudgmentDetail() {
         <>
           {judgment && (
             <EntityPrintButton
-              branchId={judgment.branchId}
-              title={
-                judgment.judgmentNumber
-                  ? `حكم ${judgment.judgmentNumber}`
-                  : `حكم JDG-${id}`
-              }
-              ref={judgment.judgmentNumber || `JDG-${id}`}
-              date={formatDateAr(judgment.judgmentDate || judgment.createdAt)}
-              sections={printSections}
-            />
+              entityType="legal_judgment"
+              entityId={id ?? 0}
+              formats={["a4"]}/>
           )}
           <GuardedButton
             perm="legal:update"

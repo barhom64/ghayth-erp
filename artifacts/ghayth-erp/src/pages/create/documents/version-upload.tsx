@@ -1,6 +1,4 @@
-import { useState, useRef } from "react";
-import { z } from "zod";
-import { useFormContext } from "react-hook-form";
+import { useState, useRef, useCallback } from "react";
 import { useRoute } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { notifyRateLimited, RateLimitError } from "@/lib/rate-limit-toast";
@@ -10,8 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Upload, FileText, Save } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { cn } from "@/lib/utils";
-import { CreatePageLayout, FormShell, FormTextField } from "@workspace/ui-core";
+import { CreatePageLayout } from "@workspace/ui-core";
+import { TextField } from "@/components/shared/form-field-wrapper";
 
 const BASE = "";
 
@@ -21,20 +22,6 @@ function formatSize(bytes: number) {
   const sizes = ["B", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-}
-
-const uploadSchema = z.object({
-  notes: z.string(),
-});
-type UploadForm = z.infer<typeof uploadSchema>;
-
-function UploadSubmitButton({ file }: { file: File | null }) {
-  const { formState } = useFormContext<UploadForm>();
-  return (
-    <Button type="submit" disabled={!file || formState.isSubmitting} className="gap-2" rateLimitAware>
-      <Save className="h-4 w-4" /> {formState.isSubmitting ? "جاري الرفع..." : "رفع الإصدار"}
-    </Button>
-  );
 }
 
 export default function VersionUploadPage() {
@@ -49,8 +36,63 @@ export default function VersionUploadPage() {
   );
   const versions = asList(versionsResp);
 
+  const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("documents_version_upload", { notes: "" });
+  const { fieldErrors, validate } = useFieldErrors();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadVersion = useCallback(async () => {
+    const firstError = validate({
+      file: !file ? "يرجى اختيار ملف للرفع" : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
+      return;
+    }
+    if (!file || !docId) return;
+    setUploading(true);
+    try {
+      const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+      });
+      if (urlRes.status === 429) {
+        throw new RateLimitError(notifyRateLimited(urlRes));
+      }
+      if (!urlRes.ok) throw new Error("فشل في الحصول على رابط الرفع");
+      const { uploadURL, objectPath } = await urlRes.json();
+      const putRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+      if (!putRes.ok) throw new Error("فشل في رفع الملف");
+
+      await apiFetch(`/documents/${docId}/versions`, {
+        method: "POST",
+        body: JSON.stringify({
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+          storageKey: objectPath,
+          notes: form.notes,
+        }),
+      });
+
+      toast({ title: "تم رفع الإصدار بنجاح" });
+      setFile(null);
+      clearDraft();
+      refetch();
+    } catch (err: any) {
+      if (err instanceof RateLimitError) {
+        // notifyRateLimited already showed the debounced rate-limit toast.
+        setUploading(false);
+        return;
+      }
+      toast({ variant: "destructive", title: err.message || "حدث خطأ" });
+    } finally {
+      setUploading(false);
+    }
+  }, [file, form.notes, docId, refetch, toast, validate, clearDraft]);
 
   return (
     <CreatePageLayout
@@ -58,61 +100,18 @@ export default function VersionUploadPage() {
       subtitle="عرض ورفع إصدارات جديدة"
       backPath="/documents"
     >
+      {hasDraft && (
+        <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
+          <span>تم استعادة مسودة محفوظة سابقاً</span>
+          <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
+        </div>
+      )}
       <div className="space-y-6">
         <div>
           <h3 className="flex items-center gap-2 text-lg font-semibold mb-3">
             <Upload className="h-5 w-5 text-status-info" /> رفع إصدار جديد
           </h3>
-          <FormShell
-            schema={uploadSchema}
-            defaultValues={{ notes: "" }}
-            hideSubmit
-            onSubmit={async (values, ctx) => {
-              if (!file) {
-                toast({ variant: "destructive", title: "يرجى اختيار ملف للرفع" });
-                throw new Error("missing-file");
-              }
-              if (!docId) return;
-              try {
-                const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  credentials: "include",
-                  body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
-                });
-                if (urlRes.status === 429) {
-                  throw new RateLimitError(notifyRateLimited(urlRes));
-                }
-                if (!urlRes.ok) throw new Error("فشل في الحصول على رابط الرفع");
-                const { uploadURL, objectPath } = await urlRes.json();
-                const putRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-                if (!putRes.ok) throw new Error("فشل في رفع الملف");
-
-                await apiFetch(`/documents/${docId}/versions`, {
-                  method: "POST",
-                  body: JSON.stringify({
-                    fileName: file.name,
-                    fileSize: file.size,
-                    mimeType: file.type,
-                    storageKey: objectPath,
-                    notes: values.notes,
-                  }),
-                });
-
-                toast({ title: "تم رفع الإصدار بنجاح" });
-                setFile(null);
-                ctx.reset();
-                refetch();
-              } catch (err: any) {
-                if (err instanceof RateLimitError) {
-                  // notifyRateLimited already showed the debounced rate-limit toast.
-                  return;
-                }
-                toast({ variant: "destructive", title: err.message || "حدث خطأ" });
-                throw err;
-              }
-            }}
-          >
+          <div className="space-y-4">
             <div
               onClick={() => inputRef.current?.click()}
               className={cn(
@@ -130,9 +129,11 @@ export default function VersionUploadPage() {
               )}
               <input ref={inputRef} type="file" className="hidden" onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); e.target.value = ""; }} />
             </div>
-            <FormTextField name="notes" label="ملاحظات (اختياري)" placeholder="وصف التغييرات في هذا الإصدار" />
-            <UploadSubmitButton file={file} />
-          </FormShell>
+            <TextField label="ملاحظات (اختياري)" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} placeholder="وصف التغييرات في هذا الإصدار" />
+            <Button onClick={handleUploadVersion} disabled={!file || uploading} className="gap-2" rateLimitAware>
+              <Save className="h-4 w-4" /> {uploading ? "جاري الرفع..." : "رفع الإصدار"}
+            </Button>
+          </div>
         </div>
 
         <div className="border-t pt-4">

@@ -6,11 +6,11 @@ import {
   type RelatedEntity,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-// ApprovalActions removed — contracts use status-direct PATCH, not an approval flow.
+// ApprovalActions removed — contracts use direct status PATCH, no approval flow.
 import { Edit, FileText } from "lucide-react";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -54,7 +54,7 @@ export default function LegalContractDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["legal-contract", String(id)],
-    `/legal/contracts/${id}`,
+    id ? `/legal/contracts/${id}` : null,
     !!id
   );
 
@@ -93,39 +93,6 @@ export default function LegalContractDetail() {
     return out;
   }, [contract]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!contract) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم العقد", value: contract.contractNumber || `LC-${id}` },
-          { label: "نوع العقد", value: CONTRACT_TYPE_LABELS[contract.type] || contract.type || "-" },
-          { label: "الطرف الأول", value: contract.partyA || "-" },
-          { label: "الطرف الثاني", value: contract.partyB || "-" },
-          { label: "تاريخ البداية", value: formatDateAr(contract.startDate) },
-          { label: "تاريخ النهاية", value: formatDateAr(contract.endDate) },
-          { label: "القيمة", value: formatCurrency(contract.value || 0) },
-          { label: "شروط الدفع", value: contract.paymentTerms || "-" },
-          { label: "الحالة", value: STATUS_LABELS[contract.status] || contract.status || "-" },
-        ],
-      },
-    ];
-    if (contract.scope || contract.description) {
-      sections.push({ kind: "text", title: "نطاق العقد", body: contract.scope || contract.description });
-    }
-    if (contract.specialClauses) {
-      sections.push({ kind: "text", title: "بنود خاصة", body: contract.specialClauses });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "الطرف الأول", name: contract.partyA || "" },
-        { label: "الطرف الثاني", name: contract.partyB || "" },
-      ],
-    });
-    return sections;
-  }, [contract, id]);
 
   const { extraTabs, hideTabs } = useRegistryTabs("legal_contract", id ?? 0);
 
@@ -217,14 +184,9 @@ export default function LegalContractDetail() {
       </Card>
 
       <div className="space-y-3">
-        {/* Legal contracts have no approve/reject lifecycle — the status
-            enum is draft/active/expired/terminated/renewed, transitioned
-            via PATCH /:id with status field directly, or via the dedicated
-            /renew and /terminate endpoints. The previous ApprovalActions
-            card called /legal/contracts/:id/approve which doesn't exist
-            on the backend, AND its render-gate (draft|active) never
-            overlapped with its pendingStatuses (pending|under_review|
-            returned) so the buttons would never render anyway. Removed. */}
+        {/* Legal contracts have no approve/reject lifecycle — status enum
+            is draft/active/expired/terminated/renewed, transitioned via
+            PATCH /:id status field or /renew & /terminate endpoints. */}
 
         {/* Additional info card */}
         <Card>
@@ -279,15 +241,9 @@ export default function LegalContractDetail() {
         <>
           {contract && (
             <EntityPrintButton
-              branchId={contract.branchId}
-              title={contract.title || "عقد"}
-              ref={contract.contractNumber || `LC-${id}`}
-              date={formatDateAr(contract.createdAt)}
-              sections={printSections}
               entityType="legal_contract"
               entityId={contract.id ?? id}
-              formats={["a4"]}
-            />
+              formats={["a4"]}/>
           )}
           <GuardedButton
             perm="legal:update"

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -8,16 +7,12 @@ import {
   DataTable,
   type DataTableColumn,
   PageShell,
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormTextareaField,
-  FormEmailField,
-  FormPhoneField,
-  FormNumberField,
 } from "@workspace/ui-core";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Building2, Users, Pencil, Trash2 } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -25,18 +20,17 @@ import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 
-const agentFormSchema = z.object({
-  name: z.string().min(1, "اسم الوكيل مطلوب"),
-  contactPerson: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().optional(),
-  country: z.string().optional(),
-  profitMargin: z.string().optional(),
-  contractRef: z.string().optional(),
-  currency: z.string(),
-  notes: z.string().optional(),
-});
-type AgentForm = z.infer<typeof agentFormSchema>;
+interface AgentForm {
+  name: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  country: string;
+  profitMargin: string;
+  contractRef: string;
+  currency: string;
+  notes: string;
+}
 
 const emptyForm: AgentForm = {
   name: "", contactPerson: "", phone: "", email: "", country: "",
@@ -49,35 +43,29 @@ export default function UmrahAgents() {
   const items = resp?.data || [];
   const { toast } = useToast();
 
-  // editingId discriminator: null = closed, "new" = create, number = edit row.
-  const [editingId, setEditingId] = useState<null | "new" | number>(null);
-  const [editingDefaults, setEditingDefaults] = useState<AgentForm>(emptyForm);
+  const [editing, setEditing] = useState<any>(null);
+  const [isNew, setIsNew] = useState(false);
+  const [form, setForm] = useState<AgentForm>(emptyForm);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-
-  const closeDialog = () => setEditingId(null);
 
   const createMut = useApiMutation<any, any>("/umrah/agents", "POST", [["umrah-agents"]], {
     onSuccess: () => { refetch(); closeDialog(); toast({ title: "تم إضافة الوكيل بنجاح" }); },
   });
-  const updateMut = useApiMutation<any, any>(
-    () => `/umrah/agents/${typeof editingId === "number" ? editingId : ""}`,
-    "PATCH",
-    [["umrah-agents"]],
-    {
-      onSuccess: () => { refetch(); closeDialog(); toast({ title: "تم تحديث الوكيل بنجاح" }); },
-    },
-  );
+  const updateMut = useApiMutation<any, any>(() => `/umrah/agents/${editing?.id}`, "PATCH", [["umrah-agents"]], {
+    onSuccess: () => { refetch(); closeDialog(); toast({ title: "تم تحديث الوكيل بنجاح" }); },
+  });
   const deleteMut = useApiMutation<any, any>(() => `/umrah/agents/${deleteId}`, "DELETE", [["umrah-agents"]], {
     onSuccess: () => { refetch(); setDeleteId(null); toast({ title: "تم حذف الوكيل" }); },
   });
 
   function openCreate() {
-    setEditingDefaults(emptyForm);
-    setEditingId("new");
+    setForm(emptyForm);
+    setEditing({});
+    setIsNew(true);
   }
 
   function openEdit(agent: any) {
-    setEditingDefaults({
+    setForm({
       name: agent.name || "",
       contactPerson: agent.contactPerson || "",
       phone: agent.phone || "",
@@ -88,23 +76,29 @@ export default function UmrahAgents() {
       currency: agent.currency || "SAR",
       notes: agent.notes || "",
     });
-    setEditingId(agent.id);
+    setEditing(agent);
+    setIsNew(false);
   }
 
-  async function handleSubmit(values: AgentForm) {
+  function closeDialog() {
+    setEditing(null);
+    setIsNew(false);
+  }
+
+  function handleSubmit() {
     const payload = {
-      name: values.name,
-      contactPerson: values.contactPerson || undefined,
-      phone: values.phone || undefined,
-      email: values.email || undefined,
-      country: values.country || undefined,
-      profitMargin: values.profitMargin ? Number(values.profitMargin) : 0,
-      contractRef: values.contractRef || undefined,
-      currency: values.currency || "SAR",
-      notes: values.notes || undefined,
+      name: form.name,
+      contactPerson: form.contactPerson || undefined,
+      phone: form.phone || undefined,
+      email: form.email || undefined,
+      country: form.country || undefined,
+      profitMargin: form.profitMargin ? Number(form.profitMargin) : 0,
+      contractRef: form.contractRef || undefined,
+      currency: form.currency || "SAR",
+      notes: form.notes || undefined,
     };
-    if (editingId === "new") await createMut.mutateAsync(payload);
-    else await updateMut.mutateAsync(payload);
+    if (isNew) createMut.mutate(payload);
+    else updateMut.mutate(payload);
   }
 
   if (isLoading) return <LoadingSpinner />;
@@ -173,41 +167,59 @@ export default function UmrahAgents() {
         onRowClick={(row) => navigate(`/umrah/agents/${row.id}`)}
       />
 
-      <Dialog open={editingId !== null} onOpenChange={(o) => !o && closeDialog()}>
+      <Dialog open={!!editing} onOpenChange={(o) => !o && closeDialog()}>
         <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingId === "new" ? "إضافة وكيل جديد" : "تعديل الوكيل"}</DialogTitle>
-          </DialogHeader>
-          <FormShell
-            key={String(editingId ?? "closed")}
-            schema={agentFormSchema}
-            defaultValues={editingDefaults}
-            submitLabel={
-              createMut.isPending || updateMut.isPending
-                ? "جاري الحفظ..."
-                : editingId === "new"
-                  ? "إنشاء"
-                  : "حفظ"
-            }
-            secondaryActions={
-              <Button type="button" variant="outline" onClick={closeDialog}>إلغاء</Button>
-            }
-            onSubmit={handleSubmit}
-          >
-            <FormTextField name="name" label="الاسم" required />
-            <FormGrid cols={2}>
-              <FormTextField name="contactPerson" label="الشخص المسؤول" />
-              <FormTextField name="country" label="البلد" />
-              <FormPhoneField name="phone" label="الهاتف" />
-              <FormEmailField name="email" label="البريد الإلكتروني" />
-            </FormGrid>
-            <FormGrid cols={3}>
-              <FormNumberField name="profitMargin" label="نسبة الربح %" />
-              <FormTextField name="contractRef" label="مرجع العقد" />
-              <FormTextField name="currency" label="العملة" />
-            </FormGrid>
-            <FormTextareaField name="notes" label="ملاحظات" rows={2} />
-          </FormShell>
+          <DialogHeader><DialogTitle>{isNew ? "إضافة وكيل جديد" : "تعديل الوكيل"}</DialogTitle></DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div>
+              <Label>الاسم *</Label>
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>الشخص المسؤول</Label>
+                <Input value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} />
+              </div>
+              <div>
+                <Label>البلد</Label>
+                <Input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>الهاتف</Label>
+                <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              </div>
+              <div>
+                <Label>البريد الإلكتروني</Label>
+                <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label>نسبة الربح %</Label>
+                <Input type="number" value={form.profitMargin} onChange={(e) => setForm({ ...form, profitMargin: e.target.value })} />
+              </div>
+              <div>
+                <Label>مرجع العقد</Label>
+                <Input value={form.contractRef} onChange={(e) => setForm({ ...form, contractRef: e.target.value })} />
+              </div>
+              <div>
+                <Label>العملة</Label>
+                <Input value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <Label>ملاحظات</Label>
+              <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDialog}>إلغاء</Button>
+            <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending || updateMut.isPending} rateLimitAware>
+              {createMut.isPending || updateMut.isPending ? "جاري الحفظ..." : isNew ? "إنشاء" : "حفظ"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -215,12 +227,12 @@ export default function UmrahAgents() {
         <DialogContent>
           <DialogHeader><DialogTitle>تأكيد الحذف</DialogTitle></DialogHeader>
           <p>هل أنت متأكد من حذف هذا الوكيل؟ لا يمكن حذف وكيل مرتبط بمعتمرين.</p>
-          <div className="flex justify-end gap-2 pt-4">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>إلغاء</Button>
             <GuardedButton perm="umrah:delete" variant="destructive" onClick={() => deleteMut.mutate({})} disabled={deleteMut.isPending}>
               {deleteMut.isPending ? "جاري الحذف..." : "حذف"}
             </GuardedButton>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </PageShell>

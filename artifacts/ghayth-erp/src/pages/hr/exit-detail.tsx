@@ -40,6 +40,7 @@ function buildExitSteps(status: string | undefined): StageStep[] {
   });
 }
 import { EXIT_TYPES, EXIT_REQUEST_STATUS, CLEARANCE_STATUS } from "@/lib/hr-type-maps";
+import { PrintButton } from "@/components/shared/print-button";
 
 const STATUS_TONE_MAP: Record<string, "default" | "success" | "warning" | "destructive" | "info" | "muted"> = {
   pending: "warning",
@@ -279,7 +280,8 @@ export default function ExitDetail() {
       createdAt={item?.createdAt}
       updatedAt={item?.updatedAt}
       actions={
-        item?.status === "pending" ? (
+        <div className="flex items-center gap-2">
+          item?.status === "pending" ? (
           <GuardedButton
             perm="hr:approve"
             size="sm"
@@ -303,6 +305,8 @@ export default function ExitDetail() {
             إتمام نهاية الخدمة
           </GuardedButton>
         ) : undefined
+          <PrintButton entityType="exit_request" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+        </div>
       }
       overview={overviewContent}
     />

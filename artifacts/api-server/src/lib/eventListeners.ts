@@ -1,7 +1,7 @@
 import { eventBus, registerCrossDomainHandler, type EventPayload } from "./eventBus.js";
 import { pool, rawQuery, rawExecute } from "./rawdb.js";
 import { logger } from "./logger.js";
-import { createNotification, getManagerAssignmentId, createGuardedJournalEntry, getAccountCodeFromMapping, todayISO, toDateISO, currentYear } from "./businessHelpers.js";
+import { createNotification, getManagerAssignmentId, createGuardedJournalEntry, getAccountCodeFromMapping, todayISO, toDateISO, currentYear, currentMonthPadded } from "./businessHelpers.js";
 import { computeDiff } from "./auditDiff.js";
 import { calculateAllForCompany } from "./umrahCommissionEngine.js";
 import { registerObligation, markObligationMet } from "./obligationsEngine.js";
@@ -716,6 +716,10 @@ export function registerEventListeners() {
     await logEvent("fiscal_period.reopened", payload);
     await logAudit("fiscal_period.reopened", { ...payload, action: "reopen", entity: "fiscal_period" });
   });
+  eventBus.on("fiscal_period.locked", async (payload) => {
+    await logEvent("fiscal_period.locked", payload);
+    await logAudit("fiscal_period.locked", { ...payload, action: "lock", entity: "fiscal_period" });
+  });
   eventBus.on("payment_run.executed", async (payload) => {
     await logEvent("payment_run.executed", payload);
     await logAudit("payment_run.executed", { ...payload, action: "execute", entity: "payment_run" });
@@ -779,7 +783,7 @@ export function registerEventListeners() {
     if (payload.companyId) {
       try {
         const details = typeof payload.details === "string" ? JSON.parse(payload.details) : (payload.details ?? {});
-        const month = Number(details.month) || new Date().getMonth() + 1;
+        const month = Number(details.month) || Number(currentMonthPadded());
         const year = Number(details.year) || currentYear();
         const results = await calculateAllForCompany(payload.companyId, month, year, (payload.userId as number) || 0);
         if (results.length > 0) {

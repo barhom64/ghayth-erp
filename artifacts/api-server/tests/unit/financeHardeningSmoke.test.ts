@@ -24,6 +24,73 @@ describe("finance-hardening — fiscal periods v2", () => {
     expect(SRC).toContain('"/fiscal-periods-v2/:id/close"');
     expect(SRC).toContain('"/fiscal-periods-v2/:id/reopen"');
   });
+
+  // PER-3 — audit-lock endpoint. `locked` is the stricter terminal
+  // state above `closed`; once locked there is intentionally NO
+  // reverse route. `checkFinancialPeriodOpen` + `systemGovernor`
+  // already treat status='locked' as posting-blocking, so the
+  // platform is wired to honor the lock the moment it's set.
+  it("lock endpoint exists (PER-3) and uses lifecycle engine", () => {
+    expect(SRC).toContain('"/fiscal-periods-v2/:id/lock"');
+    const idx = SRC.indexOf('"/fiscal-periods-v2/:id/lock"');
+    const block = SRC.slice(idx, idx + 2200);
+    // Goes through applyTransition with the correct from/to states and
+    // writes the audit-trail columns we just added in migration 207.
+    expect(block).toContain('entity: "financial_periods"');
+    expect(block).toContain('action: "fiscal_period.locked"');
+    expect(block).toContain('fromStates: ["closed"]');
+    expect(block).toContain('toState: "locked"');
+    expect(block).toContain("lockedAt:");
+    expect(block).toContain("lockedBy:");
+    expect(block).toContain("lockReason:");
+  });
+
+  // Intercompany — from-leg JE, to-leg JE, and the parent
+  // intercompany_transactions row must commit or roll back together.
+  // The earlier shape used a compensating-reversal pattern on to-leg
+  // failure but the subsequent intercompany_transactions INSERT lived
+  // bare-outside-any-txn — a constraint violation there left BOTH
+  // legs orphaned with no parent row.
+  it("POST /intercompany wraps both legs + parent INSERT in one withTransaction (atomicity)", () => {
+    const idx = SRC.indexOf('financeHardeningRouter.post("/intercompany"');
+    expect(idx).toBeGreaterThan(-1);
+    const block = SRC.slice(idx, idx + 6500);
+    // Outer withTransaction wraps the whole atomic block.
+    const txnStart = block.indexOf("withTransaction(async ()");
+    expect(txnStart).toBeGreaterThan(-1);
+    // Both engine posts AND the intercompany_transactions INSERT live
+    // inside that outer txn. Locate each and assert ordering.
+    const fromPostIdx = block.indexOf("financialEngine.postJournalEntry", txnStart);
+    const toPostIdx = block.indexOf("financialEngine.postJournalEntry", fromPostIdx + 1);
+    const insertIdx = block.indexOf("INSERT INTO intercompany_transactions", toPostIdx);
+    const txnCloseIdx = block.indexOf("\n    });", insertIdx);
+    expect(fromPostIdx).toBeGreaterThan(txnStart);
+    expect(toPostIdx).toBeGreaterThan(fromPostIdx);
+    expect(insertIdx).toBeGreaterThan(toPostIdx);
+    expect(txnCloseIdx).toBeGreaterThan(insertIdx);
+  });
+
+  it("POST /intercompany no longer needs compensating reverseAccountBalances (txn rollback handles it)", () => {
+    const idx = SRC.indexOf('financeHardeningRouter.post("/intercompany"');
+    const block = SRC.slice(idx, idx + 6500);
+    // The old compensating reversal called reverseAccountBalances on
+    // the from-leg journalId. With the outer-txn rollback, that explicit
+    // call is no longer needed — Postgres rolls the from-leg SAVEPOINT
+    // back automatically. Guard against a regression that re-introduces
+    // the manual reversal (which would double-reverse if the txn
+    // already rolled back).
+    expect(block).not.toContain("reverseAccountBalances");
+  });
+
+  it("no /fiscal-periods-v2/:id/unlock route exists (locked is intentionally terminal)", () => {
+    // PER-3 contract: a locked period stays locked. The platform has
+    // a `reopen` route for `closed → open`, but not for `locked → *`.
+    // The sanctioned way out is to NEVER lock unless the audit
+    // sign-off is final. Catching a future PR that adds an unlock
+    // route is the whole point of this test.
+    expect(SRC).not.toContain('"/fiscal-periods-v2/:id/unlock"');
+    expect(SRC).not.toContain('fromStates: ["locked"]');
+  });
 });
 
 describe("finance-hardening — manual journal entries", () => {

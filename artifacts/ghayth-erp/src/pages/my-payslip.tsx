@@ -3,10 +3,10 @@ import { PageShell } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { formatCurrency } from "@/lib/formatters";
-import { DollarSign, TrendingUp, TrendingDown, FileText, Printer } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, FileText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export default function MyPayslip() {
@@ -29,12 +29,9 @@ export default function MyPayslip() {
       title="كشف راتبي"
       subtitle="عرض مفصّل لراتبك الشهري"
       actions={
-        hasData && (
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => window.print()}>
-            <Printer size={14} />
-            طباعة
-          </Button>
-        )
+        hasData && payslip?.id ? (
+          <EntityPrintButton entityType="payslip" entityId={payslip.id} formats={["a4"]} />
+        ) : undefined
       }
     >
       <div className="flex items-center gap-3 mb-6">

@@ -22,12 +22,12 @@ import { Router } from "express";
 import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import {
   createAuditLog,
   emitEvent,
   todayISO,
   checkFinancialPeriodOpen,
-  reverseAccountBalances,
 } from "../lib/businessHelpers.js";
 import { requestIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib/requestIdempotency.js";
 
@@ -85,7 +85,9 @@ const approveJournalSchema = z.object({
 });
 
 const createBankGuaranteeSchema = z.object({
-  ref: z.string().min(1),
+  // ref is now optional — the numbering center issues one if absent.
+  // A user-supplied ref is honoured for legacy-data imports only.
+  ref: z.string().optional(),
   bank: z.string().min(1),
   beneficiary: z.string().min(1),
   amount: z.coerce.number(),
@@ -118,6 +120,14 @@ const releaseBankGuaranteeSchema = z.object({
 
 const createIntercompanySchema = z.object({
   toCompanyId: z.coerce.number(),
+  // The branch within the destination company that owns its leg of
+  // the entry. Optional — when omitted, the to-side JE is filed
+  // company-wide (branchId NULL). The previous code defaulted to
+  // `scope.branchId` (the SOURCE company's branch) which leaks the
+  // user's home-company branch id into the destination company,
+  // where it may not even exist as a valid branch row. Branch
+  // isolation queries on the destination company side then break.
+  toBranchId: z.coerce.number().optional(),
   amount: z.coerce.number(),
   description: z.string().optional(),
   transactionDate: z.string().optional(),
@@ -317,6 +327,67 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/reopen", authorize({ feature
   }
 });
 
+// PER-3 — POST /fiscal-periods-v2/:id/lock
+// Audit-lock a fiscal period after year-end + external audit. `locked`
+// is a stricter state than `closed`: `checkFinancialPeriodOpen` and
+// `systemGovernor` both already treat it as posting-blocking (see
+// businessHelpers.ts:1219 and systemGovernor.ts:29), and unlike `closed`
+// there is intentionally NO reverse route — once a period is locked,
+// the only way to mutate the ledger inside its date range is the
+// audited fiscal-period reopen flow (which requires escalation since
+// it transitions closed→open, NOT locked→open). The CHECK constraint
+// on financial_periods.status already enumerates 'locked' as a valid
+// state; we just expose the transition that was previously
+// unreachable from the API.
+financeHardeningRouter.post("/fiscal-periods-v2/:id/lock", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+
+    const periodId = parseId(req.params.id, "id");
+    // Reuse the same shape the reopen schema enforces — a written
+    // reason is mandatory so the audit trail captures "WHY was this
+    // period locked" alongside who and when.
+    const { reason } = zodParse(reopenFiscalPeriodSchema.safeParse(req.body ?? {}));
+
+    const [period] = await rawQuery<Record<string, unknown>>(
+      `SELECT name FROM financial_periods WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [periodId, scope.companyId]
+    );
+    if (!period) throw new NotFoundError("الفترة غير موجودة");
+
+    const updated = await applyTransition<Record<string, unknown>>({
+      entity: "financial_periods",
+      id: periodId,
+      scope: { companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId },
+      action: "fiscal_period.locked",
+      // closed → locked. A period cannot be locked directly from open;
+      // it must first go through the audited close workflow. This
+      // mirrors the reopen route's `closed → open` direction.
+      fromStates: ["closed"],
+      toState: "locked",
+      reason,
+      extraWhere: `"deletedAt" IS NULL`,
+      setExtras: {
+        lockedAt: { raw: "NOW()" },
+        lockedBy: scope.activeAssignmentId,
+        lockReason: reason,
+      },
+      after: { name: period.name, reason },
+    });
+
+    res.json({
+      message: `تم قفل الفترة المالية "${period.name}" بشكل دائم`,
+      reason,
+      status: updated.status,
+      event: "fiscal_period.locked",
+    });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Lock fiscal period error:");
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MANUAL JOURNAL APPROVAL WORKFLOW
 // draft → pending_review → approved → posted
@@ -410,9 +481,33 @@ financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.har
 
     const { description, lines, costCenter, notes } = zodParse(createManualJournalSchema.safeParse(req.body ?? {}));
 
+    // Mirror the negative-amount + both-sides guards landed in #957
+    // for the /journal route. Without these, hardening accepts a
+    // balanced-but-inverted entry (e.g. `{debit:-100, credit:0}` on
+    // both sides) and reverses chart_of_accounts at apply time.
+    for (const l of lines) {
+      const d = Number(l.debit ?? 0);
+      const c = Number(l.credit ?? 0);
+      if (d < 0 || c < 0) {
+        throw new ValidationError("لا يُسمح بمبالغ سالبة في بنود القيد", {
+          field: "lines",
+          fix: "استعمل الجانب المقابل (مدين/دائن) لعكس الإشارة بدل الرقم السالب",
+        });
+      }
+      if (d > 0 && c > 0) {
+        throw new ValidationError("لا يُسمح بمدين ودائن في نفس البند", {
+          field: "lines",
+          fix: "اقسم البند إلى بندين منفصلين",
+        });
+      }
+    }
+
     const totalDebit = lines.reduce((s: number, l) => s + Number(l.debit ?? 0), 0);
     const totalCredit = lines.reduce((s: number, l) => s + Number(l.credit ?? 0), 0);
-    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+    // Align with createJournalEntry (businessHelpers.ts:529) — strict
+    // cent threshold so we don't silently let a 1-cent imbalance
+    // through. Previously `> 0.01` only caught ≥ 2-cent diffs.
+    if (Math.abs(totalDebit - totalCredit) >= 0.005) {
       throw new ValidationError(
         `القيد غير متوازن: مدين ${totalDebit.toFixed(2)}، دائن ${totalCredit.toFixed(2)}`,
         {
@@ -832,13 +927,34 @@ financeHardeningRouter.post("/bank-guarantees", authorize({ feature: "finance.ha
   try {
     const scope = req.scope!;
 
-    const { ref, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = zodParse(createBankGuaranteeSchema.safeParse(req.body ?? {}));
+    const { ref: bodyRef, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = zodParse(createBankGuaranteeSchema.safeParse(req.body ?? {}));
+    // Numbering center (Issue #1141) — bank-guarantee ref from authority.
+    // Body-supplied ref is preserved for legacy imports only.
+    let issuedBg: Awaited<ReturnType<typeof issueNumber>> | null = null;
+    let ref = bodyRef;
+    if (!ref) {
+      issuedBg = await issueNumber({
+        companyId: scope.companyId,
+        branchId: branchId ?? scope.branchId ?? null,
+        moduleKey: "finance",
+        entityKey: "bank_guarantee",
+        entityTable: "bank_guarantees",
+        actorId: scope.userId,
+      });
+      ref = issuedBg.number;
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO bank_guarantees ("companyId","branchId",ref,bank,beneficiary,amount,"issueDate","expiryDate","guaranteeType",notes,"attachmentUrl","createdBy")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [scope.companyId, branchId ?? scope.branchId, ref, bank, beneficiary, Number(amount), issueDate, expiryDate, guaranteeType ?? "performance", notes ?? null, attachmentUrl ?? null, scope.activeAssignmentId]
     );
     assertInsert(insertId, "bank_guarantees");
+    if (issuedBg) {
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertId, issuedBg.assignmentId]
+      ).catch(() => { /* non-blocking link */ });
+    }
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM bank_guarantees WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     emitEvent({
@@ -1104,7 +1220,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
   try {
     const scope = req.scope!;
 
-    const { toCompanyId, amount, description, transactionDate, arAccountCode, apAccountCode, revenueAccountCode, expenseAccountCode } = zodParse(createIntercompanySchema.safeParse(req.body ?? {}));
+    const { toCompanyId, toBranchId, amount, description, transactionDate, arAccountCode, apAccountCode, revenueAccountCode, expenseAccountCode } = zodParse(createIntercompanySchema.safeParse(req.body ?? {}));
 
     if (toCompanyId === scope.companyId) {
       throw new ValidationError("لا يمكن إنشاء معاملة بين الشركة ونفسها", {
@@ -1117,6 +1233,27 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
         fix: "تأكد من أن لديك تعييناً نشطاً على الشركة المستلمة",
         meta: { toCompanyId: Number(toCompanyId), allowedCompanies: scope.allowedCompanies ?? [] },
       });
+    }
+
+    // If a toBranchId is supplied, validate it belongs to toCompanyId
+    // (catches a typo or stale UI state pointing at a branch in the
+    // wrong company). Without this check the JE silently posts on a
+    // branch id that doesn't belong to the destination company →
+    // branch-isolation queries on that company side return empty.
+    if (toBranchId != null) {
+      const branchRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM branches
+          WHERE id = $1 AND "companyId" = $2
+            AND COALESCE("deletedAt", NULL) IS NULL
+          LIMIT 1`,
+        [toBranchId, toCompanyId]
+      );
+      if (branchRows.length === 0) {
+        throw new ValidationError(
+          `الفرع #${toBranchId} لا ينتمي إلى الشركة المستلمة #${toCompanyId}`,
+          { field: "toBranchId", fix: "اختر فرعاً تابعاً للشركة المستلمة" }
+        );
+      }
     }
 
     const idempotencyToken = requestIdempotencyToken(req);
@@ -1146,29 +1283,45 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
 
     const { financialEngine } = await import("../lib/engines/index.js");
 
-    // postJournalEntry manages its own transaction internally, so we use a
-    // compensating-reversal pattern: if the second post fails we soft-delete the first.
-    // The idempotency token anchors both legs so a retry collapses onto the same pair.
-    const fromResult = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: scope.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref,
-      description: description ?? `معاملة بين الشركات ${ref}`,
-      type: "intercompany",
-      sourceType: "intercompany",
-      sourceId: 0,
-      sourceKey: `finance:intercompany:from:${idempotencyToken}`,
-      postingDate: txDate,
-      lines: fromLines,
-    });
-    markIdempotencyReplay(req, res, fromResult.alreadyExists);
-
-    let toResult: { journalId: number; alreadyExists: boolean };
-    try {
-      toResult = await financialEngine.postJournalEntry({
-        companyId: Number(toCompanyId),
+    // Atomicity guarantee: from-leg JE, to-leg JE, and the parent
+    // intercompany_transactions row commit or roll back together. The
+    // previous shape used a compensating-reversal pattern on to-leg
+    // failure but the SUBSEQUENT intercompany_transactions INSERT lived
+    // bare-outside-any-txn — a constraint violation there (companies FK
+    // failing on a concurrent deletedAt, malformed amount, etc.) left
+    // BOTH committed JE legs orphaned with no parent row to tie them
+    // back to. The outer withTransaction here closes that window.
+    //
+    // financialEngine.postJournalEntry's internal withTransaction joins
+    // this outer one reentrantly via SAVEPOINT (rawdb.ts:108), so a
+    // throw anywhere — from-leg post, to-leg post, parent INSERT —
+    // rolls all three back together. Cross-company posting is safe in a
+    // single transaction because Postgres doesn't gate transactions on
+    // the companyId column; the companyId scoping is purely a data
+    // attribute.
+    const { fromResult, toResult } = await withTransaction(async () => {
+      const fromResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
         branchId: scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref,
+        description: description ?? `معاملة بين الشركات ${ref}`,
+        type: "intercompany",
+        sourceType: "intercompany",
+        sourceId: 0,
+        sourceKey: `finance:intercompany:from:${idempotencyToken}`,
+        postingDate: txDate,
+        lines: fromLines,
+      });
+
+      const toResult = await financialEngine.postJournalEntry({
+        companyId: Number(toCompanyId),
+        // Use the caller-provided toBranchId. Falls back to 0
+        // (company-wide sentinel — same value used by other engine
+        // call sites e.g. hrEngine when no branch is in play).
+        // NOT scope.branchId, which would leak the SOURCE company's
+        // branch id into the DESTINATION company.
+        branchId: toBranchId ?? 0,
         createdBy: scope.activeAssignmentId,
         ref,
         description: description ?? `معاملة بين الشركات ${ref}`,
@@ -1179,30 +1332,16 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
         postingDate: txDate,
         lines: toLines,
       });
-    } catch (err) {
-      // Compensating reversal: the from-side post already moved
-      // chart_of_accounts.currentBalance (postJournalEntry with status
-      // 'posted' applies balances). A bare soft-delete leaves those GL
-      // movements in place — the from-company's AR + Revenue stay
-      // inflated by `amount` with no auditable JE explaining them.
-      //
-      // reverseAccountBalances unwinds the per-account currentBalance
-      // updates and flips balancesApplied → false; the soft-delete then
-      // hides the row from reports. Order matters: reverse first, then
-      // soft-delete (reverseAccountBalances reads the JE row by id).
-      await reverseAccountBalances(scope.companyId, fromResult.journalId);
-      await rawExecute(
-        `UPDATE journal_entries SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2`,
-        [fromResult.journalId, scope.companyId]
-      );
-      throw err;
-    }
 
-    await rawExecute(
-      `INSERT INTO intercompany_transactions (ref,"fromCompanyId","toCompanyId",amount,description,"transactionDate",status,"fromJournalId","toJournalId","createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,'posted',$7,$8,$9)`,
-      [ref, scope.companyId, Number(toCompanyId), Number(amount), description ?? null, txDate, fromResult.journalId, toResult.journalId, scope.activeAssignmentId]
-    );
+      await rawExecute(
+        `INSERT INTO intercompany_transactions (ref,"fromCompanyId","toCompanyId",amount,description,"transactionDate",status,"fromJournalId","toJournalId","createdBy")
+         VALUES ($1,$2,$3,$4,$5,$6,'posted',$7,$8,$9)`,
+        [ref, scope.companyId, Number(toCompanyId), Number(amount), description ?? null, txDate, fromResult.journalId, toResult.journalId, scope.activeAssignmentId]
+      );
+
+      return { fromResult, toResult };
+    });
+    markIdempotencyReplay(req, res, fromResult.alreadyExists);
 
     const fromJournalId = fromResult.journalId;
     const toJournalId = toResult.journalId;
@@ -1317,17 +1456,34 @@ financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening
   try {
     const scope = req.scope!;
 
-    const { name, description, budget, startDate, endDate, ref } = zodParse(createProjectSchema.safeParse(req.body ?? {}));
-    // PRJ-003: the `projects` table has no `ref` or `branchId` column — the
-    // old INSERT referenced both and aborted with SQLSTATE 42703. Insert only
-    // the columns that exist; projectRef is kept for the audit/event details.
-    const projectRef = ref ?? `PRJ-${Date.now()}`;
+    const { name, description, budget, startDate, endDate, ref: bodyRef } = zodParse(createProjectSchema.safeParse(req.body ?? {}));
+    // Numbering center (Issue #1141) — project ref from authority.
+    // The `projects.ref` column was added in migration 217.
+    let projectRef = bodyRef;
+    let issuedProj: Awaited<ReturnType<typeof issueNumber>> | null = null;
+    if (!projectRef) {
+      issuedProj = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "projects",
+        entityKey: "project",
+        entityTable: "projects",
+        actorId: scope.userId,
+      });
+      projectRef = issuedProj.number;
+    }
     const { insertId } = await rawExecute(
-      `INSERT INTO projects ("companyId",name,description,budget,"startDate","endDate","managerId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
+      `INSERT INTO projects ("companyId",ref,name,description,budget,"startDate","endDate","managerId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [scope.companyId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
     );
     assertInsert(insertId, "projects");
+    if (issuedProj) {
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertId, issuedProj.assignmentId]
+      ).catch(() => { /* non-blocking link */ });
+    }
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     emitEvent({

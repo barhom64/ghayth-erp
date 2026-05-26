@@ -61,9 +61,7 @@ export function CAPATab() {
   const filteredItems = applyFilters(items, filters, { searchFields: ["finding", "rootCause", "responsiblePerson"], statusField: "status", dateField: "dueDate" });
 
   // CAPA records are audit artifacts — closed via status change, never
-  // hard-deleted. The backend deliberately exposes only PATCH (no
-  // DELETE), so the delete affordance is omitted here. Closing a CAPA
-  // happens via the inline edit form's status field.
+  // hard-deleted. Backend deliberately exposes only PATCH (no DELETE).
   const { editingId, editForm, setEditForm, startEdit, cancelEdit, isPending, handleSave } = useInlineActions({
     endpoint: "/governance/capa",
     queryKeys: [["gov-capa"], ["gov-stats"]],

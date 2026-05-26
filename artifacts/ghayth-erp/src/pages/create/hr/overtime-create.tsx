@@ -1,137 +1,116 @@
-import { useEffect } from "react";
+import { useMemo } from "react";
 import { useLocation } from "wouter";
-import { z } from "zod";
 import { useApiMutation, useApiQuery, asList } from "@/lib/api";
-import { useFormContext } from "react-hook-form";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  CreatePageLayout,
-  CreationDateField,
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormTextareaField,
-  FormNumberField,
-  FormSelectField,
-  FormDateField,
-  FormEntitySelect,
-} from "@workspace/ui-core";
+import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { useToast } from "@/hooks/use-toast";
+import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency } from "@/lib/formatters";
 import { OVERTIME_MULTIPLIERS } from "@/lib/hr-type-maps";
-import { Calculator } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Clock, User, Calculator, Info } from "lucide-react";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
+import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { EmployeeSelect } from "@/components/shared/entity-selects";
 
-const schema = z.object({
-  assignmentId: z.string().min(1, "يرجى اختيار الموظف"),
-  overtimeDate: z.string().min(1, "تاريخ الوقت الإضافي مطلوب"),
-  startTime: z.string().min(1, "وقت البدء مطلوب"),
-  endTime: z.string().min(1, "وقت الانتهاء مطلوب"),
-  hours: z
-    .string()
-    .refine(
-      (v) => Number(v) > 0,
-      "عدد الساعات يجب أن يكون أكبر من صفر",
-    )
-    .refine(
-      (v) => Number(v) <= 12,
-      "لا يمكن تسجيل أكثر من 12 ساعة في اليوم",
-    ),
-  multiplier: z.string(),
-  reason: z.string().optional(),
-});
-
-const MULTIPLIER_OPTIONS = OVERTIME_MULTIPLIERS.map((m) => ({
-  value: m.value,
-  label: m.label,
-}));
-
-function calcHours(start: string, end: string) {
-  if (!start || !end) return "";
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  let diff = eh * 60 + em - (sh * 60 + sm);
-  if (diff < 0) diff += 24 * 60; // crosses midnight
-  return (diff / 60).toFixed(2);
-}
-
-function AutoComputeHours() {
-  const { watch, setValue } = useFormContext();
-  const startTime = watch("startTime") as string;
-  const endTime = watch("endTime") as string;
-  useEffect(() => {
-    if (startTime && endTime) {
-      setValue("hours", calcHours(startTime, endTime), { shouldValidate: false });
-    }
-  }, [startTime, endTime, setValue]);
-  return null;
-}
-
-function EmployeeContext({ employees }: { employees: any[] }) {
-  const { watch } = useFormContext();
-  const assignmentId = watch("assignmentId") as string;
-  const selectedEmployee = employees.find(
-    (e: any) => String(e.activeAssignmentId || e.assignmentId) === assignmentId,
-  );
-  if (!selectedEmployee) return null;
-  return <EmployeeContextCard employeeId={selectedEmployee.id} section="overtime" />;
-}
-
-function CostSummary({ employees }: { employees: any[] }) {
-  const { watch } = useFormContext();
-  const assignmentId = watch("assignmentId") as string;
-  const hours = Number(watch("hours") || 0);
-  const multiplier = Number(watch("multiplier") || 1.5);
-  const selectedEmployee = employees.find(
-    (e: any) => String(e.activeAssignmentId || e.assignmentId) === assignmentId,
-  );
-  const salary = Number(selectedEmployee?.salary || selectedEmployee?.basicSalary || 0);
-  const hourlyRate = salary > 0 ? Math.round((salary / 30 / 8) * 100) / 100 : 0;
-  const totalAmount = Math.round(hourlyRate * multiplier * hours * 100) / 100;
-  if (hours <= 0 || hourlyRate <= 0) return null;
-  return (
-    <Card className="border-purple-200 bg-purple-50/50">
-      <CardContent className="p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Calculator className="h-4 w-4 text-purple-600" />
-          <span className="text-sm font-semibold text-purple-700">ملخص التكلفة</span>
-        </div>
-        <div className="grid grid-cols-4 gap-4 text-center">
-          <div>
-            <p className="text-lg font-bold text-purple-700">{formatCurrency(hourlyRate)}</p>
-            <p className="text-xs text-muted-foreground">سعر الساعة</p>
-          </div>
-          <div>
-            <p className="text-lg font-bold text-purple-700">×{multiplier.toFixed(2)}</p>
-            <p className="text-xs text-muted-foreground">المعامل</p>
-          </div>
-          <div>
-            <p className="text-lg font-bold text-purple-700">{hours}</p>
-            <p className="text-xs text-muted-foreground">ساعات</p>
-          </div>
-          <div>
-            <p className="text-lg font-bold text-status-success-foreground">{formatCurrency(totalAmount)}</p>
-            <p className="text-xs text-muted-foreground">الإجمالي</p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+const DRAFT_KEY = "hr_overtime_create";
 
 export default function OvertimeCreate() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
   const createMut = useApiMutation("/hr/overtime", "POST", [["hr-overtime"]], {
     successMessage: "تم إرسال طلب الوقت الإضافي بنجاح",
   });
+
   const employeesQ = useApiQuery<any>(["employees-list"], "/employees?limit=500");
+  const employees = asList<any>(employeesQ.data);
+
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, {
+    assignmentId: "",
+    overtimeDate: "",
+    startTime: "",
+    endTime: "",
+    hours: "",
+    multiplier: "1.50",
+    reason: "",
+  });
+
+  const { fieldErrors, validate, setApiError } = useFieldErrors();
+
+  const selectedEmployee = useMemo(
+    () => employees.find((e: any) => String(e.activeAssignmentId || e.assignmentId) === form.assignmentId),
+    [employees, form.assignmentId]
+  );
 
   if (employeesQ.isLoading) return <LoadingSpinner />;
   if (employeesQ.isError) return <ErrorState />;
 
-  const employees = asList<any>(employeesQ.data);
+  const salary = Number(selectedEmployee?.salary || selectedEmployee?.basicSalary || 0);
+  const hourlyRate = salary > 0 ? Math.round((salary / 30 / 8) * 100) / 100 : 0;
+  const hours = Number(form.hours || 0);
+  const multiplier = Number(form.multiplier || 1.5);
+  const totalAmount = Math.round(hourlyRate * multiplier * hours * 100) / 100;
+
+  // حساب الساعات تلقائياً من وقت البداية والنهاية
+  const calcHours = (start: string, end: string) => {
+    if (!start || !end) return "";
+    const [sh, sm] = start.split(":").map(Number);
+    const [eh, em] = end.split(":").map(Number);
+    let diff = (eh * 60 + em) - (sh * 60 + sm);
+    if (diff < 0) diff += 24 * 60; // يمتد لليوم التالي
+    return (diff / 60).toFixed(2);
+  };
+
+  const handleTimeChange = (field: "startTime" | "endTime", value: string) => {
+    const updated = { ...form, [field]: value };
+    const start = field === "startTime" ? value : form.startTime;
+    const end = field === "endTime" ? value : form.endTime;
+    if (start && end) {
+      updated.hours = calcHours(start, end);
+    }
+    setForm(updated);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const firstError = validate({
+      assignmentId: form.assignmentId ? null : "يرجى اختيار الموظف",
+      overtimeDate: form.overtimeDate ? null : "تاريخ الوقت الإضافي مطلوب",
+      startTime: form.startTime ? null : "وقت البدء مطلوب",
+      endTime: form.endTime ? null : "وقت الانتهاء مطلوب",
+      hours: hours <= 0
+        ? "عدد الساعات يجب أن يكون أكبر من صفر"
+        : hours > 12
+          ? "لا يمكن تسجيل أكثر من 12 ساعة في اليوم"
+          : null,
+    });
+    if (firstError) {
+      toast({ variant: "destructive", title: firstError });
+      return;
+    }
+
+    try {
+      await createMut.mutateAsync({
+        assignmentId: Number(form.assignmentId),
+        overtimeDate: form.overtimeDate,
+        startTime: form.startTime,
+        endTime: form.endTime,
+        hours,
+        multiplier,
+        reason: form.reason || undefined,
+      });
+      clearDraft();
+      setLocation("/hr/overtime");
+    } catch (err: any) {
+      setApiError(err);
+    }
+  };
 
   return (
     <CreatePageLayout
@@ -139,62 +118,129 @@ export default function OvertimeCreate() {
       backPath="/hr/overtime"
       backLabel="الوقت الإضافي"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }]}
+      isDirty={Boolean(form.assignmentId || form.overtimeDate)}
     >
-      <CreationDateField />
-      <FormShell
-        schema={schema}
-        defaultValues={{
-          assignmentId: "",
-          overtimeDate: "",
-          startTime: "",
-          endTime: "",
-          hours: "",
-          multiplier: "1.50",
-          reason: "",
-        }}
-        submitLabel={createMut.isPending ? "جاري الإرسال..." : "إرسال الطلب"}
-        secondaryActions={
-          <Button type="button" variant="outline" onClick={() => setLocation("/hr/overtime")}>
-            إلغاء
-          </Button>
-        }
-        onSubmit={async (values) => {
-          await createMut.mutateAsync({
-            assignmentId: Number(values.assignmentId),
-            overtimeDate: values.overtimeDate,
-            startTime: values.startTime,
-            endTime: values.endTime,
-            hours: Number(values.hours),
-            multiplier: Number(values.multiplier),
-            reason: values.reason || undefined,
-          });
-          setLocation("/hr/overtime");
-        }}
-      >
-        <AutoComputeHours />
-        <FormGrid cols={2}>
-          <FormEntitySelect name="assignmentId" select={EmployeeSelect} label="الموظف" required />
-          <FormDateField name="overtimeDate" label="تاريخ الوقت الإضافي" required />
-        </FormGrid>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <CreationDateField />
+        {hasDraft && (
+          <div className="flex items-center gap-2 p-3 bg-status-info-surface border border-status-info-surface rounded-lg text-sm text-status-info-foreground">
+            <Info className="h-4 w-4 shrink-0" />
+            <span>تم استعادة مسودة سابقة</span>
+            <Button type="button" size="sm" variant="ghost" onClick={clearDraft} className="mr-auto text-xs">
+              مسح المسودة
+            </Button>
+          </div>
+        )}
 
-        <EmployeeContext employees={employees} />
+        {/* الموظف والتاريخ */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <EmployeeSelect
+            value={form.assignmentId}
+            onChange={(v) => setForm({ ...form, assignmentId: v })}
+            label="الموظف"
+            required
+            error={fieldErrors.assignmentId}
+          />
 
-        <FormGrid cols={4}>
-          <FormTextField name="startTime" label="وقت البداية" type="time" required />
-          <FormTextField name="endTime" label="وقت النهاية" type="time" required />
-          <FormNumberField name="hours" label="عدد الساعات" step="0.25" min="0.25" max="12" />
-          <FormSelectField name="multiplier" label="معامل الضرب" options={MULTIPLIER_OPTIONS} />
-        </FormGrid>
+          <FormFieldWrapper label="تاريخ الوقت الإضافي" required error={fieldErrors.overtimeDate}>
+            <DatePicker
+              value={form.overtimeDate}
+              onChange={(v) => setForm({ ...form, overtimeDate: v })}
+              maxDate={new Date()}
+            />
+          </FormFieldWrapper>
+        </div>
 
-        <CostSummary employees={employees} />
+        {/* سياق الموظف: ساعات إضافية هذا الشهر + تنبيهات */}
+        {selectedEmployee && (
+          <EmployeeContextCard
+            employeeId={selectedEmployee.id}
+            section="overtime"
+          />
+        )}
 
-        <FormTextareaField
-          name="reason"
+        {/* الأوقات والساعات */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <FormFieldWrapper label="وقت البداية" required>
+            <Input type="time" value={form.startTime} onChange={(e) => handleTimeChange("startTime", e.target.value)} />
+          </FormFieldWrapper>
+
+          <FormFieldWrapper label="وقت النهاية" required>
+            <Input type="time" value={form.endTime} onChange={(e) => handleTimeChange("endTime", e.target.value)} />
+          </FormFieldWrapper>
+
+          <NumberField
+            label="عدد الساعات"
+            value={form.hours}
+            onChange={(v) => setForm({ ...form, hours: v })}
+            step={0.25}
+            min={0.25}
+            max={12}
+            error={fieldErrors.hours}
+          />
+
+          <FormFieldWrapper label="معامل الضرب">
+            <Select value={form.multiplier} onValueChange={(v) => setForm({ ...form, multiplier: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {OVERTIME_MULTIPLIERS.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormFieldWrapper>
+        </div>
+
+        {/* ملخص التكلفة */}
+        {hours > 0 && hourlyRate > 0 && (
+          <Card className="border-purple-200 bg-purple-50/50">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Calculator className="h-4 w-4 text-purple-600" />
+                <span className="text-sm font-semibold text-purple-700">ملخص التكلفة</span>
+              </div>
+              <div className="grid grid-cols-4 gap-4 text-center">
+                <div>
+                  <p className="text-lg font-bold text-purple-700">{formatCurrency(hourlyRate)}</p>
+                  <p className="text-xs text-muted-foreground">سعر الساعة</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-purple-700">×{multiplier.toFixed(2)}</p>
+                  <p className="text-xs text-muted-foreground">المعامل</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-purple-700">{hours}</p>
+                  <p className="text-xs text-muted-foreground">ساعات</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-status-success-foreground">{formatCurrency(totalAmount)}</p>
+                  <p className="text-xs text-muted-foreground">الإجمالي</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* السبب */}
+        <TextAreaField
           label="سبب الطلب (اختياري)"
           rows={3}
           placeholder="سبب العمل الإضافي..."
+          value={form.reason}
+          onChange={(v) => setForm({ ...form, reason: v })}
         />
-      </FormShell>
+
+        {/* أزرار الإرسال */}
+        <div className="flex items-center gap-3 pt-4 border-t">
+          <Button type="submit" disabled={createMut.isPending} className="gap-1.5" rateLimitAware>
+            <Clock className="h-4 w-4" />
+            {createMut.isPending ? "جاري الإرسال..." : "إرسال الطلب"}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => setLocation("/hr/overtime")}>
+            إلغاء
+          </Button>
+        </div>
+      </form>
     </CreatePageLayout>
   );
 }

@@ -34,12 +34,15 @@ export const labelAdapter: FormatAdapter = {
     const paper = (ctx.paperSize ?? (ctx.template.paperSize as PaperSize) ?? "LABEL_50x30") as PaperSize;
     const { w, h } = labelDimsMm(paper);
     const html = renderContextToHtml(ctx);
-    const overrides = ctx.template.cssOverrides ?? "";
+    // Strip </style> from user-supplied overrides — see a4Adapter for context.
+    const overrides = typeof ctx.template.cssOverrides === "string"
+      ? ctx.template.cssOverrides.replace(/<\s*\/\s*style/gi, "")
+      : "";
     const full = `<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8"/>
-  <title>label-${ctx.entityType}-${ctx.entityId}</title>
+  <title>label-${`${ctx.entityType}-${ctx.entityId}`.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]!))}</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Libre+Barcode+128&display=swap"/>
   <style>${LABEL_CSS(w, h)}${overrides}</style>
 </head>

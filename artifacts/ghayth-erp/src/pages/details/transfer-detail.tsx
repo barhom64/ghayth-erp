@@ -4,7 +4,7 @@ import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
@@ -65,36 +65,6 @@ export default function TransferDetail() {
     return out;
   }, [transfer]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!transfer) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: `TRF-${id}` },
-          { label: "اسم الموظف", value: transfer.employeeName || "-" },
-          { label: "من القسم", value: transfer.fromDepartment || "-" },
-          { label: "إلى القسم", value: transfer.toDepartment || "-" },
-          ...(transfer.fromBranch ? [{ label: "من الفرع", value: transfer.fromBranch }] : []),
-          ...(transfer.toBranch ? [{ label: "إلى الفرع", value: transfer.toBranch }] : []),
-          { label: "تاريخ النقل", value: formatDateAr(transfer.transferDate) },
-          ...(transfer.reason ? [{ label: "السبب", value: transfer.reason }] : []),
-          { label: "الحالة", value: STATUS_LABELS[transfer.status] || transfer.status || "-" },
-        ],
-      },
-    ];
-    if (transfer.notes) {
-      sections.push({ kind: "text", title: "ملاحظات", body: transfer.notes });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "الموظف", name: transfer.employeeName || "" },
-        { label: "المعتمد", name: transfer.approvedByName || "" },
-      ],
-    });
-    return sections;
-  }, [transfer, id]);
 
   const handleEdit = () => {
     setLocation(`/hr/transfers/${id}/edit`);
@@ -245,12 +215,9 @@ export default function TransferDetail() {
         <>
           {transfer && (
             <EntityPrintButton
-              branchId={transfer.branchId}
-              title={`نقل TRF-${id}`}
-              ref={`TRF-${id}`}
-              date={formatDateAr(transfer.createdAt)}
-              sections={printSections}
-            />
+              entityType="transfer"
+              entityId={id ?? 0}
+              formats={["a4"]}/>
           )}
           <GuardedButton
             perm="hr:update"

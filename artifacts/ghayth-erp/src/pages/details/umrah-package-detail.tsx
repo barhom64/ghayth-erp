@@ -1,22 +1,14 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import {
-  useDetailEditDelete,
-  DetailActionButtons,
-  InlineEditCard,
-} from "@/components/shared/detail-edit-delete-actions";
-import {
-  DetailPageLayout,
-  type RelatedEntity,
-  EntityComments,
-} from "@workspace/entity-kit";
+import { useDetailEditDelete, DetailActionButtons, InlineEditCard } from "@/components/shared/detail-edit-delete-actions";
+import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Package, Star, Bus, Utensils, Calendar } from "lucide-react";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 
@@ -42,7 +34,7 @@ export default function UmrahPackageDetail() {
 
   const { data: pkg, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-package", String(id)],
-    `/umrah/packages/${id}`,
+    id ? `/umrah/packages/${id}` : null,
     !!id
   );
 
@@ -62,23 +54,6 @@ export default function UmrahPackageDetail() {
     return out;
   }, [pkg]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!pkg) return [];
-    const items: Array<{ label: string; value: string }> = [
-      { label: "رقم المرجع", value: `PKG-${id}` },
-      { label: "اسم الباقة", value: pkg.name || "-" },
-      { label: "السعر", value: formatCurrency(Number(pkg.sellPrice ?? 0)) },
-      { label: "المدة", value: pkg.duration ? `${pkg.duration} يوم` : "-" },
-      { label: "الفندق", value: pkg.hotelName || "-" },
-      { label: "تصنيف الفندق", value: pkg.hotelStars ? `${pkg.hotelStars} نجوم` : "-" },
-      { label: "النقل", value: pkg.transportType || "-" },
-      { label: "الوجبات", value: pkg.mealsIncluded || "-" },
-      { label: "السعة", value: String(pkg.capacity ?? "-") },
-      { label: "المحجوز", value: String(pkg.pilgrimCount ?? 0) },
-      { label: "الحالة", value: STATUS_LABELS[pkg.status] || pkg.status || "-" },
-    ];
-    return [{ kind: "info-grid", items }];
-  }, [pkg, id]);
 
   const editDelete = useDetailEditDelete({
     entityLabel: "الباقة",
@@ -266,12 +241,9 @@ export default function UmrahPackageDetail() {
           deletePerm="umrah:delete"
           extra={
             <EntityPrintButton
-              branchId={pkg?.branchId}
-              title={`الباقة — ${pkg?.name || ""}`}
-              ref={`PKG-${id}`}
-              date={formatDateAr(new Date().toISOString())}
-              sections={printSections}
-            />
+              entityType="umrah_package"
+              entityId={id ?? 0}
+              formats={["a4"]}/>
           }
         />
       }

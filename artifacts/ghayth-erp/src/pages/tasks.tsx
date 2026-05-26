@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { z } from "zod";
 import { Link, useLocation } from "wouter";
 import {
   PageShell,
@@ -10,18 +9,15 @@ import {
   useFilters,
   applyFilters,
   exportToCSV,
-  FormShell,
-  FormGrid,
-  FormTextField,
-  FormSelectField,
 } from "@workspace/ui-core";
 import { EntityComments } from "@workspace/entity-kit";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckSquare, Plus, Pencil, Trash2, PlayCircle, CheckCircle2, Copy, Eye, ChevronDown, ChevronUp, Link2 } from "lucide-react";
+import { CheckSquare, Plus, Pencil, Trash2, Check, X, PlayCircle, CheckCircle2, Loader2, Copy, Eye, ChevronDown, ChevronUp, Link2 } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { priorityLabel } from "@/lib/priority-labels";
 import { useAppContext } from "@/contexts/app-context";
@@ -44,18 +40,6 @@ const statusOptions = [
   { value: "completed", label: "مكتمل", color: "bg-status-success-surface text-status-success-foreground" },
   { value: "cancelled", label: "ملغاة", color: "bg-slate-100 text-slate-600" },
 ];
-
-const PRIORITY_OPTIONS = [
-  { value: "low", label: "منخفضة" },
-  { value: "medium", label: "متوسطة" },
-  { value: "high", label: "عالية" },
-];
-
-const taskEditSchema = z.object({
-  title: z.string().min(1, "العنوان مطلوب"),
-  priority: z.string(),
-  status: z.string(),
-});
 
 const typeLabels: Record<string, string> = { task: "مهمة عامة", meeting: "اجتماع", call: "مكالمة" };
 
@@ -87,7 +71,7 @@ export default function Tasks() {
   const [filters, setFilters] = useFilters();
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editInitial, setEditInitial] = useState<{ title: string; priority: string; status: string } | null>(null);
+  const [editForm, setEditForm] = useState<any>({});
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const { selectedRole } = useAppContext();
@@ -117,7 +101,7 @@ export default function Tasks() {
     [["tasks"]],
     {
       successMessage: "تم تحديث المهمة بنجاح",
-      onSuccess: () => { setEditingId(null); setEditInitial(null); },
+      onSuccess: () => { setEditingId(null); setEditForm({}); },
     }
   );
 
@@ -138,6 +122,8 @@ export default function Tasks() {
     { successMessage: "تم تحديث الحالة" }
   );
 
+  const saving = updateMut.isPending || deleteMut.isPending;
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -155,10 +141,15 @@ export default function Tasks() {
   const startEdit = (task: any) => {
     setEditingId(task.id);
     setDeletingId(null);
-    setEditInitial({ title: task.title || "", priority: task.priority || "medium", status: task.status || "pending" });
+    setEditForm({ title: task.title, priority: task.priority, status: task.status, description: task.description || "" });
   };
 
-  const cancelEdit = () => { setEditingId(null); setEditInitial(null); };
+  const cancelEdit = () => { setEditingId(null); setEditForm({}); };
+
+  const saveEdit = () => {
+    if (!editingId) return;
+    updateMut.mutate({ id: editingId, ...editForm });
+  };
 
   const handleDelete = (id: number) => {
     deleteMut.mutate({ id });
@@ -381,35 +372,49 @@ export default function Tasks() {
               </div>
             );
           }
-          if (editingId === task.id && editInitial) {
+          if (editingId === task.id) {
             parts.push(
               <div key="edit" className="bg-status-info-surface p-4">
-                <FormShell
-                  schema={taskEditSchema}
-                  defaultValues={editInitial}
-                  submitLabel="حفظ"
-                  secondaryActions={
-                    <Button type="button" size="sm" variant="outline" onClick={cancelEdit}>إلغاء</Button>
-                  }
-                  onSubmit={async (values) => {
-                    await new Promise<void>((resolve, reject) => {
-                      updateMut.mutate(
-                        { id: task.id, ...values },
-                        { onSuccess: () => resolve(), onError: () => reject() },
-                      );
-                    });
-                  }}
-                >
-                  <FormGrid cols={3}>
-                    <FormTextField name="title" label="العنوان" required />
-                    <FormSelectField name="priority" label="الأولوية" options={PRIORITY_OPTIONS} />
-                    <FormSelectField
-                      name="status"
-                      label="الحالة"
-                      options={statusOptions.map((s) => ({ value: s.value, label: s.label }))}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">العنوان</label>
+                    <Input
+                      value={editForm.title || ""}
+                      onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                     />
-                  </FormGrid>
-                </FormShell>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">الأولوية</label>
+                    <Select value={editForm.priority || "medium"} onValueChange={(v) => setEditForm({ ...editForm, priority: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">منخفضة</SelectItem>
+                        <SelectItem value="medium">متوسطة</SelectItem>
+                        <SelectItem value="high">عالية</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">الحالة</label>
+                    <Select value={editForm.status || "pending"} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map((s) => (
+                          <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <Button size="sm" onClick={saveEdit} disabled={saving} className="gap-1">
+                      {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                      حفظ
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={cancelEdit} className="gap-1">
+                      <X className="h-3 w-3" /> إلغاء
+                    </Button>
+                  </div>
+                </div>
               </div>
             );
           }
@@ -422,7 +427,7 @@ export default function Tasks() {
                   entityName={task.title}
                   onConfirm={() => handleDelete(task.id)}
                   onCancel={() => setDeletingId(null)}
-                  isPending={deleteMut.isPending}
+                  isPending={saving}
                 />
               </div>
             );

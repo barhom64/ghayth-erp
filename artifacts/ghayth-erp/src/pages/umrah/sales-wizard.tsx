@@ -1,16 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useFormContext } from "react-hook-form";
-import { z } from "zod";
+import { useMemo, useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import {
-  PageShell,
-  FormShell,
-  FormGrid,
-  FormSelectField,
-} from "@workspace/ui-core";
+import { PageShell } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
@@ -51,39 +46,26 @@ interface WizardResponse {
 
 const SOURCE_LABEL: Record<UninvoicedGroup["suggestedSource"], { text: string; tone: string; icon: typeof Sparkles }> = {
   last_invoice:         { text: "آخر فاتورة", tone: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: Sparkles },
-  pricing_rule:         { text: "قاعدة تسعير", tone: "bg-blue-50 text-blue-700 border-blue-200",       icon: TagsIcon },
-  default_per_mutamer:  { text: "افتراضي الوكيل", tone: "bg-amber-50 text-amber-700 border-amber-200",    icon: TagsIcon },
+  pricing_rule:         { text: "قاعدة تسعير", tone: "bg-status-info-surface text-status-info-foreground border-status-info-surface",       icon: TagsIcon },
+  default_per_mutamer:  { text: "افتراضي الوكيل", tone: "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface",    icon: TagsIcon },
   none:                 { text: "أدخل يدوياً",  tone: "bg-rose-50 text-rose-700 border-rose-200",        icon: Hand },
 };
 
-const salesWizardSchema = z.object({
-  subAgentId: z.string(),
-  seasonId: z.string(),
-});
-type SalesWizardForm = z.infer<typeof salesWizardSchema>;
+export default function UmrahSalesWizard() {
+  const { toast } = useToast();
+  const subAgentsQ = useApiQuery<{ data: SubAgent[] }>(["umrah-sub-agents"], "/umrah/sub-agents");
+  const seasonsQ = useApiQuery<{ data: Season[] }>(["umrah-seasons"], "/umrah/seasons");
 
-// Reads the live form values to drive both the uninvoiced-groups query
-// and the per-group price-table side state. Living inside FormShell
-// keeps the picker/seed/totals/submit tied to the same RHF source of
-// truth.
-function WizardBody({
-  subAgentsQ,
-  seasonsQ,
-  prices,
-  setPrices,
-  generate,
-  groupsRef,
-}: {
-  subAgentsQ: ReturnType<typeof useApiQuery<{ data: SubAgent[] }>>;
-  seasonsQ: ReturnType<typeof useApiQuery<{ data: Season[] }>>;
-  prices: Record<number, string>;
-  setPrices: React.Dispatch<React.SetStateAction<Record<number, string>>>;
-  generate: ReturnType<typeof useApiMutation<any, any>>;
-  groupsRef: React.MutableRefObject<UninvoicedGroup[]>;
-}) {
-  const { watch } = useFormContext<SalesWizardForm>();
-  const subAgentId = watch("subAgentId");
-  const seasonId = watch("seasonId");
+  const [subAgentId, setSubAgentId] = useState<string>("");
+  const [seasonId, setSeasonId] = useState<string>("");
+  const [prices, setPrices] = useState<Record<number, string>>({});
+
+  // currentSeason auto-select on first load so the operator types less.
+  const currentSeasonId = useMemo(() => {
+    const list = seasonsQ.data?.data ?? [];
+    return list.find((s) => s.isCurrent)?.id ?? list[0]?.id ?? null;
+  }, [seasonsQ.data]);
+  if (currentSeasonId && !seasonId) setSeasonId(String(currentSeasonId));
 
   const wizardQ = useApiQuery<WizardResponse>(
     ["umrah-sales-wizard", subAgentId, seasonId],
@@ -93,14 +75,10 @@ function WizardBody({
     !!subAgentId,
   );
 
+  // Hydrate the local prices map whenever the server returns groups.
+  // We only seed inputs that haven't been touched yet — operator edits stick.
   const groups = wizardQ.data?.groups ?? [];
-  // Surface the current groups to the FormShell-level submit handler so
-  // it can validate per-group prices without re-fetching.
-  groupsRef.current = groups;
-
-  // Hydrate prices when groups arrive — only fields the operator hasn't
-  // touched yet pick up the suggestedPrice so manual edits stick.
-  useEffect(() => {
+  useMemo(() => {
     if (!groups.length) return;
     setPrices((prev) => {
       const next = { ...prev };
@@ -111,8 +89,51 @@ function WizardBody({
       }
       return next;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groups]);
+
+  const generate = useApiMutation<any, any>(
+    "/umrah/invoices/generate",
+    "POST",
+    [["umrah-sales-wizard"], ["umrah-invoices"]],
+  );
+
+  const handleSubmit = async () => {
+    if (!subAgentId || !seasonId || groups.length === 0) return;
+    const manualPrices: Record<number, number> = {};
+    const missing: string[] = [];
+    for (const g of groups) {
+      const raw = prices[g.id];
+      const v = raw != null ? Number(raw) : NaN;
+      if (!Number.isFinite(v) || v <= 0) {
+        missing.push(g.nuskGroupNumber);
+        continue;
+      }
+      manualPrices[g.id] = v;
+    }
+    if (missing.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "أسعار ناقصة",
+        description: `يرجى إدخال سعر صحيح للمجموعات: ${missing.join(", ")}`,
+      });
+      return;
+    }
+    try {
+      const result: any = await generate.mutateAsync({
+        subAgentId: Number(subAgentId),
+        seasonId: Number(seasonId),
+        groupIds: groups.map((g) => g.id),
+        manualPrices,
+      });
+      toast({
+        title: "تم إنشاء الفاتورة",
+        description: `${result?.ref ?? ""} — ${formatCurrency(Number(result?.total ?? 0))}`,
+      });
+      setPrices({});
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذّر إنشاء الفاتورة", description: err?.message ?? "" });
+    }
+  };
 
   const total = useMemo(() => {
     let sum = 0;
@@ -125,33 +146,40 @@ function WizardBody({
   }, [groups, prices]);
 
   return (
-    <>
+    <PageShell title="إنشاء فاتورة مبيعات — معالج ذكي">
+      <UmrahTabsNav />
+
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base inline-flex items-center gap-2">
-            <Receipt className="h-4 w-4 text-gray-500" />
+            <Receipt className="h-4 w-4 text-muted-foreground" />
             اختر الوكيل الفرعي + الموسم
           </CardTitle>
-          <p className="text-xs text-gray-500">سيقوم النظام باستحضار المجموعات غير المفوترة + اقتراح سعر لكل واحدة بناء على آخر فاتورة أو قاعدة التسعير.</p>
+          <p className="text-xs text-muted-foreground">سيقوم النظام باستحضار المجموعات غير المفوترة + اقتراح سعر لكل واحدة بناء على آخر فاتورة أو قاعدة التسعير.</p>
         </CardHeader>
-        <CardContent>
-          <FormGrid cols={2}>
-            <FormSelectField
-              name="subAgentId"
-              label="الوكيل الفرعي"
-              placeholder="اختر الوكيل الفرعي"
-              options={(subAgentsQ.data?.data ?? []).map((s) => ({ value: String(s.id), label: s.name }))}
-            />
-            <FormSelectField
-              name="seasonId"
-              label="الموسم"
-              placeholder="اختر الموسم"
-              options={(seasonsQ.data?.data ?? []).map((s) => ({
-                value: String(s.id),
-                label: `${s.title}${s.isCurrent ? " (الحالي)" : ""}`,
-              }))}
-            />
-          </FormGrid>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label>الوكيل الفرعي</Label>
+            <Select value={subAgentId} onValueChange={setSubAgentId}>
+              <SelectTrigger><SelectValue placeholder="اختر الوكيل الفرعي" /></SelectTrigger>
+              <SelectContent>
+                {(subAgentsQ.data?.data ?? []).map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>الموسم</Label>
+            <Select value={seasonId} onValueChange={setSeasonId}>
+              <SelectTrigger><SelectValue placeholder="اختر الموسم" /></SelectTrigger>
+              <SelectContent>
+                {(seasonsQ.data?.data ?? []).map((s) => (
+                  <SelectItem key={s.id} value={String(s.id)}>{s.title}{s.isCurrent ? " (الحالي)" : ""}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
 
@@ -165,12 +193,12 @@ function WizardBody({
                   <Badge variant="outline" className="ms-2 text-xs">{wizardQ.data.subAgent.clientName}</Badge>
                 )}
               </CardTitle>
-              <p className="text-xs text-gray-500">عدّل السعر يدوياً لو احتجت — الافتراضي مأخوذ من آخر فاتورة أو القاعدة المطابقة.</p>
+              <p className="text-xs text-muted-foreground">عدّل السعر يدوياً لو احتجت — الافتراضي مأخوذ من آخر فاتورة أو القاعدة المطابقة.</p>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="text-xs text-gray-500 border-b">
+                  <thead className="text-xs text-muted-foreground border-b">
                     <tr>
                       <th className="text-start py-2 px-2">المجموعة</th>
                       <th className="text-start py-2 px-2">عدد المعتمرين</th>
@@ -191,7 +219,7 @@ function WizardBody({
                         <tr key={g.id} className="border-b last:border-0">
                           <td className="py-2 px-2">
                             <div className="font-medium">{g.nuskGroupNumber}</div>
-                            <div className="text-xs text-gray-500">{g.name ?? "—"}</div>
+                            <div className="text-xs text-muted-foreground">{g.name ?? "—"}</div>
                           </td>
                           <td className="py-2 px-2">{g.mutamerCount}</td>
                           <td className="py-2 px-2 text-xs">{g.entryDate ? formatDateAr(g.entryDate) : "—"}</td>
@@ -218,7 +246,7 @@ function WizardBody({
                   </tbody>
                   <tfoot>
                     <tr className="border-t">
-                      <td colSpan={5} className="py-2 px-2 text-end text-sm text-gray-500">الإجمالي قبل الضريبة + الغرامات</td>
+                      <td colSpan={5} className="py-2 px-2 text-end text-sm text-muted-foreground">الإجمالي قبل الضريبة + الغرامات</td>
                       <td className="py-2 px-2 text-end font-semibold">{formatCurrency(total)}</td>
                     </tr>
                   </tfoot>
@@ -227,8 +255,8 @@ function WizardBody({
 
               <div className="flex justify-end pt-2">
                 <GuardedButton
-                  type="submit"
                   perm="umrah:create"
+                  onClick={handleSubmit}
                   disabled={generate.isPending || groups.length === 0}
                 >
                   {generate.isPending ? "جاري الإنشاء…" : "إنشاء فاتورة"}
@@ -238,99 +266,6 @@ function WizardBody({
           </Card>
         </PageStateWrapper>
       )}
-    </>
-  );
-}
-
-export default function UmrahSalesWizard() {
-  const { toast } = useToast();
-  const subAgentsQ = useApiQuery<{ data: SubAgent[] }>(["umrah-sub-agents"], "/umrah/sub-agents");
-  const seasonsQ = useApiQuery<{ data: Season[] }>(["umrah-seasons"], "/umrah/seasons");
-
-  const [prices, setPrices] = useState<Record<number, string>>({});
-  // WizardBody owns the active uninvoiced-groups query; we mirror the
-  // current list into a ref so the FormShell-level submit handler can
-  // see it without re-running the query.
-  const groupsRef = useRef<UninvoicedGroup[]>([]);
-
-  // currentSeason → default value for the seasonId form field on mount.
-  const defaultSeasonId = useMemo(() => {
-    const list = seasonsQ.data?.data ?? [];
-    return list.find((s) => s.isCurrent)?.id ?? list[0]?.id ?? null;
-  }, [seasonsQ.data]);
-
-  const generate = useApiMutation<any, any>(
-    "/umrah/invoices/generate",
-    "POST",
-    [["umrah-sales-wizard"], ["umrah-invoices"]],
-  );
-
-  // Form needs to remount when the season list arrives so the seasonId
-  // default value reflects the current season. Until the list loads we
-  // render the initial empty-default form; once defaultSeasonId resolves
-  // the form re-keys.
-  const formKey = String(defaultSeasonId ?? "no-default");
-
-  const handleSubmit = async (values: SalesWizardForm) => {
-    if (!values.subAgentId || !values.seasonId) return;
-    const groups = groupsRef.current;
-    if (groups.length === 0) return;
-
-    const manualPrices: Record<number, number> = {};
-    const missing: string[] = [];
-    for (const g of groups) {
-      const raw = prices[g.id];
-      const v = raw != null ? Number(raw) : NaN;
-      if (!Number.isFinite(v) || v <= 0) {
-        missing.push(g.nuskGroupNumber);
-        continue;
-      }
-      manualPrices[g.id] = v;
-    }
-    if (missing.length > 0) {
-      toast({
-        variant: "destructive",
-        title: "أسعار ناقصة",
-        description: `يرجى إدخال سعر صحيح للمجموعات: ${missing.join(", ")}`,
-      });
-      return;
-    }
-    try {
-      const result: any = await generate.mutateAsync({
-        subAgentId: Number(values.subAgentId),
-        seasonId: Number(values.seasonId),
-        groupIds: groups.map((g) => g.id),
-        manualPrices,
-      });
-      toast({
-        title: "تم إنشاء الفاتورة",
-        description: `${result?.ref ?? ""} — ${formatCurrency(Number(result?.total ?? 0))}`,
-      });
-      setPrices({});
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "تعذّر إنشاء الفاتورة", description: err?.message ?? "" });
-    }
-  };
-
-  return (
-    <PageShell title="إنشاء فاتورة مبيعات — معالج ذكي">
-      <UmrahTabsNav />
-      <FormShell
-        key={formKey}
-        schema={salesWizardSchema}
-        defaultValues={{ subAgentId: "", seasonId: defaultSeasonId ? String(defaultSeasonId) : "" }}
-        hideSubmit
-        onSubmit={handleSubmit}
-      >
-        <WizardBody
-          subAgentsQ={subAgentsQ}
-          seasonsQ={seasonsQ}
-          prices={prices}
-          setPrices={setPrices}
-          generate={generate}
-          groupsRef={groupsRef}
-        />
-      </FormShell>
     </PageShell>
   );
 }

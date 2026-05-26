@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -156,52 +156,6 @@ export default function ReceivableDetail() {
     return out;
   }, [receivable]);
 
-  const printSections: PrintSection[] = useMemo(() => {
-    if (!receivable) return [];
-    const sections: PrintSection[] = [
-      {
-        kind: "info-grid",
-        items: [
-          { label: "رقم المرجع", value: receivable.ref || `AR-${id}` },
-          { label: "الإجمالي", value: formatCurrency(total) },
-          { label: "المدفوع", value: formatCurrency(paid) },
-          { label: "المتبقي", value: formatCurrency(remaining) },
-          ...(receivable.clientName
-            ? [{ label: "العميل", value: receivable.clientName }]
-            : []),
-          ...(receivable.invoiceRef
-            ? [{ label: "الفاتورة", value: receivable.invoiceRef }]
-            : []),
-          ...(receivable.dueDate
-            ? [{ label: "تاريخ الاستحقاق", value: formatDateAr(receivable.dueDate) }]
-            : []),
-          ...(isActuallyOverdue
-            ? [{ label: "أيام التأخر", value: String(daysOverdue) }]
-            : []),
-          { label: "شريحة العمر", value: AGING_LABEL[bucket] },
-          { label: "الحالة", value: STATUS_LABELS[receivable.status] || receivable.status || "-" },
-          { label: "تاريخ الإنشاء", value: formatDateAr(receivable.createdAt) },
-        ],
-      },
-    ];
-    if (paymentHistory.length > 0) {
-      sections.push({
-        kind: "info-grid",
-        items: paymentHistory.map((p: any, i: number) => ({
-          label: p.date ? formatDateAr(p.date) : `دفعة #${i + 1}`,
-          value: `${formatCurrency(Number(p.amount || 0))}${p.method ? ` — ${p.method}` : ""}`,
-        })),
-      });
-    }
-    sections.push({
-      kind: "signature",
-      parties: [
-        { label: "المحاسب", name: receivable.createdByName || "" },
-        { label: "المستلم", name: receivable.clientName || "" },
-      ],
-    });
-    return sections;
-  }, [receivable, total, paid, remaining, daysOverdue, isActuallyOverdue, bucket, paymentHistory, id]);
 
   const handleEdit = () => {
     setLocation(`/finance/receivables/${id}/edit`);
@@ -400,12 +354,9 @@ export default function ReceivableDetail() {
           <>
             {receivable && (
               <EntityPrintButton
-                branchId={receivable.branchId}
-                title={receivable.ref ? `مستحق ${receivable.ref}` : "مستحق"}
-                ref={receivable.ref || `AR-${id}`}
-                date={formatDateAr(receivable.createdAt)}
-                sections={printSections}
-              />
+                entityType="receivable"
+                entityId={id ?? 0}
+                formats={["a4"]}/>
             )}
             <GuardedButton
               perm="finance:update"
