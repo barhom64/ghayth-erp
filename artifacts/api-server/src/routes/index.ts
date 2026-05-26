@@ -44,6 +44,12 @@ import settingsRouter from "./settings.js";
 import rulesRouter from "./rules.js";
 import moduleDashboardsRouter from "./moduleDashboards.js";
 import adminRouter from "./admin.js";
+import adminObservabilityRouter from "./admin-observability.js";
+import adminAiGovernanceRouter from "./admin-ai-governance.js";
+import adminCommControlRouter from "./admin-communication-control.js";
+import adminPbxControlRouter from "./admin-pbx-control.js";
+import adminMasterPlanRouter from "./admin-master-plan.js";
+import adminNotificationRoutingRouter from "./admin-notification-routing.js";
 import permissionsRouter from "./permissions.js";
 import rbacV2Router from "./rbacV2.js";
 import auditLogsRouter from "./auditLogs.js";
@@ -351,6 +357,23 @@ router.use("/numbering", requireModule("settings"), requireMinLevel(70), numberi
 router.use("/rules", requireModule("settings"), requireMinLevel(70), rulesRouter);
 router.use("/module-dashboards", requireModule("bi"), moduleDashboardsRouter);
 router.use("/admin", requireModule("admin"), requireMinLevel(90), adminRouter);
+// Observability operator pane (#1139 §5). Mounted under /admin/observability
+// so the same module + minLevel guards apply; each endpoint inside also
+// calls authorize() to stay consistent with the rest of admin.
+router.use("/admin/observability", requireModule("admin"), requireMinLevel(90), adminObservabilityRouter);
+// AI Governance surface (#1139 §4 — provider registry + prompt catalog +
+// review center). Same gating as the rest of /admin.
+router.use("/admin/ai-governance", requireModule("admin"), requireMinLevel(90), adminAiGovernanceRouter);
+// Communication Control Plane (#1139 §3 — provider failover + DLP +
+// unified inbox).
+router.use("/admin/communication-control", requireModule("admin"), requireMinLevel(90), adminCommControlRouter);
+// PBX/IVR/Recording control plane (#1139 §3 — voice side).
+router.use("/admin/pbx-control", requireModule("admin"), requireMinLevel(90), adminPbxControlRouter);
+// Master Plan dashboard (#1139 §6 — "كل شيء قابل للتحكم من الواجهة")
+router.use("/admin/master-plan", requireModule("admin"), requireMinLevel(90), adminMasterPlanRouter);
+// Notification Routing rules + fallback chains UI (existing tables;
+// new admin surface to fulfil #1139 §6 "كل شيء قابل للتحكم من الواجهة").
+router.use("/admin/notification-routing", requireModule("admin"), requireMinLevel(90), adminNotificationRoutingRouter);
 // FND-004 — RBAC administration surfaces. permissions.ts is fully
 // authorize()-guarded per route; rbacV2.ts had a few routes without one;
 // gating the mount at level 90 (consistent with /admin) closes the gap

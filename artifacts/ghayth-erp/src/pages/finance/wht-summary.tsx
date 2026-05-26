@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { formatCurrency, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh, todayLocal } from "@/lib/formatters";
-import { Download, Receipt, Printer } from "lucide-react";
+import { Download, Receipt } from "lucide-react";
 
 interface DetailRow {
   allocationId: number;
@@ -184,9 +185,11 @@ export default function WhtSummaryPage() {
           >
             <Download className="h-3.5 w-3.5 me-1" /> تصدير CSV
           </GuardedButton>
-          <Button variant="outline" size="sm" onClick={() => window.print()}>
-            <Printer className="h-3.5 w-3.5 me-1" /> طباعة
-          </Button>
+          <EntityPrintButton
+            entityType="report_wht_summary"
+            entityId={`${startDate ?? ""}..${endDate ?? ""}`}
+            formats={["a4"]}
+          />
         </div>
       }
     >
