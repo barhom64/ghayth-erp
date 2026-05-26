@@ -10,6 +10,7 @@ const Dashboard = lazy(() => import("@/pages/finance/dashboard"));
 const CfoCockpit = lazy(() => import("@/pages/finance/cfo-cockpit"));
 const FinanceWorkflowsHub = lazy(() => import("@/pages/finance/finance-workflows-hub"));
 const MonthlyClosePack = lazy(() => import("@/pages/finance/monthly-close-pack"));
+const DailyCloseChecklist = lazy(() => import("@/pages/finance/daily-close-checklist"));
 const GlHealthScore = lazy(() => import("@/pages/finance/gl-health-score"));
 const ApprovalsInbox = lazy(() => import("@/pages/finance/approvals-inbox"));
 const Accounts = lazy(() => import("@/pages/finance/accounts"));
@@ -49,6 +50,7 @@ const InvoicesCreate = lazy(() => import("@/pages/create/finance/invoices-create
 const InvoiceDetail = lazy(() => import("@/pages/finance/invoice-detail"));
 const Expenses = lazy(() => import("@/pages/finance/expenses"));
 const ExpenseBurnRate = lazy(() => import("@/pages/finance/expense-burn-rate"));
+const ExpenseBulkApprovals = lazy(() => import("@/pages/finance/expense-bulk-approvals"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
 const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
@@ -178,6 +180,7 @@ export const financeRoutes = [
   { path: "/finance/cfo-cockpit", component: CfoCockpit },
   { path: "/finance/workflows-hub", component: FinanceWorkflowsHub },
   { path: "/finance/monthly-close-pack", component: MonthlyClosePack },
+  { path: "/finance/daily-close-checklist", component: DailyCloseChecklist },
   { path: "/finance/gl-health", component: GlHealthScore },
   { path: "/finance/approvals-inbox", component: ApprovalsInbox },
   { path: "/finance/accounts", component: Accounts },
@@ -225,6 +228,7 @@ export const financeRoutes = [
   { path: "/finance/invoices/create", component: InvoicesCreate },
   { path: "/finance/invoices/:id", component: InvoiceDetail },
   { path: "/finance/expenses", component: Expenses },
+  { path: "/finance/expense-bulk-approvals", component: ExpenseBulkApprovals },
   { path: "/finance/expense-burn-rate", component: ExpenseBurnRate },
   { path: "/finance/expenses/create", component: ExpensesCreate },
   { path: "/finance/expenses/multi-line", component: MultiLineExpenseCreate },

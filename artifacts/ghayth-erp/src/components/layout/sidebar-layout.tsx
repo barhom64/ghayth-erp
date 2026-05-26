@@ -179,6 +179,7 @@ const allNavSections: NavSection[] = [
     items: [
       { label: "🆕 مركز سير العمل المالي", path: "/finance/workflows-hub", icon: Sparkles, module: "finance" },
       { label: "CFO Cockpit", path: "/finance/cfo-cockpit", icon: BarChart3, module: "finance" },
+      { label: "فحص الإغلاق اليومي 🆕", path: "/finance/daily-close-checklist", icon: ListChecks, module: "finance" },
       { label: "حزمة الإقفال الشهري", path: "/finance/monthly-close-pack", icon: FileBarChart, module: "finance" },
       { label: "الحسابات والقيود", path: "/finance/accounts", icon: GitBranch, module: "finance", children: [
         { label: "شجرة الحسابات", path: "/finance/accounts", icon: GitBranch },
@@ -393,7 +394,8 @@ const allNavSections: NavSection[] = [
         { label: "الأرشيف", path: "/documents/archive", icon: Archive },
         { label: "القوالب", path: "/documents/templates", icon: FilePlus },
       ]},
-      { label: "التواصل", path: "/communications", icon: Mail, module: "comms", children: [
+      { label: "التواصل", path: "/inbox", icon: Mail, module: "comms", children: [
+        { label: "صندوقي الموحّد", path: "/inbox", icon: Mail },
         { label: "سجل الاتصالات", path: "/communications", icon: MessageSquare },
         { label: "الصادر والوارد", path: "/correspondence", icon: FileText },
         { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap },
