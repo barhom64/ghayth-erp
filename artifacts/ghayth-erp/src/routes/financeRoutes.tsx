@@ -13,6 +13,7 @@ const AccountsCreate = lazy(() => import("@/pages/create/finance/accounts-create
 const AccountsEdit = lazy(() => import("@/pages/create/finance/accounts-edit"));
 const AccountDetail = lazy(() => import("@/pages/details/account-detail"));
 const CostCenters = lazy(() => import("@/pages/finance/cost-centers"));
+const CostCenterPnl = lazy(() => import("@/pages/finance/cost-center-pnl"));
 const TaxCodes = lazy(() => import("@/pages/finance/tax-codes"));
 const TaxCodesCreate = lazy(() => import("@/pages/create/finance/tax-codes-create"));
 const WhtCategories = lazy(() => import("@/pages/finance/wht-categories"));
@@ -124,6 +125,7 @@ const BadDebt = lazy(() => import("@/pages/finance/bad-debt"));
 const AllocationRules = lazy(() => import("@/pages/finance/allocation-rules"));
 const OverridesReport = lazy(() => import("@/pages/finance/overrides-report"));
 const AllocationResults = lazy(() => import("@/pages/finance/allocation-results"));
+const AllocationCoverage = lazy(() => import("@/pages/finance/allocation-coverage"));
 const AllocationRuleCreate = lazy(() => import("@/pages/create/finance/allocation-rule-create"));
 const AllocationRuleEdit = lazy(() => import("@/pages/create/finance/allocation-rule-edit"));
 const ProductCatalog = lazy(() => import("@/pages/finance/product-catalog"));
@@ -215,7 +217,9 @@ export const financeRoutes = [
   { path: "/finance/allocation-rules/:id/edit", component: AllocationRuleEdit },
   { path: "/finance/overrides-report", component: OverridesReport },
   { path: "/finance/allocation-results", component: AllocationResults },
+  { path: "/finance/allocation-coverage", component: AllocationCoverage },
   { path: "/finance/cost-centers", component: CostCenters },
+  { path: "/finance/cost-center-pnl", component: CostCenterPnl },
   { path: "/finance/product-catalog", component: ProductCatalog },
   { path: "/finance/fx-rates", component: FxRates },
   { path: "/finance/fx-revaluation/history", component: FxRevaluationHistory },
