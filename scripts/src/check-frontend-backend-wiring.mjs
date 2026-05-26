@@ -446,11 +446,13 @@ function extractFrontendCalls() {
     // were invisible on every page using the hook (recruitment / crm /
     // legal / fleet / support / store / etc. — 22 pages total).
     //
-    // Per-call: always emit PATCH. Only emit DELETE if the page's
-    // destructure pulls `handleDelete` or `startDelete` — pages that
-    // don't (governance/capa-tab.tsx) intentionally suppress the delete
-    // affordance because the backend doesn't expose a DELETE route.
-    const inlineRe = /(?:const\s*\{([^}]*)\}\s*=\s*)?useInlineActions\s*\(\s*\{[^}]*endpoint\s*:\s*/g;
+    // Per-call: always emit PATCH. Only emit DELETE if delete-related
+    // identifiers (handleDelete / startDelete / deletingId) appear
+    // either in the destructure literal OR as `.method` accessors on
+    // the returned object — covers both `const { startDelete } = use…`
+    // (governance/capa-tab.tsx style) and `const jobActions = use…;
+    // jobActions.startDelete(…)` (hr/recruitment.tsx style).
+    const inlineRe = /(?:const\s+(?:\{([^}]*)\}|([a-zA-Z_$][\w$]*))\s*=\s*)?useInlineActions\s*\(\s*\{[^}]*endpoint\s*:\s*/g;
     for (const m of src.matchAll(inlineRe)) {
       let i = m.index + m[0].length;
       while (i < src.length && /\s/.test(src[i])) i++;
@@ -461,7 +463,11 @@ function extractFrontendCalls() {
       const line = lineOf(src, m.index);
       calls.push({ file: rel, url, line, method: "PATCH", source: "prop" });
       const destructure = m[1] ?? "";
-      if (/\b(handleDelete|startDelete|deletingId)\b/.test(destructure)) {
+      const varName = m[2] ?? "";
+      const usesDelete =
+        /\b(handleDelete|startDelete|deletingId)\b/.test(destructure) ||
+        (varName && new RegExp(`\\b${varName}\\.(handleDelete|startDelete|deletingId)\\b`).test(src));
+      if (usesDelete) {
         calls.push({ file: rel, url, line, method: "DELETE", source: "prop" });
       }
     }
