@@ -104,8 +104,10 @@ describe("Exit request creation", () => {
   });
 
   it("initiates approval chain for exit requests", () => {
+    // Slice widened from 6000 → 7500: the unified-numbering issueNumber
+    // prelude (#1141 phase 6) pushed initiateApprovalChain further down.
     const idx = EXIT_ROUTE.indexOf('router.post("/exit"');
-    const section = EXIT_ROUTE.slice(idx, idx + 6000);
+    const section = EXIT_ROUTE.slice(idx, idx + 7500);
     expect(section).toContain("initiateApprovalChain");
     expect(section).toContain('chainType: "exit"');
   });
