@@ -8,6 +8,7 @@ import { lazy } from "react";
 // for the cascade to the rest of the module.
 const Dashboard = lazy(() => import("@/pages/finance/dashboard"));
 const CfoCockpit = lazy(() => import("@/pages/finance/cfo-cockpit"));
+const FinanceWorkflowsHub = lazy(() => import("@/pages/finance/finance-workflows-hub"));
 const MonthlyClosePack = lazy(() => import("@/pages/finance/monthly-close-pack"));
 const GlHealthScore = lazy(() => import("@/pages/finance/gl-health-score"));
 const ApprovalsInbox = lazy(() => import("@/pages/finance/approvals-inbox"));
@@ -159,6 +160,7 @@ export const financeRoutes = [
   // to its own explicit path so the two pages don't share a URL.
   { path: "/finance", component: Dashboard },
   { path: "/finance/cfo-cockpit", component: CfoCockpit },
+  { path: "/finance/workflows-hub", component: FinanceWorkflowsHub },
   { path: "/finance/monthly-close-pack", component: MonthlyClosePack },
   { path: "/finance/gl-health", component: GlHealthScore },
   { path: "/finance/approvals-inbox", component: ApprovalsInbox },
