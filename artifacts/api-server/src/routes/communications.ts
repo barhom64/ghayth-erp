@@ -7,6 +7,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
 import { getCachedVendorConfigSync } from "../lib/vendorSettings.js";
+import { enqueueTranscription } from "../lib/pbxControl.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -459,6 +460,26 @@ router.post("/pbx/completed", async (req, res): Promise<void> => {
       `UPDATE pbx_calls SET status=$1, duration=$2, "recordingUrl"=$3 WHERE id=$4 AND "companyId"=$5 AND status != 'completed'`,
       [status, duration, recordingUrl, call.id, companyId]
     );
+
+    // Auto-queue the recording for transcription. The STT worker
+    // (cron: stt_queue_drain) picks it up; lib/pbxControl resolves
+    // an active STT provider from ai_providers (capability='stt')
+    // and falls back to a clear failed state if none is configured.
+    // Persist a pbx_call_recordings row in the same step so the
+    // operator UI has retention metadata.
+    if (recordingUrl && (status === "completed" || duration > 0)) {
+      void rawExecute(
+        `INSERT INTO pbx_call_recordings ("callId", "companyId", "recordingUrl", "durationMs", status)
+         VALUES ($1, $2, $3, $4, 'active')
+         ON CONFLICT ("callId") DO UPDATE
+           SET "recordingUrl" = EXCLUDED."recordingUrl",
+               "durationMs"   = EXCLUDED."durationMs",
+               status         = 'active'`,
+        [call.id, companyId, recordingUrl, (duration ?? 0) * 1000],
+      ).catch((e) => logger.warn(e, "[PBX] recording metadata upsert failed (non-fatal)"));
+      void enqueueTranscription(call.id, companyId, "ar")
+        .catch((e) => logger.warn(e, "[PBX] auto-enqueue STT failed (non-fatal)"));
+    }
 
     if (status === "no_answer" || duration === 0) {
       const sender = await matchSenderToEntity(call.callerNumber, companyId);

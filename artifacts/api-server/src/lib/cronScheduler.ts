@@ -22,6 +22,9 @@ import {
 } from "./businessHelpers.js";
 import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { processFallbackChains } from "./notificationEngine.js";
+import { runPendingTranscription } from "./pbxControl.js";
+import { aiEngine } from "./aiEngine.js";
+import { rawQuery as rawQueryShared, rawExecute as rawExecuteShared } from "./rawdb.js";
 import { checkSlaStatus } from "./workflowEngine.js";
 import { applyTransition } from "./lifecycleEngine.js";
 import { runAllProactiveChecks, registerProactiveEventListeners } from "./proactiveEngine.js";
@@ -3629,7 +3632,55 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "daily_budget_variance_alert", description: "تنبيه تجاوز الميزانية اليومي", schedule: "0 10 * * *", handler: dailyBudgetVarianceAlert },
   { name: "rate_limit_fallback_alert", description: "تنبيه عند انتقال حدود الطلبات إلى الذاكرة المحلية (Redis fallback)", schedule: "*/2 * * * *", handler: rateLimitFallbackAlertCheck },
   { name: "rbac_v2_expired_grants_cleanup", description: "تنظيف منح RBAC v2 منتهية الصلاحية", schedule: "0 3 * * *", handler: rbacV2ExpiredGrantsCleanup },
+  { name: "pbx_stt_queue_drain", description: "تفريغ طابور تحويل التسجيلات إلى نصوص + توليد ملخّص AI", schedule: "*/2 * * * *", handler: pbxSttQueueDrain },
 ];
+
+/**
+ * Drain the PBX transcript queue. Each tick processes up to 5 pending
+ * recordings to keep the cron run bounded; the next tick picks up
+ * anything left. When a transcript completes, this same handler also
+ * generates the AI summary so the operator UI shows both as soon as
+ * possible. STT/summarisation cost flows through recordAiUsage so it
+ * lands in /admin/observability.
+ */
+async function pbxSttQueueDrain(): Promise<string> {
+  const MAX_PER_TICK = 5;
+  let processed = 0;
+  let summarised = 0;
+  for (let i = 0; i < MAX_PER_TICK; i++) {
+    const result = await runPendingTranscription();
+    if (!result) break;
+    processed++;
+    if (result.status !== "completed") continue;
+
+    // Just-completed transcript → auto-summarise. Read the transcript
+    // text + companyId, pipe to the existing aiEngine.summarizerSummarize.
+    const [row] = await rawQueryShared<{ id: number; transcript: string | null; companyId: number }>(
+      `SELECT id, transcript, "companyId" FROM pbx_call_transcripts
+        WHERE "callId" = $1 AND status = 'completed' AND summary IS NULL`,
+      [result.callId],
+    );
+    if (!row || !row.transcript) continue;
+    try {
+      const summary = await aiEngine.summarizerSummarize(
+        row.transcript,
+        300,
+        { companyId: row.companyId, userId: null },
+      );
+      await rawExecuteShared(
+        `UPDATE pbx_call_transcripts
+            SET summary = $1, "summarisedAt" = NOW()
+          WHERE id = $2`,
+        [summary, row.id],
+      );
+      summarised++;
+    } catch {
+      // Summarisation failure is non-fatal — the transcript is
+      // already saved; an operator can retry from the UI.
+    }
+  }
+  return `processed=${processed} summarised=${summarised}`;
+}
 
 async function rbacV2ExpiredGrantsCleanup(): Promise<string> {
   // Drop user-level grants whose expires_at has passed. We delete rather
