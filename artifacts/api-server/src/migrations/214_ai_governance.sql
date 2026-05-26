@@ -23,18 +23,18 @@
 -- The registry slot every AI call resolves through. Slug is unique so the
 -- runtime can look up "anthropic" without trusting an arbitrary id.
 CREATE TABLE IF NOT EXISTS public.ai_providers (
-  id           SERIAL PRIMARY KEY,
-  slug         varchar(60)  NOT NULL UNIQUE,           -- 'anthropic' / 'openai' / 'azure-openai' …
-  name         varchar(200) NOT NULL,                  -- human-readable label (Arabic-OK)
-  status       varchar(20)  NOT NULL DEFAULT 'active', -- 'active' | 'disabled' | 'failover-only'
-  priority     integer      NOT NULL DEFAULT 100,      -- lower = tried first when fallback is needed
-  defaultModel varchar(120),
+  id             SERIAL PRIMARY KEY,
+  slug           varchar(60)  NOT NULL UNIQUE,           -- 'anthropic' / 'openai' / 'azure-openai' …
+  name           varchar(200) NOT NULL,                  -- human-readable label (Arabic-OK)
+  status         varchar(20)  NOT NULL DEFAULT 'active', -- 'active' | 'disabled' | 'failover-only'
+  priority       integer      NOT NULL DEFAULT 100,      -- lower = tried first when fallback is needed
+  "defaultModel" varchar(120),
   -- Config holds the env-var keys to read API credentials from, not the
   -- credentials themselves. The actual secrets stay in lib/config.ts.
-  config       jsonb        NOT NULL DEFAULT '{}'::jsonb,
-  notes        text,
-  "createdAt"  timestamp with time zone DEFAULT now(),
-  "updatedAt"  timestamp with time zone DEFAULT now(),
+  config         jsonb        NOT NULL DEFAULT '{}'::jsonb,
+  notes          text,
+  "createdAt"    timestamp with time zone DEFAULT now(),
+  "updatedAt"    timestamp with time zone DEFAULT now(),
   CONSTRAINT ai_providers_status_check CHECK (status IN ('active','disabled','failover-only'))
 );
 
@@ -47,24 +47,24 @@ CREATE INDEX IF NOT EXISTS idx_ai_providers_status_priority
 -- version. The runtime always picks the row with status='approved' and
 -- the highest version number for a given slug.
 CREATE TABLE IF NOT EXISTS public.ai_prompts (
-  id             SERIAL PRIMARY KEY,
-  slug           varchar(120) NOT NULL,                -- 'reception.categorize' / 'print.suggest_template' …
-  version        integer      NOT NULL DEFAULT 1,
-  title          varchar(300) NOT NULL,
-  description    text,
-  systemPrompt   text         NOT NULL,
-  userTemplate   text,                                 -- optional — engines may compose the user msg themselves
+  id               SERIAL PRIMARY KEY,
+  slug             varchar(120) NOT NULL,                -- 'reception.categorize' / 'print.suggest_template' …
+  version          integer      NOT NULL DEFAULT 1,
+  title            varchar(300) NOT NULL,
+  description      text,
+  "systemPrompt"   text         NOT NULL,
+  "userTemplate"   text,                                 -- optional — engines may compose the user msg themselves
   -- 'draft'        — author is editing
   -- 'in_review'    — submitted; awaiting reviewer decision
   -- 'approved'     — live; eligible for getApprovedPrompt() lookup
   -- 'deprecated'   — superseded by a newer approved version
   -- 'rejected'     — review rejected; cannot ship
-  status         varchar(20)  NOT NULL DEFAULT 'draft',
-  ownerUserId    integer,
-  approvedUserId integer,
-  approvedAt     timestamp with time zone,
-  "createdAt"    timestamp with time zone DEFAULT now(),
-  "updatedAt"    timestamp with time zone DEFAULT now(),
+  status           varchar(20)  NOT NULL DEFAULT 'draft',
+  "ownerUserId"    integer,
+  "approvedUserId" integer,
+  "approvedAt"     timestamp with time zone,
+  "createdAt"      timestamp with time zone DEFAULT now(),
+  "updatedAt"      timestamp with time zone DEFAULT now(),
   CONSTRAINT ai_prompts_slug_version_unique UNIQUE (slug, version),
   CONSTRAINT ai_prompts_status_check
     CHECK (status IN ('draft','in_review','approved','deprecated','rejected'))
@@ -84,15 +84,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_ai_prompts_approved_per_slug
 -- approval gate (in the route) requires at least one approved review with
 -- the reviewer ≠ author before status can move to 'approved'.
 CREATE TABLE IF NOT EXISTS public.ai_prompt_reviews (
-  id          SERIAL PRIMARY KEY,
-  promptId    integer NOT NULL REFERENCES public.ai_prompts(id) ON DELETE CASCADE,
-  reviewerId  integer NOT NULL,
+  id            SERIAL PRIMARY KEY,
+  "promptId"    integer NOT NULL REFERENCES public.ai_prompts(id) ON DELETE CASCADE,
+  "reviewerId"  integer NOT NULL,
   -- 'approved'          — green-light to ship
   -- 'changes_requested' — author should iterate
   -- 'rejected'          — kill the version
-  decision    varchar(30) NOT NULL,
-  comments    text,
-  "createdAt" timestamp with time zone DEFAULT now(),
+  decision      varchar(30) NOT NULL,
+  comments      text,
+  "createdAt"   timestamp with time zone DEFAULT now(),
   CONSTRAINT ai_prompt_reviews_decision_check
     CHECK (decision IN ('approved','changes_requested','rejected'))
 );
