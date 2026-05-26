@@ -10498,6 +10498,55 @@ CREATE UNIQUE INDEX zatca_settings_company_branch_uq ON public.zatca_settings US
 CREATE UNIQUE INDEX zatca_settings_company_default_uq ON public.zatca_settings USING btree ("companyId") WHERE ("branchId" IS NULL);
 
 
+-- ============================================================
+-- Numbering center indexes (migrations 213 / 216 / 217 of #1141).
+-- These belong in the dump baseline so the CI test Postgres has them
+-- without re-running the migrations; `pg_dump` would emit them in
+-- their alphabetical position the next time db/dump-schema.sh runs.
+-- ============================================================
+
+-- numbering_counters unique scope index (#1141 migration 213).
+-- issueNumber's ON CONFLICT clause relies on this exact expression
+-- index. Without it, the service can't atomically upsert a counter
+-- row on first issue and falls back to a SQL 42P10 error.
+CREATE UNIQUE INDEX IF NOT EXISTS numbering_counters_unique_scope
+    ON public.numbering_counters (
+        "schemeId",
+        COALESCE("branchId", 0),
+        COALESCE("fiscalYear", 0),
+        COALESCE(period, ''::text),
+        COALESCE("seasonId", 0)
+    );
+CREATE INDEX IF NOT EXISTS numbering_counters_company_idx
+    ON public.numbering_counters ("companyId");
+
+-- numbering_assignments unique number per (company, module, entity).
+CREATE UNIQUE INDEX IF NOT EXISTS numbering_assignments_unique_number
+    ON public.numbering_assignments ("companyId", "moduleKey", "entityKey", number);
+CREATE INDEX IF NOT EXISTS numbering_assignments_entity_idx
+    ON public.numbering_assignments ("entityTable", "entityId");
+CREATE INDEX IF NOT EXISTS numbering_assignments_scheme_idx
+    ON public.numbering_assignments ("schemeId");
+CREATE INDEX IF NOT EXISTS numbering_assignments_status_idx
+    ON public.numbering_assignments (status);
+
+-- numbering_audit_logs indexes.
+CREATE INDEX IF NOT EXISTS numbering_audit_logs_company_idx
+    ON public.numbering_audit_logs ("companyId");
+CREATE INDEX IF NOT EXISTS numbering_audit_logs_scheme_idx
+    ON public.numbering_audit_logs ("schemeId");
+CREATE INDEX IF NOT EXISTS numbering_audit_logs_assignment_idx
+    ON public.numbering_audit_logs ("assignmentId");
+CREATE INDEX IF NOT EXISTS numbering_audit_logs_created_idx
+    ON public.numbering_audit_logs ("createdAt");
+
+-- numbering_schemes alphabetical-anchor indexes.
+CREATE INDEX IF NOT EXISTS numbering_schemes_company_idx
+    ON public.numbering_schemes ("companyId");
+CREATE INDEX IF NOT EXISTS numbering_schemes_module_idx
+    ON public.numbering_schemes ("moduleKey");
+
+
 --
 -- Name: accounting_mappings accounting_mappings_companyId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
