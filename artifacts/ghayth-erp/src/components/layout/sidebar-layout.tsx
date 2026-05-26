@@ -215,6 +215,7 @@ const allNavSections: NavSection[] = [
         { label: "إنفاق الموردين 🆕", path: "/finance/vendor-spend", icon: BarChart3 },
         { label: "دفعة الدفع", path: "/finance/payment-run", icon: Banknote },
         { label: "تقويم الدفعات 🆕", path: "/finance/ap-payment-calendar", icon: Calendar },
+        { label: "متابعة عقود الموردين 🆕", path: "/finance/vendor-contracts-tracker", icon: FileSignature },
       ]},
       { label: "النقد والذمم", path: "/finance/treasury", icon: Building, module: "finance", children: [
         { label: "مراقبة البنوك 🆕", path: "/finance/bank-accounts-watch", icon: Banknote },
@@ -224,6 +225,7 @@ const allNavSections: NavSection[] = [
         { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
         { label: "منضدة التحصيل 🆕", path: "/finance/ar-collection-workbench", icon: Users },
         { label: "كشف حساب عميل للطباعة 🆕", path: "/finance/customer-statement-print", icon: Printer },
+        { label: "ملف العميل 360° 🆕", path: "/finance/customer-360-sheet", icon: Users },
         { label: "مخاطر العملاء", path: "/finance/customer-risk", icon: AlertTriangle },
         { label: "مخصص ديون مشكوك فيها 🆕", path: "/finance/bad-debt-provision", icon: TrendingUp },
         { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },

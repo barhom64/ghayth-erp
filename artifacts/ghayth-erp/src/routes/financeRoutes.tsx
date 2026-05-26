@@ -77,6 +77,7 @@ const VendorStatement = lazy(() => import("@/pages/finance/vendor-statement"));
 const VendorStatementPrint = lazy(() => import("@/pages/finance/vendor-statement-print"));
 const Vendor360Sheet = lazy(() => import("@/pages/finance/vendor-360-sheet"));
 const VendorContracts = lazy(() => import("@/pages/finance/vendor-contracts"));
+const VendorContractsTracker = lazy(() => import("@/pages/finance/vendor-contracts-tracker"));
 const VendorSpend = lazy(() => import("@/pages/finance/vendor-spend"));
 const VendorSettlementWorkbench = lazy(() => import("@/pages/finance/vendor-settlement-workbench"));
 const PurchaseRequests = lazy(() => import("@/pages/finance/purchase-requests"));
@@ -95,6 +96,7 @@ const TaxFilingCalendar = lazy(() => import("@/pages/finance/tax-filing-calendar
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
 const CustomerAdvancesWorkbench = lazy(() => import("@/pages/finance/customer-advances-workbench"));
 const CustomerStatementPrint = lazy(() => import("@/pages/finance/customer-statement-print"));
+const Customer360Sheet = lazy(() => import("@/pages/finance/customer-360-sheet"));
 const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
 const BadDebtProvision = lazy(() => import("@/pages/finance/bad-debt-provision"));
 const ReceivableDetail = lazy(() => import("@/pages/details/receivable-detail"));
@@ -251,6 +253,7 @@ export const financeRoutes = [
   { path: "/finance/vendor-statement-print", component: VendorStatementPrint },
   { path: "/finance/vendor-360-sheet", component: Vendor360Sheet },
   { path: "/finance/contracts", component: VendorContracts },
+  { path: "/finance/vendor-contracts-tracker", component: VendorContractsTracker },
   { path: "/finance/vendor-spend", component: VendorSpend },
   { path: "/finance/vendor-settlement-workbench", component: VendorSettlementWorkbench },
   { path: "/finance/vendors/:id", component: VendorDetail, subKey: "vendors" },
@@ -293,6 +296,7 @@ export const financeRoutes = [
   { path: "/finance/tax-filing-calendar", component: TaxFilingCalendar },
   { path: "/finance/receivables", component: Receivables },
   { path: "/finance/customer-statement-print", component: CustomerStatementPrint },
+  { path: "/finance/customer-360-sheet", component: Customer360Sheet },
   { path: "/finance/customer-risk", component: CustomerRisk },
   { path: "/finance/bad-debt-provision", component: BadDebtProvision },
   { path: "/finance/receivables/:id", component: ReceivableDetail },
