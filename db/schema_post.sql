@@ -560,10 +560,24 @@ ALTER TABLE ONLY public.dunning_letters ALTER COLUMN id SET DEFAULT nextval('pub
 
 
 --
+-- Name: email_drafts id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_drafts ALTER COLUMN id SET DEFAULT nextval('public.email_drafts_id_seq'::regclass);
+
+
+--
 -- Name: email_queue id; Type: DEFAULT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.email_queue ALTER COLUMN id SET DEFAULT nextval('public.email_queue_id_seq'::regclass);
+
+
+--
+-- Name: email_signatures id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_signatures ALTER COLUMN id SET DEFAULT nextval('public.email_signatures_id_seq'::regclass);
 
 
 --
@@ -1327,6 +1341,34 @@ ALTER TABLE ONLY public.notification_webhooks ALTER COLUMN id SET DEFAULT nextva
 --
 
 ALTER TABLE ONLY public.notifications ALTER COLUMN id SET DEFAULT nextval('public.notifications_id_seq'::regclass);
+
+
+--
+-- Name: numbering_assignments id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.numbering_assignments ALTER COLUMN id SET DEFAULT nextval('public.numbering_assignments_id_seq'::regclass);
+
+
+--
+-- Name: numbering_audit_logs id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.numbering_audit_logs ALTER COLUMN id SET DEFAULT nextval('public.numbering_audit_logs_id_seq'::regclass);
+
+
+--
+-- Name: numbering_counters id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.numbering_counters ALTER COLUMN id SET DEFAULT nextval('public.numbering_counters_id_seq'::regclass);
+
+
+--
+-- Name: numbering_schemes id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.numbering_schemes ALTER COLUMN id SET DEFAULT nextval('public.numbering_schemes_id_seq'::regclass);
 
 
 --
@@ -3147,11 +3189,27 @@ ALTER TABLE ONLY public.dunning_letters
 
 
 --
+-- Name: email_drafts email_drafts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_drafts
+    ADD CONSTRAINT email_drafts_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: email_queue email_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.email_queue
     ADD CONSTRAINT email_queue_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: email_signatures email_signatures_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_signatures
+    ADD CONSTRAINT email_signatures_pkey PRIMARY KEY (id);
 
 
 --
@@ -4200,6 +4258,14 @@ ALTER TABLE ONLY public.notification_webhooks
 
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: numbering_schemes numbering_schemes_unique_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.numbering_schemes
+    ADD CONSTRAINT numbering_schemes_unique_key UNIQUE ("companyId", "moduleKey", "entityKey");
 
 
 --
@@ -6663,6 +6729,13 @@ CREATE INDEX idx_communication_providers_channel_priority ON public.communicatio
 
 
 --
+-- Name: idx_communications_log_company_folder; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_communications_log_company_folder ON public.communications_log USING btree ("companyId", folder, "createdAt" DESC) WHERE ("deletedAt" IS NULL);
+
+
+--
 -- Name: idx_communications_log_companyid; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6674,6 +6747,13 @@ CREATE INDEX idx_communications_log_companyid ON public.communications_log USING
 --
 
 CREATE INDEX idx_communications_log_deletedat ON public.communications_log USING btree ("deletedAt");
+
+
+--
+-- Name: idx_communications_log_starred; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_communications_log_starred ON public.communications_log USING btree ("companyId", "createdAt" DESC) WHERE (("isStarred" = true) AND ("deletedAt" IS NULL));
 
 
 --
@@ -7055,10 +7135,24 @@ CREATE INDEX idx_ect_plan ON public.employee_commission_tiers USING btree ("plan
 
 
 --
+-- Name: idx_email_drafts_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_email_drafts_user ON public.email_drafts USING btree ("companyId", "userId", "lastSavedAt" DESC);
+
+
+--
 -- Name: idx_email_queue_companyid; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX idx_email_queue_companyid ON public.email_queue USING btree ("companyId");
+
+
+--
+-- Name: idx_email_signatures_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_email_signatures_user ON public.email_signatures USING btree ("companyId", "userId");
 
 
 --
@@ -9960,6 +10054,90 @@ CREATE INDEX mudad_settlements_journal_idx ON public.mudad_settlements USING btr
 
 
 --
+-- Name: numbering_assignments_entity_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_assignments_entity_idx ON public.numbering_assignments USING btree ("entityTable", "entityId");
+
+
+--
+-- Name: numbering_assignments_scheme_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_assignments_scheme_idx ON public.numbering_assignments USING btree ("schemeId");
+
+
+--
+-- Name: numbering_assignments_status_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_assignments_status_idx ON public.numbering_assignments USING btree (status);
+
+
+--
+-- Name: numbering_assignments_unique_number; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX numbering_assignments_unique_number ON public.numbering_assignments USING btree ("companyId", "moduleKey", "entityKey", number);
+
+
+--
+-- Name: numbering_audit_logs_assignment_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_audit_logs_assignment_idx ON public.numbering_audit_logs USING btree ("assignmentId");
+
+
+--
+-- Name: numbering_audit_logs_company_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_audit_logs_company_idx ON public.numbering_audit_logs USING btree ("companyId");
+
+
+--
+-- Name: numbering_audit_logs_created_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_audit_logs_created_idx ON public.numbering_audit_logs USING btree ("createdAt");
+
+
+--
+-- Name: numbering_audit_logs_scheme_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_audit_logs_scheme_idx ON public.numbering_audit_logs USING btree ("schemeId");
+
+
+--
+-- Name: numbering_counters_company_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_counters_company_idx ON public.numbering_counters USING btree ("companyId");
+
+
+--
+-- Name: numbering_counters_unique_scope; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX numbering_counters_unique_scope ON public.numbering_counters USING btree ("schemeId", COALESCE("branchId", 0), COALESCE("fiscalYear", 0), COALESCE(period, ''::text), COALESCE("seasonId", 0));
+
+
+--
+-- Name: numbering_schemes_company_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_schemes_company_idx ON public.numbering_schemes USING btree ("companyId");
+
+
+--
+-- Name: numbering_schemes_module_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX numbering_schemes_module_idx ON public.numbering_schemes USING btree ("moduleKey");
+
+
+--
 -- Name: official_letters_branch_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -10345,6 +10523,13 @@ CREATE UNIQUE INDEX uniq_ai_prompts_approved_per_slug ON public.ai_prompts USING
 
 
 --
+-- Name: uniq_email_signatures_default_per_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uniq_email_signatures_default_per_user ON public.email_signatures USING btree ("companyId", "userId") WHERE ("isDefault" = true);
+
+
+--
 -- Name: uniq_fleet_trips_source_key; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -10496,55 +10681,6 @@ CREATE UNIQUE INDEX zatca_settings_company_branch_uq ON public.zatca_settings US
 --
 
 CREATE UNIQUE INDEX zatca_settings_company_default_uq ON public.zatca_settings USING btree ("companyId") WHERE ("branchId" IS NULL);
-
-
--- ============================================================
--- Numbering center indexes (migrations 213 / 216 / 217 of #1141).
--- These belong in the dump baseline so the CI test Postgres has them
--- without re-running the migrations; `pg_dump` would emit them in
--- their alphabetical position the next time db/dump-schema.sh runs.
--- ============================================================
-
--- numbering_counters unique scope index (#1141 migration 213).
--- issueNumber's ON CONFLICT clause relies on this exact expression
--- index. Without it, the service can't atomically upsert a counter
--- row on first issue and falls back to a SQL 42P10 error.
-CREATE UNIQUE INDEX IF NOT EXISTS numbering_counters_unique_scope
-    ON public.numbering_counters (
-        "schemeId",
-        COALESCE("branchId", 0),
-        COALESCE("fiscalYear", 0),
-        COALESCE(period, ''::text),
-        COALESCE("seasonId", 0)
-    );
-CREATE INDEX IF NOT EXISTS numbering_counters_company_idx
-    ON public.numbering_counters ("companyId");
-
--- numbering_assignments unique number per (company, module, entity).
-CREATE UNIQUE INDEX IF NOT EXISTS numbering_assignments_unique_number
-    ON public.numbering_assignments ("companyId", "moduleKey", "entityKey", number);
-CREATE INDEX IF NOT EXISTS numbering_assignments_entity_idx
-    ON public.numbering_assignments ("entityTable", "entityId");
-CREATE INDEX IF NOT EXISTS numbering_assignments_scheme_idx
-    ON public.numbering_assignments ("schemeId");
-CREATE INDEX IF NOT EXISTS numbering_assignments_status_idx
-    ON public.numbering_assignments (status);
-
--- numbering_audit_logs indexes.
-CREATE INDEX IF NOT EXISTS numbering_audit_logs_company_idx
-    ON public.numbering_audit_logs ("companyId");
-CREATE INDEX IF NOT EXISTS numbering_audit_logs_scheme_idx
-    ON public.numbering_audit_logs ("schemeId");
-CREATE INDEX IF NOT EXISTS numbering_audit_logs_assignment_idx
-    ON public.numbering_audit_logs ("assignmentId");
-CREATE INDEX IF NOT EXISTS numbering_audit_logs_created_idx
-    ON public.numbering_audit_logs ("createdAt");
-
--- numbering_schemes alphabetical-anchor indexes.
-CREATE INDEX IF NOT EXISTS numbering_schemes_company_idx
-    ON public.numbering_schemes ("companyId");
-CREATE INDEX IF NOT EXISTS numbering_schemes_module_idx
-    ON public.numbering_schemes ("moduleKey");
 
 
 --
