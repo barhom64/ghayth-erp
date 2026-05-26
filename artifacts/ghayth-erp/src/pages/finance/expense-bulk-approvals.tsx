@@ -12,7 +12,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import {
   CheckSquare, XSquare, Search, ExternalLink, CheckCircle2,
-  AlertTriangle, Filter, Users, Receipt,
+  AlertTriangle, Filter, Users, Receipt, BarChart3, ListChecks,
 } from "lucide-react";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 
@@ -127,6 +127,28 @@ export default function ExpenseBulkApprovalsPage() {
     <PageShell
       title="اعتماد المصاريف بالجملة"
       subtitle="اختر عدة مصاريف واعتمدها أو ارفضها مرة واحدة — توفير وقت المعتمد"
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/expenses">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Receipt className="h-3.5 w-3.5 ml-1" />
+              قائمة المصاريف
+            </Button>
+          </Link>
+          <Link href="/finance/expense-burn-rate">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <BarChart3 className="h-3.5 w-3.5 ml-1" />
+              معدل الحرق
+            </Button>
+          </Link>
+          <Link href="/finance/approvals-inbox">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <ListChecks className="h-3.5 w-3.5 ml-1" />
+              صندوق الاعتمادات
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 
