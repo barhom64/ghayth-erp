@@ -17,7 +17,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { BookOpen, Pencil, RefreshCw, AlertTriangle } from "lucide-react";
+import { BookOpen, Pencil, RefreshCw, AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import {
   PageShell,
   FormShell,
@@ -37,6 +38,21 @@ const articleFormSchema = z.object({
   legalReference: z.string().optional(),
 });
 type ArticleForm = z.infer<typeof articleFormSchema>;
+
+const createArticleSchema = z.object({
+  section: z.enum(["work_time", "work_organization", "conduct"]),
+  articleNumber: z.coerce.number().int().positive("رقم المادة مطلوب"),
+  title: z.string().min(1, "وصف المخالفة مطلوب"),
+  severity: z.enum(["low", "medium", "high", "critical"]),
+  isTermination: z.boolean().optional(),
+  penalty1: z.string().optional(),
+  penalty2: z.string().optional(),
+  penalty3: z.string().optional(),
+  penalty4: z.string().optional(),
+  extraDeduction: z.string().optional(),
+  legalReference: z.string().optional(),
+});
+type CreateArticleForm = z.infer<typeof createArticleSchema>;
 
 const SECTION_LABELS: Record<string, string> = {
   work_time: "مخالفات تتعلق بمواعيد العمل",
@@ -83,6 +99,14 @@ export default function DisciplineRegulationPage() {
   // arrives → "Invalid hook call" + "change in order of Hooks" errors). Must
   // stay above any conditional return.
   const [reseedAsk, setReseedAsk] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<Article | null>(null);
+  const createMut = useApiMutation<unknown, CreateArticleForm>(
+    "/hr/discipline/regulation",
+    "POST",
+    [["discipline-regulation"]],
+    { successMessage: "تم إضافة المادة", onSuccess: () => setCreating(false) },
+  );
 
   const grouped = data?.grouped ?? { work_time: [], work_organization: [], conduct: [] };
   const total = data?.total ?? 0;
@@ -172,9 +196,21 @@ export default function DisciplineRegulationPage() {
             <p className="text-xs text-orange-700 mt-2">+ {a.extraDeduction}</p>
           )}
         </div>
-        <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>
-          <Pencil className="w-4 h-4" />
-        </Button>
+        <div className="flex gap-1 shrink-0">
+          <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>
+            <Pencil className="w-4 h-4" />
+          </Button>
+          {canEdit && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-status-error-foreground"
+              onClick={() => setDeleting(a)}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -190,10 +226,20 @@ export default function DisciplineRegulationPage() {
       ]}
       loading={isLoading}
       actions={
-        <GuardedButton perm="hr:create" variant="outline" onClick={reseedDefaults} disabled={reseeding}>
-          <RefreshCw className={`w-4 h-4 me-2 ${reseeding ? "animate-spin" : ""}`} />
-          استنساخ اللائحة الافتراضية
-        </GuardedButton>
+        <div className="flex gap-2">
+          <GuardedButton
+            perm="hr:create"
+            onClick={() => setCreating(true)}
+            className="gap-1"
+          >
+            <Plus className="w-4 h-4" />
+            مادة جديدة
+          </GuardedButton>
+          <GuardedButton perm="hr:create" variant="outline" onClick={reseedDefaults} disabled={reseeding}>
+            <RefreshCw className={`w-4 h-4 me-2 ${reseeding ? "animate-spin" : ""}`} />
+            استنساخ اللائحة الافتراضية
+          </GuardedButton>
+        </div>
       }
     >
       <Tabs defaultValue="work_time" dir="rtl">
@@ -224,6 +270,78 @@ export default function DisciplineRegulationPage() {
           </TabsContent>
         ))}
       </Tabs>
+
+      <Dialog open={creating} onOpenChange={setCreating}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="w-4 h-4" /> مادة جديدة في اللائحة
+            </DialogTitle>
+          </DialogHeader>
+          <FormShell
+            schema={createArticleSchema}
+            defaultValues={{
+              section: "work_time",
+              articleNumber: (data?.total ?? 0) + 1,
+              title: "",
+              severity: "low",
+              isTermination: false,
+              penalty1: "",
+              penalty2: "",
+              penalty3: "",
+              penalty4: "",
+              extraDeduction: "",
+              legalReference: "",
+            }}
+            submitLabel="إضافة المادة"
+            secondaryActions={
+              <Button type="button" variant="outline" onClick={() => setCreating(false)}>
+                إلغاء
+              </Button>
+            }
+            onSubmit={async (values) => {
+              await createMut.mutateAsync(values);
+            }}
+          >
+            <FormGrid cols={2}>
+              <FormTextField
+                name="section"
+                label="القسم"
+                required
+                placeholder="work_time | work_organization | conduct"
+              />
+              <FormTextField name="articleNumber" label="رقم المادة" type="number" required />
+            </FormGrid>
+            <FormTextField name="title" label="وصف المخالفة" required />
+            <FormGrid cols={2}>
+              <FormTextField name="severity" label="الشدة (low/medium/high/critical)" />
+              <FormTextField name="legalReference" label="المرجع القانوني" />
+            </FormGrid>
+            <FormGrid cols={2}>
+              <FormTextField name="penalty1" label="عقوبة المخالفة الأولى" />
+              <FormTextField name="penalty2" label="عقوبة المخالفة الثانية" />
+              <FormTextField name="penalty3" label="عقوبة المخالفة الثالثة" />
+              <FormTextField name="penalty4" label="عقوبة المخالفة الرابعة" />
+            </FormGrid>
+            <FormTextareaField name="extraDeduction" label="ملاحظات إضافية" rows={2} />
+          </FormShell>
+        </DialogContent>
+      </Dialog>
+
+      {deleting && (
+        <ConfirmDeleteDialog
+          open={deleting !== null}
+          onOpenChange={(o) => { if (!o) setDeleting(null); }}
+          entity={{
+            type: "discipline_regulation_article",
+            id: deleting.id,
+            name: `المادة #${deleting.articleNumber} — ${deleting.title}`,
+          }}
+          deletePath={`/hr/discipline/regulation/${deleting.id}`}
+          invalidateKeys={[["discipline-regulation"]]}
+          onDeleted={() => setDeleting(null)}
+        />
+      )}
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
