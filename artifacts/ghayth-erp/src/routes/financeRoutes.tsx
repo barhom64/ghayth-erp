@@ -52,6 +52,7 @@ const Budget = lazy(() => import("@/pages/finance/budget"));
 const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
 const BudgetVariance = lazy(() => import("@/pages/finance/budget-variance"));
+const BudgetHeatmap = lazy(() => import("@/pages/finance/budget-heatmap"));
 const BudgetApprovals = lazy(() => import("@/pages/finance/budget-approvals"));
 const Vendors = lazy(() => import("@/pages/finance/vendors"));
 const VendorsCreate = lazy(() => import("@/pages/create/finance/vendors-create"));
@@ -202,6 +203,7 @@ export const financeRoutes = [
   { path: "/finance/budget/create", component: BudgetCreate },
   { path: "/finance/budget/:id", component: BudgetDetail },
   { path: "/finance/budget-variance", component: BudgetVariance },
+  { path: "/finance/budget-heatmap", component: BudgetHeatmap },
   { path: "/finance/budget-approvals", component: BudgetApprovals },
   { path: "/finance/vendors", component: Vendors },
   { path: "/finance/vendors/create", component: VendorsCreate },
