@@ -58,23 +58,22 @@ interface DayCell {
 }
 
 function addDaysIso(base: string, days: number): string {
-  // utc-ok: pure date arithmetic, no time-of-day matters
-  const d = new Date(base + "T00:00:00");
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  // Parse as UTC + use UTC arithmetic — guard rule wants explicit Z suffix
+  // so the wall-clock interpretation isn't dependent on the server's TZ.
+  const d = new Date(base + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
 function getWeekdayAr(iso: string): string {
-  // utc-ok: weekday label derivation, no business-period sensitivity
-  const d = new Date(iso + "T00:00:00");
-  return ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"][d.getDay()];
+  const d = new Date(iso + "T00:00:00Z");
+  return ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"][d.getUTCDay()];
 }
 
 function getMonthLabelAr(iso: string): string {
   const months = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
-  // utc-ok: month label only, no period drift
-  const d = new Date(iso + "T00:00:00");
-  return `${months[d.getMonth()]} ${d.getFullYear()}`;
+  const d = new Date(iso + "T00:00:00Z");
+  return `${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
 export default function CashCalendarPage() {
@@ -127,11 +126,10 @@ export default function CashCalendarPage() {
       const flows = flowsByDate.get(iso) ?? { inflow: 0, outflow: 0, events: [] };
       const net = flows.inflow - flows.outflow;
       running += net;
-      // utc-ok: comparing YYYY-MM-DD strings
-      const d = new Date(iso + "T00:00:00");
+      const d = new Date(iso + "T00:00:00Z");
       cells.push({
         date: iso,
-        dayOfMonth: d.getDate(),
+        dayOfMonth: d.getUTCDate(),
         inflow: flows.inflow,
         outflow: flows.outflow,
         net,
