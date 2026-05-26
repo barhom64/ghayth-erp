@@ -106,6 +106,20 @@ async function buildScope(payload: JWTPayload): Promise<RequestScope> {
   ];
 
   if (assignment.role === "owner" || assignment.role === "general_manager") {
+    // Owner / general_manager are global-scope by definition — they must
+    // see (and be able to filter to) every company and branch, not just
+    // the ones their single assignment row happens to point at. Without
+    // this expansion, picking any non-default branch in the header
+    // dropdown silently fell through `parseScopeFilters` (the requested
+    // id wasn't in `allowedBranches`, so it was dropped), and the server
+    // returned the user's default scope regardless of what they picked —
+    // the user-reported "فلتر الفروع لا يعمل".
+    const allCompanies = await rawQuery<{ id: number }>(
+      `SELECT id FROM companies WHERE COALESCE(status, 'active') = 'active'`
+    );
+    for (const c of allCompanies) {
+      if (!allowedCompanies.includes(c.id)) allowedCompanies.push(c.id);
+    }
     // Same status filter for the company-wide expansion — owners must
     // not silently regain access to a disabled branch.
     const companyBranches = await rawQuery<{ id: number }>(
