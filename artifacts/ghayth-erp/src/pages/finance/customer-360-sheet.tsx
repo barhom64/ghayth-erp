@@ -83,7 +83,10 @@ interface AdvancesResp {
 
 export default function Customer360SheetPage() {
   const today = todayLocal();
-  const [clientId, setClientId] = useState<string>("");
+  const initialClientId = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("clientId") ?? ""
+    : "";
+  const [clientId, setClientId] = useState<string>(initialClientId);
 
   const { data: client } = useApiQuery<ClientResp>(
     ["c360-client", clientId],
