@@ -277,7 +277,12 @@ function extractFrontendCalls() {
     // explicit type argument. That false-negative was big enough to
     // make the "POST /api/finance/invoices" endpoint look unused even
     // though invoices-create.tsx calls it on line 151.
-    const re = /\b(apiFetch|apiPatch|apiPost|apiPut|apiDelete|useApiQuery|useApiMutation)\b\s*(?:<[^>]*>)?\s*\(/g;
+    // Generic-slot regex allows nested `<T, Record<K, V>>` — one level of
+    // angle-bracket nesting. Previously `[^>]*` was non-balanced so a
+    // `useApiMutation<T, Record<string, unknown>>(...)` call would parse
+    // as `<T, Record<string, unknown>` then fail to reach the `(`,
+    // hiding every typed-mutation call with a Record/Array/Map generic.
+    const re = /\b(apiFetch|apiPatch|apiPost|apiPut|apiDelete|useApiQuery|useApiMutation)\b\s*(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(/g;
     for (const m of src.matchAll(re)) {
       const helper = m[1];
       // Cursor sits just past the `(`. Skip whitespace, then read the
