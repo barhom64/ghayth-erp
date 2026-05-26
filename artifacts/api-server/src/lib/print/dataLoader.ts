@@ -17,6 +17,10 @@ import {
   loadAttendanceReport,
   loadFleetReport,
   loadFleetTripsReport,
+  loadBalanceSheet,
+  loadCashFlow,
+  loadCashBankStatement,
+  loadBudgetVariance,
 } from "./reportLoaders.js";
 
 interface LoaderArgs {
@@ -164,6 +168,14 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadFleetReport(companyId, entityId);
     case "report_fleet_trips":
       return await loadFleetTripsReport(companyId, entityId);
+    case "report_balance_sheet":
+      return await loadBalanceSheet(companyId, entityId);
+    case "report_cash_flow":
+      return await loadCashFlow(companyId, entityId);
+    case "report_cash_bank":
+      return await loadCashBankStatement(companyId, entityId);
+    case "report_budget_variance":
+      return await loadBudgetVariance(companyId, entityId);
     default:
       // 1. Entity is in entityRegistry → use its declared table.
       // 2. Otherwise fall back to the static map below for entities the

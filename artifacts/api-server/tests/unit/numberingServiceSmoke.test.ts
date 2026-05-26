@@ -322,3 +322,76 @@ describe("CI guard — direct numbering inside routes", () => {
     expect(LINT).toContain("Issue #1141");
   });
 });
+
+describe("UX simplification + backfill (#1141 phase 5)", () => {
+  const TAB = readFileSync(
+    join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/settings/numbering-tab.tsx"),
+    "utf8",
+  );
+  const BACKFILL = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/lib/numberingBackfill.ts"),
+    "utf8",
+  );
+  const MIG216 = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/migrations/216_numbering_backfill_metadata.sql"),
+    "utf8",
+  );
+  const ROUTES = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/routes/numbering.ts"),
+    "utf8",
+  );
+
+  it("numbering tab does NOT use forbidden Dialog/Modal popups", () => {
+    // No popup imports — the new UX uses inline master/detail.
+    expect(TAB).not.toMatch(/from\s+["']@\/components\/ui\/dialog["']/);
+    expect(TAB).not.toMatch(/<DialogContent\b/);
+    expect(TAB).not.toMatch(/<DialogHeader\b/);
+  });
+  it("numbering tab exposes the three end-user presets", () => {
+    expect(TAB).toContain("per_branch_yearly");
+    expect(TAB).toContain("company_yearly");
+    expect(TAB).toContain("per_season");
+    expect(TAB).toContain("كل فرع رقم مستقل");
+    expect(TAB).toContain("رقم واحد للشركة");
+    expect(TAB).toContain("حسب الموسم");
+  });
+  it("numbering tab hides expert fields behind an advanced toggle", () => {
+    expect(TAB).toContain("إعدادات متقدمة");
+    expect(TAB).toContain("showAdvanced");
+  });
+  it("numbering tab renders a backfill banner with row count + action", () => {
+    expect(TAB).toContain("BackfillBanner");
+    expect(TAB).toContain("/numbering/schemes/${scheme.id}/backfill");
+  });
+  it("numberingBackfill exports the backfill API surface", () => {
+    expect(BACKFILL).toContain("export async function backfillScheme");
+    expect(BACKFILL).toContain("export async function backfillAllSchemes");
+    expect(BACKFILL).toContain("export async function previewBackfill");
+    expect(BACKFILL).toContain("export function extractSequenceFromRef");
+  });
+  it("backfill rejects non-identifier table/column names (SQL-injection guard)", () => {
+    expect(BACKFILL).toContain("safeIdent");
+    expect(BACKFILL).toMatch(/\/\^\[a-zA-Z_\]\[a-zA-Z0-9_\]\{0,62\}\$\//);
+  });
+  it("backfill ratchets the counter — never decrements", () => {
+    expect(BACKFILL).toContain('GREATEST("lastNumber"');
+    expect(BACKFILL).toContain('GREATEST("nextNumber"');
+  });
+  it("migration 216 adds the backfill-metadata columns + seeds entity-table mapping", () => {
+    expect(MIG216).toContain('"defaultEntityTable"');
+    expect(MIG216).toContain('"defaultRefColumn"');
+    expect(MIG216).toContain('"lastBackfillAt"');
+    expect(MIG216).toContain("'general_request',     'requests'");
+    expect(MIG216).toContain("'employee_contract',   'employee_contracts'");
+    expect(MIG216).toContain("'umrah_agent_invoice', 'umrah_agent_invoices'");
+  });
+  it("backfill endpoints are wired through the numbering router with override RBAC", () => {
+    expect(ROUTES).toMatch(/router\.get\(\s*["']\/schemes\/:id\/backfill\/preview["']/);
+    expect(ROUTES).toMatch(/router\.post\(\s*["']\/schemes\/:id\/backfill["']/);
+    expect(ROUTES).toMatch(/router\.post\(\s*["']\/backfill-all["']/);
+    // The destructive endpoints sit behind `settings.numbering.reset`
+    // — same guard that protects counter resets.
+    expect(ROUTES).toMatch(/backfill["'][\s\S]{0,200}feature:\s*"settings\.numbering\.reset"/);
+  });
+});
+
