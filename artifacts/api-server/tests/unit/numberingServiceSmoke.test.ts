@@ -238,6 +238,42 @@ describe("priority-2 numbering schemes seeded in migration 214", () => {
   });
 });
 
+describe("phase-3 cleanup — generateTimeRef removed from all routes (#1141)", () => {
+  const CLI = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/clients.ts"), "utf8");
+  const WHS = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/warehouse.ts"), "utf8");
+  const POR = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/clientPortal.ts"), "utf8");
+  const ALG = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/finance-algorithms.ts"), "utf8");
+  const SIG = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/digital-signature.ts"), "utf8");
+  const INTERNAL = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/internalRef.ts"), "utf8");
+  const MIG215 = readFileSync(
+    join(REPO_ROOT, "artifacts/api-server/src/migrations/215_numbering_client_code_scheme.sql"),
+    "utf8",
+  );
+
+  it("clients.ts issues client code through the numbering center", () => {
+    expect(CLI).not.toMatch(/generateTimeRef\(\s*["']CLT["']\s*\)/);
+    expect(CLI).toContain('entityKey: "client_code"');
+  });
+  it("warehouse.ts no longer calls generateTimeRef for official refs", () => {
+    expect(WHS).not.toMatch(/generateTimeRef\(\s*["']PR-AUTO["']\s*\)/);
+    expect(WHS).not.toMatch(/generateTimeRef\(\s*["']TRANSFER["']\s*\)/);
+    expect(WHS).toContain('entityKey: "purchase_request"');
+    expect(WHS).toContain('entityKey: "stock_transfer"');
+  });
+  it("internal correlation refs (BATCH/BANK/SIG/PAY-PORTAL) go through lib/internalRef.ts", () => {
+    expect(INTERNAL).toContain("export function internalTechRef");
+    expect(WHS).toContain('internalTechRef("BATCH")');
+    expect(POR).toContain('internalTechRef("PAY-PORTAL")');
+    expect(ALG).toContain('internalTechRef("BANK")');
+    expect(SIG).toContain('internalTechRef("SIG")');
+  });
+  it("migration 215 seeds the crm.client_code scheme for every company", () => {
+    expect(MIG215).toContain("'crm', 'client_code'");
+    expect(MIG215).toContain("CLT");
+    expect(MIG215).toContain('ON CONFLICT ("companyId","moduleKey","entityKey") DO NOTHING');
+  });
+});
+
 describe("finance routes migrated to the numbering center", () => {
   const INV = readFileSync(
     join(REPO_ROOT, "artifacts/api-server/src/routes/finance-invoices.ts"),

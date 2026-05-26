@@ -2,7 +2,8 @@ import { handleRouteError, ValidationError, NotFoundError, ConflictError, parseI
 import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
-import { createAuditLog, emitEvent, generateTimeRef } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { hashPassword } from "../lib/auth.js";
@@ -423,7 +424,16 @@ router.post("/auto-create", authorize({ feature: "crm.clients", action: "create"
     }
 
     const clientName = name || `عميل ${phone.slice(-4)}`;
-    const code = generateTimeRef("CLT");
+    // Numbering center (Issue #1141) — client code from central authority.
+    const issued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "crm",
+      entityKey: "client_code",
+      entityTable: "clients",
+      actorId: scope.userId,
+    });
+    const code = issued.number;
 
     const { insertId } = await rawExecute(
       `INSERT INTO clients (name, phone, classification, source, code, "companyId", "isBlacklisted")
@@ -431,6 +441,10 @@ router.post("/auto-create", authorize({ feature: "crm.clients", action: "create"
       [clientName, phone, source, code, scope.companyId]
     );
     assertInsert(insertId, "clients");
+    await rawExecute(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [insertId, issued.assignmentId]
+    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to clients row"));
 
     const [newClient] = await rawQuery<ClientRow>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     if (!newClient) throw new NotFoundError("فشل في استرجاع العميل");
