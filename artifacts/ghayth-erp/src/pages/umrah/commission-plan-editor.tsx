@@ -461,7 +461,8 @@ function AssignmentField({ disabled }: { disabled: boolean }) {
   const enabled = !!employeeId && employeeId > 0;
   const assignmentsQ = useApiQuery<{ data: any[] }>(
     ["umrah-employee-assignments", String(employeeId ?? "")],
-    enabled ? `/umrah/employees/${employeeId}/assignments` : null,
+    `/umrah/employees/${employeeId}/assignments`,
+    enabled,
   );
   const assignments = assignmentsQ.data?.data ?? [];
   return (

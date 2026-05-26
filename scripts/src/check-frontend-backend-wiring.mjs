@@ -316,6 +316,17 @@ function extractFrontendCalls() {
         // Skip `=>` and whitespace.
         while (i < src.length && /[\s=>]/.test(src[i])) i++;
       }
+      // Conditional URL form: `cond ? "..." : null`. The URL we want
+      // is the truthy branch. The audit used to miss these because
+      // readString stopped at the leading identifier. Detect a
+      // `<ident>(?.<ident>)*\s*\?\s*` prefix and skip to the URL.
+      // useApiQuery's third arg is the `enabled` flag so a bare-template
+      // URL is the recommended shape, but legacy pages use the
+      // conditional shape extensively (44 sites at last count).
+      const cond = /^[a-zA-Z_$][\w$]*(?:\?\.[a-zA-Z_$][\w$]*|\.[a-zA-Z_$][\w$]*)*\s*\?\s*/.exec(src.slice(i));
+      if (cond) {
+        i += cond[0].length;
+      }
       const lit = readString(src, i);
       if (!lit) continue;
       if (!lit.value.startsWith("/")) continue;
