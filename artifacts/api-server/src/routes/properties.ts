@@ -2017,18 +2017,19 @@ router.post("/late-rent/escalate", authorize({ feature: "properties.payments", a
       const lateDays = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
 
       let targetStage: string | null = null;
-      if (lateDays >= 90) targetStage = 'legal_transfer';
-      else if (lateDays >= 60) targetStage = 'penalty_applied';
-      else if (lateDays >= 30) targetStage = 'escalation';
-      else if (lateDays >= 14) targetStage = 'field_visit';
-      else if (lateDays >= 7) targetStage = 'notification';
-      else if (lateDays >= 3) targetStage = 'alert';
+      let targetPhase: number | null = null;
+      if (lateDays >= 90)      { targetStage = 'legal_transfer';  targetPhase = 6; }
+      else if (lateDays >= 60) { targetStage = 'penalty_applied'; targetPhase = 5; }
+      else if (lateDays >= 30) { targetStage = 'escalation';      targetPhase = 4; }
+      else if (lateDays >= 14) { targetStage = 'field_visit';     targetPhase = 3; }
+      else if (lateDays >= 7)  { targetStage = 'notification';    targetPhase = 2; }
+      else if (lateDays >= 3)  { targetStage = 'alert';           targetPhase = 1; }
 
-      if (!targetStage) continue;
+      if (!targetStage || targetPhase === null) continue;
 
       const existingAction = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM late_rent_actions WHERE "paymentId"=$1 AND phase=$2 LIMIT 1`,
-        [payment.id, targetStage]
+        [payment.id, targetPhase]
       );
       if (existingAction.length > 0) {
         results.push({ paymentId: payment.id, tenant: payment.tenantName, unit: payment.unitNumber, lateDays, stage: targetStage, skipped: true, reason: 'already_applied' });
@@ -2112,7 +2113,7 @@ router.post("/late-rent/escalate", authorize({ feature: "properties.payments", a
       try {
         await rawExecute(
           `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes) VALUES ($1,$2,$3,$4,NOW(),$5)`,
-          [payment.contractId, payment.id, targetStage, action, `إيجار متأخر ${lateDays} يوم — المرحلة: ${targetStage}`]
+          [payment.contractId, payment.id, targetPhase, action, `إيجار متأخر ${lateDays} يوم — المرحلة: ${targetStage}`]
         );
       } catch (logErr) {
         logger.error(logErr, "Failed to log late_rent_action:");
