@@ -837,8 +837,11 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
     if (filters.q) u.set("q", filters.q);
     return u.toString();
   }, [filters]);
-  const url = `/numbering/assignments${query ? `?${query}` : ""}`;
-  const { data, isLoading } = useApiQuery<{ data: Assignment[] }>(["numbering-assignments", query], url);
+  const suffix = query ? `?${query}` : "";
+  const { data, isLoading } = useApiQuery<{ data: Assignment[] }>(
+    ["numbering-assignments", query],
+    `/numbering/assignments${suffix}`,
+  );
   const rows = (data?.data || []) as Assignment[];
   const moduleKeys = useMemo(
     () => Array.from(new Set(schemes.map((s) => s.moduleKey))).sort(),
