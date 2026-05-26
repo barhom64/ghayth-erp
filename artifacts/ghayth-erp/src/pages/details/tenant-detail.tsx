@@ -319,7 +319,7 @@ function TenantLettersTab({ tenantId }: { tenantId: string }) {
     <Card className="border-0 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base flex items-center gap-2"><Mail className="h-4 w-4" /> المراسلات ({letters.length})</CardTitle>
-        <Link href={`/communications/letters/create?relatedType=tenant&relatedId=${tenantId}`}>
+        <Link href={`/correspondence/create?relatedType=tenant&relatedId=${tenantId}`}>
           <Button size="sm" className="gap-1"><Mail className="h-3 w-3" /> خطاب جديد</Button>
         </Link>
       </CardHeader>

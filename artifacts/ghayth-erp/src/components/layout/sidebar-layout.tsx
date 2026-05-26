@@ -404,9 +404,12 @@ const allNavSections: NavSection[] = [
       { label: "التواصل", path: "/inbox", icon: Mail, module: "comms", children: [
         { label: "صندوقي الموحّد", path: "/inbox", icon: Mail },
         { label: "الصناديق المتصلة", path: "/mailboxes", icon: Send },
-        { label: "سجل الاتصالات", path: "/communications", icon: MessageSquare },
         { label: "الصادر والوارد", path: "/correspondence", icon: FileText },
-        { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap },
+        // Phase 5: communications dashboard is admin-only — non-managers
+        // get redirected to /inbox automatically. Sidebar hides it for
+        // them via minRoleLevel.
+        { label: "مراقبة الاتصالات", path: "/communications", icon: MessageSquare, minRoleLevel: 40 },
+        { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap, minRoleLevel: 40 },
       ]},
       { label: "الشؤون القانونية", path: "/legal/cases", icon: Scale, module: "legal", minRoleLevel: 40, children: [
         { label: "القضايا", path: "/legal/cases", icon: Briefcase },

@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { Plus, CalendarClock, Play, Pause, Zap, Trash2 } from "lucide-react";
+import { Plus, CalendarClock, Play, Pause, Zap, Trash2, ScrollText, Calendar } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import {
   DataTable,
@@ -202,12 +202,24 @@ export default function RecurringJournalsPage() {
         breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "القيود الدورية" }]}
         loading={isLoading}
         actions={
-          <GuardedButton perm="finance:create" size="sm" asChild>
-            <Link href="/finance/recurring-journals/create">
-              <Plus className="h-4 w-4 me-1" />
-              قيد دوري جديد
+          <>
+            <Link href="/finance/journal">
+              <Button variant="outline" size="sm">
+                <ScrollText className="h-4 w-4 me-2" />القيود اليومية
+              </Button>
             </Link>
-          </GuardedButton>
+            <Link href="/finance/recurring-calendar">
+              <Button variant="outline" size="sm">
+                <Calendar className="h-4 w-4 me-2" />التقويم
+              </Button>
+            </Link>
+            <GuardedButton perm="finance:create" size="sm" asChild>
+              <Link href="/finance/recurring-journals/create">
+                <Plus className="h-4 w-4 me-1" />
+                قيد دوري جديد
+              </Link>
+            </GuardedButton>
+          </>
         }
       >
         <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
