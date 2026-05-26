@@ -46,6 +46,7 @@ import moduleDashboardsRouter from "./moduleDashboards.js";
 import adminRouter from "./admin.js";
 import adminObservabilityRouter from "./admin-observability.js";
 import adminAiGovernanceRouter from "./admin-ai-governance.js";
+import adminCommControlRouter from "./admin-communication-control.js";
 import permissionsRouter from "./permissions.js";
 import rbacV2Router from "./rbacV2.js";
 import auditLogsRouter from "./auditLogs.js";
@@ -355,6 +356,9 @@ router.use("/admin/observability", requireModule("admin"), requireMinLevel(90), 
 // AI Governance surface (#1139 §4 — provider registry + prompt catalog +
 // review center). Same gating as the rest of /admin.
 router.use("/admin/ai-governance", requireModule("admin"), requireMinLevel(90), adminAiGovernanceRouter);
+// Communication Control Plane (#1139 §3 — provider failover + DLP +
+// unified inbox).
+router.use("/admin/communication-control", requireModule("admin"), requireMinLevel(90), adminCommControlRouter);
 // FND-004 — RBAC administration surfaces. permissions.ts is fully
 // authorize()-guarded per route; rbacV2.ts had a few routes without one;
 // gating the mount at level 90 (consistent with /admin) closes the gap

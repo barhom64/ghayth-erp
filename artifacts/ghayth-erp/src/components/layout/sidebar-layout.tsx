@@ -383,6 +383,7 @@ const allNavSections: NavSection[] = [
         { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "مرصد المراقبة الموحّد", path: "/admin/observability", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "حوكمة الذكاء الاصطناعي", path: "/admin/ai-governance", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+        { label: "مركز التحكّم بالاتصالات", path: "/admin/communication-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
         { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any" },
         { label: "سجل الحركات", path: "/activity-log", icon: Activity },
