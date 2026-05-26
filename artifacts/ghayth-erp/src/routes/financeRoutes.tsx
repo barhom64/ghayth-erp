@@ -44,6 +44,7 @@ const Invoices = lazy(() => import("@/pages/finance/invoices"));
 const InvoicesCreate = lazy(() => import("@/pages/create/finance/invoices-create"));
 const InvoiceDetail = lazy(() => import("@/pages/finance/invoice-detail"));
 const Expenses = lazy(() => import("@/pages/finance/expenses"));
+const ExpenseBurnRate = lazy(() => import("@/pages/finance/expense-burn-rate"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
 const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
@@ -201,6 +202,7 @@ export const financeRoutes = [
   { path: "/finance/invoices/create", component: InvoicesCreate },
   { path: "/finance/invoices/:id", component: InvoiceDetail },
   { path: "/finance/expenses", component: Expenses },
+  { path: "/finance/expense-burn-rate", component: ExpenseBurnRate },
   { path: "/finance/expenses/create", component: ExpensesCreate },
   { path: "/finance/expenses/multi-line", component: MultiLineExpenseCreate },
   { path: "/finance/expenses/split", component: CostSplitter },
