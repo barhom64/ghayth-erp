@@ -42,6 +42,11 @@ export default function PrintLogPage() {
   const [entityType, setEntityType] = useState<string>("all");
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
+  // Status filter — "all" shows everything, "failed" focuses ops on
+  // broken prints (the audit called this out as a debug-friendliness
+  // gap), "success" hides noise, "pending" shows jobs that crashed
+  // mid-flight before writing a final status row.
+  const [status, setStatus] = useState<string>("all");
 
   const { data: branchesData } = useApiQuery<any>(["settings-branches"], "/settings/branches");
   const branches = (branchesData?.data ?? branchesData?.items ?? []) as Array<{ id: number; name: string }>;
@@ -49,6 +54,7 @@ export default function PrintLogPage() {
   const qs = new URLSearchParams();
   if (branchId !== "all") qs.set("branchId", branchId);
   if (entityType !== "all") qs.set("entityType", entityType);
+  if (status !== "all") qs.set("status", status);
   if (from) qs.set("from", from);
   if (to) qs.set("to", to);
 
@@ -95,7 +101,19 @@ export default function PrintLogPage() {
           <CardTitle className="text-base">المرشّحات</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div>
+              <Label>الحالة</Label>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">الكل</SelectItem>
+                  <SelectItem value="success">ناجحة فقط</SelectItem>
+                  <SelectItem value="failed">فشلت فقط</SelectItem>
+                  <SelectItem value="failed,pending">فشلت + معلقة</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <Label>الفرع</Label>
               <Select value={branchId} onValueChange={setBranchId}>
