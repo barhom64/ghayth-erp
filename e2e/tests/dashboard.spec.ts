@@ -7,8 +7,8 @@
 
 import { test, expect } from "@playwright/test";
 
-const EMAIL = process.env.E2E_USER_EMAIL ?? "owner@local.test";
-const PASSWORD = process.env.E2E_USER_PASSWORD ?? "Test1234!";
+const EMAIL = process.env.E2E_USER_EMAIL ?? "admin@ghayth.com";
+const PASSWORD = process.env.E2E_USER_PASSWORD ?? "Admin@123456";
 
 async function login(page: import("@playwright/test").Page) {
   await page.goto("/");
