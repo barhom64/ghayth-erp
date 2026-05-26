@@ -1,18 +1,41 @@
 # Forms Migration Verification Report
 
 > **Generated**: 2026-05-13
+> **Last update**: 2026-05-25 — enterprise-hardening sweep on `claude/enterprise-hardening-roadmap-AOfO7`
 > **Scope**: All `useState` form patterns migrated to `FormShell + zod` across the ghayth-erp frontend.
-> **Status**: 59 of ~280 forms migrated, 100% present on `main`, 42 smoke tests green (389/389 assertions).
+> **Status**: 223 of 431 pages on FormShell (51.7%); 10 shared/embedded components on FormShell that fan out across many detail pages (incl. `entity-comments` add-comment row, `entity-selects` QuickCreateDialog used by 10+ entity pickers, `detail-edit-delete-actions` InlineEditCard used by 18 detail pages, and `approval-actions` ApprovalActions used by 33 approval-bearing pages); all 76 pages/create/* migrated; complex editors (documents/templates, year-end-close, evaluation-360, login, change-password, umrah/sales-wizard, notification-engine templates+webhooks tabs, settings/print-templates) and many detail-page inline edits migrated; reason-prompt AlertDialogs consolidated to shared PromptDialog (12 callsites); all `window.prompt()` AND `window.confirm()` page-level calls eliminated (last `confirm()` replaced with AlertDialog-backed `useDirtyGuard` hook in fiscal-periods-v2); FormShell gains `hideSubmit` to let pages keep custom save-button placement; legacy `useAutoDraft` + `useFieldErrors` hooks deleted; hard lint rule `manual-form-instead-of-formshell` blocks regression.
 
 ---
 
 ## TL;DR
 
-| Item | Count | Verified On Main |
+| Item | Count | Verified On Branch |
 |------|-------|------------------|
-| Migrated form files | **29** | ✅ all contain `FormShell` import |
-| Smoke test files | **42** | ✅ `tests/unit/formMigrationBatch{2,3,…,43}Smoke.test.ts` |
-| Smoke test assertions | **389/389 pass** | ✅ `pnpm vitest run formMigrationBatch` |
+| Pages using FormShell directly | **159** | ✅ `grep -lr FormShell artifacts/ghayth-erp/src/pages` |
+| Pages using InlineEditForm (FormShell-backed) | **22** | ✅ `grep -lr InlineEditForm artifacts/ghayth-erp/src/pages` |
+| Detail pages using useDetailEditDelete (FormShell-backed via InlineEditCard) | **17** | ✅ `grep -lr useDetailEditDelete artifacts/ghayth-erp/src/pages` (excluding those already counted) |
+| Approval-bearing pages using ApprovalActions (FormShell-backed approve/reject/return/refer/escalate form) | **25** | ✅ `grep -lr ApprovalActions artifacts/ghayth-erp/src/pages` (excluding those already counted) |
+| **Total pages on FormShell (direct + indirect)** | **223** | — |
+| Shared components using FormShell | **10** | ✅ `grep -lr FormShell artifacts/ghayth-erp/src/components` |
+| Pages using shared PromptDialog | **12** | ✅ `grep -lr PromptDialog artifacts/ghayth-erp/src/pages` |
+| Page-level `window.prompt()` callers | **0** | ✅ `grep -rn 'window\.prompt' artifacts/ghayth-erp/src/pages` |
+| Page-level `window.confirm()` / `confirm()` callers | **0** | ✅ `grep -rn 'window\.confirm\|\bconfirm(' artifacts/ghayth-erp/src/pages` |
+| Frontend API calls resolving to real backend routes (path + HTTP method) | **1313/1313 (100%)** — audit scans helper calls + JSX-prop URLs + nested-generic helper signatures + `useInlineActions({endpoint:…})` (the shared list-page edit/delete hook). The `useInlineActions` scanner is destructure-aware — it only synthesises a DELETE call when the caller pulls `handleDelete` / `startDelete`, so domains that intentionally omit the delete affordance (governance/capa-tab — CAPA records are closed, not deleted) don't get audited for a DELETE the backend doesn't serve. | ✅ `pnpm run audit:wiring` (hard gate in `scripts/guard.sh` — any orphan OR method mismatch fails the build, helper-source AND prop-source) |
+| Backend coverage by UI (Phase C) | **963/1321 (72.9%)** — 358 endpoints have no frontend caller. Phase D Finance pages added: `/finance/cost-centers` (5-endpoint CRUD), `/finance/journal-templates` (4-endpoint CRUD with useFieldArray lines editor), `/finance/fx` (5-endpoint rates + revaluation with tabs), `/finance/contracts` (5-endpoint vendor contracts with expiry-soon highlights), `/finance/subsidiary-accounts` (4-endpoint entity↔GL-account links with entity-type-switched picker), `settings/accounting-mappings-tab` (extended: batch-save + per-row validate + single-row refresh, +3 endpoints), `/finance/customer-advances` (3-endpoint receive-then-apply flow with per-row apply dialog), `/finance/collections` (5-endpoint dunning preview/send/history + bad-debt provision workflow in one tabbed page), `/finance/purchase-requests` (6-endpoint P→PR→PO chain: list / create / impact-preview / submit / approve-decision / convert-to-PO), `purchase-order-detail` (extended with vendor-confirm + match-invoice + schedule-payment post-approval flows, +3 endpoints), `fixed-asset-detail` (extended: edit dialog / depreciation schedule modal / per-asset depreciate, +3 endpoints), `invoice-detail` + `expense-detail` (shared ZatcaActions component: XML preview / settings editor / submit-to-Fatoora flow, +3 endpoints), `/finance/budget-approvals` (5-endpoint budget governance: approval requests workflow + variance report + interactive validator), `/finance/entity-statements` (4-tab page: customer-statement / vendor-statement / subsidiary-ledger / cost-center-report) | ⚠️ report-only — `pnpm run audit:wiring` lists them grouped by domain |
+| Wiring-audit fixture tests | **36/36 pass** | ✅ `scripts/src/check-frontend-backend-wiring.test.mjs` (readString, normaliseFrontendUrl, urlsMatch + regression guards, methodsMatch, inferMethod, end-to-end invariant + Phase C unused-backend signal) |
+| Sidebar coverage audit | **17 list/dashboard pages missing nav entry** (down from 33 — added 16: 5 umrah ops, 8 admin governance, 1 finance, 2 hr) | ⚠️ `pnpm run audit:sidebar` — report-only; remaining 17 are minor or section-root paths |
+| Sidebar accordion behaviour | **on** | ✅ Opening a top-level group closes other top-level groups (request اللي اتطلب) |
+| Raw `<table>` ratchet baseline | **27 occurrences** (down from 30 — import-wizard preview tables + commission-plan-editor tiers table migrated to `<DataTable noToolbar>`) | ✅ `raw-table-in-page` rule in `scripts/src/lint-patterns.mjs` — net-new raw `<table>` fails the build; existing ones (mostly print views) stay until per-file migration |
+| RTL hardening — physical `left-N`/`right-N` | **0** (hard rule) | ✅ `rtl-position-left-right` — any new physical position class fails the build. This was the class causing print/dropdown buttons to drift left on mobile Arabic |
+| RTL hardening — physical `text-left`/`text-right` ratchet | **69** (down from 74 — login + insights + legal cleaned) | ✅ `rtl-text-align-lr` — use `text-start`/`text-end` instead |
+| RTL hardening — physical `ml-`/`mr-`/`pl-`/`pr-` ratchet | **47** (locked) | ✅ `rtl-margin-padding-lr` — use logical `ms-`/`me-`/`ps-`/`pe-` instead |
+| Legacy `useAutoDraft` / `useFieldErrors` callers | **0** | ✅ both hook files deleted from src/hooks/ |
+| Hard lint rule blocking regression | **active** | ✅ `manual-form-instead-of-formshell` in scripts/src/lint-patterns.mjs |
+| Lint-pattern test fixtures for the FormShell + native-dialog rules | **9** | ✅ scripts/src/lint-patterns.test.mjs (4 for `manual-form-instead-of-formshell`, 5 for `native-confirm-or-prompt`) |
+| Smoke test files (legacy batch) | **42** | ✅ `tests/unit/formMigrationBatch{2,3,…,43}Smoke.test.ts` |
+| Smoke test assertions (batch + shared + hook) | **396/396 pass** | ✅ `pnpm vitest run formMigrationBatch` + `sharedFormShellComponentsSmoke` |
+| Shared-components smoke file | **1** | ✅ `tests/unit/sharedFormShellComponentsSmoke.test.ts` (7 fixtures: 5 pinning entity-comments / entity-selects / detail-edit-delete-actions / approval-actions / workflow-kit re-export, + 2 pinning the shared `useDirtyGuard` hook contract) |
+| Full test suite | **4288/4288 pass** | ✅ on every commit via pre-commit hook |
 | Architectural patterns documented | **18** | ✅ as smoke-test fixtures |
 | RBAC: `GuardedButton` hides by default | **yes** | ✅ `permission-gate.tsx:66` |
 

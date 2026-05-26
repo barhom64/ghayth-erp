@@ -361,7 +361,7 @@ function ProjectListTab() {
             onPageChange={setPage}
             onRowClick={(row) => navigate(`/projects/${row.id}`)}
             renderRowExtras={(p) => {
-              if (editingId === p.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (editingId === p.id) return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(p.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === p.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="project" entityId={p.id} />;
               return null;
             }}

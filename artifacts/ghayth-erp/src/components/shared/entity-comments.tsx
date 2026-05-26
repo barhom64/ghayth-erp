@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { z } from "zod";
+import { useFormContext } from "react-hook-form";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormShell } from "@workspace/ui-core";
 import { cn } from "@/lib/utils";
 import { MessageCircle, Send, Trash2, User } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -12,6 +14,11 @@ interface EntityCommentsProps {
   entityId: number | string;
   className?: string;
 }
+
+const commentSchema = z.object({
+  body: z.string().min(1, "مطلوب"),
+});
+type CommentForm = z.infer<typeof commentSchema>;
 
 function formatTimeAgo(ts: string): string {
   const diff = Date.now() - new Date(ts).getTime();
@@ -24,30 +31,29 @@ function formatTimeAgo(ts: string): string {
   return `منذ ${days} يوم`;
 }
 
+function CommentRow() {
+  const { register, formState, watch } = useFormContext<CommentForm>();
+  const body = watch("body");
+  return (
+    <div className="flex gap-2 items-start">
+      <Input
+        {...register("body")}
+        placeholder="أضف تعليقاً..."
+        disabled={formState.isSubmitting}
+        className="flex-1"
+      />
+      <Button type="submit" size="sm" rateLimitAware disabled={!body?.trim() || formState.isSubmitting}>
+        <Send className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
 export function EntityComments({ entityType, entityId, className }: EntityCommentsProps) {
   const qc = useQueryClient();
   const qk = ["entity-comments", entityType, String(entityId)];
   const { data } = useApiQuery<any>(qk, `/entity-meta/comments/${entityType}/${entityId}`, !!entityId);
   const comments = data?.data || [];
-  const [body, setBody] = useState("");
-  const [sending, setSending] = useState(false);
-
-  const addComment = async () => {
-    if (!body.trim()) return;
-    setSending(true);
-    try {
-      await apiFetch(`/entity-meta/comments/${entityType}/${entityId}`, {
-        method: "POST",
-        body: JSON.stringify({ body: body.trim() }),
-      });
-      setBody("");
-      qc.invalidateQueries({ queryKey: qk });
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "خطأ في إضافة التعليق", description: err.message });
-    } finally {
-      setSending(false);
-    }
-  };
 
   const removeComment = async (id: number) => {
     try {
@@ -65,18 +71,26 @@ export function EntityComments({ entityType, entityId, className }: EntityCommen
         <span>التعليقات ({comments.length})</span>
       </div>
 
-      <div className="flex gap-2">
-        <Input
-          placeholder="أضف تعليقاً..."
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addComment(); } }}
-          className="flex-1"
-        />
-        <Button size="sm" onClick={addComment} disabled={!body.trim() || sending}>
-          <Send className="h-4 w-4" />
-        </Button>
-      </div>
+      <FormShell
+        schema={commentSchema}
+        defaultValues={{ body: "" }}
+        hideSubmit
+        onSubmit={async (values, ctx) => {
+          try {
+            await apiFetch(`/entity-meta/comments/${entityType}/${entityId}`, {
+              method: "POST",
+              body: JSON.stringify({ body: values.body.trim() }),
+            });
+            qc.invalidateQueries({ queryKey: qk });
+            ctx.reset();
+          } catch (err: any) {
+            toast({ variant: "destructive", title: "خطأ في إضافة التعليق", description: err.message });
+            throw err;
+          }
+        }}
+      >
+        <CommentRow />
+      </FormShell>
 
       {comments.length > 0 && (
         <div className="space-y-2 max-h-[300px] overflow-y-auto">

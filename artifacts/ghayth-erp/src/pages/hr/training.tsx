@@ -196,7 +196,7 @@ export default function TrainingPage() {
                   </div>
                   {programActions.editingId === t.id && (
                     <div className="mt-3">
-                      <InlineEditForm fields={programEditFields} form={programActions.editForm} setForm={programActions.setEditForm} onSave={() => programActions.handleSave(t.id, programActions.editForm)} onCancel={programActions.cancelEdit} isPending={programActions.isPending} />
+                      <InlineEditForm fields={programEditFields} initialValues={programActions.editForm} onSave={(values) => programActions.handleSave(t.id, values)} onCancel={programActions.cancelEdit} isPending={programActions.isPending} />
                     </div>
                   )}
                   {programActions.deletingId === t.id && (
@@ -223,9 +223,8 @@ export default function TrainingPage() {
                 return (
                   <InlineEditForm
                     fields={enrollmentEditFields}
-                    form={enrollmentActions.editForm}
-                    setForm={enrollmentActions.setEditForm}
-                    onSave={() => enrollmentActions.handleSave(e.id, enrollmentActions.editForm)}
+                    initialValues={enrollmentActions.editForm}
+                    onSave={(values) => enrollmentActions.handleSave(e.id, values)}
                     onCancel={enrollmentActions.cancelEdit}
                     isPending={enrollmentActions.isPending}
                   />

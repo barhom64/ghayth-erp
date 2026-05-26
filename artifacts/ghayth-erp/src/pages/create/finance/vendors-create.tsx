@@ -61,7 +61,7 @@ export default function VendorsCreate() {
   // Load WHT categories for the default-category dropdown.
   const { data: whtData } = useApiQuery<{ data: WhtCategory[] }>(
     ["wht-categories"],
-    "/finance/accounts/wht-categories",
+    "/finance/wht-categories",
   );
   const whtCategories = useMemo(
     () => (whtData?.data ?? []).filter((c) => c.isActive),

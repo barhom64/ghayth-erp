@@ -177,7 +177,7 @@ function ContractsTab() {
             pageSize={pageSize}
             onPageChange={setPage}
             renderRowExtras={(c) => {
-              if (editingId === c.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (editingId === c.id) return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(c.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal-contract" entityId={c.id} />;
               return null;
             }}
@@ -293,7 +293,7 @@ function CasesTab() {
             pageSize={20}
             onRowClick={(row) => setLocation(`/legal/cases/${row.id}`)}
             renderRowExtras={(c) => {
-              if (editingId === c.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (editingId === c.id) return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(c.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal-case" entityId={c.id} />;
               return null;
             }}
@@ -358,7 +358,7 @@ function FinancialLegalTab() {
                         <p className="font-medium text-sm">{c.title}</p>
                         <p className="text-xs mt-0.5 opacity-75">{c.court || "-"} — {c.opposingParty || "-"}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-end">
                         <p className="font-bold text-sm">{formatCurrency(c.financialRisk || 0)}</p>
                         <p className="text-xs mt-0.5 font-medium">{RISK_LABELS[c.riskLevel] || c.riskLevel}</p>
                       </div>

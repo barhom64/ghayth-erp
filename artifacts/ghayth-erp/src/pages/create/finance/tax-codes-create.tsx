@@ -48,7 +48,7 @@ export default function TaxCodesCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation(
-    "/finance/accounts/tax-codes", "POST",
+    "/finance/tax-codes", "POST",
     [["tax-codes"]],
   );
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);

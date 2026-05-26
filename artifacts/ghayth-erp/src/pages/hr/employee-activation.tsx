@@ -4,10 +4,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Badge } from "@/components/ui/badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { UserCheck, UserX, Users, ToggleLeft, Pause, Play, Ban } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -29,6 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { useAppContext } from "@/contexts/app-context";
 
 type LifecycleAction = "activate" | "suspend" | "terminate";
@@ -70,7 +68,6 @@ export default function EmployeeActivationPage() {
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["employees"], "/employees?limit=200");
 
   const [pending, setPending] = useState<{ action: LifecycleAction; employee: any } | null>(null);
-  const [reason, setReason] = useState("");
 
   const onLifecycleSuccess = (action: LifecycleAction) => {
     const msg =
@@ -80,7 +77,6 @@ export default function EmployeeActivationPage() {
     toast({ title: msg });
     refetch();
     setPending(null);
-    setReason("");
   };
 
   const patchMutation = useApiMutation<any, { id: number; status: string; statusReason?: string; action: LifecycleAction }>(
@@ -127,27 +123,32 @@ export default function EmployeeActivationPage() {
   ];
 
   const openConfirm = (action: LifecycleAction, employee: any) => {
-    setReason("");
     setPending({ action, employee });
   };
 
-  const confirmAction = () => {
+  // Activate has no reason field — fires directly from the confirm
+  // AlertDialog. Suspend/terminate route through PromptDialog which
+  // captures the reason inline.
+  const confirmActivate = () => {
     if (!pending) return;
-    const cfg = ACTION_CONFIG[pending.action];
-    if (cfg.requiresReason && !reason.trim()) {
-      toast({ variant: "destructive", title: "السبب مطلوب" });
-      return;
-    }
-    const trimmed = reason.trim();
+    patchMutation.mutate({
+      id: pending.employee.id,
+      status: "active",
+      action: "activate",
+    });
+  };
+
+  const confirmWithReason = (reason: string) => {
+    if (!pending) return;
     if (pending.action === "terminate") {
-      terminateMutation.mutate({ id: pending.employee.id, reason: trimmed, action: "terminate" });
+      terminateMutation.mutate({ id: pending.employee.id, reason, action: "terminate" });
     } else {
-      const nextStatus = pending.action === "activate" ? "active" : "suspended";
+      // suspend
       patchMutation.mutate({
         id: pending.employee.id,
-        status: nextStatus,
-        statusReason: trimmed || undefined,
-        action: pending.action,
+        status: "suspended",
+        statusReason: reason,
+        action: "suspend",
       });
     }
   };
@@ -293,7 +294,11 @@ export default function EmployeeActivationPage() {
         pageSize={20}
       />
 
-      <AlertDialog open={!!pending} onOpenChange={(open) => { if (!open) { setPending(null); setReason(""); } }}>
+      {/* Activate: no reason field, plain confirmation. */}
+      <AlertDialog
+        open={pending?.action === "activate"}
+        onOpenChange={(open) => { if (!open) setPending(null); }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{cfg?.title}</AlertDialogTitle>
@@ -301,32 +306,28 @@ export default function EmployeeActivationPage() {
               {pending && cfg?.description(pending.employee.name)}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {cfg?.requiresReason && (
-            <div className="space-y-2">
-              <Label htmlFor="reason">
-                السبب {cfg.requiresReason && <span className="text-status-error-foreground">*</span>}
-              </Label>
-              <Textarea
-                id="reason"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="اكتب سبب الإجراء..."
-                rows={3}
-              />
-            </div>
-          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={lifecyclePending}>إلغاء</AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => { e.preventDefault(); confirmAction(); }}
+              onClick={(e) => { e.preventDefault(); confirmActivate(); }}
               disabled={lifecyclePending}
-              className={cfg?.destructive ? "bg-red-600 hover:bg-red-700" : undefined}
             >
               {lifecyclePending ? "جارٍ التنفيذ..." : cfg?.confirmLabel}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Suspend / Terminate: capture a required reason via PromptDialog. */}
+      <PromptDialog
+        open={pending?.action === "suspend" || pending?.action === "terminate"}
+        title={cfg?.title ?? ""}
+        description={pending && cfg ? cfg.description(pending.employee.name) : ""}
+        placeholder="اكتب سبب الإجراء..."
+        confirmLabel={cfg?.confirmLabel ?? "تأكيد"}
+        onSubmit={(reason) => confirmWithReason(reason)}
+        onClose={() => setPending(null)}
+      />
     </PageShell>
   );
 }

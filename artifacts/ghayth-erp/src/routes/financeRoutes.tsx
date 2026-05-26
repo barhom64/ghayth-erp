@@ -54,6 +54,12 @@ const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create
 const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
 const CostSplitter = lazy(() => import("@/pages/create/finance/cost-splitter"));
 const AccountTransfer = lazy(() => import("@/pages/create/finance/account-transfer"));
+// Phase D — pages from the enterprise-hardening branch that don't
+// collide with main's parallel feature work.
+const Collections = lazy(() => import("@/pages/finance/collections"));
+const EntityStatements = lazy(() => import("@/pages/finance/entity-statements"));
+const JournalTemplates = lazy(() => import("@/pages/finance/journal-templates"));
+const SubsidiaryAccounts = lazy(() => import("@/pages/finance/subsidiary-accounts"));
 const Budget = lazy(() => import("@/pages/finance/budget"));
 const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
@@ -331,4 +337,9 @@ export const financeRoutes = [
   { path: "/finance/year-end-close", component: YearEndClose },
   { path: "/finance/treasury", component: Treasury },
   { path: "/finance/treasury/transfer", component: AccountTransfer },
+  // Phase D — non-colliding routes from the enterprise-hardening branch
+  { path: "/finance/collections", component: Collections },
+  { path: "/finance/entity-statements", component: EntityStatements },
+  { path: "/finance/journal-templates", component: JournalTemplates },
+  { path: "/finance/subsidiary-accounts", component: SubsidiaryAccounts },
 ];

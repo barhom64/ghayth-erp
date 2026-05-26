@@ -67,7 +67,7 @@ export default function TaxCodesPage() {
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, error, refetch } = useApiQuery<{ data: TaxCode[] }>(
     ["tax-codes", scopeQueryString],
-    `/finance/accounts/tax-codes${scopeSuffix}`,
+    `/finance/tax-codes${scopeSuffix}`,
   );
   const items = data?.data ?? [];
   const [pendingDelete, setPendingDelete] = useState<TaxCode | null>(null);
@@ -224,7 +224,7 @@ export default function TaxCodesPage() {
             id: pendingDelete.id,
             name: `${pendingDelete.code} — ${pendingDelete.name}`,
           }}
-          deletePath={`/finance/accounts/tax-codes/${pendingDelete.id}`}
+          deletePath={`/finance/tax-codes/${pendingDelete.id}`}
           invalidateKeys={[["tax-codes"]]}
           successMessage="تم حذف رمز الضريبة"
           onDeleted={() => { setPendingDelete(null); refetch(); }}

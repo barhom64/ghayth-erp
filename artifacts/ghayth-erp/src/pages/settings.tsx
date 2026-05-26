@@ -11,8 +11,6 @@ import {
 } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -164,26 +162,37 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>([queryKey], endpoint);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((f) => [f.name, ""])));
   // Replaces window.confirm() for the generic settings-table delete.
   // The row has no fixed name field — use the first listed field as a
   // best-effort label, falling back to "—".
   const [deletingItem, setDeletingItem] = useState<{ id: number; label: string } | null>(null);
   const items = asList(data);
 
-  const resetForm = () => {
-    setForm(Object.fromEntries(fields.map((f) => [f.name, ""])));
-    setEditingId(null);
+  // Build a dynamic zod schema and default-values record from the
+  // declarative `fields` array. Each field is a free-text string;
+  // `required` becomes a zod min(1) refinement.
+  const schemaShape: Record<string, z.ZodString> = {};
+  for (const f of fields) {
+    const s = z.string().trim();
+    schemaShape[f.name] = f.required ? s.min(1, "مطلوب") : s;
+  }
+  const crudSchema = z.object(schemaShape);
+  type CrudForm = Record<string, string>;
+
+  const emptyDefaults: CrudForm = Object.fromEntries(fields.map((f) => [f.name, ""]));
+
+  const closeForm = () => {
     setShowForm(false);
+    setEditingId(null);
   };
 
-  const createMut = useApiMutation<any, Record<string, string>>(
+  const createMut = useApiMutation<any, CrudForm>(
     endpoint,
     "POST",
     [[queryKey]],
     {
       successMessage: `تمت إضافة ${title} بنجاح`,
-      onSuccess: resetForm,
+      onSuccess: closeForm,
     }
   );
   const updateMut = useApiMutation<any, Record<string, any>>(
@@ -192,7 +201,7 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
     [[queryKey]],
     {
       successMessage: `تم تعديل ${title} بنجاح`,
-      onSuccess: resetForm,
+      onSuccess: closeForm,
     }
   );
   const deleteMut = useApiMutation<any, { id: number }>(
@@ -203,26 +212,19 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
   );
   const deleting = deleteMut.isPending ? deleteMut.variables?.id ?? null : null;
 
+  // Seed values for the form. New row → empty strings; edit → values
+  // copied from the row. FormShell remounts on `key={editingId ?? "new"}`
+  // so we can pass freshly-derived defaults each time without an effect.
+  const editingItem = editingId
+    ? (items as any[]).find((it: any) => it.id === editingId)
+    : null;
+  const formDefaults: CrudForm = editingItem
+    ? Object.fromEntries(fields.map((f) => [f.name, String(editingItem[f.name] ?? "")]))
+    : emptyDefaults;
+
   const handleEdit = (item: any) => {
-    const newForm: Record<string, string> = {};
-    for (const f of fields) {
-      newForm[f.name] = item[f.name] || "";
-    }
-    setForm(newForm);
     setEditingId(item.id);
     setShowForm(true);
-  };
-
-  const handleSave = () => {
-    if (editingId) {
-      updateMut.mutate({ ...form, __id: editingId });
-    } else {
-      createMut.mutate(form);
-    }
-  };
-
-  const handleDelete = (id: number) => {
-    deleteMut.mutate({ id });
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -232,14 +234,29 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">{title}</h3>
-        <GuardedButton perm="admin:create" size="sm" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة</>}</GuardedButton>
+        <GuardedButton perm="admin:create" size="sm" onClick={() => { if (showForm) closeForm(); else { setEditingId(null); setShowForm(true); } }}>{showForm ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إضافة</>}</GuardedButton>
       </div>
       {showForm && (
-        <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-          {fields.map((f) => (
-            <div key={f.name}><Label>{f.label}</Label><Input value={form[f.name]} onChange={(e) => setForm({ ...form, [f.name]: e.target.value })} /></div>
-          ))}
-          <div className="md:col-span-2"><Button onClick={handleSave} disabled={createMut.isPending} rateLimitAware>{editingId ? "تحديث" : "حفظ"}</Button></div>
+        <Card><CardContent className="p-4">
+          <FormShell
+            key={editingId ?? "new"}
+            schema={crudSchema as unknown as z.ZodType<CrudForm>}
+            defaultValues={formDefaults}
+            submitLabel={editingId ? "تحديث" : "حفظ"}
+            onSubmit={async (values) => {
+              if (editingId) {
+                await updateMut.mutateAsync({ ...values, __id: editingId });
+              } else {
+                await createMut.mutateAsync(values);
+              }
+            }}
+          >
+            <FormGrid cols={2}>
+              {fields.map((f) => (
+                <FormTextField key={f.name} name={f.name} label={f.label} required={f.required} />
+              ))}
+            </FormGrid>
+          </FormShell>
         </CardContent></Card>
       )}
       <Card><CardContent className="p-0">

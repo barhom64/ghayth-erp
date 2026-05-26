@@ -2,8 +2,8 @@
  * Print SDK — frontend wrapper around the Print Platform API.
  *
  * Phase 1 of the Print Platform roadmap. PrintButton and any other UI
- * that needs to print should call these helpers, not apiFetch("/print/...")
- * directly — that way the contract surface lives in one place and we can
+ * that needs to print should call these helpers, not the low-level API
+ * helper directly — that way the contract surface lives in one place and we can
  * evolve it (add caching, retries, observability) without touching every
  * page.
  *

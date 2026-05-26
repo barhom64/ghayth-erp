@@ -63,7 +63,7 @@ export default function WhtCategoriesPage() {
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, error, refetch } = useApiQuery<{ data: WhtCategory[] }>(
     ["wht-categories", scopeQueryString],
-    `/finance/accounts/wht-categories${scopeSuffix}`,
+    `/finance/wht-categories${scopeSuffix}`,
   );
   const items = data?.data ?? [];
   const [pendingDelete, setPendingDelete] = useState<WhtCategory | null>(null);
@@ -199,7 +199,7 @@ export default function WhtCategoriesPage() {
             id: pendingDelete.id,
             name: `${pendingDelete.code} — ${pendingDelete.name}`,
           }}
-          deletePath={`/finance/accounts/wht-categories/${pendingDelete.id}`}
+          deletePath={`/finance/wht-categories/${pendingDelete.id}`}
           invalidateKeys={[["wht-categories"]]}
           successMessage="تم حذف فئة الاستقطاع"
           onDeleted={() => { setPendingDelete(null); refetch(); }}

@@ -363,6 +363,9 @@ function RequestsList() {
           approveEndpoint={`/requests/${r.id}/approve`}
           rejectEndpoint={`/requests/${r.id}/reject`}
           returnEndpoint={`/requests/${r.id}/return`}
+          approveMethod="POST"
+          rejectMethod="POST"
+          returnMethod="POST"
           onDone={handleApprovalDone}
         />
       ),
@@ -413,7 +416,7 @@ function RequestsList() {
     if (editingId === r.id) {
       extras.push(
         <div key="edit" className="p-2">
-          <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(r.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
+          <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(r.id, values)} onCancel={cancelEdit} isPending={isPending} />
         </div>
       );
     }
