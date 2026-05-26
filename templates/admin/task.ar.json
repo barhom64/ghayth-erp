@@ -1,0 +1,20 @@
+{
+  "code": "admin.task",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "task",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": true,
+  "qr": true,
+  "status": "published",
+  "domain": "admin",
+  "title": "بطاقة مهمة",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "task"
+  },
+  "ownerTeam": "admin"
+}
