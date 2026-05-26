@@ -30,6 +30,11 @@ import {
   unlockCounter,
   invalidateBranchCodeCache,
 } from "../lib/numberingService.js";
+import {
+  backfillScheme,
+  backfillAllSchemes,
+  previewBackfill,
+} from "../lib/numberingBackfill.js";
 import { createAuditLog } from "../lib/businessHelpers.js";
 import { checkAccess } from "../lib/rbac/authzEngine.js";
 
@@ -65,7 +70,11 @@ router.get(
                 s.prefix, s.pattern, s."padLength", s."resetPolicy", s."scopePolicy",
                 s."issueTiming", s."manualEditPolicy", s."requiresReasonOnManualEdit",
                 s."lockAfterStatuses", s."branchPrefixOverrides", s."isActive",
-                s."createdAt", s."updatedAt"
+                s."defaultEntityTable", s."defaultRefColumn",
+                s."lastBackfillAt", s."lastBackfillCount",
+                s."createdAt", s."updatedAt",
+                (SELECT COUNT(*)::int FROM numbering_assignments a
+                  WHERE a."schemeId" = s.id) AS "assignmentCount"
            FROM numbering_schemes s
           WHERE s."companyId" = $1
           ORDER BY s."moduleKey", s."entityKey"`,
@@ -451,6 +460,72 @@ router.get(
       });
     } catch (err) {
       handleRouteError(err, res, "خطأ في فحص حالة الترقيم");
+    }
+  },
+);
+
+// ─── Backfill — inventory legacy refs (Issue #1141 phase 5) ─────────
+//
+// One-time admin tool that scans an entity table for refs that
+// existed before the unified numbering center was introduced and
+// inserts a `numbering_assignments` row for each so they appear in
+// the search, the audit log, and the printed reports.
+
+router.get(
+  "/schemes/:id/backfill/preview",
+  authorize({ feature: "settings.numbering", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const preview = await previewBackfill({
+        companyId: scope.companyId,
+        schemeId: id,
+      });
+      res.json(preview);
+    } catch (err) {
+      handleRouteError(err, res, "خطأ في معاينة الجرد");
+    }
+  },
+);
+
+router.post(
+  "/schemes/:id/backfill",
+  authorize({ feature: "settings.numbering.reset", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const summary = await backfillScheme({
+        companyId: scope.companyId,
+        schemeId: id,
+        actorId: scope.userId,
+      });
+      res.json(summary);
+    } catch (err) {
+      handleRouteError(err, res, "خطأ في جرد المعاملات السابقة");
+    }
+  },
+);
+
+router.post(
+  "/backfill-all",
+  authorize({ feature: "settings.numbering.reset", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const summaries = await backfillAllSchemes({
+        companyId: scope.companyId,
+        actorId: scope.userId,
+      });
+      const totalImported = summaries.reduce((s, x) => s + x.imported, 0);
+      res.json({
+        ok: true,
+        totalImported,
+        schemes: summaries,
+      });
+    } catch (err) {
+      handleRouteError(err, res, "خطأ في الجرد الشامل");
     }
   },
 );
