@@ -72,6 +72,7 @@ const ExpiringDocuments = lazy(() => import("@/pages/hr/expiring-documents"));
 const AutoDetection = lazy(() => import("@/pages/hr/auto-detection"));
 const DisciplineRegulation = lazy(() => import("@/pages/hr/discipline-regulation"));
 const ApprovalInbox = lazy(() => import("@/pages/hr/approval-inbox"));
+const HrDocuments = lazy(() => import("@/pages/hr/documents"));
 const DisciplineMemos = lazy(() => import("@/pages/hr/discipline-memos"));
 const DisciplineMemoDetail = lazy(() => import("@/pages/hr/discipline-memo-detail"));
 const OfficialLetters = lazy(() => import("@/pages/hr/official-letters"));
@@ -151,6 +152,7 @@ export const hrRoutes = [
   { path: "/hr/violations/:id", component: ViolationDetail, subKey: "violations" },
   { path: "/hr/discipline/regulation", component: DisciplineRegulation, subKey: "violations" },
   { path: "/hr/approvals", component: ApprovalInbox },
+  { path: "/hr/documents", component: HrDocuments },
   { path: "/hr/discipline/memos", component: DisciplineMemos, subKey: "violations" },
   { path: "/hr/discipline/memos/:id", component: DisciplineMemoDetail, subKey: "violations" },
   { path: "/hr/shifts", component: Shifts, subKey: "shifts" },

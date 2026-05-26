@@ -119,6 +119,7 @@ const allNavSections: NavSection[] = [
         { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
         { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
         { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
+        { label: "إدارة الوثائق", path: "/hr/documents", icon: FileText, subKey: "employees" },
         { label: "الهيكل التنظيمي", path: "/hr/organization", icon: Network, subKey: "organization" },
         { label: "الهيكل المصوّر", path: "/hr/organization/structure", icon: GitBranch, subKey: "organization" },
         { label: "التفويضات", path: "/hr/delegations", icon: Users2, subKey: "organization" },
