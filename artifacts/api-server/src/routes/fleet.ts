@@ -1181,6 +1181,7 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
       entityTable: "fleet_trips",
       actorId: scope.userId,
       metadata: { sourceKey, vehicleId: selectedVehicleId },
+      expectedTiming: "on_draft",
     });
     let alreadyExists = false;
     const insertId = await withTransaction(async (client) => {

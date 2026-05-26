@@ -1138,6 +1138,7 @@ router.post("/contracts", authorize({ feature: "properties.contracts", action: "
         entityKey: "lease_contract",
         entityTable: "rental_contracts",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       contractNumber = issuedContract.number;
     }
@@ -3561,6 +3562,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", authorize({ feature: "
         entityTable: "contract_payment_schedule",
         entityId: installmentId,
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       receiptNumber = issuedReceipt.number;
     }

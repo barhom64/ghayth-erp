@@ -451,6 +451,7 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
       entityKey: "project",
       entityTable: "projects",
       actorId: scope.userId,
+      expectedTiming: "on_draft",
     });
     let insertId!: number;
     await withTransaction(async (client) => {
