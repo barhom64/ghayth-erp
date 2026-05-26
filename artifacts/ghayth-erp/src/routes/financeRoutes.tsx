@@ -79,6 +79,7 @@ const SalaryAdvanceDetail = lazy(() => import("@/pages/details/salary-advance-de
 const Ledger = lazy(() => import("@/pages/finance/ledger"));
 const Entity360 = lazy(() => import("@/pages/finance/entity-360"));
 const ReconciliationHub = lazy(() => import("@/pages/finance/reconciliation-hub"));
+const TbComparison = lazy(() => import("@/pages/finance/trial-balance-comparison"));
 const ArAging = lazy(() => import("@/pages/finance/ar-aging"));
 const ApAging = lazy(() => import("@/pages/finance/ap-aging"));
 const BankReconciliation = lazy(() => import("@/pages/finance/bank-reconciliation"));
@@ -234,6 +235,7 @@ export const financeRoutes = [
   { path: "/finance/ledger/:code", component: Ledger },
   { path: "/finance/entity-360", component: Entity360 },
   { path: "/finance/reconciliation-hub", component: ReconciliationHub },
+  { path: "/finance/trial-balance-comparison", component: TbComparison },
   { path: "/finance/ar-aging", component: ArAging },
   { path: "/finance/ap-aging", component: ApAging },
   { path: "/finance/bank-reconciliation", component: BankReconciliation },
