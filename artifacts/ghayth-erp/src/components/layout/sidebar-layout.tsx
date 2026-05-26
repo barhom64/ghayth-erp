@@ -16,7 +16,7 @@ import {
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
-  BarChart2, ShieldAlert, Flag, Lock, Layers, Calculator,
+  BarChart2, ShieldAlert, Flag, Lock, Layers, Calculator, LayoutGrid,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -75,9 +75,11 @@ const allNavSections: NavSection[] = [
     title: "الرئيسية",
     items: [
       { label: "لوحة التحكم", path: "/dashboard", icon: LayoutDashboard, module: "home" },
+      { label: "مساحة العمل", path: "/workspace", icon: LayoutGrid },
       { label: "مساحتي", path: "/my-space", icon: User },
       { label: "مركز القرارات", path: "/action-center", icon: Briefcase, minRoleLevel: 20 },
       { label: "لوحة المدير", path: "/manager-board", icon: Users, minRoleLevel: 40 },
+      { label: "مساحة المدير", path: "/manager-workspace", icon: Users, minRoleLevel: 40 },
       { label: "لوحة القيادة التنفيذية", path: "/exec-dashboard", icon: Shield, minRoleLevel: 60 },
       { label: "مركز العمليات", path: "/operations-center", icon: Zap, minRoleLevel: 40 },
       { label: "مركز الالتزامات", path: "/obligations", icon: Clock, minRoleLevel: 30 },
