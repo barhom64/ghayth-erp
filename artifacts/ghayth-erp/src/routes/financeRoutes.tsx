@@ -94,6 +94,7 @@ const ApAging = lazy(() => import("@/pages/finance/ap-aging"));
 const BankReconciliation = lazy(() => import("@/pages/finance/bank-reconciliation"));
 const BankManualMatch = lazy(() => import("@/pages/create/finance/bank-manual-match"));
 const FixedAssets = lazy(() => import("@/pages/finance/fixed-assets"));
+const FixedAssetRegister = lazy(() => import("@/pages/finance/fixed-asset-register"));
 const FixedAssetDetail = lazy(() => import("@/pages/details/fixed-asset-detail"));
 const BatchDepreciate = lazy(() => import("@/pages/create/finance/batch-depreciate"));
 const InventoryCosting = lazy(() => import("@/pages/finance/inventory-costing"));
@@ -263,6 +264,7 @@ export const financeRoutes = [
   { path: "/finance/bank-reconciliation", component: BankReconciliation },
   { path: "/finance/bank-reconciliation/manual-match/:batchId/:rowId", component: BankManualMatch },
   { path: "/finance/fixed-assets", component: FixedAssets },
+  { path: "/finance/fixed-asset-register", component: FixedAssetRegister },
   { path: "/finance/fixed-assets/batch-depreciate", component: BatchDepreciate },
   { path: "/finance/fixed-assets/:id", component: FixedAssetDetail },
   { path: "/finance/inventory-costing", component: InventoryCosting },
