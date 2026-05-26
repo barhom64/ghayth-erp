@@ -22,9 +22,10 @@ test.describe("Auth", () => {
     await expect(page).toHaveURL(/\/(dashboard|home)?$/);
     await expect(page.locator("body")).toContainText(/لوحة|dashboard/i, { timeout: 10_000 });
 
-    // Logout — the menu opens via avatar/profile button.
-    await page.getByRole("button", { name: /profile|الملف|account/i }).first().click();
-    await page.getByRole("menuitem", { name: /logout|تسجيل الخروج/i }).click();
+    // Logout — sidebar-layout renders a direct icon button with
+    // title="تسجيل الخروج", not a profile dropdown menu. Match by title
+    // (Playwright treats title as accessible name when no aria-label exists).
+    await page.getByRole("button", { name: /تسجيل الخروج|logout/i }).first().click();
     await expect(page).toHaveURL(/login|\/$/);
   });
 
@@ -34,9 +35,12 @@ test.describe("Auth", () => {
     await page.getByLabel(/password|كلمة/i).fill("definitely-not-the-password");
     await page.getByRole("button", { name: /login|دخول/i }).click();
 
-    // Some error toast / inline message should appear.
-    await expect(page.locator("body")).toContainText(/invalid|خطأ|incorrect/i, {
-      timeout: 5_000,
-    });
+    // Server replies with "بيانات الدخول غير صحيحة" (FORBIDDEN). Match the
+    // stable substrings the login form actually surfaces — including "غير
+    // صحيحة" (the canonical Arabic error) and English fallbacks.
+    await expect(page.locator("body")).toContainText(
+      /invalid|incorrect|خطأ|غير صحيحة|غير صالح/i,
+      { timeout: 5_000 },
+    );
   });
 });

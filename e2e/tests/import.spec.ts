@@ -11,6 +11,11 @@ import { TEST_API_URL } from "../playwright.config.js";
 const EMAIL = process.env.E2E_USER_EMAIL ?? "owner@local.test";
 const PASSWORD = process.env.E2E_USER_PASSWORD ?? "Test1234!";
 
+// csrfMiddleware (artifacts/api-server/src/middlewares/csrfMiddleware.ts)
+// requires every non-safe method to carry the `erp_csrf` cookie value as an
+// `x-csrf-token` header. The login endpoint is exempt and sets the cookie
+// in its response, so the helper just needs to pluck it off the storage
+// state and attach it as a default header for the rest of the session.
 async function authedContext() {
   const ctx = await apiRequest.newContext({ baseURL: TEST_API_URL });
   const login = await ctx.post("/api/auth/login", {
@@ -19,7 +24,23 @@ async function authedContext() {
   if (!login.ok()) {
     throw new Error(`Login failed: ${login.status()} ${await login.text()}`);
   }
-  return ctx;
+
+  const state = await ctx.storageState();
+  const csrf = state.cookies.find((c) => c.name === "erp_csrf")?.value;
+  if (!csrf) {
+    throw new Error("Login did not set erp_csrf cookie — CSRF middleware may be misconfigured");
+  }
+
+  // Recreate the context with the auth cookies preserved and the CSRF
+  // header set as a default. Playwright API contexts don't expose a
+  // setExtraHTTPHeaders, so a fresh context with merged options is the
+  // cleanest path.
+  await ctx.dispose();
+  return apiRequest.newContext({
+    baseURL: TEST_API_URL,
+    storageState: state,
+    extraHTTPHeaders: { "x-csrf-token": csrf },
+  });
 }
 
 test.describe("Generic Import Engine API", () => {
