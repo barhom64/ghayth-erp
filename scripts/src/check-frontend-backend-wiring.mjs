@@ -410,6 +410,28 @@ function extractFrontendCalls() {
       calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "prop" });
     }
 
+    // <ExportButton endpoint="/export/excel/x" /> + the array form
+    // { endpoint: "/export/...", … } inside <MultiExportButton items={[…]}>
+    // The shared shared/export-buttons.tsx component fires a
+    // window-level fetch with auth headers; the `endpoint` prop is the
+    // URL path. Same JSX-blind-spot pattern as ApprovalActions —
+    // covered here with a dedicated scanner so every report-export
+    // route gets credit.
+    //
+    // ExportButton variants accept either a string literal or a
+    // template literal (for per-row IDs). readString handles both.
+    const exportRe = /\b(?:ExportButton[^/>]*?\bendpoint\s*=\s*|endpoint\s*:\s*)[`"']/g;
+    for (const m of src.matchAll(exportRe)) {
+      let i = m.index + m[0].length - 1; // back up onto the opening quote
+      const lit = readString(src, i);
+      if (!lit) continue;
+      // The /export/* prefix is the marker that this `endpoint:` is for
+      // an export button (rather than EntityEditDialog or ImpactPreviewButton
+      // which have their own scanners and matchers).
+      if (!/^\/export\//.test(lit.value)) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "prop" });
+    }
+
     // useDetailEditDelete({ patchPath: "/...", deletePath: "/..." })
     // wraps apiPatch + apiDelete with variable URLs — invisible to the
     // helper-call scanner. Credits the PATCH + DELETE per call.
