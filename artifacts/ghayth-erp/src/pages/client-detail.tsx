@@ -608,7 +608,7 @@ export default function ClientDetail() {
     <DetailPageLayout
       title="ملف العميل 360°"
       subtitle={client?.name}
-      backPath="/crm/clients"
+      backPath="/clients"
       entityType="client"
       entityId={id || ""}
       overview={overview}
