@@ -71,7 +71,10 @@ function daysInMonth(year: number, month: number): number {
 }
 
 export default function CustomerStatementPrintPage() {
-  const [clientId, setClientId] = useState<string>("");
+  const initialClientId = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("clientId") ?? ""
+    : "";
+  const [clientId, setClientId] = useState<string>(initialClientId);
   const [year, setYear] = useState(currentYearRiyadh());
   const [month, setMonth] = useState(currentMonthPaddedRiyadh());
   const [scope, setScope] = useState<"month" | "ytd" | "all">("month");
@@ -176,6 +179,14 @@ export default function CustomerStatementPrintPage() {
             </div>
           </div>
           <div className="flex gap-2 mt-3 justify-end">
+            {clientId && (
+              <Link href={`/finance/customer-360-sheet?clientId=${clientId}`}>
+                <Button variant="outline" size="sm">
+                  <FileText className="w-4 h-4 ml-1" />
+                  ملف العميل 360°
+                </Button>
+              </Link>
+            )}
             <Button variant="outline" size="sm" onClick={exportCSV} disabled={!data}>
               <Download className="w-4 h-4 ml-1" />
               CSV

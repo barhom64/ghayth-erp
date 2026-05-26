@@ -10,7 +10,7 @@ import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import {
   Phone, Mail, AlertTriangle, ChevronDown, ChevronRight, Search,
-  ExternalLink, Download, Users, Clock, Send,
+  ExternalLink, Download, Users, FileText, Clock, Send,
 } from "lucide-react";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 
@@ -416,10 +416,16 @@ export default function ArCollectionWorkbenchPage() {
                           </tbody>
                         </table>
                         <div className="flex justify-end gap-2 mt-3 border-t pt-3">
-                          <Link href={`/finance/entity-360?type=client&id=${c.clientId}`}>
+                          <Link href={`/finance/customer-360-sheet?clientId=${c.clientId}`}>
                             <Button size="sm" variant="outline">
                               <Users className="w-4 h-4 ml-1" />
-                              ملف العميل
+                              ملف العميل 360°
+                            </Button>
+                          </Link>
+                          <Link href={`/finance/customer-statement-print?clientId=${c.clientId}`}>
+                            <Button size="sm" variant="outline">
+                              <FileText className="w-4 h-4 ml-1" />
+                              كشف الحساب
                             </Button>
                           </Link>
                         </div>

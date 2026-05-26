@@ -32,6 +32,7 @@ import crmRouter from "./crm.js";
 import intelligenceRouter from "./intelligence.js";
 import automationRouter from "./automation.js";
 import communicationsRouter from "./communications.js";
+import inboxRouter from "./inbox.js";
 import governanceRouter from "./governance.js";
 import biRouter from "./bi.js";
 import storeRouter from "./store.js";
@@ -50,6 +51,7 @@ import adminCommControlRouter from "./admin-communication-control.js";
 import adminPbxControlRouter from "./admin-pbx-control.js";
 import adminMasterPlanRouter from "./admin-master-plan.js";
 import adminNotificationRoutingRouter from "./admin-notification-routing.js";
+import adminVendorSettingsRouter from "./admin-vendor-settings.js";
 import permissionsRouter from "./permissions.js";
 import rbacV2Router from "./rbacV2.js";
 import auditLogsRouter from "./auditLogs.js";
@@ -62,6 +64,7 @@ import storageRouter from "./storage.js";
 import activityIngestRouter from "./activityIngest.js";
 import mySpaceRouter from "./mySpace.js";
 import actionCenterRouter from "./actionCenter.js";
+import workspaceRouter from "./workspace.js";
 import accountingEngineRouter from "./accounting-engine.js";
 import { financeAlgorithmsRouter } from "./finance-algorithms.js";
 import financeHardeningRouter from "./finance-hardening.js";
@@ -339,6 +342,10 @@ router.use("/crm", requireModule("crm"), crmRouter);
 router.use("/intelligence", requireModule("bi"), intelligenceRouter);
 router.use("/automation", requireModule("automation"), automationRouter);
 router.use("/communications", requireModule("comms"), communicationsRouter);
+// User-facing inbox: compose/send + thread view + call log. Lives next
+// to /communications (read-only logs) so the SPA can navigate between
+// them without crossing module boundaries.
+router.use("/inbox", requireModule("comms"), inboxRouter);
 router.use("/governance", requireModule("governance"), governanceRouter);
 router.use("/bi", requireModule("bi"), biRouter);
 router.use("/store", requireModule("store"), requireGuards("financial"), storeRouter);
@@ -374,6 +381,9 @@ router.use("/admin/master-plan", requireModule("admin"), requireMinLevel(90), ad
 // Notification Routing rules + fallback chains UI (existing tables;
 // new admin surface to fulfil #1139 §6 "كل شيء قابل للتحكم من الواجهة").
 router.use("/admin/notification-routing", requireModule("admin"), requireMinLevel(90), adminNotificationRoutingRouter);
+// Vendor Settings hub — every external integration (PBX webhook, WhatsApp,
+// SMTP, VAPID, SIEM, ZATCA) editable from the UI, secrets encrypted at rest.
+router.use("/admin/vendor-settings", requireModule("admin"), requireMinLevel(90), adminVendorSettingsRouter);
 // FND-004 — RBAC administration surfaces. permissions.ts is fully
 // authorize()-guarded per route; rbacV2.ts had a few routes without one;
 // gating the mount at level 90 (consistent with /admin) closes the gap
@@ -388,6 +398,7 @@ router.use("/workflows", workflowsRouter);
 router.use("/impact-preview", impactPreviewRouter);
 router.use("/my-space", mySpaceRouter);
 router.use("/action-center", actionCenterRouter);
+router.use("/workspace", workspaceRouter);
 router.use("/entity-meta", entityMetaRouter);
 // Mount the umrah limiter once on the /umrah prefix so it runs exactly once per
 // request, regardless of which sub-router (umrahRouter / umrahEntitiesRouter)

@@ -10,6 +10,7 @@ const Dashboard = lazy(() => import("@/pages/finance/dashboard"));
 const CfoCockpit = lazy(() => import("@/pages/finance/cfo-cockpit"));
 const FinanceWorkflowsHub = lazy(() => import("@/pages/finance/finance-workflows-hub"));
 const MonthlyClosePack = lazy(() => import("@/pages/finance/monthly-close-pack"));
+const DailyCloseChecklist = lazy(() => import("@/pages/finance/daily-close-checklist"));
 const GlHealthScore = lazy(() => import("@/pages/finance/gl-health-score"));
 const ApprovalsInbox = lazy(() => import("@/pages/finance/approvals-inbox"));
 const Accounts = lazy(() => import("@/pages/finance/accounts"));
@@ -33,6 +34,7 @@ const GlIntegrityGaps = lazy(() => import("@/pages/finance/gl-integrity-gaps"));
 const GlAnomalyDetector = lazy(() => import("@/pages/finance/gl-anomaly-detector"));
 const UnmappedLines = lazy(() => import("@/pages/finance/unmapped-lines"));
 const WhtSummary = lazy(() => import("@/pages/finance/wht-summary"));
+const WhtFilingWorkbench = lazy(() => import("@/pages/finance/wht-filing-workbench"));
 const ZatcaReportsHub = lazy(() => import("@/pages/finance/zatca-reports-hub"));
 const VatReconciliation = lazy(() => import("@/pages/finance/vat-reconciliation"));
 const VatFilingReadiness = lazy(() => import("@/pages/finance/vat-filing-readiness"));
@@ -49,6 +51,7 @@ const InvoicesCreate = lazy(() => import("@/pages/create/finance/invoices-create
 const InvoiceDetail = lazy(() => import("@/pages/finance/invoice-detail"));
 const Expenses = lazy(() => import("@/pages/finance/expenses"));
 const ExpenseBurnRate = lazy(() => import("@/pages/finance/expense-burn-rate"));
+const ExpenseBulkApprovals = lazy(() => import("@/pages/finance/expense-bulk-approvals"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
 const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
@@ -72,7 +75,9 @@ const VendorsEdit = lazy(() => import("@/pages/create/finance/vendors-edit"));
 const VendorDetail = lazy(() => import("@/pages/finance/vendor-detail"));
 const VendorStatement = lazy(() => import("@/pages/finance/vendor-statement"));
 const VendorStatementPrint = lazy(() => import("@/pages/finance/vendor-statement-print"));
+const Vendor360Sheet = lazy(() => import("@/pages/finance/vendor-360-sheet"));
 const VendorContracts = lazy(() => import("@/pages/finance/vendor-contracts"));
+const VendorContractsTracker = lazy(() => import("@/pages/finance/vendor-contracts-tracker"));
 const VendorSpend = lazy(() => import("@/pages/finance/vendor-spend"));
 const VendorSettlementWorkbench = lazy(() => import("@/pages/finance/vendor-settlement-workbench"));
 const PurchaseRequests = lazy(() => import("@/pages/finance/purchase-requests"));
@@ -81,6 +86,7 @@ const PurchaseOrdersCreate = lazy(() => import("@/pages/create/finance/purchase-
 const PurchaseOrderDetail = lazy(() => import("@/pages/finance/purchase-order-detail"));
 const PaymentRun = lazy(() => import("@/pages/finance/payment-run"));
 const ApPaymentCalendar = lazy(() => import("@/pages/finance/ap-payment-calendar"));
+const CashPositionCalculator = lazy(() => import("@/pages/finance/cash-position-calculator"));
 const FinancialReports = lazy(() => import("@/pages/finance/reports"));
 const IncomeStatementTrend = lazy(() => import("@/pages/finance/income-statement-trend"));
 const IncomeStatementVsBudget = lazy(() => import("@/pages/finance/income-statement-vs-budget"));
@@ -88,7 +94,9 @@ const YoyComparison = lazy(() => import("@/pages/finance/yoy-comparison"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
 const TaxFilingCalendar = lazy(() => import("@/pages/finance/tax-filing-calendar"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
+const CustomerAdvancesWorkbench = lazy(() => import("@/pages/finance/customer-advances-workbench"));
 const CustomerStatementPrint = lazy(() => import("@/pages/finance/customer-statement-print"));
+const Customer360Sheet = lazy(() => import("@/pages/finance/customer-360-sheet"));
 const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
 const BadDebtProvision = lazy(() => import("@/pages/finance/bad-debt-provision"));
 const ReceivableDetail = lazy(() => import("@/pages/details/receivable-detail"));
@@ -100,6 +108,7 @@ const FinancialRequestDetail = lazy(() => import("@/pages/details/financial-requ
 const Custodies = lazy(() => import("@/pages/finance/custodies"));
 const CustodyDetail = lazy(() => import("@/pages/finance/custody-detail"));
 const CustodyAgingReport = lazy(() => import("@/pages/finance/custody-aging-report"));
+const CustodyWorkbench = lazy(() => import("@/pages/finance/custody-workbench"));
 const FiscalPeriods = lazy(() => import("@/pages/finance/fiscal-periods"));
 const FiscalPeriodsV2 = lazy(() => import("@/pages/finance/fiscal-periods-v2"));
 const PeriodClosePreflight = lazy(() => import("@/pages/finance/period-close-preflight"));
@@ -137,6 +146,7 @@ const Cash13Week = lazy(() => import("@/pages/finance/cash-13week"));
 const CashFlowStatement = lazy(() => import("@/pages/finance/cash-flow-statement"));
 const ProjectCosting = lazy(() => import("@/pages/finance/project-costing"));
 const ProjectCostingDetail = lazy(() => import("@/pages/finance/project-costing-detail"));
+const VehiclePortfolioDashboard = lazy(() => import("@/pages/finance/vehicle-portfolio-dashboard"));
 const CashflowDashboard = lazy(() => import("@/pages/finance/cashflow-dashboard"));
 const OpeningBalances = lazy(() => import("@/pages/finance/opening-balances"));
 const OpeningBalancesCreate = lazy(() => import("@/pages/create/finance/opening-balances-create"));
@@ -175,6 +185,7 @@ export const financeRoutes = [
   { path: "/finance/cfo-cockpit", component: CfoCockpit },
   { path: "/finance/workflows-hub", component: FinanceWorkflowsHub },
   { path: "/finance/monthly-close-pack", component: MonthlyClosePack },
+  { path: "/finance/daily-close-checklist", component: DailyCloseChecklist },
   { path: "/finance/gl-health", component: GlHealthScore },
   { path: "/finance/approvals-inbox", component: ApprovalsInbox },
   { path: "/finance/accounts", component: Accounts },
@@ -195,6 +206,7 @@ export const financeRoutes = [
   { path: "/finance/gl-anomaly-detector", component: GlAnomalyDetector },
   { path: "/finance/reports/unmapped-lines", component: UnmappedLines },
   { path: "/finance/reports/wht-summary", component: WhtSummary },
+  { path: "/finance/wht-filing-workbench", component: WhtFilingWorkbench },
   // ZATCA & inventory reports hub — landing page (#1059).
   { path: "/finance/reports/zatca", component: ZatcaReportsHub },
   { path: "/finance/vat-filing-readiness", component: VatFilingReadiness },
@@ -222,6 +234,7 @@ export const financeRoutes = [
   { path: "/finance/invoices/create", component: InvoicesCreate },
   { path: "/finance/invoices/:id", component: InvoiceDetail },
   { path: "/finance/expenses", component: Expenses },
+  { path: "/finance/expense-bulk-approvals", component: ExpenseBulkApprovals },
   { path: "/finance/expense-burn-rate", component: ExpenseBurnRate },
   { path: "/finance/expenses/create", component: ExpensesCreate },
   { path: "/finance/expenses/multi-line", component: MultiLineExpenseCreate },
@@ -238,7 +251,9 @@ export const financeRoutes = [
   { path: "/finance/vendors/:id/edit", component: VendorsEdit, subKey: "vendors" },
   { path: "/finance/vendors/:id/statement", component: VendorStatement, subKey: "vendors" },
   { path: "/finance/vendor-statement-print", component: VendorStatementPrint },
+  { path: "/finance/vendor-360-sheet", component: Vendor360Sheet },
   { path: "/finance/contracts", component: VendorContracts },
+  { path: "/finance/vendor-contracts-tracker", component: VendorContractsTracker },
   { path: "/finance/vendor-spend", component: VendorSpend },
   { path: "/finance/vendor-settlement-workbench", component: VendorSettlementWorkbench },
   { path: "/finance/vendors/:id", component: VendorDetail, subKey: "vendors" },
@@ -247,12 +262,14 @@ export const financeRoutes = [
   { path: "/finance/purchase-orders/create", component: PurchaseOrdersCreate },
   { path: "/finance/payment-run", component: PaymentRun },
   { path: "/finance/ap-payment-calendar", component: ApPaymentCalendar },
+  { path: "/finance/cash-position-calculator", component: CashPositionCalculator },
   { path: "/finance/purchase-orders/:id", component: PurchaseOrderDetail },
   { path: "/finance/profitability/vehicle/:id", component: ProfitabilityVehicle },
   { path: "/finance/profitability/property/:id", component: ProfitabilityProperty },
   { path: "/finance/profitability/project/:id", component: ProfitabilityProject },
   { path: "/finance/profitability/umrah-agent/:id", component: ProfitabilityUmrahAgent },
   { path: "/finance/customer-advances", component: CustomerAdvances },
+  { path: "/finance/customer-advances-workbench", component: CustomerAdvancesWorkbench },
   { path: "/finance/customer-advances/create", component: CustomerAdvancesCreate },
   { path: "/finance/customer-advances/:id/apply", component: CustomerAdvancesApply },
   { path: "/finance/dunning", component: Dunning },
@@ -279,6 +296,7 @@ export const financeRoutes = [
   { path: "/finance/tax-filing-calendar", component: TaxFilingCalendar },
   { path: "/finance/receivables", component: Receivables },
   { path: "/finance/customer-statement-print", component: CustomerStatementPrint },
+  { path: "/finance/customer-360-sheet", component: Customer360Sheet },
   { path: "/finance/customer-risk", component: CustomerRisk },
   { path: "/finance/bad-debt-provision", component: BadDebtProvision },
   { path: "/finance/receivables/:id", component: ReceivableDetail },
@@ -288,6 +306,7 @@ export const financeRoutes = [
   { path: "/finance/financial-requests", component: FinancialRequests },
   { path: "/finance/financial-requests/:id", component: FinancialRequestDetail },
   { path: "/finance/custodies", component: Custodies },
+  { path: "/finance/custody-workbench", component: CustodyWorkbench },
   { path: "/finance/custodies/report", component: CustodyAgingReport },
   { path: "/finance/custodies/:id", component: CustodyDetail },
   { path: "/finance/fiscal-periods", component: FiscalPeriods },
@@ -326,6 +345,7 @@ export const financeRoutes = [
   { path: "/finance/cash-13week", component: Cash13Week },
   { path: "/finance/reports/cash-flow-statement", component: CashFlowStatement },
   { path: "/finance/project-costing", component: ProjectCosting },
+  { path: "/finance/vehicle-portfolio", component: VehiclePortfolioDashboard },
   { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
   { path: "/finance/opening-balances", component: OpeningBalances },

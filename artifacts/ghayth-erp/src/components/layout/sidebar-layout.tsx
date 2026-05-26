@@ -16,7 +16,7 @@ import {
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
-  BarChart2, ShieldAlert, Flag, Lock, Layers,
+  BarChart2, ShieldAlert, Flag, Lock, Layers, Calculator, LayoutGrid,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +34,7 @@ import { NotificationDropdown } from "@/components/notification-dropdown";
 import { PolicyBanner } from "@/components/policy-banner";
 import { RateLimitFallbackBanner } from "@/components/rate-limit-fallback-banner";
 import { useKeyboardShortcuts, usePropertyKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { isRegisteredRoute } from "@/routes/registry";
 // CommandPalette is only mounted when the user opens it (Cmd+K or the
 // header button). Lazy-load it so its ~345 lines + icons don't ship in
 // the initial bundle.
@@ -74,9 +75,11 @@ const allNavSections: NavSection[] = [
     title: "الرئيسية",
     items: [
       { label: "لوحة التحكم", path: "/dashboard", icon: LayoutDashboard, module: "home" },
+      { label: "مساحة العمل", path: "/workspace", icon: LayoutGrid },
       { label: "مساحتي", path: "/my-space", icon: User },
       { label: "مركز القرارات", path: "/action-center", icon: Briefcase, minRoleLevel: 20 },
       { label: "لوحة المدير", path: "/manager-board", icon: Users, minRoleLevel: 40 },
+      { label: "مساحة المدير", path: "/manager-workspace", icon: Users, minRoleLevel: 40 },
       { label: "لوحة القيادة التنفيذية", path: "/exec-dashboard", icon: Shield, minRoleLevel: 60 },
       { label: "مركز العمليات", path: "/operations-center", icon: Zap, minRoleLevel: 40 },
       { label: "مركز الالتزامات", path: "/obligations", icon: Clock, minRoleLevel: 30 },
@@ -179,6 +182,7 @@ const allNavSections: NavSection[] = [
     items: [
       { label: "مركز سير العمل المالي", path: "/finance/workflows-hub", icon: Sparkles, module: "finance" },
       { label: "CFO Cockpit", path: "/finance/cfo-cockpit", icon: BarChart3, module: "finance" },
+      { label: "فحص الإغلاق اليومي", path: "/finance/daily-close-checklist", icon: ListChecks, module: "finance" },
       { label: "حزمة الإقفال الشهري", path: "/finance/monthly-close-pack", icon: FileBarChart, module: "finance" },
       { label: "الحسابات والقيود", path: "/finance/accounts", icon: GitBranch, module: "finance", children: [
         { label: "شجرة الحسابات", path: "/finance/accounts", icon: GitBranch },
@@ -201,6 +205,7 @@ const allNavSections: NavSection[] = [
         { label: "موزّع التكاليف", path: "/finance/expenses/split", icon: Layers },
         { label: "تحويل بين الحسابات", path: "/finance/treasury/transfer", icon: ArrowLeftRight },
         { label: "المقبوضات", path: "/finance/receivables", icon: DollarSign },
+        { label: "تسجيل دفعة عميل", path: "/finance/receivables/receipt", icon: DollarSign },
         { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
       ]},
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
@@ -208,9 +213,11 @@ const allNavSections: NavSection[] = [
         { label: "الموردين", path: "/finance/vendors", icon: Users },
         { label: "منضدة التسوية", path: "/finance/vendor-settlement-workbench", icon: Briefcase },
         { label: "كشف حساب مورد للطباعة", path: "/finance/vendor-statement-print", icon: Printer },
+        { label: "ملف المورد 360°", path: "/finance/vendor-360-sheet", icon: Users },
         { label: "إنفاق الموردين", path: "/finance/vendor-spend", icon: BarChart3 },
         { label: "دفعة الدفع", path: "/finance/payment-run", icon: Banknote },
         { label: "تقويم الدفعات", path: "/finance/ap-payment-calendar", icon: Calendar },
+        { label: "متابعة عقود الموردين", path: "/finance/vendor-contracts-tracker", icon: FileSignature },
       ]},
       { label: "النقد والذمم", path: "/finance/treasury", icon: Building, module: "finance", children: [
         { label: "مراقبة البنوك", path: "/finance/bank-accounts-watch", icon: Banknote },
@@ -220,6 +227,7 @@ const allNavSections: NavSection[] = [
         { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
         { label: "منضدة التحصيل", path: "/finance/ar-collection-workbench", icon: Users },
         { label: "كشف حساب عميل للطباعة", path: "/finance/customer-statement-print", icon: Printer },
+        { label: "ملف العميل 360°", path: "/finance/customer-360-sheet", icon: Users },
         { label: "مخاطر العملاء", path: "/finance/customer-risk", icon: AlertTriangle },
         { label: "مخصص ديون مشكوك فيها", path: "/finance/bad-debt-provision", icon: TrendingUp },
         { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
@@ -227,12 +235,14 @@ const allNavSections: NavSection[] = [
         { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
         { label: "تقويم النقدية", path: "/finance/cash-calendar", icon: Calendar },
         { label: "13-Week Cash", path: "/finance/cash-13week", icon: TrendingUp },
+        { label: "حاسبة الوضع النقدي", path: "/finance/cash-position-calculator", icon: Calculator },
       ]},
       { label: "الأصول والعهد", path: "/finance/fixed-assets", icon: Building2, module: "finance", children: [
         { label: "الأصول الثابتة", path: "/finance/fixed-assets", icon: Building2 },
         { label: "سجل الأصول التحليلي", path: "/finance/fixed-asset-register", icon: BarChart3 },
         { label: "إهلاك دفعة واحدة", path: "/finance/fixed-assets/batch-depreciate", icon: TrendingUp },
         { label: "العهد", path: "/finance/custodies", icon: KeyRound },
+        { label: "منضدة العُهد", path: "/finance/custody-workbench", icon: KeyRound },
       ]},
       { label: "الفترات والميزانية", path: "/finance/budget", icon: FileBarChart, module: "finance", children: [
         { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
@@ -248,6 +258,9 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "التكاليف والتسويات", path: "/finance/project-costing", icon: FolderOpen, module: "finance", children: [
         { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
+        { label: "محفظة المشاريع", path: "/finance/project-portfolio", icon: BarChart3 },
+        { label: "محفظة المركبات", path: "/finance/vehicle-portfolio", icon: BarChart3 },
+        { label: "محفظة العقارات", path: "/finance/property-portfolio", icon: BarChart3 },
         { label: "Cost Center P&L", path: "/finance/cost-center-pnl", icon: BarChart3 },
         { label: "تقييم المخزون", path: "/finance/inventory-costing", icon: Package },
         { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
@@ -259,12 +272,16 @@ const allNavSections: NavSection[] = [
         { label: "ZATCA Reports Hub", path: "/finance/reports/zatca", icon: FileCheck },
         { label: "تسوية VAT", path: "/finance/reports/vat-reconciliation", icon: Scale },
         { label: "ملخص WHT", path: "/finance/reports/wht-summary", icon: Percent },
+        { label: "إعداد إقرار WHT", path: "/finance/wht-filing-workbench", icon: FileCheck },
         { label: "التقارير المالية", path: "/finance/reports", icon: FileBarChart },
         { label: "P&L مقابل الميزانية", path: "/finance/reports/is-vs-budget", icon: Scale },
         { label: "اتجاه قائمة الدخل", path: "/finance/reports/is-trend", icon: TrendingUp },
         { label: "قائمة التدفقات النقدية", path: "/finance/reports/cash-flow-statement", icon: Banknote },
         { label: "Y/Y Comparison", path: "/finance/reports/yoy", icon: BarChart2 },
         { label: "معدل الحرق", path: "/finance/expense-burn-rate", icon: Activity },
+        { label: "محلل الإيرادات", path: "/finance/revenue-mix", icon: BarChart3 },
+        { label: "محلل المصاريف", path: "/finance/expense-mix", icon: BarChart3 },
+        { label: "DSO Trend", path: "/finance/reports/dso-trend", icon: Activity },
         { label: "GL Health Score", path: "/finance/gl-health", icon: ShieldAlert },
       ]},
       { label: "صناديق الواردات", path: "/finance/approvals-inbox", icon: Bell, module: "finance", children: [
@@ -384,7 +401,8 @@ const allNavSections: NavSection[] = [
         { label: "الأرشيف", path: "/documents/archive", icon: Archive },
         { label: "القوالب", path: "/documents/templates", icon: FilePlus },
       ]},
-      { label: "التواصل", path: "/communications", icon: Mail, module: "comms", children: [
+      { label: "التواصل", path: "/inbox", icon: Mail, module: "comms", children: [
+        { label: "صندوقي الموحّد", path: "/inbox", icon: Mail },
         { label: "سجل الاتصالات", path: "/communications", icon: MessageSquare },
         { label: "الصادر والوارد", path: "/correspondence", icon: FileText },
         { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap },
@@ -434,6 +452,7 @@ const allNavSections: NavSection[] = [
         { label: "مركز التحكّم بالـ PBX", path: "/admin/pbx-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "خارطة #1139 الحيّة", path: "/admin/master-plan", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "توجيه الإشعارات", path: "/admin/notification-routing", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+        { label: "إعدادات المزوّدات", path: "/admin/vendor-settings", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
         { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any" },
         { label: "سجل الحركات", path: "/activity-log", icon: Activity },
@@ -574,7 +593,10 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         if (item.minRoleLevel && effectiveRoleLevel < item.minRoleLevel) return null;
         if (item.subKey && mod && !canAccessSubPage(mod, item.subKey)) return null;
         if (!itemPermAllowed(item)) return null;
-        if (!item.children) return item;
+        if (!item.children || item.children.length === 0) {
+          if (!isRegisteredRoute(item.path)) return null;
+          return item;
+        }
         const filteredChildren = filterItems(item.children, mod);
         if (filteredChildren.length === 0) return null;
         return { ...item, children: filteredChildren };
@@ -818,7 +840,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     ],
     "/hr/leaves": [
       { label: "طلب إجازة", icon: Plus, link: "/hr/leaves/create" },
-      { label: "اعتماد الطلبات", icon: CheckSquare, link: "/hr/leaves?status=pending", minRoleLevel: 40 },
+      { label: "اعتماد الطلبات", icon: CheckSquare, link: "/hr/leaves?tab=pending", minRoleLevel: 40 },
     ],
     "/hr/leaves/management": [
       { label: "طلب إجازة", icon: Plus, link: "/hr/leaves/create" },
@@ -923,14 +945,14 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     ],
     "/finance/expenses": [
       { label: "مصروف جديد", icon: Plus, link: "/finance/expenses?action=new" },
-      { label: "اعتماد المصروفات", icon: CheckSquare, link: "/finance/expenses?status=pending", minRoleLevel: 40 },
+      { label: "اعتماد المصروفات", icon: CheckSquare, link: "/finance/expenses?tab=pending", minRoleLevel: 40 },
     ],
     "/finance/vouchers": [
       { label: "سند جديد", icon: Plus, link: "/finance/vouchers/create" },
     ],
     "/finance/purchase-orders": [
       { label: "طلب شراء جديد", icon: Plus, link: "/finance/purchase-orders?action=new" },
-      { label: "اعتماد الطلبات", icon: CheckSquare, link: "/finance/purchase-orders?status=pending", minRoleLevel: 40 },
+      { label: "اعتماد الطلبات", icon: CheckSquare, link: "/finance/purchase-orders?tab=pending", minRoleLevel: 40 },
     ],
     "/tasks": [
       { label: "مهمة جديدة", icon: Plus, link: "/tasks?action=new" },

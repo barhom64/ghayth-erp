@@ -13,6 +13,7 @@ import { logger } from "../lib/logger.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { slaDeadlineForPriority, haversineKm, loadBalanceAssign } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { sendMessage } from "../lib/messageSender.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, LifecycleError, lifecycleErrorResponse, STATE_MACHINES } from "../lib/lifecycleEngine.js";
@@ -243,18 +244,12 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
       }
     }
 
-    // Numbering center (Issue #1141) — support ticket number from
-    // the central authority. Scheme: `support.support_ticket`.
-    const issued = await issueNumber({
-      companyId: scope.companyId,
-      branchId: scope.branchId ?? null,
-      moduleKey: "support",
-      entityKey: "support_ticket",
-      entityTable: "support_tickets",
-      actorId: scope.userId,
-    });
-    const ref = issued.number;
-
+    // Numbering center (Issue #1141 closure) — issueNumber +
+    // INSERT + linkback now run in ONE atomic withTransaction below
+    // (lines 302+). Moved the call down so it sits next to the INSERT
+    // it pairs with, instead of allocating a counter slot up here and
+    // potentially burning it on a no-op when priority/assignee
+    // resolution throws later.
     const aiDetectedPriority = detectPriority(`${title} ${b.description || ''}`);
     const priority = b.priority || aiDetectedPriority;
     const slaResponseHours = priority === 'critical' ? 1 : priority === 'high' ? 2 : priority === 'medium' ? 4 : 8;
@@ -299,15 +294,31 @@ router.post("/tickets", authorize({ feature: "support.tickets", action: "create"
     // Stamp branchId from the active JWT assignment (migration 171 added
     // the column). Tickets created via the picker now isolate per-branch
     // instead of being visible to every agent in the company.
-    const { insertId } = await rawExecute(
-      `INSERT INTO support_tickets ("companyId","branchId",ref,title,description,category,priority,status,"clientId","assigneeId","slaDeadline") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-      [scope.companyId, scope.branchId, ref, title, b.description, b.category, priority, 'open', b.clientId ?? null, assigneeId, slaResolutionDeadline]
-    );
-    assertInsert(insertId, "support_tickets");
-    await rawExecute(
-      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
-      [insertId, issued.assignmentId]
-    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to support_tickets row"));
+    // Numbering center (#1141 closure) — issueNumber + INSERT + linkback
+    // in ONE atomic withTransaction. issueNumber joins via SAVEPOINT.
+    const atomic = await withTransaction(async () => {
+      const issued = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "support",
+        entityKey: "support_ticket",
+        entityTable: "support_tickets",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      const result = await rawExecute(
+        `INSERT INTO support_tickets ("companyId","branchId",ref,title,description,category,priority,status,"clientId","assigneeId","slaDeadline") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [scope.companyId, scope.branchId, issued.number, title, b.description, b.category, priority, 'open', b.clientId ?? null, assigneeId, slaResolutionDeadline]
+      );
+      assertInsert(result.insertId, "support_tickets");
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [result.insertId, issued.assignmentId]
+      );
+      return { insertId: result.insertId, ref: issued.number };
+    });
+    const insertId = atomic.insertId;
+    const ref = atomic.ref;
     const [row] = await rawQuery<SupportTicketRow>(`SELECT * FROM support_tickets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     if (assigneeId) {
@@ -628,19 +639,19 @@ router.patch("/tickets/:id", authorize({ feature: "support.tickets", action: "up
           );
           if (client?.email) {
             const scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-            await rawExecute(
-              `INSERT INTO email_queue ("companyId","toEmail","recipientName",subject,body,status,"scheduledAt","createdAt","refType","refId")
-               VALUES ($1,$2,$3,$4,$5,'pending',$6,NOW(),'support_ticket',$7)`,
-              [
-                scope.companyId,
-                client.email,
-                client.name ?? "",
-                `استبيان رضا العميل - التذكرة ${ticket.ref}`,
-                `مرحباً ${client.name ?? ""},\n\nتم حل تذكرتكم رقم ${ticket.ref}.\nنرجو تقييم تجربتكم معنا من خلال الرابط المرفق.\n\nشكراً لثقتكم.`,
-                scheduledAt.toISOString(),
-                ticketId,
-              ]
-            );
+            await sendMessage({
+              channel: "email",
+              recipient: client.email,
+              recipientName: client.name ?? "",
+              subject: `استبيان رضا العميل - التذكرة ${ticket.ref}`,
+              body: `مرحباً ${client.name ?? ""},\n\nتم حل تذكرتكم رقم ${ticket.ref}.\nنرجو تقييم تجربتكم معنا من خلال الرابط المرفق.\n\nشكراً لثقتكم.`,
+              companyId: scope.companyId,
+              userId: scope.userId,
+              relatedType: "support_ticket",
+              relatedId: ticketId,
+              scheduledAt,
+              templateKey: "support.csat.survey",
+            }).catch((e) => logger.error(e, "support csat queue failed"));
             surveyQueued = true;
           }
         } catch (e) {

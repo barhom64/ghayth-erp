@@ -599,7 +599,7 @@ function SchemeEditor({
               </div>
               <div>
                 <Label className="text-xs">توقيت إصدار الرقم</Label>
-                <Select value={scheme.issueTiming} onValueChange={() => { /* fixed by scheme creator */ }}>
+                <Select value={scheme.issueTiming} disabled onValueChange={() => { /* enforced by route — see note */ }}>
                   <SelectTrigger><SelectValue placeholder={TIMING_LABELS[scheme.issueTiming]} /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(TIMING_LABELS).map(([k, v]) => (
@@ -607,6 +607,9 @@ function SchemeEditor({
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
+                  هذا التوقيت مربوط بكود المسار — تغييره بدون تعديل المسار سيمنع إصدار الأرقام الجديدة (خطأ بالعربية يبيّن السبب).
+                </p>
               </div>
               <div>
                 <Label className="text-xs">آخر تعديل</Label>

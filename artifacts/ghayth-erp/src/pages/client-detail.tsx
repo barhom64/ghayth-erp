@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { ComposeDialog } from "@/pages/inbox";
+import { Send } from "lucide-react";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import {
   PageStatusBadge,
@@ -71,6 +73,7 @@ export default function ClientDetail() {
   const { hideTabs: registryHideTabs } = useRegistryTabs("client", id ?? "");
   const { data: client, isLoading, isError } = useApiQuery<any>(["client", id], `/clients/${id}`, !!id);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [composeOpen, setComposeOpen] = useState(false);
 
   const invoices: any[] = client?.invoices || [];
   const opportunities: any[] = client?.opportunities || [];
@@ -605,6 +608,7 @@ export default function ClientDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title="ملف العميل 360°"
       subtitle={client?.name}
@@ -638,9 +642,25 @@ export default function ClientDetail() {
               formats={["a4"]}
             />
           )}
+          {client && (client.email || client.phone) && (
+            <Button size="sm" variant="default" className="gap-1" onClick={() => setComposeOpen(true)}>
+              <Send className="h-4 w-4" />راسل العميل
+            </Button>
+          )}
         </>
       }
     />
+      {composeOpen && (
+        <ComposeDialog
+          open={composeOpen}
+          onClose={() => setComposeOpen(false)}
+          onSent={() => setComposeOpen(false)}
+          initialRecipient={client?.email || client?.phone || ""}
+          initialChannel={client?.email ? "email" : "whatsapp"}
+          initialRelated={client?.id ? { type: "client", id: client.id } : undefined}
+        />
+      )}
+    </>
   );
 }
 

@@ -6,6 +6,8 @@ import { Router } from "express";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
+import { getCachedVendorConfigSync } from "../lib/vendorSettings.js";
+import { enqueueTranscription } from "../lib/pbxControl.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -84,11 +86,25 @@ const pushUnsubscribeSchema = z.object({
 
 const router = Router();
 
-const WA_VERIFY_TOKEN = config.whatsapp.verifyToken ?? "ghayth_erp_verify";
+// WhatsApp credentials — env values used as the initial cached value;
+// the live read in the route bodies goes through getCachedVendorConfigSync
+// so a UI-driven update via /admin/vendor-settings takes effect after the
+// next cache warm (60s TTL).
+const WA_VERIFY_TOKEN_ENV = config.whatsapp.verifyToken ?? "ghayth_erp_verify";
 const WA_ACCESS_TOKEN = config.whatsapp.accessToken ?? "";
 const WA_PHONE_ID = config.whatsapp.phoneId ?? "";
 const WA_APP_SECRET = config.whatsapp.appSecret ?? "";
-const PBX_WEBHOOK_SECRET = config.pbx.webhookSecret ?? "";
+
+/**
+ * Resolve the PBX webhook secret — DB first (vendor_secrets.pbx-webhook
+ * via the cached sync read), env fallback. Lets the operator rotate
+ * the secret from /admin/vendor-settings without a redeploy.
+ */
+function getPbxWebhookSecret(): string {
+  const vc = getCachedVendorConfigSync("pbx-webhook");
+  const fromDb = typeof vc.config.webhookSecret === "string" ? vc.config.webhookSecret : "";
+  return fromDb || config.pbx.webhookSecret || "";
+}
 
 // RD3-01 — PBX webhook auth. PBX providers (3CX, Twilio, Asterisk
 // connectors, etc.) typically sign callbacks with HMAC-SHA256 over the
@@ -96,16 +112,17 @@ const PBX_WEBHOOK_SECRET = config.pbx.webhookSecret ?? "";
 // (HMAC-SHA256) OR a bearer token `Authorization: Bearer <secret>` to
 // match the simpler shared-secret schemes some on-prem PBXs use.
 // Without verification, any attacker could forge a POST to /pbx/* and
-// fabricate calls / chat_messages / tasks. Fails closed when
-// PBX_WEBHOOK_SECRET is unset.
+// fabricate calls / chat_messages / tasks. Fails closed when no
+// secret is configured (in DB or env).
 function verifyPbxSignature(req: import("express").Request): boolean {
-  if (!PBX_WEBHOOK_SECRET) return false;
+  const pbxSecret = getPbxWebhookSecret();
+  if (!pbxSecret) return false;
   const auth = req.get("authorization") ?? "";
   if (auth.startsWith("Bearer ")) {
     const provided = auth.slice("Bearer ".length).trim();
-    if (provided.length === PBX_WEBHOOK_SECRET.length) {
+    if (provided.length === pbxSecret.length) {
       try {
-        return timingSafeEqual(Buffer.from(provided), Buffer.from(PBX_WEBHOOK_SECRET));
+        return timingSafeEqual(Buffer.from(provided), Buffer.from(pbxSecret));
       } catch { return false; }
     }
     return false;
@@ -114,7 +131,7 @@ function verifyPbxSignature(req: import("express").Request): boolean {
   if (!header.startsWith("sha256=")) return false;
   const raw = (req as unknown as { rawBody?: Buffer }).rawBody;
   if (!raw) return false;
-  const expected = createHmac("sha256", PBX_WEBHOOK_SECRET).update(raw).digest("hex");
+  const expected = createHmac("sha256", pbxSecret).update(raw).digest("hex");
   const provided = header.slice("sha256=".length);
   if (expected.length !== provided.length) return false;
   try {
@@ -204,7 +221,7 @@ router.get("/whatsapp/webhook", (req, res) => {
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
 
-    if (mode === "subscribe" && token === WA_VERIFY_TOKEN) {
+    if (mode === "subscribe" && token === WA_VERIFY_TOKEN_ENV) {
       res.status(200).send(challenge);
     } else {
       throw new ForbiddenError("Verification failed");
@@ -444,6 +461,26 @@ router.post("/pbx/completed", async (req, res): Promise<void> => {
       `UPDATE pbx_calls SET status=$1, duration=$2, "recordingUrl"=$3 WHERE id=$4 AND "companyId"=$5 AND status != 'completed'`,
       [status, duration, recordingUrl, call.id, companyId]
     );
+
+    // Auto-queue the recording for transcription. The STT worker
+    // (cron: stt_queue_drain) picks it up; lib/pbxControl resolves
+    // an active STT provider from ai_providers (capability='stt')
+    // and falls back to a clear failed state if none is configured.
+    // Persist a pbx_call_recordings row in the same step so the
+    // operator UI has retention metadata.
+    if (recordingUrl && (status === "completed" || duration > 0)) {
+      void rawExecute(
+        `INSERT INTO pbx_call_recordings ("callId", "companyId", "recordingUrl", "durationMs", status)
+         VALUES ($1, $2, $3, $4, 'active')
+         ON CONFLICT ("callId") DO UPDATE
+           SET "recordingUrl" = EXCLUDED."recordingUrl",
+               "durationMs"   = EXCLUDED."durationMs",
+               status         = 'active'`,
+        [call.id, companyId, recordingUrl, (duration ?? 0) * 1000],
+      ).catch((e) => logger.warn(e, "[PBX] recording metadata upsert failed (non-fatal)"));
+      void enqueueTranscription(call.id, companyId, "ar")
+        .catch((e) => logger.warn(e, "[PBX] auto-enqueue STT failed (non-fatal)"));
+    }
 
     if (status === "no_answer" || duration === 0) {
       const sender = await matchSenderToEntity(call.callerNumber, companyId);
@@ -697,6 +734,7 @@ router.post("/log/:id/convert", authorize({ feature: "communications", action: "
           entityTable: "support_tickets",
           actorId: scope.userId,
           metadata: { source: "communications", logId },
+          expectedTiming: "on_draft",
         });
         const result = await client.query(
           `INSERT INTO support_tickets ("companyId", title, description, status, priority, ref)
@@ -720,6 +758,7 @@ router.post("/log/:id/convert", authorize({ feature: "communications", action: "
           entityTable: "requests",
           actorId: scope.userId,
           metadata: { source: "communications", logId },
+          expectedTiming: "on_draft",
         });
         const result = await client.query(
           `INSERT INTO requests ("companyId", title, description, status, priority, "requesterName", ref)

@@ -85,6 +85,7 @@ function scopeFromReq(req: Request): PrintScope {
     userId: s.userId,
     role: s.role,
     isOwner: s.isOwner,
+    allowedBranches: s.allowedBranches ?? [],
   };
 }
 
@@ -211,6 +212,13 @@ const previewBody = z.object({
   templateId: z.number().int().positive().optional(),
   format: z.enum(["a4", "thermal_80", "thermal_58", "label", "excel"]).optional(),
   payload: z.record(z.any()).optional(),
+  /** In-flight HTML draft from the template editor. When supplied (without
+   *  templateId) the engine renders this exact markup, so the user sees
+   *  their unsaved edits before committing. Capped at 200KB to prevent
+   *  a malicious client from blowing past the rate limit with a huge body. */
+  htmlContent: z.string().max(200_000).optional(),
+  presetKey: z.string().max(100).optional(),
+  paperSize: z.enum(["A4", "A5", "THERMAL_80", "THERMAL_58", "LABEL_50x30", "LABEL_100x50"]).optional(),
 });
 
 router.post(
@@ -229,6 +237,27 @@ router.post(
         );
         if (!t) throw new NotFoundError("template");
         overrideTemplate = t as never;
+      } else if (body.htmlContent) {
+        // In-flight HTML preview: build an in-memory template that wraps
+        // the user's draft markup. Skips the DB entirely so editing a
+        // template without saving still produces a faithful preview.
+        overrideTemplate = {
+          id: -999,
+          name: "draft-preview",
+          entityType: body.entityType,
+          branchId: null,
+          companyId: null,
+          paperSize: body.paperSize ?? "A4",
+          mode: "html",
+          presetKey: body.presetKey ?? "draft",
+          htmlContent: body.htmlContent,
+          layoutJson: null,
+          cssOverrides: null,
+          headerOverride: null,
+          footerOverride: null,
+          isThermal: body.paperSize === "THERMAL_80" || body.paperSize === "THERMAL_58",
+          version: 1,
+        } as never;
       }
       const result = await renderPrint(
         scope,
@@ -873,6 +902,44 @@ router.post(
       });
       if (!result.ok) return res.status(503).json({ error: result.error });
       res.json(result.result);
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  },
+);
+
+// ─── Retention — prune old PDFs from object storage ──────────────────────
+//
+// Audit rows in print_jobs are never deleted (regulatory). Only the
+// rendered bytes are evicted from object storage and the pdfStorageKey
+// column is cleared so re-runs don't re-scan the same rows.
+//
+// Gated by `print_jobs:read` (read-level access to the print log + manual
+// cleanup of one's own company's artifacts). Owners + GMs are the
+// expected callers via an admin button; a future cron can call this
+// helper directly without going through HTTP.
+router.post(
+  "/jobs/prune",
+  requirePermission("print_jobs:read"),
+  async (req: Request, res: Response) => {
+    try {
+      const scope = scopeFromReq(req);
+      const body = zodParse(z.object({
+        daysToKeep: z.number().int().min(1).max(3650).default(90),
+        maxPerRun: z.number().int().min(1).max(10_000).optional(),
+        dryRun: z.boolean().optional(),
+      }).safeParse(req.body));
+      const { prunePrintArtifacts } = await import("../lib/print/retention.js");
+      const result = await prunePrintArtifacts({
+        daysToKeep: body.daysToKeep,
+        maxPerRun: body.maxPerRun,
+        dryRun: body.dryRun,
+        // Non-owners are scoped to their own company; owners across
+        // the whole platform would still see only their currentCompany
+        // because scopeFromReq populates it from the JWT.
+        companyId: scope.companyId,
+      });
+      res.json(result);
     } catch (err) {
       return handleRouteError(err, res, "print");
     }

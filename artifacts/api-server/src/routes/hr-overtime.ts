@@ -7,7 +7,7 @@
 import { Router } from "express";
 import { HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
-import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { issueNumber } from "../lib/numberingService.js";
 
@@ -325,37 +325,42 @@ router.post("/overtime", authorize({ feature: "hr.overtime", action: "create" })
       throw new ConflictError("يوجد طلب وقت إضافي لنفس الموظف في نفس التاريخ");
     }
 
-    // Numbering center (Issue #1141) — overtime request number from authority.
-    const issued = await issueNumber({
-      companyId: scope.companyId,
-      branchId: emp.branchId ?? scope.branchId ?? null,
-      moduleKey: "hr",
-      entityKey: "overtime",
-      entityTable: "hr_overtime_requests",
-      actorId: scope.userId,
-    });
-    const requestNumber = issued.number;
     const period = b.overtimeDate.substring(0, 7); // YYYY-MM
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO hr_overtime_requests
-         ("companyId","branchId","assignmentId","employeeId","requestNumber",
-          "overtimeDate","startTime","endTime",hours,"hourlyRate","multiplier",
-          "totalAmount",reason,status,"payrollPeriod","createdAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending',$14,NOW())
-       RETURNING id`,
-      [
-        scope.companyId, emp.branchId, b.assignmentId, emp.employeeId,
-        requestNumber, b.overtimeDate, b.startTime, b.endTime,
-        hours, hourlyRate, multiplier, totalAmount,
-        b.reason || null, period,
-      ]
-    );
-    assertInsert(insertId, "hr_overtime_requests");
-    await rawExecute(
-      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
-      [insertId, issued.assignmentId]
-    ).catch((e) => logger.error(e, "numbering: failed to link assignment.entityId to hr_overtime_requests row"));
+    // Numbering center (#1141 closure) — atomic issue + INSERT + linkback.
+    const atomic = await withTransaction(async () => {
+      const issued = await issueNumber({
+        companyId: scope.companyId,
+        branchId: emp.branchId ?? scope.branchId ?? null,
+        moduleKey: "hr",
+        entityKey: "overtime",
+        entityTable: "hr_overtime_requests",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      const result = await rawExecute(
+        `INSERT INTO hr_overtime_requests
+           ("companyId","branchId","assignmentId","employeeId","requestNumber",
+            "overtimeDate","startTime","endTime",hours,"hourlyRate","multiplier",
+            "totalAmount",reason,status,"payrollPeriod","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending',$14,NOW())
+         RETURNING id`,
+        [
+          scope.companyId, emp.branchId, b.assignmentId, emp.employeeId,
+          issued.number, b.overtimeDate, b.startTime, b.endTime,
+          hours, hourlyRate, multiplier, totalAmount,
+          b.reason || null, period,
+        ]
+      );
+      assertInsert(result.insertId, "hr_overtime_requests");
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [result.insertId, issued.assignmentId]
+      );
+      return { insertId: result.insertId, requestNumber: issued.number };
+    });
+    const insertId = atomic.insertId;
+    const requestNumber = atomic.requestNumber;
 
     // ── سلسلة الموافقات ──
     const approvalResult = await initiateApprovalChain({

@@ -232,7 +232,7 @@ router.get(
         items: [
           { key: "no_platform_duplication", label: "ممنوع تكرار Platform Services داخل المسارات", status: "implemented", evidence: "audit-domain-boundaries scanner — no cross-domain writes detected" },
           { key: "lifecycle_events_audit_rbac", label: "كل feature يحتوي lifecycle/events/audit/RBAC/settings/APIs", status: "implemented", evidence: "audit-stop-ship scanner runs on every commit; baseline = 0 critical violations" },
-          { key: "ui_controllable", label: "كل شيء قابل للتحكم من الواجهة", status: "implemented", evidence: "5 جديدة admin pages في الـ slices + master-plan page (هذه)", linkPath: "/admin" },
+          { key: "ui_controllable", label: "كل شيء قابل للتحكم من الواجهة", status: ifTable("vendor_secrets", "implemented"), evidence: "vendor_secrets table + /admin/vendor-settings hub — PBX webhook, WhatsApp, SMTP, VAPID, SIEM, ZATCA كلها UI-driven مع secrets مشفّرة عبر secrets.ts", linkPath: "/admin/vendor-settings" },
           { key: "contracts", label: "جميع integrations تعتمد contracts", status: "implemented", evidence: "@workspace/api-zod schemas + zodParse() على كل request + lib/api-spec OpenAPI" },
         ],
       };

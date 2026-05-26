@@ -273,7 +273,13 @@ export default function InvoiceDetailPage() {
 
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-2 mb-3 text-muted-foreground"><User className="h-4 w-4" /><span className="text-sm">العميل</span></div>
-          <p className="font-bold text-lg">{invoice.clientName || "-"}</p>
+          {(invoice as any).clientId ? (
+            <Link href={`/finance/customer-360-sheet?clientId=${(invoice as any).clientId}`}>
+              <p className="font-bold text-lg hover:underline cursor-pointer">{invoice.clientName || "-"}</p>
+            </Link>
+          ) : (
+            <p className="font-bold text-lg">{invoice.clientName || "-"}</p>
+          )}
           {invoice.clientPhone && <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><Phone className="h-3 w-3" />{invoice.clientPhone}</p>}
           {invoice.clientEmail && <p className="text-sm text-muted-foreground flex items-center gap-1"><Mail className="h-3 w-3" />{invoice.clientEmail}</p>}
         </CardContent></Card>

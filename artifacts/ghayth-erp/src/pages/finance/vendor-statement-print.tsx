@@ -61,7 +61,11 @@ interface StatementResp {
 }
 
 export default function VendorStatementPrintPage() {
-  const [supplierId, setSupplierId] = useState<string>("");
+  const initialSupplierId = typeof window !== "undefined"
+    ? (new URLSearchParams(window.location.search).get("vendorId") ??
+       new URLSearchParams(window.location.search).get("supplierId") ?? "")
+    : "";
+  const [supplierId, setSupplierId] = useState<string>(initialSupplierId);
   const [year, setYear] = useState(currentYearRiyadh());
   const [month, setMonth] = useState(currentMonthPaddedRiyadh());
   const [scope, setScope] = useState<"month" | "ytd" | "all">("month");
@@ -166,6 +170,14 @@ export default function VendorStatementPrintPage() {
             </div>
           </div>
           <div className="flex gap-2 mt-3 justify-end">
+            {supplierId && (
+              <Link href={`/finance/vendor-360-sheet?vendorId=${supplierId}`}>
+                <Button variant="outline" size="sm">
+                  <FileText className="w-4 h-4 ml-1" />
+                  ملف المورد 360°
+                </Button>
+              </Link>
+            )}
             <Button variant="outline" size="sm" onClick={exportCSV} disabled={!data}>
               <Download className="w-4 h-4 ml-1" />
               CSV

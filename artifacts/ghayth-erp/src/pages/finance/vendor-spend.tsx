@@ -243,7 +243,7 @@ export default function VendorSpendPage() {
       key: "name",
       header: "المورد",
       render: (v) => (
-        <Link href={`/finance/vendors/${v.supplierId}`}>
+        <Link href={`/finance/vendor-360-sheet?vendorId=${v.supplierId}`}>
           <div className="flex flex-col">
             <span className="text-xs font-medium text-status-info-foreground hover:underline">{v.name}</span>
             {v.phone && <span className="text-[10px] text-muted-foreground">{v.phone}</span>}
