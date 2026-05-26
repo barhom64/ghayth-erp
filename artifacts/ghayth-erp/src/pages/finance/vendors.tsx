@@ -124,12 +124,24 @@ export default function VendorsPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الموردون" }]}
       loading={isLoading}
       actions={
-        <GuardedButton perm="finance:create" size="sm" asChild>
-          <Link href={createPath}>
-            <Plus className="h-4 w-4 me-1" />
-            إضافة مورد
+        <>
+          <Link href="/finance/vendor-spend">
+            <Button variant="outline" size="sm">
+              <Building2 className="h-4 w-4 me-2" />تحليل الإنفاق
+            </Button>
           </Link>
-        </GuardedButton>
+          <Link href="/finance/vendor-contracts-tracker">
+            <Button variant="outline" size="sm">
+              <Calendar className="h-4 w-4 me-2" />متابعة العقود
+            </Button>
+          </Link>
+          <GuardedButton perm="finance:create" size="sm" asChild>
+            <Link href={createPath}>
+              <Plus className="h-4 w-4 me-1" />
+              إضافة مورد
+            </Link>
+          </GuardedButton>
+        </>
       }
     >
       <FinanceTabsNav />
