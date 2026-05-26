@@ -1,6 +1,7 @@
 import { lazy } from "react";
 
 const Communications = lazy(() => import("@/pages/communications"));
+const Inbox = lazy(() => import("@/pages/inbox"));
 const NotificationEngine = lazy(() => import("@/pages/notification-engine"));
 const Correspondence = lazy(() => import("@/pages/comms/correspondence"));
 const CorrespondenceCreate = lazy(() => import("@/pages/create/comms/correspondence-create"));
@@ -8,6 +9,7 @@ const LettersCreate = lazy(() => import("@/pages/create/communications/letters-c
 const CorrespondenceDetail = lazy(() => import("@/pages/details/correspondence-detail"));
 
 export const commsRoutes = [
+  { path: "/inbox", component: Inbox },
   { path: "/communications", component: Communications },
   { path: "/communications/notification-engine", component: NotificationEngine },
   { path: "/communications/letters/create", component: LettersCreate },
