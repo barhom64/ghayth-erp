@@ -8,6 +8,7 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -630,6 +631,13 @@ export default function ClientDetail() {
               <FileSpreadsheet className="h-4 w-4" /> كشف حساب
             </Button>
           </Link>
+          {client && (
+            <EntityPrintButton
+              entityType="client"
+              entityId={client.id ?? params?.id}
+              formats={["a4"]}
+            />
+          )}
         </>
       }
     />
