@@ -106,7 +106,14 @@ function parseModules(raw: unknown, roleKey?: string): string[] {
   return [];
 }
 
-router.get("/my", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+// `/my` returns the caller's own effective permission set — this is a
+// self-introspection endpoint that every authenticated user must be
+// able to call regardless of role. Gating it on `admin:list` broke the
+// header role picker: switching to a non-admin role made this endpoint
+// 403, the frontend `apiData` never refreshed, and the UI got stuck.
+// authMiddleware already guarantees the caller is authenticated, and
+// the response is scoped to `scope.userId` / `scope.companyId`.
+router.get("/my", async (req, res) => {
   try {
     const scope = req.scope!;
     const roleRows = await rawQuery<RoleSummaryRow>(
@@ -121,9 +128,14 @@ router.get("/my", authorize({ feature: "admin", action: "list" }), async (req, r
     // يعمل"). The picker may only narrow to a role the user actually owns;
     // an unknown / unassigned key falls back to the full union so we don't
     // accidentally lock the user out.
-    const requestedRole = typeof req.query.role === "string" && req.query.role.trim()
-      ? req.query.role.trim()
-      : null;
+    // Prefer the scope's already-validated selectedRoleKey (set from the
+    // `x-selected-role` header by authMiddleware) — that's gone through
+    // the canonical validation against user_roles. Fall back to the
+    // query param for older callers.
+    const requestedRole = scope.selectedRoleKey
+      ?? (typeof req.query.role === "string" && req.query.role.trim()
+        ? req.query.role.trim()
+        : null);
 
     let roles: RoleSummaryRow[];
     if (roleRows.length > 0) {

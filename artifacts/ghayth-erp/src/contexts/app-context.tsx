@@ -219,15 +219,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isAuthenticated) { setApiData(null); return; }
-    // Pass the picked role to the backend so /permissions/my returns just
-    // that role's modules + permissions. Without this, the union of every
-    // assigned role was returned and switching role in the header dropdown
-    // had no visible effect ("فلتر الدور لا يعمل"). Also clear cached
-    // queries so list pages refetch under the new role's scope.
-    const rolePath = selectedRoleKey
-      ? `/permissions/my?role=${encodeURIComponent(selectedRoleKey)}`
-      : "/permissions/my";
-    apiFetch(rolePath)
+    // apiFetch automatically sends the picked role as `x-selected-role`,
+    // and authMiddleware narrows scope.role + authzEngine grants to that
+    // role on the backend. We just need to refetch here whenever the
+    // user changes their pick so the local apiData (which drives the
+    // sidebar and button gating) reflects the new scope.
+    apiFetch("/permissions/my")
       .then((data: any) => {
         setApiData({
           permissions: Array.isArray(data?.permissions) ? data.permissions : [],
