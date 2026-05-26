@@ -1,0 +1,20 @@
+{
+  "code": "fleet.fuel",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "fuel",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": true,
+  "qr": true,
+  "status": "published",
+  "domain": "fleet",
+  "title": "إيصال تعبئة وقود",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "fuel"
+  },
+  "ownerTeam": "fleet"
+}

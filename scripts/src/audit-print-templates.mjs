@@ -53,7 +53,7 @@ async function main() {
   const presetMatch = resolverSrc.match(/const\s+BESPOKE_PRESETS[^{]*=\s*\{([\s\S]*?)\n\};/);
   const presetBody = presetMatch ? presetMatch[1] : "";
   const presetKeys = new Set(
-    Array.from(presetBody.matchAll(/^\s*([a-z_]+):\s*\(/gm)).map((m) => m[1]),
+    Array.from(presetBody.matchAll(/^\s*([a-z_][a-z0-9_]*):\s*\(/gm)).map((m) => m[1]),
   );
   // Also collect every implementation.key referenced from manifests so we
   // can spot the inverse case (a manifest with a typo'd key).
