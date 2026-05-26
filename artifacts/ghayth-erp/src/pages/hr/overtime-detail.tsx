@@ -48,7 +48,7 @@ export default function OvertimeDetail() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
 
-  const { data, isLoading, isError } = useApiQuery<any>(["hr-overtime-detail", id], id ? `/hr/overtime/${id}` : null);
+  const { data, isLoading, isError } = useApiQuery<any>(["hr-overtime-detail", id], `/hr/overtime/${id}`);
   const item = data?.data ?? data;
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("overtime_request", id || "");
 

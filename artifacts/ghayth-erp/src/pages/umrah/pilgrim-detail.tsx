@@ -41,7 +41,7 @@ export default function PilgrimDetail() {
   const [, params] = useRoute("/umrah/pilgrims/:id");
   const id = params?.id || "";
   const { extraTabs, hideTabs } = useRegistryTabs("pilgrim", id ?? "");
-  const { data, refetch, isLoading, isError } = useApiQuery<any>(["umrah-pilgrim", id], id ? `/umrah/pilgrims/${id}` : null);
+  const { data, refetch, isLoading, isError } = useApiQuery<any>(["umrah-pilgrim", id], `/umrah/pilgrims/${id}`);
   const [newStatus, setNewStatus] = useState("");
   const { toast } = useToast();
 

@@ -189,7 +189,7 @@ function CustomerStatementTab({ startDate, endDate }: { startDate: string; endDa
   const params = `startDate=${startDate}&endDate=${endDate}`;
   const { data, isLoading, error, refetch } = useApiQuery<StatementResponse>(
     ["finance-customer-statement", clientId, params],
-    enabled ? `/finance/reports/customer-statement/${clientId}?${params}` : null,
+    `/finance/reports/customer-statement/${clientId}?${params}`,
     { enabled },
   );
 
@@ -223,7 +223,7 @@ function VendorStatementTab({ startDate, endDate }: { startDate: string; endDate
   const params = `startDate=${startDate}&endDate=${endDate}`;
   const { data, isLoading, error, refetch } = useApiQuery<StatementResponse>(
     ["finance-vendor-statement", supplierId, params],
-    enabled ? `/finance/reports/vendor-statement/${supplierId}?${params}` : null,
+    `/finance/reports/vendor-statement/${supplierId}?${params}`,
     { enabled },
   );
 
@@ -389,7 +389,7 @@ function SubsidiaryLedgerTab({ startDate, endDate }: { startDate: string; endDat
     totalCredit?: number;
   }>(
     ["finance-subsidiary-ledger", entityType, entityId, params],
-    enabled ? `/finance/subsidiary-ledger/${entityType}/${entityId}?${params}` : null,
+    `/finance/subsidiary-ledger/${entityType}/${entityId}?${params}`,
     { enabled },
   );
 
