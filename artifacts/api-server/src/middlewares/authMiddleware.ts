@@ -127,6 +127,23 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
   ];
 
   if (assignment.role === "owner" || assignment.role === "general_manager") {
+    // Owner / general_manager are global within the companies they
+    // actually have an owner/GM assignment in. Expand `allowedCompanies`
+    // to every such company so the header branch picker works across
+    // them (was the user-reported "فلتر الفروع لا يعمل"). Do NOT expand
+    // to every company in the DB — that would break tenant isolation
+    // for an owner of company A who has no entitlement on company B.
+    const ownerAssignments = await rawQuery<{ companyId: number }>(
+      `SELECT DISTINCT "companyId"
+         FROM employee_assignments
+        WHERE "employeeId" = $1
+          AND status = 'active'
+          AND role IN ('owner','general_manager')`,
+      [assignment.employeeId]
+    );
+    for (const a of ownerAssignments) {
+      if (!allowedCompanies.includes(a.companyId)) allowedCompanies.push(a.companyId);
+    }
     // Same status filter for the company-wide expansion — owners must
     // not silently regain access to a disabled branch.
     const companyBranches = await rawQuery<{ id: number }>(
