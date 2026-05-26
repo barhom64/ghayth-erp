@@ -368,6 +368,7 @@ router.post("/loans", authorize({ feature: "hr.loans", action: "create" }), asyn
         entityKey: "loan",
         entityTable: "hr_employee_loans",
         actorId: scope.userId,
+        expectedTiming: "on_draft",
       });
       const result = await rawExecute(
         `INSERT INTO hr_employee_loans

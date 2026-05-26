@@ -137,7 +137,7 @@ INSERT INTO numbering_schemes (
 )
 SELECT c.id, 'mymodule', 'myentity',
        'وصف عربي', 'PFX', '{PREFIX}-{BRANCH}-{YYYY}-{SEQ}', 4,
-       'yearly', 'branch', 'on_submit',
+       'yearly', 'branch', 'on_draft',
        'draft_only', '["approved","posted","closed"]'::jsonb,
        'my_entity_table', 'ref'
 FROM companies c
@@ -146,6 +146,8 @@ ON CONFLICT ("companyId","moduleKey","entityKey") DO NOTHING;
 ```
 
 Available `resetPolicy` / `scopePolicy` / `issueTiming` / `manualEditPolicy` values are declared as TS unions in `numberingService.ts`.
+
+> **`issueTiming` is enforced** — pick a value the route can actually call at. Today every wired route calls `issueNumber` from its CREATE handler and passes `expectedTiming: "on_draft"`. If you seed a scheme as `'on_submit'`/`'on_approval'`/`'on_posting'` but the corresponding route still issues at draft time, the service will throw a clear Arabic `ValidationError` on every call. Match the scheme value to the lifecycle point your route is actually calling from, or refactor the route to defer.
 
 ### Step 2 — also add a DB UNIQUE index
 
@@ -163,41 +165,48 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_<table>_<refcol>
 // artifacts/api-server/src/routes/mymodule.ts
 
 import { issueNumber } from "../lib/numberingService.js";
+import { withTransaction, rawExecute, assertInsert } from "../lib/rawdb.js";
 
 router.post("/", authorize({ feature: "...", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
-    // Numbering center — issue the official ref FIRST. If this fails,
-    // throw → the document is never created. No fallback.
-    const issued = await issueNumber({
-      companyId: scope.companyId,
-      branchId: scope.branchId ?? null,
-      moduleKey: "mymodule",
-      entityKey: "myentity",
-      entityTable: "my_entity_table",
-      actorId: scope.userId,
-      // seasonId: ...  // ONLY if scopePolicy === "season"
+    // Numbering center — issue + INSERT + linkback are ONE atomic
+    // transaction. If any step fails, everything rolls back so we never
+    // leave an orphaned counter slot or an unlinked assignment row.
+    // issueNumber itself opens an inner withTransaction that joins this
+    // outer one via SAVEPOINT (see rawdb.ts:99-124).
+    const atomic = await withTransaction(async () => {
+      const issued = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "mymodule",
+        entityKey: "myentity",
+        entityTable: "my_entity_table",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",   // REQUIRED — must match scheme.issueTiming
+        // seasonId: ...               // ONLY if scopePolicy === "season"
+      });
+      const result = await rawExecute(
+        `INSERT INTO my_entity_table ("companyId", ref, ...) VALUES ($1, $2, ...)`,
+        [scope.companyId, issued.number, ...]
+      );
+      assertInsert(result.insertId, "my_entity_table");
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [result.insertId, issued.assignmentId]
+      );
+      return { insertId: result.insertId, ref: issued.number };
     });
-    const ref = issued.number;
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO my_entity_table ("companyId", ref, …) VALUES ($1, $2, …)`,
-      [scope.companyId, ref, …]
-    );
-
-    // Link the assignment back to the new entity row.
-    await rawExecute(
-      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
-      [insertId, issued.assignmentId]
-    ).catch((e) => logger.error(e, "numbering: failed to link assignment"));
-
-    res.status(201).json({ id: insertId, ref });
+    res.status(201).json({ id: atomic.insertId, ref: atomic.ref });
   } catch (err) {
     handleRouteError(err, res, "خطأ في إنشاء المعاملة");
   }
 });
 ```
+
+**DO NOT** call `issueNumber` outside `withTransaction`, and **DO NOT** wrap the link-back UPDATE in `.catch(log)`. The lawyer's review nit #2 closed both of those legacy patterns — re-introducing either one bypasses the atomicity guarantee and leaves orphaned counter slots on failure.
 
 ### Step 4 — confirm coverage
 
