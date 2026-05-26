@@ -106,6 +106,7 @@ const ArAging = lazy(() => import("@/pages/finance/ar-aging"));
 const ArCollectionWorkbench = lazy(() => import("@/pages/finance/ar-collection-workbench"));
 const ApAging = lazy(() => import("@/pages/finance/ap-aging"));
 const BankReconciliation = lazy(() => import("@/pages/finance/bank-reconciliation"));
+const BankAccountsWatch = lazy(() => import("@/pages/finance/bank-accounts-watch"));
 const BankManualMatch = lazy(() => import("@/pages/create/finance/bank-manual-match"));
 const FixedAssets = lazy(() => import("@/pages/finance/fixed-assets"));
 const FixedAssetRegister = lazy(() => import("@/pages/finance/fixed-asset-register"));
@@ -292,6 +293,7 @@ export const financeRoutes = [
   { path: "/finance/ar-collection-workbench", component: ArCollectionWorkbench },
   { path: "/finance/ap-aging", component: ApAging },
   { path: "/finance/bank-reconciliation", component: BankReconciliation },
+  { path: "/finance/bank-accounts-watch", component: BankAccountsWatch },
   { path: "/finance/bank-reconciliation/manual-match/:batchId/:rowId", component: BankManualMatch },
   { path: "/finance/fixed-assets", component: FixedAssets },
   { path: "/finance/fixed-asset-register", component: FixedAssetRegister },
