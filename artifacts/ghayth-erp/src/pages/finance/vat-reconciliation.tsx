@@ -171,11 +171,11 @@ export default function VatReconciliationPage() {
       {/* الرسالة الرئيسية: drift صفر أم لا */}
       <Card className={summary.driftIsClean
         ? "border-emerald-300 bg-emerald-50/40"
-        : "border-amber-300 bg-amber-50/40"}>
+        : "border-status-warning-surface bg-status-warning-surface/40"}>
         <CardContent className="p-4 flex items-start gap-3">
           {summary.driftIsClean
             ? <CheckCircle2 className="h-6 w-6 text-emerald-600 mt-0.5 shrink-0" />
-            : <AlertTriangle className="h-6 w-6 text-amber-600 mt-0.5 shrink-0" />}
+            : <AlertTriangle className="h-6 w-6 text-status-warning-foreground mt-0.5 shrink-0" />}
           <div className="flex-1">
             <p className="font-semibold">
               {summary.driftIsClean
@@ -226,7 +226,7 @@ export default function VatReconciliationPage() {
               <Scale className="h-3 w-3" />
               الفرق مع الرصيد الفعلي
             </p>
-            <p className={`text-xl font-bold mt-1 ${summary.driftIsClean ? "text-emerald-700" : "text-amber-700"}`}>
+            <p className={`text-xl font-bold mt-1 ${summary.driftIsClean ? "text-emerald-700" : "text-status-warning-foreground"}`}>
               {formatCurrency(summary.drift)}
             </p>
           </CardContent>

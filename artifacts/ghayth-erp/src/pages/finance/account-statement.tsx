@@ -229,7 +229,7 @@ export default function AccountStatementPage({ entityType }: Props) {
               <p className="opacity-70">جاري</p>
               <p className="font-mono font-bold">{formatCurrency(data.aging.current)}</p>
             </div>
-            <div className="p-2 rounded bg-yellow-50 text-yellow-800 text-center">
+            <div className="p-2 rounded bg-status-warning-surface text-yellow-800 text-center">
               <p className="opacity-70">1-30 يوم</p>
               <p className="font-mono font-bold">{formatCurrency(data.aging["1-30"])}</p>
             </div>
@@ -237,7 +237,7 @@ export default function AccountStatementPage({ entityType }: Props) {
               <p className="opacity-70">31-60 يوم</p>
               <p className="font-mono font-bold">{formatCurrency(data.aging["31-60"])}</p>
             </div>
-            <div className="p-2 rounded bg-red-50 text-red-800 text-center">
+            <div className="p-2 rounded bg-status-error-surface text-status-error-foreground text-center">
               <p className="opacity-70">61-90 يوم</p>
               <p className="font-mono font-bold">{formatCurrency(data.aging["61-90"])}</p>
             </div>

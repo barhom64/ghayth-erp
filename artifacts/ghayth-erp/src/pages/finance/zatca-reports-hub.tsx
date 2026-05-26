@@ -42,7 +42,7 @@ const CARDS: ReportCard[] = [
     title: "ملخص استقطاع الضريبة (WHT)",
     description: "تقرير الاستقطاع الشهري للموردين غير المقيمين — تقسيم حسب الفئة + المورد لتعبئة إقرار زاتكا.",
     icon: Receipt,
-    iconClass: "text-amber-600 bg-amber-50",
+    iconClass: "text-status-warning-foreground bg-status-warning-surface",
     group: "tax",
   },
   {
@@ -50,7 +50,7 @@ const CARDS: ReportCard[] = [
     title: "ملخص التكلفة وهامش الربح (COGS)",
     description: "إيراد − تكلفة المباع = الربح. تقسيم حسب المنتج / العميل / الشهر مع badge ملوّن للهامش.",
     icon: ReceiptIcon,
-    iconClass: "text-blue-600 bg-blue-50",
+    iconClass: "text-status-info-foreground bg-status-info-surface",
     group: "tax",
   },
 
@@ -68,7 +68,7 @@ const CARDS: ReportCard[] = [
     title: "معدل دوران المخزون",
     description: "COGS / قيمة المخزون = معدل الدوران. لرصد المنتجات السريعة والجامدة.",
     icon: RefreshCw,
-    iconClass: "text-amber-600 bg-amber-50",
+    iconClass: "text-status-warning-foreground bg-status-warning-surface",
     group: "inventory",
   },
   {
@@ -76,7 +76,7 @@ const CARDS: ReportCard[] = [
     title: "تنبيهات صلاحية التشغيلات",
     description: "التشغيلات المتجهة للانتهاء (30/60/90 يوم) — تخطيط FIFO ومنع الخسائر.",
     icon: Clock,
-    iconClass: "text-amber-700 bg-amber-50",
+    iconClass: "text-status-warning-foreground bg-status-warning-surface",
     group: "inventory",
   },
   {
@@ -102,7 +102,7 @@ const CARDS: ReportCard[] = [
     title: "البنود غير المُوجَّهة",
     description: "بنود فواتير / أوامر شراء / إيصالات استلام بدون allocation لحساب GL محدد — تخفي قيمتها عن تحليل الإيرادات والمصروفات.",
     icon: FileSearch,
-    iconClass: "text-amber-700 bg-amber-50",
+    iconClass: "text-status-warning-foreground bg-status-warning-surface",
     group: "tax",
   },
 
@@ -120,7 +120,7 @@ const CARDS: ReportCard[] = [
     title: "إدارة فئات الاستقطاع",
     description: "10 فئات سعودية مبذورة (إتاوات 15% / خدمات فنية 15% / إدارة 20% / ...) قابلة للتعديل.",
     icon: Layers,
-    iconClass: "text-amber-700 bg-amber-50",
+    iconClass: "text-status-warning-foreground bg-status-warning-surface",
     group: "registry",
   },
 ];
