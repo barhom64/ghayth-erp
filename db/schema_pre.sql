@@ -7682,7 +7682,8 @@ CREATE TABLE public.fleet_trips (
     "deletedAt" timestamp with time zone,
     "cancelledAt" timestamp with time zone,
     "cancellationReason" text,
-    "sourceKey" character varying(128)
+    "sourceKey" character varying(128),
+    ref character varying(50)
 );
 
 
@@ -12661,6 +12662,7 @@ ALTER SEQUENCE public.project_tasks_id_seq OWNED BY public.project_tasks.id;
 CREATE TABLE public.projects (
     id integer NOT NULL,
     "companyId" integer NOT NULL,
+    ref character varying(50),
     name character varying(300) NOT NULL,
     description text,
     "clientId" integer,
@@ -15621,6 +15623,7 @@ CREATE TABLE public.umrah_groups (
     "companyId" integer NOT NULL,
     "branchId" integer,
     "nuskGroupNumber" character varying(30) NOT NULL,
+    "internalRef" character varying(50),
     name character varying(255),
     "agentId" integer,
     "subAgentId" integer,
