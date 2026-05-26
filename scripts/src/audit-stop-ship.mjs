@@ -37,10 +37,15 @@
 //   with a reason.
 //
 // Usage:
-//   node scripts/src/audit-stop-ship.mjs                 # exit 1 on violations
+//   node scripts/src/audit-stop-ship.mjs                 # check only, exit 1 on critical
 //   node scripts/src/audit-stop-ship.mjs --report-only   # print, always exit 0
+//   node scripts/src/audit-stop-ship.mjs --write-report  # also write md + csv to audit/stop-ship/
 //   pnpm audit:stop-ship
 //
+// The guard mode (the default) intentionally does NOT write files —
+// regenerating audit/stop-ship/report.md on every pre-commit hook
+// would dirty the working tree on every commit. The --write-report
+// flag is for the operator who wants a tracked snapshot.
 
 import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
 import { join, relative } from "node:path";
@@ -91,6 +96,7 @@ const RBAC_PATTERNS = [
 const WRITE_METHODS = ["post", "patch", "put", "delete"];
 
 const isReportOnly = process.argv.includes("--report-only");
+const shouldWriteReport = process.argv.includes("--write-report");
 
 // ─────────────────────── helpers ──────────────────────────────────────────
 
@@ -297,24 +303,25 @@ async function main() {
     console.log("");
   }
 
-  // ─── Markdown report ───
-  await mkdir(REPORT_DIR, { recursive: true });
-  const md = renderMarkdownReport(filtered, criticals, warnings);
-  await writeFile(join(REPORT_DIR, "report.md"), md, "utf8");
+  // ─── Optional persisted reports (--write-report) ───
+  if (shouldWriteReport) {
+    await mkdir(REPORT_DIR, { recursive: true });
+    const md = renderMarkdownReport(filtered, criticals, warnings);
+    await writeFile(join(REPORT_DIR, "report.md"), md, "utf8");
 
-  // ─── CSV (machine-readable) ───
-  const csvLines = ["severity,rule,file,endpoint,message"];
-  for (const v of allViolations) {
-    csvLines.push([
-      v.severity, v.rule, v.file,
-      `"${v.endpoint.replace(/"/g, '""')}"`,
-      `"${v.message.replace(/"/g, '""')}"`,
-    ].join(","));
+    const csvLines = ["severity,rule,file,endpoint,message"];
+    for (const v of allViolations) {
+      csvLines.push([
+        v.severity, v.rule, v.file,
+        `"${v.endpoint.replace(/"/g, '""')}"`,
+        `"${v.message.replace(/"/g, '""')}"`,
+      ].join(","));
+    }
+    await writeFile(join(REPORT_DIR, "violations.csv"), csvLines.join("\n") + "\n", "utf8");
+
+    console.log(`Report written to ${relative(REPO_ROOT, REPORT_DIR)}/report.md`);
+    console.log(`CSV     written to ${relative(REPO_ROOT, REPORT_DIR)}/violations.csv`);
   }
-  await writeFile(join(REPORT_DIR, "violations.csv"), csvLines.join("\n") + "\n", "utf8");
-
-  console.log(`Report written to ${relative(REPO_ROOT, REPORT_DIR)}/report.md`);
-  console.log(`CSV     written to ${relative(REPO_ROOT, REPORT_DIR)}/violations.csv`);
 
   if (criticals.length > 0 && !isReportOnly) {
     process.exit(1);
