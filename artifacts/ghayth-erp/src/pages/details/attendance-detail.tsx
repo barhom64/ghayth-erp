@@ -48,7 +48,7 @@ export default function AttendanceDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["attendance", String(id)],
-    id ? `/hr/attendance/${id}` : null,
+    `/hr/attendance/${id}`,
     !!id
   );
 

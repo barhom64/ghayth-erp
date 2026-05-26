@@ -86,7 +86,7 @@ export default function PerformanceDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["performance", String(id)],
-    id ? `/hr/performance/${id}` : null,
+    `/hr/performance/${id}`,
     !!id
   );
 

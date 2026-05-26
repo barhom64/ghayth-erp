@@ -63,7 +63,7 @@ export default function DriverDetail() {
 
   const { data: driver, isLoading, error, refetch } = useApiQuery<any>(
     ["driver-detail", String(id)],
-    id ? `/fleet/drivers/${id}` : null,
+    `/fleet/drivers/${id}`,
     !!id
   );
 

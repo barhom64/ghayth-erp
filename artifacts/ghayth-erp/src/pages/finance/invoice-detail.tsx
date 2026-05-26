@@ -135,7 +135,7 @@ export default function InvoiceDetailPage() {
   const id = params?.id;
   const { data: invoice, isLoading, isError, refetch } = useApiQuery<any>(
     ["invoice-detail", id || ""],
-    id ? `/finance/invoices/${id}` : null,
+    `/finance/invoices/${id}`,
     !!id,
   );
   const [showPayment, setShowPayment] = useState(false);

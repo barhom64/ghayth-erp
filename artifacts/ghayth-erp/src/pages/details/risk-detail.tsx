@@ -128,7 +128,7 @@ export default function RiskDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["risk", String(id)],
-    id ? `/governance/risks/${id}` : null,
+    `/governance/risks/${id}`,
     !!id
   );
 

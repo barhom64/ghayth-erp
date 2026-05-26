@@ -123,7 +123,7 @@ export default function UmrahCommissionPlanEditor() {
 
   const loadQ = useApiQuery<{ data: CommissionPlan }>(
     ["umrah-commission-plan", planId ?? ""],
-    isEditMode && planId ? `/umrah/commission-plans/${planId}` : null,
+    isEditMode ? `/umrah/commission-plans/${planId}` : null,
   );
 
   const employeesQ = useApiQuery<{ data: any[] }>(["employees"], "/employees");

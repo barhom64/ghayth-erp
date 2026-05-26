@@ -42,7 +42,7 @@ export default function WarehouseSupplierDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["warehouse-supplier", String(id)],
-    id ? `/warehouse/suppliers/${id}` : null,
+    `/warehouse/suppliers/${id}`,
     !!id
   );
 

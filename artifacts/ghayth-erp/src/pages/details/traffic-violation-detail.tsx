@@ -45,7 +45,7 @@ export default function TrafficViolationDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["traffic-violation", String(id)],
-    id ? `/fleet/traffic-violations/${id}` : null,
+    `/fleet/traffic-violations/${id}`,
     !!id,
   );
 

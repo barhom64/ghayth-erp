@@ -43,7 +43,7 @@ export default function TransferDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["hr-transfer", String(id)],
-    id ? `/hr/transfers/${id}` : null,
+    `/hr/transfers/${id}`,
     !!id
   );
 

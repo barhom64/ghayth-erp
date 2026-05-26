@@ -40,7 +40,7 @@ export default function ExcuseDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["excuse", String(id)],
-    id ? `/hr/excuse-requests/${id}` : null,
+    `/hr/excuse-requests/${id}`,
     !!id
   );
 

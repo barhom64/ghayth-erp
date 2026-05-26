@@ -58,7 +58,7 @@ export default function LeaveDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["leave", String(id)],
-    id ? `/hr/leaves/${id}` : null,
+    `/hr/leaves/${id}`,
     !!id
   );
 

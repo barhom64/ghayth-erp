@@ -25,7 +25,7 @@ export default function BankManualMatchPage() {
 
   const { data: batchDetail, isLoading, isError } = useApiQuery<any>(
     ["bank-batch", params?.batchId],
-    params?.batchId ? `/finance/bank-reconciliation/${params.batchId}` : null,
+    `/finance/bank-reconciliation/${params?.batchId}`,
     { enabled: !!params?.batchId }
   );
   const rows = batchDetail?.rows || [];

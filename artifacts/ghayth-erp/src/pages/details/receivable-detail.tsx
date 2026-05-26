@@ -102,7 +102,7 @@ export default function ReceivableDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["receivable", String(id)],
-    id ? `/finance/receivables/${id}` : null,
+    `/finance/receivables/${id}`,
     !!id
   );
 

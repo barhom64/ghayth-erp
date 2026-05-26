@@ -52,7 +52,7 @@ export default function WarehouseMovementDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["warehouse-movement", String(id)],
-    id ? `/warehouse/movements/${id}` : null,
+    `/warehouse/movements/${id}`,
     !!id
   );
 

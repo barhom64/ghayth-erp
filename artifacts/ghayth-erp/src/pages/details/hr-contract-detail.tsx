@@ -56,7 +56,7 @@ export default function HrContractDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["hr-contract", String(id)],
-    id ? `/hr/contracts/${id}` : null,
+    `/hr/contracts/${id}`,
     !!id
   );
 

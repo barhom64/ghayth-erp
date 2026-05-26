@@ -46,7 +46,7 @@ export default function FixedAssetDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["fixed-asset", String(id)],
-    id ? `/finance/fixed-assets/${id}` : null,
+    `/finance/fixed-assets/${id}`,
     !!id,
   );
 

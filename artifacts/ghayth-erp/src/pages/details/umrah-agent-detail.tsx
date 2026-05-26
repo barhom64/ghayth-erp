@@ -45,7 +45,7 @@ export default function UmrahAgentDetail() {
 
   const { data: agent, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-agent", String(id)],
-    id ? `/umrah/agents/${id}` : null,
+    `/umrah/agents/${id}`,
     !!id
   );
 

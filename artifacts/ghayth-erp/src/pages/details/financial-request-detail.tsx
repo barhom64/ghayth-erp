@@ -54,7 +54,7 @@ export default function FinancialRequestDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["financial-request", String(id)],
-    id ? `/finance/financial-requests/${id}` : null,
+    `/finance/financial-requests/${id}`,
     !!id,
   );
 

@@ -49,7 +49,7 @@ export default function UmrahSubAgentDetail() {
 
   const { data: sa, isLoading, error, refetch } = useApiQuery<SubAgent>(
     ["umrah-sub-agent", String(id ?? 0)],
-    id ? `/umrah/sub-agents/${id}` : null,
+    `/umrah/sub-agents/${id}`,
     !!id,
   );
 

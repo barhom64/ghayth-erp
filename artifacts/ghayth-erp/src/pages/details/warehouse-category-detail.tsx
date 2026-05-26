@@ -28,7 +28,7 @@ export default function WarehouseCategoryDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["warehouse-category", String(id)],
-    id ? `/warehouse/categories/${id}` : null,
+    `/warehouse/categories/${id}`,
     !!id
   );
 

@@ -85,7 +85,7 @@ export default function CustodyDetailPage() {
   const id = params?.id;
   const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["custody-detail", id || ""],
-    id ? `/finance/custodies/${id}` : null,
+    `/finance/custodies/${id}`,
     !!id,
   );
 

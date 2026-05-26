@@ -81,7 +81,7 @@ export default function ExpenseDetail() {
   // a journal_entries row so this returns the full record + lines.
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["expense", String(id)],
-    id ? `/finance/journal/${id}` : null,
+    `/finance/journal/${id}`,
     !!id
   );
 

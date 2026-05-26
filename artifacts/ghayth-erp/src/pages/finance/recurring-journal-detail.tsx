@@ -29,7 +29,7 @@ export default function RecurringJournalDetailPage() {
 
   const { data: rj, isLoading, isError, refetch } = useApiQuery<any>(
     ["recurring-journal-detail", id],
-    id ? `/finance/recurring-journals/${id}` : null,
+    `/finance/recurring-journals/${id}`,
     !!id
   );
 

@@ -38,13 +38,13 @@ export default function TripDetailPage() {
 
   const { data: trip, isLoading, isError, refetch } = useApiQuery<any>(
     ["fleet-trip", id],
-    id ? `/fleet/trips/${id}` : null,
+    `/fleet/trips/${id}`,
     !!id
   );
 
   const { data: fuelResp } = useApiQuery<any>(
     ["trip-fuel", id],
-    id ? `/fleet/fuel-logs?tripId=${id}` : null,
+    `/fleet/fuel-logs?tripId=${id}`,
     !!id
   );
   const allFuel: any[] = fuelResp?.data || [];
@@ -60,7 +60,7 @@ export default function TripDetailPage() {
 
   const { data: maintResp } = useApiQuery<any>(
     ["trip-maintenance", id],
-    id && trip?.vehicleId ? `/fleet/maintenance?vehicleId=${trip.vehicleId}` : null,
+    `/fleet/maintenance?vehicleId=${trip?.vehicleId ?? 0}`,
     !!(id && trip?.vehicleId)
   );
   const allMaint: any[] = maintResp?.data || [];

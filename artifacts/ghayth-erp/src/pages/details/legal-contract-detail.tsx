@@ -54,7 +54,7 @@ export default function LegalContractDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["legal-contract", String(id)],
-    id ? `/legal/contracts/${id}` : null,
+    `/legal/contracts/${id}`,
     !!id
   );
 

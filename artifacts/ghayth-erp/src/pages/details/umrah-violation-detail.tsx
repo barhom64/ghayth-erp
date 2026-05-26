@@ -18,7 +18,7 @@ export default function UmrahViolationDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-violation", String(id)],
-    id ? `/umrah/violations/${id}` : null,
+    `/umrah/violations/${id}`,
     !!id
   );
   const violation = data?.data ?? data;

@@ -82,7 +82,7 @@ export default function JournalManualDetailPage() {
 
   const { data: journal, isLoading, isError, refetch } = useApiQuery<any>(
     ["journal-manual-detail", id],
-    id ? `/finance/journal-manual/${id}` : null,
+    `/finance/journal-manual/${id}`,
     !!id,
   );
 

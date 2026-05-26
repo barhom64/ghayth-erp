@@ -53,7 +53,7 @@ export default function MaintenanceDetail() {
 
   const { data: maintenance, isLoading, error, refetch } = useApiQuery<any>(
     ["maintenance-detail", String(id)],
-    id ? `/fleet/maintenance/${id}` : null,
+    `/fleet/maintenance/${id}`,
     !!id
   );
 

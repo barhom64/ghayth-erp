@@ -44,20 +44,20 @@ export default function LeadDetailPage() {
 
   const { data: lead, isLoading, isError, refetch } = useApiQuery<any>(
     ["crm-lead", id],
-    id ? `/crm/opportunities/${id}` : null,
+    `/crm/opportunities/${id}`,
     !!id
   );
 
   const { data: activitiesResp } = useApiQuery<any>(
     ["crm-lead-activities", id],
-    id ? `/crm/opportunities/${id}/activities` : null,
+    `/crm/opportunities/${id}/activities`,
     !!id
   );
   const activities: any[] = activitiesResp?.data || (Array.isArray(activitiesResp) ? activitiesResp : []);
 
   const { data: relatedResp } = useApiQuery<any>(
     ["crm-lead-deals", id],
-    id ? `/crm/opportunities/${id}/related` : null,
+    `/crm/opportunities/${id}/related`,
     !!id
   );
   const deals: any[] = relatedResp?.data || [];

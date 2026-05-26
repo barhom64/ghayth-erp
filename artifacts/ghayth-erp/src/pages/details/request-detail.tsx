@@ -63,7 +63,7 @@ export default function RequestDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["request", String(id)],
-    id ? `/requests/${id}` : null,
+    `/requests/${id}`,
     !!id
   );
 

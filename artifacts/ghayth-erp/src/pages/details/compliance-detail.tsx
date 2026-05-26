@@ -44,7 +44,7 @@ export default function ComplianceDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["compliance", String(id)],
-    id ? `/governance/compliance/${id}` : null,
+    `/governance/compliance/${id}`,
     !!id
   );
 

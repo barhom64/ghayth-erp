@@ -53,7 +53,7 @@ export default function OwnerDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["property-owner", String(id)],
-    id ? `/properties/owners/${id}` : null,
+    `/properties/owners/${id}`,
     !!id
   );
 

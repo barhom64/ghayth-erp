@@ -47,27 +47,27 @@ export default function ContractDetailPage() {
 
   const { data: contract, isLoading, isError, refetch } = useApiQuery<any>(
     ["properties-contract", id],
-    id ? `/properties/contracts/${id}` : null,
+    `/properties/contracts/${id}`,
     !!id
   );
 
   const { data: scheduleResp } = useApiQuery<any>(
     ["contract-detail-schedule", id],
-    id ? `/properties/contracts/${id}/schedule` : null,
+    `/properties/contracts/${id}/schedule`,
     !!id
   );
   const schedule: any[] = scheduleResp?.data || (Array.isArray(scheduleResp) ? scheduleResp : []);
 
   const { data: maintResp } = useApiQuery<any>(
     ["contract-maintenance", id],
-    id ? `/properties/maintenance?contractId=${id}` : null,
+    `/properties/maintenance?contractId=${id}`,
     !!id
   );
   const maintRequests: any[] = maintResp?.data || [];
 
   const { data: inspResp } = useApiQuery<any>(
     ["contract-inspections", id],
-    id ? `/properties/inspections?contractId=${id}` : null,
+    `/properties/inspections?contractId=${id}`,
     !!id
   );
   const inspections: any[] = inspResp?.data || [];

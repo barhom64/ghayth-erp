@@ -56,7 +56,7 @@ export default function LegalJudgmentDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["legal-judgment", String(id)],
-    id ? `/legal/judgments/${id}` : null,
+    `/legal/judgments/${id}`,
     !!id
   );
 

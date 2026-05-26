@@ -81,7 +81,7 @@ export default function PayrollDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["payroll", String(id)],
-    id ? `/hr/payroll/${id}` : null,
+    `/hr/payroll/${id}`,
     !!id
   );
 

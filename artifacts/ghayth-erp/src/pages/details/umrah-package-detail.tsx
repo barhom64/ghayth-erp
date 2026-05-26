@@ -42,7 +42,7 @@ export default function UmrahPackageDetail() {
 
   const { data: pkg, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-package", String(id)],
-    id ? `/umrah/packages/${id}` : null,
+    `/umrah/packages/${id}`,
     !!id
   );
 

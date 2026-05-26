@@ -43,7 +43,7 @@ export default function SalaryAdvanceDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["salary-advance", String(id)],
-    id ? `/finance/salary-advances/${id}` : null,
+    `/finance/salary-advances/${id}`,
     !!id,
   );
 
