@@ -29,7 +29,6 @@ import {
   currentYear,
   currentMonthPadded,
   combineDateAndShiftTime,
-  generateRef,
   toDateISO,
   roundTo2,
   softDeleteJournalEntry,
