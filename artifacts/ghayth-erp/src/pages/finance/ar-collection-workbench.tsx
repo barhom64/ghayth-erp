@@ -10,7 +10,7 @@ import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import {
   Phone, Mail, AlertTriangle, ChevronDown, ChevronRight, Search,
-  ExternalLink, Download, Users, FileText, Clock, Send,
+  ExternalLink, Download, Users, Clock, Send,
 } from "lucide-react";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 
@@ -416,12 +416,6 @@ export default function ArCollectionWorkbenchPage() {
                           </tbody>
                         </table>
                         <div className="flex justify-end gap-2 mt-3 border-t pt-3">
-                          <Link href={`/finance/receivables/receipt?clientId=${c.clientId}`}>
-                            <Button size="sm" variant="outline">
-                              <FileText className="w-4 h-4 ml-1" />
-                              تسجيل دفعة
-                            </Button>
-                          </Link>
                           <Link href={`/finance/entity-360?type=client&id=${c.clientId}`}>
                             <Button size="sm" variant="outline">
                               <Users className="w-4 h-4 ml-1" />

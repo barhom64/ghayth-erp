@@ -201,7 +201,6 @@ const allNavSections: NavSection[] = [
         { label: "موزّع التكاليف 🆕", path: "/finance/expenses/split", icon: Layers },
         { label: "تحويل بين الحسابات 🆕", path: "/finance/treasury/transfer", icon: ArrowLeftRight },
         { label: "المقبوضات", path: "/finance/receivables", icon: DollarSign },
-        { label: "تسجيل دفعة عميل 🆕", path: "/finance/receivables/receipt", icon: DollarSign },
         { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
       ]},
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
@@ -266,9 +265,6 @@ const allNavSections: NavSection[] = [
         { label: "قائمة التدفقات النقدية 🆕", path: "/finance/reports/cash-flow-statement", icon: Banknote },
         { label: "Y/Y Comparison 🆕", path: "/finance/reports/yoy", icon: BarChart2 },
         { label: "معدل الحرق 🆕", path: "/finance/expense-burn-rate", icon: Activity },
-        { label: "محلل الإيرادات 🆕", path: "/finance/revenue-mix", icon: BarChart3 },
-        { label: "محلل المصاريف 🆕", path: "/finance/expense-mix", icon: BarChart3 },
-        { label: "DSO Trend 🆕", path: "/finance/reports/dso-trend", icon: Activity },
         { label: "GL Health Score 🆕", path: "/finance/gl-health", icon: ShieldAlert },
       ]},
       { label: "صناديق الواردات", path: "/finance/approvals-inbox", icon: Bell, module: "finance", children: [
