@@ -77,6 +77,7 @@ const IncomeStatementTrend = lazy(() => import("@/pages/finance/income-statement
 const IncomeStatementVsBudget = lazy(() => import("@/pages/finance/income-statement-vs-budget"));
 const YoyComparison = lazy(() => import("@/pages/finance/yoy-comparison"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
+const TaxFilingCalendar = lazy(() => import("@/pages/finance/tax-filing-calendar"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
 const CustomerStatementPrint = lazy(() => import("@/pages/finance/customer-statement-print"));
 const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
@@ -262,6 +263,7 @@ export const financeRoutes = [
   { path: "/finance/reports/is-vs-budget", component: IncomeStatementVsBudget },
   { path: "/finance/reports/yoy", component: YoyComparison },
   { path: "/finance/tax", component: TaxSystem },
+  { path: "/finance/tax-filing-calendar", component: TaxFilingCalendar },
   { path: "/finance/receivables", component: Receivables },
   { path: "/finance/customer-statement-print", component: CustomerStatementPrint },
   { path: "/finance/customer-risk", component: CustomerRisk },
