@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Banknote, Send, AlertCircle } from "lucide-react";
+import { Banknote, Send, AlertCircle, Calendar, Clock, FileText } from "lucide-react";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { BulkCheckbox } from "@/components/shared/bulk-actions";
 
@@ -134,6 +135,28 @@ export default function PaymentRunPage() {
       title="دفعة الدفع الجماعية"
       subtitle="جدول أوامر الشراء المُطابَقة الجاهزة للدفع — اختر ونفّذ دفعة واحدة"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "دفعة الدفع" }]}
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/ap-payment-calendar">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Calendar className="h-3.5 w-3.5 ml-1" />
+              تقويم الدفعات
+            </Button>
+          </Link>
+          <Link href="/finance/ap-aging">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Clock className="h-3.5 w-3.5 ml-1" />
+              تقادم الموردين
+            </Button>
+          </Link>
+          <Link href="/finance/vendor-settlement-workbench">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <FileText className="h-3.5 w-3.5 ml-1" />
+              تسوية المورد
+            </Button>
+          </Link>
+        </div>
+      }
     >
       {isLoading ? <LoadingSpinner /> : isError ? <ErrorState /> : (
         <div className="space-y-4">
