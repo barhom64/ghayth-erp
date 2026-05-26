@@ -389,19 +389,19 @@ d("Numbering center — dynamic (real Postgres)", () => {
 
   describe("lifecycle gate", () => {
     it("voidNumber refuses when entity is in a locked status", async () => {
-      // Use an entity table that has a `status` column (employees) —
-      // we'll set status='inactive' as the locked state.
+      // Use the employees table (varchar status with CHECK constraint
+      // on allowed values). 'inactive' is in the allowed set per
+      // chk_employees_status — we declare that as the lock trigger so
+      // the test exercises the gate without violating the check.
       await upsertScheme(rawExecute, rawQuery, {
         companyId: fx.companyA.id,
         moduleKey: "lifecycle_test", entityKey: "doc",
         scopePolicy: "company", resetPolicy: "yearly",
-        lockAfterStatuses: ["posted", "closed"],
+        lockAfterStatuses: ["inactive", "terminated"],
       });
-      // Create a dummy employee row with status='posted' (simulating
-      // a locked document — employees.status is varchar so any value works).
       const [{ id: empId }] = await rawQuery(
         `INSERT INTO employees (name, email, status)
-         VALUES ('Locked Doc', 'locked-${Date.now()}@test.local', 'posted') RETURNING id`,
+         VALUES ('Locked Doc', 'locked-${Date.now()}@test.local', 'inactive') RETURNING id`,
       );
       const issued = await issueNumber({
         companyId: fx.companyA.id, branchId: fx.companyA.branchId,
@@ -464,7 +464,15 @@ d("Numbering center — dynamic (real Postgres)", () => {
         });
       } catch (err: any) {
         blocked = true;
-        expect(err.message).toContain("مستخدم مسبقًا");
+        // Either path proves uniqueness held: the service catches it
+        // first via validateManualNumber ("مستخدم مسبقًا") OR the
+        // DB-level UNIQUE index from migration 217 fires first
+        // (numbering_assignments_unique_number). Both are acceptable —
+        // we just need PROOF that the second issue can't claim the
+        // first's ref.
+        const matchedService = /مستخدم مسبقًا/.test(err.message ?? "");
+        const matchedDb = /numbering_assignments_unique_number|duplicate key/i.test(err.message ?? "");
+        expect(matchedService || matchedDb).toBe(true);
       }
       expect(blocked).toBe(true);
     });
@@ -523,7 +531,7 @@ d("Numbering center — dynamic (real Postgres)", () => {
         });
       }
       const [counter] = await rawQuery(
-        `SELECT id FROM numbering_counters c
+        `SELECT c.id FROM numbering_counters c
            JOIN numbering_schemes s ON s.id = c."schemeId"
           WHERE s."companyId" = $1 AND s."moduleKey" = $2 AND s."entityKey" = $3
           LIMIT 1`,
@@ -557,7 +565,7 @@ d("Numbering center — dynamic (real Postgres)", () => {
         entityTable: "reset_test_2_doc", actorId: fx.companyA.userId,
       });
       const [counter] = await rawQuery(
-        `SELECT id FROM numbering_counters c
+        `SELECT c.id FROM numbering_counters c
            JOIN numbering_schemes s ON s.id = c."schemeId"
           WHERE s."companyId" = $1 AND s."moduleKey" = $2 AND s."entityKey" = $3
           LIMIT 1`,
