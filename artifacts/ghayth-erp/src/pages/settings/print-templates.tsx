@@ -740,7 +740,7 @@ function VisualBuilder({ layout, onChange }: VisualBuilderProps) {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); removeBlock(block.id); }}
-                  className="text-red-600 hover:text-red-700 px-1"
+                  className="text-status-error-foreground hover:text-status-error-foreground px-1"
                   title="حذف"
                 ><Trash2 className="h-3 w-3" /></button>
               </div>
@@ -837,7 +837,7 @@ function Inspector({ block, onChange }: { block: VisualBlock; onChange: (patch: 
             <button
               type="button"
               onClick={() => onChange({ items: block.items.filter((_, j) => j !== i) } as Partial<VisualBlock>)}
-              className="text-red-600 px-1"
+              className="text-status-error-foreground px-1"
             ><Trash2 className="h-3 w-3" /></button>
           </div>
         ))}
@@ -898,7 +898,7 @@ function Inspector({ block, onChange }: { block: VisualBlock; onChange: (patch: 
               <button
                 type="button"
                 onClick={() => onChange({ items: block.items.filter((_, j) => j !== i) } as Partial<VisualBlock>)}
-                className="text-red-600 text-xs"
+                className="text-status-error-foreground text-xs"
               >حذف</button>
             </div>
           </div>
@@ -934,7 +934,7 @@ function Inspector({ block, onChange }: { block: VisualBlock; onChange: (patch: 
             <button
               type="button"
               onClick={() => onChange({ parties: block.parties.filter((_, j) => j !== i) } as Partial<VisualBlock>)}
-              className="text-red-600 px-1"
+              className="text-status-error-foreground px-1"
             ><Trash2 className="h-3 w-3" /></button>
           </div>
         ))}

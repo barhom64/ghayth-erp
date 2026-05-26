@@ -186,8 +186,14 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   evaluation_360: "evaluation_cycles",
   training: "training_courses",
   job: "job_postings",
+  employee: "employees",
+  employee_profile: "employees",
+  overtime_request: "hr_overtime_requests",
+  exit_request: "hr_exit_requests",
   // Finance
   project_costing: "project_costs",
+  fixed_asset: "fixed_assets",
+  vendor: "suppliers",
   // account_statement was already moved off gl_accounts in #1084 (its
   // dedicated loader uses chart_of_accounts directly). This fallback entry
   // points to the canonical name so any code path that hits the default
@@ -195,6 +201,17 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   account_statement: "chart_of_accounts",
   // Property / CRM
   tenant: "tenants",
+  property_unit: "property_units",
+  rental_contract: "rental_contracts",
+  // Fleet
+  vehicle: "fleet_vehicles",
+  fleet_trip: "fleet_trips",
+  fuel: "fleet_fuel_logs",
+  driver: "drivers",
+  // Legal
+  legal_contract: "legal_contracts",
+  legal_judgment: "legal_cases",
+  legal_session: "legal_sessions",
   // Inventory / Store
   warehouse_category: "warehouse_categories",
   store_product: "warehouse_products",

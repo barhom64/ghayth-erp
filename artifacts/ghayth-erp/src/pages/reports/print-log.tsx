@@ -180,7 +180,7 @@ export default function PrintLogPage() {
                       <td className="p-2">{j.format}</td>
                       <td className="p-2">
                         {j.copyNumber > 1 ? (
-                          <span className="inline-flex items-center gap-1 text-red-600">
+                          <span className="inline-flex items-center gap-1 text-status-error-foreground">
                             <AlertTriangle className="h-3 w-3" /> {j.copyNumber}
                           </span>
                         ) : (
@@ -191,9 +191,9 @@ export default function PrintLogPage() {
                         <span
                           className={
                             j.status === "done"
-                              ? "text-green-600"
+                              ? "text-status-success-foreground"
                               : j.status === "failed"
-                                ? "text-red-600"
+                                ? "text-status-error-foreground"
                                 : "text-muted-foreground"
                           }
                         >

@@ -213,14 +213,14 @@ export function CreditMemoDialog({
             )}
 
             {(preview.warnings.length > 0 || preview.cogsReversalWarnings.length > 0) && (
-              <div className="border border-amber-300 rounded p-3 bg-amber-50/40">
-                <p className="text-xs font-semibold text-amber-800 mb-1 flex items-center gap-1">
+              <div className="border border-status-warning-surface rounded p-3 bg-status-warning-surface/40">
+                <p className="text-xs font-semibold text-status-warning-foreground mb-1 flex items-center gap-1">
                   <AlertTriangle className="h-3.5 w-3.5" />
                   تنبيهات (يجوز الإصدار مع المراجعة):
                 </p>
                 <ul className="text-xs space-y-1">
                   {[...preview.warnings, ...preview.cogsReversalWarnings].map((w, i) => (
-                    <li key={i} className="text-amber-800">• {w.message}</li>
+                    <li key={i} className="text-status-warning-foreground">• {w.message}</li>
                   ))}
                 </ul>
               </div>

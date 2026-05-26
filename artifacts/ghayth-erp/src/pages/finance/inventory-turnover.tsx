@@ -56,7 +56,7 @@ function startOfMonthLocal() {
 const turnoverColor = (t: number | null) =>
   t == null ? "text-muted-foreground"
   : t >= 4 ? "text-emerald-700"      // أكثر من 4× سنوياً = جيد
-  : t >= 2 ? "text-amber-700"
+  : t >= 2 ? "text-status-warning-foreground"
   : t >= 1 ? "text-orange-600"
   : "text-destructive";              // dead-stock
 
@@ -202,7 +202,7 @@ export default function InventoryTurnoverPage() {
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <RefreshCw className="h-5 w-5 text-amber-600 mx-auto mb-1" />
+            <RefreshCw className="h-5 w-5 text-status-warning-foreground mx-auto mb-1" />
             <p className="text-xs text-muted-foreground">معدل الدوران الإجمالي</p>
             <p className={`text-xl font-bold mt-1 ${turnoverColor(summary.overallTurnover)}`}>
               {summary.overallTurnover == null ? "—" : `${summary.overallTurnover.toFixed(2)}×`}

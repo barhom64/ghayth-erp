@@ -81,7 +81,7 @@ export default function CustomerAdvancesPage() {
     { key: "appliedAmount", header: "مُطبَّق",
       render: (r) => <span className="font-mono text-emerald-700">{formatCurrency(Number(r.appliedAmount))}</span> },
     { key: "remaining", header: "متبقي",
-      render: (r) => <span className="font-mono font-bold text-amber-700">{formatCurrency(Number(r.remaining))}</span> },
+      render: (r) => <span className="font-mono font-bold text-status-warning-foreground">{formatCurrency(Number(r.remaining))}</span> },
     { key: "status", header: "الحالة",
       render: (r) => {
         const s = STATUS_LABEL[r.status] ?? { label: r.status, tone: "bg-muted" };
@@ -136,12 +136,12 @@ export default function CustomerAdvancesPage() {
             <p className="text-lg font-bold font-mono">{formatCurrency(totalsByStatus.total)}</p>
           </CardContent>
         </Card>
-        <Card className="border-amber-300">
+        <Card className="border-status-warning-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <Wallet className="h-3 w-3" /> الرصيد المتبقي
             </p>
-            <p className="text-lg font-bold font-mono text-amber-700">{formatCurrency(totalsByStatus.remaining)}</p>
+            <p className="text-lg font-bold font-mono text-status-warning-foreground">{formatCurrency(totalsByStatus.remaining)}</p>
             <p className="text-[10px] text-muted-foreground">قابل للتطبيق على فواتير</p>
           </CardContent>
         </Card>

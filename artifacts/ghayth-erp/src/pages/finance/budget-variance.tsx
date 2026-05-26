@@ -44,8 +44,8 @@ const STATUS_LABEL: Record<VarianceLine["status"], string> = {
 };
 
 const STATUS_BADGE: Record<VarianceLine["status"], string> = {
-  over_budget:   "bg-red-100 text-red-800",
-  near_limit:    "bg-amber-100 text-amber-800",
+  over_budget:   "bg-red-100 text-status-error-foreground",
+  near_limit:    "bg-amber-100 text-status-warning-foreground",
   within_budget: "bg-emerald-100 text-emerald-800",
   no_budget:     "bg-gray-100 text-gray-700",
 };
@@ -111,7 +111,7 @@ export default function BudgetVariancePage() {
         const v = l.variance;
         return (
           <span className={`font-mono text-xs font-semibold
-            ${v < 0 ? "text-red-700" : v > 0 ? "text-emerald-700" : ""}`}>
+            ${v < 0 ? "text-status-error-foreground" : v > 0 ? "text-emerald-700" : ""}`}>
             {v > 0 ? "+" : ""}{formatCurrency(v)}
           </span>
         );
@@ -123,11 +123,11 @@ export default function BudgetVariancePage() {
       render: (l) => {
         const pct = l.utilizationPct;
         if (l.budgetAmount === 0) return <span className="text-muted-foreground italic text-xs">—</span>;
-        const barColor = pct > 100 ? "bg-red-500" : pct > 90 ? "bg-amber-500" : "bg-emerald-500";
+        const barColor = pct > 100 ? "bg-status-error-surface0" : pct > 90 ? "bg-status-warning-surface0" : "bg-emerald-500";
         return (
           <div className="flex items-center gap-2">
             <span className={`font-mono text-xs font-semibold w-12 text-end
-              ${pct > 100 ? "text-red-700" : pct > 90 ? "text-amber-700" : "text-emerald-700"}`}>
+              ${pct > 100 ? "text-status-error-foreground" : pct > 90 ? "text-status-warning-foreground" : "text-emerald-700"}`}>
               {pct.toFixed(0)}%
             </span>
             <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden min-w-[60px]">
@@ -203,17 +203,17 @@ export default function BudgetVariancePage() {
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <TrendingUp className="h-3 w-3" /> الفرق الكلي
             </p>
-            <p className={`text-lg font-bold font-mono ${data.totalVariance < 0 ? "text-red-700" : "text-emerald-700"}`}>
+            <p className={`text-lg font-bold font-mono ${data.totalVariance < 0 ? "text-status-error-foreground" : "text-emerald-700"}`}>
               {data.totalVariance > 0 ? "+" : ""}{formatCurrency(data.totalVariance)}
             </p>
           </CardContent>
         </Card>
-        <Card className="border-red-300">
+        <Card className="border-status-error-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <AlertTriangle className="h-3 w-3" /> تجاوز الميزانية
             </p>
-            <p className="text-lg font-bold font-mono text-red-700">{overCount}</p>
+            <p className="text-lg font-bold font-mono text-status-error-foreground">{overCount}</p>
           </CardContent>
         </Card>
       </div>
@@ -224,12 +224,12 @@ export default function BudgetVariancePage() {
           className="cursor-pointer text-xs"
           onClick={() => setStatusFilter("")}>الكل ({lines.length})</Badge>
         <Badge variant={statusFilter === "over_budget" ? "default" : "outline"}
-          className="cursor-pointer text-xs bg-red-100 text-red-800 hover:bg-red-200"
+          className="cursor-pointer text-xs bg-red-100 text-status-error-foreground hover:bg-red-200"
           onClick={() => setStatusFilter("over_budget")}>
           <AlertTriangle className="h-3 w-3 me-1" /> تجاوز ({overCount})
         </Badge>
         <Badge variant={statusFilter === "near_limit" ? "default" : "outline"}
-          className="cursor-pointer text-xs bg-amber-100 text-amber-800 hover:bg-amber-200"
+          className="cursor-pointer text-xs bg-amber-100 text-status-warning-foreground hover:bg-amber-200"
           onClick={() => setStatusFilter("near_limit")}>
           اقترب ({nearCount})
         </Badge>

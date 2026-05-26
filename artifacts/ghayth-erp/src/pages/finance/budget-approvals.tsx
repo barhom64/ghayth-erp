@@ -52,8 +52,8 @@ const LEVEL_LABEL: Record<BudgetApprovalRequest["approvalLevel"], string> = {
 
 const LEVEL_COLOR: Record<BudgetApprovalRequest["approvalLevel"], string> = {
   auto: "bg-emerald-100 text-emerald-800",
-  cfo:  "bg-amber-100 text-amber-800",
-  gm:   "bg-red-100 text-red-800",
+  cfo:  "bg-amber-100 text-status-warning-foreground",
+  gm:   "bg-red-100 text-status-error-foreground",
 };
 
 export default function BudgetApprovalsPage() {
@@ -134,7 +134,7 @@ export default function BudgetApprovalsPage() {
       header: "% الاستخدام بعد",
       render: (r) => {
         const pct = Number(r.utilizationAfter ?? 0);
-        const color = pct > 100 ? "text-red-700" : pct > 95 ? "text-amber-700" : "text-emerald-700";
+        const color = pct > 100 ? "text-status-error-foreground" : pct > 95 ? "text-status-warning-foreground" : "text-emerald-700";
         return (
           <span className={`font-mono text-xs font-semibold ${color}`}>
             {Number(r.utilizationBefore ?? 0).toFixed(0)}% → {pct.toFixed(0)}%
@@ -172,7 +172,7 @@ export default function BudgetApprovalsPage() {
         if (r.status !== "pending") {
           return r.status === "approved"
             ? <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">✓ معتمد</Badge>
-            : <Badge className="bg-red-100 text-red-800 text-[10px]">✗ مرفوض</Badge>;
+            : <Badge className="bg-red-100 text-status-error-foreground text-[10px]">✗ مرفوض</Badge>;
         }
         return (
           <div className="flex items-center gap-1">
@@ -209,7 +209,7 @@ export default function BudgetApprovalsPage() {
               onOpenChange={(open) => { if (!open) { setDecideId(null); setDecisionType(null); } }}>
               <AlertDialogTrigger asChild>
                 <GuardedButton perm="finance:approve" variant="ghost" size="sm"
-                  className="h-7 text-xs text-red-700"
+                  className="h-7 text-xs text-status-error-foreground"
                   onClick={() => { setDecideId(r.id); setDecisionType("reject"); }}>
                   <XCircle className="h-3 w-3 me-1" /> رفض
                 </GuardedButton>
@@ -267,12 +267,12 @@ export default function BudgetApprovalsPage() {
       </Card>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <Card className="border-amber-300">
+        <Card className="border-status-warning-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <Clock className="h-3 w-3" /> طلبات معلّقة
             </p>
-            <p className="text-lg font-bold font-mono text-amber-700">{formatNumber(rows.filter((r) => r.status === "pending").length)}</p>
+            <p className="text-lg font-bold font-mono text-status-warning-foreground">{formatNumber(rows.filter((r) => r.status === "pending").length)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -281,18 +281,18 @@ export default function BudgetApprovalsPage() {
             <p className="text-lg font-bold font-mono">{formatCurrency(totalRequested)}</p>
           </CardContent>
         </Card>
-        <Card className="border-red-300">
+        <Card className="border-status-error-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <AlertTriangle className="h-3 w-3" /> يحتاج GM
             </p>
-            <p className="text-lg font-bold font-mono text-red-700">{formatNumber(gmCount)}</p>
+            <p className="text-lg font-bold font-mono text-status-error-foreground">{formatNumber(gmCount)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">يحتاج CFO</p>
-            <p className="text-lg font-bold font-mono text-amber-700">{formatNumber(cfoCount)}</p>
+            <p className="text-lg font-bold font-mono text-status-warning-foreground">{formatNumber(cfoCount)}</p>
           </CardContent>
         </Card>
       </div>
