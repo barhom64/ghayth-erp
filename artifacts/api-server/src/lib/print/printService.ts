@@ -81,17 +81,24 @@ export async function renderPrint(
   // bubble a generic 500. The route's own `requirePermission("print:create")`
   // middleware has already gated the request; this inner check is the
   // per-entity refinement.
-  let permitted = false;
-  try {
-    permitted = await userHasPermission(scope, profile.permission);
-  } catch (err) {
-    logger.warn(err as Error, "[print] userHasPermission failed — falling back to deny");
-    permitted = false;
-  }
-  if (!permitted) {
-    throw new PrintPermissionError(
-      `missing permission ${profile.permission} for entity ${req.entityType}`
-    );
+  //
+  // Ephemeral previews skip the per-entity refinement: the /preview route
+  // already gates on `templates:read`, and template editors (admins iterating
+  // on the layout of an entity they may not personally print) would otherwise
+  // 403 here even though they hold the broader templates:manage perm.
+  if (!req.ephemeral) {
+    let permitted = false;
+    try {
+      permitted = await userHasPermission(scope, profile.permission);
+    } catch (err) {
+      logger.warn(err as Error, "[print] userHasPermission failed — falling back to deny");
+      permitted = false;
+    }
+    if (!permitted) {
+      throw new PrintPermissionError(
+        `missing permission ${profile.permission} for entity ${req.entityType}`
+      );
+    }
   }
 
   // 2. Reprint detection
