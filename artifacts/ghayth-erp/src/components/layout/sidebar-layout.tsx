@@ -16,7 +16,7 @@ import {
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
-  BarChart2, ShieldAlert, Flag, Lock, Layers, Link2,
+  BarChart2, ShieldAlert, Flag, Lock, Layers, Link2, ArrowRightCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -196,6 +196,7 @@ const allNavSections: NavSection[] = [
         { label: "السندات", path: "/finance/vouchers", icon: FileText },
         { label: "المصروفات", path: "/finance/expenses", icon: Wallet },
         { label: "المقبوضات", path: "/finance/receivables", icon: DollarSign },
+        { label: "الدفعات المقدمة", path: "/finance/customer-advances", icon: ArrowRightCircle },
         { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
       ]},
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
