@@ -1,16 +1,16 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { FixedAssetActions } from "@/components/finance/fixed-asset-actions";
 import {
   DetailPageLayout,
   type RelatedEntity,
   EntityComments,
 } from "@workspace/entity-kit";
-import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton, type PrintSection } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Box } from "lucide-react";
+import { Box } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -40,7 +40,6 @@ function statusTone(status: string) {
 }
 
 export default function FixedAssetDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/fixed-assets/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("fixed-asset", id ?? 0);
@@ -275,16 +274,24 @@ export default function FixedAssetDetail() {
             date={formatDateAr(item?.purchaseDate || item?.createdAt)}
             sections={printSections}
           />
-          <GuardedButton
-            perm="finance:update"
-            variant="outline"
-            size="sm"
-            onClick={() => setLocation("/finance/fixed-assets")}
-            disabled={!item || ["disposed", "sold"].includes(item.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
+          {item && (
+            <FixedAssetActions
+              asset={{
+                id: Number(item.id ?? id),
+                name: item.name,
+                description: item.description ?? null,
+                category: item.category ?? null,
+                salvageValue: item.salvageValue ?? 0,
+                usefulLifeYears: item.usefulLifeYears ?? 0,
+                depreciationMethod: item.depreciationMethod ?? null,
+                status: item.status,
+                purchaseCost: item.purchaseCost ?? item.cost ?? 0,
+                currentBookValue: item.currentBookValue ?? 0,
+                accumulatedDepreciation: item.accumulatedDepreciation ?? 0,
+              }}
+              onRefresh={refetch}
+            />
+          )}
         </>
       }
     />
