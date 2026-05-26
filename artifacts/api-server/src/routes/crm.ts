@@ -12,7 +12,8 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import type pg from "pg";
 import type { Request as ExpressRequest } from "express";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, currentMonthPadded, generateTimeRef, roundTo2 } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2 } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -748,11 +749,24 @@ async function handleDealWon(scope: RequestScope, opp: CrmOpportunityRow, dealVa
     }
 
     try {
+      // Numbering center (Issue #1141) — CRM contract number from the
+      // central authority (scheme `crm.contract`). Issued OUTSIDE the
+      // crmEngine call so the assignment exists even if engine async
+      // dispatch fails — the audit log shows the issued number.
+      const issuedContract = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "crm",
+        entityKey: "contract",
+        entityTable: "legal_contracts",
+        actorId: scope.userId,
+        metadata: { sourceOpportunityId: opp.id },
+      });
       const { crmEngine } = await import("../lib/engines/index.js");
       crmEngine.requestLegalContractCreation(
         { companyId: scope.companyId, branchId: scope.branchId || 0, createdBy: scope.userId },
         {
-          ref: generateTimeRef("CTR-CRM"),
+          ref: issuedContract.number,
           title: `عقد خدمات - ${opp.title}`,
           contractType: "service",
           partyName: opp.contactName || 'عميل',

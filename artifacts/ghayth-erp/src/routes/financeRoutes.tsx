@@ -43,6 +43,7 @@ const Expenses = lazy(() => import("@/pages/finance/expenses"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
 const MultiLineExpenseCreate = lazy(() => import("@/pages/create/finance/multi-line-expense-create"));
+const CostSplitter = lazy(() => import("@/pages/create/finance/cost-splitter"));
 const Budget = lazy(() => import("@/pages/finance/budget"));
 const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
@@ -62,6 +63,7 @@ const PaymentRun = lazy(() => import("@/pages/finance/payment-run"));
 const FinancialReports = lazy(() => import("@/pages/finance/reports"));
 const TaxSystem = lazy(() => import("@/pages/finance/tax-system"));
 const Receivables = lazy(() => import("@/pages/finance/receivables"));
+const CustomerRisk = lazy(() => import("@/pages/finance/customer-risk"));
 const ReceivableDetail = lazy(() => import("@/pages/details/receivable-detail"));
 const Payments = lazy(() => import("@/pages/finance/payments-page"));
 const Commitments = lazy(() => import("@/pages/finance/commitments"));
@@ -79,6 +81,7 @@ const SalaryAdvanceDetail = lazy(() => import("@/pages/details/salary-advance-de
 const Ledger = lazy(() => import("@/pages/finance/ledger"));
 const Entity360 = lazy(() => import("@/pages/finance/entity-360"));
 const ReconciliationHub = lazy(() => import("@/pages/finance/reconciliation-hub"));
+const TbComparison = lazy(() => import("@/pages/finance/trial-balance-comparison"));
 const ArAging = lazy(() => import("@/pages/finance/ar-aging"));
 const ApAging = lazy(() => import("@/pages/finance/ap-aging"));
 const BankReconciliation = lazy(() => import("@/pages/finance/bank-reconciliation"));
@@ -95,6 +98,7 @@ const JournalManualDetail = lazy(() => import("@/pages/finance/journal-manual-de
 const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
 const IntercompanyConsolidationCreate = lazy(() => import("@/pages/create/finance/intercompany-consolidation-create"));
 const CashFlowForecast = lazy(() => import("@/pages/finance/cash-flow-forecast"));
+const CashCalendar = lazy(() => import("@/pages/finance/cash-calendar"));
 const ProjectCosting = lazy(() => import("@/pages/finance/project-costing"));
 const ProjectCostingDetail = lazy(() => import("@/pages/finance/project-costing-detail"));
 const CashflowDashboard = lazy(() => import("@/pages/finance/cashflow-dashboard"));
@@ -175,6 +179,7 @@ export const financeRoutes = [
   { path: "/finance/expenses", component: Expenses },
   { path: "/finance/expenses/create", component: ExpensesCreate },
   { path: "/finance/expenses/multi-line", component: MultiLineExpenseCreate },
+  { path: "/finance/expenses/split", component: CostSplitter },
   { path: "/finance/expenses/:id", component: ExpenseDetail },
   { path: "/finance/budget", component: Budget },
   { path: "/finance/budget/create", component: BudgetCreate },
@@ -216,6 +221,7 @@ export const financeRoutes = [
   { path: "/finance/reports", component: FinancialReports },
   { path: "/finance/tax", component: TaxSystem },
   { path: "/finance/receivables", component: Receivables },
+  { path: "/finance/customer-risk", component: CustomerRisk },
   { path: "/finance/receivables/:id", component: ReceivableDetail },
   { path: "/finance/payments", component: Payments },
   { path: "/finance/commitments", component: Commitments },
@@ -233,6 +239,7 @@ export const financeRoutes = [
   { path: "/finance/ledger/:code", component: Ledger },
   { path: "/finance/entity-360", component: Entity360 },
   { path: "/finance/reconciliation-hub", component: ReconciliationHub },
+  { path: "/finance/trial-balance-comparison", component: TbComparison },
   { path: "/finance/ar-aging", component: ArAging },
   { path: "/finance/ap-aging", component: ApAging },
   { path: "/finance/bank-reconciliation", component: BankReconciliation },
@@ -249,6 +256,7 @@ export const financeRoutes = [
   { path: "/finance/intercompany", component: Intercompany },
   { path: "/finance/intercompany/consolidation/create", component: IntercompanyConsolidationCreate },
   { path: "/finance/cash-flow-forecast", component: CashFlowForecast },
+  { path: "/finance/cash-calendar", component: CashCalendar },
   { path: "/finance/project-costing", component: ProjectCosting },
   { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
