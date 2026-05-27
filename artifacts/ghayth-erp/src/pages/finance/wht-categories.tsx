@@ -12,7 +12,8 @@ import {
   exportToCSV,
   PageShell,
 } from "@workspace/ui-core";
-import { Plus, Receipt, Trash2, Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Plus, Receipt, Trash2, Pencil, Percent, FileCheck2 } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
@@ -145,12 +146,24 @@ export default function WhtCategoriesPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "فئات الاستقطاع" }]}
       loading={isLoading}
       actions={
-        <GuardedButton perm="finance:create" size="sm" asChild>
-          <Link href="/finance/wht-categories/create">
-            <Plus className="h-4 w-4 me-1" />
-            إضافة فئة استقطاع
+        <>
+          <Link href="/finance/tax-codes">
+            <Button variant="outline" size="sm">
+              <Percent className="h-4 w-4 me-1" />رموز الضريبة
+            </Button>
           </Link>
-        </GuardedButton>
+          <Link href="/finance/wht-filing-workbench">
+            <Button variant="outline" size="sm">
+              <FileCheck2 className="h-4 w-4 me-1" />منضدة WHT
+            </Button>
+          </Link>
+          <GuardedButton perm="finance:create" size="sm" asChild>
+            <Link href="/finance/wht-categories/create">
+              <Plus className="h-4 w-4 me-1" />
+              إضافة فئة استقطاع
+            </Link>
+          </GuardedButton>
+        </>
       }
     >
       <FinanceTabsNav />

@@ -682,7 +682,7 @@ export default function ProjectDetail() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2"><Mail className="w-5 h-5 text-muted-foreground" /> المراسلات المرتبطة ({letters.length})</CardTitle>
-              <Link href={`/communications/letters/create?relatedType=project&relatedId=${id}`}>
+              <Link href={`/correspondence/create?relatedType=project&relatedId=${id}`}>
                 <Button size="sm" variant="outline"><Plus className="h-3 w-3 me-1" /> خطاب جديد</Button>
               </Link>
             </div>

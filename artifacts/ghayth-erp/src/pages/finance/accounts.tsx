@@ -7,7 +7,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, GitBranch, TrendingUp, TrendingDown, Layers, BookOpen, ChevronDown, ChevronRight, CheckCircle, Search, Edit2, Trash2 } from "lucide-react";
+import { Plus, GitBranch, TrendingUp, TrendingDown, Layers, BookOpen, ChevronDown, ChevronRight, CheckCircle, Search, Edit2, Trash2, Scale, Percent } from "lucide-react";
 import { formatCurrency, formatNumber, formatDateAr } from "@/lib/formatters";
 import {
   AdvancedFilters,
@@ -281,6 +281,21 @@ export default function AccountsPage() {
         loading={isLoading}
         actions={
           <>
+            <Link href="/finance/trial-balance-drilldown">
+              <Button size="sm" variant="outline">
+                <Scale className="h-4 w-4 me-1" />ميزان المراجعة
+              </Button>
+            </Link>
+            <Link href="/finance/subsidiary-accounts">
+              <Button size="sm" variant="outline">
+                <BookOpen className="h-4 w-4 me-1" />الحسابات الفرعية
+              </Button>
+            </Link>
+            <Link href="/finance/tax-codes">
+              <Button size="sm" variant="outline">
+                <Percent className="h-4 w-4 me-1" />رموز الضريبة
+              </Button>
+            </Link>
             <EntityPrintButton entityType="report_chart_of_accounts" entityId="all" formats={["a4"]} />
             <Button
               size="sm"

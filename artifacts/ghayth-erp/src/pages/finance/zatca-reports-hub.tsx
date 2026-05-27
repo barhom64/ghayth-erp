@@ -1,11 +1,12 @@
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@workspace/ui-core";
 import {
   Receipt, FileBarChart2, Boxes, Layers, Clock,
   AlertTriangle, RefreshCw, ShieldAlert, Percent, Receipt as ReceiptIcon,
-  FileSearch,
+  FileSearch, Calendar, FileCheck2,
 } from "lucide-react";
 
 /**
@@ -148,6 +149,28 @@ export default function ZatcaReportsHubPage() {
         { href: "/finance/reports", label: "التقارير" },
         { label: "ضريبة + مخزون" },
       ]}
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/tax-filing-calendar">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Calendar className="h-3.5 w-3.5 ml-1" />
+              تقويم الإقرارات
+            </Button>
+          </Link>
+          <Link href="/finance/vat-filing-readiness">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <FileCheck2 className="h-3.5 w-3.5 ml-1" />
+              جاهزية VAT
+            </Button>
+          </Link>
+          <Link href="/finance/wht-filing-workbench">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Receipt className="h-3.5 w-3.5 ml-1" />
+              منضدة WHT
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <Card className="mb-6 border-status-info-surface bg-status-info-surface/30">
         <CardContent className="p-4 text-sm">

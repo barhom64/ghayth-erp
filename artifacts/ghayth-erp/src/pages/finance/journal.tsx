@@ -4,7 +4,7 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Plus, ScrollText, ArrowLeftRight, Undo2, Calendar, FileEdit } from "lucide-react";
+import { Plus, ScrollText, ArrowLeftRight, Undo2, Calendar, FileEdit, Repeat, FileText, Activity } from "lucide-react";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import {
   AdvancedFilters,
@@ -188,12 +188,29 @@ export default function JournalPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "القيود اليومية" }]}
       loading={isLoading}
       actions={
-        <GuardedButton perm="finance:create" size="sm" asChild>
-          <Link href="/finance/journal/create">
-            <Plus className="h-4 w-4 me-1" />
-            قيد جديد
+        <>
+          <Link href="/finance/recurring-journals">
+            <Button variant="outline" size="sm">
+              <Repeat className="h-4 w-4 me-2" />القيود الدورية
+            </Button>
           </Link>
-        </GuardedButton>
+          <Link href="/finance/journal-templates">
+            <Button variant="outline" size="sm">
+              <FileText className="h-4 w-4 me-2" />القوالب
+            </Button>
+          </Link>
+          <Link href="/finance/journal/activity">
+            <Button variant="outline" size="sm">
+              <Activity className="h-4 w-4 me-2" />نشاط الترحيل
+            </Button>
+          </Link>
+          <GuardedButton perm="finance:create" size="sm" asChild>
+            <Link href="/finance/journal/create">
+              <Plus className="h-4 w-4 me-1" />
+              قيد جديد
+            </Link>
+          </GuardedButton>
+        </>
       }
     >
       <FinanceTabsNav />
