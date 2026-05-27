@@ -615,6 +615,31 @@ describe("Print Engine v2 — retention legal hold", () => {
   });
 });
 
+describe("Print Engine v2 — statement bespoke presets", () => {
+  // PR1 of issue #1286 wired customer-statement-print.tsx and
+  // vendor-statement-print.tsx through <PrintButton entityType="…_statement">.
+  // Without bespoke presets the platform falls back to the universal renderer
+  // which produces a database-dump look. These presets give the printed
+  // statement a proper letterhead, party-info block, totals card, and a
+  // ledger table — close enough to the inline UI that finance users won't
+  // notice the move to server-side rendering.
+  const src = readFileSync(join(PRINT_LIB, "templateResolver.ts"), "utf8");
+
+  it("registers customer_statement and vendor_statement in BESPOKE_PRESETS", () => {
+    expect(src).toMatch(/customer_statement:\s*\(\)\s*=>\s*buildCustomerStatementPreset/);
+    expect(src).toMatch(/vendor_statement:\s*\(\)\s*=>\s*buildVendorStatementPreset/);
+  });
+
+  it("statement presets surface the loader's note field for the not-found path", () => {
+    // When the loader can't find the client/supplier it returns a `note`.
+    // The preset must conditionally render that note instead of an empty
+    // ledger, otherwise "no client" produces a blank page that looks like a
+    // platform bug. The {{#if entity.note}} guard is the contract.
+    expect(src).toMatch(/buildCustomerStatementPreset[\s\S]*?\{\{#if entity\.note\}\}/);
+    expect(src).toMatch(/buildVendorStatementPreset[\s\S]*?\{\{#if entity\.note\}\}/);
+  });
+});
+
 describe("Print platform — Stop-Ship: no parallel print systems", () => {
   // The print platform is the only path that produces audited, archived,
   // verifiable documents. A stray `window.print()` in any user-facing page
@@ -788,5 +813,49 @@ describe("Print Engine v2 — statement loaders compute opening balance", () => 
     const fnIdx = src.indexOf("export async function loadVendorStatement");
     const body = src.slice(fnIdx);
     expect(body).toMatch(/openingBalance[\s\S]*?42P01/);
+  });
+});
+
+describe("Print platform — CSV-only pages migrated to PrintButton (#1286 Q6)", () => {
+  // Q6 of the deep audit on #1286: six pages had a "Download CSV" button
+  // but no print path through the official platform. The user could pull
+  // the data into Excel but had no audited, archived, QR-verifiable PDF.
+  // This wave wires <PrintButton> + payload bypass onto all six.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const PAGES: Array<{ path: string; entityType: string }> = [
+    { path: "pages/finance/ar-aging.tsx",              entityType: "report_ar_aging" },
+    { path: "pages/finance/ap-aging.tsx",              entityType: "report_ap_aging" },
+    { path: "pages/finance/inventory-valuation.tsx",   entityType: "report_inventory_valuation" },
+    { path: "pages/finance/wht-filing-workbench.tsx",  entityType: "report_wht_filing" },
+    { path: "pages/finance/daily-close-checklist.tsx", entityType: "report_daily_close" },
+    { path: "pages/admin/logs.tsx",                    entityType: "report_audit_logs" },
+  ];
+
+  for (const { path, entityType } of PAGES) {
+    it(`${path} mounts <PrintButton entityType="${entityType}" payload={...}>`, () => {
+      const src = readFileSync(join(SPA, path), "utf8");
+      expect(src, `${path} must import PrintButton`).toContain('from "@/components/shared/print-button"');
+      expect(src, `${path} must render PrintButton`).toContain("<PrintButton");
+      expect(src, `${path} must use entityType="${entityType}"`).toContain(`entityType="${entityType}"`);
+      expect(src, `${path} must pass payload (client-side rows bypass dataLoader)`).toMatch(/payload=\{/);
+    });
+  }
+});
+
+describe("Print platform — PrintButton.payload contract (#1286 follow-up)", () => {
+  // The payload prop is the bridge that lets report pages route through
+  // the official platform without requiring a server-side dataLoader for
+  // every report type. Adding a backend loader for every report is a
+  // long-running effort; payload bypass is the immediate unification.
+  const printButton = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/components/shared/print-button.tsx"), "utf8");
+
+  it("PrintButton accepts an optional payload prop", () => {
+    expect(printButton).toMatch(/payload\?:\s*Record<string,\s*unknown>/);
+  });
+
+  it("PrintButton forwards payload to /print/render only when provided", () => {
+    // Conditional spread keeps the wire format clean — no `payload: undefined`
+    // ending up in the JSON body for the common no-payload case.
+    expect(printButton).toMatch(/\.\.\.\(payload\s*\?\s*\{\s*payload\s*\}\s*:\s*\{\}\)/);
   });
 });

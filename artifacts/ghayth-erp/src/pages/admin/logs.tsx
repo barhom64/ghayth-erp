@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollText, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, todayLocal } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
@@ -173,6 +174,24 @@ export default function AdminLogsPage() {
           <GuardedButton perm="admin:export" variant="outline" size="sm" onClick={exportCSV}>
             <Download className="h-4 w-4 me-1" />تصدير جدولي
           </GuardedButton>
+          <PrintButton
+            entityType="report_audit_logs"
+            entityId={todayLocal()}
+            payload={{
+              entity: {
+                title: "سجل التدقيق",
+                exportedAt: todayLocal(),
+                rowCount: filteredLogs.length,
+              },
+              items: filteredLogs.map((l: any) => ({
+                "المستخدم": l.userName || "النظام",
+                "الإجراء": ACTION_LABELS[l.action] || l.action,
+                "الكيان": ENTITY_LABELS[l.entity] || l.entity,
+                "المعرف": `#${l.entityId}`,
+                "التاريخ": l.createdAt ? formatDateAr(l.createdAt) : "-",
+              })),
+            }}
+          />
           <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
         </div>
       </div>

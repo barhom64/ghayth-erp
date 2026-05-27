@@ -173,12 +173,36 @@ Idempotency: dedupe probe on `(companyId, direction, channel,
 fromAddress, createdAt)` skips messages already stored, so a re-sync
 after a deltaToken reset doesn't duplicate the inbox.
 
+## Phase 2.x — IMAP / Hostinger live sync (SHIPPED)
+
+Replaces `syncImapStub` with a real `imapflow` + `mailparser` client.
+Same cron worker (`mailbox_sync_worker`, `*/5 * * * *`) covers both
+M365 and IMAP — the dispatch picks the right implementation based on
+`mailbox_accounts.provider`.
+
+- Cursor: monotonic IMAP UID stored in `mailbox_sync_cursors.lastUid`.
+  `SEARCH UID {lastUid+1}:*` returns only new messages — first run
+  pulls everything, subsequent runs only the delta.
+- Body parsing: `mailparser.simpleParser()` extracts plain text /
+  HTML, subject, from/to, Message-ID, date.
+- Dedupe: Message-ID header (when present) probes
+  `communications_log.body LIKE '%Message-ID: ...%'`. Falls back to
+  the M365-style (companyId, from, createdAt) probe otherwise.
+- Auth failure handling: error text matched against `/auth|login|invalid credentials/i`
+  → marks `status='auth_expired'` so the operator re-enters the
+  password (covers IMAP password rotation, app-specific password
+  removal, etc.).
+- One page per tick (50 messages max) — keeps the worker bounded.
+- Connection lifecycle: `connect()` → `getMailboxLock('INBOX')` →
+  fetch → `lock.release()` → `logout()` in a finally, so a partial
+  failure can't leave a stale connection on the IMAP server.
+
+`testMailboxConnection()` was promoted to a real RPC: M365 hits
+`/me`, IMAP runs `connect + noop`. The admin UI's "اختبار" button
+now confirms the credentials actually authenticate end-to-end before
+the operator commits to a sync schedule.
+
 ## Remaining work
 
 - **Phase 4 final contract**: DROP `communications_log`, `notification_log`,
   `email_queue`, `sms_queue`, `whatsapp_queue` after the soak window.
-- **Phase 2.x IMAP**: replace `syncImapStub` with a real IMAP client
-  (Hostinger and generic accounts). Requires adding `imap` / `imapflow`
-  + `mailparser` as deps and implementing the IDLE / UID-based polling
-  in `mailboxSync.ts`. The schema (mailbox_accounts.imapHost/Port/
-  Username/Password) is ready.
