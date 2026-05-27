@@ -524,10 +524,27 @@ router.get("/jobs", requirePermission("print_jobs:read"), async (req: Request, r
     const userId = req.query.userId ? Number(req.query.userId) : null;
     const from = (req.query.from as string | undefined) ?? null;
     const to = (req.query.to as string | undefined) ?? null;
+    // status filter — accepts a single value or a comma-separated list so
+    // ops can query e.g. ?status=failed to triage broken prints, or
+    // ?status=success,failed to exclude pending. Whitelisted to known
+    // values to keep the SQL clause well-defined.
+    const statusRaw = (req.query.status as string | undefined) ?? null;
+    const statusValues = statusRaw
+      ? statusRaw.split(",")
+          .map((s) => s.trim())
+          .filter((s) => ["success", "failed", "pending", "queued"].includes(s))
+      : null;
     const limit = Math.min(Number(req.query.limit ?? 100), 500);
 
     const params: unknown[] = [scope.companyId];
     const where: string[] = [`pj."companyId" = $1`];
+    // Non-owners are also branch-scoped: even with print_jobs:read, a
+    // user limited to Branch A shouldn't see Branch B's print history.
+    // Owners pass through unrestricted (allowedBranches is empty for them).
+    if (!scope.isOwner && scope.allowedBranches && scope.allowedBranches.length > 0) {
+      params.push(scope.allowedBranches);
+      where.push(`(pj."branchId" IS NULL OR pj."branchId" = ANY($${params.length}::int[]))`);
+    }
     if (branchId) {
       params.push(branchId);
       where.push(`pj."branchId" = $${params.length}`);
@@ -548,11 +565,15 @@ router.get("/jobs", requirePermission("print_jobs:read"), async (req: Request, r
       params.push(to);
       where.push(`pj."createdAt" <= $${params.length}`);
     }
+    if (statusValues && statusValues.length > 0) {
+      params.push(statusValues);
+      where.push(`pj."status" = ANY($${params.length}::text[])`);
+    }
     params.push(limit);
     const rows = await rawQuery(
       `SELECT pj.id, pj."jobId", pj."entityType", pj."entityId", pj."format", pj."paperSize",
               pj."copyNumber", pj."isReprint", pj."watermark", pj."status", pj."createdAt",
-              pj."pdfStorageKey", pj."approvedBy",
+              pj."pdfStorageKey", pj."approvedBy", pj."errorMessage",
               pj."branchId", b.name AS "branchName",
               pj."userId", u.email AS "userEmail",
               e.name AS "userName"
@@ -589,12 +610,25 @@ router.get(
         pdfStorageKey: string | null;
         entityType: string;
         entityId: string;
+        branchId: number | null;
       }>(
-        `SELECT format, "pdfStorageKey", "entityType", "entityId"
+        `SELECT format, "pdfStorageKey", "entityType", "entityId", "branchId"
          FROM print_jobs WHERE "jobId" = $1 AND "companyId" = $2 LIMIT 1`,
         [jobId, scope.companyId]
       );
       if (!rows[0]) throw new NotFoundError("print_job");
+      // Branch scoping: even with print_jobs:read, a user limited to
+      // certain branches must not download artifacts from branches
+      // they can't see. Owners + null-branch (company-wide) prints
+      // pass through.
+      if (
+        !scope.isOwner
+        && scope.allowedBranches && scope.allowedBranches.length > 0
+        && rows[0].branchId !== null
+        && !scope.allowedBranches.includes(rows[0].branchId)
+      ) {
+        throw new PrintPermissionError("هذه الوثيقة لا تخص الفرع المسموح لك بالوصول إليه");
+      }
       const key = rows[0].pdfStorageKey;
       if (!key) {
         return res
@@ -902,6 +936,44 @@ router.post(
       });
       if (!result.ok) return res.status(503).json({ error: result.error });
       res.json(result.result);
+    } catch (err) {
+      return handleRouteError(err, res, "print");
+    }
+  },
+);
+
+// ─── Retention — prune old PDFs from object storage ──────────────────────
+//
+// Audit rows in print_jobs are never deleted (regulatory). Only the
+// rendered bytes are evicted from object storage and the pdfStorageKey
+// column is cleared so re-runs don't re-scan the same rows.
+//
+// Gated by `print_jobs:read` (read-level access to the print log + manual
+// cleanup of one's own company's artifacts). Owners + GMs are the
+// expected callers via an admin button; a future cron can call this
+// helper directly without going through HTTP.
+router.post(
+  "/jobs/prune",
+  requirePermission("print_jobs:read"),
+  async (req: Request, res: Response) => {
+    try {
+      const scope = scopeFromReq(req);
+      const body = zodParse(z.object({
+        daysToKeep: z.number().int().min(1).max(3650).default(90),
+        maxPerRun: z.number().int().min(1).max(10_000).optional(),
+        dryRun: z.boolean().optional(),
+      }).safeParse(req.body));
+      const { prunePrintArtifacts } = await import("../lib/print/retention.js");
+      const result = await prunePrintArtifacts({
+        daysToKeep: body.daysToKeep,
+        maxPerRun: body.maxPerRun,
+        dryRun: body.dryRun,
+        // Non-owners are scoped to their own company; owners across
+        // the whole platform would still see only their currentCompany
+        // because scopeFromReq populates it from the JWT.
+        companyId: scope.companyId,
+      });
+      res.json(result);
     } catch (err) {
       return handleRouteError(err, res, "print");
     }

@@ -3,6 +3,7 @@
  *
  * نموذج إنشاء مراسلة صادرة أو واردة مع حفظ تلقائي كمسودة.
  */
+import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,27 @@ export default function CorrespondenceCreate() {
   );
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
+  // Phase 5: legacy /communications/letters/create redirects here with
+  // ?relatedType=&relatedId=&subject= query params. Pre-fill the form
+  // on first mount so the deep links from discipline-memo / tenant /
+  // project pages keep working without a separate form file.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const subject = sp.get("subject");
+    const recipientName = sp.get("recipientName");
+    if (!subject && !recipientName) return;
+    setForm((f) => ({
+      ...f,
+      subject: f.subject || subject || "",
+      recipientName: f.recipientName || recipientName || "",
+    }));
+    // entityType/entityId aren't form fields today — the /correspondence
+    // POST accepts them in the request body but the form here doesn't
+    // collect them. We forward them via a hidden hand-off captured at
+    // submit time below.
+  }, [setForm]);
+
   const createMut = useApiMutation<unknown, typeof INITIAL_FORM>(
     "/correspondence",
     "POST",
@@ -57,7 +79,17 @@ export default function CorrespondenceCreate() {
       toast({ variant: "destructive", title: firstError });
       return;
     }
-    createMut.mutate(form as any, {
+    // Forward relatedType/relatedId from the deep-link query at submit
+    // time. They don't live in the form state (no UI field today) so
+    // we read them straight from the URL.
+    const sp = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    const entityType = sp?.get("relatedType") || sp?.get("entityType") || undefined;
+    const entityIdRaw = sp?.get("relatedId") || sp?.get("entityId");
+    const entityId = entityIdRaw ? Number(entityIdRaw) : undefined;
+    const payload = entityType && entityId
+      ? { ...form, entityType, entityId }
+      : form;
+    createMut.mutate(payload as any, {
       onSuccess: () => {
         clearDraft();
         toast({ title: "تم إنشاء المراسلة بنجاح" });

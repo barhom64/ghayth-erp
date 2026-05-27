@@ -39,8 +39,39 @@ function get(obj: unknown, path: string): unknown {
 function formatValue(v: unknown): string {
   if (v === null || v === undefined) return "";
   if (typeof v === "number") {
-    if (Number.isInteger(v)) return String(v);
-    return v.toFixed(2);
+    if (!Number.isFinite(v)) return "";
+    return v.toLocaleString("en-US", {
+      minimumFractionDigits: Number.isInteger(v) ? 0 : 2,
+      maximumFractionDigits: 2,
+    });
+  }
+  if (typeof v === "string") {
+    const trimmed = v.trim();
+    // ISO date / timestamp detection — formats like "2025-06-15" or
+    // "2025-06-15T12:34:56.000Z" come back from PG date/timestamp columns
+    // as strings. Convert to Arabic locale date so {{entity.createdAt}}
+    // renders as "15‏/06‏/2025" not the raw ISO string. We're strict
+    // about the shape to avoid mangling refs that coincidentally look
+    // similar (e.g., "2025-INV-001" would NOT match).
+    if (/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+\-]\d{2}:?\d{2})?)?$/.test(trimmed)) {
+      const d = new Date(trimmed);
+      if (!isNaN(d.getTime())) return d.toLocaleDateString("ar-SA");
+    }
+    // Numeric strings from PG NUMERIC columns. Only format if purely
+    // numeric — don't mangle SKUs / refs like "300SP-X".
+    if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+      const n = Number(trimmed);
+      if (Number.isFinite(n)) {
+        return n.toLocaleString("en-US", {
+          minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
+          maximumFractionDigits: 2,
+        });
+      }
+    }
+    return v;
+  }
+  if (v instanceof Date) {
+    return v.toLocaleDateString("ar-SA");
   }
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);

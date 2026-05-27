@@ -1267,6 +1267,20 @@ ALTER TABLE ONLY public.lot_expiry_alerts ALTER COLUMN id SET DEFAULT nextval('p
 
 
 --
+-- Name: mailbox_accounts id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mailbox_accounts ALTER COLUMN id SET DEFAULT nextval('public.mailbox_accounts_id_seq'::regclass);
+
+
+--
+-- Name: mailbox_sync_cursors id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mailbox_sync_cursors ALTER COLUMN id SET DEFAULT nextval('public.mailbox_sync_cursors_id_seq'::regclass);
+
+
+--
 -- Name: maintenance_requests id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4160,6 +4174,22 @@ ALTER TABLE ONLY public.lot_expiry_alerts
 
 ALTER TABLE ONLY public.lot_expiry_alerts
     ADD CONSTRAINT lot_expiry_alerts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mailbox_accounts mailbox_accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mailbox_accounts
+    ADD CONSTRAINT mailbox_accounts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mailbox_sync_cursors mailbox_sync_cursors_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mailbox_sync_cursors
+    ADD CONSTRAINT mailbox_sync_cursors_pkey PRIMARY KEY (id);
 
 
 --
@@ -8411,6 +8441,27 @@ CREATE INDEX idx_lots_picker ON public.warehouse_stock_lots USING btree ("compan
 
 
 --
+-- Name: idx_mailbox_accounts_company_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_mailbox_accounts_company_user ON public.mailbox_accounts USING btree ("companyId", "userId") WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: idx_mailbox_accounts_sync_due; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_mailbox_accounts_sync_due ON public.mailbox_accounts USING btree ("lastSyncedAt" NULLS FIRST) WHERE (("syncEnabled" = true) AND ("deletedAt" IS NULL));
+
+
+--
+-- Name: idx_mailbox_sync_cursors_account; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_mailbox_sync_cursors_account ON public.mailbox_sync_cursors USING btree ("accountId");
+
+
+--
 -- Name: idx_maintenance_requests_companyid; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -10819,6 +10870,20 @@ CREATE UNIQUE INDEX uniq_invoices_ref ON public.invoices USING btree ("companyId
 
 
 --
+-- Name: uniq_mailbox_accounts_per_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uniq_mailbox_accounts_per_user ON public.mailbox_accounts USING btree ("companyId", "userId", "emailAddress") WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: uniq_mailbox_sync_cursors_per_folder; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uniq_mailbox_sync_cursors_per_folder ON public.mailbox_sync_cursors USING btree ("accountId", folder);
+
+
+--
 -- Name: uniq_official_letters_ref; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -12840,6 +12905,14 @@ ALTER TABLE ONLY public.loan_accounts
 
 ALTER TABLE ONLY public.lot_expiry_alerts
     ADD CONSTRAINT "lot_expiry_alerts_lotId_fkey" FOREIGN KEY ("lotId") REFERENCES public.warehouse_stock_lots(id) ON DELETE CASCADE;
+
+
+--
+-- Name: mailbox_sync_cursors mailbox_sync_cursors_accountId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mailbox_sync_cursors
+    ADD CONSTRAINT "mailbox_sync_cursors_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES public.mailbox_accounts(id) ON DELETE CASCADE;
 
 
 --
