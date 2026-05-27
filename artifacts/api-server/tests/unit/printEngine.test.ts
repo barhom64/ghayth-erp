@@ -567,3 +567,50 @@ describe("Print Engine v2 — preset contract (every BESPOKE_PRESETS entry retur
     expect(missing, `ARABIC_TITLES missing entries for: ${missing.join(", ")}`).toEqual([]);
   });
 });
+
+describe("Print Engine v2 — retention legal hold", () => {
+  // These document types are the legal artifact under Saudi tax / commercial
+  // record retention. Dropping any of them silently from the retention list
+  // (e.g. via a future refactor) would let the daily prune job evict PDFs
+  // that ZATCA may demand in an audit. A failing assert here means a
+  // regression in the legal posture — coordinate with finance before
+  // removing a type, not just by changing the source.
+  const MUST_HOLD = [
+    "invoice",
+    "credit_note",
+    "debit_note",
+    "pos_receipt",
+    "receipt_voucher",
+    "payment_voucher",
+    "journal_entry",
+    "delivery_note",
+    "purchase_order",
+    "goods_receipt",
+    "payroll",
+  ];
+
+  it("LEGAL_RETENTION_ENTITY_TYPES covers every Saudi-mandated record type", async () => {
+    const mod = await import("../../src/lib/print/retention.js");
+    const list = (mod as { LEGAL_RETENTION_ENTITY_TYPES: readonly string[] }).LEGAL_RETENTION_ENTITY_TYPES;
+    expect(Array.isArray(list)).toBe(true);
+    for (const t of MUST_HOLD) {
+      expect(list, `LEGAL_RETENTION_ENTITY_TYPES must include ${t} (Saudi tax/commercial record)`).toContain(t);
+    }
+  });
+
+  it("retention SQL excludes legal-hold rows at query time (not in JS)", () => {
+    // Belt-and-braces: ensure both the WHERE clause and the per-row guard
+    // reference the legal-hold list. If a future change removes the SQL
+    // filter, the per-row guard still protects the data; if the per-row
+    // guard is removed, the SQL still does. Both being present is the
+    // invariant — drop either at your peril.
+    const src = readFileSync(join(PRINT_LIB, "retention.ts"), "utf8");
+    expect(src).toMatch(/NOT\s*\(\s*"entityType"\s*=\s*ANY\(\$2::text\[\]\)\s*\)/);
+    expect(src).toMatch(/LEGAL_RETENTION_ENTITY_TYPES\.includes\(row\.entityType\)/);
+  });
+
+  it("PruneResult exposes legalHoldSkipped so ops can audit the runner", () => {
+    const src = readFileSync(join(PRINT_LIB, "retention.ts"), "utf8");
+    expect(src).toMatch(/legalHoldSkipped:\s*number/);
+  });
+});
