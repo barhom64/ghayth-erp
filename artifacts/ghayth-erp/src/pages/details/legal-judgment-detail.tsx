@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
+import { z } from "zod";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -8,6 +9,12 @@ import {
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
+import {
+  FormGrid,
+  FormNumberField,
+  FormTextareaField,
+} from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Scale } from "lucide-react";
@@ -48,10 +55,19 @@ function outcomeTone(outcome?: string | null) {
   return "default" as const;
 }
 
+const judgmentEditSchema = z.object({
+  verdict: z.string().optional().default(""),
+  paidAmount: z.coerce.number().min(0, "لا يقل عن صفر").optional().default(0),
+  dueDate: z.string().optional().default(""),
+  notes: z.string().optional().default(""),
+});
+type JudgmentEditForm = z.infer<typeof judgmentEditSchema>;
+
 export default function LegalJudgmentDetail() {
   const [, params] = useRoute("/legal/judgments/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("legal-judgment", id ?? 0);
+  const [editOpen, setEditOpen] = useState(false);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["legal-judgment", String(id)],
@@ -195,6 +211,7 @@ export default function LegalJudgmentDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={
         judgment?.judgmentNumber
@@ -238,8 +255,44 @@ export default function LegalJudgmentDetail() {
               entityId={id ?? 0}
               formats={["a4"]}/>
           )}
+          {judgment && judgment.caseId && (
+            <GuardedButton
+              perm="legal:update"
+              variant="outline"
+              size="sm"
+              onClick={() => setEditOpen(true)}
+              disabled={!judgment || judgment.status === "executed" || judgment.status === "reversed"}
+            >
+              <Edit className="h-4 w-4 ms-1" />
+              تعديل
+            </GuardedButton>
+          )}
         </>
       }
     />
+    {judgment && judgment.caseId && id && (
+      <EntityEditDialog<JudgmentEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل الحكم"
+        schema={judgmentEditSchema}
+        defaultValues={{
+          verdict: judgment.verdict ?? "",
+          paidAmount: Number(judgment.paidAmount ?? 0),
+          dueDate: judgment.dueDate ?? "",
+          notes: judgment.notes ?? "",
+        }}
+        endpoint={`/legal/cases/${judgment.caseId}/judgments/${id}`}
+        invalidateKeys={[["legal-judgment", String(id)], ["legal-judgments"], ["legal-case", String(judgment.caseId)]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextareaField name="verdict" label="نص الحكم" className="md:col-span-2" />
+          <FormNumberField name="paidAmount" label="المبلغ المسدد" />
+          <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }
