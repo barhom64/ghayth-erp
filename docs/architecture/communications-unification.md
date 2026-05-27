@@ -107,8 +107,10 @@ easy to bisect.
 | Slice | Migrated | Reads from |
 |---|---|---|
 | 1 (#1284) | `inbox.ts` `/folder-counts`, `/threads`, `/threads/:channel/:address` | `v_message_log_all` |
-| 2 (_this_) | `inbox.ts` `/threads/:id/reply` lookup; `communications.ts` `/log` + `/stats`; `workspace.ts` `recentMessages`, `messagesLast24h`, `teamMessagesToday`, `messagesWeek` | `v_message_log_all` |
-| follow-up | `cronScheduler.ts` `email_queue_drain` / `sms_queue_drain` / `whatsapp_queue_drain` | `outbound_queue` |
+| 2 (#1288) | `inbox.ts` `/threads/:id/reply` lookup; `communications.ts` `/log` + `/stats`; `workspace.ts` `recentMessages`, `messagesLast24h`, `teamMessagesToday`, `messagesWeek` | `v_message_log_all` |
+| 3 (#1292) | `communications.ts` `/send` → routes through `messageSender` for email/sms/whatsapp (DLP + dual-write) | `v_message_log_all` for read-back |
+| 4 (_this_) | `cronScheduler.ts` workers mirror status updates to `outbound_queue` after legacy `email_queue` / `sms_queue` / `whatsapp_queue` UPDATEs (sent / failed / externalId / errorMessage) — `outbound_queue` now has full lifecycle visibility | legacy queues remain primary, `outbound_queue` mirrored |
+| follow-up | flip cron worker SELECT direction to `outbound_queue` (now safe because mirror gives confidence the data is in sync) | `outbound_queue` |
 | final | DROP `communications_log`, `notification_log`, `email_queue`, `sms_queue`, `whatsapp_queue` | — |
 
 The view's `fromAddress` / `toAddress` columns alias back to the
