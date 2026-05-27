@@ -22,6 +22,30 @@ export interface JournalLine {
   /** Optional foreign-key to the originating row for drilldowns. */
   referenceType?: string;
   referenceId?: number;
+  // ─── Dimensional payload ──────────────────────────────────────────
+  // Without these, every JE posted through the gl/posting.ts path
+  // (Mudad salary, FX revaluation, FX realised, cycle-count variance,
+  // inventory write-off) leaves journal_lines with the dimensional
+  // columns NULL. That defeats per-employee / per-branch / per-vehicle
+  // / per-project reporting for those sources. All optional — legacy
+  // callers stay backwards-compatible.
+  employeeId?: number;
+  departmentId?: number;
+  branchId?: number;
+  costCenterId?: number;
+  projectId?: number;
+  vehicleId?: number;
+  propertyId?: number;
+  unitId?: number;
+  assetId?: number;
+  contractId?: number;
+  productId?: number;
+  clientId?: number;
+  vendorId?: number;
+  driverId?: number;
+  umrahSeasonId?: number;
+  umrahAgentId?: number;
+  activityType?: string;
 }
 
 export interface JournalEntryPayload {

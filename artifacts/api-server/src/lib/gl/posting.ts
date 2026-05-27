@@ -223,14 +223,39 @@ export async function postJournalEntry(
         // Shouldn't happen — we validated above. Belt + braces.
         throw new Error(`postJournalEntry: account ${line.accountId} disappeared mid-transaction`);
       }
+      // Dimensional payload — see JournalLine.* in journal-poster.ts.
+      // Every optional dim from the input line is forwarded so reports
+      // can roll up by employee/department/branch/cost-center/etc.
+      // even for entries posted through this primitive (Mudad salary,
+      // FX revaluation, cycle-count variance, inventory write-off, …).
       await rawExecute(
         `INSERT INTO journal_lines (
            "journalId", "accountId", "accountCode",
-           debit, credit, description
-         ) VALUES ($1, $2, $3, $4, $5, $6)`,
+           debit, credit, description,
+           "employeeId", "departmentId", "branchId",
+           "costCenterId", "projectId", "vehicleId", "propertyId",
+           "unitId", "assetId", "contractId", "productId",
+           "clientId", "vendorId", "driverId",
+           "umrahSeasonId", "umrahAgentId", "activityType",
+           "sourceLineTable", "sourceLineId"
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6,
+           $7, $8, $9,
+           $10, $11, $12, $13,
+           $14, $15, $16, $17,
+           $18, $19, $20,
+           $21, $22, $23,
+           $24, $25
+         )`,
         [
           journalEntryId, line.accountId, accountCode,
           line.debit, line.credit, line.description,
+          line.employeeId ?? null, line.departmentId ?? null, line.branchId ?? null,
+          line.costCenterId ?? null, line.projectId ?? null, line.vehicleId ?? null, line.propertyId ?? null,
+          line.unitId ?? null, line.assetId ?? null, line.contractId ?? null, line.productId ?? null,
+          line.clientId ?? null, line.vendorId ?? null, line.driverId ?? null,
+          line.umrahSeasonId ?? null, line.umrahAgentId ?? null, line.activityType ?? null,
+          line.referenceType ?? null, line.referenceId ?? null,
         ],
       );
       balanceDeltas.set(

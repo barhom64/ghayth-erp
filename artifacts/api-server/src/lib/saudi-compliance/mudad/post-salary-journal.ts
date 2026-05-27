@@ -77,6 +77,12 @@ export function buildSalaryEntryInput(opts: {
   settlementId: number;
   employeeId: number;
   period: string;
+  /** Department resolved from employee_assignments. Stamped on every
+   *  line so payroll reports can roll up by department for Mudad-
+   *  booked salaries the same way they do for the in-engine path. */
+  departmentId?: number | null;
+  /** Branch the employee belongs to. */
+  branchId?: number | null;
 }): BuildEntryInput {
   const net = round2dp(opts.components.amount);
   const deductions = round2dp(opts.components.deductions);
@@ -104,6 +110,16 @@ export function buildSalaryEntryInput(opts: {
     );
   }
 
+  // Common dimensional payload spread onto every line so the
+  // expense + payable + deductions legs all share the same
+  // employee/dept/branch tags (financial-integrity audit gap #6 —
+  // Mudad follow-up from PR #1304).
+  const dims = {
+    employeeId: opts.employeeId,
+    ...(opts.departmentId != null ? { departmentId: opts.departmentId } : {}),
+    ...(opts.branchId != null ? { branchId: opts.branchId } : {}),
+  };
+
   const lines: BuildEntryInput["lines"] = [];
 
   // DR salary expense (gross).
@@ -113,6 +129,7 @@ export function buildSalaryEntryInput(opts: {
     description: `Salary expense — employee #${opts.employeeId} (${opts.accounts.expense.accountCode})`,
     referenceType: "mudad_settlements",
     referenceId: opts.settlementId,
+    ...dims,
   });
 
   // CR salary payable (net).
@@ -123,6 +140,7 @@ export function buildSalaryEntryInput(opts: {
       description: `Salary payable — employee #${opts.employeeId} ${opts.period} (${opts.accounts.payable.accountCode})`,
       referenceType: "mudad_settlements",
       referenceId: opts.settlementId,
+      ...dims,
     });
   }
 
@@ -135,6 +153,7 @@ export function buildSalaryEntryInput(opts: {
       description: `Salary deductions — employee #${opts.employeeId} ${opts.period} (${opts.accounts.deductionsPayable.accountCode})`,
       referenceType: "mudad_settlements",
       referenceId: opts.settlementId,
+      ...dims,
     });
   }
 
@@ -255,6 +274,19 @@ export async function postMudadSalaryJournal(
     const description =
       opts.description ?? `Salary booking — employee #${row.employeeId} ${period}`;
 
+    // Resolve the employee's department + branch via their active
+    // assignment so every Mudad-booked salary line carries the same
+    // dimensional context the in-engine payroll path uses. Falls back
+    // to the most-recent assignment when no row is currently active.
+    const asnRows = await rawQuery<{ departmentId: number | null; branchId: number | null }>(
+      `SELECT "departmentId", "branchId" FROM employee_assignments
+        WHERE "employeeId" = $1 AND "companyId" = $2
+        ORDER BY (status = 'active') DESC, id DESC
+        LIMIT 1`,
+      [row.employeeId, opts.companyId],
+    );
+    const asn = asnRows[0];
+
     const buildInput = buildSalaryEntryInput({
       description,
       components,
@@ -262,6 +294,8 @@ export async function postMudadSalaryJournal(
       settlementId: opts.settlementId,
       employeeId: row.employeeId,
       period,
+      departmentId: asn?.departmentId ?? null,
+      branchId: asn?.branchId ?? null,
     });
     if (buildInput.lines.length === 0) {
       return {
