@@ -94,6 +94,15 @@ export default function AdminNotificationRouting() {
     onSuccess: () => { toast({ title: "أُضيفت السلسلة" }); setChainOpen(false); refreshAll(); },
     onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
   });
+  const toggleChain = useMutation({
+    mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
+      apiFetch(`/admin/notification-routing/chains/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive }),
+      }),
+    onSuccess: () => { toast({ title: "تم تحديث السلسلة" }); refreshAll(); },
+    onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
+  });
 
   const ruleColumns: DataTableColumn<RuleRow>[] = [
     { key: "eventCategory", header: "فئة الحدث", searchable: true, render: (r) => (
@@ -130,7 +139,11 @@ export default function AdminNotificationRouting() {
     { key: "steps", header: "الخطوات", render: (r) => (
       <span className="font-mono text-xs">{r.steps.length}</span>
     )},
-    { key: "isActive", header: "مفعّلة", render: (r) => <PageStatusBadge status={r.isActive ? "active" : "disabled"} /> },
+    { key: "isActive", header: "مفعّلة", render: (r) => (
+      <Button variant="ghost" size="sm" onClick={() => toggleChain.mutate({ id: r.id, isActive: !r.isActive })}>
+        <PageStatusBadge status={r.isActive ? "active" : "disabled"} />
+      </Button>
+    )},
     { key: "createdAt", header: "أُضيفت", render: (r) => (
       <span className="text-xs">{formatDateAr(r.createdAt)}</span>
     )},
