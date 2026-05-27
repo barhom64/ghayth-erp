@@ -560,9 +560,21 @@ router.get("/log", authorize({ feature: "communications", action: "list" }), asy
     if (channel) { params.push(channel); conditions.push(`channel = $${params.length}`); }
     if (direction) { params.push(direction); conditions.push(`direction = $${params.length}`); }
     const where = conditions.join(" AND ");
-    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM communications_log WHERE ${where}`, params);
+    // Phase 4 contract step 2: read from v_message_log_all. The view
+    // aliases fromAddress/toAddress columns back to fromNumber/toNumber
+    // in the explicit projection so the frontend `<DataTable>` columns
+    // ("من" / "إلى") keep resolving against the same keys.
+    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM v_message_log_all WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM communications_log WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT id, "companyId", channel, direction,
+              "fromAddress" AS "fromNumber", "toAddress" AS "toNumber",
+              subject, body, status, folder, "isStarred",
+              "relatedType", "relatedId", "createdAt", "deletedAt"
+         FROM v_message_log_all WHERE ${where}
+        ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    );
     res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset }));
   } catch (err) { handleRouteError(err, res, "Communications log error:"); }
 });
@@ -825,7 +837,9 @@ router.get("/stats", authorize({ feature: "communications", action: "list" }), a
     const scope = req.scope!;
     const cid = scope.companyId;
     const [[comm], [wa], [sms]] = await Promise.all([
-      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE channel='whatsapp') as whatsapp, COUNT(*) FILTER (WHERE channel='sms') as sms, COUNT(*) FILTER (WHERE channel='email') as email, COUNT(*) FILTER (WHERE channel='pbx') as pbx FROM communications_log WHERE "companyId"=$1`, [cid]),
+      // Phase 4 contract step 2: counts come from the unified view —
+      // legacy + new rows in one COUNT, no UNION needed.
+      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE channel='whatsapp') as whatsapp, COUNT(*) FILTER (WHERE channel='sms') as sms, COUNT(*) FILTER (WHERE channel='email') as email, COUNT(*) FILTER (WHERE channel='pbx') as pbx FROM v_message_log_all WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as pending FROM whatsapp_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as pending FROM sms_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
     ]);
