@@ -168,6 +168,11 @@ const allNavSections: NavSection[] = [
         { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
         { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
         { label: "الاستحقاقات الشهرية", path: "/hr/accruals", icon: ListChecks, subKey: "payroll" },
+        { label: "نظام حماية الأجور (WPS)", path: "/hr/wps", icon: Send, subKey: "payroll" },
+      ]},
+      { label: "الامتثال السعودي", path: "/hr/saudization", icon: Flag, module: "hr", children: [
+        { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees" },
+        { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
       ]},
       { label: "الأداء والتطوير", path: "/hr/performance", icon: Target, module: "hr", children: [
         { label: "تقييم الأداء", path: "/hr/performance", icon: Target, subKey: "performance" },
@@ -356,6 +361,7 @@ const allNavSections: NavSection[] = [
         { label: "الوحدات العقارية", path: "/properties", icon: Building },
         { label: "المستأجرون", path: "/properties/tenants", icon: Users2 },
         { label: "الملاك", path: "/properties/owners", icon: User },
+        { label: "كشف حساب المالك", path: "/properties/owners/statement", icon: FileBarChart },
         { label: "عقود الإيجار", path: "/properties/contracts", icon: FileSignature },
         { label: "المدفوعات", path: "/properties/payments", icon: Banknote },
         { label: "طلبات الصيانة", path: "/properties/maintenance", icon: Hammer },
