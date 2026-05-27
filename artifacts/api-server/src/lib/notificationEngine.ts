@@ -469,11 +469,23 @@ export async function dispatchNotification(payload: EnginePayload): Promise<{ de
           });
           deliveryIds.push(dlId);
         } else {
+          // Phase 4 contract slice 8: dual-write to outbound_queue alongside
+          // the legacy email_queue so the worker (slice 6 → outbound_queue
+          // primary) picks it up. Once the legacy queue is dropped, this
+          // legacy INSERT can be removed; the outbound_queue insert below
+          // is the canonical path.
           await rawExecute(
             `INSERT INTO email_queue ("companyId", "toEmail", "recipientName", subject, body, status, "createdAt", "refType", "refId")
              VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), $6, $7)`,
             [companyId, payload.recipientEmail, payload.recipientName ?? "", title, dlp.body, payload.refType ?? null, payload.refId ?? null]
           );
+          await rawExecute(
+            `INSERT INTO outbound_queue
+               ("companyId", channel, recipient, "recipientName", subject, body,
+                status, "refType", "refId", "createdAt", "updatedAt")
+             VALUES ($1, 'email', $2, $3, $4, $5, 'pending', $6, $7, NOW(), NOW())`,
+            [companyId, payload.recipientEmail, payload.recipientName ?? null, title, dlp.body, payload.refType ?? null, payload.refId ?? null]
+          ).catch((e) => logger.warn(e, "[notificationEngine] outbound_queue dual-write failed"));
           const dlId = await insertDeliveryLog({
             companyId, channel: "email",
             recipient: payload.recipientEmail,
