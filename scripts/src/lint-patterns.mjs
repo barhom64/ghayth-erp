@@ -288,6 +288,34 @@ const RULES = [
       "code into a lib/ helper outside routes/.",
   },
   {
+    id: "inline-date-now-as-ref",
+    scan: [ROUTES_DIR],
+    // The 2026-05-27 coverage report exposed `ORD-${Date.now()}` in
+    // store.ts:262 — same anti-pattern as generateTimeRef but written
+    // inline so the previous rule didn't catch it. Catch any template
+    // literal that splices Date.now() into a refish prefix string.
+    // Shape: `XXX-${Date.now()}` or `XXX${Date.now()}` or with extra
+    // segments. The `[A-Z]{2,}` requires a SHOUTY prefix so we don't
+    // false-positive on date strings like `${Date.now()}.json`.
+    //
+    // Soft ratchet with baseline 5 — the report identified exactly 5
+    // remaining offenders. Each fix drops the baseline by 1; new
+    // additions fail CI. Drop to 0 once every offender is fixed:
+    //   • routes/communications.ts:365  CALL-${Date.now()}          — PBX call id (tech)
+    //   • routes/finance-invoices.ts:3246  ADV-${Date.now()}        — customer advance
+    //   • routes/finance-purchase.ts:1654  PR-${Date.now()}         — payment run
+    //   • routes/properties.ts:2054  RENT-${payment.id}-${Date.now()} — legal case
+    //   • routes/store.ts:262  ORD-${Date.now()}                    — store order
+    countBaseline: 5,
+    regex: /`[A-Z]{2,}[^`]*\$\{\s*Date\.now\s*\(\s*\)/,
+    message:
+      "Inline `${Date.now()}` inside a refish string is the same anti-pattern " +
+      "as generateTimeRef(...) — it bypasses the numbering center (Issue " +
+      "#1141). Call `numberingService.issueNumber(...)` instead. If this is " +
+      "genuinely an internal tech correlation id (not a customer-visible " +
+      "document number), move it to a lib/ helper (e.g. internalTechRef).",
+  },
+  {
     id: "random-as-ref-fallback",
     scan: [ROUTES_DIR],
     // Catch the specific anti-pattern called out in issue #1141: the

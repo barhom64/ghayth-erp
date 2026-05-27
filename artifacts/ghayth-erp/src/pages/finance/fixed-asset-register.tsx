@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Building2, Download, Search, TrendingDown, Calendar, Package,
   ExternalLink, AlertTriangle, CheckCircle2,
@@ -234,6 +235,30 @@ export default function FixedAssetRegisterPage() {
               <Download className="w-4 h-4 ml-1" />
               CSV
             </Button>
+            <PrintButton
+              entityType="report_fixed_asset_register"
+              entityId="all"
+              payload={{
+                entity: {
+                  title: "سجل الأصول الثابتة",
+                  count: filtered.length,
+                  totalCost: filtered.reduce((s, a) => s + Number(a.purchaseCost ?? 0), 0),
+                  totalBookValue: filtered.reduce((s, a) => s + Number(a.currentBookValue ?? 0), 0),
+                },
+                items: filtered.map((a) => ({
+                  "الكود": a.code ?? "",
+                  "اسم الأصل": a.name,
+                  "الفئة": a.category ?? "",
+                  "تاريخ الشراء": a.purchaseDate,
+                  "التكلفة": Number(a.purchaseCost ?? 0),
+                  "العمر الإنتاجي (سنة)": a.usefulLifeYears,
+                  "طريقة الإهلاك": a.depreciationMethod,
+                  "الإهلاك المتراكم": Number(a.accumulatedDepreciation ?? 0),
+                  "القيمة الدفترية": Number(a.currentBookValue ?? 0),
+                  "الحالة": a.status,
+                })),
+              }}
+            />
           </div>
         </CardContent>
       </Card>
