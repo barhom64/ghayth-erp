@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Scale, Plus, Trash2, Download, CheckCircle2, AlertTriangle,
   Building2, FileText, ArrowDown, Equal,
@@ -465,6 +466,29 @@ export default function AccountReconciliationWorkpaperPage() {
                 <Download className="w-4 h-4 ml-2" />
                 تصدير ورقة العمل (CSV)
               </Button>
+              <PrintButton
+                entityType="report_account_reconciliation"
+                entityId={`${accountCode}:${period}`}
+                variant="default"
+                label="طباعة ورقة العمل"
+                payload={{
+                  entity: {
+                    title: "ورقة عمل تسوية الحساب",
+                    accountCode,
+                    accountName: ledger?.account?.name ?? "",
+                    period,
+                    asOfDate: asOf,
+                    ref: `RECON-${accountCode}-${period}`,
+                    systemBalance: Number(ledger?.summary?.balance ?? 0),
+                  },
+                  items: items.map((it) => ({
+                    "النوع": CATEGORY_LABELS[it.category]?.label ?? it.category,
+                    "البيان": it.description,
+                    "المرجع": it.reference ?? "",
+                    "المبلغ": Number(it.amount ?? 0),
+                  })),
+                }}
+              />
             </CardContent>
           </Card>
         </>
