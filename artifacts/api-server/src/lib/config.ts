@@ -150,6 +150,12 @@ const EnvSchema = z.object({
   WHATSAPP_APP_SECRET: optStr(),
   PBX_WEBHOOK_SECRET: optStr(),
 
+  // -- microsoft 365 (graph) ----------------------------------------------
+  // Azure AD app registration credentials for mailbox OAuth.
+  MICROSOFT365_CLIENT_ID: optStr(),
+  MICROSOFT365_CLIENT_SECRET: optStr(),
+  MICROSOFT365_REDIRECT_URI: optStr(),
+
   // -- zatca / e-invoice ---------------------------------------------------
   EINVOICE_DEFAULT_PROVIDER: optStr(),
   ZATCA_FATOORA_PROD_URL: optStr(),
@@ -295,6 +301,13 @@ export interface AppConfig {
 
   readonly pbx: {
     readonly webhookSecret: string | undefined;
+  };
+
+  readonly microsoft365: {
+    readonly clientId: string | undefined;
+    readonly clientSecret: string | undefined;
+    readonly redirectUri: string | undefined;
+    readonly configured: boolean;
   };
 
   readonly zatca: {
@@ -447,6 +460,13 @@ function buildConfig(env: RawEnv): AppConfig {
 
     pbx: {
       webhookSecret: env.PBX_WEBHOOK_SECRET,
+    },
+
+    microsoft365: {
+      clientId: env.MICROSOFT365_CLIENT_ID,
+      clientSecret: env.MICROSOFT365_CLIENT_SECRET,
+      redirectUri: env.MICROSOFT365_REDIRECT_URI,
+      configured: Boolean(env.MICROSOFT365_CLIENT_ID && env.MICROSOFT365_CLIENT_SECRET),
     },
 
     zatca: {
