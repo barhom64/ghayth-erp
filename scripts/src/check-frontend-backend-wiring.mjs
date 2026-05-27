@@ -538,6 +538,94 @@ function extractFrontendCalls() {
       if (!lit.value.startsWith("/")) continue;
       calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "POST", source: "prop" });
     }
+
+    // Config-object URL property values:
+    //   `approveEndpoint: "/workflows/:id/approve"` in approval-registry.ts
+    //   `rejectEndpoint:  "/x/:id/reject"` / `returnEndpoint: "/x/:id/return"` etc.
+    // These are consumed via getApprovalEndpoint(type, id) which calls
+    // .replace(":id", String(id)) — runtime substitution invisible to a
+    // static scan. Without crediting them, every /workflows/:id/approve,
+    // /workflows/:id/reject style registry entry shows as unused even
+    // though the action-center fires them.
+    //
+    // The verb is taken from the key prefix (approve/reject/return/refer/
+    // escalate) → PATCH by default, POST when the same object literal has
+    // a sibling `method: "POST"`. Mirrors the approval-actions defaults.
+    const cfgRe = /\b(approve|reject|return|refer|escalate)Endpoint\s*:\s*[`"']/g;
+    for (const m of src.matchAll(cfgRe)) {
+      let i = m.index + m[0].length - 1;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      // Same-object `method:` sibling overrides the default. Approval-
+      // registry entries default to PATCH; the workflow row carries
+      // `method: "POST"` because /workflows/:id/approve is a POST route.
+      const window = src.slice(Math.max(0, m.index - 200), Math.min(src.length, m.index + 200));
+      const mm = window.match(/\bmethod\s*:\s*["'`](GET|POST|PATCH|PUT|DELETE)["'`]/i);
+      const method = mm ? mm[1].toUpperCase() : "PATCH";
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method, source: "prop" });
+    }
+
+    // Record<Key, (id) => `/url/${id}/action`> — config tables that map
+    // a tab/key to a URL builder. action-center.tsx uses this for the
+    // per-tab approval endpoints (workflows / leaves / advances / …),
+    // and several stat-tab pages use the same idiom. The arrow body is
+    // a template literal starting with `/` — readString handles it.
+    //
+    // Disambiguation from wouter routing tables (e.g.
+    // `Record<string, (id) => \`/finance/invoices/${id}\`>`): require
+    // the URL to have at least one *literal* segment after the first
+    // `${…}` interpolation. Approval URLs end with `/approve`/`/reject`
+    // etc., while routing-only URLs are bare entity references and get
+    // skipped. The verb stays "?" because the arrow alone doesn't
+    // signal it — backend method resolution falls back to path-only.
+    const arrowUrlRe = /=>\s*[`"']\//g;
+    for (const m of src.matchAll(arrowUrlRe)) {
+      const i = m.index + m[0].length - 2;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      // Require a literal path segment AFTER an interpolation — that's
+      // the signal this is an action URL, not just an entity reference.
+      // Matches `…/${id}/approve` (✓) but rejects `…/${id}` (skip).
+      // `lit.value` preserves `${…}` placeholders verbatim before the
+      // url-normaliser rewrites them to `:param`.
+      if (!/\$\{[^}]+\}\/[a-z][a-z0-9_-]*/i.test(lit.value)) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "?", source: "prop" });
+    }
+
+    // `const endpoint = cond ? "/url1" : cond2 ? "/url2" : null;` —
+    // the variable-bound conditional URL pattern, used by
+    // entity-timeline.tsx (workflow timeline switches between the
+    // instance-scoped and ref-scoped endpoints). The audit's inline
+    // ternary scanner only fires when the ternary is the URL argument
+    // itself; here the URL is bound to an identifier first, so the
+    // helper-call scan reads only the identifier and misses both URLs.
+    //
+    // Restricted to variables named exactly `endpoint` / `apiUrl` /
+    // `apiPath` — these names are the codebase's explicit convention
+    // for API URLs and are NOT reused for wouter route strings.
+    //
+    // Additional guard: the file must already use a known API helper
+    // (useApiQuery / useApiMutation / apiFetch / apiPatch / …), so we
+    // don't credit URLs in pure config files or routing tables.
+    const hasApiHelper = /\b(?:useApiQuery|useApiMutation|apiFetch|apiPatch|apiPost|apiPut|apiDelete)\s*[(<]/.test(src);
+    if (hasApiHelper) {
+      const condVarRe = /\b(?:const|let)\s+(endpoint|apiUrl|apiPath)\s*(?::\s*[^=]+)?=\s*[^;]+\?/g;
+      for (const m of src.matchAll(condVarRe)) {
+        const start = m.index + m[0].length;
+        const tail = src.slice(start, Math.min(src.length, start + 600));
+        const endRel = tail.search(/;|\n\s*\n|\n[^\s)]/);
+        const segment = endRel === -1 ? tail : tail.slice(0, endRel);
+        const strRe = /[`"']\/[^`"']*[`"']/g;
+        for (const sm of segment.matchAll(strRe)) {
+          const lit = readString(src, start + sm.index);
+          if (!lit) continue;
+          if (!lit.value.startsWith("/")) continue;
+          calls.push({ file: rel, url: lit.value, line: lineOf(src, start + sm.index), method: "GET", source: "prop" });
+        }
+      }
+    }
   }
   return calls;
 }
