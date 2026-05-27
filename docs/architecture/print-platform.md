@@ -206,6 +206,85 @@ Lockable surfaces:
 
 ---
 
+## 7a. Granular permissions (issue #1286)
+
+The legacy print perms bundle several capabilities under one key. `print_jobs:read` for instance lets you list jobs AND prune storage AND see the archive view AND power the diagnostics page — useful for a small team but a footgun for an "audit reader" role. Issue #1286 split each capability into its own key.
+
+| Permission | Gates | Why this verb |
+|---|---|---|
+| `print:create` | `POST /api/print/render` | legacy — every render |
+| `print:reprint:create` | `POST /api/print/reprint-requests` | legacy — request a reprint |
+| `print:reprint:approve` | `POST /api/print/reprint-requests/:id/approve` | legacy — approve a reprint |
+| `print:preview:create` | `POST /api/print/preview` (ephemeral, no audit) | produces an ephemeral doc |
+| `print:download` | `GET /api/print/jobs/:jobId/download` | already an allowlisted verb |
+| `print:archive:delete` | `POST /api/print/jobs/prune` (destructive) | permanently removes the blob |
+| `print:verify:read` | `GET /api/print/archive/:entityType/:entityId` | lookup-only |
+| `print:diagnostics:read` | `GET /api/print/jobs`, `GET /api/print/jobs.csv` | lookup-only |
+| `templates:read` | template list + preview | legacy |
+| `templates:write` | template CRUD | legacy |
+| `print_jobs:read` | full print log | legacy (still works on every endpoint above via `requireAnyPermission`) |
+| `print:<entity>:create` | per-entity render gate (defined in catalogue, not yet route-enforced) | per-entity opt-out |
+
+Every granular route uses `requireAnyPermission(<legacy>, <granular>)` so existing roles holding the legacy keys keep working without migration — owners who want narrower roles can mint them by granting only the granular keys.
+
+Verbs follow the `rbacConsistency` allowlist (`read | create | update | write | delete | approve | self | download`); preview becomes `:create` because it produces an ephemeral document, archive prune becomes `:delete` because it permanently removes the blob.
+
+---
+
+## 7b. Audit + event entries
+
+Every `/render` call writes exactly one append-only row to `print_jobs` via `printJobsLogger.ts`. Schema:
+
+| Column | Meaning |
+|---|---|
+| `id`, `jobId` | UUID for the rendered document — what the QR points at |
+| `companyId`, `branchId`, `userId` | actor context from the JWT scope |
+| `entityType`, `entityId` | what was printed |
+| `templateId`, `templateVersion` | which template version was applied (or `null` for in-memory presets) |
+| `format`, `paperSize` | a4 / thermal_80 / thermal_58 / label / excel |
+| `copyNumber`, `isReprint` | 1 for the original, 2+ for reprints |
+| `watermark` | `"نسخة مكررة"` for reprints, `null` otherwise |
+| `status` | `rendered` / `failed` / `delivered` |
+| `pdfStorageKey` | GCS object key (`null` after retention pruning, or for legal-hold types it stays forever) |
+| `verificationCode` | 8-char human-readable code (in addition to the UUID) |
+| `dataSnapshot` | JSON capture of the loader output at print time — frozen, never refreshed |
+| `renderedFileHash` | SHA-256 of the bytes — proves the served artifact matches the audit row |
+| `createdAt` | wall-clock at render |
+
+Mutations: `printJobs.pdfStorageKey` is cleared by the retention runner once the blob has been pruned. No other field is ever updated. The row itself is never deleted.
+
+Legal hold (Saudi tax/commercial-record retention, issue #1286 PR 10): documents whose `entityType` is in `LEGAL_RETENTION_ENTITY_TYPES` (`invoice`, `credit_note`, `debit_note`, `pos_receipt`, `receipt_voucher`, `payment_voucher`, `journal_entry`, `delivery_note`, `purchase_order`, `goods_receipt`, `payroll`) are **never** pruned regardless of age — `prunePrintArtifacts` skips them at both the SQL filter and a per-row guard.
+
+Reprint events: the `/reprint-requests` flow writes to `print_reprint_requests` (request) and updates `print_jobs.isReprint` + `copyNumber` (approval). The reprint approver's `userId` is stamped via the internal `reprintApprovedBy` path — clients cannot forge it through the public `/render` body.
+
+---
+
+## 7c. Stop-Ship — no parallel printing systems (issue #1286)
+
+Two layers of mechanical enforcement guarantee the platform is the sole printing path:
+
+1. **`scripts/src/lint-patterns.mjs`** — rule `direct-pdf-generation` rejects PR diffs containing the banned patterns from §9.
+2. **`artifacts/api-server/tests/unit/printEngine.test.ts`** walks the entire `artifacts/` tree on every CI run and fails the build if:
+   - any file outside the official print module calls `window.print()`
+   - any file imports `jspdf` / `pdfmake` / `html2canvas` / `html2pdf` / `puppeteer` / `react-to-print`
+
+Allowed locations are an explicit allowlist (the print SDK itself, `print-button.tsx`, the print stylesheet, docs, and tests). To add a new printable surface, wire a server-side `dataLoader` case + render through `<PrintButton entityType=... entityId=... />`. Never call the browser's native print dialog directly.
+
+---
+
+## 7d. Issue #1286 — Changelog
+
+Four sequential PRs unified the platform per the issue's Stop-Ship rule:
+
+| # | What changed |
+|---|---|
+| 1 | Eliminated `window.print()` from 7 user-facing pages. Statement pages migrated to `<PrintButton entityType="customer_statement" \| "vendor_statement">`; finance/BI dashboards lost their dashboard-print buttons (analytical views, not formal documents). New static tests fail CI on any future `window.print()` regression. |
+| 2 | Added bespoke presets for `customer_statement` and `vendor_statement` so the server-side render matches the inline UI — letterhead, party block, opening balance card, ledger, totals. |
+| 3 | Split the bundled print perms into 5 granular keys (table in §7a). All routes use `requireAnyPermission` for backward compat. `audit-stop-ship.mjs` updated to recognize `requireAnyPermission` as a valid RBAC guard. |
+| 4 | This documentation update + frontend static-contract tests for `PrintButton` / `EntityPrintButton`. |
+
+---
+
 ## 8. What lives outside Print Platform (for now)
 
 These are explicitly **not** part of the platform yet and require their own RFC before being absorbed:
