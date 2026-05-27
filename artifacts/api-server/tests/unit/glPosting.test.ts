@@ -154,12 +154,32 @@ describe("postJournalEntry — INSERT shape", () => {
     expect(mockRawExecute).toHaveBeenCalledTimes(4);
     const firstLineCall = mockRawExecute.mock.calls[0];
     expect(String(firstLineCall[0])).toContain("INSERT INTO journal_lines");
+    // The INSERT grew from 6 columns/params to 25 in this PR — the
+    // primitive now forwards the full dimensional payload (employeeId,
+    // departmentId, branchId, costCenterId, projectId, vehicleId,
+    // propertyId, unitId, assetId, contractId, productId, clientId,
+    // vendorId, driverId, umrahSeasonId, umrahAgentId, activityType)
+    // plus sourceLineTable + sourceLineId (mapped from referenceType +
+    // referenceId on the line). Each new optional dim defaults to null
+    // for callers that don't supply it (the FX poster doesn't).
     expect(firstLineCall[1]).toEqual([
       4242, 100, "1100", 30, 0, "FX gain Q1",
+      null, null, null,                    // employeeId, departmentId, branchId
+      null, null, null, null,              // costCenterId, projectId, vehicleId, propertyId
+      null, null, null, null,              // unitId, assetId, contractId, productId
+      null, null, null,                    // clientId, vendorId, driverId
+      null, null, null,                    // umrahSeasonId, umrahAgentId, activityType
+      "fx_revaluation_log", 7,             // sourceLineTable, sourceLineId (from referenceType/Id)
     ]);
     const secondLineCall = mockRawExecute.mock.calls[1];
     expect(secondLineCall[1]).toEqual([
       4242, 490, "4900", 0, 30, "FX gain Q1",
+      null, null, null,
+      null, null, null, null,
+      null, null, null, null,
+      null, null, null,
+      null, null, null,
+      "fx_revaluation_log", 7,
     ]);
     // currentBalance moves by debit−credit per account: +30 on the debit
     // account (1100), −30 on the credit account (4900).
