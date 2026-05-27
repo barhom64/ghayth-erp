@@ -841,7 +841,7 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
     return u.toString();
   }, [filters]);
   const suffix = query ? `?${query}` : "";
-  const { data, isLoading } = useApiQuery<{ data: Assignment[] }>(
+  const { data, isLoading, refetch } = useApiQuery<{ data: Assignment[] }>(
     ["numbering-assignments", query],
     `/numbering/assignments${suffix}`,
   );
@@ -850,6 +850,59 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
     () => Array.from(new Set(schemes.map((s) => s.moduleKey))).sort(),
     [schemes],
   );
+  const { toast } = useToast();
+  // Override + void are admin-only repair operations — wrap each in an
+  // inline prompt-and-fire helper instead of building a dialog. Both
+  // POST to /numbering/assignments/:id/{override,void} with a {reason}
+  // body; void also takes {newNumber} when overriding. Backend enforces
+  // settings.numbering.override authorize, so the prompt is mostly UX
+  // (operator confirmation + reason capture).
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const overrideAssignment = async (a: Assignment) => {
+    const newNumber = window.prompt("الرقم الجديد للمعاملة", a.number);
+    if (!newNumber || !newNumber.trim()) return;
+    const reason = window.prompt("سبب التعديل (3 أحرف على الأقل):", "");
+    if (!reason || reason.trim().length < 3) {
+      toast({ variant: "destructive", title: "سبب التعديل مطلوب" });
+      return;
+    }
+    try {
+      setBusyId(a.id);
+      await apiFetch(`/numbering/assignments/${a.id}/override`, {
+        method: "POST",
+        body: JSON.stringify({ newNumber: newNumber.trim(), reason: reason.trim() }),
+      });
+      toast({ title: "تم تعديل الرقم" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر التعديل", description: err.message });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const voidAssignment = async (a: Assignment) => {
+    const reason = window.prompt(`سبب إلغاء الرقم ${a.number} (3 أحرف على الأقل):`, "");
+    if (!reason || reason.trim().length < 3) {
+      toast({ variant: "destructive", title: "سبب الإلغاء مطلوب" });
+      return;
+    }
+    if (!window.confirm(`سيتم إلغاء الرقم ${a.number} نهائياً. متابعة؟`)) return;
+    try {
+      setBusyId(a.id);
+      await apiFetch(`/numbering/assignments/${a.id}/void`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      toast({ title: "تم إلغاء الرقم" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر الإلغاء", description: err.message });
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <div className="space-y-3">
@@ -899,6 +952,7 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
                 <th className="p-3 text-start">المعرف</th>
                 <th className="p-3 text-start">الحالة</th>
                 <th className="p-3 text-start">تاريخ الإصدار</th>
+                <th className="p-3 text-start"></th>
               </tr>
             </thead>
             <tbody>
@@ -914,10 +968,38 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
                     </Badge>
                   </td>
                   <td className="p-3 text-xs text-muted-foreground">{formatDateAr(r.issuedAt)}</td>
+                  <td className="p-3 whitespace-nowrap">
+                    {r.status !== "voided" && (
+                      <div className="flex items-center gap-1">
+                        <GuardedButton
+                          perm="settings:update"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => overrideAssignment(r)}
+                          disabled={busyId === r.id}
+                          title="تعديل الرقم"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </GuardedButton>
+                        <GuardedButton
+                          perm="settings:update"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs text-status-error-foreground"
+                          onClick={() => voidAssignment(r)}
+                          disabled={busyId === r.id}
+                          title="إلغاء الرقم"
+                        >
+                          <X className="h-3 w-3" />
+                        </GuardedButton>
+                      </div>
+                    )}
+                  </td>
                 </tr>
               ))}
               {rows.length === 0 && (
-                <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">
+                <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">
                   لا توجد أرقام مسجلة بهذه المعايير
                 </td></tr>
               )}
