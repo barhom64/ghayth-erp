@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   DataTable,
   type DataTableColumn,
@@ -90,6 +91,27 @@ export default function ApAgingPage() {
           <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(suppliers, `ap-aging-${asOfDate}.csv`)}>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </GuardedButton>
+          <PrintButton
+            entityType="report_ap_aging"
+            entityId={asOfDate}
+            payload={{
+              entity: {
+                title: "تقرير تقادم الذمم الدائنة",
+                asOfDate: formatDateAr(asOfDate),
+                totalOutstanding: summary.grandTotal ?? 0,
+                over90Total: summary.over90 ?? 0,
+              },
+              items: suppliers.map((s: any) => ({
+                "المورد": s.supplierName ?? "",
+                "حالي": Number(s.current ?? 0),
+                "1-30 يوم": Number(s["1_30"] ?? 0),
+                "31-60 يوم": Number(s["31_60"] ?? 0),
+                "61-90 يوم": Number(s["61_90"] ?? 0),
+                "+90 يوم": Number(s.over90 ?? 0),
+                "الإجمالي": Number(s.total ?? 0),
+              })),
+            }}
+          />
         </>
       }
     >
