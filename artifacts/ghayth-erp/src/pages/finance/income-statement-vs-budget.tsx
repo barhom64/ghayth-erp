@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   BarChart3, Download, TrendingUp, TrendingDown, CheckCircle2,
   AlertTriangle, Target, ChevronDown, ChevronRight, Grid3x3,
@@ -222,6 +223,30 @@ export default function IncomeStatementVsBudgetPage() {
             <Download className="w-4 h-4 ml-1" />
             CSV
           </Button>
+          <PrintButton
+            entityType="report_income_vs_budget"
+            entityId={period}
+            payload={{
+              entity: {
+                title: "قائمة الدخل مقابل الموازنة",
+                period,
+                totalRevenueBudget,
+                totalExpenseBudget,
+                netIncomeBudget,
+              },
+              items: [
+                ...(pnl?.revenue?.items ?? []).map((l) => ({
+                  "القسم": "إيرادات", "الكود": l.accountCode, "اسم الحساب": l.accountName, "فعلي": Number(l.amount ?? 0),
+                })),
+                ...(pnl?.cogs?.items ?? []).map((l) => ({
+                  "القسم": "تكلفة البضاعة", "الكود": l.accountCode, "اسم الحساب": l.accountName, "فعلي": Number(l.amount ?? 0),
+                })),
+                ...(pnl?.operatingExpenses?.items ?? []).map((l) => ({
+                  "القسم": "مصاريف تشغيلية", "الكود": l.accountCode, "اسم الحساب": l.accountName, "فعلي": Number(l.amount ?? 0),
+                })),
+              ],
+            }}
+          />
         </CardContent>
       </Card>
 
