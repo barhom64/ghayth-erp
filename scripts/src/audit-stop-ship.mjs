@@ -94,6 +94,19 @@ const RBAC_PATTERNS = [
   /\bverify[A-Za-z]*(?:Signature|Hmac|Webhook|Token)\s*\(/,
 ];
 
+// Accepted audit-write patterns. `createAuditLog` is the generic helper
+// most routes use; subsystem-specific orchestrators count too when their
+// public contract guarantees an audit row. For the print platform,
+// `renderPrint()` is documented (printService.ts header, step 8) to call
+// `writePrintJob()` internally — so any route calling renderPrint IS
+// auditing, just through one level of indirection. Add new entries as
+// new audit pipelines land.
+const AUDIT_PATTERNS = [
+  /\bcreateAuditLog\s*\(/,
+  /\brenderPrint\s*\(/,
+  /\bwritePrintJob\s*\(/,
+];
+
 const WRITE_METHODS = ["post", "patch", "put", "delete"];
 
 const isReportOnly = process.argv.includes("--report-only");
@@ -173,9 +186,10 @@ async function scanFile(absPath) {
   const base = absPath.split("/").pop();
 
   // File-level signals — set once per file rather than per route.
-  // A route file is "audited" if it imports createAuditLog OR uses
-  // the audit middleware. Same logic for events.
-  const fileHasCreateAuditLog = /\bcreateAuditLog\s*\(/.test(clean);
+  // A route file is "audited" if it imports createAuditLog OR a
+  // subsystem-specific audit writer (see AUDIT_PATTERNS). Same logic
+  // for events.
+  const fileHasCreateAuditLog = AUDIT_PATTERNS.some((re) => re.test(clean));
   const fileHasEmitEvent = /\bemitEvent\s*\(/.test(clean);
   // RBAC: routes can either call authorize() per-route or be mounted
   // behind requireMinLevel/requireModule at the router level — we
