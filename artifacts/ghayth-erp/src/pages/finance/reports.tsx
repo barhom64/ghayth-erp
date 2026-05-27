@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   FileBarChart, TrendingUp, TrendingDown, Scale, DollarSign,
   ArrowDownCircle, ArrowUpCircle, BookOpen, AlertTriangle, Download,
-  Users, BarChart2, PieChart, FileText, Printer, ChevronDown, ChevronRight,
+  Users, BarChart2, PieChart, FileText, ChevronDown, ChevronRight,
   Activity, Briefcase,
 } from "lucide-react";
 import { formatCurrency, formatDateAr, currentPeriodRiyadh } from "@/lib/formatters";
@@ -36,22 +36,16 @@ function exportCSV(rows: any[], headers: string[], filename: string) {
   link.click();
 }
 
-// PrintButton — routes through Print Engine v2 when entityType is provided
-// so the report carries branch letterhead, audit row, verify QR, and reprint
-// detection. The legacy browser-dialog fallback below is kept for the report
-// tabs that don't yet have a server-side loader; once they do, pass the
-// entityType + entityId and the engine takes over. The entityId encodes the
-// date filter as "YYYY-MM-DD..YYYY-MM-DD" to match parseEntityId() in
-// reportLoaders.ts so each rendered job is traceable to its filter set.
-function PrintButton({ entityType, entityId }: { entityType?: string; entityId?: string } = {}) {
-  if (entityType) {
-    return <EntityPrintButton entityType={entityType} entityId={entityId ?? "all"} formats={["a4"]} />;
-  }
-  return (
-    <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => window.print()}>
-      <Printer className="h-3.5 w-3.5 me-1" />طباعة
-    </GuardedButton>
-  );
+// PrintButton — routes through Print Engine v2 unconditionally. Every report
+// tab must declare an entityType so the rendered job carries the branch
+// letterhead, audit row, verify QR, and reprint detection. The legacy
+// browser-print fallback was removed as part of the print-platform
+// unification (issue #1286):
+// any tab that needs printing must wire a server-side loader and pass
+// entityType. The entityId encodes the date filter as
+// "YYYY-MM-DD..YYYY-MM-DD" so each rendered job is traceable to its filter.
+function PrintButton({ entityType, entityId }: { entityType: string; entityId?: string }) {
+  return <EntityPrintButton entityType={entityType} entityId={entityId ?? "all"} formats={["a4"]} />;
 }
 
 function dateRangeId(startDate?: string, endDate?: string): string {
@@ -1122,7 +1116,14 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
 
         {rows.length > 0 && (
           <>
-            <PrintButton />
+            <PrintButton
+              entityType={
+                entityType === "client" ? "customer_statement"
+                : entityType === "supplier" ? "vendor_statement"
+                : "report_entity_statement"
+              }
+              entityId={`${entityId}:${dateRangeId(startDate, endDate)}`}
+            />
             <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(rowsWithBalance, ["ref", "description", "debit", "credit", "runningBalance", "date", "type"], `entity-statement-${entityId}.csv`)}>
               <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
             </GuardedButton>
