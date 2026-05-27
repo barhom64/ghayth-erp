@@ -2559,11 +2559,27 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
         : creditAmount;
       vat = roundTo2(creditAmount - net);
 
+      // G12 fix (Issue #1141 coverage report 2026-05-27 §3 G12) —
+      // issue a real credit_memo ref through the numbering center
+      // (scheme `finance.credit_memo`, seeded by migration 213). The
+      // previous code created the row with ref = NULL. issueNumber's
+      // inner withTransaction joins this outer one via SAVEPOINT.
+      const issuedMemo = await issueNumber({
+        companyId: scope.companyId,
+        branchId: invoice.branchId,
+        moduleKey: "finance",
+        entityKey: "credit_memo",
+        entityTable: "credit_memos",
+        actorId: scope.userId,
+        metadata: { sourceInvoiceId: id },
+        expectedTiming: "on_draft",
+      });
+
       try {
         const ins = await client.query(
-          `INSERT INTO credit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-          [scope.companyId, invoice.branchId, id, invoice.clientId, creditAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId]
+          `INSERT INTO credit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy",ref)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+          [scope.companyId, invoice.branchId, id, invoice.clientId, creditAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId, issuedMemo.number]
         );
         memoId = ins.rows[0].id;
       } catch (e: any) {
@@ -2583,19 +2599,24 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
                "memoDate" DATE NOT NULL,
                "journalId" INTEGER,
                "createdBy" INTEGER,
+               ref TEXT,
                "createdAt" TIMESTAMP DEFAULT NOW()
              )`
           );
           const ins2 = await client.query(
-            `INSERT INTO credit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy")
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-            [scope.companyId, invoice.branchId, id, invoice.clientId, creditAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId]
+            `INSERT INTO credit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy",ref)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+            [scope.companyId, invoice.branchId, id, invoice.clientId, creditAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId, issuedMemo.number]
           );
           memoId = ins2.rows[0].id;
         } else {
           throw e;
         }
       }
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [memoId, issuedMemo.assignmentId]
+      );
 
       // Reduce invoice effective total via paidAmount adjustment (treat memo as
       // virtual payment so aging / collection logic treats it as settled).
@@ -2900,11 +2921,24 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
     // duplicate memo row (no idempotency on debit_memos INSERT) AND
     // double-count the counters.
     await withTransaction(async (client) => {
+      // G13 fix (Issue #1141 coverage report 2026-05-27 §3 G13) —
+      // issue a real debit_memo ref through the numbering center
+      // (scheme `finance.debit_memo`, seeded by migration 213).
+      const issuedMemo = await issueNumber({
+        companyId: scope.companyId,
+        branchId: (invoice.branchId as number | null) ?? null,
+        moduleKey: "finance",
+        entityKey: "debit_memo",
+        entityTable: "debit_memos",
+        actorId: scope.userId,
+        metadata: { sourceInvoiceId: id },
+        expectedTiming: "on_draft",
+      });
       try {
         const ins = await client.query(
-          `INSERT INTO debit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-          [scope.companyId, invoice.branchId, id, invoice.clientId, chargeAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId]
+          `INSERT INTO debit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy",ref)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+          [scope.companyId, invoice.branchId, id, invoice.clientId, chargeAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId, issuedMemo.number]
         );
         memoId = ins.rows[0].id;
       } catch (e: any) {
@@ -2923,19 +2957,24 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
                "memoDate" DATE NOT NULL,
                "journalId" INTEGER,
                "createdBy" INTEGER,
+               ref TEXT,
                "createdAt" TIMESTAMP DEFAULT NOW()
              )`
           );
           const ins2 = await client.query(
-            `INSERT INTO debit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy")
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-            [scope.companyId, invoice.branchId, id, invoice.clientId, chargeAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId]
+            `INSERT INTO debit_memos ("companyId","branchId","invoiceId","clientId",amount,"netAmount","vatAmount",reason,"memoDate","createdBy",ref)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+            [scope.companyId, invoice.branchId, id, invoice.clientId, chargeAmount, net, vat, reason, memoDateStr, scope.activeAssignmentId, issuedMemo.number]
           );
           memoId = ins2.rows[0].id;
         } else {
           throw e;
         }
       }
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [memoId, issuedMemo.assignmentId]
+      );
 
       // Increase invoice subtotal + VAT + total to reflect the additional
       // charge. Missing subtotal here broke the `subtotal = total - vatAmount`
