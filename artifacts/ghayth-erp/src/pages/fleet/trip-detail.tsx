@@ -7,6 +7,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -40,6 +45,25 @@ export default function TripDetailPage() {
     id ? `/fleet/trips/${id}` : null,
     !!id
   );
+
+  // PATCH + DELETE wired through the shared edit/delete hook. Backend
+  // accepts fromLocation/toLocation/destination/status/notes/cost.
+  const editDelete = useDetailEditDelete({
+    entityLabel: "الرحلة",
+    patchPath: `/fleet/trips/${id}`,
+    deletePath: `/fleet/trips/${id}`,
+    listPath: "/fleet/trips",
+    initialValues: trip,
+    fields: [
+      { key: "fromLocation", label: "نقطة الانطلاق" },
+      { key: "toLocation", label: "الوجهة" },
+      { key: "destination", label: "موقع آخر" },
+      { key: "notes", label: "ملاحظات" },
+      { key: "cost", label: "التكلفة", type: "number" },
+    ],
+    invalidateKeys: [["fleet-trip", id], ["trips"]],
+    onSaved: () => refetch(),
+  });
 
   const { data: fuelResp } = useApiQuery<any>(
     ["trip-fuel", id],
@@ -157,6 +181,7 @@ export default function TripDetailPage() {
 
   const overview = (
     <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
@@ -251,6 +276,7 @@ export default function TripDetailPage() {
         إلغاء
       </GuardedButton>
       <EntityPrintButton entityType="fleet_trip" entityId={id ?? ""} formats={["a4"]} />
+      <DetailActionButtons hook={editDelete} editPerm="fleet:create" deletePerm="fleet:delete" />
     </div>
   );
 

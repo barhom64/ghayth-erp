@@ -60,12 +60,19 @@ export default function ExitDetail() {
   const item = data?.data ?? data;
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("exit_request", id || "");
 
-  const approveMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-exit"]], {
-    successMessage: "تم اعتماد طلب نهاية الخدمة",
-  });
+  // Factory form with the literal URL inline so the wiring audit can
+  // credit /hr/exit/:id/approve statically. Previously the URL was
+  // funneled through `body.__url` which the static scanner couldn't
+  // resolve, leaving the endpoint flagged unused.
+  const approveMut = useApiMutation<unknown, { approved: boolean }>(
+    () => `/hr/exit/${id}/approve`,
+    "PATCH",
+    [["hr-exit"]],
+    { successMessage: "تم اعتماد طلب نهاية الخدمة" },
+  );
 
   const handleApprove = async () => {
-    await approveMut.mutateAsync({ __url: `/hr/exit/${id}/approve`, approved: true } as any);
+    await approveMut.mutateAsync({ approved: true });
     queryClient.invalidateQueries({ queryKey: ["hr-exit-detail", id] });
   };
 

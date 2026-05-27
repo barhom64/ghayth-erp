@@ -186,6 +186,24 @@ export const PERMISSIONS = [
   "print:fleet_trips:create",
   "print:umrah_invoice:create",
   "print:umrah_statement:create",
+  "print:customer_statement:create",
+  "print:vendor_statement:create",
+  // Granular print platform actions (issue #1286). Each gates a distinct
+  // capability that today is bundled under `print:create` / `print_jobs:read`.
+  // Wiring uses requireAnyPermission so existing roles keep working —
+  // these are additive, not replacements. Splitting them lets owners build
+  // narrower roles (e.g. a "finance reader" who can preview templates but
+  // can't prune storage, or an "audit user" who can verify a doc by its
+  // ID but can't see the rest of the print log). Verbs (last segment)
+  // follow rbacConsistency's allowlist — preview becomes :create because
+  // it produces an ephemeral document; archive prune is :delete because
+  // it permanently removes the blob; verify-admin and diagnostics are
+  // :read because they're lookup-only.
+  "print:preview:create",
+  "print:download",
+  "print:archive:delete",
+  "print:verify:read",
+  "print:diagnostics:read",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
