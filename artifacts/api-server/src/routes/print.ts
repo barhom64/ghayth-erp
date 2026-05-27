@@ -20,7 +20,7 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, ValidationError, NotFoundError, zodParse } from "../lib/errorHandler.js";
-import { requirePermission } from "../middlewares/permissionMiddleware.js";
+import { requirePermission, requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import {
   renderPrint,
@@ -225,7 +225,11 @@ const previewBody = z.object({
 router.post(
   "/preview",
   previewLimiter,
-  requirePermission("templates:read"),
+  // Granular gate (issue #1286): preview without audit row. Backward-compat
+  // via requireAnyPermission — existing "templates:read" still works for
+  // template authors, plus a dedicated "print:preview" lets owners grant
+  // preview access without granting full template editing.
+  requireAnyPermission("templates:read", "print:preview:create"),
   async (req: Request, res: Response) => {
     try {
       const body = zodParse(previewBody.safeParse(req.body));
@@ -517,7 +521,7 @@ router.delete(
 
 // ─── Print jobs (log) ───────────────────────────────────────────────────────
 
-router.get("/jobs", requirePermission("print_jobs:read"), async (req: Request, res: Response) => {
+router.get("/jobs", requireAnyPermission("print_jobs:read", "print:diagnostics:read"), async (req: Request, res: Response) => {
   try {
     const scope = scopeFromReq(req);
     const branchId = req.query.branchId ? Number(req.query.branchId) : null;
@@ -606,7 +610,7 @@ router.get("/jobs", requirePermission("print_jobs:read"), async (req: Request, r
 // CSV export of the print log under the same filters as GET /jobs. Capped
 // at 10k rows because the UI offers no progress indicator — a larger
 // export should be a server-side scheduled job, not an HTTP request.
-router.get("/jobs.csv", requirePermission("print_jobs:read"), async (req: Request, res: Response) => {
+router.get("/jobs.csv", requireAnyPermission("print_jobs:read", "print:diagnostics:read"), async (req: Request, res: Response) => {
   try {
     const scope = scopeFromReq(req);
     const branchId = req.query.branchId ? Number(req.query.branchId) : null;
@@ -709,7 +713,10 @@ router.get("/jobs.csv", requirePermission("print_jobs:read"), async (req: Reques
 
 router.get(
   "/jobs/:jobId/download",
-  requirePermission("print_jobs:read"),
+  // Bytes of a previously-archived job. "print_jobs:read" is the legacy gate;
+  // "print:download" is the granular gate from issue #1286 so owners can mint
+  // a download-only role (downloads but cannot list other jobs).
+  requireAnyPermission("print_jobs:read", "print:download"),
   async (req: Request, res: Response) => {
     try {
       const scope = scopeFromReq(req);
@@ -899,7 +906,10 @@ router.post(
 // pages so users see the printed copy alongside their uploads.
 router.get(
   "/archive/:entityType/:entityId",
-  requirePermission("print_jobs:read"),
+  // Admin view of archived jobs for a specific entity. Legacy +
+  // granular gate per issue #1286 so an audit-only role can be limited
+  // to archive lookups without seeing the entire print log.
+  requireAnyPermission("print_jobs:read", "print:verify:read"),
   async (req: Request, res: Response) => {
     try {
       const scope = scopeFromReq(req);
@@ -1069,7 +1079,11 @@ router.post(
 // helper directly without going through HTTP.
 router.post(
   "/jobs/prune",
-  requirePermission("print_jobs:read"),
+  // Destructive — drops blob from object storage. "print_jobs:read" is the
+  // legacy gate; "print:archive:manage" is the granular gate from issue
+  // #1286 so owners can mint an "archive admin" role without granting read
+  // access to the full print log.
+  requireAnyPermission("print_jobs:read", "print:archive:delete"),
   async (req: Request, res: Response) => {
     try {
       const scope = scopeFromReq(req);

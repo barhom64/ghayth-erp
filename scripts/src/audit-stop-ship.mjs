@@ -86,6 +86,7 @@ const ALLOWLIST = new Map([
 const RBAC_PATTERNS = [
   /\bauthorize\s*\(/,
   /\brequirePermission\s*\(/,
+  /\brequireAnyPermission\s*\(/,
   /\brequireMinLevel\s*\(/,
   /\brequireRole\s*\(/,
   // verify*(Signature|Hmac|Webhook|Token) — matches verifyPbxSignature,
