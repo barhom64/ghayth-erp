@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Phone, Mail, AlertTriangle, ChevronDown, ChevronRight, Search,
   ExternalLink, Download, Users, FileText, Clock, Send,
@@ -216,6 +217,25 @@ export default function ArCollectionWorkbenchPage() {
               <Download className="w-4 h-4 ml-1" />
               CSV
             </Button>
+            <PrintButton
+              entityType="report_ar_collection_plan"
+              entityId={today}
+              payload={{
+                entity: {
+                  title: "خطة التحصيل (الذمم المدينة)",
+                  asOfDate: today,
+                  totalOverdue,
+                  totalAccounts: totalCollectionAccounts,
+                },
+                items: filtered.map((c) => ({
+                  "العميل": c.clientName ?? "",
+                  "هاتف": c.clientPhone ?? "",
+                  "إجمالي مستحق": Number(c.total ?? 0),
+                  "متأخر": Number((c.total ?? 0) - (c.current ?? 0)),
+                  "+90 يوم": Number(c.over90 ?? 0),
+                })),
+              }}
+            />
           </div>
         </CardContent>
       </Card>

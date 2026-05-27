@@ -66,6 +66,17 @@ interface PrintButtonProps {
   size?: "default" | "sm" | "lg" | "icon";
   /** Force download instead of in-browser print dialog. */
   download?: boolean;
+  /**
+   * Optional payload — when set the server SKIPS the per-entity dataLoader
+   * and renders using these fields directly. Used by:
+   *  - report pages that already have the rows loaded client-side (AR/AP
+   *    aging, inventory valuation, daily close, etc.) so we don't refetch
+   *  - ListPage exports that print the visible filtered rows
+   *  - AI letter drafts that pass a server-generated body
+   * Shape: { entity: { title, ... }, items?: [...] } — anything the
+   * universal fallback or a bespoke preset can consume.
+   */
+  payload?: Record<string, unknown>;
 }
 
 export function PrintButton({
@@ -77,6 +88,7 @@ export function PrintButton({
   variant = "outline",
   size = "sm",
   download = false,
+  payload,
 }: PrintButtonProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -122,7 +134,15 @@ export function PrintButton({
     try {
       const resp = await apiFetch<RenderResponse>(`/print/render`, {
         method: "POST",
-        body: JSON.stringify({ entityType, entityId: String(entityId), format }),
+        body: JSON.stringify({
+          entityType,
+          entityId: String(entityId),
+          format,
+          // Forward payload only when the caller supplied one — the
+          // server's renderBody schema makes it optional and bypasses
+          // the dataLoader when present.
+          ...(payload ? { payload } : {}),
+        }),
       });
 
       if (format === "excel" || download) {

@@ -171,6 +171,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:approve", "hr:self"],
     notifications: ["leave_submitted", "leave_approved", "leave_rejected"],
     reports: ["leave_balance", "leave_summary"],
+    print: { hasTemplate: true, templateKey: "leave_request", formats: ["a4"], defaultFormat: "a4", permission: "print:leave_request:create" },
   },
   {
     id: "attendance",
@@ -188,6 +189,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:self"],
     notifications: ["late_arrival", "early_departure", "absence"],
     reports: ["attendance_daily", "attendance_monthly", "attendance_anomalies"],
+    print: { hasTemplate: true, templateKey: "attendance", formats: ["a4"], defaultFormat: "a4", permission: "print:attendance:create" },
   },
   {
     id: "overtime_request",
@@ -218,6 +220,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:approve", "hr:self"],
     notifications: ["overtime_submitted", "overtime_approved", "overtime_rejected"],
     reports: ["overtime_summary"],
+    print: { hasTemplate: true, templateKey: "overtime_request", formats: ["a4"], defaultFormat: "a4", permission: "print:overtime_request:create" },
   },
   {
     id: "official_letter",
@@ -278,6 +281,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:approve", "hr:self"],
     notifications: ["loan_submitted", "loan_approved", "loan_rejected"],
     reports: ["active_loans", "loan_deductions"],
+    print: { hasTemplate: true, templateKey: "loan_request", formats: ["a4"], defaultFormat: "a4", permission: "print:loan_request:create" },
   },
   {
     id: "exit_request",
@@ -308,6 +312,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:approve"],
     notifications: ["exit_submitted", "exit_approved", "exit_completed"],
     reports: ["exit_summary", "turnover_report"],
+    print: { hasTemplate: true, templateKey: "exit_request", formats: ["a4"], defaultFormat: "a4", permission: "print:exit_request:create" },
   },
   {
     id: "transfer",
@@ -337,6 +342,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:approve"],
     notifications: ["transfer_approved"],
     reports: [],
+    print: { hasTemplate: true, templateKey: "transfer", formats: ["a4"], defaultFormat: "a4", permission: "print:transfer:create" },
   },
   {
     id: "excuse_request",
@@ -366,6 +372,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:approve", "hr:self"],
     notifications: ["excuse_submitted", "excuse_approved", "excuse_rejected"],
     reports: [],
+    print: { hasTemplate: true, templateKey: "excuse_request", formats: ["a4"], defaultFormat: "a4", permission: "print:excuse_request:create" },
   },
   {
     id: "discipline_memo",
@@ -443,6 +450,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:update"],
     notifications: [],
     reports: [],
+    print: { hasTemplate: true, templateKey: "shift", formats: ["a4"], defaultFormat: "a4", permission: "print:shift:create" },
   },
   {
     id: "evaluation_cycle",
@@ -459,6 +467,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read", "hr:update"],
     notifications: ["evaluation_due", "evaluation_completed"],
     reports: ["performance_summary"],
+    print: { hasTemplate: true, templateKey: "evaluation_cycle", formats: ["a4"], defaultFormat: "a4", permission: "print:evaluation_cycle:create" },
   },
   {
     id: "training_program",
@@ -475,6 +484,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["hr:create", "hr:read"],
     notifications: ["training_enrollment", "training_reminder"],
     reports: ["training_summary"],
+    print: { hasTemplate: true, templateKey: "training_program", formats: ["a4"], defaultFormat: "a4", permission: "print:training_program:create" },
   },
   {
     id: "job_posting",
@@ -556,6 +566,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:approve"],
     notifications: [],
     reports: ["trial_balance", "general_ledger"],
+    print: { hasTemplate: true, templateKey: "journal_entry", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:journal_entry:create" },
   },
   {
     id: "purchase_request",
@@ -584,6 +595,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:approve"],
     notifications: ["purchase_request_approved"],
     reports: [],
+    print: { hasTemplate: true, templateKey: "purchase_request", formats: ["a4"], defaultFormat: "a4", permission: "print:purchase_request:create" },
   },
   {
     id: "purchase_order",
@@ -644,6 +656,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:approve"],
     notifications: ["expense_approved", "expense_rejected"],
     reports: ["expense_by_category", "expense_by_department"],
+    print: { hasTemplate: true, templateKey: "expense_claim", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:expense_claim:create" },
   },
   {
     id: "budget",
@@ -672,6 +685,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:approve"],
     notifications: ["budget_approved", "budget_overrun"],
     reports: ["budget_vs_actual", "budget_utilization"],
+    print: { hasTemplate: true, templateKey: "budget", formats: ["a4"], defaultFormat: "a4", permission: "print:budget:create" },
   },
   {
     id: "custody",
@@ -702,6 +716,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:approve"],
     notifications: ["custody_approved", "custody_aging"],
     reports: ["custody_aging_report"],
+    print: { hasTemplate: true, templateKey: "custody", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:custody:create" },
   },
   {
     id: "salary_advance",
@@ -732,6 +747,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:approve", "hr:self"],
     notifications: ["advance_approved", "advance_rejected"],
     reports: [],
+    print: { hasTemplate: true, templateKey: "salary_advance", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:salary_advance:create" },
   },
   {
     id: "payment_voucher",
@@ -772,6 +788,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:update"],
     notifications: [],
     reports: ["vendor_list", "vendor_payments"],
+    print: { hasTemplate: true, templateKey: "vendor", formats: ["a4"], defaultFormat: "a4", permission: "print:vendor:create" },
   },
   {
     id: "chart_of_account",
@@ -788,6 +805,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read", "finance:update"],
     notifications: [],
     reports: ["chart_of_accounts"],
+    print: { hasTemplate: true, templateKey: "chart_of_account", formats: ["a4"], defaultFormat: "a4", permission: "print:chart_of_account:create" },
   },
   {
     id: "recurring_journal",
@@ -804,6 +822,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["finance:create", "finance:read"],
     notifications: ["recurring_journal_failed"],
     reports: [],
+    print: { hasTemplate: true, templateKey: "journal_entry", formats: ["a4"], defaultFormat: "a4", permission: "print:recurring_journal:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -991,6 +1010,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["property:create", "property:read", "property:update"],
     notifications: [],
     reports: ["property_portfolio"],
+    print: { hasTemplate: true, templateKey: "building", formats: ["a4"], defaultFormat: "a4", permission: "print:building:create" },
   },
   {
     id: "property_unit",
@@ -1008,6 +1028,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["property:create", "property:read", "property:update"],
     notifications: [],
     reports: ["unit_occupancy"],
+    print: { hasTemplate: true, templateKey: "property_unit", formats: ["a4"], defaultFormat: "a4", permission: "print:property_unit:create" },
   },
   {
     id: "rental_contract",
@@ -1061,6 +1082,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["property:create", "property:read", "property:update"],
     notifications: ["maintenance_assigned", "maintenance_completed"],
     reports: ["maintenance_summary"],
+    print: { hasTemplate: true, templateKey: "maintenance_request", formats: ["a4"], defaultFormat: "a4", permission: "print:maintenance_request:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1089,7 +1111,10 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["legal:create", "legal:read", "legal:update"],
     notifications: ["hearing_reminder", "case_update"],
     reports: ["case_summary", "case_status"],
-    print: { hasTemplate: true, templateKey: "legal_case", formats: ["a4"], defaultFormat: "a4", permission: "print:legal_case:create" },
+    // main #1305 added requiresApprovalForReprint for case files —
+    // accepted on the merge since legal documents already carry the
+    // approval-for-reprint discipline elsewhere.
+    print: { hasTemplate: true, templateKey: "legal_case", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:legal_case:create" },
   },
   {
     id: "legal_session",
@@ -1189,6 +1214,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["crm:create", "crm:read", "crm:update", "crm:delete"],
     notifications: [],
     reports: ["client_list", "client_revenue"],
+    print: { hasTemplate: true, templateKey: "client", formats: ["a4"], defaultFormat: "a4", permission: "print:client:create" },
   },
   {
     id: "crm_opportunity",
@@ -1212,6 +1238,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["crm:create", "crm:read", "crm:update"],
     notifications: ["deal_stale", "deal_won"],
     reports: ["sales_pipeline", "conversion_rate"],
+    print: { hasTemplate: true, templateKey: "crm_opportunity", formats: ["a4"], defaultFormat: "a4", permission: "print:crm_opportunity:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1239,6 +1266,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["support:create", "support:read", "support:update"],
     notifications: ["ticket_assigned", "ticket_resolved", "sla_breach"],
     reports: ["ticket_summary", "sla_compliance"],
+    print: { hasTemplate: true, templateKey: "support_ticket", formats: ["a4"], defaultFormat: "a4", permission: "print:support_ticket:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1260,6 +1288,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["warehouse:create", "warehouse:read", "warehouse:update"],
     notifications: ["low_stock_alert", "expiry_alert"],
     reports: ["stock_levels", "stock_movement"],
+    print: { hasTemplate: true, templateKey: "warehouse_product", formats: ["a4"], defaultFormat: "a4", permission: "print:warehouse_product:create" },
   },
   {
     id: "inventory_count",
@@ -1288,6 +1317,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["warehouse:create", "warehouse:read", "warehouse:approve"],
     notifications: ["inventory_count_ready", "inventory_count_approved"],
     reports: ["inventory_count_report"],
+    print: { hasTemplate: true, templateKey: "inventory_count", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:inventory_count:create" },
   },
   {
     id: "item_barcode_label",
@@ -1333,6 +1363,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["store:read", "store:write"],
     notifications: ["order_placed", "order_fulfilled"],
     reports: ["order_summary"],
+    print: { hasTemplate: true, templateKey: "store_order", formats: ["a4"], defaultFormat: "a4", permission: "print:store_order:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1355,6 +1386,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["projects:create", "projects:read", "projects:update"],
     notifications: ["milestone_reminder", "budget_overrun"],
     reports: ["project_status", "project_costing"],
+    print: { hasTemplate: true, templateKey: "project", formats: ["a4"], defaultFormat: "a4", permission: "print:project:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1452,7 +1484,12 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["umrah:read", "umrah:write"],
     notifications: ["umrah_invoice_paid"],
     reports: ["umrah_revenue"],
-    print: { hasTemplate: true, templateKey: "umrah_sales_invoice", formats: ["a4"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:umrah_sales_invoice:create" },
+    // main #1305 widened formats to a4 + thermal_80 + excel and uses
+    // templateKey "umrah_invoice". Our dataLoader dispatch (after the
+    // 9ab2603c merge) routes both umrah_invoice + umrah_sales_invoice
+    // cases to loadUmrahSalesInvoice, so this richer print profile
+    // applies cleanly.
+    print: { hasTemplate: true, templateKey: "umrah_invoice", formats: ["a4", "thermal_80", "excel"], defaultFormat: "a4", requiresApprovalForReprint: true, permission: "print:umrah_invoice:create" },
   },
   {
     id: "umrah_agent_invoice",
@@ -1550,6 +1587,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["governance:read", "governance:write"],
     notifications: ["policy_review_due"],
     reports: ["policy_register"],
+    print: { hasTemplate: true, templateKey: "governance_policy", formats: ["a4"], defaultFormat: "a4", permission: "print:governance_policy:create" },
   },
 ];
 

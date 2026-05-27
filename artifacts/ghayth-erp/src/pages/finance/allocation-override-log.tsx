@@ -3,10 +3,11 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { formatDateAr } from "@/lib/formatters";
-import { ShieldAlert, ChevronRight, Settings } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
 
 /**
  * Allocation Override Log — audit trail of approvals that bypassed the
@@ -132,23 +133,9 @@ export default function AllocationOverrideLogPage() {
         { href: "/finance/settings-hub", label: "الإعدادات" },
         { label: "تجاوزات التخصيص" },
       ]}
-      actions={
-        <div className="flex gap-2">
-          <Link href="/finance/settings-hub">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
-              <Settings className="h-3.5 w-3.5 ml-1" />
-              مركز الإعدادات
-            </Button>
-          </Link>
-          <Link href="/finance/allocation-results">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
-              <ChevronRight className="h-3.5 w-3.5 ml-1" />
-              سجل التوجيه الكامل
-            </Button>
-          </Link>
-        </div>
-      }
     >
+      <FinanceTabsNav />
+      <AllocationTabsNav />
       <Card className="mb-4 border-status-warning-surface bg-status-warning-surface/30">
         <CardContent className="p-4 text-sm flex items-start gap-3">
           <ShieldAlert className="h-5 w-5 text-status-warning-foreground shrink-0 mt-0.5" />
