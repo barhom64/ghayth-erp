@@ -2,7 +2,9 @@
 
 > **الغرض**: إجابة على المطالبة الصريحة من المحامي إبراهيم: *"لا أقبل كلمة 'التزم النظام كله' إلا بتقرير ناتج من `audit-numbering-coverage.mjs` يثبت أن كل جدول/مسار فيه رقم رسمي مربوط بـ `numbering_assignments`، وأن كل أماكن إنشاء المستندات تستخدم `issueNumber`، وأن أي ref موجود خارج المركز إما مستثنى ومبرر أو مرفوض."*
 >
-> **النتيجة باختصار**: المعمارية الأساسية مكتملة، لكن وُجدت **7 ثغرات حقيقية** خارج نطاق الـ22 مسار التي يفحصها السكربت الحالي. هذا التقرير يعدّدها صراحةً ولا يدّعي الاكتمال 100% قبل سدّها.
+> **النتيجة باختصار**: المعمارية الأساسية مكتملة، لكن وُجدت **15 ثغرة حقيقية** بعد توسعة الفحص بطبقات أعمق (`audit-numbering-service-bypass.mjs` + `audit-numbering-schemes-vs-callers.mjs` + per-table check). هذا التقرير يعدّدها صراحةً ولا يدّعي الاكتمال 100% قبل سدّها.
+>
+> **تحديث 2026-05-27 (الجولة الثانية)**: بعد طلب المحامي بفحوصات أقوى، أضفت 3 سكربتات/قواعد جديدة كشفت 8 ثغرات إضافية (G8-G15) كانت تتسرّب من السكربت الأول. واحدة (G8) أُصلِحت في هذا الـPR. الباقي مفتوحة.
 >
 > **تاريخ التقرير**: 2026-05-27. مُولَّد بفحص كل ملف يحتوي `INSERT INTO`، كل جدول له عمود `ref`/`number`/`*Number`/`*Ref`/`*Code`، وكل ملف داخل `lib/`، `lib/engines/`، `lib/cronScheduler.ts`، `lib/imports/`، `lib/mailboxSync.ts`، `scripts/`، والـ migrations.
 
@@ -139,7 +141,29 @@ Legacy-pattern guard:
 
 ---
 
-## 3. الثغرات الحقيقية (7 ثغرات تتجاوز مركز الترقيم)
+## 3. الثغرات الحقيقية (15 ثغرة بعد الجولة الثانية)
+
+| رمز | المكان | الحالة |
+|---|---|---|
+| G1 | `lib/disciplineEngine.ts:331` COUNT(*) للـmemo | 🔓 مفتوحة |
+| G2 | `routes/store.ts:262` ORD-${Date.now()} | 🔓 مفتوحة |
+| G3 | `routes/requests.ts:916` PO-REQ-${id} | 🔓 مفتوحة |
+| G4 | `routes/requests.ts:904` ticket بلا ref | 🔓 مفتوحة |
+| G5 | `routes/requests.ts:925` case بلا caseNumber | 🔓 مفتوحة |
+| G6 | `lib/cronScheduler.ts:1158` PO تلقائي بلا ref | 🔓 مفتوحة |
+| G7 | `lib/cronScheduler.ts:1408` RENT-${id}-${Date.now()} | 🔓 مفتوحة |
+| G8 | `routes/fleet.ts:1213` UPDATE numbering_assignments مباشر | ✅ مُصلَحة في هذا الـPR |
+| G9 | crm.client_code seed-pattern (false-finding) | ✅ مُغلَقة (regex fix) |
+| G10 | `routes/crm.ts:742` opp→client بلا code | 🔓 مفتوحة |
+| G11 | `routes/employees.ts:614` onboarding contract بلا ref | 🔓 مفتوحة |
+| G12 | `routes/finance-invoices.ts:2560` credit_memos.ref NULL | 🔓 مفتوحة |
+| G13 | `routes/finance-invoices.ts:2901` debit_memos.ref NULL | 🔓 مفتوحة |
+| G14 | `routes/finance-purchase.ts:1654` payment_runs Date.now() | 🔓 مفتوحة |
+| G15 | 8 schemes ميتة في الـUI (vendor_invoice, lead, ...) | 🔓 مفتوحة |
+
+**13 ثغرة مفتوحة + 2 مُغلَقة في هذا الـPR.**
+
+---
 
 هذه ثغرات حقيقية في كود يكتب إلى جداول تنفيذية **خارج طبقة الـroutes**، ولذلك السكربت الحالي لا يلتقطها.
 
@@ -256,7 +280,107 @@ await rawExecute(
 
 ---
 
-### G7. `lib/cronScheduler.ts:1408` — `RENT-${p.id}-${Date.now()}` لقضايا التحصيل
+### G8. `routes/fleet.ts:1213` — `UPDATE numbering_assignments SET status='voided'` مباشرة ✅ مُصلَحة
+
+**أصلَحَت بعد إضافة `audit-numbering-service-bypass.mjs`**: الـroute كان يُلغي تخصيصاً بـUPDATE مباشر بدلاً من استدعاء `voidNumber()`. الإصلاح في هذا الـPR.
+
+```diff
+- await client.query(
+-   `UPDATE numbering_assignments SET status='voided',"voidReason"=$1 WHERE id=$2`,
+-   ['fleet trip de-duplicated by sourceKey', issuedTrip.assignmentId]
+- );
++ await voidNumber({
++   companyId: scope.companyId,
++   branchId: scope.branchId ?? null,
++   assignmentId: issuedTrip.assignmentId,
++   actorId: scope.userId,
++   reason: 'fleet trip de-duplicated by sourceKey',
++ });
+```
+
+---
+
+### G9. `crm.client_code` — scheme استُدعي بدون seed (false-finding مُغلَقة)
+
+**ملاحظة**: المهاجرة 215 تَزرع السياسة لكن بصيغة `SELECT ... FROM companies` بدلاً من `VALUES`. السكربت الجديد `audit-numbering-schemes-vs-callers.mjs` أصلحت regex للتعرف على كلا الشكلين.
+
+---
+
+### G10. `routes/crm.ts:742` — تحويل CRM opportunity → client بدون كود
+
+```ts
+const { rows: [newRow] } = await txClient.query(
+  `INSERT INTO clients ("companyId",name,phone,email,source,classification) 
+   VALUES ($1,$2,$3,$4,'crm','regular') RETURNING id`,
+  [scope.companyId, opp.contactName, opp.contactPhone || null, opp.contactEmail || null]
+);
+```
+
+**المشكلة**: عند تحويل فرصة بيع إلى عميل، يُنشأ صف `clients` بدون `code` (NULL). routes/clients.ts الرئيسي يستخدم `issueNumber` لكن هذا المسار يفوّت ذلك.
+
+**الإصلاح**: استدعاء `issueNumber({ moduleKey: "crm", entityKey: "client_code", ... })` قبل الـINSERT وتمرير الكود.
+
+---
+
+### G11. `routes/employees.ts:614` — onboarding ينشئ employee_contract بدون ref
+
+```ts
+await client.query(
+  `INSERT INTO employee_contracts ("companyId","employeeId","assignmentId","contractType",
+     "startDate","probationEndDate","probationStatus",status)
+   VALUES ($1,$2,$3,$4,$5,$6,'active','active')`,
+  [scope.companyId, empId, assignmentId, contractType, effectiveHireDate, toDateISO(probEnd)]
+);
+```
+
+**المشكلة**: routes/employees.ts يستدعي `issueNumber` لكن لـ`entityTable: "employees"` فقط — لا يصدر `ref` للعقد التلقائي خلال onboarding. routes/hr-contracts.ts يفعل ذلك لإنشاء العقود اليدوي.
+
+**الإصلاح**: استدعاء `issueNumber({ moduleKey: "hr", entityKey: "employee_contract", entityTable: "employee_contracts", expectedTiming: "on_draft" })` قبل INSERT.
+
+---
+
+### G12. `routes/finance-invoices.ts:2560` — credit_memos.ref يُترك NULL
+
+السياسة `finance.credit_memo` مزروعة منذ مهاجرة 213 لكن لا أحد يستدعيها. الـINSERT لا يحتوي عمود `ref`.
+
+```sql
+INSERT INTO credit_memos ("companyId","branchId","invoiceId","clientId",amount,
+  "netAmount","vatAmount",reason,"memoDate","createdBy") VALUES ($1,$2,...);
+```
+
+**الإصلاح**: استدعاء `issueNumber({ moduleKey: "finance", entityKey: "credit_memo", entityTable: "credit_memos", ... })` وإضافة العمود إلى INSERT.
+
+---
+
+### G13. `routes/finance-invoices.ts:2901` — debit_memos.ref يُترك NULL
+
+نفس النمط لـ `debit_memos`. السياسة مزروعة لكن لا تُستدعى.
+
+---
+
+### G14. `routes/finance-purchase.ts:1654` — payment_runs uses `PR-${Date.now()}`
+
+موجود سابقاً في قائمة الـ`inline-date-now-as-ref` المرصودة. مُصنّف هنا أيضاً ليأخذ G-code رسمياً.
+
+---
+
+### G15. (ثقافياً مزروع لكن لا يُستدعى) — 8 schemes ميتة في الـUI
+
+السكربت الجديد `audit-numbering-schemes-vs-callers.mjs` كشف 8 سياسات مزروعة في `numbering_schemes` تظهر في إعدادات الـUI لكن لا route فعلياً يصدر لها:
+
+- `finance.receipt_voucher` — سند قبض (ينبغي وصله بـreceipt-creation route)
+- `finance.payment_voucher` — سند صرف (ينبغي وصله بـpayment-creation route)
+- `purchase.vendor_invoice` — فاتورة مورد (مرتبط بـG12 أو إنشاؤها منفصلاً)
+- `crm.lead` — عميل محتمل (ينبغي وصله عند إنشاء lead)
+- `warehouse.stock_movement` (vs `stock_transfer` المُستخدَم فعلياً) — تباين في الـentityKey
+- `legal.legal_case` (vs `legal.case` المُستخدَم فعلياً) — تباين في الـentityKey
+- `warehouse.purchase_receipt`، `finance.expense_voucher` — مهاجرة 214
+
+**كل واحدة من هذه الـ8 تحتاج قراراً صريحاً**: إما توصيلها بـroute حقيقي، أو حذف الـseed لأنها كانت اقتراحاً معمارياً لم يُنفَّذ.
+
+---
+
+### G7 (الأصلي). `lib/cronScheduler.ts:1408` — `RENT-${p.id}-${Date.now()}` لقضايا التحصيل
 
 ```ts
 // dailyPropertyCheck — auto-creates legal cases for unpaid rent

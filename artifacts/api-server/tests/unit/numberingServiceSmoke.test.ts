@@ -510,9 +510,14 @@ describe("phase-6 — 9 priority-2 routes migrated to numberingService", () => {
     expect(LGL).toContain('entityKey: "contract"');
     expect(LGL).toContain('entityKey: "case"');
   });
-  it("fleet.ts issues fleet.fleet_trip and voids on sourceKey dedupe", () => {
+  it("fleet.ts issues fleet.fleet_trip and voids on sourceKey dedupe through the service", () => {
     expect(FLT).toContain('entityKey: "fleet_trip"');
-    expect(FLT).toContain("status='voided'");
+    // After G8 fix: void goes through voidNumber({...}) instead of a
+    // direct UPDATE numbering_assignments SET status='voided'.
+    expect(FLT).toContain("voidNumber(");
+    expect(FLT).toContain("fleet trip de-duplicated by sourceKey");
+    // Inverse: the direct-UPDATE pattern must NOT come back.
+    expect(FLT).not.toMatch(/UPDATE\s+numbering_assignments\s+SET\s+status='voided'/);
   });
   it("communications.ts issues real refs for derived tickets + requests", () => {
     expect(CMC).toMatch(/entityKey:\s*"support_ticket"/);
@@ -645,20 +650,56 @@ describe("phase-7 real-closure (#1141)", () => {
     expect(missingFields, `routes missing expectedTiming: ${missingFields.join(", ")}`).toEqual([]);
   });
 
-  it("coverage report 2026-05-27 exists and documents the 7 known gaps", () => {
+  it("coverage report 2026-05-27 exists and documents all 15 known gaps", () => {
     const fs = require("node:fs") as typeof import("node:fs");
     const path = join(REPO_ROOT, "docs/architecture/numbering-coverage-report-2026-05-27.md");
     expect(fs.existsSync(path)).toBe(true);
     const md = fs.readFileSync(path, "utf8");
     // Each gap MUST be enumerated by its G-code so the file can't be
-    // silently truncated/edited to hide gaps.
-    for (const id of ["G1", "G2", "G3", "G4", "G5", "G6", "G7"]) {
-      expect(md, `coverage report missing ${id}`).toMatch(new RegExp(`### ${id}\\.`));
+    // silently truncated/edited to hide gaps. Updated to 15 after the
+    // second-round audit (audit-numbering-service-bypass +
+    // audit-numbering-schemes-vs-callers + per-table check).
+    for (const id of ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12", "G13", "G14", "G15"]) {
+      expect(md, `coverage report missing ${id}`).toMatch(new RegExp(`G${id.slice(1)}\\.|^\\|\\s*${id}\\s*\\|`, "m"));
     }
     // The report must explicitly refuse to claim full closure — the
     // lawyer's standard from 2026-05-27.
-    expect(md).toMatch(/لا يدّعي الاكتمال|لا تُغلق|7 ثغرات/);
-    expect(md).toContain("7 ثغرات");
+    expect(md).toMatch(/لا يدّعي الاكتمال|لا تُغلق|ثغر(ة|ات)/);
+    expect(md).toContain("15 ثغرة");
+  });
+
+  it("audit-numbering-service-bypass script exists and gates direct numbering_* writes", () => {
+    const fs = require("node:fs") as typeof import("node:fs");
+    const path = join(REPO_ROOT, "scripts/src/audit-numbering-service-bypass.mjs");
+    expect(fs.existsSync(path)).toBe(true);
+    const src = fs.readFileSync(path, "utf8");
+    expect(src).toContain("NUMBERING_TABLES");
+    expect(src).toContain("LEGITIMATE_WRITERS");
+    expect(src).toContain("ALLOWED_LINKBACK_RE");
+    // Must scan the entire src/ tree, not just routes/.
+    expect(src).toContain("artifacts/api-server/src");
+    // Sequence reinvention check must look for COUNT(*) + 1.
+    expect(src).toContain("COUNT\\s*\\(\\s*\\*\\s*\\)");
+  });
+
+  it("audit-numbering-schemes-vs-callers script exists and cross-checks seed vs runtime", () => {
+    const fs = require("node:fs") as typeof import("node:fs");
+    const path = join(REPO_ROOT, "scripts/src/audit-numbering-schemes-vs-callers.mjs");
+    expect(fs.existsSync(path)).toBe(true);
+    const src = fs.readFileSync(path, "utf8");
+    expect(src).toContain("extractSeededSchemes");
+    expect(src).toContain("extractCalledSchemes");
+    // Must fail CI when a called (moduleKey,entityKey) has no seed.
+    expect(src).toContain('process.exit(1)');
+  });
+
+  it("audit-numbering-coverage enforces per-table coverage with documented exemptions", () => {
+    // The stronger check catches files that issue for SOME tables but
+    // INSERT into OTHER tables without issuing. Each exemption must
+    // cite the coverage report.
+    expect(AUDIT).toContain("PER_TABLE_EXEMPTIONS");
+    expect(AUDIT).toContain("tablesIssuedFor");
+    expect(AUDIT).toMatch(/coverage report.*G1[0-5]/);
   });
 
   it("audit-numbering-coverage extends scan to lib/engines + cron + disciplineEngine", () => {
