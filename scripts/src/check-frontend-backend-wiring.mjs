@@ -397,13 +397,17 @@ function extractFrontendCalls() {
     // downloads, previews) can't use apiFetch because the response
     // is a stream, not JSON. The convention across the app is
     // `<a href="/api/documents/:id/download" download>` or
-    // `<a href="/api/documents/:id/preview" target="_blank">`.
-    // Crediting these so download/preview routes don't show as
-    // unused even though the user-visible flow works.
-    const hrefRe = /\bhref\s*=\s*[`"']\/api\//g;
+    // `<a href={`/api/print/jobs/${id}/download`} target="_blank">`.
+    // Handles both the JSX `href="…"` string-prop form and the
+    // `href={…}` expression form (with template literals).
+    const hrefRe = /\bhref\s*=\s*([{`"'])/g;
     for (const m of src.matchAll(hrefRe)) {
-      let i = m.index + 5; // skip "href="
-      while (i < src.length && /\s/.test(src[i])) i++;
+      let i = m.index + m[0].length - 1; // back up onto opening delimiter
+      // JSX brace expression — skip past `{` and any leading whitespace.
+      if (src[i] === "{") {
+        i++;
+        while (i < src.length && /\s/.test(src[i])) i++;
+      }
       const lit = readString(src, i);
       if (!lit) continue;
       if (!lit.value.startsWith("/api/")) continue;
