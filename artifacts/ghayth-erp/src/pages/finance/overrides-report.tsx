@@ -41,6 +41,12 @@ interface OverrideRow {
   resolvedAt: string | null;
   manualOverrideBy: number | null;
   manualOverrideReason: string | null;
+  // Before/after diff — populated by the resolver (migration 225) so
+  // the report shows what the rule WOULD have picked vs what the
+  // operator pinned. NULL on legacy rows written before #1327.
+  proposedAccountId: number | null;
+  proposedAccountCode: string | null;
+  proposedCostCenterId: number | null;
 }
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -61,21 +67,31 @@ function csvEscape(val: string) {
 
 function exportCSV(rows: OverrideRow[]) {
   const headers = [
-    "التاريخ", "المصدر", "البند", "الحساب الناتج", "مركز التكلفة",
+    "التاريخ", "المصدر", "البند",
+    "اقترح الحساب (Before)", "اقترح مركز التكلفة (Before)",
+    "الحساب الفعلي (After)", "مركز التكلفة الفعلي (After)",
+    "تغيير؟",
     "بواسطة (override)", "السبب", "بواسطة (resolve)",
   ];
   const csv = [
     headers,
-    ...rows.map((r) => [
-      csvEscape(r.resolvedAt?.slice(0, 19).replace("T", " ") ?? ""),
-      csvEscape(SOURCE_LABEL[r.sourceTable] ?? r.sourceTable),
-      String(r.sourceLineId),
-      csvEscape(r.resolvedAccountCode ?? ""),
-      r.costCenterId ? String(r.costCenterId) : "",
-      r.manualOverrideBy ? String(r.manualOverrideBy) : "",
-      csvEscape(r.manualOverrideReason ?? ""),
-      r.resolvedBy ? String(r.resolvedBy) : "",
-    ]),
+    ...rows.map((r) => {
+      const acctChanged = r.proposedAccountCode !== r.resolvedAccountCode;
+      const ccChanged = (r.proposedCostCenterId ?? null) !== (r.costCenterId ?? null);
+      return [
+        csvEscape(r.resolvedAt?.slice(0, 19).replace("T", " ") ?? ""),
+        csvEscape(SOURCE_LABEL[r.sourceTable] ?? r.sourceTable),
+        String(r.sourceLineId),
+        csvEscape(r.proposedAccountCode ?? ""),
+        r.proposedCostCenterId ? String(r.proposedCostCenterId) : "",
+        csvEscape(r.resolvedAccountCode ?? ""),
+        r.costCenterId ? String(r.costCenterId) : "",
+        acctChanged || ccChanged ? "نعم" : "لا",
+        r.manualOverrideBy ? String(r.manualOverrideBy) : "",
+        csvEscape(r.manualOverrideReason ?? ""),
+        r.resolvedBy ? String(r.resolvedBy) : "",
+      ];
+    }),
   ].map((r) => r.join(",")).join("\n");
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
@@ -132,14 +148,42 @@ export default function OverridesReportPage() {
     },
     { key: "sourceLineId", header: "البند",
       render: (r) => <span className="font-mono text-xs">#{r.sourceLineId}</span> },
-    { key: "resolvedAccountCode", header: "الحساب الناتج",
-      render: (r) => r.resolvedAccountCode
-        ? <span className="font-mono text-xs">{r.resolvedAccountCode}</span>
+    // ─── Before/after diff (migration 225) ──────────────────────────
+    // proposedAccountCode = what the rule WOULD have picked
+    // resolvedAccountCode = what the operator actually pinned
+    // If they're equal, no real override happened (likely a legacy row
+    // written before #1327 where proposed* is NULL). When NULL, render
+    // a faded em-dash so the column stays visually aligned.
+    { key: "proposedAccountCode", header: "اقترح (Before)",
+      render: (r) => r.proposedAccountCode
+        ? <span className="font-mono text-xs text-muted-foreground">{r.proposedAccountCode}</span>
         : <span className="text-muted-foreground italic text-xs">—</span> },
-    { key: "costCenterId", header: "مركز التكلفة",
-      render: (r) => r.costCenterId
-        ? <span className="font-mono text-xs">cc:{r.costCenterId}</span>
+    { key: "resolvedAccountCode", header: "اختار (After)",
+      render: (r) => {
+        if (!r.resolvedAccountCode) return <span className="text-muted-foreground italic text-xs">—</span>;
+        const changed = r.proposedAccountCode != null && r.proposedAccountCode !== r.resolvedAccountCode;
+        return (
+          <span className={`font-mono text-xs ${changed ? "font-bold text-status-warning-foreground" : ""}`}>
+            {r.resolvedAccountCode}
+          </span>
+        );
+      },
+    },
+    { key: "proposedCostCenterId", header: "CC مقترح",
+      render: (r) => r.proposedCostCenterId
+        ? <span className="font-mono text-xs text-muted-foreground">cc:{r.proposedCostCenterId}</span>
         : <span className="text-muted-foreground italic text-xs">—</span> },
+    { key: "costCenterId", header: "CC مختار",
+      render: (r) => {
+        if (!r.costCenterId) return <span className="text-muted-foreground italic text-xs">—</span>;
+        const changed = (r.proposedCostCenterId ?? null) !== (r.costCenterId ?? null);
+        return (
+          <span className={`font-mono text-xs ${changed ? "font-bold text-status-warning-foreground" : ""}`}>
+            cc:{r.costCenterId}
+          </span>
+        );
+      },
+    },
     { key: "manualOverrideBy", header: "بواسطة",
       render: (r) => r.manualOverrideBy
         ? <span className="font-mono text-xs">user:{r.manualOverrideBy}</span>
