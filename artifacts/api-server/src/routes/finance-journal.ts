@@ -1198,6 +1198,16 @@ journalRouter.delete("/vouchers/:id", authorize({ feature: "finance.journal", ac
   }
 });
 
+// Audit F2 — Intentional split, not duplication.
+// /finance/salary-advances posts a one-shot advance against
+// salary_advance_receivable (default 1410) with no installment plan,
+// no employee_loans row, no monthly amortization. Approval flows through
+// the finance "advances" chain. Idempotency: SALARY-ADV-<token>.
+// hr-loans (loanType='salary_advance') posts to staff_loans (default 1400),
+// creates an employee_loans row with deductMonths, schedules payroll
+// auto-deductions, and flows through the HR loan-approval chain.
+// Idempotency: LOAN-<id>. Different account, different table, different
+// workflow — keep both.
 journalRouter.get("/salary-advances", authorize({ feature: "finance.journal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
