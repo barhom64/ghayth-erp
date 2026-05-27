@@ -333,19 +333,27 @@ router.post("/calls", authorize({ feature: "communications", action: "create" })
     );
     assertInsert(insertId, "pbx_calls");
 
-    // Mirror in communications_log so it shows up in the unified
-    // thread view alongside email/SMS/WhatsApp.
+    // Mirror in communications_log + message_log so the call shows up
+    // in the unified thread view alongside email/SMS/WhatsApp.
+    // Phase 4 contract slice 9: dual-write — channel='pbx' was accepted
+    // by message_log's check constraint via migration 224.
+    const fromAddr = body.direction === "outbound" ? scope.userId.toString() : body.callerNumber;
+    const toAddr = body.direction === "outbound" ? body.calledNumber : scope.userId.toString();
+    const callBody = `${body.status} · ${body.duration}s${body.notes ? ` · ${body.notes}` : ""}`;
     await rawExecute(
       `INSERT INTO communications_log ("companyId", channel, direction, "fromNumber", "toNumber", body, status, "relatedType", "relatedId", "createdAt")
        VALUES ($1, 'pbx', $2, $3, $4, $5, 'logged', $6, $7, NOW())`,
-      [
-        scope.companyId, body.direction,
-        body.direction === "outbound" ? scope.userId.toString() : body.callerNumber,
-        body.direction === "outbound" ? body.calledNumber : scope.userId.toString(),
-        `${body.status} · ${body.duration}s${body.notes ? ` · ${body.notes}` : ""}`,
-        body.relatedType ?? null, body.relatedId ?? null,
-      ],
+      [scope.companyId, body.direction, fromAddr, toAddr, callBody, body.relatedType ?? null, body.relatedId ?? null],
     );
+    await rawExecute(
+      `INSERT INTO message_log
+         ("companyId", channel, direction, "fromAddress", "toAddress",
+          body, status, folder, "relatedType", "relatedId", "createdAt")
+       VALUES ($1, 'pbx', $2, $3, $4, $5, 'logged',
+               CASE WHEN $2 = 'inbound' THEN 'inbox' ELSE 'sent' END,
+               $6, $7, NOW())`,
+      [scope.companyId, body.direction, fromAddr, toAddr, callBody, body.relatedType ?? null, body.relatedId ?? null],
+    ).catch((e) => logger.warn(e, "[inbox/calls] message_log dual-write failed"));
 
     void emitEvent({
       companyId: scope.companyId, userId: scope.userId,
