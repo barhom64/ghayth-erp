@@ -104,19 +104,22 @@ migrates readers + workers off the legacy tables, then drops them.
 Each PR moves a small, isolated cluster of callers so a regression is
 easy to bisect.
 
-| PR | Migrated | Reads from |
+| Slice | Migrated | Reads from |
 |---|---|---|
-| _this_ | `inbox.ts` `/folder-counts`, `/threads`, `/threads/:channel/:address` | `v_message_log_all` |
-| follow-up | `communications.ts` stats + log listings | `v_message_log_all` |
-| follow-up | `workspace.ts` counts (recentMessages, teamMessagesToday) | `v_message_log_all` |
+| 1 (#1284) | `inbox.ts` `/folder-counts`, `/threads`, `/threads/:channel/:address` | `v_message_log_all` |
+| 2 (_this_) | `inbox.ts` `/threads/:id/reply` lookup; `communications.ts` `/log` + `/stats`; `workspace.ts` `recentMessages`, `messagesLast24h`, `teamMessagesToday`, `messagesWeek` | `v_message_log_all` |
 | follow-up | `cronScheduler.ts` `email_queue_drain` / `sms_queue_drain` / `whatsapp_queue_drain` | `outbound_queue` |
 | final | DROP `communications_log`, `notification_log`, `email_queue`, `sms_queue`, `whatsapp_queue` | — |
 
 The view's `fromAddress` / `toAddress` columns alias back to the
 legacy `fromNumber` / `toNumber` in the SELECT projections so the
-frontend response shape stays stable.
+frontend response shape stays stable. **Slice 2 also closes an id
+mismatch:** slice 1 migrated `/threads` to return `message_log.id`,
+but `/threads/:id/reply` still looked the id up in `communications_log`
+— different sequence, different rows. Both endpoints now query the
+same view, so the id passed from the UI resolves correctly.
 
 ## Remaining work
 
-- **Phase 4 contract — follow-ups**: communications.ts + workspace.ts reader migration; cron worker swap; finally DROP legacy tables.
+- **Phase 4 contract — follow-ups**: cron worker swap to outbound_queue; finally DROP legacy tables after soak.
 - **Phase 2.x live sync**: replace `syncMicrosoft365Stub` / `syncImapStub` with real Microsoft Graph + node-imap clients (needs Azure AD app + credentials); add `mailbox_sync_drain` to cronScheduler; build OAuth callback for hands-off Microsoft 365 connect.
