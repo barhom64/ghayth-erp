@@ -1317,6 +1317,10 @@ router.patch("/cases/:caseId/judgments/:id", authorize({ feature: "legal.cases",
       }
     }
 
+    // Snapshot prior paidAmount to compute the GL delta — partial payments
+    // produce one journal entry per increment, not per absolute total.
+    const priorPaid = Number(existingJ.paidAmount || 0);
+
     const sets: string[] = [`"updatedAt"=NOW()`];
     const params: unknown[] = [];
     if (b.paidAmount !== undefined) { params.push(b.paidAmount); sets.push(`"paidAmount"=$${params.length}`); }
@@ -1327,6 +1331,19 @@ router.patch("/cases/:caseId/judgments/:id", authorize({ feature: "legal.cases",
     const { affectedRows } = await rawExecute(`UPDATE legal_judgments SET ${sets.join(",")} WHERE id=$${params.length - 2} AND "caseId"=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (!affectedRows) throw new NotFoundError("الحكم غير موجود");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_judgments WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+
+    // GL: post the payment delta. postSettlementGL recorded the liability /
+    // receivable when the judgment was first created; we now clear it on
+    // each payment increment so the books match cash reality.
+    const newPaid = row ? Number(row.paidAmount || 0) : priorPaid;
+    if (newPaid > priorPaid) {
+      const { legalEngine } = await import("../lib/engines/index.js");
+      const isInFavor = existingJ.verdict === "in_favor" || existingJ.verdict === "لصالح الشركة";
+      legalEngine.postJudgmentPaymentGL(
+        { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+        { caseId, judgmentId: id, priorPaid, newPaid, isInFavor },
+      ).catch((e: unknown) => logger.error(e, "Legal judgment payment GL error:"));
+    }
 
     // Mark payment obligation met if fully paid
     if (row && Number(row.paidAmount || 0) >= Number(row.amount || 0) && Number(row.amount || 0) > 0) {
