@@ -859,3 +859,24 @@ describe("Print platform — PrintButton.payload contract (#1286 follow-up)", ()
     expect(printButton).toMatch(/\.\.\.\(payload\s*\?\s*\{\s*payload\s*\}\s*:\s*\{\}\)/);
   });
 });
+
+describe("Print platform — finance reports wave 5 migrated (#1286 Q4 wave 5)", () => {
+  // Final wave: 4 pages with non-standard CSV anchors (camel-case exportCsv).
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const PAGES: Array<{ path: string; entityType: string }> = [
+    { path: "pages/finance/cash-13week.tsx",                 entityType: "report_cash_13week" },
+    { path: "pages/finance/income-statement-trend.tsx",      entityType: "report_income_trend" },
+    { path: "pages/finance/trial-balance-comparison.tsx",    entityType: "report_trial_balance_comparison" },
+    { path: "pages/finance/cost-center-pnl.tsx",             entityType: "report_cost_center_pnl" },
+  ];
+
+  for (const { path, entityType } of PAGES) {
+    it(`${path} mounts <PrintButton entityType="${entityType}" payload={...}>`, () => {
+      const src = readFileSync(join(SPA, path), "utf8");
+      expect(src, `${path} must import PrintButton`).toContain('from "@/components/shared/print-button"');
+      expect(src, `${path} must render PrintButton`).toContain("<PrintButton");
+      expect(src, `${path} must use entityType="${entityType}"`).toContain(`entityType="${entityType}"`);
+      expect(src, `${path} must pass payload`).toMatch(/payload=\{/);
+    });
+  }
+});

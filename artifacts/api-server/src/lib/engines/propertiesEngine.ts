@@ -345,6 +345,64 @@ class PropertiesEngineImpl implements DomainEngine {
     });
     return { requested: true };
   }
+
+  /**
+   * Post the cash leg of an owner payout — the reciprocal of the
+   * commission/management-fee accruals that build up during the month
+   * from postRentRevenueGL.
+   *
+   *   Dr owner_payable  (clear the liability we owe the owner)
+   *   Cr cash           (treasury pays out)
+   *
+   * sourceKey includes the period so a redo of the same period (after
+   * the payout was soft-deleted and re-recorded) ends up as a fresh
+   * journal entry, not a no-op at the financialEngine dedup layer.
+   * postOwnerPayoutGL is called from POST /properties/owners/:id/payouts
+   * with the payout row's id appended so each correction gets its own
+   * traceable JE.
+   */
+  async postOwnerPayoutGL(
+    ctx: PropertyGLContext,
+    payout: {
+      payoutId: number;
+      ownerId: number;
+      period: string;
+      amount: number;
+    }
+  ) {
+    const [debitCode, creditCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "owner_payable", "debit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cash", "credit", "1010"),
+    ]);
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `JE-OWNERPAY-${payout.payoutId}`,
+      description: `سداد مستحقات مالك العقار #${payout.ownerId} عن ${payout.period}`,
+      type: "general",
+      sourceType: "property_owner_payouts",
+      sourceId: payout.payoutId,
+      sourceKey: `property:owner_payout:${payout.payoutId}`,
+      guardTable: "property_owner_payouts",
+      guardId: payout.payoutId,
+      lines: [
+        {
+          accountCode: debitCode,
+          debit: payout.amount,
+          credit: 0,
+          description: `إقفال مستحقات المالك — ${payout.period}`,
+        },
+        {
+          accountCode: creditCode,
+          debit: 0,
+          credit: payout.amount,
+          description: `سداد نقدي للمالك`,
+        },
+      ],
+    });
+  }
 }
 
 export const propertiesEngine = new PropertiesEngineImpl();

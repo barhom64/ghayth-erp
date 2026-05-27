@@ -25,7 +25,17 @@ export function totalAmount(entries: WpsPayrollEntry[]): number {
  * formats. Length-cap to 80 chars (SAMA spec for the remark).
  */
 export function sanitiseFreeText(value: string): string {
-  return value.replace(/[|,\r\n\t]+/g, " ").trim().slice(0, 80);
+  let v = value.replace(/[|,\r\n\t]+/g, " ").trim().slice(0, 80);
+  // CSV/Excel formula injection defense — see builder.ts sanitize().
+  // Bank ops teams sometimes open WPS exports in Excel before
+  // forwarding to treasury; a remark starting with =/+/-/@ would
+  // execute as a formula. Prefix with a tab (invisible, parser-safe).
+  // Tab is the only char already stripped by the regex above, so
+  // re-prefixing here is the controlled place to add it back.
+  if (v.length > 0 && /^[=+\-@]/.test(v)) {
+    v = "\t" + v;
+  }
+  return v;
 }
 
 /**
