@@ -58,7 +58,11 @@ router.get("/hr", authorize({ feature: "hr", action: "list" }), async (req, res)
   }
 });
 
-router.get("/finance", authorize({ feature: "finance", action: "list" }), async (req, res) => {
+// F4 (audit fix) — migrated from broad `feature: "finance"` to the
+// granular `finance.reports` sub-feature: this endpoint is the read-
+// side dashboard data (invoices/expenses/receivables/budgets summary),
+// which is exactly what finance.reports gates elsewhere.
+router.get("/finance", authorize({ feature: "finance.reports", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
