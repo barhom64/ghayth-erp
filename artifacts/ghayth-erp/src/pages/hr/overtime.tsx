@@ -46,15 +46,25 @@ export default function OvertimePage() {
   const stats = data?.stats || {};
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
-  const approveMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-overtime"]], {
-    successMessage: "تم اعتماد الطلب",
-  });
-  const rejectMut = useApiMutation((body: any) => body.__url, "PATCH", [["hr-overtime"]], {
-    successMessage: "تم رفض الطلب",
-  });
+  // Factory URL with the literal path inline so the wiring audit can
+  // credit /hr/overtime/:id/approve and /:id/reject statically.
+  // Previously routed through `body.__url` which the static scanner
+  // couldn't resolve.
+  const approveMut = useApiMutation<unknown, { id: number }>(
+    (b) => `/hr/overtime/${b.id}/approve`,
+    "PATCH",
+    [["hr-overtime"]],
+    { successMessage: "تم اعتماد الطلب" },
+  );
+  const rejectMut = useApiMutation<unknown, { id: number; reason: string }>(
+    (b) => `/hr/overtime/${b.id}/reject`,
+    "PATCH",
+    [["hr-overtime"]],
+    { successMessage: "تم رفض الطلب" },
+  );
 
   const handleApprove = async (id: number) => {
-    await approveMut.mutateAsync({ __url: `/hr/overtime/${id}/approve` } as any);
+    await approveMut.mutateAsync({ id });
     queryClient.invalidateQueries({ queryKey: ["hr-overtime"] });
   };
   const handleReject = (id: number) => setRejectingId(id);
@@ -63,7 +73,7 @@ export default function OvertimePage() {
     if (rejectingId === null) return;
     const id = rejectingId;
     setRejectingId(null);
-    await rejectMut.mutateAsync({ __url: `/hr/overtime/${id}/reject`, reason } as any);
+    await rejectMut.mutateAsync({ id, reason });
     queryClient.invalidateQueries({ queryKey: ["hr-overtime"] });
   };
 

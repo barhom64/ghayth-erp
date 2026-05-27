@@ -252,9 +252,29 @@ export default function PrintLogPage() {
                         </span>
                       </td>
                       <td className="p-2 text-left whitespace-nowrap">
-                        <Button size="sm" variant="ghost" onClick={() => download(j)} title="إعادة عرض">
-                          <Download className="h-3 w-3" />
-                        </Button>
+                        {j.pdfStorageKey ? (
+                          // Direct anchor — GET /api/print/jobs/:jobId/download
+                          // streams the stored PDF. Anchor (not window.open)
+                          // keeps the URL visible to the wiring audit.
+                          <a
+                            href={`/api/print/jobs/${j.jobId}/download`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center h-8 w-8 rounded hover:bg-accent"
+                            title="إعادة عرض"
+                          >
+                            <Download className="h-3 w-3" />
+                          </a>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => download(j)}
+                            title="إعادة عرض"
+                          >
+                            <Download className="h-3 w-3" />
+                          </Button>
+                        )}
                         <Button size="sm" variant="ghost" onClick={() => reprint(j)} title="طلب إعادة طباعة">
                           <Repeat className="h-3 w-3" />
                         </Button>

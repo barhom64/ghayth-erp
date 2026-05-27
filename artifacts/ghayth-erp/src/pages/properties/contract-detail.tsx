@@ -7,6 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   DetailPageLayout,
@@ -48,6 +53,31 @@ export default function ContractDetailPage() {
     id ? `/properties/contracts/${id}` : null,
     !!id
   );
+
+  // PATCH /properties/contracts/:id is blocked by the backend once the
+  // contract leaves the active lifecycle (terminated/expired/etc.) — the
+  // hook hides the Edit button below in those cases via the disabled
+  // check on the contract status; the server still enforces the same
+  // rule even if a privileged user bypasses the UI.
+  const isContractLocked = !!contract && ["terminated", "expired", "cancelled", "renewed"].includes(contract.status as string);
+  const editDelete = useDetailEditDelete({
+    entityLabel: "العقد",
+    patchPath: `/properties/contracts/${id}`,
+    deletePath: `/properties/contracts/${id}`,
+    listPath: "/properties/contracts",
+    initialValues: contract,
+    fields: [
+      { key: "tenantName", label: "اسم المستأجر" },
+      { key: "tenantPhone", label: "الهاتف" },
+      { key: "tenantEmail", label: "البريد" },
+      { key: "monthlyRent", label: "الإيجار الشهري", type: "number" },
+      { key: "depositAmount", label: "مبلغ التأمين", type: "number" },
+      { key: "paymentDay", label: "يوم السداد", type: "number" },
+      { key: "notes", label: "ملاحظات" },
+    ],
+    invalidateKeys: [["properties-contract", id], ["properties-contracts"]],
+    onSaved: () => refetch(),
+  });
 
   const { data: scheduleResp } = useApiQuery<any>(
     ["contract-detail-schedule", id],
@@ -173,6 +203,7 @@ export default function ContractDetailPage() {
 
   const overview = (
     <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
@@ -256,6 +287,9 @@ export default function ContractDetailPage() {
         إنهاء
       </GuardedButton>
       <EntityPrintButton entityType="rental_contract" entityId={id ?? ""} formats={["a4"]} />
+      {!isContractLocked && (
+        <DetailActionButtons hook={editDelete} editPerm="properties:update" deletePerm="properties:delete" />
+      )}
     </div>
   );
 

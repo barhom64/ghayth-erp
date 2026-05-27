@@ -71,36 +71,54 @@ const allNavSections: NavSection[] = [
   // ══════════════════════════════════════════════════════════════════════
   // 1. الرئيسية
   // ══════════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════
+  // 1. الرئيسية — لوحات + مراكز التحكم + بوابة الموظف
+  // ══════════════════════════════════════════════════════════════════════
+  // Restructured from a flat 10-item list into three logical sub-groups
+  // so the accordion behavior actually saves vertical space. Order
+  // reflects use-frequency: dashboard / calendar at top (every-day),
+  // then "my space" cluster (every user), then management dashboards
+  // (managers), then control centers (approvers/operators).
   {
     title: "الرئيسية",
     items: [
       { label: "لوحة التحكم", path: "/dashboard", icon: LayoutDashboard, module: "home" },
-      { label: "مساحة العمل", path: "/workspace", icon: LayoutGrid },
-      { label: "مساحتي", path: "/my-space", icon: User },
-      { label: "مركز القرارات", path: "/action-center", icon: Briefcase, minRoleLevel: 20 },
-      { label: "لوحة المدير", path: "/manager-board", icon: Users, minRoleLevel: 40 },
-      { label: "مساحة المدير", path: "/manager-workspace", icon: Users, minRoleLevel: 40 },
-      { label: "لوحة القيادة التنفيذية", path: "/exec-dashboard", icon: Shield, minRoleLevel: 60 },
-      { label: "مركز العمليات", path: "/operations-center", icon: Zap, minRoleLevel: 40 },
-      { label: "مركز الالتزامات", path: "/obligations", icon: Clock, minRoleLevel: 30 },
       { label: "التقويم الموحد", path: "/calendar", icon: Calendar, minRoleLevel: 20 },
+      { label: "مساحاتي", path: "/my-space", icon: User, children: [
+        { label: "مساحتي", path: "/my-space", icon: User },
+        { label: "مساحة العمل", path: "/workspace", icon: LayoutGrid },
+        { label: "إشعاراتي", path: "/notifications", icon: Bell },
+      ]},
+      { label: "لوحات الإدارة", path: "/manager-board", icon: Users, minRoleLevel: 40, children: [
+        { label: "لوحة المدير", path: "/manager-board", icon: Users },
+        { label: "مساحة المدير", path: "/manager-workspace", icon: Users },
+        { label: "لوحة القيادة التنفيذية", path: "/exec-dashboard", icon: Shield, minRoleLevel: 60 },
+      ]},
+      { label: "مراكز التحكم", path: "/action-center", icon: Briefcase, minRoleLevel: 20, children: [
+        { label: "مركز القرارات", path: "/action-center", icon: Briefcase },
+        { label: "مركز العمليات", path: "/operations-center", icon: Zap, minRoleLevel: 40 },
+        { label: "مركز الالتزامات", path: "/obligations", icon: Clock, minRoleLevel: 30 },
+      ]},
     ],
   },
   // ══════════════════════════════════════════════════════════════════════
-  // 2. بوابة الموظف
+  // 2. بوابة الموظف — مقسّم على مجموعتين: طلباتي + معلوماتي
   // ══════════════════════════════════════════════════════════════════════
   {
     title: "بوابة الموظف",
     items: [
-      { label: "طلباتي", path: "/my-requests", icon: ClipboardCheck },
-      { label: "طلب إجازة", path: "/my-leave-request", icon: Calendar },
-      { label: "حضوري وانصرافي", path: "/my-attendance", icon: Clock },
-      { label: "كشف راتبي", path: "/my-payslip", icon: DollarSign },
-      { label: "سلفي", path: "/my-loans", icon: Wallet },
-      { label: "ساعاتي الإضافية", path: "/my-overtime", icon: Timer },
-      { label: "تقييمي", path: "/my-performance", icon: Target },
-      { label: "مستنداتي", path: "/my-documents", icon: FileText },
-      { label: "إشعاراتي", path: "/notifications", icon: Bell },
+      { label: "طلباتي", path: "/my-requests", icon: ClipboardCheck, children: [
+        { label: "كل طلباتي", path: "/my-requests", icon: ClipboardCheck },
+        { label: "طلب إجازة", path: "/my-leave-request", icon: Calendar },
+      ]},
+      { label: "معلوماتي", path: "/my-attendance", icon: User, children: [
+        { label: "حضوري وانصرافي", path: "/my-attendance", icon: Clock },
+        { label: "كشف راتبي", path: "/my-payslip", icon: DollarSign },
+        { label: "سلفي", path: "/my-loans", icon: Wallet },
+        { label: "ساعاتي الإضافية", path: "/my-overtime", icon: Timer },
+        { label: "تقييمي", path: "/my-performance", icon: Target },
+        { label: "مستنداتي", path: "/my-documents", icon: FileText },
+      ]},
     ],
   },
   // ══════════════════════════════════════════════════════════════════════
@@ -443,24 +461,35 @@ const allNavSections: NavSection[] = [
         { label: "الرؤى الذكية", path: "/insights", icon: Sparkles },
         { label: "لوحة الذكاء", path: "/intelligence", icon: Brain },
       ]},
+      // 17-item "مدير النظام" was one flat list — broke into 4 themed
+      // sub-groups so an admin can find a specific tool without scanning
+      // the whole list. Order: identity first, then ops, then integrations,
+      // then audit trails.
       { label: "مدير النظام", path: "/admin", icon: Shield, module: "admin", minRoleLevel: 90, children: [
-        { label: "المستخدمين", path: "/admin/users", icon: Users, perm: ["admin:list", "admin:update"], permMode: "any" },
-        { label: "الأدوار والصلاحيات (v2)", path: "/admin", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
-        { label: "مصفوفة الأدوار", path: "/admin/rbac-matrix", icon: Shield, perm: "admin.roles:view" },
-        { label: "الأدوار (الكلاسيكي)", path: "/admin/roles", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
-        { label: "مركز التكاملات", path: "/admin/integrations", icon: Mail, perm: "admin:update" },
-        { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-        { label: "مرصد المراقبة الموحّد", path: "/admin/observability", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-        { label: "حوكمة الذكاء الاصطناعي", path: "/admin/ai-governance", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-        { label: "مركز التحكّم بالاتصالات", path: "/admin/communication-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-        { label: "مركز التحكّم بالـ PBX", path: "/admin/pbx-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-        { label: "خارطة #1139 الحيّة", path: "/admin/master-plan", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-        { label: "توجيه الإشعارات", path: "/admin/notification-routing", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-        { label: "إعدادات المزوّدات", path: "/admin/vendor-settings", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-        { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
-        { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any" },
-        { label: "سجل الحركات", path: "/activity-log", icon: Activity },
-        { label: "الإشعارات", path: "/notifications", icon: Bell },
+        { label: "المستخدمين والصلاحيات", path: "/admin/users", icon: KeyRound, children: [
+          { label: "المستخدمين", path: "/admin/users", icon: Users, perm: ["admin:list", "admin:update"], permMode: "any" },
+          { label: "الأدوار والصلاحيات (v2)", path: "/admin", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
+          { label: "مصفوفة الأدوار", path: "/admin/rbac-matrix", icon: Shield, perm: "admin.roles:view" },
+          { label: "الأدوار (الكلاسيكي)", path: "/admin/roles", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
+        ]},
+        { label: "المراقبة والمتابعة", path: "/admin/monitoring", icon: Activity, children: [
+          { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "مرصد المراقبة الموحّد", path: "/admin/observability", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "خارطة #1139 الحيّة", path: "/admin/master-plan", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
+        ]},
+        { label: "التكاملات والاتصالات", path: "/admin/integrations", icon: Mail, children: [
+          { label: "مركز التكاملات", path: "/admin/integrations", icon: Mail, perm: "admin:update" },
+          { label: "مركز التحكّم بالاتصالات", path: "/admin/communication-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "مركز التحكّم بالـ PBX", path: "/admin/pbx-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "توجيه الإشعارات", path: "/admin/notification-routing", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "إعدادات المزوّدات", path: "/admin/vendor-settings", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "حوكمة الذكاء الاصطناعي", path: "/admin/ai-governance", icon: Brain, perm: ["admin:list", "admin:view"], permMode: "any" },
+        ]},
+        { label: "سجلات التدقيق", path: "/admin/logs", icon: ScrollText, children: [
+          { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any" },
+          { label: "سجل الحركات", path: "/activity-log", icon: Activity },
+        ]},
       ]},
       { label: "الأتمتة", path: "/automation", icon: Zap, module: "admin", minRoleLevel: 60, perm: ["admin:update", "automation:write"], permMode: "any" },
       { label: "التقارير المجدولة", path: "/reports/scheduled", icon: CalendarClock, module: "bi", minRoleLevel: 40, perm: ["bi:read", "reports:read"], permMode: "any" },
