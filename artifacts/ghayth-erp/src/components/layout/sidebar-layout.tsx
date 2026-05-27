@@ -613,26 +613,36 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const filteredNavItems = filteredSections.flatMap(s => s.items);
 
   useEffect(() => {
-    const toExpand: string[] = [];
-    const checkItem = (item: NavItem) => {
-      if (item.children) {
-        const isChildActive = item.children.some(
-          (c) => location === c.path || location.startsWith(c.path + "/") || (c.children && c.children.some(gc => location === gc.path || location.startsWith(gc.path + "/")))
-        );
-        if (isChildActive && !expandedItems.includes(item.path)) {
-          toExpand.push(item.path);
-        }
-        for (const child of item.children) {
-          checkItem(child);
-        }
+    // Accordion-style auto-expand: when the route changes, find which
+    // parent items lead to the active path and open only them. Anything
+    // previously expanded that isn't on the active lineage collapses,
+    // so the sidebar mirrors the user's current location instead of
+    // accumulating every section they ever opened.
+    const lineage: string[] = [];
+    const walk = (item: NavItem, ancestors: string[]) => {
+      if (!item.children) return;
+      const isChildActive = item.children.some(
+        (c) => location === c.path || location.startsWith(c.path + "/") || (c.children && c.children.some(gc => location === gc.path || location.startsWith(gc.path + "/")))
+      );
+      if (isChildActive) {
+        lineage.push(...ancestors, item.path);
+      }
+      for (const child of item.children) {
+        walk(child, [...ancestors, item.path]);
       }
     };
     for (const item of filteredNavItems) {
-      checkItem(item);
+      walk(item, []);
     }
-    if (toExpand.length > 0) {
-      setExpandedItems((prev) => [...prev, ...toExpand.filter(p => !prev.includes(p))]);
-    }
+    if (lineage.length === 0) return;
+    setExpandedItems((prev) => {
+      // Equal sets — bail out so we don't fire a no-op re-render.
+      const dedup = Array.from(new Set(lineage));
+      if (dedup.length === prev.length && dedup.every((p) => prev.includes(p))) {
+        return prev;
+      }
+      return dedup;
+    });
   }, [location]);
 
     useEffect(() => {
@@ -647,9 +657,20 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     }, [location, user]);
 
     const toggleExpand = (path: string) => {
-    setExpandedItems((prev) =>
-      prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]
-    );
+    // Accordion behavior: opening an item closes every sibling/cousin
+    // that isn't an ancestor of the newly-opened path. Ancestors stay
+    // open so the navigation tree to the active node remains visible.
+    //
+    // - close X: drop X and any of its descendants from the expanded set.
+    // - open X: keep only ancestors of X (paths that are a strict prefix
+    //   of X), then add X. Anything unrelated collapses.
+    setExpandedItems((prev) => {
+      if (prev.includes(path)) {
+        return prev.filter((p) => p !== path && !p.startsWith(path + "/"));
+      }
+      const ancestors = prev.filter((p) => path.startsWith(p + "/"));
+      return [...ancestors, path];
+    });
   };
 
   const isItemActive = (item: NavItem): boolean => {
