@@ -1,11 +1,15 @@
 import { useState } from "react";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   PageShell,
   DataTable,
@@ -13,8 +17,9 @@ import {
 } from "@workspace/ui-core";
 import {
   Receipt, TrendingUp, TrendingDown, Wallet, AlertTriangle,
-  Wrench, Crown, FileText, Calendar,
+  Wrench, Crown, FileText, Calendar, Banknote, CheckCircle, History,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 interface OwnerOption {
@@ -95,11 +100,41 @@ function firstOfMonth(): string {
   return `${todayLocal().slice(0, 7)}-01`;
 }
 
+interface PayoutRow {
+  id: number;
+  period: string;
+  fromDate: string;
+  toDate: string;
+  totalRentCollected: string | number;
+  totalMaintenance: string | number;
+  commissionRate: string | number;
+  commissionAmount: string | number;
+  netAmount: string | number;
+  paymentMethod: string;
+  reference: string | null;
+  paidAt: string;
+  journalEntryId: number | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  bank_transfer: "تحويل بنكي",
+  cash: "نقدي",
+  cheque: "شيك",
+  other: "أخرى",
+};
+
 export default function PropertiesOwnerStatement() {
   const [ownerId, setOwnerId] = useState<string>("");
   const [from, setFrom] = useState<string>(firstOfMonth());
   const [to, setTo] = useState<string>(todayLocal());
   const [commissionOverride, setCommissionOverride] = useState<string>("");
+  const [payoutOpen, setPayoutOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<string>("bank_transfer");
+  const [reference, setReference] = useState<string>("");
+  const [payoutNotes, setPayoutNotes] = useState<string>("");
+  const { toast } = useToast();
 
   const { data: ownersResp } = useApiQuery<{ data: OwnerOption[] } | OwnerOption[]>(
     ["property-owners-picker"],
@@ -116,6 +151,39 @@ export default function PropertiesOwnerStatement() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<OwnerStatement>(
     ["owner-statement", ownerId, from, to, commissionOverride],
     queryUrl,
+  );
+
+  const { data: payoutsResp, refetch: refetchPayouts } = useApiQuery<{ data: PayoutRow[] }>(
+    ["owner-payouts", ownerId],
+    ownerId ? `/properties/owners/${ownerId}/payouts` : null,
+  );
+  const payouts: PayoutRow[] = payoutsResp?.data ?? [];
+  // Snapshot the period the operator is currently looking at — used to
+  // detect "already paid out" and to fill the payout dialog defaults.
+  const currentPeriod = from.slice(0, 7);
+  const alreadyPaidForPeriod = payouts.find((p) => p.period === currentPeriod);
+
+  const recordPayoutMut = useApiMutation<
+    { id: number; journalEntryId: number | null },
+    {
+      period: string; fromDate: string; toDate: string;
+      totalRentCollected: number; totalMaintenance: number;
+      commissionRate: number; commissionAmount: number; netAmount: number;
+      paymentMethod: string; reference?: string; notes?: string;
+    }
+  >(
+    () => `/properties/owners/${ownerId}/payouts`,
+    "POST",
+    [["owner-payouts", ownerId]],
+    {
+      successMessage: "تم تسجيل سداد المالك",
+      onSuccess: () => {
+        setPayoutOpen(false);
+        setReference("");
+        setPayoutNotes("");
+        refetchPayouts();
+      },
+    },
   );
 
   const rentColumns: DataTableColumn<RentRow>[] = [
@@ -259,6 +327,21 @@ export default function PropertiesOwnerStatement() {
                   <div className={`text-5xl font-bold ${summary.netDueToOwner >= 0 ? "text-green-700" : "text-red-700"}`}>
                     {formatCurrency(summary.netDueToOwner)}
                   </div>
+                  {alreadyPaidForPeriod ? (
+                    <Badge className="mt-2 bg-green-200 text-green-900 border-green-300 inline-flex items-center gap-1">
+                      <CheckCircle className="h-3 w-3" />
+                      مدفوع — {formatDateAr(alreadyPaidForPeriod.paidAt)}
+                    </Badge>
+                  ) : summary.netDueToOwner > 0 ? (
+                    <GuardedButton
+                      perm="properties.owners:create"
+                      className="mt-3"
+                      onClick={() => setPayoutOpen(true)}
+                    >
+                      <Banknote className="h-4 w-4 ml-1" />
+                      تسجيل سداد {formatCurrency(summary.netDueToOwner)}
+                    </GuardedButton>
+                  ) : null}
                 </div>
               </div>
             </CardContent>
@@ -365,6 +448,127 @@ export default function PropertiesOwnerStatement() {
               </CardContent>
             </Card>
           )}
+
+          {payouts.length > 0 && (
+            <Card className="mb-4">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <History className="h-4 w-4" /> دفعات سابقة ({payouts.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DataTable
+                  data={payouts}
+                  columns={[
+                    { key: "period", header: "الفترة",
+                      render: (p) => <span className="font-mono">{p.period}</span> },
+                    { key: "paidAt", header: "تاريخ السداد",
+                      render: (p) => formatDateAr(p.paidAt) },
+                    { key: "netAmount", header: "المبلغ", sortable: true,
+                      render: (p) => <span className="font-medium text-green-700">{formatCurrency(Number(p.netAmount))}</span> },
+                    { key: "commissionAmount", header: "العمولة",
+                      render: (p) => <span className="text-blue-700">{formatCurrency(Number(p.commissionAmount))} ({Number(p.commissionRate).toFixed(1)}%)</span> },
+                    { key: "paymentMethod", header: "طريقة الدفع",
+                      render: (p) => <Badge variant="outline">{PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</Badge> },
+                    { key: "reference", header: "المرجع",
+                      render: (p) => p.reference || <span className="text-muted-foreground">—</span> },
+                    { key: "journalEntryId", header: "القيد",
+                      render: (p) => p.journalEntryId
+                        ? <span className="font-mono text-xs text-muted-foreground">#{p.journalEntryId}</span>
+                        : <span className="text-amber-600 text-xs">معلق</span> },
+                  ] as DataTableColumn<PayoutRow>[]}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          <Dialog open={payoutOpen} onOpenChange={setPayoutOpen}>
+            <DialogContent dir="rtl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Banknote className="h-5 w-5" />
+                  تسجيل سداد للمالك
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="rounded-md bg-green-50 border border-green-200 p-3 text-sm">
+                  <div className="flex justify-between mb-1">
+                    <span className="text-muted-foreground">المالك</span>
+                    <span className="font-medium">{data.owner.name}</span>
+                  </div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-muted-foreground">الفترة ({currentPeriod})</span>
+                    <span className="font-mono text-xs">{formatDateAr(from)} → {formatDateAr(to)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-lg pt-2 border-t border-green-200">
+                    <span>المبلغ</span>
+                    <span className="text-green-700">{formatCurrency(summary.netDueToOwner)}</span>
+                  </div>
+                  {data.owner.iban && (
+                    <div className="text-xs text-muted-foreground font-mono mt-2 text-center">
+                      {data.owner.iban} — {data.owner.bankName || ""}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <Label>طريقة الدفع</Label>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bank_transfer">تحويل بنكي</SelectItem>
+                      <SelectItem value="cash">نقدي</SelectItem>
+                      <SelectItem value="cheque">شيك</SelectItem>
+                      <SelectItem value="other">أخرى</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>المرجع (رقم تحويل / شيك)</Label>
+                  <Input
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                    placeholder="اختياري"
+                    maxLength={120}
+                  />
+                </div>
+
+                <div>
+                  <Label>ملاحظات</Label>
+                  <Textarea
+                    value={payoutNotes}
+                    onChange={(e) => setPayoutNotes(e.target.value)}
+                    rows={2}
+                    placeholder="اختياري"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPayoutOpen(false)}>إلغاء</Button>
+                <Button
+                  disabled={recordPayoutMut.isPending}
+                  onClick={() =>
+                    recordPayoutMut.mutate({
+                      period: currentPeriod,
+                      fromDate: from,
+                      toDate: to,
+                      totalRentCollected: summary.totalRentCollected,
+                      totalMaintenance: summary.totalMaintenance,
+                      commissionRate: data.commission.rate,
+                      commissionAmount: summary.commissionAmount,
+                      netAmount: summary.netDueToOwner,
+                      paymentMethod,
+                      reference: reference || undefined,
+                      notes: payoutNotes || undefined,
+                    })
+                  }
+                >
+                  {recordPayoutMut.isPending ? "جاري التسجيل..." : "تأكيد السداد"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <div className="mt-6 text-xs text-muted-foreground bg-muted/30 p-4 rounded-md flex items-start gap-2">
             <FileText className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
