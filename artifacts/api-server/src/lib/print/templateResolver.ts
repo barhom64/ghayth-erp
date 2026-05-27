@@ -270,6 +270,8 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   // db/schema_pre.sql, tokens match what dataLoader actually returns.
   payment_voucher: () => buildVoucherPreset("payment"),
   receipt_voucher: () => buildVoucherPreset("receipt"),
+  customer_statement: () => buildCustomerStatementPreset(),
+  vendor_statement: () => buildVendorStatementPreset(),
   purchase_order: () => buildPurchaseOrderPreset(),
   purchase_request: () => buildPurchaseRequestPreset(),
   goods_receipt: () => buildGoodsReceiptPreset(),
@@ -929,6 +931,118 @@ function buildJournalEntryPreset(): PrintTemplate {
   <div>المُعِد<br/>____________________</div>
   <div>المراجِع<br/>____________________</div>
   <div>المدير المالي<br/>____________________</div>
+</div>`,
+  });
+}
+
+// Customer & vendor statements — formal كشف حساب layouts. The data loaders
+// in reportLoaders.ts return:
+//   entity: { id, ref, title, clientName|supplierName, clientPhone|supplierPhone,
+//             clientVat|supplierTaxNumber, date, period,
+//             openingBalance (customer only), totalDebit, totalCredit, closingBalance }
+//   items:  [{ التاريخ, المرجع, البيان, مدين, دائن, الرصيد التراكمي }, ...]
+//
+// The Arabic-keyed items are handled by buildItemsTable via {{entity.itemsTable}}
+// — it picks the first six non-id keys and renders them, so the Arabic columns
+// flow through unchanged.
+//
+// Failure mode: when the loader can't find the client/supplier it returns
+// entity.note. The {{entity.note}} fallback below surfaces that message instead
+// of a blank ledger — saves the user from "the report just prints empty".
+function buildCustomerStatementPreset(): PrintTemplate {
+  return makePreset({
+    id: -74,
+    presetKey: "customer_statement_classic",
+    entityType: "customer_statement",
+    name: "كشف حساب عميل",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">كشف حساب عميل</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.ref}}</div>
+{{#if entity.note}}<div style="padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;margin-bottom:14px;color:#991b1b">{{entity.note}}</div>{{/if}}
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">العميل</div>
+      <div style="font-size:11pt">{{entity.clientName}}</div>
+      <div style="font-size:10pt;color:#475569">{{entity.clientPhone}}</div>
+      {{#if entity.clientVat}}<div style="font-size:10pt;color:#475569">الرقم الضريبي: <span dir="ltr">{{entity.clientVat}}</span></div>{{/if}}
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>الفترة:</strong> {{entity.period}}</div>
+      <div><strong>طُبع في:</strong> {{entity.date}}</div>
+      <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:280px;margin-bottom:10px;border-collapse:collapse">
+  <tr style="background:#f1f5f9">
+    <td style="padding:6px 8px;border:1px solid #cbd5e1;font-weight:bold">الرصيد الافتتاحي</td>
+    <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.openingBalance}}</td>
+  </tr>
+</table>
+{{entity.itemsTable}}
+<table style="width:320px;margin-right:auto;margin-left:0;margin-top:10px;border-collapse:collapse">
+  <tr>
+    <td style="padding:6px 8px;border:1px solid #cbd5e1">إجمالي المدين</td>
+    <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.totalDebit}}</td>
+  </tr>
+  <tr>
+    <td style="padding:6px 8px;border:1px solid #cbd5e1">إجمالي الدائن</td>
+    <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.totalCredit}}</td>
+  </tr>
+  <tr style="background:#f1f5f9;font-weight:bold">
+    <td style="padding:6px 8px;border:1px solid #cbd5e1">الرصيد الختامي</td>
+    <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.closingBalance}}</td>
+  </tr>
+</table>
+<div style="margin-top:18px;font-size:10pt;color:#475569">
+  كشف حساب آلي صادر عن نظام غيث — للاستفسارات يُرجى التواصل مع قسم المالية.
+</div>`,
+  });
+}
+
+function buildVendorStatementPreset(): PrintTemplate {
+  return makePreset({
+    id: -75,
+    presetKey: "vendor_statement_classic",
+    entityType: "vendor_statement",
+    name: "كشف حساب مورّد",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">كشف حساب مورّد</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.ref}}</div>
+{{#if entity.note}}<div style="padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;margin-bottom:14px;color:#991b1b">{{entity.note}}</div>{{/if}}
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">المورّد</div>
+      <div style="font-size:11pt">{{entity.supplierName}}</div>
+      <div style="font-size:10pt;color:#475569">{{entity.supplierPhone}}</div>
+      {{#if entity.supplierTaxNumber}}<div style="font-size:10pt;color:#475569">الرقم الضريبي: <span dir="ltr">{{entity.supplierTaxNumber}}</span></div>{{/if}}
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>الفترة:</strong> {{entity.period}}</div>
+      <div><strong>طُبع في:</strong> {{entity.date}}</div>
+      <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+    </td>
+  </tr>
+</table>
+{{entity.itemsTable}}
+<table style="width:320px;margin-right:auto;margin-left:0;margin-top:10px;border-collapse:collapse">
+  <tr>
+    <td style="padding:6px 8px;border:1px solid #cbd5e1">إجمالي المدين</td>
+    <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.totalDebit}}</td>
+  </tr>
+  <tr>
+    <td style="padding:6px 8px;border:1px solid #cbd5e1">إجمالي الدائن</td>
+    <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.totalCredit}}</td>
+  </tr>
+  <tr style="background:#f1f5f9;font-weight:bold">
+    <td style="padding:6px 8px;border:1px solid #cbd5e1">الرصيد الختامي</td>
+    <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.closingBalance}}</td>
+  </tr>
+</table>
+<div style="margin-top:18px;font-size:10pt;color:#475569">
+  كشف حساب آلي صادر عن نظام غيث — للاستفسارات يُرجى التواصل مع قسم المالية.
 </div>`,
   });
 }
@@ -2802,6 +2916,8 @@ const ARABIC_TITLES: Record<string, string> = {
   purchase_order: "أمر شراء", purchase_request: "طلب شراء",
   goods_receipt: "إيصال استلام بضاعة", journal_entry: "قيد محاسبي",
   account_statement: "كشف حساب",
+  customer_statement: "كشف حساب عميل",
+  vendor_statement: "كشف حساب مورّد",
   stock_transfer: "تحويل مخزون", stock_adjustment: "تسوية مخزون",
   item_barcode_label: "ملصق باركود",
   leave_request: "طلب إجازة", loan_request: "طلب قرض", loan: "قرض موظف",
