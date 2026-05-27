@@ -237,6 +237,9 @@ budgetRouter.post("/budget", authorize({ feature: "finance.budget", action: "cre
   }
 });
 
+// Audit F5 — DOC. Pre-allocation budget gate. Called server-side by the
+// allocation/commitment paths (not from the UI directly), so wiring
+// audit flags it as orphan. Keep.
 budgetRouter.post("/budget/validate", authorize({ feature: "finance.budget", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;

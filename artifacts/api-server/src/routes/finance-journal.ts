@@ -594,6 +594,9 @@ journalRouter.patch("/expenses/:id", authorize({ feature: "finance.journal", act
   }
 });
 
+// Audit F5 — DELETE candidate. UI uses the soft-status `void` flow
+// instead of hard delete. Marked for removal in the F5 follow-up PR
+// (see docs/audits/finance-orphan-endpoints-disposition.md).
 journalRouter.delete("/expenses/:id", authorize({ feature: "finance.journal", action: "delete", resource: { table: "expenses", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1124,6 +1127,9 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
   }
 });
 
+// Audit F5 — DELETE candidate. UI uses approve/reject flows; no direct
+// PATCH on individual vouchers. Marked for removal in the F5 follow-up
+// PR (see docs/audits/finance-orphan-endpoints-disposition.md).
 journalRouter.patch("/vouchers/:id", authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1185,6 +1191,9 @@ journalRouter.patch("/vouchers/:id", authorize({ feature: "finance.journal", act
   }
 });
 
+// Audit F5 — DELETE candidate. UI uses the soft-status `void` flow
+// instead of hard delete. Marked for removal in the F5 follow-up PR
+// (see docs/audits/finance-orphan-endpoints-disposition.md).
 journalRouter.delete("/vouchers/:id", authorize({ feature: "finance.journal", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;

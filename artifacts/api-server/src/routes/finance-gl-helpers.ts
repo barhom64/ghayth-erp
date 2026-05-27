@@ -328,6 +328,9 @@ glHelpersRouter.post(
 // ─────────────────────────────────────────────────────────────────────
 // 2) Realised FX — wire invoice settlement → journal entry
 // ─────────────────────────────────────────────────────────────────────
+// Audit F5 — DOC. Manual one-shot realization for operators; paired
+// with `/gl-helpers/realized-fx/history` (the GET path the UI reads).
+// Auto-realization runs from the settlement engine, not the UI.
 glHelpersRouter.post(
   "/gl-helpers/realized-fx/:invoiceId",
   authorize({ feature: "finance.journal", action: "create" }),
