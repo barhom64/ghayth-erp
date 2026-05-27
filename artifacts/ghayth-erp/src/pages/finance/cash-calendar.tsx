@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import {
   Calendar as CalIcon, TrendingUp, TrendingDown, AlertTriangle,
-  Wallet, ChevronLeft, ChevronRight,
+  Wallet, ChevronLeft, ChevronRight, Banknote, Activity,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
@@ -172,6 +172,21 @@ export default function CashCalendarPage() {
       ]}
       actions={
         <div className="flex items-center gap-2">
+          <Link href="/finance/cash-position-calculator">
+            <Button variant="outline" size="sm">
+              <Banknote className="h-4 w-4 me-1" />مركز السيولة
+            </Button>
+          </Link>
+          <Link href="/finance/cash-13week">
+            <Button variant="outline" size="sm">
+              <CalIcon className="h-4 w-4 me-1" />توقع 13 أسبوع
+            </Button>
+          </Link>
+          <Link href="/finance/cashflow">
+            <Button variant="outline" size="sm">
+              <Activity className="h-4 w-4 me-1" />لوحة التدفقات
+            </Button>
+          </Link>
           <Button variant="outline" size="sm" onClick={() => setStartDate(addDaysIso(startDate, -7))}>
             <ChevronRight className="h-4 w-4" />
           </Button>
