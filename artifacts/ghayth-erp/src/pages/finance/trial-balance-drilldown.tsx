@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   ScaleIcon, ChevronRight, Search, Download, ChevronDown,
   TrendingUp, TrendingDown, X, ExternalLink, Filter,
@@ -217,6 +218,28 @@ export default function TrialBalanceDrilldownPage() {
               <Download className="w-4 h-4 ml-1" />
               CSV
             </Button>
+            <PrintButton
+              entityType="report_trial_balance_drilldown"
+              entityId={`${startDate}..${endDate}`}
+              payload={{
+                entity: {
+                  title: "ميزان المراجعة — التفصيلي",
+                  period: label,
+                  startDate, endDate,
+                  totalDebit: data?.summary?.totalDebit ?? 0,
+                  totalCredit: data?.summary?.totalCredit ?? 0,
+                  isBalanced: data?.summary?.isBalanced ?? false,
+                },
+                items: (data?.data ?? []).map((r: TbRow) => ({
+                  "الكود": r.code,
+                  "اسم الحساب": r.name,
+                  "النوع": r.type,
+                  "مدين": Number(r.totalDebit ?? 0),
+                  "دائن": Number(r.totalCredit ?? 0),
+                  "الرصيد": Number(r.balance ?? 0),
+                })),
+              }}
+            />
           </div>
         </CardContent>
       </Card>

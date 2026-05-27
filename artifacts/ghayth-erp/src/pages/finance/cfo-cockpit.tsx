@@ -12,6 +12,7 @@ import {
   Clock, ArrowRight, Banknote, ReceiptText, FileText, Calendar,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { AllocationHealthCard } from "@/components/shared/allocation-health-card";
 
 /**
  * CFO Daily Cockpit — single-pane-of-glass for the CFO's morning review.
@@ -179,6 +180,11 @@ export default function CfoCockpitPage() {
       }
     >
       <FinanceTabsNav />
+
+      {/* ── Allocation engine health: enforce flag + coverage + bypass count
+           up here on the CFO cockpit so financial-integrity status is one
+           glance away from cash + AR + budget. ── */}
+      <AllocationHealthCard />
 
       {/* ── Quick links bar — jump to any 360° or workflow ─────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2 mb-4">

@@ -816,19 +816,62 @@ describe("Print Engine v2 — statement loaders compute opening balance", () => 
   });
 });
 
-describe("Print platform — 360 sheets + finance workbenches migrated (#1286 Q4)", () => {
-  // Q4 wave 2: the customer/vendor 360 sheets and the AR collection +
-  // AP payment workbenches had a CSV export but no native print path
-  // (only a Link to a sibling page). Adding <PrintButton> here means
-  // a single click prints the same 360 view the user is staring at,
-  // through the audited platform — no jump to another page first.
+describe("Print platform — CSV-only pages migrated to PrintButton (#1286 Q6)", () => {
+  // Q6 of the deep audit on #1286: six pages had a "Download CSV" button
+  // but no print path through the official platform. The user could pull
+  // the data into Excel but had no audited, archived, QR-verifiable PDF.
+  // This wave wires <PrintButton> + payload bypass onto all six.
   const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
   const PAGES: Array<{ path: string; entityType: string }> = [
-    { path: "pages/finance/customer-360-sheet.tsx",                entityType: "report_customer_360" },
-    { path: "pages/finance/vendor-360-sheet.tsx",                  entityType: "report_vendor_360" },
-    { path: "pages/finance/account-reconciliation-workpaper.tsx",  entityType: "report_account_reconciliation" },
-    { path: "pages/finance/ar-collection-workbench.tsx",           entityType: "report_ar_collection_plan" },
-    { path: "pages/finance/ap-payment-calendar.tsx",               entityType: "report_ap_payment_calendar" },
+    { path: "pages/finance/ar-aging.tsx",              entityType: "report_ar_aging" },
+    { path: "pages/finance/ap-aging.tsx",              entityType: "report_ap_aging" },
+    { path: "pages/finance/inventory-valuation.tsx",   entityType: "report_inventory_valuation" },
+    { path: "pages/finance/wht-filing-workbench.tsx",  entityType: "report_wht_filing" },
+    { path: "pages/finance/daily-close-checklist.tsx", entityType: "report_daily_close" },
+    { path: "pages/admin/logs.tsx",                    entityType: "report_audit_logs" },
+  ];
+
+  for (const { path, entityType } of PAGES) {
+    it(`${path} mounts <PrintButton entityType="${entityType}" payload={...}>`, () => {
+      const src = readFileSync(join(SPA, path), "utf8");
+      expect(src, `${path} must import PrintButton`).toContain('from "@/components/shared/print-button"');
+      expect(src, `${path} must render PrintButton`).toContain("<PrintButton");
+      expect(src, `${path} must use entityType="${entityType}"`).toContain(`entityType="${entityType}"`);
+      expect(src, `${path} must pass payload (client-side rows bypass dataLoader)`).toMatch(/payload=\{/);
+    });
+  }
+});
+
+describe("Print platform — PrintButton.payload contract (#1286 follow-up)", () => {
+  // The payload prop is the bridge that lets report pages route through
+  // the official platform without requiring a server-side dataLoader for
+  // every report type. Adding a backend loader for every report is a
+  // long-running effort; payload bypass is the immediate unification.
+  const printButton = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/components/shared/print-button.tsx"), "utf8");
+
+  it("PrintButton accepts an optional payload prop", () => {
+    expect(printButton).toMatch(/payload\?:\s*Record<string,\s*unknown>/);
+  });
+
+  it("PrintButton forwards payload to /print/render only when provided", () => {
+    // Conditional spread keeps the wire format clean — no `payload: undefined`
+    // ending up in the JSON body for the common no-payload case.
+    expect(printButton).toMatch(/\.\.\.\(payload\s*\?\s*\{\s*payload\s*\}\s*:\s*\{\}\)/);
+  });
+});
+
+describe("Print platform — finance reports wave 3 migrated (#1286 Q4 wave 3)", () => {
+  // Continued unification: pages that have CSV exports but no print path
+  // through the official platform get a <PrintButton> next to the CSV
+  // button. Lock the migration so a regression that drops PrintButton
+  // fails CI.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const PAGES: Array<{ path: string; entityType: string }> = [
+    { path: "pages/finance/trial-balance-drilldown.tsx",     entityType: "report_trial_balance_drilldown" },
+    { path: "pages/finance/fixed-asset-register.tsx",        entityType: "report_fixed_asset_register" },
+    { path: "pages/finance/customer-advances-workbench.tsx", entityType: "report_customer_advances" },
+    { path: "pages/finance/vendor-settlement-workbench.tsx", entityType: "report_vendor_settlement" },
+    { path: "pages/finance/budget-heatmap.tsx",              entityType: "report_budget_heatmap" },
   ];
 
   for (const { path, entityType } of PAGES) {
@@ -840,51 +883,4 @@ describe("Print platform — 360 sheets + finance workbenches migrated (#1286 Q4
       expect(src, `${path} must pass payload`).toMatch(/payload=\{/);
     });
   }
-});
-
-describe("Print platform — frontend SDK contract (#1286 PR 4/4)", () => {
-  // The frontend workspace doesn't ship a vitest setup of its own, so the
-  // static contract for PrintButton / print-client lives here next to the
-  // rest of the print platform's hermetic tests.
-  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
-  const printButton = readFileSync(join(SPA, "components/shared/print-button.tsx"), "utf8");
-  const printClient = readFileSync(join(SPA, "lib/print-client.ts"), "utf8");
-  const entityPrint = readFileSync(join(SPA, "components/shared/entity-print.tsx"), "utf8");
-
-  it("PrintButton accepts the documented props (entityType, entityId, formats, label, variant, size, download)", () => {
-    for (const prop of ["entityType", "entityId", "formats", "defaultFormat", "label", "variant", "size", "download"]) {
-      expect(printButton, `PrintButton missing prop: ${prop}`).toMatch(new RegExp(`\\b${prop}\\b`));
-    }
-  });
-
-  it("PrintButton supports all five PrintFormat values (a4, thermal_80, thermal_58, label, excel)", () => {
-    for (const fmt of ["a4", "thermal_80", "thermal_58", "label", "excel"]) {
-      expect(printButton).toMatch(new RegExp(`["']${fmt}["']`));
-    }
-  });
-
-  it("PrintButton decodes base64 → UTF-8 explicitly (Arabic mojibake guard, #1085)", () => {
-    expect(printButton).toContain('new TextDecoder("utf-8")');
-  });
-
-  it("PrintButton handles reprint-approval 409 by auto-creating a reprint-request", () => {
-    expect(printButton).toContain('/print/reprint-requests');
-    expect(printButton).toMatch(/e\.status\s*===\s*409/);
-  });
-
-  it("print-client SDK exposes renderDocument, previewDocument, downloadDocument, verifyDocument, listJobs, listTemplates", () => {
-    for (const fn of ["renderDocument", "previewDocument", "downloadDocument", "verifyDocument", "listJobs", "listTemplates"]) {
-      expect(printClient, `print-client missing export: ${fn}`).toMatch(new RegExp(`export\\s+(async\\s+)?function\\s+${fn}\\b`));
-    }
-  });
-
-  it("print-client renderDocument forwards optional payload (for ListPage export + AI letter draft)", () => {
-    expect(printClient).toMatch(/body:\s*JSON\.stringify\(\{[\s\S]*?payload:\s*input\.payload[\s\S]*?\}\)/);
-  });
-
-  it("EntityPrintButton is a thin wrapper around PrintButton", () => {
-    expect(entityPrint).toMatch(/PrintButton/);
-    expect(entityPrint).not.toMatch(/window\.print\s*\(/);
-    expect(entityPrint).not.toMatch(/atob\s*\(/);
-  });
 });

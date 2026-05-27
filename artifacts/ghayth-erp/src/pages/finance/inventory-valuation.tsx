@@ -10,6 +10,7 @@ import {
   DataTable, type DataTableColumn, PageShell,
 } from "@workspace/ui-core";
 import { Download, Boxes, Warehouse, Tags } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 
 /**
@@ -202,6 +203,27 @@ export default function InventoryValuationPage() {
           >
             <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
           </GuardedButton>
+          <PrintButton
+            entityType="report_inventory_valuation"
+            entityId={todayLocal()}
+            payload={{
+              entity: {
+                title: "تقييم المخزون",
+                asOfDate: todayLocal(),
+                totalValuation: rows.reduce((s, r) => s + Number(r.valuation ?? 0), 0),
+                productCount: rows.length,
+                includeZeroStock,
+              },
+              items: rows.map((r) => ({
+                "المنتج": r.name,
+                "SKU": r.sku ?? "",
+                "المستودع": r.warehouseName ?? "",
+                "الكمية": Number(r.onHandQty ?? 0),
+                "متوسط التكلفة": Number(r.weightedAvgCost ?? 0),
+                "القيمة": Number(r.valuation ?? 0),
+              })),
+            }}
+          />
         </>
       }
     >
