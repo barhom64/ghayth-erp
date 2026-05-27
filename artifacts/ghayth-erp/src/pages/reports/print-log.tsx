@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, Repeat, Printer, AlertTriangle } from "lucide-react";
+import { Download, Repeat, Printer, AlertTriangle, FileDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@workspace/ui-core";
 
 interface JobRow {
@@ -47,21 +47,49 @@ export default function PrintLogPage() {
   // gap), "success" hides noise, "pending" shows jobs that crashed
   // mid-flight before writing a final status row.
   const [status, setStatus] = useState<string>("all");
+  const [page, setPage] = useState(0);
+  const pageSize = 100;
 
   const { data: branchesData } = useApiQuery<any>(["settings-branches"], "/settings/branches");
   const branches = (branchesData?.data ?? branchesData?.items ?? []) as Array<{ id: number; name: string }>;
 
-  const qs = new URLSearchParams();
-  if (branchId !== "all") qs.set("branchId", branchId);
-  if (entityType !== "all") qs.set("entityType", entityType);
-  if (status !== "all") qs.set("status", status);
-  if (from) qs.set("from", from);
-  if (to) qs.set("to", to);
+  // Filters that should reset pagination when changed. We pass them through
+  // the qs builder both for the page query and for the CSV download link.
+  const filterQs = () => {
+    const q = new URLSearchParams();
+    if (branchId !== "all") q.set("branchId", branchId);
+    if (entityType !== "all") q.set("entityType", entityType);
+    if (status !== "all") q.set("status", status);
+    if (from) q.set("from", from);
+    if (to) q.set("to", to);
+    return q;
+  };
 
-  const { data, isLoading, refetch } = useApiQuery<{ items: JobRow[] }>(
+  const qs = filterQs();
+  qs.set("limit", String(pageSize));
+  qs.set("offset", String(page * pageSize));
+
+  const { data, isLoading } = useApiQuery<{ items: JobRow[]; total: number; limit: number; offset: number }>(
     ["print-jobs", qs.toString()],
     `/print/jobs?${qs.toString()}`
   );
+
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  // Reset to page 0 whenever a filter changes — otherwise users land on an
+  // empty page when the new filter result has fewer rows than the offset.
+  const onFilter = <T,>(setter: (v: T) => void) => (v: T) => {
+    setter(v);
+    setPage(0);
+  };
+
+  function exportCsv() {
+    const q = filterQs();
+    // apiFetch isn't used here because the CSV endpoint streams a file —
+    // we want the browser's native download flow, not a fetch+blob.
+    window.open(`/api/print/jobs.csv?${q.toString()}`, "_blank");
+  }
 
   async function reprint(j: JobRow) {
     const reason = prompt("سبب طلب إعادة الطباعة:");
@@ -104,7 +132,7 @@ export default function PrintLogPage() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div>
               <Label>الحالة</Label>
-              <Select value={status} onValueChange={setStatus}>
+              <Select value={status} onValueChange={onFilter(setStatus)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">الكل</SelectItem>
@@ -116,7 +144,7 @@ export default function PrintLogPage() {
             </div>
             <div>
               <Label>الفرع</Label>
-              <Select value={branchId} onValueChange={setBranchId}>
+              <Select value={branchId} onValueChange={onFilter(setBranchId)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">الكل</SelectItem>
@@ -128,7 +156,7 @@ export default function PrintLogPage() {
             </div>
             <div>
               <Label>الكيان</Label>
-              <Select value={entityType} onValueChange={setEntityType}>
+              <Select value={entityType} onValueChange={onFilter(setEntityType)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">الكل</SelectItem>
@@ -145,11 +173,11 @@ export default function PrintLogPage() {
             </div>
             <div>
               <Label>من تاريخ</Label>
-              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              <Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(0); }} />
             </div>
             <div>
               <Label>إلى تاريخ</Label>
-              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(0); }} />
             </div>
           </div>
         </CardContent>
@@ -157,11 +185,16 @@ export default function PrintLogPage() {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Printer className="h-4 w-4" /> المطبوعات
-            {data?.items && (
-              <span className="text-xs text-muted-foreground">({data.items.length})</span>
-            )}
+          <CardTitle className="text-base flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <Printer className="h-4 w-4" /> المطبوعات
+              {data && (
+                <span className="text-xs text-muted-foreground">({total.toLocaleString("en-US")})</span>
+              )}
+            </span>
+            <Button size="sm" variant="outline" onClick={exportCsv} disabled={!total}>
+              <FileDown className="h-3 w-3 ml-1" /> تصدير CSV
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -230,6 +263,31 @@ export default function PrintLogPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          {total > pageSize && (
+            <div className="flex items-center justify-between mt-3 text-sm">
+              <span className="text-muted-foreground">
+                صفحة {(page + 1).toLocaleString("en-US")} من {totalPages.toLocaleString("en-US")}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0 || isLoading}
+                >
+                  <ChevronRight className="h-3 w-3" /> السابقة
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1 || isLoading}
+                >
+                  التالية <ChevronLeft className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

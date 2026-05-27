@@ -1,11 +1,14 @@
-import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useMemo, useState } from "react";
+import { useRoute } from "wouter";
+import { z } from "zod";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
   EntityComments,
 } from "@workspace/entity-kit";
+import { FormGrid, FormTextField, FormTextareaField, FormSelectField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,11 +55,21 @@ function riskTone(risk?: string | null) {
   return "default" as const;
 }
 
+const auditEditSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب"),
+  description: z.string().optional().default(""),
+  type: z.enum(["internal", "external", "compliance", "financial", "operational"]),
+  status: z.enum(["planned", "in_progress", "completed", "cancelled"]),
+  scheduledDate: z.string().optional().default(""),
+  auditorName: z.string().optional().default(""),
+});
+type AuditEditForm = z.infer<typeof auditEditSchema>;
+
 export default function AuditDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/governance/audits/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("audit", id ?? 0);
+  const [editOpen, setEditOpen] = useState(false);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["audit", String(id)],
@@ -80,10 +93,6 @@ export default function AuditDetail() {
     return out;
   }, [audit]);
 
-
-  const handleEdit = () => {
-    setLocation(`/governance/audits/${id}/edit`);
-  };
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -189,6 +198,7 @@ export default function AuditDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={audit?.title || "تفاصيل التدقيق"}
       subtitle={audit?.type ? TYPE_LABELS[audit.type] || audit.type : undefined}
@@ -224,7 +234,7 @@ export default function AuditDetail() {
             perm="governance:update"
             variant="outline"
             size="sm"
-            onClick={handleEdit}
+            onClick={() => setEditOpen(true)}
             disabled={!audit || ["completed", "cancelled"].includes(audit?.status)}
           >
             <Edit className="h-4 w-4 ms-1" />
@@ -233,5 +243,53 @@ export default function AuditDetail() {
         </>
       }
     />
+    {audit && id && (
+      <EntityEditDialog<AuditEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل التدقيق"
+        schema={auditEditSchema}
+        defaultValues={{
+          title: audit.title ?? "",
+          description: audit.description ?? "",
+          type: (audit.type ?? "internal") as AuditEditForm["type"],
+          status: (audit.status ?? "planned") as AuditEditForm["status"],
+          scheduledDate: audit.scheduledDate ?? "",
+          auditorName: audit.auditorName ?? "",
+        }}
+        endpoint={`/governance/audits/${id}`}
+        invalidateKeys={[["audit", String(id)], ["gov-audits"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="title" label="العنوان" required className="md:col-span-2" />
+          <FormSelectField
+            name="type"
+            label="النوع"
+            options={[
+              { value: "internal", label: "داخلي" },
+              { value: "external", label: "خارجي" },
+              { value: "compliance", label: "امتثال" },
+              { value: "financial", label: "مالي" },
+              { value: "operational", label: "تشغيلي" },
+            ]}
+          />
+          <FormSelectField
+            name="status"
+            label="الحالة"
+            options={[
+              { value: "planned", label: "مخطط" },
+              { value: "in_progress", label: "قيد التنفيذ" },
+              { value: "completed", label: "مكتمل" },
+              { value: "cancelled", label: "ملغى" },
+            ]}
+          />
+          <FormTextField name="scheduledDate" label="التاريخ المجدول" type="date" />
+          <FormTextField name="auditorName" label="المدقق" />
+          <FormTextareaField name="description" label="الوصف" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }

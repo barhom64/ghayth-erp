@@ -33,7 +33,10 @@ export default function InvoicesPage() {
   const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const [filters, setFilters] = useFilters();
+  // Seed status from ?status=… so deep-links land pre-filtered
+  // (e.g. /finance/invoices?status=draft from VAT readiness checklist).
+  const initialStatus = new URLSearchParams(window.location.search).get("status") || "";
+  const [filters, setFilters] = useFilters({ status: initialStatus });
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["invoices", scopeQueryString], `/finance/invoices${scopeSuffix}`);

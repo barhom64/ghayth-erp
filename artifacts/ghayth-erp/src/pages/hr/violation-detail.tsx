@@ -50,7 +50,11 @@ export default function ViolationDetail() {
   const { id } = useParams<{ id: string }>();
   const { extraTabs, hideTabs } = useRegistryTabs("violation", id ?? "");
 
-  const { data, isLoading, isError } = useApiQuery<any>(["hr-violation-detail", id], id ? `/hr/violations/${id}` : null);
+  const { data, isLoading, isError } = useApiQuery<any>(
+    ["hr-violation-detail", id],
+    `/hr/violations/${id}`,
+    !!id,
+  );
   const item = data?.data ?? data;
 
   const severity = item

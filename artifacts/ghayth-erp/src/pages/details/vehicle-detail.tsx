@@ -790,7 +790,7 @@ export default function VehicleDetail() {
     <DetailPageLayout
       title={`${vehicle?.make || ""} ${vehicle?.model || ""} ${vehicle?.year || ""}`.trim() || "المركبة"}
       subtitle={vehicle?.plateNumber || undefined}
-      backPath="/fleet/vehicles"
+      backPath="/fleet"
       backLabel="المركبات"
       status={vehicle ? { label: statusLabel, tone: vehicleStatusTone(vehicle.status) } : undefined}
       entityType="fleet-vehicle"

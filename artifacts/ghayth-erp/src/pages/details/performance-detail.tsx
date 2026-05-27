@@ -166,7 +166,7 @@ export default function PerformanceDetail() {
       { key: "improvements", label: "مجالات التحسين" },
       { key: "comments", label: "ملاحظات" },
     ],
-    invalidateKeys: [["performance-review", String(id)], ["performance-reviews"]],
+    invalidateKeys: [["performance", String(id)], ["performance"]],
     onSaved: () => refetch(),
   });
 

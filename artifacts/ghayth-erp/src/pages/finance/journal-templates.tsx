@@ -60,6 +60,11 @@ interface JournalTemplate {
   activityType: string | null;
   isActive: boolean;
   lineCount?: number;
+  // The list endpoint joins template lines onto each row, so the
+  // edit dialog can hydrate from `initial.lines` directly without a
+  // second GET /journal-templates/:id round-trip (the backend doesn't
+  // expose that detail route — only PUT and DELETE on /:id).
+  lines?: JournalTemplateLine[];
 }
 
 interface JournalTemplateLine {
@@ -274,17 +279,11 @@ function TemplateDialog({
   initial: JournalTemplate | null;
   onSaved: () => void;
 }) {
-  // On edit, we need the full template *with* lines — the list
-  // response only carries the header row. Fetch the detail when the
-  // dialog opens for editing. The endpoint is GET
-  // /finance/journal-templates/:id — although the static audit
-  // tagged it as unused, this fetch wires it up (it's a real
-  // backend endpoint, see accounting-engine.ts).
-  const detailQ = useApiQuery<{ data: JournalTemplate & { lines: JournalTemplateLine[] } }>(
-    ["finance-journal-template-detail", String(initial?.id ?? 0)],
-    initial ? `/finance/journal-templates/${initial.id}` : "",
-    !!initial,
-  );
+  // `initial` (the row from the list) already includes the template
+  // lines — the list endpoint joins journal_entry_template_lines onto
+  // each row. The backend doesn't expose a GET /:id endpoint and a
+  // previous code path was hitting that non-existent route (the audit
+  // surfaced it as a method-mismatch). Hydrate directly from `initial`.
 
   const createMut = useApiMutation<JournalTemplate, TemplateForm>(
     "/finance/journal-templates",
@@ -299,35 +298,22 @@ function TemplateDialog({
     { successMessage: "تم تحديث القالب" },
   );
 
-  // For edit, hydrate from the fetched detail (which contains lines)
-  // when it arrives; before then, render with header-only defaults so
-  // the dialog can still open instantly.
-  const detail = detailQ.data?.data ?? null;
-  const defaults: TemplateForm =
-    initial && detail
-      ? {
-          name: detail.name,
-          operationType: detail.operationType,
-          description: detail.description ?? "",
-          activityType: detail.activityType ?? "",
-          lines:
-            detail.lines && detail.lines.length > 0
-              ? detail.lines.map((l) => ({
-                  accountCode: l.accountCode ?? "",
-                  lineType: (l.lineType as "debit" | "credit") ?? "debit",
-                  description: l.description ?? "",
-                }))
-              : [{ accountCode: "", lineType: "debit", description: "" }],
-        }
-      : initial
-      ? {
-          name: initial.name,
-          operationType: initial.operationType,
-          description: initial.description ?? "",
-          activityType: initial.activityType ?? "",
-          lines: [{ accountCode: "", lineType: "debit", description: "" }],
-        }
-      : EMPTY_DEFAULTS;
+  const defaults: TemplateForm = initial
+    ? {
+        name: initial.name,
+        operationType: initial.operationType,
+        description: initial.description ?? "",
+        activityType: initial.activityType ?? "",
+        lines:
+          initial.lines && initial.lines.length > 0
+            ? initial.lines.map((l) => ({
+                accountCode: l.accountCode ?? "",
+                lineType: (l.lineType as "debit" | "credit") ?? "debit",
+                description: l.description ?? "",
+              }))
+            : [{ accountCode: "", lineType: "debit", description: "" }],
+      }
+    : EMPTY_DEFAULTS;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -341,7 +327,7 @@ function TemplateDialog({
         <FormShell
           // Remount on each `initial` switch so defaults re-seed when
           // the detail response lands.
-          key={`${initial?.id ?? "new"}-${detail ? "loaded" : "fresh"}`}
+          key={`${initial?.id ?? "new"}`}
           schema={templateSchema}
           defaultValues={defaults}
           submitLabel={mode === "create" ? "إنشاء" : "حفظ"}

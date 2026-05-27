@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatNumber } from "@/lib/formatters";
-import { Plus, Workflow, AlertTriangle, Pencil } from "lucide-react";
+import { Plus, Workflow, AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
@@ -65,6 +66,10 @@ const STRATEGY_LABEL: Record<string, string> = {
 export default function AllocationRulesPage() {
   const [docTypeFilter, setDocTypeFilter] = useState<string>("");
   const [activeFilter, setActiveFilter] = useState<string>("");
+  // ConfirmDeleteDialog fires DELETE /finance/allocation-rules/:id
+  // itself (audit scanner picks up the deletePath prop). No separate
+  // mutation needed here — the dialog owns the call.
+  const [deleting, setDeleting] = useState<AllocationRule | null>(null);
 
   const params = new URLSearchParams();
   if (docTypeFilter) params.set("documentType", docTypeFilter);
@@ -131,13 +136,24 @@ export default function AllocationRulesPage() {
       render: (r) => r.isActive
         ? <Badge className="bg-emerald-100 text-emerald-800 text-xs">نشطة</Badge>
         : <Badge variant="outline" className="text-xs">معطّلة</Badge> },
-    { key: "_actions", header: "تعديل",
+    { key: "_actions", header: "إجراءات",
       render: (r) => (
-        <Link href={`/finance/allocation-rules/${r.id}/edit`}>
-          <Button variant="ghost" size="sm" className="h-7 px-2" title="تعديل القاعدة">
-            <Pencil className="h-3.5 w-3.5" />
+        <div className="flex items-center gap-1">
+          <Link href={`/finance/allocation-rules/${r.id}/edit`}>
+            <Button variant="ghost" size="sm" className="h-7 px-2" title="تعديل القاعدة">
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-status-error-foreground"
+            title="حذف القاعدة"
+            onClick={() => setDeleting(r)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
           </Button>
-        </Link>
+        </div>
       ) },
   ];
 
@@ -254,6 +270,18 @@ export default function AllocationRulesPage() {
           />
         </CardContent>
       </Card>
+
+      {deleting && (
+        <ConfirmDeleteDialog
+          open={!!deleting}
+          onOpenChange={(o) => { if (!o) setDeleting(null); }}
+          entity={{ type: "allocation-rule", id: deleting.id, name: deleting.name }}
+          deletePath={`/finance/allocation-rules/${deleting.id}`}
+          invalidateKeys={[["allocation-rules"]]}
+          successMessage="تم حذف القاعدة"
+          onDeleted={() => setDeleting(null)}
+        />
+      )}
     </PageShell>
   );
 }

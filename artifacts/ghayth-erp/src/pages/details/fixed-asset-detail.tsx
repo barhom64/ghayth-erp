@@ -1,6 +1,9 @@
-import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useMemo, useState } from "react";
+import { useRoute } from "wouter";
+import { z } from "zod";
 import { useApiQuery } from "@/lib/api";
+import { FormGrid, FormTextField, FormTextareaField, FormSelectField, FormNumberField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import {
   DetailPageLayout,
   type RelatedEntity,
@@ -40,10 +43,21 @@ function statusTone(status: string) {
   return "default" as const;
 }
 
+const fixedAssetEditSchema = z.object({
+  name: z.string().min(1, "اسم الأصل مطلوب"),
+  description: z.string().optional().default(""),
+  category: z.string().optional().default(""),
+  salvageValue: z.coerce.number().optional().default(0),
+  usefulLifeYears: z.coerce.number().min(1, "العمر الإنتاجي يجب أن يكون أكبر من صفر"),
+  depreciationMethod: z.enum(["straight_line", "double_declining", "units_of_production"]),
+  status: z.enum(["active", "disposed", "sold", "under_maintenance"]),
+});
+type FixedAssetEditForm = z.infer<typeof fixedAssetEditSchema>;
+
 export default function FixedAssetDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/fixed-assets/:id");
   const id = params?.id ? Number(params.id) : null;
+  const [editOpen, setEditOpen] = useState(false);
   const { extraTabs, hideTabs } = useRegistryTabs("fixed-asset", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -224,6 +238,7 @@ export default function FixedAssetDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={item?.name || "تفاصيل الأصل الثابت"}
       subtitle={item?.category}
@@ -253,7 +268,7 @@ export default function FixedAssetDetail() {
             perm="finance:update"
             variant="outline"
             size="sm"
-            onClick={() => setLocation("/finance/fixed-assets")}
+            onClick={() => setEditOpen(true)}
             disabled={!item || ["disposed", "sold"].includes(item.status)}
           >
             <Edit className="h-4 w-4 ms-1" />
@@ -262,6 +277,54 @@ export default function FixedAssetDetail() {
         </>
       }
     />
+    {item && id && (
+      <EntityEditDialog<FixedAssetEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل الأصل الثابت"
+        schema={fixedAssetEditSchema}
+        defaultValues={{
+          name: item.name ?? "",
+          description: item.description ?? "",
+          category: item.category ?? "",
+          salvageValue: Number(item.salvageValue ?? 0),
+          usefulLifeYears: Number(item.usefulLifeYears ?? 5),
+          depreciationMethod: (item.depreciationMethod ?? "straight_line") as FixedAssetEditForm["depreciationMethod"],
+          status: (item.status ?? "active") as FixedAssetEditForm["status"],
+        }}
+        endpoint={`/finance/fixed-assets/${id}`}
+        invalidateKeys={[["fixed-asset", String(id)], ["fixed-assets"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="name" label="اسم الأصل" required className="md:col-span-2" />
+          <FormTextField name="category" label="الفئة" />
+          <FormSelectField
+            name="status"
+            label="الحالة"
+            options={[
+              { value: "active", label: "نشط" },
+              { value: "under_maintenance", label: "تحت الصيانة" },
+              { value: "disposed", label: "مستبعد" },
+              { value: "sold", label: "مُباع" },
+            ]}
+          />
+          <FormNumberField name="usefulLifeYears" label="العمر الإنتاجي (سنوات)" />
+          <FormNumberField name="salvageValue" label="القيمة المتبقية" />
+          <FormSelectField
+            name="depreciationMethod"
+            label="طريقة الإهلاك"
+            options={[
+              { value: "straight_line", label: "القسط الثابت" },
+              { value: "double_declining", label: "القسط المتناقص المضاعف" },
+              { value: "units_of_production", label: "وحدات الإنتاج" },
+            ]}
+          />
+          <FormTextareaField name="description" label="الوصف" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }
 

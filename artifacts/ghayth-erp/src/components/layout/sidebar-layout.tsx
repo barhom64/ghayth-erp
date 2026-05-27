@@ -180,76 +180,76 @@ const allNavSections: NavSection[] = [
   {
     title: "المالية والمحاسبة",
     items: [
-      { label: "🆕 مركز سير العمل المالي", path: "/finance/workflows-hub", icon: Sparkles, module: "finance" },
+      { label: "مركز سير العمل المالي", path: "/finance/workflows-hub", icon: Sparkles, module: "finance" },
       { label: "CFO Cockpit", path: "/finance/cfo-cockpit", icon: BarChart3, module: "finance" },
-      { label: "فحص الإغلاق اليومي 🆕", path: "/finance/daily-close-checklist", icon: ListChecks, module: "finance" },
+      { label: "فحص الإغلاق اليومي", path: "/finance/daily-close-checklist", icon: ListChecks, module: "finance" },
       { label: "حزمة الإقفال الشهري", path: "/finance/monthly-close-pack", icon: FileBarChart, module: "finance" },
       { label: "الحسابات والقيود", path: "/finance/accounts", icon: GitBranch, module: "finance", children: [
         { label: "شجرة الحسابات", path: "/finance/accounts", icon: GitBranch },
         { label: "القيود اليومية", path: "/finance/journal", icon: ScrollText },
-        { label: "ميزان مع تتبّع 🆕", path: "/finance/trial-balance-drilldown", icon: Scale },
-        { label: "كاشف الشذوذ 🆕", path: "/finance/gl-anomaly-detector", icon: ShieldAlert },
+        { label: "ميزان مع تتبّع", path: "/finance/trial-balance-drilldown", icon: Scale },
+        { label: "كاشف الشذوذ", path: "/finance/gl-anomaly-detector", icon: ShieldAlert },
         { label: "القيود اليدوية", path: "/finance/journal-manual", icon: FileSignature },
-        { label: "قوالب قيود سريعة 🆕", path: "/finance/journal-quick-templates", icon: Zap },
-        { label: "معالج عكس قيد 🆕", path: "/finance/journal/reverse", icon: ArrowLeftRight },
+        { label: "قوالب قيود سريعة", path: "/finance/journal-quick-templates", icon: Zap },
+        { label: "معالج عكس قيد", path: "/finance/journal/reverse", icon: ArrowLeftRight },
         { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
-        { label: "تقويم الدورية 🆕", path: "/finance/recurring-calendar", icon: Calendar },
+        { label: "تقويم الدورية", path: "/finance/recurring-calendar", icon: Calendar },
         { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus },
       ]},
       { label: "الفواتير والسندات", path: "/finance/invoices", icon: Receipt, module: "finance", children: [
         { label: "الفواتير", path: "/finance/invoices", icon: Receipt },
-        { label: "صف الإرسال 🆕", path: "/finance/invoice-send-queue", icon: Send },
+        { label: "صف الإرسال", path: "/finance/invoice-send-queue", icon: Send },
         { label: "السندات", path: "/finance/vouchers", icon: FileText },
         { label: "المصروفات", path: "/finance/expenses", icon: Wallet },
-        { label: "مصروف متعدد البنود 🆕", path: "/finance/expenses/multi-line", icon: Layers },
-        { label: "موزّع التكاليف 🆕", path: "/finance/expenses/split", icon: Layers },
-        { label: "تحويل بين الحسابات 🆕", path: "/finance/treasury/transfer", icon: ArrowLeftRight },
+        { label: "مصروف متعدد البنود", path: "/finance/expenses/multi-line", icon: Layers },
+        { label: "موزّع التكاليف", path: "/finance/expenses/split", icon: Layers },
+        { label: "تحويل بين الحسابات", path: "/finance/treasury/transfer", icon: ArrowLeftRight },
         { label: "المقبوضات", path: "/finance/receivables", icon: DollarSign },
-        { label: "تسجيل دفعة عميل 🆕", path: "/finance/receivables/receipt", icon: DollarSign },
+        { label: "تسجيل دفعة عميل", path: "/finance/receivables/receipt", icon: DollarSign },
         { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
       ]},
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
         { label: "طلبات الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },
         { label: "الموردين", path: "/finance/vendors", icon: Users },
-        { label: "منضدة التسوية 🆕", path: "/finance/vendor-settlement-workbench", icon: Briefcase },
-        { label: "كشف حساب مورد للطباعة 🆕", path: "/finance/vendor-statement-print", icon: Printer },
-        { label: "ملف المورد 360° 🆕", path: "/finance/vendor-360-sheet", icon: Users },
-        { label: "إنفاق الموردين 🆕", path: "/finance/vendor-spend", icon: BarChart3 },
+        { label: "منضدة التسوية", path: "/finance/vendor-settlement-workbench", icon: Briefcase },
+        { label: "كشف حساب مورد للطباعة", path: "/finance/vendor-statement-print", icon: Printer },
+        { label: "ملف المورد 360°", path: "/finance/vendor-360-sheet", icon: Users },
+        { label: "إنفاق الموردين", path: "/finance/vendor-spend", icon: BarChart3 },
         { label: "دفعة الدفع", path: "/finance/payment-run", icon: Banknote },
-        { label: "تقويم الدفعات 🆕", path: "/finance/ap-payment-calendar", icon: Calendar },
-        { label: "متابعة عقود الموردين 🆕", path: "/finance/vendor-contracts-tracker", icon: FileSignature },
+        { label: "تقويم الدفعات", path: "/finance/ap-payment-calendar", icon: Calendar },
+        { label: "متابعة عقود الموردين", path: "/finance/vendor-contracts-tracker", icon: FileSignature },
       ]},
       { label: "النقد والذمم", path: "/finance/treasury", icon: Building, module: "finance", children: [
-        { label: "مراقبة البنوك 🆕", path: "/finance/bank-accounts-watch", icon: Banknote },
+        { label: "مراقبة البنوك", path: "/finance/bank-accounts-watch", icon: Banknote },
         { label: "الخزينة", path: "/finance/treasury", icon: Wallet },
         { label: "التسوية البنكية", path: "/finance/bank-reconciliation", icon: Building },
-        { label: "ورقة عمل تسوية حساب 🆕", path: "/finance/account-recon-workpaper", icon: FileSignature },
+        { label: "ورقة عمل تسوية حساب", path: "/finance/account-recon-workpaper", icon: FileSignature },
         { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
-        { label: "منضدة التحصيل 🆕", path: "/finance/ar-collection-workbench", icon: Users },
-        { label: "كشف حساب عميل للطباعة 🆕", path: "/finance/customer-statement-print", icon: Printer },
-        { label: "ملف العميل 360° 🆕", path: "/finance/customer-360-sheet", icon: Users },
+        { label: "منضدة التحصيل", path: "/finance/ar-collection-workbench", icon: Users },
+        { label: "كشف حساب عميل للطباعة", path: "/finance/customer-statement-print", icon: Printer },
+        { label: "ملف العميل 360°", path: "/finance/customer-360-sheet", icon: Users },
         { label: "مخاطر العملاء", path: "/finance/customer-risk", icon: AlertTriangle },
-        { label: "مخصص ديون مشكوك فيها 🆕", path: "/finance/bad-debt-provision", icon: TrendingUp },
+        { label: "مخصص ديون مشكوك فيها", path: "/finance/bad-debt-provision", icon: TrendingUp },
         { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
         { label: "لوحة التدفق النقدي", path: "/finance/cashflow", icon: LineChart },
         { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
-        { label: "تقويم النقدية 🆕", path: "/finance/cash-calendar", icon: Calendar },
-        { label: "13-Week Cash 🆕", path: "/finance/cash-13week", icon: TrendingUp },
-        { label: "حاسبة الوضع النقدي 🆕", path: "/finance/cash-position-calculator", icon: Calculator },
+        { label: "تقويم النقدية", path: "/finance/cash-calendar", icon: Calendar },
+        { label: "13-Week Cash", path: "/finance/cash-13week", icon: TrendingUp },
+        { label: "حاسبة الوضع النقدي", path: "/finance/cash-position-calculator", icon: Calculator },
       ]},
       { label: "الأصول والعهد", path: "/finance/fixed-assets", icon: Building2, module: "finance", children: [
         { label: "الأصول الثابتة", path: "/finance/fixed-assets", icon: Building2 },
-        { label: "سجل الأصول التحليلي 🆕", path: "/finance/fixed-asset-register", icon: BarChart3 },
-        { label: "إهلاك دفعة واحدة 🆕", path: "/finance/fixed-assets/batch-depreciate", icon: TrendingUp },
+        { label: "سجل الأصول التحليلي", path: "/finance/fixed-asset-register", icon: BarChart3 },
+        { label: "إهلاك دفعة واحدة", path: "/finance/fixed-assets/batch-depreciate", icon: TrendingUp },
         { label: "العهد", path: "/finance/custodies", icon: KeyRound },
-        { label: "منضدة العُهد 🆕", path: "/finance/custody-workbench", icon: KeyRound },
+        { label: "منضدة العُهد", path: "/finance/custody-workbench", icon: KeyRound },
       ]},
       { label: "الفترات والميزانية", path: "/finance/budget", icon: FileBarChart, module: "finance", children: [
         { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
-        { label: "خريطة حرارية 🆕", path: "/finance/budget-heatmap", icon: BarChart3 },
+        { label: "خريطة حرارية", path: "/finance/budget-heatmap", icon: BarChart3 },
         { label: "الفترات المالية", path: "/finance/fiscal-periods", icon: Calendar },
         { label: "إقفال الفترات", path: "/finance/fiscal-periods-v2", icon: Lock },
-        { label: "فحص قبل الإقفال 🆕", path: "/finance/period-close-preflight", icon: ShieldAlert },
+        { label: "فحص قبل الإقفال", path: "/finance/period-close-preflight", icon: ShieldAlert },
         { label: "إقفال السنة المالية", path: "/finance/year-end-close", icon: Archive },
       ]},
       { label: "الالتزامات والضمانات", path: "/finance/commitments", icon: FileSignature, module: "finance", children: [
@@ -258,35 +258,35 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "التكاليف والتسويات", path: "/finance/project-costing", icon: FolderOpen, module: "finance", children: [
         { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
-        { label: "محفظة المشاريع 🆕", path: "/finance/project-portfolio", icon: BarChart3 },
-        { label: "محفظة المركبات 🆕", path: "/finance/vehicle-portfolio", icon: BarChart3 },
-        { label: "محفظة العقارات 🆕", path: "/finance/property-portfolio", icon: BarChart3 },
-        { label: "Cost Center P&L 🆕", path: "/finance/cost-center-pnl", icon: BarChart3 },
+        { label: "محفظة المشاريع", path: "/finance/project-portfolio", icon: BarChart3 },
+        { label: "محفظة المركبات", path: "/finance/vehicle-portfolio", icon: BarChart3 },
+        { label: "محفظة العقارات", path: "/finance/property-portfolio", icon: BarChart3 },
+        { label: "Cost Center P&L", path: "/finance/cost-center-pnl", icon: BarChart3 },
         { label: "تقييم المخزون", path: "/finance/inventory-costing", icon: Package },
         { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
       ]},
       { label: "الضرائب والتقارير", path: "/finance/tax", icon: Scale, module: "finance", children: [
         { label: "نظام الضرائب", path: "/finance/tax", icon: Scale },
-        { label: "تقويم الإقرارات 🆕", path: "/finance/tax-filing-calendar", icon: Calendar },
-        { label: "جاهزية ZATCA 🆕", path: "/finance/vat-filing-readiness", icon: FileCheck },
+        { label: "تقويم الإقرارات", path: "/finance/tax-filing-calendar", icon: Calendar },
+        { label: "جاهزية ZATCA", path: "/finance/vat-filing-readiness", icon: FileCheck },
         { label: "ZATCA Reports Hub", path: "/finance/reports/zatca", icon: FileCheck },
         { label: "تسوية VAT", path: "/finance/reports/vat-reconciliation", icon: Scale },
         { label: "ملخص WHT", path: "/finance/reports/wht-summary", icon: Percent },
-        { label: "إعداد إقرار WHT 🆕", path: "/finance/wht-filing-workbench", icon: FileCheck },
+        { label: "إعداد إقرار WHT", path: "/finance/wht-filing-workbench", icon: FileCheck },
         { label: "التقارير المالية", path: "/finance/reports", icon: FileBarChart },
-        { label: "P&L مقابل الميزانية 🆕", path: "/finance/reports/is-vs-budget", icon: Scale },
-        { label: "اتجاه قائمة الدخل 🆕", path: "/finance/reports/is-trend", icon: TrendingUp },
-        { label: "قائمة التدفقات النقدية 🆕", path: "/finance/reports/cash-flow-statement", icon: Banknote },
-        { label: "Y/Y Comparison 🆕", path: "/finance/reports/yoy", icon: BarChart2 },
-        { label: "معدل الحرق 🆕", path: "/finance/expense-burn-rate", icon: Activity },
-        { label: "محلل الإيرادات 🆕", path: "/finance/revenue-mix", icon: BarChart3 },
-        { label: "محلل المصاريف 🆕", path: "/finance/expense-mix", icon: BarChart3 },
-        { label: "DSO Trend 🆕", path: "/finance/reports/dso-trend", icon: Activity },
-        { label: "GL Health Score 🆕", path: "/finance/gl-health", icon: ShieldAlert },
+        { label: "P&L مقابل الميزانية", path: "/finance/reports/is-vs-budget", icon: Scale },
+        { label: "اتجاه قائمة الدخل", path: "/finance/reports/is-trend", icon: TrendingUp },
+        { label: "قائمة التدفقات النقدية", path: "/finance/reports/cash-flow-statement", icon: Banknote },
+        { label: "Y/Y Comparison", path: "/finance/reports/yoy", icon: BarChart2 },
+        { label: "معدل الحرق", path: "/finance/expense-burn-rate", icon: Activity },
+        { label: "محلل الإيرادات", path: "/finance/revenue-mix", icon: BarChart3 },
+        { label: "محلل المصاريف", path: "/finance/expense-mix", icon: BarChart3 },
+        { label: "DSO Trend", path: "/finance/reports/dso-trend", icon: Activity },
+        { label: "GL Health Score", path: "/finance/gl-health", icon: ShieldAlert },
       ]},
       { label: "صناديق الواردات", path: "/finance/approvals-inbox", icon: Bell, module: "finance", children: [
-        { label: "Approvals Inbox 🆕", path: "/finance/approvals-inbox", icon: Bell },
-        { label: "ملف الجهة 360° 🆕", path: "/finance/entity-360", icon: Sparkles },
+        { label: "Approvals Inbox", path: "/finance/approvals-inbox", icon: Bell },
+        { label: "ملف الجهة 360°", path: "/finance/entity-360", icon: Sparkles },
         { label: "GL Integrity Gaps", path: "/finance/reports/gl-integrity-gaps", icon: AlertTriangle },
         { label: "Unmapped Lines", path: "/finance/reports/unmapped-lines", icon: AlertTriangle },
         { label: "Posting Activity", path: "/finance/journal/activity", icon: Activity },
@@ -617,26 +617,36 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const filteredNavItems = filteredSections.flatMap(s => s.items);
 
   useEffect(() => {
-    const toExpand: string[] = [];
-    const checkItem = (item: NavItem) => {
-      if (item.children) {
-        const isChildActive = item.children.some(
-          (c) => location === c.path || location.startsWith(c.path + "/") || (c.children && c.children.some(gc => location === gc.path || location.startsWith(gc.path + "/")))
-        );
-        if (isChildActive && !expandedItems.includes(item.path)) {
-          toExpand.push(item.path);
-        }
-        for (const child of item.children) {
-          checkItem(child);
-        }
+    // Accordion-style auto-expand: when the route changes, find which
+    // parent items lead to the active path and open only them. Anything
+    // previously expanded that isn't on the active lineage collapses,
+    // so the sidebar mirrors the user's current location instead of
+    // accumulating every section they ever opened.
+    const lineage: string[] = [];
+    const walk = (item: NavItem, ancestors: string[]) => {
+      if (!item.children) return;
+      const isChildActive = item.children.some(
+        (c) => location === c.path || location.startsWith(c.path + "/") || (c.children && c.children.some(gc => location === gc.path || location.startsWith(gc.path + "/")))
+      );
+      if (isChildActive) {
+        lineage.push(...ancestors, item.path);
+      }
+      for (const child of item.children) {
+        walk(child, [...ancestors, item.path]);
       }
     };
     for (const item of filteredNavItems) {
-      checkItem(item);
+      walk(item, []);
     }
-    if (toExpand.length > 0) {
-      setExpandedItems((prev) => [...prev, ...toExpand.filter(p => !prev.includes(p))]);
-    }
+    if (lineage.length === 0) return;
+    setExpandedItems((prev) => {
+      // Equal sets — bail out so we don't fire a no-op re-render.
+      const dedup = Array.from(new Set(lineage));
+      if (dedup.length === prev.length && dedup.every((p) => prev.includes(p))) {
+        return prev;
+      }
+      return dedup;
+    });
   }, [location]);
 
     useEffect(() => {
@@ -651,9 +661,20 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     }, [location, user]);
 
     const toggleExpand = (path: string) => {
-    setExpandedItems((prev) =>
-      prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]
-    );
+    // Accordion behavior: opening an item closes every sibling/cousin
+    // that isn't an ancestor of the newly-opened path. Ancestors stay
+    // open so the navigation tree to the active node remains visible.
+    //
+    // - close X: drop X and any of its descendants from the expanded set.
+    // - open X: keep only ancestors of X (paths that are a strict prefix
+    //   of X), then add X. Anything unrelated collapses.
+    setExpandedItems((prev) => {
+      if (prev.includes(path)) {
+        return prev.filter((p) => p !== path && !p.startsWith(path + "/"));
+      }
+      const ancestors = prev.filter((p) => path.startsWith(p + "/"));
+      return [...ancestors, path];
+    });
   };
 
   const isItemActive = (item: NavItem): boolean => {

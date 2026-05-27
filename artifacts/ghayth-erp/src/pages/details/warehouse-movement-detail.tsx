@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -45,7 +45,6 @@ function typeTone(type?: string | null) {
 }
 
 export default function WarehouseMovementDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/warehouse/movements/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("warehouse-movement", id ?? 0);
@@ -93,10 +92,6 @@ export default function WarehouseMovementDetail() {
     return out;
   }, [movement]);
 
-
-  const handleEdit = () => {
-    setLocation(`/warehouse/movements/${id}/edit`);
-  };
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -241,10 +236,6 @@ export default function WarehouseMovementDetail() {
               entityId={movement.id ?? id}
               formats={["a4", "label"]}/>
           )}
-          <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!movement}>
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

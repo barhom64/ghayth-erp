@@ -1,11 +1,14 @@
-import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useMemo, useState } from "react";
+import { useRoute } from "wouter";
+import { z } from "zod";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
   EntityComments,
 } from "@workspace/entity-kit";
+import { FormGrid, FormTextField, FormTextareaField, FormSelectField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,11 +37,20 @@ function statusTone(status?: string | null) {
   return "default" as const;
 }
 
+const complianceEditSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب"),
+  description: z.string().optional().default(""),
+  regulation: z.string().optional().default(""),
+  status: z.enum(["compliant", "non_compliant", "partial", "pending_review"]),
+  assessmentDate: z.string().optional().default(""),
+});
+type ComplianceEditForm = z.infer<typeof complianceEditSchema>;
+
 export default function ComplianceDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/governance/compliance/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("compliance", id ?? 0);
+  const [editOpen, setEditOpen] = useState(false);
 
   const { toast } = useToast();
 
@@ -73,10 +85,6 @@ export default function ComplianceDetail() {
     return out;
   }, [compliance]);
 
-
-  const handleEdit = () => {
-    setLocation(`/governance/compliance/${id}/edit`);
-  };
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -217,6 +225,7 @@ export default function ComplianceDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={compliance?.requirement || compliance?.title || "تفاصيل الامتثال"}
       subtitle={compliance?.framework}
@@ -256,7 +265,7 @@ export default function ComplianceDetail() {
             perm="governance:update"
             variant="outline"
             size="sm"
-            onClick={handleEdit}
+            onClick={() => setEditOpen(true)}
             disabled={!compliance}
           >
             <Edit className="h-4 w-4 ms-1" />
@@ -265,5 +274,41 @@ export default function ComplianceDetail() {
         </>
       }
     />
+    {compliance && id && (
+      <EntityEditDialog<ComplianceEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل سجل الامتثال"
+        schema={complianceEditSchema}
+        defaultValues={{
+          title: compliance.title ?? "",
+          description: compliance.description ?? "",
+          regulation: compliance.regulation ?? "",
+          status: (compliance.status ?? "pending_review") as ComplianceEditForm["status"],
+          assessmentDate: compliance.assessmentDate ?? "",
+        }}
+        endpoint={`/governance/compliance/${id}`}
+        invalidateKeys={[["compliance", String(id)], ["gov-compliance"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="title" label="العنوان" required className="md:col-span-2" />
+          <FormTextField name="regulation" label="اللائحة / المرجع" />
+          <FormSelectField
+            name="status"
+            label="الحالة"
+            options={[
+              { value: "compliant", label: "ملتزم" },
+              { value: "partial", label: "جزئي" },
+              { value: "non_compliant", label: "غير ملتزم" },
+              { value: "pending_review", label: "قيد المراجعة" },
+            ]}
+          />
+          <FormTextField name="assessmentDate" label="تاريخ التقييم" type="date" />
+          <FormTextareaField name="description" label="الوصف" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }

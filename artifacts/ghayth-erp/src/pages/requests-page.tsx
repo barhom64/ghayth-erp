@@ -672,6 +672,11 @@ function WorkflowsTab() {
 }
 
 export default function RequestsPage() {
+  const [location] = useLocation();
+  const initialTab =
+    location === "/requests/types" ? "types" :
+    location === "/requests/workflows" ? "workflows" :
+    "catalog";
   const { data: stats, isLoading, isError } = useApiQuery<any>(["req-stats"], "/requests/stats");
 
   if (isLoading) return <LoadingSpinner />;
@@ -698,7 +703,7 @@ export default function RequestsPage() {
           </Card>
         ))}
       </div>
-      <Tabs defaultValue="catalog" dir="rtl">
+      <Tabs defaultValue={initialTab} dir="rtl">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="catalog">مركز الطلبات</TabsTrigger>
           <TabsTrigger value="requests">الطلبات</TabsTrigger>
