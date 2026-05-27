@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Banknote, TrendingUp, TrendingDown, AlertTriangle, Download,
   Calendar, ChevronRight,
@@ -189,9 +190,29 @@ export default function Cash13WeekPage() {
         { label: "13 أسبوع" },
       ]}
       actions={
-        <Button variant="outline" size="sm" onClick={exportCsv} disabled={weeks.length === 0}>
-          <Download className="h-4 w-4 me-1" /> CSV
-        </Button>
+        <>
+          <Button variant="outline" size="sm" onClick={exportCsv} disabled={weeks.length === 0}>
+            <Download className="h-4 w-4 me-1" /> CSV
+          </Button>
+          <PrintButton
+            entityType="report_cash_13week"
+            entityId={todayLocal()}
+            payload={{
+              entity: {
+                title: "تدفق نقدي — 13 أسبوع قادم",
+                asOfDate: todayLocal(),
+                weekCount: weeks.length,
+              },
+              items: weeks.map((w: any) => ({
+                "الأسبوع": w.label ?? w.startDate,
+                "الوارد": Number(w.inflow ?? 0),
+                "الصادر": Number(w.outflow ?? 0),
+                "الصافي": Number((w.inflow ?? 0) - (w.outflow ?? 0)),
+                "الرصيد التراكمي": Number(w.endingBalance ?? 0),
+              })),
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />

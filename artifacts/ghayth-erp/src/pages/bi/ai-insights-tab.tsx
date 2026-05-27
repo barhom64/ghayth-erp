@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
 import {
-  Brain, CheckCircle2, ArrowUpRight, Lightbulb, ShieldAlert, X,
+  Brain, CheckCircle2, ArrowUpRight, Lightbulb, ShieldAlert, X, Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
@@ -15,6 +15,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 
 export function AIInsightsTab() {
   const [dismissingId, setDismissingId] = useState<number | null>(null);
+  const [readingId, setReadingId] = useState<number | null>(null);
   const { toast } = useToast();
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["bi-ai-insights"], "/bi/ai-insights");
   const alerts = (data?.alerts || []) as any[];
@@ -31,6 +32,22 @@ export function AIInsightsTab() {
       toast({ title: "خطأ", variant: "destructive" });
     }
     setDismissingId(null);
+  };
+
+  // PATCH /bi/ai-insights/:id/read marks an alert as read without
+  // dismissing it — keeps it in the list but visually demotes it. Pairs
+  // with /dismiss (hide entirely) so an operator can triage by either
+  // hiding an alert or acknowledging it for later action.
+  const handleMarkRead = async (id: number) => {
+    setReadingId(id);
+    try {
+      await apiFetch(`/bi/ai-insights/${id}/read`, { method: "PATCH" });
+      toast({ title: "تم تعليم التنبيه كمقروء" });
+      refetch();
+    } catch {
+      toast({ title: "خطأ", variant: "destructive" });
+    }
+    setReadingId(null);
   };
 
   const severityConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -96,15 +113,28 @@ export function AIInsightsTab() {
                       )}
                     </div>
                   </div>
-                  <GuardedButton
-                    perm="bi:create"
-                    size="sm" variant="ghost"
-                    onClick={() => handleDismiss(alert.id)}
-                    disabled={dismissingId === alert.id}
-                    className="shrink-0"
-                  >
-                    <X className="h-4 w-4" />
-                  </GuardedButton>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {!alert.isRead && (
+                      <GuardedButton
+                        perm="bi:create"
+                        size="sm" variant="ghost"
+                        onClick={() => handleMarkRead(alert.id)}
+                        disabled={readingId === alert.id}
+                        title="تعليم كمقروء"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </GuardedButton>
+                    )}
+                    <GuardedButton
+                      perm="bi:create"
+                      size="sm" variant="ghost"
+                      onClick={() => handleDismiss(alert.id)}
+                      disabled={dismissingId === alert.id}
+                      title="إغلاق"
+                    >
+                      <X className="h-4 w-4" />
+                    </GuardedButton>
+                  </div>
                 </div>
               </CardContent>
             </Card>
