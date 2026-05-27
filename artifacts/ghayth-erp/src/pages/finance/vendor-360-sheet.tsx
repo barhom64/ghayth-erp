@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { VendorSelect } from "@/components/shared/entity-selects";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Building2, Phone, Mail, Printer, Download, AlertTriangle,
   FileSignature, Banknote, ExternalLink, Users, Activity,
@@ -192,10 +193,35 @@ export default function Vendor360SheetPage() {
             CSV
           </Button>
           {vendorId && (
+            <PrintButton
+              entityType="report_vendor_360"
+              entityId={String(vendorId)}
+              variant="default"
+              label="طباعة ملف 360°"
+              payload={{
+                entity: {
+                  title: "ملف المورد 360°",
+                  vendorId,
+                  vendorName: vendor?.name ?? "",
+                  asOfDate: today,
+                  endingBalance: stmt?.endingBalance ?? 0,
+                },
+                items: (stmt?.movements ?? []).map((m: any) => ({
+                  "التاريخ": m.date?.split("T")[0] ?? "",
+                  "المرجع": m.ref ?? "",
+                  "البيان": m.description ?? "",
+                  "مدين": Number(m.debit ?? 0),
+                  "دائن": Number(m.credit ?? 0),
+                  "الرصيد": Number(m.runningBalance ?? 0),
+                })),
+              }}
+            />
+          )}
+          {vendorId && (
             <Link href={`/finance/vendor-statement-print?vendorId=${vendorId}`}>
-              <Button size="sm">
+              <Button variant="outline" size="sm">
                 <Printer className="w-4 h-4 ml-1" />
-                نسخة قابلة للطباعة
+                كشف حساب مفصّل
               </Button>
             </Link>
           )}
