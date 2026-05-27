@@ -18,7 +18,7 @@ export default function ComplianceCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const createMut = useApiMutation<unknown, Record<string, string | undefined>>("/governance/compliance", "POST", [["governance-compliance"]]);
+  const createMut = useApiMutation<unknown, Record<string, string | undefined>>("/governance/compliance", "POST", [["gov-compliance"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 

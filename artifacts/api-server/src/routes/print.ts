@@ -32,6 +32,7 @@ import {
 import { listTemplates } from "../lib/print/templateResolver.js";
 import { fetchPrintArtifact } from "../lib/print/printStorage.js";
 import { logger } from "../lib/logger.js";
+import { todayISO } from "../lib/businessHelpers.js";
 
 const router = Router();
 
@@ -534,7 +535,8 @@ router.get("/jobs", requirePermission("print_jobs:read"), async (req: Request, r
           .map((s) => s.trim())
           .filter((s) => ["success", "failed", "pending", "queued"].includes(s))
       : null;
-    const limit = Math.min(Number(req.query.limit ?? 100), 500);
+    const limit = Math.min(Math.max(Number(req.query.limit ?? 100), 1), 500);
+    const offset = Math.max(Number(req.query.offset ?? 0), 0);
 
     const params: unknown[] = [scope.companyId];
     const where: string[] = [`pj."companyId" = $1`];
@@ -569,7 +571,16 @@ router.get("/jobs", requirePermission("print_jobs:read"), async (req: Request, r
       params.push(statusValues);
       where.push(`pj."status" = ANY($${params.length}::text[])`);
     }
+    // Total count under the same filters — drives the pager. We run this
+     // before adding LIMIT/OFFSET params so the where clause is reused.
+    const countRows = await rawQuery<{ total: string }>(
+      `SELECT COUNT(*)::text AS total FROM print_jobs pj WHERE ${where.join(" AND ")}`,
+      params
+    );
+    const total = Number(countRows[0]?.total ?? 0);
+
     params.push(limit);
+    params.push(offset);
     const rows = await rawQuery(
       `SELECT pj.id, pj."jobId", pj."entityType", pj."entityId", pj."format", pj."paperSize",
               pj."copyNumber", pj."isReprint", pj."watermark", pj."status", pj."createdAt",
@@ -583,10 +594,114 @@ router.get("/jobs", requirePermission("print_jobs:read"), async (req: Request, r
        LEFT JOIN employees e ON e.id = u."employeeId"
        WHERE ${where.join(" AND ")}
        ORDER BY pj."createdAt" DESC
-       LIMIT $${params.length}`,
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
-    res.json({ items: rows });
+    res.json({ items: rows, total, limit, offset });
+  } catch (err) {
+    return handleRouteError(err, res, "print");
+  }
+});
+
+// CSV export of the print log under the same filters as GET /jobs. Capped
+// at 10k rows because the UI offers no progress indicator — a larger
+// export should be a server-side scheduled job, not an HTTP request.
+router.get("/jobs.csv", requirePermission("print_jobs:read"), async (req: Request, res: Response) => {
+  try {
+    const scope = scopeFromReq(req);
+    const branchId = req.query.branchId ? Number(req.query.branchId) : null;
+    const entityType = (req.query.entityType as string | undefined) ?? null;
+    const userId = req.query.userId ? Number(req.query.userId) : null;
+    const from = (req.query.from as string | undefined) ?? null;
+    const to = (req.query.to as string | undefined) ?? null;
+    const statusRaw = (req.query.status as string | undefined) ?? null;
+    const statusValues = statusRaw
+      ? statusRaw.split(",")
+          .map((s) => s.trim())
+          .filter((s) => ["success", "failed", "pending", "queued"].includes(s))
+      : null;
+
+    const params: unknown[] = [scope.companyId];
+    const where: string[] = [`pj."companyId" = $1`];
+    if (!scope.isOwner && scope.allowedBranches && scope.allowedBranches.length > 0) {
+      params.push(scope.allowedBranches);
+      where.push(`(pj."branchId" IS NULL OR pj."branchId" = ANY($${params.length}::int[]))`);
+    }
+    if (branchId) {
+      params.push(branchId);
+      where.push(`pj."branchId" = $${params.length}`);
+    }
+    if (entityType) {
+      params.push(entityType);
+      where.push(`pj."entityType" = $${params.length}`);
+    }
+    if (userId) {
+      params.push(userId);
+      where.push(`pj."userId" = $${params.length}`);
+    }
+    if (from) {
+      params.push(from);
+      where.push(`pj."createdAt" >= $${params.length}`);
+    }
+    if (to) {
+      params.push(to);
+      where.push(`pj."createdAt" <= $${params.length}`);
+    }
+    if (statusValues && statusValues.length > 0) {
+      params.push(statusValues);
+      where.push(`pj."status" = ANY($${params.length}::text[])`);
+    }
+
+    const rows = await rawQuery<{
+      createdAt: string;
+      userName: string | null;
+      userEmail: string | null;
+      branchName: string | null;
+      entityType: string;
+      entityId: string;
+      format: string;
+      copyNumber: number;
+      isReprint: boolean;
+      status: string;
+      errorMessage: string | null;
+    }>(
+      `SELECT pj."createdAt", pj."entityType", pj."entityId", pj."format",
+              pj."copyNumber", pj."isReprint", pj."status", pj."errorMessage",
+              b.name AS "branchName", u.email AS "userEmail", e.name AS "userName"
+       FROM print_jobs pj
+       LEFT JOIN branches b ON b.id = pj."branchId"
+       LEFT JOIN users u ON u.id = pj."userId"
+       LEFT JOIN employees e ON e.id = u."employeeId"
+       WHERE ${where.join(" AND ")}
+       ORDER BY pj."createdAt" DESC
+       LIMIT 10000`,
+      params
+    );
+
+    // CSV-quote a cell: wrap in double-quotes and double any embedded quote.
+    // Also strip CR/LF so a malicious field can't inject new rows.
+    const q = (v: unknown): string => {
+      if (v === null || v === undefined) return "";
+      const s = String(v).replace(/[\r\n]+/g, " ");
+      return `"${s.replace(/"/g, '""')}"`;
+    };
+
+    const header = [
+      "createdAt", "user", "userEmail", "branch", "entityType",
+      "entityId", "format", "copyNumber", "isReprint", "status", "errorMessage",
+    ].join(",");
+
+    const body = rows.map((r) => [
+      q(r.createdAt), q(r.userName), q(r.userEmail), q(r.branchName),
+      q(r.entityType), q(r.entityId), q(r.format), q(r.copyNumber),
+      q(r.isReprint), q(r.status), q(r.errorMessage),
+    ].join(",")).join("\n");
+
+    // BOM so Excel detects UTF-8 (Arabic names render correctly).
+    const csv = "﻿" + header + "\n" + body + "\n";
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="print-log-${todayISO()}.csv"`);
+    res.send(csv);
   } catch (err) {
     return handleRouteError(err, res, "print");
   }

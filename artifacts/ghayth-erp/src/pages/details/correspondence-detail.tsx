@@ -5,7 +5,7 @@
  * مع إجراءات التعديل والطباعة والتذييل المسبق لمذكرة الرد.
  */
 import { useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -71,7 +71,6 @@ function statusTone(status: string) {
 }
 
 export default function CorrespondenceDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/correspondence/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("correspondence", id ?? 0);
@@ -119,10 +118,6 @@ export default function CorrespondenceDetail() {
     return out;
   }, [item]);
 
-
-  const handleEdit = () => {
-    setLocation(`/correspondence/${id}/edit`);
-  };
 
   const DirectionIcon = item?.direction === "outgoing" ? SendHorizonal : Inbox;
   const directionTone = item?.direction === "outgoing" ? "bg-status-info-surface text-status-info-foreground border-status-info-surface" : "bg-emerald-50 text-emerald-700 border-emerald-200";
@@ -309,16 +304,6 @@ export default function CorrespondenceDetail() {
                 entityId={item.id ?? id}
                 formats={["a4"]}/>
             )}
-            <GuardedButton
-              perm="comms:update"
-              variant="outline"
-              size="sm"
-              onClick={handleEdit}
-              disabled={!item || item.status !== "draft"}
-            >
-              <Edit className="h-4 w-4 ms-1" />
-              تعديل
-            </GuardedButton>
           </>
         }
       />

@@ -80,7 +80,7 @@ export default function FuelDetail() {
       { key: "totalCost", label: "التكلفة الإجمالية", type: "number" },
       { key: "stationName", label: "المحطة" },
     ],
-    invalidateKeys: [["fuel-log", String(id)], ["fuel-logs"]],
+    invalidateKeys: [["fuel-detail", String(id)], ["fuel"]],
     onSaved: () => refetch(),
   });
 

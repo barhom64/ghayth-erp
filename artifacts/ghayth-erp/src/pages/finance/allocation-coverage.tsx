@@ -355,7 +355,7 @@ export default function AllocationCoveragePage() {
             <CardTitle className="text-sm">إجراءات لتحسين التغطية</CardTitle>
           </CardHeader>
           <CardContent className="p-3 space-y-2">
-            <Link href="/finance/unmapped-lines">
+            <Link href="/finance/reports/unmapped-lines">
               <Button variant="outline" size="sm" className="w-full justify-between">
                 <span className="text-xs">معالجة البنود غير الموجَّهة</span>
                 <ChevronRight className="h-3 w-3" />

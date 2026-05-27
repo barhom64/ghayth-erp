@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -42,7 +42,6 @@ function statusTone(status: string) {
 }
 
 export default function FinancialRequestDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/financial-requests/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("financial-request", id ?? 0);
@@ -225,16 +224,6 @@ export default function FinancialRequestDetail() {
             entityType="purchase_request"
             entityId={item?.id ?? id}
             formats={["a4"]}/>
-          <GuardedButton
-            perm="finance:update"
-            variant="outline"
-            size="sm"
-            onClick={() => setLocation("/finance/financial-requests")}
-            disabled={!item || ["approved", "disbursed", "rejected", "cancelled"].includes(item.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

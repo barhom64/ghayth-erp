@@ -181,8 +181,12 @@ function MonitorTab() {
   const [dateTo, setDateTo] = useState(today);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const queueUrl = `/communications/queue-stats?dateFrom=${dateFrom}&dateTo=${dateTo}`;
-  const { data: queueStats, refetch } = useApiQuery<any>(["comm-queue-stats", dateFrom, dateTo], queueUrl);
+  // Inline URL so the audit can credit /communications/queue-stats
+  // from a static literal.
+  const { data: queueStats, refetch } = useApiQuery<any>(
+    ["comm-queue-stats", dateFrom, dateTo],
+    `/communications/queue-stats?dateFrom=${dateFrom}&dateTo=${dateTo}`,
+  );
 
   const sms = queueStats?.sms ?? {};
   const wa = queueStats?.whatsapp ?? {};

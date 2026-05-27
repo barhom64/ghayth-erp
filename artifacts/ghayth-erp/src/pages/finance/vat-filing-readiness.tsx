@@ -194,7 +194,7 @@ export default function VatFilingReadinessPage() {
             </div>
           </div>
           <div className="flex-1" />
-          <Link href="/finance/zatca-reports-hub">
+          <Link href="/finance/reports/zatca">
             <Button variant="outline" size="sm">
               <FileCheck2 className="w-4 h-4 ml-1" />
               مركز تقارير ZATCA
@@ -373,7 +373,7 @@ export default function VatFilingReadinessPage() {
                 <ChecklistItem label="راجع كل المصاريف المدخلة — input VAT يطابق فواتير ضريبية" href="/finance/expenses" />
                 <ChecklistItem label="راجع إشعارات الدائن والمدين — تخفض/تزيد VAT المخرجات بشكل صحيح" href="/finance/invoices" />
                 <ChecklistItem label="عدّل الفترة المحاسبية إن لزم قبل التقديم النهائي" href="/finance/fiscal-periods-v2" />
-                <ChecklistItem label="اطبع قائمة الفواتير وأرفقها مع الإقرار" href="/finance/zatca-reports-hub" />
+                <ChecklistItem label="اطبع قائمة الفواتير وأرفقها مع الإقرار" href="/finance/reports/zatca" />
               </div>
             </CardContent>
           </Card>

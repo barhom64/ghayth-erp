@@ -134,10 +134,6 @@ export default function PropertyPaymentDetail() {
   }, [payment]);
 
 
-  const handleEdit = () => {
-    setLocation(`/properties/payments/${id}/edit`);
-  };
-
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
       {/* Primary info — hero amount + core metadata */}
@@ -325,16 +321,6 @@ export default function PropertyPaymentDetail() {
                 entityId={payment.id ?? id}
                 formats={["a4", "thermal_80"]}/>
             )}
-            <GuardedButton
-              perm="properties:update"
-              variant="outline"
-              size="sm"
-              onClick={handleEdit}
-              disabled={!payment || ["paid", "cancelled"].includes(payment?.status)}
-            >
-              <Edit className="h-4 w-4 ms-1" />
-              تعديل
-            </GuardedButton>
           </>
         }
       />

@@ -65,7 +65,10 @@ export default function PurchaseOrdersPage() {
     `/finance/purchase-orders${scopeSuffix}`,
   );
   const items = data?.data || [];
-  const [filters, setFilters] = useFilters();
+  // Seed status filter from ?status=... — sidebar "اعتماد الطلبات"
+  // quick-link arrives with ?status=pending so the page lands filtered.
+  const initialStatus = new URLSearchParams(window.location.search).get("status") || "";
+  const [filters, setFilters] = useFilters({ status: initialStatus });
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
 
