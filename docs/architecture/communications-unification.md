@@ -111,8 +111,9 @@ easy to bisect.
 | 3 (#1292) | `communications.ts` `/send` for email/sms/whatsapp → routes through `messageSender` (DLP + dual-write to message_log + outbound_queue). `call` + `push` keep legacy path (audit-only) | `v_message_log_all` for read-back |
 | 4 (#1293) | `cronScheduler.ts` workers mirror status updates to `outbound_queue` after legacy `email_queue` / `sms_queue` / `whatsapp_queue` UPDATEs (sent / failed / externalId / errorMessage) — `outbound_queue` now has full lifecycle visibility | legacy queues remain primary, `outbound_queue` mirrored |
 | 5 (#1294) | `communications.ts` `/whatsapp` + `/sms` queue listings + `/stats` pending counts + `/metrics` channel COUNT(*) GROUP BY status + recent queue tabs → all read from `outbound_queue` channel-filtered. Frontend `<DataTable>` keys preserved via SELECT aliases (`recipient AS phone` etc.) | `outbound_queue` |
-| 6 (_this_) | `cronScheduler.ts` `processEmailQueue` / `processSmsQueue` / `processWhatsAppQueue` flip SELECT to `outbound_queue` (channel-filtered) + UPDATE outbound_queue directly. Reverse-mirror to legacy `email_queue`/`sms_queue`/`whatsapp_queue` via the `legacyId` carried on each row, so any reader still pinned to legacy stays in sync through the soak. The obsolete `mirrorOutboundQueueStatus` helper from slice 4 is removed | `outbound_queue` (primary) |
-| final | DROP `communications_log`, `notification_log`, `email_queue`, `sms_queue`, `whatsapp_queue` | — |
+| 6 (#1299) | `cronScheduler.ts` `processEmailQueue` / `processSmsQueue` / `processWhatsAppQueue` flip SELECT to `outbound_queue` (channel-filtered) + UPDATE outbound_queue directly. Reverse-mirror to legacy `email_queue`/`sms_queue`/`whatsapp_queue` via the `legacyId` carried on each row, so any reader still pinned to legacy stays in sync through the soak. The obsolete `mirrorOutboundQueueStatus` helper from slice 4 is removed | `outbound_queue` (primary) |
+| 7 (_this_) | `inbox.ts` `POST /messages/:id/folder` + `POST /messages/:id/star` flip UPDATE target from `communications_log` to `message_log`. Closes a latent id mismatch: `GET /threads` (migrated in slice 1) returns `message_log.id`, but the folder/star endpoints would UPDATE the legacy table with that id → 0 rows for messages written by messageSender's dual-write. The backfill in migration 221 seeded older legacy rows into message_log, so historical updates still resolve | `message_log` (UPDATE primary) |
+| final | DROP `communications_log`, `notification_log`, `email_queue`, `sms_queue`, `whatsapp_queue` after the soak window — needs a sweep of the remaining writers (pbx call mirror in inbox.ts, notificationEngine, eventListeners, hr.ts cancel-email, requests.ts) | — |
 
 The view's `fromAddress` / `toAddress` columns alias back to the
 legacy `fromNumber` / `toNumber` in the SELECT projections so the
@@ -173,12 +174,36 @@ Idempotency: dedupe probe on `(companyId, direction, channel,
 fromAddress, createdAt)` skips messages already stored, so a re-sync
 after a deltaToken reset doesn't duplicate the inbox.
 
+## Phase 2.x — IMAP / Hostinger live sync (SHIPPED)
+
+Replaces `syncImapStub` with a real `imapflow` + `mailparser` client.
+Same cron worker (`mailbox_sync_worker`, `*/5 * * * *`) covers both
+M365 and IMAP — the dispatch picks the right implementation based on
+`mailbox_accounts.provider`.
+
+- Cursor: monotonic IMAP UID stored in `mailbox_sync_cursors.lastUid`.
+  `SEARCH UID {lastUid+1}:*` returns only new messages — first run
+  pulls everything, subsequent runs only the delta.
+- Body parsing: `mailparser.simpleParser()` extracts plain text /
+  HTML, subject, from/to, Message-ID, date.
+- Dedupe: Message-ID header (when present) probes
+  `communications_log.body LIKE '%Message-ID: ...%'`. Falls back to
+  the M365-style (companyId, from, createdAt) probe otherwise.
+- Auth failure handling: error text matched against `/auth|login|invalid credentials/i`
+  → marks `status='auth_expired'` so the operator re-enters the
+  password (covers IMAP password rotation, app-specific password
+  removal, etc.).
+- One page per tick (50 messages max) — keeps the worker bounded.
+- Connection lifecycle: `connect()` → `getMailboxLock('INBOX')` →
+  fetch → `lock.release()` → `logout()` in a finally, so a partial
+  failure can't leave a stale connection on the IMAP server.
+
+`testMailboxConnection()` was promoted to a real RPC: M365 hits
+`/me`, IMAP runs `connect + noop`. The admin UI's "اختبار" button
+now confirms the credentials actually authenticate end-to-end before
+the operator commits to a sync schedule.
+
 ## Remaining work
 
 - **Phase 4 final contract**: DROP `communications_log`, `notification_log`,
   `email_queue`, `sms_queue`, `whatsapp_queue` after the soak window.
-- **Phase 2.x IMAP**: replace `syncImapStub` with a real IMAP client
-  (Hostinger and generic accounts). Requires adding `imap` / `imapflow`
-  + `mailparser` as deps and implementing the IDLE / UID-based polling
-  in `mailboxSync.ts`. The schema (mailbox_accounts.imapHost/Port/
-  Username/Password) is ready.

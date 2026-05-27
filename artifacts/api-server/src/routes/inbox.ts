@@ -477,15 +477,21 @@ router.post("/messages/:id/folder", authorize({ feature: "communications", actio
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const body = zodParse(folderSchema.safeParse(req.body));
+    // Phase 4 contract slice 7: UPDATE message_log (the unified table)
+    // because GET /threads (since slice 1) returns message_log.id. If
+    // we still updated communications_log, the id wouldn't resolve to
+    // a row for messages written by messageSender's dual-write.
+    // The Phase-4 backfill seeded message_log from the legacy table,
+    // so older rows update correctly here too.
     const { affectedRows } = await rawExecute(
-      `UPDATE communications_log SET folder = $1
+      `UPDATE message_log SET folder = $1
         WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
       [body.folder, id, scope.companyId],
     );
     if (!affectedRows) throw new NotFoundError("الرسالة غير موجودة");
     void createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
-      action: "update", entity: "communications_log", entityId: id,
+      action: "update", entity: "message_log", entityId: id,
       after: { folder: body.folder },
     }).catch((e) => logger.warn(e, "[audit] message.folder"));
     res.json({ ok: true, folder: body.folder });
@@ -501,8 +507,9 @@ router.post("/messages/:id/star", authorize({ feature: "communications", action:
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    // Phase 4 contract slice 7 — see /folder above.
     const [row] = await rawQuery<{ isStarred: boolean }>(
-      `UPDATE communications_log SET "isStarred" = NOT "isStarred"
+      `UPDATE message_log SET "isStarred" = NOT "isStarred"
         WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
         RETURNING "isStarred"`,
       [id, scope.companyId],
