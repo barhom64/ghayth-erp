@@ -13,6 +13,7 @@ import {
 } from "@workspace/ui-core";
 import { Download, AlertTriangle, Clock, Users } from "lucide-react";
 import { formatCurrency, formatDateAr , todayLocal } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
 
 function csvEscape(val: string): string {
   if (val.includes(",") || val.includes('"') || val.includes("\n")) {
@@ -90,6 +91,27 @@ export default function ArAgingPage() {
           <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(clients, `ar-aging-${asOfDate}.csv`)}>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </GuardedButton>
+          <PrintButton
+            entityType="report_ar_aging"
+            entityId={asOfDate}
+            payload={{
+              entity: {
+                title: "تقرير تقادم الذمم المدينة",
+                asOfDate: formatDateAr(asOfDate),
+                totalOutstanding: summary.grandTotal ?? 0,
+                over90Total: summary.over90 ?? 0,
+              },
+              items: clients.map((c: any) => ({
+                "العميل": c.clientName ?? "",
+                "حالي": Number(c.current ?? 0),
+                "1-30 يوم": Number(c["1_30"] ?? 0),
+                "31-60 يوم": Number(c["31_60"] ?? 0),
+                "61-90 يوم": Number(c["61_90"] ?? 0),
+                "+90 يوم": Number(c.over90 ?? 0),
+                "الإجمالي": Number(c.total ?? 0),
+              })),
+            }}
+          />
         </>
       }
     >
