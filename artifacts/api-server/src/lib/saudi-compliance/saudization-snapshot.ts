@@ -106,17 +106,22 @@ export async function runSaudizationSnapshot(asOfDate?: string): Promise<Snapsho
 
       const computed = computeSnapshot(company.id, period, employees);
 
+      // Write sector='default' so the column is never NULL — the
+      // /hr/saudization/refresh route writes the operator's chosen
+      // sector, and the UI's drift card compares the two side by side.
+      // A NULL here would render that comparison meaningless.
       await rawExecute(
         `INSERT INTO saudization_snapshots (
            "companyId", period, "totalEmployees", "saudiEmployees", "nonSaudiEmployees",
-           "saudizationPercent", category, "computedAt"
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+           "saudizationPercent", category, sector, "computedAt"
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'default', NOW())
          ON CONFLICT ("companyId", period) DO UPDATE
            SET "totalEmployees"     = EXCLUDED."totalEmployees",
                "saudiEmployees"     = EXCLUDED."saudiEmployees",
                "nonSaudiEmployees"  = EXCLUDED."nonSaudiEmployees",
                "saudizationPercent" = EXCLUDED."saudizationPercent",
                category             = EXCLUDED.category,
+               sector               = COALESCE(saudization_snapshots.sector, EXCLUDED.sector),
                "computedAt"         = NOW()`,
         [
           company.id, period,
