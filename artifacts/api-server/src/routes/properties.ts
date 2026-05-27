@@ -3487,6 +3487,166 @@ router.delete("/owners/:id", authorize({ feature: "properties.owners", action: "
   } catch (err) { handleRouteError(err, res, "Delete owner error:"); }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /properties/owners/:id/statement — كشف حساب المالك للفترة
+// يُجمّع: إيجارات مستحقة + محصَّلة + مصاريف صيانة + عمولة الإدارة + الصافي
+// لا يقوم بأي ترحيل GL — تقرير قراءة فقط (read-model).
+// ═══════════════════════════════════════════════════════════════════════════════
+router.get(
+  "/owners/:id/statement",
+  authorize({
+    feature: "properties.owners",
+    action: "view",
+    resource: { table: "property_owners", idParam: "id" },
+  }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+
+      const today = todayISO();
+      const fromRaw = (req.query.from as string | undefined) || `${today.slice(0, 7)}-01`;
+      const toRaw = (req.query.to as string | undefined) || today;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fromRaw) || !/^\d{4}-\d{2}-\d{2}$/.test(toRaw)) {
+        throw new ValidationError("صيغة التاريخ غير صحيحة (YYYY-MM-DD)", { field: "from/to" });
+      }
+      if (fromRaw > toRaw) {
+        throw new ValidationError("'إلى' يجب أن يكون بعد 'من'", { field: "to" });
+      }
+
+      // Commission rate priority: query override → system setting → 5% default.
+      let commissionRate = 5;
+      const queryRate = req.query.commissionRate as string | undefined;
+      if (queryRate !== undefined && queryRate !== "") {
+        const r = Number(queryRate);
+        if (!Number.isFinite(r) || r < 0 || r > 100) {
+          throw new ValidationError("نسبة العمولة يجب أن تكون بين 0 و 100", {
+            field: "commissionRate",
+          });
+        }
+        commissionRate = r;
+      } else {
+        const [setting] = await rawQuery<{ value: string | null }>(
+          `SELECT value FROM system_settings
+            WHERE key = 'property.management_fee_rate'
+              AND ("companyId" = $1 OR "companyId" IS NULL)
+            ORDER BY "companyId" DESC NULLS LAST LIMIT 1`,
+          [scope.companyId],
+        ).catch(() => [{ value: null }]);
+        const v = Number(setting?.value);
+        if (Number.isFinite(v) && v >= 0 && v <= 100) commissionRate = v;
+      }
+
+      const [owner] = await rawQuery<Record<string, unknown>>(
+        `SELECT id, name, "nationalId", "crNumber", phone, email, iban, "bankName",
+                "authorizationNumber", "authorizationDate", "authorizationExpiry"
+           FROM property_owners
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!owner) throw new NotFoundError("المالك غير موجود");
+
+      // Rent collected vs due within the window — joined to rental_contracts
+      // so rent_payments (no companyId column) is tenant-scoped via the
+      // contract. Same isolation pattern as legal_sessions.
+      const rentRows = await rawQuery<Record<string, unknown>>(
+        `SELECT
+            u.id                   AS "unitId",
+            u."unitNumber",
+            u."buildingName",
+            c.id                   AS "contractId",
+            c."contractNumber",
+            c."tenantName",
+            COALESCE(SUM(rp.amount), 0)        AS "totalDue",
+            COALESCE(SUM(rp."paidAmount"), 0)  AS "totalCollected",
+            COALESCE(SUM(rp.amount), 0) - COALESCE(SUM(rp."paidAmount"), 0) AS "outstanding"
+           FROM property_units u
+           JOIN rental_contracts c ON c."unitId" = u.id AND c."deletedAt" IS NULL
+           LEFT JOIN rent_payments rp ON rp."contractId" = c.id
+                AND rp."dueDate" BETWEEN $3::date AND $4::date
+          WHERE u."ownerId" = $1
+            AND u."companyId" = $2
+            AND u."deletedAt" IS NULL
+            AND c."companyId" = $2
+          GROUP BY u.id, u."unitNumber", u."buildingName",
+                   c.id, c."contractNumber", c."tenantName"
+          ORDER BY u."unitNumber"`,
+        [id, scope.companyId, fromRaw, toRaw],
+      );
+
+      // Outstanding rent (unpaid past dueDate as of "to" date) — useful for
+      // the lawyer-owner to see what's still owed.
+      const outstandingRows = await rawQuery<Record<string, unknown>>(
+        `SELECT
+            rp.id, rp."contractId", rp."dueDate", rp.amount, rp."paidAmount",
+            rp.amount - rp."paidAmount" AS "outstanding",
+            ($4::date - rp."dueDate") AS "daysPastDue",
+            u."unitNumber", u."buildingName", c."tenantName"
+           FROM rent_payments rp
+           JOIN rental_contracts c ON c.id = rp."contractId" AND c."deletedAt" IS NULL
+           JOIN property_units u ON u.id = c."unitId" AND u."deletedAt" IS NULL
+          WHERE u."ownerId" = $1
+            AND u."companyId" = $2
+            AND c."companyId" = $2
+            AND rp."dueDate" BETWEEN $3::date AND $4::date
+            AND rp.amount > COALESCE(rp."paidAmount", 0)
+          ORDER BY rp."dueDate"`,
+        [id, scope.companyId, fromRaw, toRaw],
+      );
+
+      // Maintenance expenses charged against the owner's units in the window.
+      const maintRows = await rawQuery<Record<string, unknown>>(
+        `SELECT
+            mr.id, mr.category, mr.description, mr."actualCost",
+            mr."estimatedCost", mr."completedAt", mr.status,
+            u.id AS "unitId", u."unitNumber", u."buildingName"
+           FROM maintenance_requests mr
+           JOIN property_units u ON u.id = mr."unitId" AND u."deletedAt" IS NULL
+          WHERE u."ownerId" = $1
+            AND mr."companyId" = $2
+            AND u."companyId" = $2
+            AND mr."completedAt" BETWEEN $3::date AND ($4::date + INTERVAL '1 day')
+          ORDER BY mr."completedAt" DESC`,
+        [id, scope.companyId, fromRaw, toRaw],
+      );
+
+      const totalRentDue = rentRows.reduce((s, r) => s + Number(r.totalDue || 0), 0);
+      const totalRentCollected = rentRows.reduce((s, r) => s + Number(r.totalCollected || 0), 0);
+      const totalRentOutstanding = totalRentDue - totalRentCollected;
+      const totalMaintenance = maintRows.reduce(
+        (s, m) => s + Number(m.actualCost || 0),
+        0,
+      );
+      const commissionAmount = roundTo2(totalRentCollected * (commissionRate / 100));
+      const netDueToOwner = roundTo2(totalRentCollected - totalMaintenance - commissionAmount);
+
+      res.json(
+        maskFields(req, {
+          owner,
+          period: { from: fromRaw, to: toRaw },
+          commission: { rate: commissionRate, amount: commissionAmount },
+          summary: {
+            totalRentDue: roundTo2(totalRentDue),
+            totalRentCollected: roundTo2(totalRentCollected),
+            totalRentOutstanding: roundTo2(totalRentOutstanding),
+            totalMaintenance: roundTo2(totalMaintenance),
+            commissionAmount,
+            netDueToOwner,
+            unitsCount: rentRows.length,
+            outstandingPaymentsCount: outstandingRows.length,
+            maintenanceCount: maintRows.length,
+          },
+          rentByUnit: rentRows,
+          outstandingPayments: outstandingRows,
+          maintenance: maintRows,
+        }),
+      );
+    } catch (err) {
+      handleRouteError(err, res, "Owner statement error:");
+    }
+  },
+);
+
 router.get("/contracts/:id/schedule", authorize({ feature: "properties.contracts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
