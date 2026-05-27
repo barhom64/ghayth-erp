@@ -86,6 +86,20 @@ run_step "audit:domain-routes" node scripts/src/audit-domain-routes.mjs
 # lint regex can't catch a fresh INSERT into invoices/contracts/etc.
 # that simply doesn't import issueNumber at all — this audit can.
 run_step "audit:numbering-coverage" node scripts/src/audit-numbering-coverage.mjs
+
+# Stronger numbering guards added 2026-05-27 after the lawyer's review
+# demanded fewer-words / more-proof. These cover layers the original
+# audit missed:
+#   • service-bypass: forbids direct INSERT/UPDATE on numbering_* from
+#     outside lib/numberingService.ts (with the documented linkback
+#     exception). Catches code that forges assignments or hand-bumps
+#     counters.
+#   • schemes-vs-callers: cross-checks seeded scheme tuples against
+#     issueNumber call sites. Fails CI if a route issues a tuple that
+#     has no seed migration (would throw on a fresh tenant).
+run_step "audit:numbering-bypass"      node scripts/src/audit-numbering-service-bypass.mjs
+run_step "audit:numbering-schemes-vs-callers" node scripts/src/audit-numbering-schemes-vs-callers.mjs
+
 run_step "check:duplicate-migrations" node scripts/src/check-duplicate-migrations.mjs
 # Pure-logic fixtures for the breaking-change detection — no DB needed,
 # guards the guard itself (same pattern as check:ghost-rows:tests above).
