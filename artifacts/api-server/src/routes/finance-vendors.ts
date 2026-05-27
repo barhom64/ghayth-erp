@@ -335,6 +335,8 @@ vendorsRouter.get("/receivables", authorize({ feature: "finance.vendors", action
 // invoice as an AP entry alongside agent/treasury context so the finance
 // module can show what the company owes upstream without a separate
 // import step. Gap #1 from docs/umrah-import-gaps-fix-plan.md.
+// Audit F5 — DOC. AP summary feed for BI/exports. The core UI uses
+// `/payment-run/pending` instead; this stays for downstream reports.
 vendorsRouter.get("/payables", authorize({ feature: "finance.vendors", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;

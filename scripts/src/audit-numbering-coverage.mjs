@@ -145,11 +145,12 @@ const PER_TABLE_EXEMPTIONS = new Map([
   // crm.ts converts a CRM opportunity into a client without re-issuing
   // a code (the opportunity already has the contact info). Gap tracked
   // in coverage report §3 G11.
-  ["crm.ts::clients", "CRM-opp conversion creates client without code — gap tracked in coverage report §3 G11"],
-  ["employees.ts::employee_contracts", "onboarding creates contract without ref — gap tracked in coverage report §3 G12"],
-  ["finance-invoices.ts::credit_memos", "credit_memos.ref left NULL — gap tracked in coverage report §3 G13"],
-  ["finance-invoices.ts::debit_memos",  "debit_memos.ref left NULL — gap tracked in coverage report §3 G14"],
-  ["finance-purchase.ts::payment_runs", "payment_runs uses PR-${Date.now()} inline — gap tracked in coverage report §3 inline-date-now offender + G15"],
+  // crm.ts G10 closed in PR #1325. credit_memos + debit_memos
+  // (G12/G13) closed in this PR. employees.ts G11 closed in PR #1329
+  // — still in flight at the time this branch was created, so the
+  // exemption stays until #1329 lands and main has it.
+  ["employees.ts::employee_contracts", "onboarding creates contract without ref — gap tracked in coverage report §3 G11 (PR #1329 in flight)"],
+  ["finance-purchase.ts::payment_runs", "payment_runs uses PR-${Date.now()} inline — gap tracked in coverage report §3 inline-date-now offender + G14"],
 ]);
 
 // Non-route exceptions: when a lib/engines/* file legitimately INSERTs

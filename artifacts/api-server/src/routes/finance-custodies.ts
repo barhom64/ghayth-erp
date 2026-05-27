@@ -803,6 +803,9 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
   }
 });
 
+// Audit F5 — DELETE candidate. Path-param variant; the UI uses the
+// body-style POST /custodies/settle. Marked for removal in the F5
+// follow-up PR (see docs/audits/finance-orphan-endpoints-disposition.md).
 custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.custodies", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;

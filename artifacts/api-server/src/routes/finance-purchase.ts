@@ -1960,6 +1960,8 @@ purchaseRouter.post("/purchase-requests/:id/convert-to-po", authorize({ feature:
   }
 });
 
+// Audit F5 — DOC. Reporting hook used by the GRN-aging job; not driven
+// from the UI. Kept for the scheduled task.
 purchaseRouter.get("/purchase-orders/pending-grn", authorize({ feature: "finance.purchase", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
