@@ -36,8 +36,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   FileText, FolderOpen, FilePlus, X, Upload, Download, History,
-  CheckCircle2, Clock, XCircle, Filter, Search, Plus, Eye, Trash2
+  CheckCircle2, Clock, XCircle, Filter, Search, Plus, Eye, Trash2, Edit,
 } from "lucide-react";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
+import { FormTextareaField, FormSelectField } from "@workspace/ui-core";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -81,6 +83,13 @@ function CategoryBadge({ category }: { category: string }) {
 }
 
 
+const documentEditSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب"),
+  description: z.string().optional().default(""),
+  category: z.string().optional().default(""),
+});
+type DocumentEditForm = z.infer<typeof documentEditSchema>;
+
 function DocumentsList() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -88,6 +97,7 @@ function DocumentsList() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [deleting, setDeleting] = useState<{ id: number; title: string } | null>(null);
+  const [editing, setEditing] = useState<any | null>(null);
 
   const queryParams = new URLSearchParams();
   if (categoryFilter && categoryFilter !== "all") queryParams.set("category", categoryFilter);
@@ -214,6 +224,15 @@ function DocumentsList() {
                           <History className="h-3.5 w-3.5" /> الإصدارات
                         </Button>
                       </Link>
+                      <GuardedButton
+                        perm="documents:update"
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1 text-xs"
+                        onClick={() => setEditing(d)}
+                      >
+                        <Edit className="h-3.5 w-3.5" /> تعديل
+                      </GuardedButton>
                       {d.status !== "approved" && (
                         <GuardedButton perm="documents:approve" variant="ghost" size="sm" className="gap-1 text-xs text-status-success-foreground" onClick={() => handleStatusChange(d.id, "approved")}>
                           <CheckCircle2 className="h-3.5 w-3.5" /> اعتماد
@@ -292,6 +311,33 @@ function DocumentsList() {
           successMessage="تم حذف المستند"
           onDeleted={() => setDeleting(null)}
         />
+      )}
+
+      {editing && (
+        <EntityEditDialog<DocumentEditForm>
+          open={!!editing}
+          onClose={() => setEditing(null)}
+          title="تعديل المستند"
+          schema={documentEditSchema}
+          defaultValues={{
+            title: editing.title ?? "",
+            description: editing.description ?? "",
+            category: editing.category ?? "",
+          }}
+          endpoint={`/documents/${editing.id}`}
+          invalidateKeys={[["documents"], ["doc-stats"]]}
+          onSaved={() => setEditing(null)}
+        >
+          <FormGrid cols={2}>
+            <FormTextField name="title" label="العنوان" required className="md:col-span-2" />
+            <FormSelectField
+              name="category"
+              label="التصنيف"
+              options={CATEGORIES}
+            />
+            <FormTextareaField name="description" label="الوصف" className="md:col-span-2" />
+          </FormGrid>
+        </EntityEditDialog>
       )}
 
     </div>

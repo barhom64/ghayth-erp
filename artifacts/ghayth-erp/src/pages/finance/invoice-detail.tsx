@@ -35,6 +35,7 @@ import {
   type DetailStatus,
 } from "@workspace/entity-kit";
 import { EntityObligations } from "@/components/shared/entity-obligations";
+import { LineAllocationStatusBanner } from "@/components/shared/line-allocation-status-banner";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import {
   useDetailEditDelete,
@@ -243,6 +244,10 @@ export default function InvoiceDetailPage() {
   const overview = invoice ? (
     <div className="space-y-4">
       <InlineEditCard hook={editDelete} />
+      <LineAllocationStatusBanner
+        lines={(invoice as any).lines}
+        documentType="invoice"
+      />
       {/* Visible payment lifecycle strip */}
       <Card className="border-0 shadow-sm">
         <CardContent className="p-4">

@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   DataTable, type DataTableColumn, PageShell,
 } from "@workspace/ui-core";
@@ -165,6 +166,18 @@ export default function VatReconciliationPage() {
           >
             <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
           </GuardedButton>
+          <PrintButton
+            entityType="report_vat_reconciliation"
+            entityId={`${startDate}..${endDate}`}
+            payload={{
+              entity: {
+                title: "تسوية ضريبة القيمة المضافة (VAT)",
+                startDate, endDate,
+                summary,
+              },
+              items: bySource,
+            }}
+          />
         </>
       }
     >

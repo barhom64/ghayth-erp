@@ -6,6 +6,7 @@ const PropertiesDashboard = lazy(() => import("@/pages/properties-dashboard"));
 const PropertiesBuildings = lazy(() => import("@/pages/properties-buildings"));
 const PropertiesTenants = lazy(() => import("@/pages/properties-tenants"));
 const PropertiesOwners = lazy(() => import("@/pages/properties-owners"));
+const PropertiesOwnerStatement = lazy(() => import("@/pages/properties-owner-statement"));
 const PropertiesContracts = lazy(() => import("@/pages/properties-contracts"));
 const PropertiesPayments = lazy(() => import("@/pages/properties-payments"));
 const PropertiesMaintenance = lazy(() => import("@/pages/properties-maintenance"));
@@ -39,6 +40,7 @@ export const propertyRoutes = [
   { path: "/properties/tenants/:id", component: TenantDetail },
   { path: "/properties/tenants", component: PropertiesTenants },
   { path: "/properties/owners/create", component: OwnersCreate },
+  { path: "/properties/owners/statement", component: PropertiesOwnerStatement },
   { path: "/properties/owners/:id/edit", component: OwnersEdit },
   { path: "/properties/owners/:id", component: OwnerDetail },
   { path: "/properties/owners", component: PropertiesOwners },

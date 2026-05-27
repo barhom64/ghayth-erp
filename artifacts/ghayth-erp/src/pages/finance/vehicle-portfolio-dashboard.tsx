@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import {
   Car, TrendingUp, TrendingDown, Download, BarChart3,
@@ -157,6 +158,17 @@ export default function VehiclePortfolioDashboardPage() {
             <Download className="w-4 h-4 ml-1" />
             CSV
           </Button>
+          <PrintButton
+            entityType="report_vehicle_portfolio"
+            entityId="all"
+            payload={{
+              entity: {
+                title: "محفظة الأسطول — لوحة التحكم",
+                vehicleCount: vehicles.length,
+              },
+              items: vehicles,
+            }}
+          />
         </CardContent>
       </Card>
 

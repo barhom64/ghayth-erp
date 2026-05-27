@@ -168,6 +168,11 @@ const allNavSections: NavSection[] = [
         { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
         { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
         { label: "الاستحقاقات الشهرية", path: "/hr/accruals", icon: ListChecks, subKey: "payroll" },
+        { label: "نظام حماية الأجور (WPS)", path: "/hr/wps", icon: Send, subKey: "payroll" },
+      ]},
+      { label: "الامتثال السعودي", path: "/hr/saudization", icon: Flag, module: "hr", children: [
+        { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees" },
+        { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
       ]},
       { label: "الأداء والتطوير", path: "/hr/performance", icon: Target, module: "hr", children: [
         { label: "تقييم الأداء", path: "/hr/performance", icon: Target, subKey: "performance" },
@@ -309,6 +314,19 @@ const allNavSections: NavSection[] = [
         { label: "Unmapped Lines", path: "/finance/reports/unmapped-lines", icon: AlertTriangle },
         { label: "Posting Activity", path: "/finance/journal/activity", icon: Activity },
       ]},
+      // محرك التوجيه المحاسبي — صفحات Line-Level Allocation cluster (PRs 1291,
+      // 1297, 1304, 1307, 1309, 1311). الترابط بينها مكتمل عبر AllocationTabsNav
+      // و AllocationHealthCard، وهذا المدخل في القائمة الجانبية يخلي الكلستر
+      // قابلاً للوصول من أي صفحة في النظام (ليس من finance فقط).
+      { label: "محرك التوجيه المحاسبي", path: "/finance/settings-hub", icon: Network, module: "finance", children: [
+        { label: "مركز الإعدادات", path: "/finance/settings-hub", icon: Settings },
+        { label: "قواعد التوجيه", path: "/finance/allocation-rules", icon: Network },
+        { label: "كتالوج المنتجات", path: "/finance/product-catalog", icon: Package },
+        { label: "تشخيص التغطية", path: "/finance/allocation-coverage", icon: Target },
+        { label: "سجل التوجيه", path: "/finance/allocation-results", icon: Activity },
+        { label: "التعديلات اليدوية", path: "/finance/overrides-report", icon: BookOpen },
+        { label: "تجاوزات الإلزام", path: "/finance/allocation-override-log", icon: ShieldAlert },
+      ]},
       { label: "ارتباطات الموظفين", path: "/finance/salary-advances", icon: DollarSign, module: "finance", children: [
         { label: "سلف الرواتب", path: "/finance/salary-advances", icon: DollarSign },
         { label: "الطلبات المالية", path: "/finance/financial-requests", icon: ClipboardCheck },
@@ -356,6 +374,7 @@ const allNavSections: NavSection[] = [
         { label: "الوحدات العقارية", path: "/properties", icon: Building },
         { label: "المستأجرون", path: "/properties/tenants", icon: Users2 },
         { label: "الملاك", path: "/properties/owners", icon: User },
+        { label: "كشف حساب المالك", path: "/properties/owners/statement", icon: FileBarChart },
         { label: "عقود الإيجار", path: "/properties/contracts", icon: FileSignature },
         { label: "المدفوعات", path: "/properties/payments", icon: Banknote },
         { label: "طلبات الصيانة", path: "/properties/maintenance", icon: Hammer },

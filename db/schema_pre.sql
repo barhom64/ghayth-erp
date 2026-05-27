@@ -10842,7 +10842,7 @@ CREATE TABLE public.message_log (
     "legacyId" integer,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT message_log_channel_check CHECK (((channel)::text = ANY ((ARRAY['email'::character varying, 'sms'::character varying, 'whatsapp'::character varying, 'push'::character varying, 'in_app'::character varying])::text[]))),
+    CONSTRAINT message_log_channel_check CHECK (((channel)::text = ANY ((ARRAY['email'::character varying, 'sms'::character varying, 'whatsapp'::character varying, 'push'::character varying, 'in_app'::character varying, 'internal'::character varying, 'pbx'::character varying])::text[]))),
     CONSTRAINT message_log_direction_check CHECK (((direction)::text = ANY ((ARRAY['inbound'::character varying, 'outbound'::character varying])::text[]))),
     CONSTRAINT message_log_legacy_source_check CHECK ((("legacySource")::text = ANY ((ARRAY['message_log'::character varying, 'communications_log'::character varying, 'notification_log'::character varying])::text[])))
 );
@@ -11397,7 +11397,7 @@ CREATE TABLE public.numbering_schemes (
     "padLength" integer DEFAULT 4 NOT NULL,
     "resetPolicy" text DEFAULT 'yearly'::text NOT NULL,
     "scopePolicy" text DEFAULT 'branch'::text NOT NULL,
-    "issueTiming" text DEFAULT 'on_draft'::text NOT NULL,
+    "issueTiming" text DEFAULT 'on_submit'::text NOT NULL,
     "manualEditPolicy" text DEFAULT 'disabled'::text NOT NULL,
     "requiresReasonOnManualEdit" boolean DEFAULT true NOT NULL,
     "lockAfterStatuses" jsonb DEFAULT '[]'::jsonb NOT NULL,
@@ -11613,7 +11613,7 @@ CREATE TABLE public.outbound_queue (
     "legacyId" integer,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT outbound_queue_channel_check CHECK (((channel)::text = ANY ((ARRAY['email'::character varying, 'sms'::character varying, 'whatsapp'::character varying, 'push'::character varying])::text[]))),
+    CONSTRAINT outbound_queue_channel_check CHECK (((channel)::text = ANY ((ARRAY['email'::character varying, 'sms'::character varying, 'whatsapp'::character varying, 'push'::character varying, 'internal'::character varying, 'pbx'::character varying])::text[]))),
     CONSTRAINT outbound_queue_legacy_source_check CHECK ((("legacySource")::text = ANY ((ARRAY['outbound_queue'::character varying, 'email_queue'::character varying, 'sms_queue'::character varying, 'whatsapp_queue'::character varying])::text[]))),
     CONSTRAINT outbound_queue_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'sending'::character varying, 'sent'::character varying, 'failed'::character varying, 'cancelled'::character varying])::text[])))
 );

@@ -91,6 +91,16 @@ function inferCodeFromStatus(status: number): string {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+/**
+ * Build a full API URL respecting Vite's BASE_URL — for direct browser
+ * navigation (file downloads, image src, iframe src). Don't use this for
+ * fetch — use apiFetch / useApiQuery which already prepend BASE/api.
+ */
+export function apiUrl(path: string): string {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${BASE}/api${p}`;
+}
+
 let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;
 

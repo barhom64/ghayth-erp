@@ -677,6 +677,17 @@ function IvrMenuEditorDialog({ menuId, onClose }: {
     onSuccess: () => { toast({ title: "حُذف الخيار" }); refetch(); },
     onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
   });
+  // Toggle the menu's status active⇄disabled in-place. The backend allows
+  // partial updates on /admin/pbx-control/ivr-menus/:id; flipping the
+  // status is the most common edit and doesn't need a full dialog.
+  const toggleStatus = useMutation({
+    mutationFn: () => apiFetch(`/admin/pbx-control/ivr-menus/${menuId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: detail?.menu.status === "active" ? "disabled" : "active" }),
+    }),
+    onSuccess: () => { toast({ title: "تم تحديث الحالة" }); refetch(); },
+    onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
+  });
 
   return (
     <Dialog open={!!menuId} onOpenChange={(v) => !v && onClose()}>
@@ -688,6 +699,20 @@ function IvrMenuEditorDialog({ menuId, onClose }: {
         </DialogHeader>
         {detail && (
           <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            <div className="flex items-center justify-between gap-2 p-2 border rounded">
+              <div className="flex items-center gap-2">
+                <Label className="text-xs text-muted-foreground">الحالة:</Label>
+                <PageStatusBadge status={detail.menu.status} />
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => toggleStatus.mutate()}
+                disabled={toggleStatus.isPending}
+              >
+                {detail.menu.status === "active" ? "تعطيل" : "تفعيل"}
+              </Button>
+            </div>
             <div>
               <Label className="text-xs text-muted-foreground">نص الترحيب</Label>
               <pre className="bg-surface-subtle p-2 rounded text-xs whitespace-pre-wrap">{detail.menu.greetingText}</pre>

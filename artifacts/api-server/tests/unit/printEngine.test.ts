@@ -859,3 +859,28 @@ describe("Print platform — PrintButton.payload contract (#1286 follow-up)", ()
     expect(printButton).toMatch(/\.\.\.\(payload\s*\?\s*\{\s*payload\s*\}\s*:\s*\{\}\)/);
   });
 });
+
+describe("Print platform — finance reports wave 4 migrated (#1286 Q4 wave 4)", () => {
+  // Continued unification. 7 more pages with CSV exports get PrintButton
+  // next to the CSV button.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const PAGES: Array<{ path: string; entityType: string }> = [
+    { path: "pages/finance/cogs-summary.tsx",                 entityType: "report_cogs_summary" },
+    { path: "pages/finance/gl-integrity-gaps.tsx",            entityType: "report_gl_integrity_gaps" },
+    { path: "pages/finance/inventory-turnover.tsx",           entityType: "report_inventory_turnover" },
+    { path: "pages/finance/income-statement-vs-budget.tsx",   entityType: "report_income_vs_budget" },
+    { path: "pages/finance/unmapped-lines.tsx",               entityType: "report_unmapped_lines" },
+    { path: "pages/finance/vehicle-portfolio-dashboard.tsx",  entityType: "report_vehicle_portfolio" },
+    { path: "pages/finance/vat-reconciliation.tsx",           entityType: "report_vat_reconciliation" },
+  ];
+
+  for (const { path, entityType } of PAGES) {
+    it(`${path} mounts <PrintButton entityType="${entityType}" payload={...}>`, () => {
+      const src = readFileSync(join(SPA, path), "utf8");
+      expect(src, `${path} must import PrintButton`).toContain('from "@/components/shared/print-button"');
+      expect(src, `${path} must render PrintButton`).toContain("<PrintButton");
+      expect(src, `${path} must use entityType="${entityType}"`).toContain(`entityType="${entityType}"`);
+      expect(src, `${path} must pass payload`).toMatch(/payload=\{/);
+    });
+  }
+});

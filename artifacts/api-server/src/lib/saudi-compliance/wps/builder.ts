@@ -140,10 +140,21 @@ export function isSaudiIban(value: string): boolean {
 
 /**
  * Strip pipes + line breaks from free-text fields so a malformed
- * remark can't smuggle extra columns or rows into the file.
+ * remark can't smuggle extra columns or rows into the file. Also
+ * prefix a leading equals/plus/minus/at sign with a tab — those four
+ * chars are the Excel formula triggers, and bank ops teams routinely
+ * open WPS files in Excel for spot-checking. Without the prefix, a
+ * remark like `=cmd|'/c calc'!A1` would execute when opened.
+ * The tab is invisible in the rendered cell and accepted by every
+ * downstream parser (SAMA reference + the per-bank adapters all read
+ * remark as opaque text).
  */
 function sanitize(value: string): string {
-  return value.replace(/[|\r\n]+/g, " ").trim().slice(0, 80);
+  let v = value.replace(/[|\r\n]+/g, " ").trim().slice(0, 80);
+  if (v.length > 0 && /^[=+\-@\t]/.test(v)) {
+    v = "\t" + v;
+  }
+  return v;
 }
 
 function round2dp(value: number): number {
