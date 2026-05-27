@@ -3,6 +3,7 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/shared/print-button";
+import { LineAllocationStatusBanner } from "@/components/shared/line-allocation-status-banner";
 import {
   DataTable,
   type DataTableColumn,
@@ -33,6 +34,7 @@ export default function PurchaseOrderDetailPage() {
 
   const overview = po ? (
     <>
+      <LineAllocationStatusBanner lines={lines} documentType="purchase_order" />
       <div className="grid md:grid-cols-3 gap-4">
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-2 mb-3 text-muted-foreground"><User className="h-4 w-4" /><span className="text-sm">المورد</span></div>
