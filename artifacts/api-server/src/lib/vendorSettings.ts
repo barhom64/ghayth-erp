@@ -33,7 +33,8 @@ export type VendorSlug =
   | "smtp"
   | "vapid"
   | "siem"
-  | "zatca";
+  | "zatca"
+  | "microsoft365";
 
 export interface VendorConfig {
   /** Active iff the operator flipped the row to status='active'. */
@@ -122,6 +123,16 @@ function envFallback(slug: VendorSlug): Record<string, string> {
         prodUrl: appConfig.zatca.prodUrl ?? "",
         sandboxUrl: appConfig.zatca.sandboxUrl ?? "",
       };
+    case "microsoft365":
+      // Azure AD app registration credentials. The operator creates an
+      // app in https://portal.azure.com → App registrations, sets the
+      // redirect URI to {APP_URL}/api/mailboxes/oauth/microsoft365/callback,
+      // copies the client id + client secret here.
+      return {
+        clientId: appConfig.microsoft365.clientId ?? "",
+        clientSecret: appConfig.microsoft365.clientSecret ?? "",
+        redirectUri: appConfig.microsoft365.redirectUri ?? "",
+      };
     default:
       return {};
   }
@@ -191,6 +202,6 @@ export function getCachedVendorConfigSync(slug: VendorSlug): VendorConfig {
  * without depending on the request's timing. Called from app boot.
  */
 export async function warmVendorSettingsCache(): Promise<void> {
-  const slugs: VendorSlug[] = ["pbx-webhook", "whatsapp", "smtp", "vapid", "siem", "zatca"];
+  const slugs: VendorSlug[] = ["pbx-webhook", "whatsapp", "smtp", "vapid", "siem", "zatca", "microsoft365"];
   await Promise.all(slugs.map((s) => getVendorConfig(s)));
 }
