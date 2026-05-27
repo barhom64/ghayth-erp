@@ -44,6 +44,13 @@
 
 ALTER TABLE fleet_trips ADD COLUMN IF NOT EXISTS ref VARCHAR(50);
 ALTER TABLE projects    ADD COLUMN IF NOT EXISTS ref VARCHAR(50);
+-- credit_memos / debit_memos shipped without ref+soft-delete columns; the
+-- per-tenant UNIQUE indexes below need both. Backfilled forward-only;
+-- existing rows stay NULL and are excluded by the partial WHERE clause.
+ALTER TABLE credit_memos ADD COLUMN IF NOT EXISTS ref VARCHAR(50);
+ALTER TABLE credit_memos ADD COLUMN IF NOT EXISTS "deletedAt" timestamp with time zone;
+ALTER TABLE debit_memos  ADD COLUMN IF NOT EXISTS ref VARCHAR(50);
+ALTER TABLE debit_memos  ADD COLUMN IF NOT EXISTS "deletedAt" timestamp with time zone;
 -- Umrah groups already carry `nuskGroupNumber` (the external Nusk
 -- portal id). Keep that as the official body identifier and add an
 -- INTERNAL ref the numbering center owns so reports + audit still
@@ -125,8 +132,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_debit_memos_ref
     ON debit_memos ("companyId", ref) WHERE ref IS NOT NULL AND "deletedAt" IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_journal_entries_ref
     ON journal_entries ("companyId", ref) WHERE ref IS NOT NULL AND "deletedAt" IS NULL;
+-- purchase_requests has no soft-delete column; partial predicate omits it.
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_purchase_requests_ref
-    ON purchase_requests ("companyId", ref) WHERE ref IS NOT NULL AND "deletedAt" IS NULL;
+    ON purchase_requests ("companyId", ref) WHERE ref IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_goods_receipts_ref
     ON goods_receipts ("companyId", ref) WHERE ref IS NOT NULL AND "deletedAt" IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_support_tickets_ref
