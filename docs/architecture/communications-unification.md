@@ -97,8 +97,26 @@ unified storage.
   and `/communications` exposes a "المكالمات" tab pulling the same data,
   so no move needed.
 
+## Phase 4 contract step — reader migration (IN PROGRESS)
+
+The expand step shipped the unified storage; the contract step
+migrates readers + workers off the legacy tables, then drops them.
+Each PR moves a small, isolated cluster of callers so a regression is
+easy to bisect.
+
+| PR | Migrated | Reads from |
+|---|---|---|
+| _this_ | `inbox.ts` `/folder-counts`, `/threads`, `/threads/:channel/:address` | `v_message_log_all` |
+| follow-up | `communications.ts` stats + log listings | `v_message_log_all` |
+| follow-up | `workspace.ts` counts (recentMessages, teamMessagesToday) | `v_message_log_all` |
+| follow-up | `cronScheduler.ts` `email_queue_drain` / `sms_queue_drain` / `whatsapp_queue_drain` | `outbound_queue` |
+| final | DROP `communications_log`, `notification_log`, `email_queue`, `sms_queue`, `whatsapp_queue` | — |
+
+The view's `fromAddress` / `toAddress` columns alias back to the
+legacy `fromNumber` / `toNumber` in the SELECT projections so the
+frontend response shape stays stable.
+
 ## Remaining work
 
-- **Phase 4 contract**: drop legacy log + queue tables once readers and workers migrate.
-- **Phase 5**: deprecate `/communications` for users, unify correspondence creation paths, move PBX control under communication-control as a tab.
-- **Phase 2.x**: IMAP / Microsoft Graph mailbox sync (large, separate slice — OAuth flow + token refresh + thread reconciliation).
+- **Phase 4 contract — follow-ups**: communications.ts + workspace.ts reader migration; cron worker swap; finally DROP legacy tables.
+- **Phase 2.x live sync**: replace `syncMicrosoft365Stub` / `syncImapStub` with real Microsoft Graph + node-imap clients (needs Azure AD app + credentials); add `mailbox_sync_drain` to cronScheduler; build OAuth callback for hands-off Microsoft 365 connect.
