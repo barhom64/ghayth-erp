@@ -8,7 +8,7 @@ import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
-import { Edit, CalendarDays, XCircle } from "lucide-react";
+import { Edit, CalendarDays, XCircle, ChevronsUp } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 
@@ -86,6 +86,21 @@ export default function LeaveDetail() {
     return out;
   }, [leave]);
 
+
+  const handleEscalate = async () => {
+    if (!id) return;
+    if (!window.confirm("سيتم تصعيد الطلب للمرحلة التالية إذا انقضت مهلة 48 ساعة. متابعة؟")) return;
+    try {
+      await apiFetch(`/hr/leave-requests/${id}/escalate`, {
+        method: "PATCH",
+        body: JSON.stringify({}),
+      });
+      toast({ title: "تم تصعيد الطلب" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر التصعيد", description: err.message });
+    }
+  };
 
   const handleCancel = async () => {
     if (!id) return;
@@ -285,6 +300,18 @@ export default function LeaveDetail() {
             <XCircle className="h-4 w-4 ms-1" />
             إلغاء الإجازة
           </GuardedButton>
+          {leave && leave.status === "pending" && (
+            <GuardedButton
+              perm="hr:update"
+              variant="outline"
+              size="sm"
+              onClick={handleEscalate}
+              title="يصبح متاحاً بعد 48 ساعة من بدء المرحلة الحالية"
+            >
+              <ChevronsUp className="h-4 w-4 ms-1" />
+              تصعيد
+            </GuardedButton>
+          )}
         </>
       }
     />
