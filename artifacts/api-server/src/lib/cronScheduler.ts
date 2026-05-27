@@ -21,6 +21,7 @@ import {
   roundTo2,
 } from "./businessHelpers.js";
 import { broadcastAlert, sendNotification } from "./notificationService.js";
+import { syncMailbox } from "./mailboxSync.js";
 import { processFallbackChains } from "./notificationEngine.js";
 import { runPendingTranscription } from "./pbxControl.js";
 import { aiEngine } from "./aiEngine.js";
@@ -2208,6 +2209,42 @@ async function processWhatsAppQueue(): Promise<string> {
   return `WhatsApp queue: ${sent} sent, ${failed} failed, ${skipped} skipped (no config)`;
 }
 
+/**
+ * Phase 2.x live mailbox sync. Iterates over enabled mailbox_accounts
+ * ordered by lastSyncedAt (oldest first → never-synced accounts go to
+ * the head of the queue). Caps the per-tick work at 10 accounts so a
+ * tenant with many mailboxes can't starve the rest. Per-account
+ * sync failures don't abort the loop — mailboxSync.ts updates each
+ * account's lastSyncStatus + lastSyncError.
+ */
+async function processMailboxSync(): Promise<string> {
+  const due = await rawQuery<{ id: number; companyId: number; userId: number }>(
+    `SELECT id, "companyId", "userId"
+       FROM mailbox_accounts
+      WHERE "syncEnabled" = true AND "deletedAt" IS NULL
+      ORDER BY "lastSyncedAt" ASC NULLS FIRST
+      LIMIT 10`,
+  );
+  if (due.length === 0) return "No mailboxes due";
+
+  let okCount = 0, errCount = 0, msgs = 0;
+  for (const account of due) {
+    try {
+      const result = await syncMailbox(account.id, account.companyId, account.userId);
+      if (result.status === "ok") {
+        okCount++;
+        msgs += result.messagesFetched;
+      } else {
+        errCount++;
+      }
+    } catch (err) {
+      errCount++;
+      logger.warn(err, `[cronScheduler] mailbox sync failed for account ${account.id}`);
+    }
+  }
+  return `Mailbox sync: ${okCount} ok (${msgs} msgs), ${errCount} err`;
+}
+
 async function weeklyLogsArchiving(): Promise<string> {
   const AUDIT_LOG_RETENTION_DAYS = 180;
   const INTEGRATION_LOG_RETENTION_DAYS = 90;
@@ -3737,6 +3774,11 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "abc_monthly_classification", description: "تصنيف ABC الشهري للمنتجات (Pareto)", schedule: "0 3 1 * *", handler: abcMonthlyClassificationCron },
   { name: "sms_queue_worker", description: "معالجة قائمة انتظار الرسائل النصية", schedule: "* * * * *", handler: processSmsQueue },
   { name: "whatsapp_queue_worker", description: "معالجة قائمة انتظار واتساب", schedule: "* * * * *", handler: processWhatsAppQueue },
+  // Phase 2.x live sync — polls Microsoft 365 / IMAP mailboxes every
+  // 5 minutes for new inbound messages. Frequency was picked to balance
+  // freshness against Graph API rate limits (Microsoft caps delta queries
+  // at ~10k requests / 10 min per app — 10 mailboxes × 12 polls/hr = 120/hr).
+  { name: "mailbox_sync_worker", description: "مزامنة صناديق البريد المتصلة (Microsoft 365 / IMAP)", schedule: "*/5 * * * *", handler: processMailboxSync },
   { name: "weekly_logs_archiving", description: "أرشفة السجلات القديمة أسبوعياً", schedule: "0 3 * * 0", handler: weeklyLogsArchiving },
   { name: "scheduled_reports_runner", description: "إرسال التقارير المجدولة", schedule: "0 * * * *", handler: runScheduledReports },
   { name: "notification_fallback_chains", description: "معالجة سلاسل التصعيد للإشعارات الفاشلة", schedule: "*/2 * * * *", handler: processFallbackChains },
