@@ -224,6 +224,11 @@ router.get(
       const missingIban: { employeeId: number; employeeName: string }[] = [];
       const missingId: { employeeId: number; employeeName: string }[] = [];
       const invalidIban: { employeeId: number; employeeName: string; iban: string }[] = [];
+      // Separate bucket so the operator can tell "no IBAN" (data entry
+      // problem) from "deductions ≥ salary" (HR problem: loans, fines,
+      // etc. ate the whole check). Previously these collapsed together
+      // into missingIban and operators wasted time chasing the wrong fix.
+      const zeroAmount: { employeeId: number; employeeName: string; netSalary: number }[] = [];
       let totalAmount = 0;
 
       for (const l of lines) {
@@ -242,7 +247,7 @@ router.get(
         }
         const amount = Number(l.netSalary || 0);
         if (amount <= 0) {
-          missingIban.push({ employeeId: l.employeeId, employeeName: name });
+          zeroAmount.push({ employeeId: l.employeeId, employeeName: name, netSalary: amount });
           continue;
         }
         eligible.push({ employeeId: l.employeeId, employeeName: name, amount });
@@ -258,12 +263,14 @@ router.get(
           status: run.status,
           canGenerate: run.status === "approved" || run.status === "paid",
           eligibleCount: eligible.length,
-          skippedCount: missingIban.length + missingId.length + invalidIban.length,
+          skippedCount:
+            missingIban.length + missingId.length + invalidIban.length + zeroAmount.length,
           totalAmount,
           eligible,
           missingIban,
           missingId,
           invalidIban,
+          zeroAmount,
         }),
       );
     } catch (err) {

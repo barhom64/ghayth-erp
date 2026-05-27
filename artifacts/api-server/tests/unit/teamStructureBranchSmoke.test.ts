@@ -32,6 +32,17 @@ const PROPERTIES_ENGINE_SRC = readFileSync(
   join(import.meta.dirname!, "../../src/lib/engines/propertiesEngine.ts"),
   "utf8",
 );
+const WPS_BUILDER_SRC = readFileSync(
+  join(import.meta.dirname!, "../../src/lib/saudi-compliance/wps/builder.ts"),
+  "utf8",
+);
+const WPS_SHARED_SRC = readFileSync(
+  join(
+    import.meta.dirname!,
+    "../../src/lib/saudi-compliance/wps/formats/_shared.ts",
+  ),
+  "utf8",
+);
 
 // ────────────────────────────────────────────────────────────────────────────
 // WPS — /hr/wps/*
@@ -94,6 +105,15 @@ describe("hr-wps — tenant isolation + safety", () => {
   it("invalid Saudi IBAN entries are dropped, not silently included", () => {
     expect(WPS_SRC).toContain("isSaudiIban(l.iban)");
     expect(WPS_SRC).toContain('reason: "invalid_iban"');
+  });
+
+  it("preflight separates zero-amount from missingIban bucket", () => {
+    // Operators chasing 'no IBAN' for an employee whose deductions ate
+    // the whole check would update the wrong field. The zeroAmount
+    // bucket disambiguates the two.
+    expect(WPS_SRC).toContain("const zeroAmount:");
+    expect(WPS_SRC).toMatch(/zeroAmount\.push\(\{.*netSalary: amount.*\}\)/);
+    expect(WPS_SRC).toMatch(/skippedCount:\s*\n?\s*missingIban\.length \+ missingId\.length \+ invalidIban\.length \+ zeroAmount\.length/);
   });
 
   it("library FSM violations are mapped to typed HTTP errors", () => {
@@ -243,5 +263,31 @@ describe("GL idempotency — engine sourceKeys must be deterministic", () => {
     const block = PROPERTIES_ENGINE_SRC.slice(idx, idx + 2500);
     expect(block).toMatch(/resolveAccountCode\(ctx\.companyId, "owner_payable", "debit"/);
     expect(block).toMatch(/resolveAccountCode\(ctx\.companyId, "cash", "credit"/);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// WPS file builder — defense-in-depth against Excel formula injection
+// ────────────────────────────────────────────────────────────────────────────
+
+describe("WPS builder — CSV/Excel formula injection defense", () => {
+  it("builder.ts sanitize tabs-prefixes leading =/+/-/@", () => {
+    const idx = WPS_BUILDER_SRC.indexOf("function sanitize");
+    const block = WPS_BUILDER_SRC.slice(idx, idx + 600);
+    // Prefix-with-tab is the standard defense — invisible in the rendered
+    // cell, parser-safe (every WPS spec treats remark as opaque text).
+    expect(block).toMatch(/\/\^\[=\+\\?-@\\t\]\//);
+    expect(block).toContain('"\\t" + v');
+  });
+
+  it("formats/_shared.ts sanitiseFreeText also prefixes leading formula chars", () => {
+    const idx = WPS_SHARED_SRC.indexOf("function sanitiseFreeText");
+    const block = WPS_SHARED_SRC.slice(idx, idx + 700);
+    // _shared.ts feeds the per-bank adapters (alrajhi / ncb / riyad /
+    // alinma / albilad). Without the same defense, the per-bank file
+    // would still ship the dangerous remark even when the generic one
+    // is clean — split-brain CSV safety.
+    expect(block).toMatch(/\/\^\[=\+\\?-@\]\//);
+    expect(block).toContain('"\\t" + v');
   });
 });
