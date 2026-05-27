@@ -11,6 +11,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatNumber, formatDateAr, todayLocal } from "@/lib/formatters";
 import { Pencil, Download, ShieldAlert } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
 
 /**
  * Manual Overrides Audit Report — focused view of every line where
@@ -181,6 +182,7 @@ export default function OverridesReportPage() {
       }
     >
       <FinanceTabsNav />
+      <AllocationTabsNav />
 
       <Card className="mb-4 border-status-info-surface bg-status-info-surface/30">
         <CardContent className="p-4 text-sm">
