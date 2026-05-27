@@ -105,6 +105,89 @@ class LegalEngineImpl implements DomainEngine {
       ],
     });
   }
+
+  /**
+   * Post a judgment payment to GL — the missing half of the settlement cycle.
+   *
+   * postSettlementGL() records the liability (against) or receivable (for)
+   * when a judgment is FIRST recorded. When that judgment is later paid
+   * (PATCH /cases/:caseId/judgments/:id with paidAmount), we need the
+   * reciprocal entry to clear the liability / collect the receivable.
+   *
+   *   Against the company, payment out:
+   *     Dr legal_payable (clear the liability)
+   *     Cr cash
+   *
+   *   In favor of the company, collection in:
+   *     Dr cash
+   *     Cr legal_receivable (clear the asset)
+   *
+   * Called with `priorPaid → newPaid` cumulative bounds so each payment
+   * increment posts exactly one journal entry and re-PATCHing with the same
+   * paidAmount is a no-op at the financialEngine dedup layer (sourceKey
+   * collides). Encoding the cumulative bounds — not Date.now — also keeps
+   * the sourceKey idempotent under retry, which the glBoundaryCompliance
+   * test enforces project-wide.
+   */
+  async postJudgmentPaymentGL(
+    ctx: LegalGLContext,
+    payment: {
+      caseId: number;
+      judgmentId: number;
+      priorPaid: number;
+      newPaid: number;
+      isInFavor: boolean;
+    },
+  ) {
+    const delta = payment.newPaid - payment.priorPaid;
+    const increment = `${payment.priorPaid.toFixed(2)}_${payment.newPaid.toFixed(2)}`;
+    if (payment.isInFavor) {
+      const [debitCode, creditCode] = await Promise.all([
+        financialEngine.resolveAccountCode(ctx.companyId, "cash", "debit", "1010"),
+        financialEngine.resolveAccountCode(ctx.companyId, "legal_receivable", "credit", "1200"),
+      ]);
+      return financialEngine.postJournalEntry({
+        companyId: ctx.companyId,
+        branchId: ctx.branchId,
+        createdBy: ctx.createdBy,
+        ref: `JE-LCOLLECT-${payment.judgmentId}-${increment}`,
+        description: `تحصيل حكم لصالح الشركة — حكم #${payment.judgmentId} / قضية #${payment.caseId}`,
+        type: "general",
+        sourceType: "legal_judgments",
+        sourceId: payment.judgmentId,
+        sourceKey: `legal:judgment_payment:${payment.judgmentId}:${increment}`,
+        guardTable: "legal_judgments",
+        guardId: payment.judgmentId,
+        lines: [
+          { accountCode: debitCode, debit: delta, credit: 0, description: "تحصيل تسوية قانونية" },
+          { accountCode: creditCode, debit: 0, credit: delta, description: "إقفال ذمم تسوية قانونية" },
+        ],
+      });
+    }
+
+    const [debitCode, creditCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "legal_payable", "debit", "2100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cash", "credit", "1010"),
+    ]);
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `JE-LPAY-${payment.judgmentId}-${increment}`,
+      description: `سداد حكم ضد الشركة — حكم #${payment.judgmentId} / قضية #${payment.caseId}`,
+      type: "general",
+      sourceType: "legal_judgments",
+      sourceId: payment.judgmentId,
+      sourceKey: `legal:judgment_payment:${payment.judgmentId}:${increment}`,
+      guardTable: "legal_judgments",
+      guardId: payment.judgmentId,
+      lines: [
+        { accountCode: debitCode, debit: delta, credit: 0, description: "إقفال مستحقات تسوية قانونية" },
+        { accountCode: creditCode, debit: 0, credit: delta, description: "سداد نقدي" },
+      ],
+    });
+  }
+
   async postLegalSessionFeeGL(
     ctx: LegalGLContext,
     session: {

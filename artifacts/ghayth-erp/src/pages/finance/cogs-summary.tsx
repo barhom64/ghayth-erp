@@ -10,6 +10,7 @@ import {
 } from "@workspace/ui-core";
 import { Download, TrendingUp, Boxes, Users, BarChart3 } from "lucide-react";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * COGS / Margin summary report — consumes #1034's
@@ -222,6 +223,18 @@ export default function CogsSummaryPage() {
           >
             <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
           </GuardedButton>
+          <PrintButton
+            entityType="report_cogs_summary"
+            entityId={`${startDate}..${endDate}`}
+            payload={{
+              entity: {
+                title: "ملخص تكلفة البضاعة المباعة (COGS)",
+                startDate, endDate,
+                count: rows.length,
+              },
+              items: rows,
+            }}
+          />
         </>
       }
     >
