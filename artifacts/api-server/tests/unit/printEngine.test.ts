@@ -860,18 +860,14 @@ describe("Print platform — PrintButton.payload contract (#1286 follow-up)", ()
   });
 });
 
-describe("Print platform — finance reports wave 4 migrated (#1286 Q4 wave 4)", () => {
-  // Continued unification. 7 more pages with CSV exports get PrintButton
-  // next to the CSV button.
+describe("Print platform — finance reports wave 5 migrated (#1286 Q4 wave 5)", () => {
+  // Final wave: 4 pages with non-standard CSV anchors (camel-case exportCsv).
   const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
   const PAGES: Array<{ path: string; entityType: string }> = [
-    { path: "pages/finance/cogs-summary.tsx",                 entityType: "report_cogs_summary" },
-    { path: "pages/finance/gl-integrity-gaps.tsx",            entityType: "report_gl_integrity_gaps" },
-    { path: "pages/finance/inventory-turnover.tsx",           entityType: "report_inventory_turnover" },
-    { path: "pages/finance/income-statement-vs-budget.tsx",   entityType: "report_income_vs_budget" },
-    { path: "pages/finance/unmapped-lines.tsx",               entityType: "report_unmapped_lines" },
-    { path: "pages/finance/vehicle-portfolio-dashboard.tsx",  entityType: "report_vehicle_portfolio" },
-    { path: "pages/finance/vat-reconciliation.tsx",           entityType: "report_vat_reconciliation" },
+    { path: "pages/finance/cash-13week.tsx",                 entityType: "report_cash_13week" },
+    { path: "pages/finance/income-statement-trend.tsx",      entityType: "report_income_trend" },
+    { path: "pages/finance/trial-balance-comparison.tsx",    entityType: "report_trial_balance_comparison" },
+    { path: "pages/finance/cost-center-pnl.tsx",             entityType: "report_cost_center_pnl" },
   ];
 
   for (const { path, entityType } of PAGES) {

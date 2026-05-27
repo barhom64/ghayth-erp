@@ -19,7 +19,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Clock, Mail, FileSpreadsheet, FileText, Calendar, Send, History } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useApiMutation as useDeleteMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 const scheduleSchema = z.object({
@@ -212,8 +211,8 @@ export default function ScheduledReportsPage() {
 
 function ScheduledReportCard({ item }: { item: any }) {
   const { toast } = useToast();
-  const deleteMut = useDeleteMutation(`/scheduled-reports/${item.id}`, "DELETE", [["scheduled-reports"]]);
-  const toggleMut = useDeleteMutation(`/scheduled-reports/${item.id}`, "PATCH", [["scheduled-reports"]]);
+  const deleteMut = useApiMutation(`/scheduled-reports/${item.id}`, "DELETE", [["scheduled-reports"]]);
+  const toggleMut = useApiMutation(`/scheduled-reports/${item.id}`, "PATCH", [["scheduled-reports"]]);
 
   const reportType = REPORT_TYPES.find((r) => r.value === item.reportType);
   const Icon = reportType?.icon || FileSpreadsheet;

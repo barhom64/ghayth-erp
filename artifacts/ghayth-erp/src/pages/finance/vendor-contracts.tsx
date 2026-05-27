@@ -21,8 +21,9 @@ import {
 } from "@/components/ui/dialog";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { Handshake, Plus, AlertTriangle, CalendarCheck, CalendarX, FileText, Users } from "lucide-react";
+import { Handshake, Plus, AlertTriangle, CalendarCheck, CalendarX, FileText, Users, Pencil, Trash2 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 
 interface VendorContract {
   id: number;
@@ -65,6 +66,8 @@ export default function VendorContractsPage() {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<VendorContract | null>(null);
+  const [deleting, setDeleting] = useState<VendorContract | null>(null);
 
   const params = new URLSearchParams();
   if (statusFilter) params.set("status", statusFilter);
@@ -76,6 +79,15 @@ export default function VendorContractsPage() {
   );
 
   const createMut = useApiMutation("/finance/contracts", "POST", [["vendor-contracts"]]);
+  const updateMut = useApiMutation<unknown, { id: number; patch: Partial<VendorContract> }>(
+    (body) => `/finance/contracts/${body.id}`,
+    "PATCH",
+    [["vendor-contracts"]],
+    {
+      successMessage: "تم تعديل العقد",
+      onSuccess: () => setEditing(null),
+    },
+  );
 
   const [form, setForm] = useState({
     vendorId: 0,
@@ -188,6 +200,34 @@ export default function VendorContractsPage() {
         <Badge className={`text-[10px] ${STATUS_BADGE[r.status]}`}>
           {STATUS_LABEL[r.status]}
         </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (r) => (
+        <div className="flex items-center gap-1">
+          <GuardedButton
+            perm="finance:update"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2"
+            onClick={() => setEditing(r)}
+            title="تعديل"
+          >
+            <Pencil className="h-3 w-3" />
+          </GuardedButton>
+          <GuardedButton
+            perm="finance:delete"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-status-error-foreground"
+            onClick={() => setDeleting(r)}
+            title="حذف"
+          >
+            <Trash2 className="h-3 w-3" />
+          </GuardedButton>
+        </div>
       ),
     },
   ];
@@ -362,12 +402,109 @@ export default function VendorContractsPage() {
         </CardContent>
       </Card>
 
-      <Card className="mt-4 bg-status-warning-surface/30 border-status-warning-surface">
-        <CardContent className="p-3 text-xs text-status-warning-foreground">
-          ⓘ التعديل والحذف — follow-up PR (PATCH/DELETE /finance/contracts/:id موجود في الـ backend).
-          حالياً للتعديل استخدم الـ API مباشرة.
-        </CardContent>
-      </Card>
+      {/* Edit dialog — opens with the row's current values; saves via
+          PATCH /finance/contracts/:id. */}
+      {editing && (
+        <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>تعديل العقد: {editing.title}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs">العنوان</Label>
+                <Input
+                  value={editing.title}
+                  onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">تاريخ البداية</Label>
+                  <Input
+                    type="date"
+                    value={editing.startDate ?? ""}
+                    onChange={(e) => setEditing({ ...editing, startDate: e.target.value || null })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">تاريخ النهاية</Label>
+                  <Input
+                    type="date"
+                    value={editing.endDate}
+                    onChange={(e) => setEditing({ ...editing, endDate: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">القيمة</Label>
+                  <Input
+                    type="number"
+                    value={String(editing.contractValue ?? "")}
+                    onChange={(e) => setEditing({ ...editing, contractValue: e.target.value === "" ? null : Number(e.target.value) })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">الحالة</Label>
+                  <Select
+                    value={editing.status}
+                    onValueChange={(v) => setEditing({ ...editing, status: v as VendorContract["status"] })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">ساري</SelectItem>
+                      <SelectItem value="pending">قيد التفعيل</SelectItem>
+                      <SelectItem value="expired">منتهي</SelectItem>
+                      <SelectItem value="terminated">مفسوخ</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">ملاحظات</Label>
+                <Textarea
+                  value={editing.notes ?? ""}
+                  onChange={(e) => setEditing({ ...editing, notes: e.target.value || null })}
+                  rows={3}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditing(null)}>إلغاء</Button>
+              <Button
+                rateLimitAware
+                disabled={updateMut.isPending || !editing.title.trim() || !editing.endDate}
+                onClick={() => updateMut.mutate({
+                  id: editing.id,
+                  patch: {
+                    title: editing.title,
+                    startDate: editing.startDate,
+                    endDate: editing.endDate,
+                    contractValue: editing.contractValue,
+                    status: editing.status,
+                    notes: editing.notes,
+                  },
+                })}
+              >
+                حفظ
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {deleting && (
+        <ConfirmDeleteDialog
+          open={!!deleting}
+          onOpenChange={(o) => { if (!o) setDeleting(null); }}
+          entity={{ type: "vendor-contract", id: deleting.id, name: deleting.title }}
+          deletePath={`/finance/contracts/${deleting.id}`}
+          invalidateKeys={[["vendor-contracts"]]}
+          successMessage="تم حذف العقد"
+          onDeleted={() => setDeleting(null)}
+        />
+      )}
     </PageShell>
   );
 }
