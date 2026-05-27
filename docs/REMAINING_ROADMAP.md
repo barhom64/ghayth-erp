@@ -78,12 +78,26 @@
 
 **ملاحظة**: foundation موجود الآن (`lib/observability.ts`) — التغيير اللازم mechanical عند اتخاذ قرار vendor.
 
-### 7. Saudi labor compliance (WPS / Mudad / Saudization) — ~4-6 أسابيع
-- WPS (Wage Protection System) — bank file generation
-- Mudad — استلام منصة موارد لتسوية الرواتب
-- Iqama tracking + renewal alerts (full integration، ليس فقط schema)
-- Saudization quota reporting (per Nitaqat)
-- GOSI integration (موجود ready لكن يحتاج testing نهائي)
+### 7. Saudi labor compliance (WPS / Mudad / Saudization) — جزئيًا مكتمل
+- ✅ WPS (Wage Protection System) — bank file generation
+  - PR: d0f80275 / 2192ee7a (CSV-injection defense follow-up)
+  - 8 endpoints under `/hr/wps/*`: settings, preflight, runs CRUD,
+    file download, submit (FSM gate), apply ack (parser).
+  - 6 bank format adapters wired (`generic_pipe`, `alrajhi`, `ncb`,
+    `riyad`, `alinma`, `albilad`).
+  - RBAC feature `hr.payroll.wps` with submit/export actions.
+- ✅ Iqama tracking + renewal alerts — already shipped
+  (verified in this branch — `iqama-alerts.ts` cron + `/hr/expiring-documents`).
+- ✅ Saudization quota reporting (per Nitaqat)
+  - PR: ae3a0212.
+  - `/hr/saudization/{current,history,refresh}` endpoints +
+    sector-aware classifier + drift card on UI dashboard.
+  - Monthly cron rationalised to write `sector='default'` so the
+    UI drift card compares apples to apples.
+- ⏳ Mudad — استلام منصة موارد لتسوية الرواتب (لم يبدأ بعد —
+  المكتبة موجودة في `lib/saudi-compliance/mudad/` بدون routes).
+- ⏳ GOSI integration — حسابات GOSI داخل payroll تعمل؛ يتبقى
+  ملف GOSI الشهري الرسمي للتسليم (deferred).
 
 ### 8. ~~RBAC v2 migration للراوتات~~ — ✅ مكتمل 100% (PR #260, 2026-05-11)
 - ~~migrate `actionCenter.ts` إلى `authorize()` middleware~~
@@ -124,7 +138,7 @@
 **P2 — تحسينات تشغيلية**:
 5. Observability (Sentry SDK)
 6. Inventory advanced
-7. WPS/Mudad/Saudization
+7. WPS ✅ / Mudad ⏳ / Saudization ✅
 
 **P3 — جودة طويلة المدى**:
 8. i18n الكامل
