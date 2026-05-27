@@ -199,17 +199,14 @@ const RULES = [
     // Excel, or printable HTML document be rendered server-side by
     // /api/print/render — the SPA must never generate documents itself.
     regex: /\bwindow\.print\(|\bjsPDF\b|\bhtml2pdf\b|\bhtml2canvas\b|\bpdfMake\b|\bpdfmake\b|\bnew\s+jsPDF|\bfrom\s+["']jspdf["']|\bfrom\s+["']html2pdf[^"']*["']|\bfrom\s+["']pdfmake[^"']*["']/,
-    // Ratchet: 9 pre-existing pages still call window.print() directly
-    // (BI dashboards, finance reports, my-payslip). New violations are
-    // blocked; existing ones drop the baseline as they migrate to
-    // <PrintButton entityType="..." entityId={...} />.
-    // Baseline 7 — current live count after this branch's merge of main:
-    // bi-admin-reports, bi-operations, vendor-statement-print, customer-
-    // statement-print, monthly-close-pack, finance/reports, account-
-    // statement (window.print()). Was 9 before Phase D, dropped to 6
-    // during the work, then bumped to 7 to absorb main's two new print
-    // pages. Tighten when those pages migrate to PrintButton.
-    countBaseline: 7,
+    // Ratchet: 0 pre-existing violations after issue #1286 PR 1/4 (#1289)
+    // migrated the last 7 pages to <PrintButton>. Locked at 0 so any
+    // future regression — a new page calling window.print() or importing
+    // jsPDF / html2pdf / pdfmake — fails CI immediately. To add a
+    // legitimately allowed call site, add the file to the `skip` list
+    // above with a comment explaining why it's the architecturally
+    // sanctioned entry point.
+    countBaseline: 0,
     message:
       "Direct PDF/print generation in the SPA is forbidden (Ghaith Print Platform, " +
       "Phase 0 architecture lock). Document generation must go through the server: " +
