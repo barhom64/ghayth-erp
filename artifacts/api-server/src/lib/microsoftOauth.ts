@@ -163,3 +163,55 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenExchange
     email,
   };
 }
+
+/**
+ * Trades a refresh token for a fresh access token. Called by the sync
+ * worker when the saved tokenExpiresAt is within 60s of now (or already
+ * past). Returns null if Microsoft rejects the refresh — the caller
+ * should mark the account `auth_expired` so the operator re-OAuths.
+ *
+ * Note: Microsoft rotates refresh tokens on each refresh call. The
+ * returned refreshToken MUST replace the stored one or the next refresh
+ * will fail with invalid_grant.
+ */
+export async function refreshAccessToken(refreshToken: string): Promise<{
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: Date;
+} | null> {
+  const m = getMicrosoftConfig();
+  if (!m.clientId || !m.clientSecret) return null;
+  try {
+    const resp = await fetch(M365_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: m.clientId,
+        client_secret: m.clientSecret,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+        scope: SCOPES.join(" "),
+      }).toString(),
+    });
+    if (!resp.ok) {
+      const err = await resp.text().catch(() => "");
+      logger.warn({ status: resp.status, err: err.slice(0, 200) }, "[microsoftOauth] refresh failed");
+      return null;
+    }
+    const data = await resp.json() as {
+      access_token: string;
+      refresh_token?: string;
+      expires_in: number;
+    };
+    return {
+      accessToken: data.access_token,
+      // Microsoft sometimes omits refresh_token on refresh if the existing
+      // one is still valid. Keep the old one in that case.
+      refreshToken: data.refresh_token ?? refreshToken,
+      expiresAt: new Date(Date.now() + data.expires_in * 1000),
+    };
+  } catch (err) {
+    logger.warn(err, "[microsoftOauth] refresh exception");
+    return null;
+  }
+}
