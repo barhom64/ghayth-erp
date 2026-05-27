@@ -8,7 +8,7 @@ import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, BookOpen, Download } from "lucide-react";
+import { ArrowRight, BookOpen, Download, Scale, FileCheck2 } from "lucide-react";
 import {
   DataTable,
   type DataTableColumn,
@@ -72,6 +72,16 @@ export default function LedgerPage() {
           {account && <Badge variant="outline">{typeMap[account.type] || account.type}</Badge>}
           <DatePicker value={startDate} onChange={setStartDate} className="w-40" placeholder="من" />
           <DatePicker value={endDate} onChange={setEndDate} className="w-40" placeholder="إلى" />
+          <Link href={`/finance/trial-balance-drilldown?accountCode=${code}`}>
+            <Button variant="outline" size="sm">
+              <Scale className="h-3.5 w-3.5 me-1" />ميزان المراجعة
+            </Button>
+          </Link>
+          <Link href={`/finance/account-recon-workpaper?accountCode=${code}`}>
+            <Button variant="outline" size="sm">
+              <FileCheck2 className="h-3.5 w-3.5 me-1" />ورقة تسوية
+            </Button>
+          </Link>
           <EntityPrintButton
             entityType="report_general_ledger"
             entityId={`${code}:${startDate ?? ""}..${endDate ?? ""}`}
