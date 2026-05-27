@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { VendorSelect } from "@/components/shared/entity-selects";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
-  Printer, Download, ExternalLink, FileText,
+  Download, ExternalLink, FileText,
   Building2, Mail, Phone, AlertTriangle,
 } from "lucide-react";
 import {
@@ -85,7 +86,9 @@ export default function VendorStatementPrintPage() {
     supplierId ? `/finance/reports/vendor-statement/${supplierId}?${queryParam}` : null,
   );
 
-  const print = () => window.print();
+  // entityId encodes the date range so the server-side loader can re-fetch
+  // exactly the same window — matches parseEntityId() in reportLoaders.ts.
+  const printEntityId = supplierId ? `${supplierId}:${startDate}..${endDate}` : "";
 
   const exportCSV = () => {
     if (!data) return;
@@ -182,10 +185,13 @@ export default function VendorStatementPrintPage() {
               <Download className="w-4 h-4 ml-1" />
               CSV
             </Button>
-            <Button size="sm" onClick={print} disabled={!data}>
-              <Printer className="w-4 h-4 ml-1" />
-              طباعة
-            </Button>
+            <PrintButton
+              entityType="vendor_statement"
+              entityId={printEntityId}
+              variant="default"
+              size="sm"
+              label="طباعة"
+            />
           </div>
         </CardContent>
       </Card>

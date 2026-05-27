@@ -97,8 +97,31 @@ unified storage.
   and `/communications` exposes a "المكالمات" tab pulling the same data,
   so no move needed.
 
+## Phase 4 contract step — reader migration (IN PROGRESS)
+
+The expand step shipped the unified storage; the contract step
+migrates readers + workers off the legacy tables, then drops them.
+Each PR moves a small, isolated cluster of callers so a regression is
+easy to bisect.
+
+| Slice | Migrated | Reads from |
+|---|---|---|
+| 1 (#1284) | `inbox.ts` `/folder-counts`, `/threads`, `/threads/:channel/:address` | `v_message_log_all` |
+| 2 (#1288) | `inbox.ts` `/threads/:id/reply` lookup; `communications.ts` `/log` + `/stats`; `workspace.ts` `recentMessages`, `messagesLast24h`, `teamMessagesToday`, `messagesWeek` | `v_message_log_all` |
+| 3 (#1292) | `communications.ts` `/send` for email/sms/whatsapp → routes through `messageSender` (DLP + dual-write to message_log + outbound_queue). `call` + `push` keep legacy path (audit-only) | `v_message_log_all` for read-back |
+| 4 (_this_) | `cronScheduler.ts` workers mirror status updates to `outbound_queue` after legacy `email_queue` / `sms_queue` / `whatsapp_queue` UPDATEs (sent / failed / externalId / errorMessage) — `outbound_queue` now has full lifecycle visibility | legacy queues remain primary, `outbound_queue` mirrored |
+| follow-up | flip cron worker SELECT direction to `outbound_queue` (now safe because mirror gives confidence the data is in sync) | `outbound_queue` |
+| final | DROP `communications_log`, `notification_log`, `email_queue`, `sms_queue`, `whatsapp_queue` | — |
+
+The view's `fromAddress` / `toAddress` columns alias back to the
+legacy `fromNumber` / `toNumber` in the SELECT projections so the
+frontend response shape stays stable. **Slice 2 also closes an id
+mismatch:** slice 1 migrated `/threads` to return `message_log.id`,
+but `/threads/:id/reply` still looked the id up in `communications_log`
+— different sequence, different rows. Both endpoints now query the
+same view, so the id passed from the UI resolves correctly.
+
 ## Remaining work
 
-- **Phase 4 contract**: drop legacy log + queue tables once readers and workers migrate.
-- **Phase 5**: deprecate `/communications` for users, unify correspondence creation paths, move PBX control under communication-control as a tab.
-- **Phase 2.x**: IMAP / Microsoft Graph mailbox sync (large, separate slice — OAuth flow + token refresh + thread reconciliation).
+- **Phase 4 contract — follow-ups**: cron worker swap to outbound_queue; finally DROP legacy tables after soak.
+- **Phase 2.x live sync**: replace `syncMicrosoft365Stub` / `syncImapStub` with real Microsoft Graph + node-imap clients (needs Azure AD app + credentials); add `mailbox_sync_drain` to cronScheduler; build OAuth callback for hands-off Microsoft 365 connect.

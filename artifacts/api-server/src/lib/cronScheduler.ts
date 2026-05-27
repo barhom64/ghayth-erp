@@ -1834,6 +1834,52 @@ async function retryStuckOfficialLetters(): Promise<string> {
   return `Stuck official letters retried: ${retried}`;
 }
 
+/**
+ * Phase 4 contract slice 4: mirror legacy queue status updates back to
+ * outbound_queue so the unified table reflects the full send lifecycle
+ * (queued → sent / failed) without changing the worker's read path.
+ *
+ * Why this approach: flipping the worker's SELECT to outbound_queue in
+ * one PR risks a missed-send window if the new index isn't perfect.
+ * Mirroring updates lets outbound_queue catch up to legacy without
+ * touching the dispatch loop. A future PR can swap the SELECT
+ * direction confidently once outbound_queue has full lifecycle data.
+ *
+ * Best-effort: failures are logged but never abort the worker — the
+ * legacy table remains source-of-truth during the soak.
+ */
+async function mirrorOutboundQueueStatus(
+  legacySource: "email_queue" | "sms_queue" | "whatsapp_queue",
+  legacyId: number,
+  fields: { status?: string; errorMessage?: string | null; externalId?: string | null; sentAt?: boolean },
+): Promise<void> {
+  const setClauses: string[] = [];
+  const params: unknown[] = [];
+  if (fields.status !== undefined) {
+    params.push(fields.status);
+    setClauses.push(`status = $${params.length}`);
+  }
+  if (fields.errorMessage !== undefined) {
+    params.push(fields.errorMessage);
+    setClauses.push(`"errorMessage" = $${params.length}`);
+  }
+  if (fields.externalId !== undefined) {
+    params.push(fields.externalId);
+    setClauses.push(`"externalId" = $${params.length}`);
+  }
+  if (fields.sentAt) {
+    setClauses.push(`"sentAt" = NOW()`);
+  }
+  setClauses.push(`"updatedAt" = NOW()`);
+  setClauses.push(`attempts = COALESCE(attempts, 0) + 1`);
+  params.push(legacySource, legacyId);
+  await rawExecute(
+    `UPDATE outbound_queue SET ${setClauses.join(", ")}
+       WHERE "legacySource" = $${params.length - 1} AND "legacyId" = $${params.length}`,
+    params,
+  ).catch((e) => logger.warn(e, `[outbound_queue mirror] ${legacySource}#${legacyId}`));
+}
+
 async function processEmailQueue(): Promise<string> {
   const pending = await rawQuery<Record<string, unknown>>(
     `SELECT eq.*, i.config AS "smtpSettings"
@@ -1861,6 +1907,10 @@ async function processEmailQueue(): Promise<string> {
           `UPDATE email_queue SET status = 'failed', "errorMessage" = $1, "attemptCount" = COALESCE("attemptCount",0) + 1, "updatedAt" = NOW() WHERE id = $2`,
           ["No active SMTP integration configured for this company", email.id]
         );
+        await mirrorOutboundQueueStatus("email_queue", email.id as number, {
+          status: "failed",
+          errorMessage: "No active SMTP integration configured for this company",
+        });
         failed++;
         continue;
       }
@@ -1893,6 +1943,9 @@ async function processEmailQueue(): Promise<string> {
         `UPDATE email_queue SET status = 'sent', "sentAt" = NOW(), "attemptCount" = COALESCE("attemptCount",0) + 1, "updatedAt" = NOW() WHERE id = $1`,
         [email.id]
       );
+      await mirrorOutboundQueueStatus("email_queue", email.id as number, {
+        status: "sent", sentAt: true, errorMessage: null,
+      });
       sent++;
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -1900,6 +1953,9 @@ async function processEmailQueue(): Promise<string> {
         `UPDATE email_queue SET status = 'failed', "errorMessage" = $1, "attemptCount" = COALESCE("attemptCount",0) + 1, "updatedAt" = NOW() WHERE id = $2`,
         [errMsg, email.id]
       ).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
+      await mirrorOutboundQueueStatus("email_queue", email.id as number, {
+        status: "failed", errorMessage: errMsg,
+      });
       failed++;
     }
   }
@@ -1980,6 +2036,9 @@ async function processSmsQueue(): Promise<string> {
           `UPDATE sms_queue SET status='sent', "externalId"=$1, "sentAt"=NOW(), "attemptCount"=COALESCE("attemptCount",0)+1, "updatedAt"=NOW() WHERE id=$2`,
           [data.sid ?? null, sms.id]
         );
+        await mirrorOutboundQueueStatus("sms_queue", sms.id as number, {
+          status: "sent", sentAt: true, externalId: data.sid ?? null, errorMessage: null,
+        });
         sent++;
       } else {
         const errText = await resp.text();
@@ -1989,6 +2048,9 @@ async function processSmsQueue(): Promise<string> {
           `UPDATE sms_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
           [newStatus, errText.substring(0, 500), newCount, sms.id]
         );
+        await mirrorOutboundQueueStatus("sms_queue", sms.id as number, {
+          status: newStatus, errorMessage: errText.substring(0, 500),
+        });
         failed++;
       }
     } catch (err) {
@@ -1999,6 +2061,9 @@ async function processSmsQueue(): Promise<string> {
         `UPDATE sms_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
         [newStatus, errMsg, newCount, sms.id]
       );
+      await mirrorOutboundQueueStatus("sms_queue", sms.id as number, {
+        status: newStatus, errorMessage: errMsg,
+      });
       failed++;
     }
   }
@@ -2063,6 +2128,9 @@ async function processWhatsAppQueue(): Promise<string> {
           `UPDATE whatsapp_queue SET status='sent', "externalId"=$1, "sentAt"=NOW(), "attemptCount"=COALESCE("attemptCount",0)+1, "updatedAt"=NOW() WHERE id=$2`,
           [msgId, msg.id]
         );
+        await mirrorOutboundQueueStatus("whatsapp_queue", msg.id as number, {
+          status: "sent", sentAt: true, externalId: msgId, errorMessage: null,
+        });
         sent++;
       } else {
         const errText = await resp.text();
@@ -2072,6 +2140,9 @@ async function processWhatsAppQueue(): Promise<string> {
           `UPDATE whatsapp_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
           [newStatus, errText.substring(0, 500), newCount, msg.id]
         );
+        await mirrorOutboundQueueStatus("whatsapp_queue", msg.id as number, {
+          status: newStatus, errorMessage: errText.substring(0, 500),
+        });
         failed++;
       }
     } catch (err) {
@@ -2082,6 +2153,9 @@ async function processWhatsAppQueue(): Promise<string> {
         `UPDATE whatsapp_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
         [newStatus, errMsg, newCount, msg.id]
       );
+      await mirrorOutboundQueueStatus("whatsapp_queue", msg.id as number, {
+        status: newStatus, errorMessage: errMsg,
+      });
       failed++;
     }
   }

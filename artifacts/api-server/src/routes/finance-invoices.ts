@@ -14,6 +14,7 @@ import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { checkAccess } from "../lib/rbac/authzEngine.js";
 import type { JournalEntryLine } from "../lib/businessHelpers.js";
 import { issueNumber } from "../lib/numberingService.js";
 import {
@@ -948,7 +949,13 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       // operator's pin always wins. Lines with no rule match fall
       // through to the generic invoice_revenue account (legacy
       // backwards-compat).
-      const { resolveLineAllocation, writeAllocationResult } = await import("../lib/accountingAllocation.js");
+      const {
+        resolveLineAllocation,
+        writeAllocationResult,
+        validateAllocationCompleteness,
+        getEnforceLineAllocation,
+        logAllocationOverride,
+      } = await import("../lib/accountingAllocation.js");
       const lineResolutions = await Promise.all(
         dimLines.rows.map((ln) =>
           resolveLineAllocation({
@@ -978,6 +985,53 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           })
         )
       );
+
+      // ── Enforce gate (migration 223 / finance.enforce_line_allocation).
+      // When the company has enforce_line_allocation=ON, refuse to post a
+      // JE that contains any line the resolver flagged as 'unmapped' or
+      // 'failed'. A user holding finance.allocation.override may still
+      // approve by supplying req.body.overrideReason; the bypass is
+      // recorded on allocation_override_log for audit. With the flag
+      // OFF (default) the code falls through to the legacy fallback-to-
+      // generic-account behavior below, exactly as before — opt-in.
+      const enforce = await getEnforceLineAllocation({ companyId: scope.companyId, branchId: scope.branchId });
+      if (enforce) {
+        const { ok, blockers } = validateAllocationCompleteness(lineResolutions);
+        if (!ok) {
+          const overrideReason = String(req.body?.overrideReason ?? "").trim();
+          if (overrideReason.length < 10) {
+            throw new ValidationError(
+              "لا يمكن اعتماد فاتورة تحتوي على بنود بدون تخصيص محاسبي",
+              {
+                field: "lines",
+                fix: "حدد الحساب ومركز التكلفة لكل بند، أو زوّد سببًا مكتوبًا (overrideReason ≥ 10 حرف) إن كان لديك صلاحية finance.allocation.override.",
+                meta: { blockers, unmappedLineCount: lineResolutions.filter((r) => r.status === "unmapped" || r.status === "failed").length },
+              } as any,
+            );
+          }
+          const overrideAllowed = (await checkAccess(scope, {
+            feature: "finance.allocation.override",
+            action: "create",
+          })).allowed;
+          if (!overrideAllowed) {
+            throw new ForbiddenError(
+              "تجاوز تخصيص البنود يحتاج صلاحية finance.allocation.override",
+              { fix: "اطلب من المدير المالي اعتماد هذه الفاتورة، أو خصّص البنود قبل الاعتماد.", meta: { blockers } } as any,
+            );
+          }
+          await logAllocationOverride({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            actorAssignmentId: scope.activeAssignmentId ?? null,
+            actorUserId: scope.userId,
+            documentType: "invoice",
+            documentId: id,
+            sourceTable: "invoice_lines",
+            blockers,
+            overrideReason,
+          });
+        }
+      }
 
       const totalNet = Number(invoice.total) - Number(invoice.vatAmount || 0);
       const revenueLines: JournalEntryLine[] = [];

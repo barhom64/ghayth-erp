@@ -170,6 +170,7 @@ const AllocationRules = lazy(() => import("@/pages/finance/allocation-rules"));
 const OverridesReport = lazy(() => import("@/pages/finance/overrides-report"));
 const AllocationResults = lazy(() => import("@/pages/finance/allocation-results"));
 const AllocationCoverage = lazy(() => import("@/pages/finance/allocation-coverage"));
+const AllocationOverrideLog = lazy(() => import("@/pages/finance/allocation-override-log"));
 const AllocationRuleCreate = lazy(() => import("@/pages/create/finance/allocation-rule-create"));
 const AllocationRuleEdit = lazy(() => import("@/pages/create/finance/allocation-rule-edit"));
 const ProductCatalog = lazy(() => import("@/pages/finance/product-catalog"));
@@ -281,6 +282,7 @@ export const financeRoutes = [
   { path: "/finance/overrides-report", component: OverridesReport },
   { path: "/finance/allocation-results", component: AllocationResults },
   { path: "/finance/allocation-coverage", component: AllocationCoverage },
+  { path: "/finance/allocation-override-log", component: AllocationOverrideLog },
   { path: "/finance/cost-centers", component: CostCenters },
   { path: "/finance/cost-center-pnl", component: CostCenterPnl },
   { path: "/finance/product-catalog", component: ProductCatalog },

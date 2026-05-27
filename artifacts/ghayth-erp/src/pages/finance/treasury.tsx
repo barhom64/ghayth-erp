@@ -11,7 +11,7 @@ import {
 } from "@workspace/ui-core";
 import {
   Landmark, Banknote, Building2, ArrowDownCircle, ArrowUpCircle,
-  TrendingUp, TrendingDown, KeyRound, Eye, Wallet,
+  TrendingUp, TrendingDown, KeyRound, Eye, Wallet, Activity, RefreshCw,
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
@@ -168,6 +168,16 @@ export default function TreasuryPage() {
       loading={isLoading}
       actions={
         <div className="flex gap-2">
+          <Button size="sm" variant="outline" asChild>
+            <Link href="/finance/bank-accounts-watch">
+              <Activity className="h-4 w-4 me-1" />مراقبة البنوك
+            </Link>
+          </Button>
+          <Button size="sm" variant="outline" asChild>
+            <Link href="/finance/bank-reconciliation">
+              <RefreshCw className="h-4 w-4 me-1" />التسوية البنكية
+            </Link>
+          </Button>
           <Button size="sm" variant="outline" asChild>
             <Link href="/finance/custodies">
               <KeyRound className="h-4 w-4 me-1" />العهد

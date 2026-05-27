@@ -567,3 +567,120 @@ describe("Print Engine v2 — preset contract (every BESPOKE_PRESETS entry retur
     expect(missing, `ARABIC_TITLES missing entries for: ${missing.join(", ")}`).toEqual([]);
   });
 });
+
+describe("Print Engine v2 — retention legal hold", () => {
+  // These document types are the legal artifact under Saudi tax / commercial
+  // record retention. Dropping any of them silently from the retention list
+  // (e.g. via a future refactor) would let the daily prune job evict PDFs
+  // that ZATCA may demand in an audit. A failing assert here means a
+  // regression in the legal posture — coordinate with finance before
+  // removing a type, not just by changing the source.
+  const MUST_HOLD = [
+    "invoice",
+    "credit_note",
+    "debit_note",
+    "pos_receipt",
+    "receipt_voucher",
+    "payment_voucher",
+    "journal_entry",
+    "delivery_note",
+    "purchase_order",
+    "goods_receipt",
+    "payroll",
+  ];
+
+  it("LEGAL_RETENTION_ENTITY_TYPES covers every Saudi-mandated record type", async () => {
+    const mod = await import("../../src/lib/print/retention.js");
+    const list = (mod as { LEGAL_RETENTION_ENTITY_TYPES: readonly string[] }).LEGAL_RETENTION_ENTITY_TYPES;
+    expect(Array.isArray(list)).toBe(true);
+    for (const t of MUST_HOLD) {
+      expect(list, `LEGAL_RETENTION_ENTITY_TYPES must include ${t} (Saudi tax/commercial record)`).toContain(t);
+    }
+  });
+
+  it("retention SQL excludes legal-hold rows at query time (not in JS)", () => {
+    // Belt-and-braces: ensure both the WHERE clause and the per-row guard
+    // reference the legal-hold list. If a future change removes the SQL
+    // filter, the per-row guard still protects the data; if the per-row
+    // guard is removed, the SQL still does. Both being present is the
+    // invariant — drop either at your peril.
+    const src = readFileSync(join(PRINT_LIB, "retention.ts"), "utf8");
+    expect(src).toMatch(/NOT\s*\(\s*"entityType"\s*=\s*ANY\(\$2::text\[\]\)\s*\)/);
+    expect(src).toMatch(/LEGAL_RETENTION_ENTITY_TYPES\.includes\(row\.entityType\)/);
+  });
+
+  it("PruneResult exposes legalHoldSkipped so ops can audit the runner", () => {
+    const src = readFileSync(join(PRINT_LIB, "retention.ts"), "utf8");
+    expect(src).toMatch(/legalHoldSkipped:\s*number/);
+  });
+});
+
+describe("Print platform — Stop-Ship: no parallel print systems", () => {
+  // The print platform is the only path that produces audited, archived,
+  // verifiable documents. A stray `window.print()` in any user-facing page
+  // bypasses the audit row, the QR verification, the retention rules, and
+  // the reprint approvals — i.e. every guarantee the platform exists to
+  // provide. Issue #1286 makes this a Stop-Ship: the merge gate fails the
+  // moment a new call appears, no exceptions. To add a printable page,
+  // wire a server-side data loader + use <PrintButton entityType=... />.
+  //
+  // Allowed locations (the official print module's OWN code may reference
+  // window.print in its template HTML, since the template's auto-print
+  // script IS the one that triggers the browser dialog inside the popup):
+  const ALLOWED_PATTERNS = [
+    /artifacts\/api-server\/src\/lib\/print\//,
+    /artifacts\/ghayth-erp\/src\/components\/shared\/print-button\.tsx$/,
+    /artifacts\/ghayth-erp\/src\/components\/shared\/entity-print\.tsx$/,
+    /artifacts\/ghayth-erp\/src\/lib\/print-client\.ts$/,
+    /artifacts\/ghayth-erp\/src\/pages\/admin\/print-/,
+    /artifacts\/ghayth-erp\/src\/components\/print-layout\.tsx$/,
+    /artifacts\/ghayth-erp\/src\/styles\/print\.css$/,
+    /tests\//,
+    /node_modules\//,
+    /\.test\.[tj]sx?$/,
+    /docs\/architecture\/print-platform/,
+  ];
+
+  function scan(pattern: RegExp): string[] {
+    // Walk the source tree by hand — avoid spawning grep so the test stays
+    // hermetic and predictable in CI environments without GNU grep.
+    const hits: string[] = [];
+    function walk(dir: string) {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name === "node_modules" || entry.name === "dist" || entry.name === ".next") continue;
+          walk(p);
+        } else if (entry.isFile()) {
+          if (!/\.(tsx?|jsx?|css|scss)$/.test(entry.name)) continue;
+          if (ALLOWED_PATTERNS.some((re) => re.test(p))) continue;
+          const src = readFileSync(p, "utf8");
+          if (pattern.test(src)) hits.push(p);
+        }
+      }
+    }
+    walk(join(REPO_ROOT, "artifacts"));
+    return hits;
+  }
+
+  it("no window.print() outside the official print module", () => {
+    const hits = scan(/\bwindow\.print\s*\(/);
+    expect(
+      hits,
+      `Found window.print() in ${hits.length} file(s). Route printing through <PrintButton entityType=... entityId=... /> instead.\n${hits.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("no third-party PDF generators imported (jspdf, pdfmake, html2canvas, html2pdf, puppeteer, react-to-print)", () => {
+    // Any direct PDF generation in the browser bypasses the platform's
+    // server-side render → archive → audit pipeline. We forbid the imports
+    // at the static level so a regression can't sneak in via a follow-up PR.
+    const banned = ["jspdf", "pdfmake", "html2canvas", "html2pdf", "puppeteer", "react-to-print"];
+    const pattern = new RegExp(`(import|require)\\s*[^;]*['"](${banned.join("|")})['"]`);
+    const hits = scan(pattern);
+    expect(
+      hits,
+      `Banned PDF libs imported in ${hits.length} file(s). Use the official print platform instead.\n${hits.join("\n")}`,
+    ).toEqual([]);
+  });
+});

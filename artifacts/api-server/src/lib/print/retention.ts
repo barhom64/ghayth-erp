@@ -13,11 +13,40 @@
  * Default policy: keep 90 days. Configurable via the runner caller.
  *
  * Safe to run repeatedly — `deletePrintArtifact` ignores missing objects.
+ *
+ * LEGAL HOLD — documents that fall under Saudi tax/commercial-record
+ * retention obligations (ZATCA: 6 years for VAT, Commercial Court Law:
+ * 10 years for accounting records) are NEVER pruned regardless of age.
+ * Their PDFs are the legal artifact — a regenerated PDF with the current
+ * template + current data is NOT an acceptable substitute for an audit,
+ * because both can drift after the fact. Keeping the original bytes is
+ * the only defensible answer when ZATCA shows up two years later.
  */
 
 import { rawQuery } from "../rawdb.js";
 import { logger } from "../logger.js";
 import { deletePrintArtifact } from "./printStorage.js";
+
+// Document types where the rendered PDF IS the legal record. These never
+// expire from object storage. Anything not on this list (e.g. internal
+// memos, label sheets, list-page exports) follows the normal retention
+// window. Adding a new type here is a one-way decision — once exempted,
+// storage cost climbs forever for that type.
+export const LEGAL_RETENTION_ENTITY_TYPES: readonly string[] = [
+  "invoice",
+  "credit_note",
+  "credit_memo",
+  "debit_note",
+  "debit_memo",
+  "pos_receipt",
+  "receipt_voucher",
+  "payment_voucher",
+  "journal_entry",
+  "delivery_note",
+  "purchase_order",
+  "goods_receipt",
+  "payroll",
+];
 
 export interface PruneResult {
   scanned: number;
@@ -25,6 +54,8 @@ export interface PruneResult {
   failed: number;
   /** Rows whose pdfStorageKey was already null (skipped). */
   alreadyEmpty: number;
+  /** Rows skipped because their entityType is under legal hold. */
+  legalHoldSkipped: number;
 }
 
 export interface PruneOptions {
@@ -42,7 +73,7 @@ export interface PruneOptions {
 export async function prunePrintArtifacts(opts: PruneOptions): Promise<PruneResult> {
   const days = Math.max(1, Math.floor(opts.daysToKeep));
   const cap = Math.max(1, Math.min(opts.maxPerRun ?? 1000, 10_000));
-  const params: unknown[] = [days];
+  const params: unknown[] = [days, LEGAL_RETENTION_ENTITY_TYPES];
   let whereCompany = "";
   if (opts.companyId) {
     params.push(opts.companyId);
@@ -52,12 +83,15 @@ export async function prunePrintArtifacts(opts: PruneOptions): Promise<PruneResu
   // Pull eligible rows. We only touch rows that still have a storage key
   // — rows whose key has been cleared (manual cleanup, previous run)
   // shouldn't count as "scanned" again. ORDER BY oldest-first so a
-  // capped run nibbles from the tail consistently.
-  const rows = await rawQuery<{ id: number; pdfStorageKey: string | null }>(
-    `SELECT id, "pdfStorageKey"
+  // capped run nibbles from the tail consistently. The NOT = ANY clause
+  // pushes the legal-hold filter into the index scan instead of pulling
+  // rows just to skip them — relevant when ~80% of prints are invoices.
+  const rows = await rawQuery<{ id: number; pdfStorageKey: string | null; entityType: string }>(
+    `SELECT id, "pdfStorageKey", "entityType"
        FROM print_jobs
       WHERE "pdfStorageKey" IS NOT NULL
         AND "createdAt" < NOW() - ($1::int || ' days')::interval
+        AND NOT ("entityType" = ANY($2::text[]))
         ${whereCompany}
       ORDER BY "createdAt" ASC
       LIMIT ${cap}`,
@@ -70,11 +104,23 @@ export async function prunePrintArtifacts(opts: PruneOptions): Promise<PruneResu
     throw err;
   });
 
-  const result: PruneResult = { scanned: rows.length, deleted: 0, failed: 0, alreadyEmpty: 0 };
+  const result: PruneResult = {
+    scanned: rows.length,
+    deleted: 0,
+    failed: 0,
+    alreadyEmpty: 0,
+    legalHoldSkipped: 0,
+  };
 
   for (const row of rows) {
     if (!row.pdfStorageKey) {
       result.alreadyEmpty++;
+      continue;
+    }
+    // Defence-in-depth: if the SQL filter above is ever changed and a
+    // legal-hold row leaks through, the per-row check still catches it.
+    if (LEGAL_RETENTION_ENTITY_TYPES.includes(row.entityType)) {
+      result.legalHoldSkipped++;
       continue;
     }
     if (opts.dryRun) {

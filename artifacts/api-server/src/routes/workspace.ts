@@ -77,11 +77,14 @@ router.get("/feed", authorize({ feature: "workspace", action: "view" }), async (
       ), "overdueTasks"),
 
       // Last 10 inbound communications (preview) — operational triage.
+      // Phase 4 contract step 2 — read from v_message_log_all; column
+      // aliases preserve the response shape the frontend expects.
       safe(rawQuery<Record<string, unknown>>(
-        `SELECT id, channel, "fromNumber", "toNumber",
+        `SELECT id, channel,
+                "fromAddress" AS "fromNumber", "toAddress" AS "toNumber",
                 subject, LEFT(body, 200) AS body_preview,
                 "relatedType", "relatedId", status, "createdAt"
-           FROM communications_log
+           FROM v_message_log_all
           WHERE "companyId" = $1
             AND direction = 'inbound'
             AND "deletedAt" IS NULL
@@ -132,7 +135,7 @@ router.get("/feed", authorize({ feature: "workspace", action: "view" }), async (
              WHERE t."companyId" = $1 AND t."deletedAt" IS NULL
                AND t.status IN ('pending','in_progress')
                AND (t."assignedTo" = $2 OR $2 IS NULL)) AS "openTasks",
-           (SELECT COUNT(*) FROM communications_log
+           (SELECT COUNT(*) FROM v_message_log_all
              WHERE "companyId" = $1 AND direction = 'inbound'
                AND "deletedAt" IS NULL
                AND "createdAt" >= NOW() - INTERVAL '24 hours') AS "messagesLast24h",
@@ -208,7 +211,7 @@ router.get("/team", authorize({ feature: "workspace.manager", action: "view" }),
            COUNT(*) FILTER (WHERE direction = 'inbound' AND channel = 'email') AS "inboundEmail",
            COUNT(*) FILTER (WHERE direction = 'inbound' AND channel = 'whatsapp') AS "inboundWhatsapp",
            COUNT(*) FILTER (WHERE direction = 'inbound' AND channel = 'sms') AS "inboundSms"
-         FROM communications_log
+         FROM v_message_log_all
          WHERE "companyId" = $1
            AND "deletedAt" IS NULL
            AND "createdAt" >= $2::date AND "createdAt" < ($2::date + INTERVAL '1 day')`,
@@ -238,7 +241,7 @@ router.get("/team", authorize({ feature: "workspace.manager", action: "view" }),
              WHERE "companyId" = $1 AND "deletedAt" IS NULL
                AND status = 'completed'
                AND "completedAt" >= NOW() - INTERVAL '7 days') AS "tasksClosedWeek",
-           (SELECT COUNT(*) FROM communications_log
+           (SELECT COUNT(*) FROM v_message_log_all
              WHERE "companyId" = $1 AND "deletedAt" IS NULL
                AND "createdAt" >= NOW() - INTERVAL '7 days') AS "messagesWeek",
            (SELECT COUNT(*) FROM pbx_calls
