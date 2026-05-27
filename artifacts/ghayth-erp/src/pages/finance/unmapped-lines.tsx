@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import { Download, CheckCircle2, AlertTriangle, FileSearch } from "lucide-react";
 
@@ -157,12 +158,29 @@ export default function UnmappedLinesPage() {
       ]}
       actions={
         nonEmptySections.length > 0 ? (
-          <GuardedButton
-            perm="finance:export" variant="outline" size="sm"
-            onClick={() => exportCSV(data.sections, `unmapped-lines-${todayLocal()}.csv`)}
-          >
-            <Download className="h-3.5 w-3.5 me-1" /> تصدير CSV
-          </GuardedButton>
+          <>
+            <GuardedButton
+              perm="finance:export" variant="outline" size="sm"
+              onClick={() => exportCSV(data.sections, `unmapped-lines-${todayLocal()}.csv`)}
+            >
+              <Download className="h-3.5 w-3.5 me-1" /> تصدير CSV
+            </GuardedButton>
+            <PrintButton
+              entityType="report_unmapped_lines"
+              entityId={todayLocal()}
+              payload={{
+                entity: {
+                  title: "البنود غير المُوجَّهة (بدون GL mapping)",
+                  asOfDate: todayLocal(),
+                  sectionCount: nonEmptySections.length,
+                },
+                items: data.sections.flatMap((s: any) => (s.rows ?? []).map((r: any) => ({
+                  "القسم": s.label ?? s.key,
+                  ...r,
+                }))),
+              }}
+            />
+          </>
         ) : null
       }
     >
