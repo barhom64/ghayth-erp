@@ -186,24 +186,31 @@ router.get("/threads", authorize({ feature: "communications", action: "list" }),
       folderCond = ` AND folder = $${params.length}`;
     }
 
+    // Phase 4 contract step: read from v_message_log_all (the unified
+    // view created in migration 221). Columns are aliased back to
+    // fromNumber / toNumber so the frontend response shape is identical
+    // to the pre-contract version — this is purely a storage swap, no
+    // API change. The view's fromAddress/toAddress columns are wider
+    // (varchar(300) vs the legacy varchar(20)) so future email-address
+    // peer keys work without truncation.
     const rows = await rawQuery(
       `WITH peer AS (
          SELECT id, channel, direction,
-                COALESCE(NULLIF("fromNumber",''), "toNumber") AS peer_addr,
-                "fromNumber", "toNumber",
+                COALESCE(NULLIF("fromAddress",''), "toAddress") AS peer_addr,
+                "fromAddress" AS "fromNumber", "toAddress" AS "toNumber",
                 subject, body, status, folder, "isStarred",
                 "relatedType", "relatedId", "createdAt",
                 ROW_NUMBER() OVER (
-                  PARTITION BY channel, COALESCE(NULLIF("fromNumber",''), "toNumber")
+                  PARTITION BY channel, COALESCE(NULLIF("fromAddress",''), "toAddress")
                   ORDER BY "createdAt" DESC
                 ) AS rn,
                 COUNT(*) OVER (
-                  PARTITION BY channel, COALESCE(NULLIF("fromNumber",''), "toNumber")
+                  PARTITION BY channel, COALESCE(NULLIF("fromAddress",''), "toAddress")
                 ) AS total_messages,
                 COUNT(*) FILTER (WHERE direction = 'inbound') OVER (
-                  PARTITION BY channel, COALESCE(NULLIF("fromNumber",''), "toNumber")
+                  PARTITION BY channel, COALESCE(NULLIF("fromAddress",''), "toAddress")
                 ) AS inbound_count
-           FROM communications_log
+           FROM v_message_log_all
           WHERE "companyId" = $1 AND "deletedAt" IS NULL
             ${channelCond}${folderCond}
        )
@@ -234,16 +241,20 @@ router.get("/threads/:channel/:address", authorize({ feature: "communications", 
     if (!["email", "whatsapp", "sms"].includes(channel)) {
       throw new ValidationError("قناة غير مدعومة");
     }
+    // Phase 4 contract step: read from v_message_log_all + alias the
+    // unified column names back to fromNumber/toNumber so the frontend
+    // sees no shape change. See /threads (above) for the rationale.
     const rows = await rawQuery(
-      `SELECT id, channel, direction, "fromNumber", "toNumber",
+      `SELECT id, channel, direction,
+              "fromAddress" AS "fromNumber", "toAddress" AS "toNumber",
               subject, body, status, "relatedType", "relatedId", "createdAt"
-         FROM communications_log
+         FROM v_message_log_all
         WHERE "companyId" = $1
           AND channel = $2
           AND "deletedAt" IS NULL
           AND (
-            COALESCE(NULLIF("fromNumber",''), '') = $3
-            OR COALESCE(NULLIF("toNumber",''), '') = $3
+            COALESCE(NULLIF("fromAddress",''), '') = $3
+            OR COALESCE(NULLIF("toAddress",''), '') = $3
           )
         ORDER BY "createdAt" ASC
         LIMIT 500`,
@@ -754,9 +765,15 @@ router.delete("/signatures/:id", authorize({ feature: "communications", action: 
 router.get("/folder-counts", authorize({ feature: "communications", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    // Phase 4 contract step: this endpoint reads from v_message_log_all,
+    // the view exposing the unified message_log table (created in
+    // migration 221). Legacy communications_log rows are visible through
+    // the same view via the Phase-4 backfill, so this is a drop-in swap
+    // — the user-visible totals stay identical, and a future contract
+    // step (DROP TABLE communications_log) won't need another route edit.
     const [folderRows, draftRow, starredRow] = await Promise.all([
       rawQuery<{ folder: string; count: string }>(
-        `SELECT folder, COUNT(*)::text AS count FROM communications_log
+        `SELECT folder, COUNT(*)::text AS count FROM v_message_log_all
           WHERE "companyId" = $1 AND "deletedAt" IS NULL
           GROUP BY folder`,
         [scope.companyId],
@@ -767,7 +784,7 @@ router.get("/folder-counts", authorize({ feature: "communications", action: "lis
         [scope.companyId, scope.userId],
       ),
       rawQuery<{ count: string }>(
-        `SELECT COUNT(*)::text AS count FROM communications_log
+        `SELECT COUNT(*)::text AS count FROM v_message_log_all
           WHERE "companyId" = $1 AND "isStarred" = true AND "deletedAt" IS NULL`,
         [scope.companyId],
       ),
