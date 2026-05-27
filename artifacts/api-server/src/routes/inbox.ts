@@ -112,6 +112,11 @@ router.post("/threads/:id/reply", authorize({ feature: "communications", action:
     const id = parseId(req.params.id, "id");
     const body = zodParse(replySchema.safeParse(req.body));
 
+    // Phase 4 contract slice 2: read from v_message_log_all so the
+    // thread id passed in matches the id returned by GET /threads
+    // (which already migrated in slice 1). Without this fix, the ids
+    // would diverge — /threads returns message_log.id but the lookup
+    // here would search communications_log.id.
     const [original] = await rawQuery<{
       channel: string;
       fromNumber: string | null;
@@ -119,8 +124,11 @@ router.post("/threads/:id/reply", authorize({ feature: "communications", action:
       relatedType: string | null;
       relatedId: number | null;
     }>(
-      `SELECT channel, "fromNumber", "toNumber", "relatedType", "relatedId"
-         FROM communications_log
+      `SELECT channel,
+              "fromAddress" AS "fromNumber",
+              "toAddress" AS "toNumber",
+              "relatedType", "relatedId"
+         FROM v_message_log_all
         WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
         LIMIT 1`,
       [id, scope.companyId],
