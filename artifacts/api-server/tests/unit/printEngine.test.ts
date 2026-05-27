@@ -684,3 +684,66 @@ describe("Print platform — Stop-Ship: no parallel print systems", () => {
     ).toEqual([]);
   });
 });
+
+describe("Print platform — granular permissions (issue #1286)", () => {
+  // The legacy print perms bundle several capabilities under one key:
+  // `print_jobs:read` lets you list jobs AND prune storage AND see the
+  // archive view AND power the diagnostics page. Issue #1286 demands one
+  // permission per capability so owners can mint narrower roles. The five
+  // perms below are the granular additions — they're wired via
+  // requireAnyPermission so existing roles with the legacy keys keep
+  // working (no migration needed). The test locks down both halves:
+  // (1) the perms exist in the catalogue (so roles can grant them);
+  // (2) the routes accept them as an alternative to the legacy gate.
+  const rbac = readFileSync(RBAC_CATALOG, "utf8");
+  const routes = readFileSync(ROUTES_FILE, "utf8");
+
+  const GRANULAR = [
+    "print:preview:create",
+    "print:download",
+    "print:archive:delete",
+    "print:verify:read",
+    "print:diagnostics:read",
+  ];
+
+  it("declares every granular print permission in the RBAC catalogue", () => {
+    for (const p of GRANULAR) {
+      expect(rbac, `RBAC catalogue missing ${p}`).toContain(`"${p}"`);
+    }
+  });
+
+  it("declares per-entity perms for the two new statement entity types", () => {
+    // customer_statement / vendor_statement were wired in PR1+PR2 but lacked
+    // per-entity perms. Adding them keeps the per-entity catalogue
+    // exhaustive — owners can now revoke statement printing per role.
+    expect(rbac).toContain('"print:customer_statement:create"');
+    expect(rbac).toContain('"print:vendor_statement:create"');
+  });
+
+  it("/preview accepts either templates:read OR print:preview:create", () => {
+    // Match the route handler signature for /preview specifically — the
+    // collapsed-whitespace form lets the test survive multi-line formatting.
+    const collapsed = routes.replace(/\s+/g, " ");
+    expect(collapsed).toMatch(/router\.post\(\s*"\/preview".*?requireAnyPermission\(\s*"templates:read"\s*,\s*"print:preview:create"\s*\)/);
+  });
+
+  it("/jobs/:jobId/download accepts either print_jobs:read OR print:download", () => {
+    const collapsed = routes.replace(/\s+/g, " ");
+    expect(collapsed).toMatch(/router\.get\(\s*"\/jobs\/:jobId\/download".*?requireAnyPermission\(\s*"print_jobs:read"\s*,\s*"print:download"\s*\)/);
+  });
+
+  it("/jobs/prune accepts either print_jobs:read OR print:archive:delete", () => {
+    const collapsed = routes.replace(/\s+/g, " ");
+    expect(collapsed).toMatch(/router\.post\(\s*"\/jobs\/prune".*?requireAnyPermission\(\s*"print_jobs:read"\s*,\s*"print:archive:delete"\s*\)/);
+  });
+
+  it("/archive/:entityType/:entityId accepts either print_jobs:read OR print:verify:read", () => {
+    const collapsed = routes.replace(/\s+/g, " ");
+    expect(collapsed).toMatch(/router\.get\(\s*"\/archive\/:entityType\/:entityId".*?requireAnyPermission\(\s*"print_jobs:read"\s*,\s*"print:verify:read"\s*\)/);
+  });
+
+  it("/jobs and /jobs.csv accept either print_jobs:read OR print:diagnostics:read", () => {
+    expect(routes).toContain('router.get("/jobs", requireAnyPermission("print_jobs:read", "print:diagnostics:read")');
+    expect(routes).toContain('router.get("/jobs.csv", requireAnyPermission("print_jobs:read", "print:diagnostics:read")');
+  });
+});
