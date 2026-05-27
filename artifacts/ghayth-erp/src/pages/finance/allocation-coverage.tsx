@@ -14,6 +14,7 @@ import {
   ChevronRight, Target, TrendingUp,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
 
 /**
  * Allocation Coverage Audit
@@ -187,6 +188,7 @@ export default function AllocationCoveragePage() {
       ]}
     >
       <FinanceTabsNav />
+      <AllocationTabsNav />
 
       <Card className="mb-4 border-status-info-surface bg-status-info-surface/30">
         <CardContent className="p-4 text-sm">

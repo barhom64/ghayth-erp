@@ -11,6 +11,7 @@ import { formatNumber } from "@/lib/formatters";
 import { Plus, Workflow, AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
 
 interface AllocationRule {
   id: number;
@@ -175,6 +176,7 @@ export default function AllocationRulesPage() {
       }
     >
       <FinanceTabsNav />
+      <AllocationTabsNav />
 
       <Card className="mb-4 border-status-info-surface bg-status-info-surface/30">
         <CardContent className="p-4 text-sm">
