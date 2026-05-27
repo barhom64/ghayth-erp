@@ -146,16 +146,39 @@ that navigates to `/api/mailboxes/oauth/microsoft365/authorize`. Manual
 token paste fields are still available as a fallback for credentials
 the operator already holds.
 
-What this does NOT do: the actual mailbox sync (`syncMicrosoft365Stub`)
-is still stubbed. Replacing the stub with real Graph `/me/messages`
-delta calls is the next slice — but now that the OAuth credentials
-land cleanly, that slice is purely a body change inside `mailboxSync.ts`.
+## Phase 2.x — Microsoft Graph live sync (SHIPPED)
+
+Replaces `syncMicrosoft365Stub` with real Graph delta polling. The cron
+worker `mailbox_sync_worker` runs every 5 minutes:
+
+1. Picks up to 10 mailboxes ordered by `lastSyncedAt ASC NULLS FIRST`
+   (never-synced accounts jump to the front).
+2. For each account, `syncMicrosoft365()` in `mailboxSync.ts`:
+   - Refreshes the access token if within 60s of expiry, via
+     `refreshAccessToken()` from `microsoftOauth.ts`. The new
+     access + refresh token pair is persisted encrypted in place.
+   - Loads the saved `deltaToken` from `mailbox_sync_cursors`; falls
+     back to a fresh delta URL on first run.
+   - Calls Graph `/me/mailFolders/Inbox/messages/delta` with the
+     access token. Cap one page (50 messages) per tick.
+   - For each non-removed message: INSERTs `communications_log`
+     (`direction='inbound'`, `folder='inbox'`) + mirrors to
+     `message_log` so it shows up in `v_message_log_all`.
+   - Persists the returned `@odata.deltaLink` (or `nextLink` if more
+     pages remain) as the cursor for the next tick.
+3. 401 from Graph → marks the account `auth_expired` so the operator
+   re-runs the OAuth flow.
+
+Idempotency: dedupe probe on `(companyId, direction, channel,
+fromAddress, createdAt)` skips messages already stored, so a re-sync
+after a deltaToken reset doesn't duplicate the inbox.
 
 ## Remaining work
 
 - **Phase 4 final contract**: DROP `communications_log`, `notification_log`,
   `email_queue`, `sms_queue`, `whatsapp_queue` after the soak window.
-- **Phase 2.x live sync**: replace `syncMicrosoft365Stub` / `syncImapStub`
-  with real Graph delta + IMAP polling (the OAuth credentials now flow
-  cleanly through the storage layer); add `mailbox_sync_drain` to
-  cronScheduler.
+- **Phase 2.x IMAP**: replace `syncImapStub` with a real IMAP client
+  (Hostinger and generic accounts). Requires adding `imap` / `imapflow`
+  + `mailparser` as deps and implementing the IDLE / UID-based polling
+  in `mailboxSync.ts`. The schema (mailbox_accounts.imapHost/Port/
+  Username/Password) is ready.
