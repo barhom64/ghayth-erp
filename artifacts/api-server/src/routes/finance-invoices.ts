@@ -1716,6 +1716,10 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
   }
 });
 
+// Audit F5 — DELETE candidate. Posting happens inside the approve
+// flow (PATCH /invoices/:id/approve); no UI directly posts. Marked
+// for removal in the F5 follow-up PR
+// (see docs/audits/finance-orphan-endpoints-disposition.md).
 invoicesRouter.post("/invoices/:id/post", authorize({ feature: "finance.invoices", action: "approve" }), requireOwnership({ table: "invoices", checks: ["company", "branch"] }), async (req, res) => {
   try {
     const scope = req.scope!;

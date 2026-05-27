@@ -1310,6 +1310,9 @@ financeAlgorithmsRouter.post("/rounding-account/setup", authorize({ feature: "fi
   }
 });
 
+// Audit F5 — DELETE candidate. No frontend caller; UI uses
+// `/rounding-differences/auto-clear`. Marked for removal in the F5
+// follow-up PR (see docs/audits/finance-orphan-endpoints-disposition.md).
 financeAlgorithmsRouter.post("/rounding-differences/apply", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
