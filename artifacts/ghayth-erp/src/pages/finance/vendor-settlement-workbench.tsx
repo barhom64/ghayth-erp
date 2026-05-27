@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Phone, Mail, AlertTriangle, ChevronDown, ChevronRight, Search,
   ExternalLink, Download, Users, Banknote, Clock, FileText,
@@ -219,6 +220,28 @@ export default function VendorSettlementWorkbenchPage() {
               <Download className="w-4 h-4 ml-1" />
               CSV
             </Button>
+            <PrintButton
+              entityType="report_vendor_settlement"
+              entityId={data?.asOfDate ?? "today"}
+              payload={{
+                entity: {
+                  title: "ورشة تسوية المورّدين",
+                  asOfDate: data?.asOfDate ?? "",
+                  vendorCount: filtered.length,
+                  totalOutstanding: filtered.reduce((s, v) => s + Number(v.total ?? 0), 0),
+                },
+                items: filtered.map((v) => ({
+                  "المورد": v.supplierName,
+                  "هاتف": v.supplierPhone ?? "",
+                  "حالي": Number(v.current ?? 0),
+                  "1-30 يوم": Number(v["1_30"] ?? 0),
+                  "31-60 يوم": Number(v["31_60"] ?? 0),
+                  "61-90 يوم": Number(v["61_90"] ?? 0),
+                  "+90 يوم": Number(v.over90 ?? 0),
+                  "الإجمالي": Number(v.total ?? 0),
+                })),
+              }}
+            />
           </div>
         </CardContent>
       </Card>
