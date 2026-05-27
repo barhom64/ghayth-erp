@@ -118,9 +118,22 @@ router.post("/cost-centers", authorize({ feature: "finance.cost_centers", action
       : [];
     if (existing) throw new ValidationError("رمز مركز التكلفة مستخدم بالفعل", { field: "code" });
 
+    // Dual-write the entity link: cost_centers carries BOTH naming pairs
+    // — the original (migration 091) relatedEntityType/relatedEntityId AND
+    // the newer (migration 203) linkedEntityType/linkedEntityId. Different
+    // consumers read from different pairs:
+    //   • This UI route + finance-reports.ts → relatedEntity* (legacy)
+    //   • lib/accountingAllocation.ts from_* strategies → linkedEntity*
+    // Writing both columns from the same parsed input keeps the resolver's
+    // cost-centre lookup in sync with rows authored via the UI (audit F1).
     const [row] = await rawQuery<CostCenterRow>(
-      `INSERT INTO cost_centers ("companyId", code, name, type, "parentId", "relatedEntityType", "relatedEntityId", "allocatedAmount")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO cost_centers (
+         "companyId", code, name, type, "parentId",
+         "relatedEntityType", "relatedEntityId",
+         "linkedEntityType", "linkedEntityId",
+         "allocatedAmount"
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $6, $7, $8)
        ON CONFLICT ("companyId", code) DO NOTHING
        RETURNING *`,
       [scope.companyId, code || null, name, type || "general", parentId || null, relatedEntityType || null, relatedEntityId || null, allocatedAmount || 0]
