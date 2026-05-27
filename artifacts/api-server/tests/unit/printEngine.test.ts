@@ -859,3 +859,28 @@ describe("Print platform — PrintButton.payload contract (#1286 follow-up)", ()
     expect(printButton).toMatch(/\.\.\.\(payload\s*\?\s*\{\s*payload\s*\}\s*:\s*\{\}\)/);
   });
 });
+
+describe("Print platform — finance reports wave 3 migrated (#1286 Q4 wave 3)", () => {
+  // Continued unification: pages that have CSV exports but no print path
+  // through the official platform get a <PrintButton> next to the CSV
+  // button. Lock the migration so a regression that drops PrintButton
+  // fails CI.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const PAGES: Array<{ path: string; entityType: string }> = [
+    { path: "pages/finance/trial-balance-drilldown.tsx",     entityType: "report_trial_balance_drilldown" },
+    { path: "pages/finance/fixed-asset-register.tsx",        entityType: "report_fixed_asset_register" },
+    { path: "pages/finance/customer-advances-workbench.tsx", entityType: "report_customer_advances" },
+    { path: "pages/finance/vendor-settlement-workbench.tsx", entityType: "report_vendor_settlement" },
+    { path: "pages/finance/budget-heatmap.tsx",              entityType: "report_budget_heatmap" },
+  ];
+
+  for (const { path, entityType } of PAGES) {
+    it(`${path} mounts <PrintButton entityType="${entityType}" payload={...}>`, () => {
+      const src = readFileSync(join(SPA, path), "utf8");
+      expect(src, `${path} must import PrintButton`).toContain('from "@/components/shared/print-button"');
+      expect(src, `${path} must render PrintButton`).toContain("<PrintButton");
+      expect(src, `${path} must use entityType="${entityType}"`).toContain(`entityType="${entityType}"`);
+      expect(src, `${path} must pass payload`).toMatch(/payload=\{/);
+    });
+  }
+});

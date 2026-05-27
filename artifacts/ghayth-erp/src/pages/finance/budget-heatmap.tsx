@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Grid3x3, Download, TrendingUp, TrendingDown, AlertTriangle, Info,
 } from "lucide-react";
@@ -188,6 +189,28 @@ export default function BudgetHeatmapPage() {
             <Download className="w-4 h-4 ml-1" />
             CSV
           </Button>
+          <PrintButton
+            entityType="report_budget_heatmap"
+            entityId={String(year)}
+            payload={{
+              entity: {
+                title: "خريطة حرارية للموازنة",
+                year: String(year),
+                accountCount: accountMap.length,
+                totalBudget,
+                totalActual,
+                overrunCount,
+              },
+              items: accountMap.map((a) => ({
+                "الحساب": a.code,
+                "اسم الحساب": a.name,
+                "إجمالي الموازنة": a.totalBudget,
+                "إجمالي الفعلي": a.totalActual,
+                "الفارق": a.totalBudget - a.totalActual,
+                "% الاستخدام": a.totalBudget > 0 ? Math.round((a.totalActual / a.totalBudget) * 100) : 0,
+              })),
+            }}
+          />
         </CardContent>
       </Card>
 
