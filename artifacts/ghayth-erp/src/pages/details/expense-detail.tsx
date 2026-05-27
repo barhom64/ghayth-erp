@@ -12,6 +12,7 @@ import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
+import { LineAllocationStatusBanner } from "@/components/shared/line-allocation-status-banner";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -212,7 +213,9 @@ export default function ExpenseDetail() {
   }, [expense]);
 
   const overview = (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="space-y-4">
+      <LineAllocationStatusBanner lines={lines} documentType="expense" />
+      <div className="grid gap-4 md:grid-cols-3">
       {/* Primary info — big amount + core metadata */}
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
@@ -383,6 +386,7 @@ export default function ExpenseDetail() {
 
       {id && <EntityComments entityType="expense" entityId={id} />}
       {id && <EntityTags entityType="expense" entityId={id} />}
+      </div>
     </div>
   );
 
