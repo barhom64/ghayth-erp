@@ -790,3 +790,29 @@ describe("Print Engine v2 — statement loaders compute opening balance", () => 
     expect(body).toMatch(/openingBalance[\s\S]*?42P01/);
   });
 });
+
+describe("Print platform — 360 sheets + finance workbenches migrated (#1286 Q4)", () => {
+  // Q4 wave 2: the customer/vendor 360 sheets and the AR collection +
+  // AP payment workbenches had a CSV export but no native print path
+  // (only a Link to a sibling page). Adding <PrintButton> here means
+  // a single click prints the same 360 view the user is staring at,
+  // through the audited platform — no jump to another page first.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const PAGES: Array<{ path: string; entityType: string }> = [
+    { path: "pages/finance/customer-360-sheet.tsx",                entityType: "report_customer_360" },
+    { path: "pages/finance/vendor-360-sheet.tsx",                  entityType: "report_vendor_360" },
+    { path: "pages/finance/account-reconciliation-workpaper.tsx",  entityType: "report_account_reconciliation" },
+    { path: "pages/finance/ar-collection-workbench.tsx",           entityType: "report_ar_collection_plan" },
+    { path: "pages/finance/ap-payment-calendar.tsx",               entityType: "report_ap_payment_calendar" },
+  ];
+
+  for (const { path, entityType } of PAGES) {
+    it(`${path} mounts <PrintButton entityType="${entityType}" payload={...}>`, () => {
+      const src = readFileSync(join(SPA, path), "utf8");
+      expect(src, `${path} must import PrintButton`).toContain('from "@/components/shared/print-button"');
+      expect(src, `${path} must render PrintButton`).toContain("<PrintButton");
+      expect(src, `${path} must use entityType="${entityType}"`).toContain(`entityType="${entityType}"`);
+      expect(src, `${path} must pass payload`).toMatch(/payload=\{/);
+    });
+  }
+});
