@@ -16,7 +16,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
-import { Plus, Eye, Pencil, CheckCircle2, Briefcase } from "lucide-react";
+import { Plus, Eye, Pencil, CheckCircle2, Briefcase, Calculator } from "lucide-react";
 
 type PlanStatus = "active" | "suspended" | "expired" | "pending";
 type CommissionType = "percentage" | "fixed" | "tiered" | "mixed";
@@ -150,12 +150,20 @@ export default function UmrahCommissionPlans() {
       subtitle="إدارة خطط عمولة موظفي العمرة والموافقة عليها"
       breadcrumbs={[{ label: "العمرة" }, { label: "خطط العمولة" }]}
       actions={
-        <GuardedButton perm="umrah:write" asChild className="gap-2">
-          <Link href="/umrah/commission-plans/new">
-            <Plus className="h-4 w-4" />
-            خطة جديدة
-          </Link>
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" className="gap-2">
+            <Link href="/umrah/commission-calculations">
+              <Calculator className="h-4 w-4" />
+              الحسابات المنفّذة
+            </Link>
+          </Button>
+          <GuardedButton perm="umrah:write" asChild className="gap-2">
+            <Link href="/umrah/commission-plans/new">
+              <Plus className="h-4 w-4" />
+              خطة جديدة
+            </Link>
+          </GuardedButton>
+        </div>
       }
     >
       <UmrahTabsNav />

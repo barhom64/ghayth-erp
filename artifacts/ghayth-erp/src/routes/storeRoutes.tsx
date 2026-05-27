@@ -8,6 +8,7 @@ const ProductDetail = lazy(() => import("@/pages/store/product-detail"));
 
 export const storeRoutes = [
   { path: "/store", component: Store },
+  { path: "/store/products", component: Store },
   { path: "/store/products/create", component: ProductsCreate },
   { path: "/store/products/:id", component: ProductDetail },
   { path: "/store/orders", component: Store },

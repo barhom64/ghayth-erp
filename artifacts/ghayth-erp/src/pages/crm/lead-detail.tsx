@@ -231,7 +231,7 @@ export default function LeadDetailPage() {
     <DetailPageLayout
       title={lead?.title || lead?.contactName || "العميل المحتمل"}
       subtitle={lead?.clientName || undefined}
-      backPath="/crm/leads"
+      backPath="/crm"
       backLabel="العودة للعملاء المحتملين"
       status={lead?.stage ? { label: STAGE_LABELS[lead.stage] || lead.stage, tone: "info" } : undefined}
       entityType="crm_lead"

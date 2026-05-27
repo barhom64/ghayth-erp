@@ -19,6 +19,7 @@ import {
   PageStatusBadge,
   type DataTableColumn,
 } from "@workspace/ui-core";
+import { Link } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageStateWrapper } from "@/components/shared/page-state";
@@ -38,7 +39,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
   Server, Sparkles, ClipboardCheck, BookOpen, Plus, Send, CheckCircle2,
-  XCircle, AlertOctagon, MessageSquare, RefreshCw, Eye, FlaskConical, PlayCircle, TestTube,
+  XCircle, AlertOctagon, MessageSquare, RefreshCw, Eye, FlaskConical, PlayCircle, TestTube, ExternalLink,
 } from "lucide-react";
 
 type AiCapability = "generation" | "stt" | "embedding" | "image";
@@ -285,7 +286,12 @@ export default function AdminAiGovernance() {
     )},
     { key: "actions", header: "إجراءات", render: (r) => (
       <div className="flex items-center gap-1 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={() => setViewPromptId(r.id)}>
+        <Button asChild variant="ghost" size="sm" title="فتح صفحة التفاصيل">
+          <Link href={`/admin/ai-governance/prompts/${r.id}`}>
+            <ExternalLink className="w-3 h-3" />
+          </Link>
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => setViewPromptId(r.id)} title="عرض سريع">
           <Eye className="w-3 h-3" />
         </Button>
         {r.status === "draft" && (

@@ -17,7 +17,7 @@ const INITIAL = { title: "", status: "planned", auditorName: "", startDate: "", 
 export default function AuditsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const createMut = useApiMutation<unknown, Record<string, string | Attachment[]>>("/governance/audits", "POST", [["governance-audits"]]);
+  const createMut = useApiMutation<unknown, Record<string, string | Attachment[]>>("/governance/audits", "POST", [["gov-audits"]]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const { fieldErrors, validate, setApiError } = useFieldErrors();

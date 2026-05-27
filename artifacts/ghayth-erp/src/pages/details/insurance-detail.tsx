@@ -99,7 +99,7 @@ export default function InsuranceDetail() {
       { key: "premium", label: "القسط", type: "number" },
       { key: "coverageAmount", label: "مبلغ التغطية", type: "number" },
     ],
-    invalidateKeys: [["insurance", String(id)], ["insurance"]],
+    invalidateKeys: [["insurance-detail", String(id)], ["fleet-insurance"]],
     onSaved: () => refetch(),
   });
 

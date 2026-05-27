@@ -10,7 +10,7 @@ import {
 const TABS = [
   { href: "/finance/accounts", label: "الحسابات", icon: BookOpen, match: ["/finance/accounts"] },
   { href: "/finance/invoices", label: "الفواتير", icon: FileText, match: ["/finance/invoices"] },
-  { href: "/finance/journal", label: "القيود", icon: ScrollText, match: ["/finance/journal", "/finance/journal-manual", "/finance/opening-balances", "/finance/recurring-journal"] },
+  { href: "/finance/journal", label: "القيود", icon: ScrollText, match: ["/finance/journal", "/finance/journal-manual", "/finance/opening-balances", "/finance/recurring-journals"] },
   { href: "/finance/vouchers", label: "السندات", icon: FileSpreadsheet, match: ["/finance/vouchers"] },
   { href: "/finance/expenses", label: "المصروفات", icon: CreditCard, match: ["/finance/expenses"] },
   { href: "/finance/budget", label: "الميزانية", icon: Wallet, match: ["/finance/budget"] },

@@ -8,6 +8,7 @@ const AdminIntegrations = lazy(() => import("@/pages/admin-integrations"));
 const AdminMonitoring = lazy(() => import("@/pages/admin-monitoring"));
 const AdminObservability = lazy(() => import("@/pages/admin-observability"));
 const AdminAiGovernance = lazy(() => import("@/pages/admin-ai-governance"));
+const AdminAiPromptDetail = lazy(() => import("@/pages/admin-ai-prompt-detail"));
 const AdminCommunicationControl = lazy(() => import("@/pages/admin-communication-control"));
 const AdminPbxControl = lazy(() => import("@/pages/admin-pbx-control"));
 const AdminMasterPlan = lazy(() => import("@/pages/admin-master-plan"));
@@ -36,6 +37,7 @@ export const adminRoutes = [
   { path: "/admin/monitoring", component: AdminMonitoring },
   { path: "/admin/observability", component: AdminObservability },
   { path: "/admin/ai-governance", component: AdminAiGovernance },
+  { path: "/admin/ai-governance/prompts/:id", component: AdminAiPromptDetail },
   { path: "/admin/communication-control", component: AdminCommunicationControl },
   { path: "/admin/pbx-control", component: AdminPbxControl },
   { path: "/admin/master-plan", component: AdminMasterPlan },

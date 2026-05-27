@@ -102,7 +102,7 @@ export default function OwnerDetail() {
       { key: "nationalId", label: "رقم الهوية" },
       { key: "bankAccount", label: "الحساب البنكي" },
     ],
-    invalidateKeys: [["owner", id || ""], ["owners"]],
+    invalidateKeys: [["property-owner", id || ""], ["property-owners"]],
     onSaved: () => refetch(),
   });
 

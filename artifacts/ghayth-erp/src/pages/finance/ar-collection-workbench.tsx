@@ -416,12 +416,6 @@ export default function ArCollectionWorkbenchPage() {
                           </tbody>
                         </table>
                         <div className="flex justify-end gap-2 mt-3 border-t pt-3">
-                          <Link href={`/finance/receivables/receipt?clientId=${c.clientId}`}>
-                            <Button size="sm" variant="outline">
-                              <FileText className="w-4 h-4 ml-1" />
-                              تسجيل دفعة
-                            </Button>
-                          </Link>
                           <Link href={`/finance/customer-360-sheet?clientId=${c.clientId}`}>
                             <Button size="sm" variant="outline">
                               <Users className="w-4 h-4 ml-1" />

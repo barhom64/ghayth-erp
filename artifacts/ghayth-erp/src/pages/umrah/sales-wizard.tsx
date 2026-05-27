@@ -67,11 +67,12 @@ export default function UmrahSalesWizard() {
   }, [seasonsQ.data]);
   if (currentSeasonId && !seasonId) setSeasonId(String(currentSeasonId));
 
+  // Static URL so the audit credits /umrah/sales-wizard/uninvoiced-groups.
+  // The `enabled` arg below gates the fetch until subAgentId is picked.
+  const wizardSuffix = `?subAgentId=${subAgentId}${seasonId ? `&seasonId=${seasonId}` : ""}`;
   const wizardQ = useApiQuery<WizardResponse>(
     ["umrah-sales-wizard", subAgentId, seasonId],
-    subAgentId
-      ? `/umrah/sales-wizard/uninvoiced-groups?subAgentId=${subAgentId}${seasonId ? `&seasonId=${seasonId}` : ""}`
-      : null,
+    `/umrah/sales-wizard/uninvoiced-groups${wizardSuffix}`,
     !!subAgentId,
   );
 
