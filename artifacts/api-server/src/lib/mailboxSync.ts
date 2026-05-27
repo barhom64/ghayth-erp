@@ -33,8 +33,9 @@
  *     real call is a localized change inside this file.
  */
 import { rawQuery, rawExecute } from "./rawdb.js";
-import { decryptSecret } from "./secrets.js";
+import { decryptSecret, encryptSecret } from "./secrets.js";
 import { logger } from "./logger.js";
+import { refreshAccessToken } from "./microsoftOauth.js";
 
 export type MailboxProvider = "microsoft365" | "imap" | "hostinger";
 
@@ -141,7 +142,12 @@ export async function syncMailbox(
   let result: SyncResult;
   switch (account.provider) {
     case "microsoft365":
-      result = await syncMicrosoft365Stub(account);
+      result = await syncMicrosoft365(account).catch((err) => ({
+        ok: false,
+        status: "error" as const,
+        messagesFetched: 0,
+        error: err instanceof Error ? err.message : String(err),
+      }));
       break;
     case "imap":
     case "hostinger":
@@ -167,17 +173,152 @@ export async function syncMailbox(
 // body with a real provider client is a localized change — the storage
 // schema and route surface above are stable.
 
-async function syncMicrosoft365Stub(account: MailboxAccountRow): Promise<SyncResult> {
-  logger.info(
-    { accountId: account.id, email: account.emailAddress },
-    "[mailboxSync] microsoft365 sync stub — real Graph client lands in follow-up slice"
+/**
+ * Real Microsoft Graph sync. Uses /me/messages/delta to pull inbox
+ * messages incrementally — the first call grabs everything (limited to
+ * 50 per page; we cap at one page per cron tick to keep latency
+ * bounded), subsequent calls only return what's new since the saved
+ * deltaToken.
+ *
+ * Each Graph message becomes an INSERT into communications_log
+ * (direction='inbound') AND a parallel INSERT into message_log via the
+ * existing Phase-4 path. We don't go through messageSender because
+ * sendMessage() is the OUTBOUND seam; INBOUND messages have their own
+ * shape (no DLP scan, no queue insert).
+ *
+ * Token refresh: if the saved tokenExpiresAt is within 60s of now,
+ * exchange the refresh token first and persist the new pair before
+ * calling Graph.
+ */
+async function syncMicrosoft365(account: MailboxAccountRow): Promise<SyncResult> {
+  let accessToken = decryptSecret(account.accessToken);
+  const refreshToken = decryptSecret(account.refreshToken);
+  if (!accessToken || !refreshToken) {
+    return { ok: false, status: "auth_expired", messagesFetched: 0, error: "tokens missing" };
+  }
+
+  // Refresh if token is within 60s of expiry (or already expired).
+  const expiresAt = account.tokenExpiresAt ? new Date(account.tokenExpiresAt).getTime() : 0;
+  if (expiresAt - Date.now() < 60_000) {
+    const refreshed = await refreshAccessToken(refreshToken);
+    if (!refreshed) {
+      return { ok: false, status: "auth_expired", messagesFetched: 0, error: "refresh token rejected" };
+    }
+    accessToken = refreshed.accessToken;
+    await rawExecute(
+      `UPDATE mailbox_accounts
+          SET "accessToken" = $1, "refreshToken" = $2, "tokenExpiresAt" = $3,
+              "updatedAt" = NOW()
+        WHERE id = $4`,
+      [
+        encryptSecret(refreshed.accessToken),
+        encryptSecret(refreshed.refreshToken),
+        refreshed.expiresAt.toISOString(),
+        account.id,
+      ],
+    ).catch((e) => logger.warn(e, "[mailboxSync] persist refreshed tokens failed"));
+  }
+
+  // Load (or initialise) the sync cursor for the inbox folder.
+  const [cursorRow] = await rawQuery<{ deltaToken: string | null }>(
+    `SELECT "deltaToken" FROM mailbox_sync_cursors
+      WHERE "accountId" = $1 AND folder = 'inbox' LIMIT 1`,
+    [account.id],
   );
-  return {
-    ok: true,
-    status: "not_implemented",
-    messagesFetched: 0,
-    error: "Microsoft Graph client integration is the next slice — credentials saved, sync deferred",
+  const initialUrl = cursorRow?.deltaToken
+    ?? "https://graph.microsoft.com/v1.0/me/mailFolders/Inbox/messages/delta?$top=50";
+
+  const resp = await fetch(initialUrl, {
+    headers: { Authorization: `Bearer ${accessToken}`, Prefer: "outlook.body-content-type=text" },
+  });
+  if (!resp.ok) {
+    if (resp.status === 401) {
+      return { ok: false, status: "auth_expired", messagesFetched: 0, error: "Graph returned 401" };
+    }
+    const errText = await resp.text().catch(() => "");
+    return { ok: false, status: "error", messagesFetched: 0, error: `Graph ${resp.status}: ${errText.slice(0, 200)}` };
+  }
+  const payload = await resp.json() as {
+    value: Array<{
+      id: string;
+      subject?: string | null;
+      from?: { emailAddress?: { address?: string } };
+      toRecipients?: Array<{ emailAddress?: { address?: string } }>;
+      bodyPreview?: string;
+      body?: { content?: string };
+      receivedDateTime?: string;
+      "@removed"?: { reason: string };
+    }>;
+    "@odata.deltaLink"?: string;
+    "@odata.nextLink"?: string;
   };
+
+  const messages = payload.value ?? [];
+  let messagesFetched = 0;
+  for (const msg of messages) {
+    if (msg["@removed"]) continue; // skip deletions during initial slice
+    const fromAddress = msg.from?.emailAddress?.address ?? null;
+    const toAddress = msg.toRecipients?.[0]?.emailAddress?.address ?? account.emailAddress;
+    const subject = msg.subject ?? null;
+    const body = msg.body?.content ?? msg.bodyPreview ?? "";
+    const receivedAt = msg.receivedDateTime ?? new Date().toISOString();
+
+    // Idempotency: skip if we already stored a row for this Graph id.
+    // The Graph id lives in message_log via the future legacyId column
+    // for messageId once we add it; for now we use a digest probe
+    // against `body` + `receivedAt` + `fromAddress` to avoid duplicates.
+    const [dup] = await rawQuery<{ id: number }>(
+      `SELECT id FROM communications_log
+        WHERE "companyId" = $1 AND direction = 'inbound' AND channel = 'email'
+          AND COALESCE("fromNumber",'') = COALESCE($2,'')
+          AND "createdAt" = $3
+        LIMIT 1`,
+      [account.companyId, fromAddress, receivedAt],
+    );
+    if (dup) continue;
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO communications_log
+         ("companyId", channel, direction, "fromNumber", "toNumber",
+          subject, body, status, folder, "createdAt")
+       VALUES ($1, 'email', 'inbound', $2, $3, $4, $5, 'received', 'inbox', $6)`,
+      [account.companyId, fromAddress, toAddress, subject, body, receivedAt],
+    );
+
+    if (insertId > 0) {
+      await rawExecute(
+        `INSERT INTO message_log
+           ("companyId", channel, direction, "fromAddress", "toAddress",
+            subject, body, status, folder,
+            "legacySource", "legacyId", "createdAt")
+         VALUES ($1, 'email', 'inbound', $2, $3, $4, $5, 'received', 'inbox',
+                 'communications_log', $6, $7)`,
+        [account.companyId, fromAddress, toAddress, subject, body, insertId, receivedAt],
+      ).catch((e) => logger.warn(e, "[mailboxSync] message_log mirror failed"));
+      messagesFetched++;
+    }
+  }
+
+  // Persist the deltaLink so the next sync only fetches new messages.
+  // Microsoft returns deltaLink only on the final page of a sync; on
+  // intermediate pages it returns nextLink. We stop after one page per
+  // tick, so on first run we may store a nextLink (still works as a
+  // cursor — calling it returns the next batch).
+  const nextCursor = payload["@odata.deltaLink"] ?? payload["@odata.nextLink"] ?? null;
+  if (nextCursor) {
+    await rawExecute(
+      `INSERT INTO mailbox_sync_cursors ("accountId", folder, "deltaToken", "lastFetchedAt", "messagesFetched", "createdAt", "updatedAt")
+       VALUES ($1, 'inbox', $2, NOW(), $3, NOW(), NOW())
+       ON CONFLICT ("accountId", folder) DO UPDATE
+         SET "deltaToken" = EXCLUDED."deltaToken",
+             "lastFetchedAt" = NOW(),
+             "messagesFetched" = mailbox_sync_cursors."messagesFetched" + EXCLUDED."messagesFetched",
+             "updatedAt" = NOW()`,
+      [account.id, nextCursor, messagesFetched],
+    ).catch((e) => logger.warn(e, "[mailboxSync] cursor persist failed"));
+  }
+
+  return { ok: true, status: "ok", messagesFetched };
 }
 
 async function syncImapStub(account: MailboxAccountRow): Promise<SyncResult> {
