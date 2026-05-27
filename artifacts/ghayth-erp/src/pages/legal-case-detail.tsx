@@ -3,6 +3,7 @@ import { z } from "zod";
 import { useParams } from "wouter";
 import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -238,7 +239,7 @@ export default function LegalCaseDetail() {
 
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("legal_case", Number(id));
 
-  const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], id ? `/legal/cases/${id}` : null);
+  const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], `/legal/cases/${id}`);
 
   const transitionMut = useApiMutation<any, { status: string }>(
     () => `/legal/cases/${id}`,
@@ -296,6 +297,7 @@ export default function LegalCaseDetail() {
           {resolveStatus(t, "legal_case")?.label || t}
         </GuardedButton>
       ))}
+      <EntityPrintButton entityType="legal_judgment" entityId={id ?? ""} formats={["a4"]} />
     </div>
   );
 

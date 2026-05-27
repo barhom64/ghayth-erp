@@ -117,7 +117,7 @@ export default function InvoicesCreate() {
   // Load all active tax codes (the 5 seeded Saudi defaults + any custom).
   const { data: taxCodesData } = useApiQuery<{ data: TaxCode[] }>(
     ["tax-codes"],
-    "/finance/accounts/tax-codes",
+    "/finance/tax-codes",
   );
   const taxCodes = useMemo(() => (taxCodesData?.data ?? []).filter((t) => t.isActive), [taxCodesData]);
   const taxCodeByCode = useMemo(() => {
@@ -406,7 +406,7 @@ export default function InvoicesCreate() {
                   <Badge variant="outline" className="font-mono">{lineCode || "—"}</Badge>
                   <Badge variant="secondary">{lineInclusive ? "شامل" : "غير شامل"}</Badge>
                   <span className="text-muted-foreground">صافي: <span className="font-semibold text-foreground">{formatCurrency(split.net)}</span></span>
-                  <span className="text-muted-foreground">ضريبة: <span className="font-semibold text-amber-700">{formatCurrency(split.vat)}</span></span>
+                  <span className="text-muted-foreground">ضريبة: <span className="font-semibold text-status-warning-foreground">{formatCurrency(split.vat)}</span></span>
                   <span className="text-muted-foreground">إجمالي: <span className="font-semibold text-emerald-700">{formatCurrency(split.gross)}</span></span>
                 </div>
               )}

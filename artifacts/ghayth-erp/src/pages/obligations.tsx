@@ -134,7 +134,7 @@ export default function ObligationsPage() {
 
       <div className="flex items-center gap-3 mt-4">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute end-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="بحث في العنوان أو نوع الكيان..."
             value={search}

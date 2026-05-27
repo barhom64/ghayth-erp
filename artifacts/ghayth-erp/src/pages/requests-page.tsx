@@ -363,6 +363,9 @@ function RequestsList() {
           approveEndpoint={`/requests/${r.id}/approve`}
           rejectEndpoint={`/requests/${r.id}/reject`}
           returnEndpoint={`/requests/${r.id}/return`}
+          approveMethod="POST"
+          rejectMethod="POST"
+          returnMethod="POST"
           onDone={handleApprovalDone}
         />
       ),
@@ -413,7 +416,7 @@ function RequestsList() {
     if (editingId === r.id) {
       extras.push(
         <div key="edit" className="p-2">
-          <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(r.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
+          <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(r.id, values)} onCancel={cancelEdit} isPending={isPending} />
         </div>
       );
     }
@@ -669,6 +672,11 @@ function WorkflowsTab() {
 }
 
 export default function RequestsPage() {
+  const [location] = useLocation();
+  const initialTab =
+    location === "/requests/types" ? "types" :
+    location === "/requests/workflows" ? "workflows" :
+    "catalog";
   const { data: stats, isLoading, isError } = useApiQuery<any>(["req-stats"], "/requests/stats");
 
   if (isLoading) return <LoadingSpinner />;
@@ -695,7 +703,7 @@ export default function RequestsPage() {
           </Card>
         ))}
       </div>
-      <Tabs defaultValue="catalog" dir="rtl">
+      <Tabs defaultValue={initialTab} dir="rtl">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="catalog">مركز الطلبات</TabsTrigger>
           <TabsTrigger value="requests">الطلبات</TabsTrigger>

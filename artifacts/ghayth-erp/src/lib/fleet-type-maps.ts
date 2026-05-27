@@ -52,7 +52,7 @@ export const TRAFFIC_VIOLATION_TYPES: Record<string, string> = {
 
 // ── حالات خطط الصيانة الوقائية ──────────────────────────────────────
 export const PREVENTIVE_PLAN_STATUS: Record<string, { label: string; color: string }> = {
-  active:    { label: "نشطة",       color: "bg-green-100 text-green-700 border-green-300" },
-  paused:    { label: "متوقفة",     color: "bg-amber-100 text-amber-700 border-amber-300" },
-  completed: { label: "مكتملة",     color: "bg-blue-100 text-blue-700 border-blue-300" },
+  active:    { label: "نشطة",       color: "bg-green-100 text-status-success-foreground border-status-success-surface" },
+  paused:    { label: "متوقفة",     color: "bg-amber-100 text-status-warning-foreground border-status-warning-surface" },
+  completed: { label: "مكتملة",     color: "bg-blue-100 text-status-info-foreground border-status-info-surface" },
 };

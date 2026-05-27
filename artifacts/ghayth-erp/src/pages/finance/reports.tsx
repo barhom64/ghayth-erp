@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   FileBarChart, TrendingUp, TrendingDown, Scale, DollarSign,
   ArrowDownCircle, ArrowUpCircle, BookOpen, AlertTriangle, Download,
-  Users, BarChart2, PieChart, FileText, Printer, ChevronDown, ChevronRight,
+  Users, BarChart2, PieChart, FileText, ChevronDown, ChevronRight,
   Activity, Briefcase,
 } from "lucide-react";
 import { formatCurrency, formatDateAr, currentPeriodRiyadh } from "@/lib/formatters";
@@ -24,6 +24,7 @@ import {
 import { MultiExportButton } from "@/components/shared/export-buttons";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { ErrorState } from "@/components/shared/loading-error-states";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 
 function exportCSV(rows: any[], headers: string[], filename: string) {
   if (!rows.length) return;
@@ -35,12 +36,21 @@ function exportCSV(rows: any[], headers: string[], filename: string) {
   link.click();
 }
 
-function PrintButton() {
-  return (
-    <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => window.print()}>
-      <Printer className="h-3.5 w-3.5 me-1" />طباعة
-    </GuardedButton>
-  );
+// PrintButton — routes through Print Engine v2 unconditionally. Every report
+// tab must declare an entityType so the rendered job carries the branch
+// letterhead, audit row, verify QR, and reprint detection. The legacy
+// browser-print fallback was removed as part of the print-platform
+// unification (issue #1286):
+// any tab that needs printing must wire a server-side loader and pass
+// entityType. The entityId encodes the date filter as
+// "YYYY-MM-DD..YYYY-MM-DD" so each rendered job is traceable to its filter.
+function PrintButton({ entityType, entityId }: { entityType: string; entityId?: string }) {
+  return <EntityPrintButton entityType={entityType} entityId={entityId ?? "all"} formats={["a4"]} />;
+}
+
+function dateRangeId(startDate?: string, endDate?: string): string {
+  if (!startDate && !endDate) return "all";
+  return `${startDate ?? ""}..${endDate ?? ""}`;
 }
 
 export default function FinancialReportsPage() {
@@ -83,16 +93,16 @@ export default function FinancialReportsPage() {
 
         <TabsContent value="trial-balance"><TrialBalance dateParams={dateParams} startDate={startDate} endDate={endDate} /></TabsContent>
         <TabsContent value="income-statement"><IncomeStatement dateParams={dateParams} startDate={startDate} endDate={endDate} /></TabsContent>
-        <TabsContent value="balance-sheet"><BalanceSheet dateParams={dateParams.replace("startDate", "asOfDate")} /></TabsContent>
-        <TabsContent value="cash-flow"><CashFlow dateParams={dateParams} /></TabsContent>
-        <TabsContent value="cash-bank"><CashBankStatement dateParams={dateParams} /></TabsContent>
-        <TabsContent value="custody-advances"><CustodyAdvances dateParams={dateParams} /></TabsContent>
-        <TabsContent value="expenses-analysis"><ExpensesAnalysis dateParams={dateParams} /></TabsContent>
-        <TabsContent value="revenue-analysis"><RevenueAnalysis dateParams={dateParams} /></TabsContent>
-        <TabsContent value="budget-variance"><BudgetVariance /></TabsContent>
+        <TabsContent value="balance-sheet"><BalanceSheet dateParams={dateParams.replace("startDate", "asOfDate")} startDate={startDate} endDate={endDate} /></TabsContent>
+        <TabsContent value="cash-flow"><CashFlow dateParams={dateParams} startDate={startDate} endDate={endDate} /></TabsContent>
+        <TabsContent value="cash-bank"><CashBankStatement dateParams={dateParams} startDate={startDate} endDate={endDate} /></TabsContent>
+        <TabsContent value="custody-advances"><CustodyAdvances dateParams={dateParams} startDate={startDate} endDate={endDate} /></TabsContent>
+        <TabsContent value="expenses-analysis"><ExpensesAnalysis dateParams={dateParams} startDate={startDate} endDate={endDate} /></TabsContent>
+        <TabsContent value="revenue-analysis"><RevenueAnalysis dateParams={dateParams} startDate={startDate} endDate={endDate} /></TabsContent>
+        <TabsContent value="budget-variance"><BudgetVariance startDate={startDate} endDate={endDate} /></TabsContent>
         <TabsContent value="entity-statement"><EntityStatement startDate={startDate} endDate={endDate} /></TabsContent>
-        <TabsContent value="revenue-by-activity"><RevenueByActivity dateParams={dateParams} /></TabsContent>
-        <TabsContent value="expenses-by-cost-center"><ExpensesByCostCenter dateParams={dateParams} /></TabsContent>
+        <TabsContent value="revenue-by-activity"><RevenueByActivity dateParams={dateParams} startDate={startDate} endDate={endDate} /></TabsContent>
+        <TabsContent value="expenses-by-cost-center"><ExpensesByCostCenter dateParams={dateParams} startDate={startDate} endDate={endDate} /></TabsContent>
       </Tabs>
     </PageShell>
   );
@@ -211,7 +221,7 @@ function TrialBalance({ dateParams, startDate, endDate }: { dateParams: string; 
           <Button variant={viewMode === "flat" ? "default" : "outline"} size="sm" onClick={() => setViewMode("flat")}>عرض مسطح</Button>
         </div>
         <div className="flex gap-2">
-          <PrintButton />
+          <PrintButton entityType="report_trial_balance" entityId={dateRangeId(startDate, endDate)} />
           <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(rows, ["code", "name", "type", "totalDebit", "totalCredit", "balance"], "trial-balance.csv")}>
             <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
           </GuardedButton>
@@ -372,7 +382,7 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
   return (
     <div className="space-y-4 mt-4">
       <div className="flex justify-end gap-2">
-        <PrintButton />
+        <PrintButton entityType="report_income_statement" entityId={dateRangeId(startDate, endDate)} />
         <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV([...revenues.map((r: any) => ({ ...r, section: "إيرادات" })), ...expenses.map((e: any) => ({ ...e, section: "مصروفات" }))], ["section", "code", "name", "amount"], "income-statement.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </GuardedButton>
@@ -458,7 +468,7 @@ function IncomeStatement({ dateParams, startDate, endDate }: { dateParams: strin
   );
 }
 
-function BalanceSheet({ dateParams }: { dateParams: string }) {
+function BalanceSheet({ dateParams, startDate, endDate }: { dateParams: string; startDate?: string; endDate?: string }) {
   const { data, isLoading, isError } = useApiQuery<any>(["balance-sheet", dateParams], `/finance/reports/balance-sheet${dateParams ? `?${dateParams}` : ""}`);
   const summary = data?.summary || {};
   const assets = data?.assets || [];
@@ -510,7 +520,7 @@ function BalanceSheet({ dateParams }: { dateParams: string }) {
   return (
     <div className="space-y-4 mt-4">
       <div className="flex justify-end gap-2">
-        <PrintButton />
+        <PrintButton entityType="report_balance_sheet" entityId={dateRangeId(startDate, endDate)} />
         <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV([...assets, ...liabilities, ...equity], ["code", "name", "type", "balance"], "balance-sheet.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </GuardedButton>
@@ -556,7 +566,7 @@ function BalanceSheet({ dateParams }: { dateParams: string }) {
   );
 }
 
-function CashFlow({ dateParams }: { dateParams: string }) {
+function CashFlow({ dateParams, startDate, endDate }: { dateParams: string; startDate?: string; endDate?: string }) {
   const { data, isLoading, isError } = useApiQuery<any>(["cash-flow", dateParams], `/finance/reports/cash-flow${dateParams ? `?${dateParams}` : ""}`);
   const summary = data?.summary || {};
   const inflows = data?.inflows || [];
@@ -580,7 +590,7 @@ function CashFlow({ dateParams }: { dateParams: string }) {
   return (
     <div className="space-y-4 mt-4">
       <div className="flex justify-end gap-2">
-        <PrintButton />
+        <PrintButton entityType="report_cash_flow" entityId={dateRangeId(startDate, endDate)} />
         <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV([...inflows.map((f: any) => ({ ...f, type: "وارد" })), ...outflows.map((f: any) => ({ ...f, type: "صادر" }))], ["type", "description", "amount", "date"], "cash-flow.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </GuardedButton>
@@ -638,7 +648,7 @@ function CashFlow({ dateParams }: { dateParams: string }) {
   );
 }
 
-function CashBankStatement({ dateParams }: { dateParams: string }) {
+function CashBankStatement({ dateParams, startDate, endDate }: { dateParams: string; startDate?: string; endDate?: string }) {
   const [accountCode, setAccountCode] = useState("1100");
   const params = `accountCode=${accountCode}${dateParams ? `&${dateParams}` : ""}`;
   const { data, isLoading, isError } = useApiQuery<any>(["cash-bank-statement", params], `/finance/reports/cash-bank-statement?${params}`);
@@ -675,7 +685,7 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
             <SelectItem value="1110">1110 - البنك</SelectItem>
           </SelectContent>
         </Select>
-        <PrintButton />
+        <PrintButton entityType="report_cash_bank" entityId={dateRangeId(startDate, endDate)} />
         <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(entries, ["ref", "description", "debit", "credit", "runningBalance", "date"], `cash-${accountCode}.csv`)}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </GuardedButton>
@@ -713,7 +723,7 @@ function CashBankStatement({ dateParams }: { dateParams: string }) {
   );
 }
 
-function CustodyAdvances({ dateParams }: { dateParams: string }) {
+function CustodyAdvances({ dateParams, startDate, endDate }: { dateParams: string; startDate?: string; endDate?: string }) {
   const { data, isLoading, isError } = useApiQuery<any>(["custody-advances", dateParams], `/finance/reports/custody-advances${dateParams ? `?${dateParams}` : ""}`);
   const custodies = data?.custodies || [];
   const advances = data?.advances || [];
@@ -733,7 +743,7 @@ function CustodyAdvances({ dateParams }: { dateParams: string }) {
   return (
     <div className="space-y-4 mt-4">
       <div className="flex justify-end gap-2">
-        <PrintButton />
+        <PrintButton entityType="report_custody_advances" entityId={dateRangeId(startDate, endDate)} />
         <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV([...custodies, ...advances], ["ref", "description", "amount", "employeeName", "date", "type"], "custody-advances.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </GuardedButton>
@@ -787,7 +797,7 @@ function CustodyAdvances({ dateParams }: { dateParams: string }) {
   );
 }
 
-function ExpensesAnalysis({ dateParams }: { dateParams: string }) {
+function ExpensesAnalysis({ dateParams, startDate, endDate }: { dateParams: string; startDate?: string; endDate?: string }) {
   const [groupBy, setGroupBy] = useState("account");
   const params = `groupBy=${groupBy}${dateParams ? `&${dateParams}` : ""}`;
   const { data, isLoading, isError } = useApiQuery<any>(["expenses-analysis", params], `/finance/reports/expenses-analysis?${params}`);
@@ -829,7 +839,7 @@ function ExpensesAnalysis({ dateParams }: { dateParams: string }) {
             <SelectItem value="employee">حسب الموظف</SelectItem>
           </SelectContent>
         </Select>
-        <PrintButton />
+        <PrintButton entityType="report_expenses_analysis" entityId={dateRangeId(startDate, endDate)} />
         <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(rows, ["key", "label", "amount", "entryCount"], "expenses-analysis.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </GuardedButton>
@@ -853,7 +863,7 @@ function ExpensesAnalysis({ dateParams }: { dateParams: string }) {
   );
 }
 
-function RevenueAnalysis({ dateParams }: { dateParams: string }) {
+function RevenueAnalysis({ dateParams, startDate, endDate }: { dateParams: string; startDate?: string; endDate?: string }) {
   const { data, isLoading, isError } = useApiQuery<any>(["revenue-analysis", dateParams], `/finance/reports/revenue-analysis${dateParams ? `?${dateParams}` : ""}`);
   const byAccount = data?.byAccount || [];
   const byMonth = data?.byMonth || [];
@@ -891,7 +901,7 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
   return (
     <div className="space-y-4 mt-4">
       <div className="flex justify-end gap-2">
-        <PrintButton />
+        <PrintButton entityType="report_revenue_analysis" entityId={dateRangeId(startDate, endDate)} />
         <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(byAccount, ["code", "name", "amount", "entryCount"], "revenue-analysis.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </GuardedButton>
@@ -935,7 +945,7 @@ function RevenueAnalysis({ dateParams }: { dateParams: string }) {
   );
 }
 
-function BudgetVariance() {
+function BudgetVariance({ startDate, endDate }: { startDate?: string; endDate?: string }) {
   const [period, setPeriod] = useState(currentPeriodRiyadh());
   const { data, isLoading, isError } = useApiQuery<any>(["budget-variance", period], `/finance/reports/budget-variance?period=${period}`);
   const rows = data?.data || [];
@@ -985,7 +995,7 @@ function BudgetVariance() {
     <div className="space-y-4 mt-4">
       <div className="flex items-center gap-3">
         <Input type="month" className="w-40" value={period} onChange={(e) => setPeriod(e.target.value)} />
-        <PrintButton />
+        <PrintButton entityType="report_budget_variance" entityId={dateRangeId(startDate, endDate)} />
         <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(rows, ["accountCode", "accountName", "budget", "actual", "variance", "usagePct"], "budget-variance.csv")}>
           <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
         </GuardedButton>
@@ -1106,7 +1116,14 @@ function EntityStatement({ startDate, endDate }: { startDate: string; endDate: s
 
         {rows.length > 0 && (
           <>
-            <PrintButton />
+            <PrintButton
+              entityType={
+                entityType === "client" ? "customer_statement"
+                : entityType === "supplier" ? "vendor_statement"
+                : "report_entity_statement"
+              }
+              entityId={`${entityId}:${dateRangeId(startDate, endDate)}`}
+            />
             <GuardedButton perm="finance:export" variant="outline" size="sm" onClick={() => exportCSV(rowsWithBalance, ["ref", "description", "debit", "credit", "runningBalance", "date", "type"], `entity-statement-${entityId}.csv`)}>
               <Download className="h-3.5 w-3.5 me-1" />تصدير جدولي
             </GuardedButton>
@@ -1183,7 +1200,7 @@ interface RevenueActivityRow {
   entryCount: number | string;
 }
 
-function RevenueByActivity({ dateParams }: { dateParams: string }) {
+function RevenueByActivity({ dateParams, startDate, endDate }: { dateParams: string; startDate?: string; endDate?: string }) {
   const { data, isLoading, isError } = useApiQuery<{
     rows: RevenueActivityRow[];
     summary: { totalRevenue: number };
@@ -1235,6 +1252,7 @@ function RevenueByActivity({ dateParams }: { dateParams: string }) {
               )}>
               <Download className="h-3.5 w-3.5 me-1" /> CSV
             </GuardedButton>
+            <PrintButton entityType="report_revenue_by_activity" entityId={dateRangeId(startDate, endDate)} />
           </div>
         </CardContent>
       </Card>
@@ -1256,7 +1274,7 @@ interface CostCenterExpenseRow {
   entryCount: number | string;
 }
 
-function ExpensesByCostCenter({ dateParams }: { dateParams: string }) {
+function ExpensesByCostCenter({ dateParams, startDate, endDate }: { dateParams: string; startDate?: string; endDate?: string }) {
   const { data, isLoading, isError } = useApiQuery<{
     rows: CostCenterExpenseRow[];
     summary: { totalExpense: number };
@@ -1318,6 +1336,7 @@ function ExpensesByCostCenter({ dateParams }: { dateParams: string }) {
               )}>
               <Download className="h-3.5 w-3.5 me-1" /> CSV
             </GuardedButton>
+            <PrintButton entityType="report_expenses_by_cost_center" entityId={dateRangeId(startDate, endDate)} />
           </div>
         </CardContent>
       </Card>

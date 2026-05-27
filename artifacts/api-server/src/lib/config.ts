@@ -100,6 +100,12 @@ const EnvSchema = z.object({
   CORS_ORIGIN: optStr(),
   REPLIT_DEV_DOMAIN: optStr(),
   REPLIT_DEPLOYMENT_URL: optStr(),
+  // Public origin used when embedding URLs inside generated documents
+  // (Print Platform QR verify URLs, email links, etc.). Falls back to
+  // the Replit deployment URL when set, otherwise to an empty string
+  // — in which case the QR encodes a relative path /api/print/verify/:id
+  // that still works for scans within the same browser session.
+  PUBLIC_BASE_URL: optStr(),
 
   // -- bootstrap / seed ----------------------------------------------------
   ADMIN_EMAIL: optStr(),
@@ -125,6 +131,17 @@ const EnvSchema = z.object({
   // -- ai ------------------------------------------------------------------
   AI_INTEGRATIONS_ANTHROPIC_API_KEY: optStr(),
   AI_INTEGRATIONS_ANTHROPIC_BASE_URL: optStr(),
+
+  // -- print platform delivery (Phase 9) -----------------------------------
+  // SMTP_* enable the email DeliveryChannel; PRINT_WEBHOOK_SIGNING_SECRET
+  // enables HMAC signatures on the webhook channel.
+  SMTP_HOST: optStr(),
+  SMTP_PORT: optStr(),
+  SMTP_USER: optStr(),
+  SMTP_PASS: optStr(),
+  SMTP_FROM: optStr(),
+  SMTP_SECURE: optStr(),
+  PRINT_WEBHOOK_SIGNING_SECRET: optStr(),
 
   // -- whatsapp ------------------------------------------------------------
   WHATSAPP_VERIFY_TOKEN: optStr(),
@@ -206,6 +223,12 @@ export interface AppConfig {
   /** Raw REPLIT_DEV_DOMAIN — used to whitelist Replit preview subdomains in dev. */
   readonly replitDevDomain: string | undefined;
 
+  /** Public origin embedded into URLs that leave the server — Print Platform
+   *  QR verify links, outbound emails, etc. Defaults to REPLIT_DEPLOYMENT_URL
+   *  when set, otherwise empty (in which case relative `/api/...` paths are
+   *  used and only work for scans from the same host). */
+  readonly publicBaseUrl: string;
+
   readonly redis: {
     readonly url: string | undefined;
     readonly host: string | undefined;
@@ -245,6 +268,21 @@ export interface AppConfig {
   readonly ai: {
     readonly anthropicApiKey: string | undefined;
     readonly anthropicBaseUrl: string | undefined;
+  };
+
+  /** SMTP configuration for Print Platform email delivery (Phase 9). */
+  readonly smtp: {
+    readonly host: string | undefined;
+    readonly port: number;
+    readonly user: string | undefined;
+    readonly pass: string | undefined;
+    readonly from: string | undefined;
+    readonly secure: boolean;
+  };
+
+  /** Print Platform configuration (Phase 9 webhook signing). */
+  readonly print: {
+    readonly webhookSigningSecret: string | undefined;
   };
 
   readonly whatsapp: {
@@ -347,6 +385,7 @@ function buildConfig(env: RawEnv): AppConfig {
 
     corsOrigins,
     replitDevDomain: env.REPLIT_DEV_DOMAIN,
+    publicBaseUrl: (env.PUBLIC_BASE_URL || env.REPLIT_DEPLOYMENT_URL || "").replace(/\/$/, ""),
 
     redis: {
       url: env.REDIS_URL,
@@ -383,6 +422,19 @@ function buildConfig(env: RawEnv): AppConfig {
     ai: {
       anthropicApiKey: env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
       anthropicBaseUrl: env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+    },
+
+    smtp: {
+      host: env.SMTP_HOST,
+      port: env.SMTP_PORT ? Number(env.SMTP_PORT) : 587,
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+      from: env.SMTP_FROM,
+      secure: env.SMTP_SECURE === "true",
+    },
+
+    print: {
+      webhookSigningSecret: env.PRINT_WEBHOOK_SIGNING_SECRET,
     },
 
     whatsapp: {

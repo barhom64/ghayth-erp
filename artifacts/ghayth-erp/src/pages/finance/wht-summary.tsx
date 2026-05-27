@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { formatCurrency, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh, todayLocal } from "@/lib/formatters";
-import { Download, Receipt, Printer } from "lucide-react";
+import { Download, Receipt } from "lucide-react";
 
 interface DetailRow {
   allocationId: number;
@@ -129,7 +130,7 @@ export default function WhtSummaryPage() {
     { key: "net", header: "الصافي للمورد",
       render: (r) => <span className="font-mono">{formatCurrency(r.net)}</span> },
     { key: "wht", header: "المُستقطع",
-      render: (r) => <span className="font-mono font-bold text-amber-700">{formatCurrency(r.wht)}</span> },
+      render: (r) => <span className="font-mono font-bold text-status-warning-foreground">{formatCurrency(r.wht)}</span> },
     { key: "gross", header: "الإجمالي قبل الاستقطاع",
       render: (r) => <span className="font-mono">{formatCurrency(r.gross)}</span> },
   ];
@@ -145,7 +146,7 @@ export default function WhtSummaryPage() {
       render: (r) => <Badge variant="outline" className="text-xs">{RESIDENCY_LABEL[r.residencyStatus ?? ""] ?? r.residencyStatus ?? "—"}</Badge> },
     { key: "rows", header: "دفعات", render: (r) => <span className="font-mono">{r.rows}</span> },
     { key: "wht", header: "المُستقطع",
-      render: (r) => <span className="font-mono font-bold text-amber-700">{formatCurrency(r.wht)}</span> },
+      render: (r) => <span className="font-mono font-bold text-status-warning-foreground">{formatCurrency(r.wht)}</span> },
     { key: "net", header: "الصافي",
       render: (r) => <span className="font-mono">{formatCurrency(r.net)}</span> },
   ];
@@ -164,7 +165,7 @@ export default function WhtSummaryPage() {
     { key: "amount", header: "الصافي للمورد",
       render: (r) => <span className="font-mono">{formatCurrency(Number(r.amount))}</span> },
     { key: "whtAmount", header: "المُستقطع",
-      render: (r) => <span className="font-mono font-bold text-amber-700">{formatCurrency(Number(r.whtAmount))}</span> },
+      render: (r) => <span className="font-mono font-bold text-status-warning-foreground">{formatCurrency(Number(r.whtAmount))}</span> },
   ];
 
   return (
@@ -184,9 +185,11 @@ export default function WhtSummaryPage() {
           >
             <Download className="h-3.5 w-3.5 me-1" /> تصدير CSV
           </GuardedButton>
-          <Button variant="outline" size="sm" onClick={() => window.print()}>
-            <Printer className="h-3.5 w-3.5 me-1" /> طباعة
-          </Button>
+          <EntityPrintButton
+            entityType="report_wht_summary"
+            entityId={`${startDate ?? ""}..${endDate ?? ""}`}
+            formats={["a4"]}
+          />
         </div>
       }
     >
@@ -205,12 +208,12 @@ export default function WhtSummaryPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <Card className="border-amber-300">
+        <Card className="border-status-warning-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <Receipt className="h-3 w-3" /> إجمالي المُستقطع
             </p>
-            <p className="text-lg font-bold font-mono text-amber-700">{formatCurrency(summary.totalWht)}</p>
+            <p className="text-lg font-bold font-mono text-status-warning-foreground">{formatCurrency(summary.totalWht)}</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">لإقرار زاتكا</p>
           </CardContent>
         </Card>

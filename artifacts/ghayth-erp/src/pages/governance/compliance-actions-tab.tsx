@@ -165,7 +165,7 @@ export function ComplianceActionsTab() {
             pageSize={20}
             rowClassName={(item) => cn(editingId === item.id && "bg-muted/50", deletingId === item.id && "bg-destructive/5")}
             renderRowExtras={(item) => {
-              if (editingId === item.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(item.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (editingId === item.id) return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(item.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === item.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(item.id)} onCancel={cancelDelete} isPending={isPending} itemName={item.title} entityType="compliance-action" entityId={item.id} />;
               return null;
             }}

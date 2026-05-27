@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +13,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Save, User, Calendar, AlertTriangle } from "lucide-react";
+import { Save, User, Calendar, AlertTriangle, Trash2 } from "lucide-react";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -42,8 +43,10 @@ export default function PilgrimDetail() {
   const [, params] = useRoute("/umrah/pilgrims/:id");
   const id = params?.id || "";
   const { extraTabs, hideTabs } = useRegistryTabs("pilgrim", id ?? "");
-  const { data, refetch, isLoading, isError } = useApiQuery<any>(["umrah-pilgrim", id], id ? `/umrah/pilgrims/${id}` : null);
+  const { data, refetch, isLoading, isError } = useApiQuery<any>(["umrah-pilgrim", id], `/umrah/pilgrims/${id}`);
   const [newStatus, setNewStatus] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [, navigate] = useLocation();
   const { toast } = useToast();
 
   const updateStatus = async () => {
@@ -146,10 +149,20 @@ export default function PilgrimDetail() {
       <GuardedButton perm="umrah:create" onClick={updateStatus} disabled={!newStatus} className="gap-2" size="sm">
         <Save className="h-4 w-4" />تحديث
       </GuardedButton>
+      <GuardedButton
+        perm="umrah:delete"
+        variant="outline"
+        size="sm"
+        className="gap-2 text-status-error-foreground"
+        onClick={() => setDeleteOpen(true)}
+      >
+        <Trash2 className="h-4 w-4" />حذف
+      </GuardedButton>
     </div>
   );
 
   return (
+    <>
     <DetailPageLayout
       title={data?.fullName || "المعتمر"}
       subtitle={`${data?.passportNumber || ""}${data?.nationality ? ` • ${data.nationality}` : ""}`}
@@ -173,5 +186,17 @@ export default function PilgrimDetail() {
         </div>
       }
     />
+    {id && data && (
+      <ConfirmDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        entity={{ type: "umrah-pilgrim", id: Number(id), name: data.fullName ?? `معتمر #${id}` }}
+        deletePath={`/umrah/pilgrims/${id}`}
+        invalidateKeys={[["umrah-pilgrims"]]}
+        successMessage="تم حذف المعتمر"
+        onDeleted={() => navigate("/umrah/pilgrims")}
+      />
+    )}
+    </>
   );
 }

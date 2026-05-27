@@ -10,9 +10,10 @@
  * كل تبويب يقبل deep-link عبر ?tab=... فيمكن للسايدبار / الإشعارات أن
  * تفتح المستخدم على المكان الصحيح بدون التنقل اليدوي.
  */
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { CreateMemoDialog } from "@/components/hr/create-memo-dialog";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -419,8 +420,23 @@ function MemosTab({ memos }: { memos: any[] }) {
     },
   ];
 
+  const [, refetchNav] = useLocation();
+  const [creating, setCreating] = useState(false);
+
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h3 className="text-sm font-medium">سجل محاضر المخالفات</h3>
+        <GuardedButton
+          perm="hr.discipline:create"
+          size="sm"
+          onClick={() => setCreating(true)}
+          className="gap-1"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          محضر مخالفة جديد
+        </GuardedButton>
+      </div>
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث بالاسم أو رقم المحضر...",
@@ -459,6 +475,12 @@ function MemosTab({ memos }: { memos: any[] }) {
         emptyMessage="لا توجد محاضر مخالفات — سجّل مخالفة جديدة للبدء"
         pageSize={20}
         onRowClick={(item) => navigate(`/hr/discipline/memos/${item.id}`)}
+      />
+
+      <CreateMemoDialog
+        open={creating}
+        onClose={() => setCreating(false)}
+        onCreated={() => setCreating(false)}
       />
     </div>
   );

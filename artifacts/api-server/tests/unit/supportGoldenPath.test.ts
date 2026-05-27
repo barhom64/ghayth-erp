@@ -102,8 +102,10 @@ describe("Support ticket creation contract", () => {
     expect(SUPPORT_ROUTE).toContain("createTicketSchema.safeParse");
   });
 
-  it("generates TKT- reference code via generateTimeRef", () => {
-    expect(SUPPORT_ROUTE).toContain('generateTimeRef("TKT")');
+  it("generates ticket ref via the unified numbering center (Issue #1141)", () => {
+    expect(SUPPORT_ROUTE).not.toMatch(/generateTimeRef\(\s*["']TKT["']\s*\)/);
+    expect(SUPPORT_ROUTE).toContain('issueNumber({');
+    expect(SUPPORT_ROUTE).toContain('entityKey: "support_ticket"');
   });
 
   it("auto-detects priority from text keywords", () => {
@@ -147,9 +149,16 @@ describe("Support ticket resolution side-effects", () => {
   });
 
   it("queues satisfaction survey email 24h after resolution", () => {
-    expect(SUPPORT_ROUTE).toContain("email_queue");
+    // Updated after the communications-unification refactor: support.ts
+    // no longer inserts directly into email_queue. It calls
+    // lib/messageSender.sendMessage() which is the SINGLE outbound seam
+    // (DLP + provider failover + audit). The CSAT survey uses the same
+    // 24h scheduledAt window — assertions cover the helper call and the
+    // schedule arithmetic.
+    expect(SUPPORT_ROUTE).toContain("sendMessage");
     expect(SUPPORT_ROUTE).toContain("استبيان رضا العميل");
     expect(SUPPORT_ROUTE).toContain("24 * 60 * 60 * 1000");
+    expect(SUPPORT_ROUTE).toContain("support.csat.survey");
   });
 
   it("returns surveyQueued flag in response", () => {

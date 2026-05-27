@@ -1,0 +1,20 @@
+{
+  "code": "legal.legal-contract",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "legal_contract",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": true,
+  "qr": true,
+  "status": "published",
+  "domain": "legal",
+  "title": "عقد قانوني",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "legal_contract"
+  },
+  "ownerTeam": "legal"
+}

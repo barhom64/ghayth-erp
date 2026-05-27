@@ -46,8 +46,8 @@ interface WizardResponse {
 
 const SOURCE_LABEL: Record<UninvoicedGroup["suggestedSource"], { text: string; tone: string; icon: typeof Sparkles }> = {
   last_invoice:         { text: "آخر فاتورة", tone: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: Sparkles },
-  pricing_rule:         { text: "قاعدة تسعير", tone: "bg-blue-50 text-blue-700 border-blue-200",       icon: TagsIcon },
-  default_per_mutamer:  { text: "افتراضي الوكيل", tone: "bg-amber-50 text-amber-700 border-amber-200",    icon: TagsIcon },
+  pricing_rule:         { text: "قاعدة تسعير", tone: "bg-status-info-surface text-status-info-foreground border-status-info-surface",       icon: TagsIcon },
+  default_per_mutamer:  { text: "افتراضي الوكيل", tone: "bg-status-warning-surface text-status-warning-foreground border-status-warning-surface",    icon: TagsIcon },
   none:                 { text: "أدخل يدوياً",  tone: "bg-rose-50 text-rose-700 border-rose-200",        icon: Hand },
 };
 
@@ -67,11 +67,12 @@ export default function UmrahSalesWizard() {
   }, [seasonsQ.data]);
   if (currentSeasonId && !seasonId) setSeasonId(String(currentSeasonId));
 
+  // Static URL so the audit credits /umrah/sales-wizard/uninvoiced-groups.
+  // The `enabled` arg below gates the fetch until subAgentId is picked.
+  const wizardSuffix = `?subAgentId=${subAgentId}${seasonId ? `&seasonId=${seasonId}` : ""}`;
   const wizardQ = useApiQuery<WizardResponse>(
     ["umrah-sales-wizard", subAgentId, seasonId],
-    subAgentId
-      ? `/umrah/sales-wizard/uninvoiced-groups?subAgentId=${subAgentId}${seasonId ? `&seasonId=${seasonId}` : ""}`
-      : null,
+    `/umrah/sales-wizard/uninvoiced-groups${wizardSuffix}`,
     !!subAgentId,
   );
 
@@ -152,10 +153,10 @@ export default function UmrahSalesWizard() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base inline-flex items-center gap-2">
-            <Receipt className="h-4 w-4 text-gray-500" />
+            <Receipt className="h-4 w-4 text-muted-foreground" />
             اختر الوكيل الفرعي + الموسم
           </CardTitle>
-          <p className="text-xs text-gray-500">سيقوم النظام باستحضار المجموعات غير المفوترة + اقتراح سعر لكل واحدة بناء على آخر فاتورة أو قاعدة التسعير.</p>
+          <p className="text-xs text-muted-foreground">سيقوم النظام باستحضار المجموعات غير المفوترة + اقتراح سعر لكل واحدة بناء على آخر فاتورة أو قاعدة التسعير.</p>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -193,12 +194,12 @@ export default function UmrahSalesWizard() {
                   <Badge variant="outline" className="ms-2 text-xs">{wizardQ.data.subAgent.clientName}</Badge>
                 )}
               </CardTitle>
-              <p className="text-xs text-gray-500">عدّل السعر يدوياً لو احتجت — الافتراضي مأخوذ من آخر فاتورة أو القاعدة المطابقة.</p>
+              <p className="text-xs text-muted-foreground">عدّل السعر يدوياً لو احتجت — الافتراضي مأخوذ من آخر فاتورة أو القاعدة المطابقة.</p>
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="text-xs text-gray-500 border-b">
+                  <thead className="text-xs text-muted-foreground border-b">
                     <tr>
                       <th className="text-start py-2 px-2">المجموعة</th>
                       <th className="text-start py-2 px-2">عدد المعتمرين</th>
@@ -219,7 +220,7 @@ export default function UmrahSalesWizard() {
                         <tr key={g.id} className="border-b last:border-0">
                           <td className="py-2 px-2">
                             <div className="font-medium">{g.nuskGroupNumber}</div>
-                            <div className="text-xs text-gray-500">{g.name ?? "—"}</div>
+                            <div className="text-xs text-muted-foreground">{g.name ?? "—"}</div>
                           </td>
                           <td className="py-2 px-2">{g.mutamerCount}</td>
                           <td className="py-2 px-2 text-xs">{g.entryDate ? formatDateAr(g.entryDate) : "—"}</td>
@@ -246,7 +247,7 @@ export default function UmrahSalesWizard() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t">
-                      <td colSpan={5} className="py-2 px-2 text-end text-sm text-gray-500">الإجمالي قبل الضريبة + الغرامات</td>
+                      <td colSpan={5} className="py-2 px-2 text-end text-sm text-muted-foreground">الإجمالي قبل الضريبة + الغرامات</td>
                       <td className="py-2 px-2 text-end font-semibold">{formatCurrency(total)}</td>
                     </tr>
                   </tfoot>

@@ -6,6 +6,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { EntityPrintButton } from "@/components/shared/entity-print";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   DetailPageLayout,
@@ -47,6 +53,31 @@ export default function ContractDetailPage() {
     id ? `/properties/contracts/${id}` : null,
     !!id
   );
+
+  // PATCH /properties/contracts/:id is blocked by the backend once the
+  // contract leaves the active lifecycle (terminated/expired/etc.) — the
+  // hook hides the Edit button below in those cases via the disabled
+  // check on the contract status; the server still enforces the same
+  // rule even if a privileged user bypasses the UI.
+  const isContractLocked = !!contract && ["terminated", "expired", "cancelled", "renewed"].includes(contract.status as string);
+  const editDelete = useDetailEditDelete({
+    entityLabel: "العقد",
+    patchPath: `/properties/contracts/${id}`,
+    deletePath: `/properties/contracts/${id}`,
+    listPath: "/properties/contracts",
+    initialValues: contract,
+    fields: [
+      { key: "tenantName", label: "اسم المستأجر" },
+      { key: "tenantPhone", label: "الهاتف" },
+      { key: "tenantEmail", label: "البريد" },
+      { key: "monthlyRent", label: "الإيجار الشهري", type: "number" },
+      { key: "depositAmount", label: "مبلغ التأمين", type: "number" },
+      { key: "paymentDay", label: "يوم السداد", type: "number" },
+      { key: "notes", label: "ملاحظات" },
+    ],
+    invalidateKeys: [["properties-contract", id], ["properties-contracts"]],
+    onSaved: () => refetch(),
+  });
 
   const { data: scheduleResp } = useApiQuery<any>(
     ["contract-detail-schedule", id],
@@ -109,27 +140,27 @@ export default function ContractDetailPage() {
   );
 
   const handleRenew = async () => {
+    // Use the dedicated /renew endpoint — it runs the audited
+    // applyTransition, generates the new installments and resets
+    // obligations correctly. The previous code cloned the row via raw
+    // POST /properties/contracts which skipped all that side-effect.
+    // Empty body → backend defaults to the contract's existing
+    // renewalPeriodMonths (or 12) and the current endDate as the new
+    // start. Frontend can later prompt for overrides if needed.
     try {
-      const oldEnd = contract?.endDate || todayLocal();
-      const newStart = oldEnd;
-      const endDate = new Date(oldEnd);
-      endDate.setFullYear(endDate.getFullYear() + 1);
-      const newEnd = endDate.toISOString().split("T")[0];
-
-      const { id: _oldId, ...contractData } = contract || {};
-      const newContract = await apiFetch<any>("/properties/contracts", {
+      const result = await apiFetch<any>(`/properties/contracts/${id}/renew`, {
         method: "POST",
-        body: JSON.stringify({
-          ...contractData,
-          startDate: newStart,
-          endDate: newEnd,
-          status: "active",
-        }),
+        body: JSON.stringify({}),
       });
-      queryClient.invalidateQueries({ queryKey: ["properties-contract"] });
+      queryClient.invalidateQueries({ queryKey: ["properties-contract", id] });
+      queryClient.invalidateQueries({ queryKey: ["properties-contracts"] });
       toast({ title: "تم تجديد العقد بنجاح" });
-      const newId = newContract?.id || newContract?.data?.id;
-      navigate(newId ? `/properties/contracts/${newId}` : "/properties/contracts");
+      // The endpoint returns the updated contract (or a new id if the
+      // backend chose to chain a successor row). Navigate accordingly.
+      const newId = result?.id || result?.data?.id;
+      if (newId && newId !== Number(id)) {
+        navigate(`/properties/contracts/${newId}`);
+      }
     } catch (err: any) {
       toast({
         variant: "destructive",
@@ -172,6 +203,7 @@ export default function ContractDetailPage() {
 
   const overview = (
     <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
@@ -254,6 +286,10 @@ export default function ContractDetailPage() {
         <XCircle className="h-4 w-4" />
         إنهاء
       </GuardedButton>
+      <EntityPrintButton entityType="rental_contract" entityId={id ?? ""} formats={["a4"]} />
+      {!isContractLocked && (
+        <DetailActionButtons hook={editDelete} editPerm="properties:update" deletePerm="properties:delete" />
+      )}
     </div>
   );
 

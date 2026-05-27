@@ -196,7 +196,7 @@ export default function InvoiceDetailPage() {
       { key: "notes", label: "ملاحظات" },
       { key: "dueDate", label: "تاريخ الاستحقاق" },
     ],
-    invalidateKeys: [["invoice", String(id)], ["invoices"]],
+    invalidateKeys: [["invoice-detail", String(id)], ["invoices"]],
     onSaved: () => refetch(),
   });
 
@@ -273,7 +273,13 @@ export default function InvoiceDetailPage() {
 
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-2 mb-3 text-muted-foreground"><User className="h-4 w-4" /><span className="text-sm">العميل</span></div>
-          <p className="font-bold text-lg">{invoice.clientName || "-"}</p>
+          {(invoice as any).clientId ? (
+            <Link href={`/finance/customer-360-sheet?clientId=${(invoice as any).clientId}`}>
+              <p className="font-bold text-lg hover:underline cursor-pointer">{invoice.clientName || "-"}</p>
+            </Link>
+          ) : (
+            <p className="font-bold text-lg">{invoice.clientName || "-"}</p>
+          )}
           {invoice.clientPhone && <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1"><Phone className="h-3 w-3" />{invoice.clientPhone}</p>}
           {invoice.clientEmail && <p className="text-sm text-muted-foreground flex items-center gap-1"><Mail className="h-3 w-3" />{invoice.clientEmail}</p>}
         </CardContent></Card>
@@ -702,13 +708,13 @@ function CogsPreviewCard({ invoiceId }: { invoiceId: number }) {
 
         {/* COGS warnings (non-fatal) */}
         {otherCogsWarnings.length > 0 && (
-          <div className="border border-amber-300 rounded-md p-3 bg-amber-50/40">
-            <p className="font-semibold text-amber-700 mb-2">
+          <div className="border border-status-warning-surface rounded-md p-3 bg-status-warning-surface/40">
+            <p className="font-semibold text-status-warning-foreground mb-2">
               تنبيهات على COGS ({otherCogsWarnings.length}) — الفاتورة ستُعتمد لكن COGS لن يُسجَّل لهذه البنود
             </p>
             <ul className="list-disc list-inside space-y-1 text-xs">
               {otherCogsWarnings.map((w, i) => (
-                <li key={i} className="text-amber-700">
+                <li key={i} className="text-status-warning-foreground">
                   <span className="font-mono text-xs me-1">سطر #{w.lineId}</span>
                   {COGS_REASON_LABEL[w.reason] ?? w.reason}
                   {w.detail && <span className="text-muted-foreground"> — {w.detail}</span>}
@@ -727,11 +733,11 @@ function CogsPreviewCard({ invoiceId }: { invoiceId: number }) {
 
         {/* Document-level warnings */}
         {data.warnings.length > 0 && (
-          <div className="border border-amber-300 rounded-md p-3 bg-amber-50/40">
-            <p className="font-semibold text-amber-700 mb-2">تنبيهات عامة ({data.warnings.length})</p>
+          <div className="border border-status-warning-surface rounded-md p-3 bg-status-warning-surface/40">
+            <p className="font-semibold text-status-warning-foreground mb-2">تنبيهات عامة ({data.warnings.length})</p>
             <ul className="list-disc list-inside space-y-1 text-xs">
               {data.warnings.map((w, i) => (
-                <li key={i} className="text-amber-700">{w.message}</li>
+                <li key={i} className="text-status-warning-foreground">{w.message}</li>
               ))}
             </ul>
           </div>

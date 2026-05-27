@@ -17,7 +17,7 @@ import {
   applyFilters,
   exportToCSV,
 } from "@workspace/ui-core";
-import { Plus, Receipt, DollarSign, AlertTriangle, CheckCircle, Eye, ExternalLink, ChevronDown, ChevronUp, Copy, Zap } from "lucide-react";
+import { Plus, Receipt, DollarSign, AlertTriangle, CheckCircle, Eye, ExternalLink, ChevronDown, ChevronUp, Copy, Zap, Send, Clock } from "lucide-react";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import {
   CollectionStages,
@@ -33,7 +33,10 @@ export default function InvoicesPage() {
   const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const [filters, setFilters] = useFilters();
+  // Seed status from ?status=… so deep-links land pre-filtered
+  // (e.g. /finance/invoices?status=draft from VAT readiness checklist).
+  const initialStatus = new URLSearchParams(window.location.search).get("status") || "";
+  const [filters, setFilters] = useFilters({ status: initialStatus });
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["invoices", scopeQueryString], `/finance/invoices${scopeSuffix}`);
@@ -173,9 +176,21 @@ export default function InvoicesPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الفواتير" }]}
       loading={isLoading}
       actions={
-        <Link href="/finance/invoices/create">
-          <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />فاتورة جديدة</GuardedButton>
-        </Link>
+        <>
+          <Link href="/finance/invoice-send-queue">
+            <Button variant="outline" size="sm">
+              <Send className="h-4 w-4 me-2" />قائمة الإرسال
+            </Button>
+          </Link>
+          <Link href="/finance/ar-aging">
+            <Button variant="outline" size="sm">
+              <Clock className="h-4 w-4 me-2" />تقادم الذمم
+            </Button>
+          </Link>
+          <Link href="/finance/invoices/create">
+            <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />فاتورة جديدة</GuardedButton>
+          </Link>
+        </>
       }
     >
       <FinanceTabsNav />

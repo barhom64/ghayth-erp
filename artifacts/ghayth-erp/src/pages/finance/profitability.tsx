@@ -122,14 +122,43 @@ export default function ProfitabilityPage({ entityType }: Props) {
   );
   const [endDate, setEndDate] = useState(todayLocal());
 
-  const endpoint = id
-    ? `/finance/reports/profitability/${config.endpointSegment}/${id}?startDate=${startDate}&endDate=${endDate}`
-    : null;
-  const queryKey = [`profitability-${entityType}`, id, startDate, endDate];
-
-  const { data, isLoading, isError, refetch } = useApiQuery<ProfitabilityResponse>(
-    queryKey, endpoint, !!id,
+  // Four explicit endpoints — one per entity type. The earlier
+  // `/${config.endpointSegment}/${id}` template normalised to
+  // `/:param/:param` and the wiring audit could not credit any of the
+  // four sibling backend routes from a single dynamic segment. By
+  // calling each route literally with `enabled` gating only the active
+  // tab, every URL becomes statically visible to the scanner. The
+  // disabled queries don't fire — useApiQuery's `enabled` flag short-
+  // circuits the fetch — so this stays a one-request-at-a-time page.
+  const qs = `startDate=${startDate}&endDate=${endDate}`;
+  const enabledFor = (t: ProfitabilityType) => !!id && entityType === t;
+  const vehicleQ = useApiQuery<ProfitabilityResponse>(
+    ["profitability-vehicle", id, startDate, endDate],
+    `/finance/reports/profitability/vehicle/${id}?${qs}`,
+    enabledFor("vehicle"),
   );
+  const propertyQ = useApiQuery<ProfitabilityResponse>(
+    ["profitability-property", id, startDate, endDate],
+    `/finance/reports/profitability/property/${id}?${qs}`,
+    enabledFor("property"),
+  );
+  const projectQ = useApiQuery<ProfitabilityResponse>(
+    ["profitability-project", id, startDate, endDate],
+    `/finance/reports/profitability/project/${id}?${qs}`,
+    enabledFor("project"),
+  );
+  const umrahAgentQ = useApiQuery<ProfitabilityResponse>(
+    ["profitability-umrah-agent", id, startDate, endDate],
+    `/finance/reports/profitability/umrah-agent/${id}?${qs}`,
+    enabledFor("umrah-agent"),
+  );
+
+  const activeQ =
+    entityType === "vehicle" ? vehicleQ
+    : entityType === "property" ? propertyQ
+    : entityType === "project" ? projectQ
+    : umrahAgentQ;
+  const { data, isLoading, isError, refetch } = activeQ;
 
   if (isLoading) return <LoadingSpinner />;
   if (isError || !data) return <ErrorState />;
@@ -143,7 +172,7 @@ export default function ProfitabilityPage({ entityType }: Props) {
   const marginColor = marginPct >= 30 ? "text-emerald-700"
     : marginPct >= 15 ? "text-yellow-700"
     : marginPct >= 0 ? "text-orange-700"
-    : "text-red-700";
+    : "text-status-error-foreground";
 
   const revCols: DataTableColumn<AccountRow>[] = [
     { key: "code", header: "الرمز", render: (r) => <span className="font-mono text-xs">{r.code}</span> },
@@ -215,10 +244,10 @@ export default function ProfitabilityPage({ entityType }: Props) {
             <p className="text-lg font-bold font-mono text-orange-700">{formatCurrency(data.summary.totalExpense)}</p>
           </CardContent>
         </Card>
-        <Card className={data.summary.netProfit >= 0 ? "border-emerald-300" : "border-red-300"}>
+        <Card className={data.summary.netProfit >= 0 ? "border-emerald-300" : "border-status-error-surface"}>
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground">صافي الربح / الخسارة</p>
-            <p className={`text-lg font-bold font-mono ${data.summary.netProfit >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+            <p className={`text-lg font-bold font-mono ${data.summary.netProfit >= 0 ? "text-emerald-700" : "text-status-error-foreground"}`}>
               {formatCurrency(data.summary.netProfit)}
             </p>
           </CardContent>

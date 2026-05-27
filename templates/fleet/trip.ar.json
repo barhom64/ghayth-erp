@@ -1,0 +1,20 @@
+{
+  "code": "fleet.fleet-trip",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "fleet_trip",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": true,
+  "qr": true,
+  "status": "published",
+  "domain": "fleet",
+  "title": "كشف رحلة",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "fleet_trip"
+  },
+  "ownerTeam": "fleet"
+}

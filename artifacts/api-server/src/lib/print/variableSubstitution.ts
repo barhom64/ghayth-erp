@@ -39,8 +39,39 @@ function get(obj: unknown, path: string): unknown {
 function formatValue(v: unknown): string {
   if (v === null || v === undefined) return "";
   if (typeof v === "number") {
-    if (Number.isInteger(v)) return String(v);
-    return v.toFixed(2);
+    if (!Number.isFinite(v)) return "";
+    return v.toLocaleString("en-US", {
+      minimumFractionDigits: Number.isInteger(v) ? 0 : 2,
+      maximumFractionDigits: 2,
+    });
+  }
+  if (typeof v === "string") {
+    const trimmed = v.trim();
+    // ISO date / timestamp detection — formats like "2025-06-15" or
+    // "2025-06-15T12:34:56.000Z" come back from PG date/timestamp columns
+    // as strings. Convert to Arabic locale date so {{entity.createdAt}}
+    // renders as "15‏/06‏/2025" not the raw ISO string. We're strict
+    // about the shape to avoid mangling refs that coincidentally look
+    // similar (e.g., "2025-INV-001" would NOT match).
+    if (/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+\-]\d{2}:?\d{2})?)?$/.test(trimmed)) {
+      const d = new Date(trimmed);
+      if (!isNaN(d.getTime())) return d.toLocaleDateString("ar-SA");
+    }
+    // Numeric strings from PG NUMERIC columns. Only format if purely
+    // numeric — don't mangle SKUs / refs like "300SP-X".
+    if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+      const n = Number(trimmed);
+      if (Number.isFinite(n)) {
+        return n.toLocaleString("en-US", {
+          minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
+          maximumFractionDigits: 2,
+        });
+      }
+    }
+    return v;
+  }
+  if (v instanceof Date) {
+    return v.toLocaleDateString("ar-SA");
   }
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
@@ -71,7 +102,7 @@ function buildLetterheadThermal(branch: BranchLetterhead): string {
   <div style="font-weight:bold;font-size:11pt">${escapeHtml(branch.companyName)}</div>
   <div style="font-size:9pt">${escapeHtml(branch.branchName)}</div>
   ${branch.phone ? `<div style="font-size:8pt" dir="ltr">${escapeHtml(branch.phone)}</div>` : ""}
-  ${branch.taxNumber ? `<div style="font-size:8pt">VAT: ${escapeHtml(branch.taxNumber)}</div>` : ""}
+  ${branch.taxNumber ? `<div style="font-size:8pt">ر.ض: ${escapeHtml(branch.taxNumber)}</div>` : ""}
 </div>`;
 }
 
@@ -83,6 +114,44 @@ function buildFooter(branch: BranchLetterhead, isThermal: boolean): string {
   ${branch.address ? `<div>${escapeHtml(branch.address)}</div>` : ""}
 </footer>`;
 }
+
+/** Snake/camel column key → Arabic display label for auto-built tables.
+ *  Mirrors the column titles the SPA uses on list pages so a printed
+ *  list of invoices reads identically to the on-screen list. */
+const COLUMN_AR: Record<string, string> = {
+  ref: "المرجع", name: "الاسم", title: "العنوان", description: "البيان", notes: "ملاحظات",
+  status: "الحالة", type: "النوع", category: "الفئة", priority: "الأولوية",
+  date: "التاريخ", startDate: "تاريخ البداية", endDate: "تاريخ النهاية",
+  dueDate: "تاريخ الاستحقاق", createdAt: "تاريخ الإنشاء", paidAt: "تاريخ السداد",
+  amount: "المبلغ", total: "الإجمالي", totalAmount: "الإجمالي", totalPrice: "الإجمالي",
+  subtotal: "المجموع قبل الضريبة", vatAmount: "الضريبة", vatRate: "نسبة الضريبة",
+  netAmount: "الصافي", netSalary: "صافي الراتب", grossSalary: "إجمالي الراتب",
+  paidAmount: "المدفوع", remainingAmount: "المتبقي", balance: "الرصيد",
+  quantity: "الكمية", qty: "الكمية", unit: "الوحدة", unitPrice: "سعر الوحدة",
+  lineTotal: "إجمالي السطر", lineGross: "الإجمالي شامل الضريبة",
+  receivedQty: "الكمية المستلمة", itemName: "اسم الصنف",
+  accountCode: "رمز الحساب", debit: "مدين", credit: "دائن",
+  reference: "المرجع", currency: "العملة", paymentMethod: "طريقة الدفع",
+  clientName: "اسم العميل", supplierName: "اسم المورّد", vendorName: "اسم المورّد",
+  employeeName: "اسم الموظف", empNumber: "الرقم الوظيفي",
+  branchName: "الفرع", departmentName: "الإدارة",
+  plateNumber: "رقم اللوحة", make: "الصانع", model: "الموديل", year: "السنة",
+  vinNumber: "رقم الهيكل", currentMileage: "العداد", fuelType: "نوع الوقود",
+  insuranceExpiry: "انتهاء التأمين", registrationExpiry: "انتهاء الاستمارة",
+  period: "الفترة", days: "عدد الأيام", hours: "الساعات",
+  reason: "السبب", phone: "الهاتف", email: "البريد", address: "العنوان",
+  taxNumber: "الرقم الضريبي", crNumber: "السجل التجاري",
+  monthlyRent: "الإيجار الشهري", depositAmount: "مبلغ التأمين",
+  contractType: "نوع العقد", partyName: "الطرف", value: "القيمة",
+  caseNumber: "رقم القضية", court: "المحكمة", filingDate: "تاريخ الرفع",
+  opposingParty: "الطرف الخصم", lawyerName: "المحامي",
+  exitType: "نوع الإنهاء", exitReason: "سبب الإنهاء",
+  fromLocation: "من", toLocation: "إلى", distance: "المسافة",
+  startTime: "وقت البداية", endTime: "وقت النهاية",
+  approvedAt: "تاريخ الاعتماد", approvedBy: "المعتمِد",
+  installmentAmount: "قيمة القسط", installmentCount: "عدد الأقساط",
+  loanType: "نوع القرض", loanNumber: "رقم القرض",
+};
 
 function buildItemsTable(items: unknown): string {
   if (!Array.isArray(items) || items.length === 0) {
@@ -101,7 +170,11 @@ function buildItemsTable(items: unknown): string {
   if (cols.length === 0) {
     return `<div class="empty">لا توجد بنود</div>`;
   }
-  const head = cols.map((c) => `<th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;font-size:10pt">${escapeHtml(c)}</th>`).join("");
+  // Translate column keys to Arabic labels so the printed table reads
+  // as a real document, not a database dump. Anything not in the map
+  // keeps the snake_case key — those are rare leaves like custom
+  // metric columns where the user usually knows what they mean.
+  const head = cols.map((c) => `<th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;font-size:10pt">${escapeHtml(COLUMN_AR[c] ?? c)}</th>`).join("");
   const body = items
     .map((r) => {
       if (!r || typeof r !== "object") return "";
@@ -124,6 +197,32 @@ function buildLinesTable(lines: unknown): string {
 
 function buildMovementsTable(movements: unknown): string {
   return buildItemsTable(movements);
+}
+
+/** Phase 6 — a small bottom-corner block with the QR + verify URL +
+ *  jobId for scanners. Designed to be dropped via `{{system.verifyBlock}}`
+ *  in any preset that wants the verification badge. Renders nothing for
+ *  ephemeral previews (no jobId allocated). */
+function buildVerifyBlock(opts: {
+  verifyUrl?: string | null;
+  verifyQrDataUrl?: string | null;
+  jobId?: string | null;
+}): string {
+  if (!opts.jobId) return "";
+  const qr = opts.verifyQrDataUrl
+    ? `<img src="${opts.verifyQrDataUrl}" alt="رمز التحقق" style="width:80px;height:80px;display:block;"/>`
+    : "";
+  const url = opts.verifyUrl ? escapeHtml(opts.verifyUrl) : "";
+  const jid = escapeHtml(opts.jobId);
+  return `<div style="margin-top:14px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;display:flex;align-items:center;gap:10px;font-size:9pt;background:#f8fafc">
+    ${qr}
+    <div style="flex:1;line-height:1.5">
+      <div style="font-weight:bold;color:#0f172a">للتحقق من صحة المستند</div>
+      <div style="color:#64748b">امسح الرمز أو افتح:</div>
+      <div dir="ltr" style="font-family:monospace;font-size:8pt;color:#334155;word-break:break-all">${url}</div>
+      <div style="color:#94a3b8;margin-top:2px">رقم المرجع: <span dir="ltr" style="font-family:monospace">${jid}</span></div>
+    </div>
+  </div>`;
 }
 
 /** Expand simple {{#each}} blocks. */
@@ -152,10 +251,16 @@ export interface SubstitutionInput {
   branch: BranchLetterhead;
   isThermal: boolean;
   watermark?: string;
+  /** Phase 6 verify context — when present, templates can use
+   *  {{system.verifyUrl}} (text) or {{system.verifyQr}} (img src).
+   *  Allocated upfront by printService so the URL matches the audit row. */
+  verifyUrl?: string | null;
+  verifyQrDataUrl?: string | null;
+  jobId?: string | null;
 }
 
 export function substitute(input: SubstitutionInput): string {
-  const { data, branch, isThermal, watermark } = input;
+  const { data, branch, isThermal, watermark, verifyUrl, verifyQrDataUrl, jobId } = input;
   let html = input.template ?? "";
 
   // Auto-tokens
@@ -164,6 +269,14 @@ export function substitute(input: SubstitutionInput): string {
     "branch.letterheadThermal": buildLetterheadThermal(branch),
     "branch.footer": buildFooter(branch, false),
     "branch.footerThermal": buildFooter(branch, true),
+    // Phase 6 verify tokens — templates can reference these to show a QR
+    // and a verify URL on every printed page. Empty strings when this is
+    // an ephemeral preview (no audit row, nothing to verify against).
+    "system.verifyUrl": verifyUrl ?? "",
+    "system.verifyQr": verifyQrDataUrl
+      ? `<img src="${verifyQrDataUrl}" alt="رمز التحقق" style="width:90px;height:90px;display:block;"/>`
+      : "",
+    "system.verifyBlock": buildVerifyBlock({ verifyUrl, verifyQrDataUrl, jobId }),
     "entity.itemsTable": buildItemsTable((data as { items?: unknown }).items),
     "entity.linesTable": buildLinesTable((data as { lines?: unknown }).lines),
     "entity.movementsTable": buildMovementsTable((data as { movements?: unknown }).movements),
@@ -199,9 +312,35 @@ export function substitute(input: SubstitutionInput): string {
 export function renderContextToHtml(ctx: RenderContext): string {
   // Visual-mode templates store a block tree in layoutJson; convert it to the
   // same {{token}} HTML shape the preset templates use, then run substitution.
-  const baseTemplate = ctx.template.mode === "visual" && ctx.template.layoutJson
+  let baseTemplate = ctx.template.mode === "visual" && ctx.template.layoutJson
     ? renderLayoutToHtml(ctx.template.layoutJson)
     : ctx.template.htmlContent ?? "";
+  // BLANK-PAGE GUARD: a template can resolve to an empty body when the user
+  // saves a draft with no htmlContent, or when a visual layout serialises
+  // to an empty tree, or when a stub loader returns nothing for the items
+  // table. Rendering empty bytes shows up as a fully-blank popup in the
+  // browser — the SPA can't tell that apart from "popup-blocked" or
+  // "Arabic mojibake", so users report "ما طبع شي".
+  //
+  // Fall back to a synthetic universal block: letterhead + meta-grid built
+  // from whatever `data.entity` actually has + items table + footer. This
+  // guarantees every render produces at least the branch header, the
+  // entity id, and the verify block on the page.
+  if (!baseTemplate.trim()) {
+    baseTemplate = `<div class="print-doc">
+{{branch.letterhead}}
+<h2 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">${escapeHtml(ctx.entityType)}</h2>
+<div class="meta-grid">
+  <div><strong>المرجع:</strong> {{entity.ref}}</div>
+  <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>المعرّف:</strong> {{entity.id}}</div>
+</div>
+{{entity.itemsTable}}
+{{system.verifyBlock}}
+{{branch.footer}}
+</div>`;
+  }
   // Template-level overrides — the cliché editor lets users upload a custom
   // logo, override the company/branch header text, set a custom footer, and
   // attach a signature image per template. These win over the branch's
@@ -222,11 +361,59 @@ export function renderContextToHtml(ctx: RenderContext): string {
     crNumber: (headerOv.crNumber as string) || ctx.branch.crNumber,
     footerText: (footerOv.text as string) || ctx.branch.footerText,
   };
-  return substitute({
-    template: baseTemplate,
+  const subOpts = {
     data: ctx.data,
     branch: mergedBranch,
     isThermal: ctx.template.isThermal || ctx.format.startsWith("thermal"),
     watermark: ctx.watermark,
-  });
+    verifyUrl: ctx.verifyUrl ?? null,
+    verifyQrDataUrl: ctx.verifyQrDataUrl ?? null,
+    jobId: ctx.jobId ?? null,
+  };
+  let rendered = substitute({ template: baseTemplate, ...subOpts });
+
+  // POST-SUBSTITUTION EMPTY-BODY GUARD: a template can be syntactically
+  // non-empty but render to nothing visible — every {{token}} resolves to
+  // an empty string because the data shape doesn't match the template's
+  // expectations, or because branchContext returned empty letterhead, or
+  // because a hand-saved template has bogus structure. The result is a
+  // page with only the watermark overlay (which is layered on top via the
+  // adapter wrapper, not from `rendered`) — users see a blank page and
+  // file "ما يطبع شي" tickets.
+  //
+  // Strip the rendered HTML down to what the user actually sees (no
+  // <style>, no <script>, no comments, no whitespace) and if the
+  // remaining text + meaningful tag count is suspiciously low, fall back
+  // to the universal preset. This is belt-and-suspenders on top of the
+  // pre-substitution empty-template guard above — that one caught
+  // `htmlContent=""`, this one catches `htmlContent="<div></div>"` and
+  // every other "syntactically present but visually empty" case.
+  const visibleLen = rendered
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s+/g, " ")
+    .trim().length;
+  if (visibleLen < 50) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[print/render] post-substitution body almost empty (visibleLen=${visibleLen}) — falling back to universal preset for ${ctx.entityType}/${ctx.entityId}`,
+    );
+    const universalTemplate = `<div class="print-doc">
+{{branch.letterhead}}
+<h2 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">${escapeHtml(ctx.entityType)} — ${escapeHtml(String(ctx.entityId))}</h2>
+<div class="meta-grid">
+  <div><strong>المرجع:</strong> {{entity.ref}}</div>
+  <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>المعرّف:</strong> {{entity.id}}</div>
+</div>
+{{entity.itemsTable}}
+{{system.verifyBlock}}
+{{branch.footer}}
+</div>`;
+    rendered = substitute({ template: universalTemplate, ...subOpts });
+  }
+  return rendered;
 }

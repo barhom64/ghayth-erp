@@ -14,7 +14,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
+import { ActionHistory } from "@workspace/workflow-kit";
 
 import { Edit, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -221,36 +221,10 @@ export default function BudgetDetail() {
           </CardContent>
         </Card>
 
-        {/* Approval actions */}
-        {id && item && ["draft", "active"].includes(item.status) && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ApprovalActions
-                entityType="budget"
-                entityId={id}
-                currentStatus={item.status}
-                approveEndpoint={`/finance/budgets/${id}/approve`}
-                rejectEndpoint={`/finance/budgets/${id}/reject`}
-                returnEndpoint={`/finance/budgets/${id}/approve`}
-                approveMethod="PATCH"
-                rejectMethod="PATCH"
-                returnMethod="PATCH"
-                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
-                rejectBody={(notes) => ({ approved: false, notes })}
-                returnBody={(notes) => ({ approved: "returned", notes })}
-                pendingStatuses={["pending", "pending_approval", "draft", "returned"]}
-                invalidateKeys={[["budget"]]}
-                onDone={() => {
-                  refetch();
-                  toast({ title: "تم تحديث الميزانية" });
-                }}
-              />
-            </CardContent>
-          </Card>
-        )}
+        {/* Budget approval lives at /finance/budget-approvals — over-budget
+            requests go through cfo/gm via budget_approval_requests.
+            Direct PATCH /budget/:id only edits accountCode/period/amount;
+            no status field on budgets, no /approve|/reject endpoints. */}
 
         {/* Action history */}
         {id && (

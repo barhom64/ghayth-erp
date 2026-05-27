@@ -1,0 +1,20 @@
+{
+  "code": "finance.receipt-voucher",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "receipt_voucher",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": true,
+  "qr": true,
+  "status": "published",
+  "domain": "finance",
+  "title": "سند قبض",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "receipt_voucher"
+  },
+  "ownerTeam": "finance"
+}

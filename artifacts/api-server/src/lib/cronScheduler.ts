@@ -22,6 +22,9 @@ import {
 } from "./businessHelpers.js";
 import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { processFallbackChains } from "./notificationEngine.js";
+import { runPendingTranscription } from "./pbxControl.js";
+import { aiEngine } from "./aiEngine.js";
+import { rawQuery as rawQueryShared, rawExecute as rawExecuteShared } from "./rawdb.js";
 import { checkSlaStatus } from "./workflowEngine.js";
 import { applyTransition } from "./lifecycleEngine.js";
 import { runAllProactiveChecks, registerProactiveEventListeners } from "./proactiveEngine.js";
@@ -1374,17 +1377,18 @@ async function monthlyRentPenalties(): Promise<string> {
     for (const p of overduePayments) {
       const lateDays = Math.floor((Date.now() - new Date(p.dueDate as string | Date).getTime()) / 86400000);
       let targetStage: string | null = null;
-      if (lateDays >= 90) targetStage = 'legal_transfer';
-      else if (lateDays >= 60) targetStage = 'penalty_applied';
-      else if (lateDays >= 30) targetStage = 'escalation';
-      else if (lateDays >= 14) targetStage = 'field_visit';
-      else if (lateDays >= 7) targetStage = 'notification';
-      else if (lateDays >= 3) targetStage = 'alert';
-      if (!targetStage) continue;
+      let targetPhase: number | null = null;
+      if (lateDays >= 90)      { targetStage = 'legal_transfer';  targetPhase = 6; }
+      else if (lateDays >= 60) { targetStage = 'penalty_applied'; targetPhase = 5; }
+      else if (lateDays >= 30) { targetStage = 'escalation';      targetPhase = 4; }
+      else if (lateDays >= 14) { targetStage = 'field_visit';     targetPhase = 3; }
+      else if (lateDays >= 7)  { targetStage = 'notification';    targetPhase = 2; }
+      else if (lateDays >= 3)  { targetStage = 'alert';           targetPhase = 1; }
+      if (!targetStage || targetPhase === null) continue;
 
       const existing = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM late_rent_actions WHERE "paymentId" = $1 AND phase = $2 LIMIT 1`,
-        [p.id, targetStage]
+        [p.id, targetPhase]
       );
       if (existing.length > 0) continue;
 
@@ -1445,7 +1449,7 @@ async function monthlyRentPenalties(): Promise<string> {
       await rawExecute(
         `INSERT INTO late_rent_actions ("contractId","paymentId",phase,action,"sentAt",notes)
          VALUES ($1,$2,$3,$4,NOW(),$5)`,
-        [p.contractId, p.id, targetStage, actionLabel, `تأخر ${lateDays} يوم — ${actionLabel}`]
+        [p.contractId, p.id, targetPhase, actionLabel, `تأخر ${lateDays} يوم — ${actionLabel}`]
       ).catch((e) => logger.error(e, "[cronScheduler] late rent action insert failed"));
 
       try {
@@ -1830,6 +1834,52 @@ async function retryStuckOfficialLetters(): Promise<string> {
   return `Stuck official letters retried: ${retried}`;
 }
 
+/**
+ * Phase 4 contract slice 4: mirror legacy queue status updates back to
+ * outbound_queue so the unified table reflects the full send lifecycle
+ * (queued → sent / failed) without changing the worker's read path.
+ *
+ * Why this approach: flipping the worker's SELECT to outbound_queue in
+ * one PR risks a missed-send window if the new index isn't perfect.
+ * Mirroring updates lets outbound_queue catch up to legacy without
+ * touching the dispatch loop. A future PR can swap the SELECT
+ * direction confidently once outbound_queue has full lifecycle data.
+ *
+ * Best-effort: failures are logged but never abort the worker — the
+ * legacy table remains source-of-truth during the soak.
+ */
+async function mirrorOutboundQueueStatus(
+  legacySource: "email_queue" | "sms_queue" | "whatsapp_queue",
+  legacyId: number,
+  fields: { status?: string; errorMessage?: string | null; externalId?: string | null; sentAt?: boolean },
+): Promise<void> {
+  const setClauses: string[] = [];
+  const params: unknown[] = [];
+  if (fields.status !== undefined) {
+    params.push(fields.status);
+    setClauses.push(`status = $${params.length}`);
+  }
+  if (fields.errorMessage !== undefined) {
+    params.push(fields.errorMessage);
+    setClauses.push(`"errorMessage" = $${params.length}`);
+  }
+  if (fields.externalId !== undefined) {
+    params.push(fields.externalId);
+    setClauses.push(`"externalId" = $${params.length}`);
+  }
+  if (fields.sentAt) {
+    setClauses.push(`"sentAt" = NOW()`);
+  }
+  setClauses.push(`"updatedAt" = NOW()`);
+  setClauses.push(`attempts = COALESCE(attempts, 0) + 1`);
+  params.push(legacySource, legacyId);
+  await rawExecute(
+    `UPDATE outbound_queue SET ${setClauses.join(", ")}
+       WHERE "legacySource" = $${params.length - 1} AND "legacyId" = $${params.length}`,
+    params,
+  ).catch((e) => logger.warn(e, `[outbound_queue mirror] ${legacySource}#${legacyId}`));
+}
+
 async function processEmailQueue(): Promise<string> {
   const pending = await rawQuery<Record<string, unknown>>(
     `SELECT eq.*, i.config AS "smtpSettings"
@@ -1857,6 +1907,10 @@ async function processEmailQueue(): Promise<string> {
           `UPDATE email_queue SET status = 'failed', "errorMessage" = $1, "attemptCount" = COALESCE("attemptCount",0) + 1, "updatedAt" = NOW() WHERE id = $2`,
           ["No active SMTP integration configured for this company", email.id]
         );
+        await mirrorOutboundQueueStatus("email_queue", email.id as number, {
+          status: "failed",
+          errorMessage: "No active SMTP integration configured for this company",
+        });
         failed++;
         continue;
       }
@@ -1889,6 +1943,9 @@ async function processEmailQueue(): Promise<string> {
         `UPDATE email_queue SET status = 'sent', "sentAt" = NOW(), "attemptCount" = COALESCE("attemptCount",0) + 1, "updatedAt" = NOW() WHERE id = $1`,
         [email.id]
       );
+      await mirrorOutboundQueueStatus("email_queue", email.id as number, {
+        status: "sent", sentAt: true, errorMessage: null,
+      });
       sent++;
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -1896,6 +1953,9 @@ async function processEmailQueue(): Promise<string> {
         `UPDATE email_queue SET status = 'failed', "errorMessage" = $1, "attemptCount" = COALESCE("attemptCount",0) + 1, "updatedAt" = NOW() WHERE id = $2`,
         [errMsg, email.id]
       ).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
+      await mirrorOutboundQueueStatus("email_queue", email.id as number, {
+        status: "failed", errorMessage: errMsg,
+      });
       failed++;
     }
   }
@@ -1976,6 +2036,9 @@ async function processSmsQueue(): Promise<string> {
           `UPDATE sms_queue SET status='sent', "externalId"=$1, "sentAt"=NOW(), "attemptCount"=COALESCE("attemptCount",0)+1, "updatedAt"=NOW() WHERE id=$2`,
           [data.sid ?? null, sms.id]
         );
+        await mirrorOutboundQueueStatus("sms_queue", sms.id as number, {
+          status: "sent", sentAt: true, externalId: data.sid ?? null, errorMessage: null,
+        });
         sent++;
       } else {
         const errText = await resp.text();
@@ -1985,6 +2048,9 @@ async function processSmsQueue(): Promise<string> {
           `UPDATE sms_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
           [newStatus, errText.substring(0, 500), newCount, sms.id]
         );
+        await mirrorOutboundQueueStatus("sms_queue", sms.id as number, {
+          status: newStatus, errorMessage: errText.substring(0, 500),
+        });
         failed++;
       }
     } catch (err) {
@@ -1995,6 +2061,9 @@ async function processSmsQueue(): Promise<string> {
         `UPDATE sms_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
         [newStatus, errMsg, newCount, sms.id]
       );
+      await mirrorOutboundQueueStatus("sms_queue", sms.id as number, {
+        status: newStatus, errorMessage: errMsg,
+      });
       failed++;
     }
   }
@@ -2059,6 +2128,9 @@ async function processWhatsAppQueue(): Promise<string> {
           `UPDATE whatsapp_queue SET status='sent', "externalId"=$1, "sentAt"=NOW(), "attemptCount"=COALESCE("attemptCount",0)+1, "updatedAt"=NOW() WHERE id=$2`,
           [msgId, msg.id]
         );
+        await mirrorOutboundQueueStatus("whatsapp_queue", msg.id as number, {
+          status: "sent", sentAt: true, externalId: msgId, errorMessage: null,
+        });
         sent++;
       } else {
         const errText = await resp.text();
@@ -2068,6 +2140,9 @@ async function processWhatsAppQueue(): Promise<string> {
           `UPDATE whatsapp_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
           [newStatus, errText.substring(0, 500), newCount, msg.id]
         );
+        await mirrorOutboundQueueStatus("whatsapp_queue", msg.id as number, {
+          status: newStatus, errorMessage: errText.substring(0, 500),
+        });
         failed++;
       }
     } catch (err) {
@@ -2078,6 +2153,9 @@ async function processWhatsAppQueue(): Promise<string> {
         `UPDATE whatsapp_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
         [newStatus, errMsg, newCount, msg.id]
       );
+      await mirrorOutboundQueueStatus("whatsapp_queue", msg.id as number, {
+        status: newStatus, errorMessage: errMsg,
+      });
       failed++;
     }
   }
@@ -3629,7 +3707,55 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "daily_budget_variance_alert", description: "تنبيه تجاوز الميزانية اليومي", schedule: "0 10 * * *", handler: dailyBudgetVarianceAlert },
   { name: "rate_limit_fallback_alert", description: "تنبيه عند انتقال حدود الطلبات إلى الذاكرة المحلية (Redis fallback)", schedule: "*/2 * * * *", handler: rateLimitFallbackAlertCheck },
   { name: "rbac_v2_expired_grants_cleanup", description: "تنظيف منح RBAC v2 منتهية الصلاحية", schedule: "0 3 * * *", handler: rbacV2ExpiredGrantsCleanup },
+  { name: "pbx_stt_queue_drain", description: "تفريغ طابور تحويل التسجيلات إلى نصوص + توليد ملخّص AI", schedule: "*/2 * * * *", handler: pbxSttQueueDrain },
 ];
+
+/**
+ * Drain the PBX transcript queue. Each tick processes up to 5 pending
+ * recordings to keep the cron run bounded; the next tick picks up
+ * anything left. When a transcript completes, this same handler also
+ * generates the AI summary so the operator UI shows both as soon as
+ * possible. STT/summarisation cost flows through recordAiUsage so it
+ * lands in /admin/observability.
+ */
+async function pbxSttQueueDrain(): Promise<string> {
+  const MAX_PER_TICK = 5;
+  let processed = 0;
+  let summarised = 0;
+  for (let i = 0; i < MAX_PER_TICK; i++) {
+    const result = await runPendingTranscription();
+    if (!result) break;
+    processed++;
+    if (result.status !== "completed") continue;
+
+    // Just-completed transcript → auto-summarise. Read the transcript
+    // text + companyId, pipe to the existing aiEngine.summarizerSummarize.
+    const [row] = await rawQueryShared<{ id: number; transcript: string | null; companyId: number }>(
+      `SELECT id, transcript, "companyId" FROM pbx_call_transcripts
+        WHERE "callId" = $1 AND status = 'completed' AND summary IS NULL`,
+      [result.callId],
+    );
+    if (!row || !row.transcript) continue;
+    try {
+      const summary = await aiEngine.summarizerSummarize(
+        row.transcript,
+        300,
+        { companyId: row.companyId, userId: null },
+      );
+      await rawExecuteShared(
+        `UPDATE pbx_call_transcripts
+            SET summary = $1, "summarisedAt" = NOW()
+          WHERE id = $2`,
+        [summary, row.id],
+      );
+      summarised++;
+    } catch {
+      // Summarisation failure is non-fatal — the transcript is
+      // already saved; an operator can retry from the UI.
+    }
+  }
+  return `processed=${processed} summarised=${summarised}`;
+}
 
 async function rbacV2ExpiredGrantsCleanup(): Promise<string> {
   // Drop user-level grants whose expires_at has passed. We delete rather

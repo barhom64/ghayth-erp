@@ -1,5 +1,10 @@
 import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -30,9 +35,30 @@ export default function RecurringJournalDetailPage() {
 
   const { data: rj, isLoading, isError, refetch } = useApiQuery<any>(
     ["recurring-journal-detail", id],
-    id ? `/finance/recurring-journals/${id}` : null,
+    `/finance/recurring-journals/${id}`,
     !!id
   );
+
+  // PATCH + DELETE wired through shared hook. Backend accepts name,
+  // description, frequency, startDate, nextRunDate, active +
+  // templateRef/Description/Lines (the lines structure is too complex
+  // for inline edit — operators recreate the schedule if those change).
+  const editDelete = useDetailEditDelete({
+    entityLabel: "القيد الدوري",
+    patchPath: `/finance/recurring-journals/${id}`,
+    deletePath: `/finance/recurring-journals/${id}`,
+    listPath: "/finance/recurring-journals",
+    initialValues: rj,
+    fields: [
+      { key: "name", label: "الاسم" },
+      { key: "description", label: "الوصف" },
+      { key: "frequency", label: "التكرار" },
+      { key: "startDate", label: "تاريخ البدء", type: "date" },
+      { key: "nextRunDate", label: "التشغيل التالي", type: "date" },
+    ],
+    invalidateKeys: [["recurring-journal-detail", id], ["recurring-journals"]],
+    onSaved: () => refetch(),
+  });
 
   const templateLines: any[] = (() => {
     if (!rj) return [];
@@ -48,10 +74,12 @@ export default function RecurringJournalDetailPage() {
   const totalCredit = templateLines.reduce((s: number, l: any) => s + Number(l.credit || 0), 0);
 
   const overview = (
-    <Card className="border-0 shadow-sm">
-      <CardContent className="p-6 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <InfoRow label="الاسم" value={rj?.name} />
+    <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InfoRow label="الاسم" value={rj?.name} />
           <InfoRow label="التكرار" value={FREQUENCY_LABEL[rj?.frequency] || rj?.frequency} />
           <InfoRow label="تاريخ البدء" value={rj?.startDate ? formatDateAr(rj.startDate) : "—"} />
           <InfoRow label="التنفيذ القادم" value={rj?.nextRunDate ? formatDateAr(rj.nextRunDate) : "—"} />
@@ -59,9 +87,10 @@ export default function RecurringJournalDetailPage() {
           <InfoRow label="عدد التنفيذات" value={String(rj?.runsCount ?? 0)} />
           <InfoRow label="الحالة" value={rj?.active ? "نشط" : "متوقف"} />
           <InfoRow label="الوصف" value={rj?.description} />
-        </div>
-      </CardContent>
-    </Card>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 
   const templateTabContent = () => (
@@ -128,7 +157,12 @@ export default function RecurringJournalDetailPage() {
 
   return (
     <DetailPageLayout
-      actions={<PrintButton entityType="recurring_journal" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
+      actions={
+        <div className="flex items-center gap-2">
+          <PrintButton entityType="recurring_journal" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />
+          <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
+        </div>
+      }
       title={rj?.name ? `قيد دوري: ${rj.name}` : "القيد الدوري"}
       subtitle={rj?.description}
       backPath="/finance/recurring-journals"

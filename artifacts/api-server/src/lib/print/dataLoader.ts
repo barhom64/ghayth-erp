@@ -17,12 +17,38 @@ import {
   loadAttendanceReport,
   loadFleetReport,
   loadFleetTripsReport,
+  loadBalanceSheet,
+  loadCashFlow,
+  loadCashBankStatement,
+  loadBudgetVariance,
+  loadGeneralLedger,
+  loadWhtSummary,
+  loadChartOfAccounts,
+  loadCustodyAdvances,
+  loadExpensesAnalysis,
+  loadRevenueAnalysis,
+  loadRevenueByActivity,
+  loadExpensesByCostCenter,
+  loadCustomerStatement,
+  loadVendorStatement,
 } from "./reportLoaders.js";
 
 interface LoaderArgs {
   companyId: number;
   entityType: string;
   entityId: string;
+  /** When non-null, the user is restricted to these branches. Loaders that
+   *  span multiple branches (customer/vendor statements, GL movements,
+   *  warehouse moves) must filter by this list. `null` = unrestricted
+   *  (company-owner / general manager / privileged role). */
+  allowedBranches?: number[] | null;
+  /** Caller's primary branch — used by single-entity loaders that want to
+   *  show "this branch's view" of a global entity (e.g., customer card
+   *  → AR balance for this branch only). */
+  branchId?: number | null;
+  /** Defensive: when `true` the user has owner-level access and branch
+   *  filters are bypassed even if `allowedBranches` is set. */
+  isOwner?: boolean;
 }
 
 async function loadByTable(table: string, id: string, companyId: number) {
@@ -93,6 +119,16 @@ async function safeLoad(
   }
 }
 
+/** Compute the branch filter that report/statement loaders should apply.
+ *  Returns null = no restriction (the user is an owner or hasn't been
+ *  scoped to specific branches). Otherwise returns the explicit list
+ *  of branchIds the user can see. */
+function branchFilter(args: LoaderArgs): number[] | null {
+  if (args.isOwner) return null;
+  if (!args.allowedBranches || args.allowedBranches.length === 0) return null;
+  return args.allowedBranches;
+}
+
 async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> {
   const { companyId, entityType, entityId } = args;
   const profile = getEntity(entityType);
@@ -129,16 +165,35 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadStockTransfer(companyId, entityId);
     case "stock_adjustment":
       return await loadStockAdjustment(companyId, entityId);
+    case "inventory_count":
+      return await loadInventoryCount(companyId, entityId);
     case "item_barcode_label":
       return await loadItemBarcode(companyId, entityId);
+    case "job":
+    case "job_posting":
+      return await loadJobPosting(companyId, entityId);
     case "leave_request":
       return await loadLeaveRequest(companyId, entityId);
     case "loan_request":
     case "loan":
       return await loadLoanRequest(companyId, entityId);
+    case "excuse_request":
+      return await loadExcuseRequest(companyId, entityId);
+    case "transfer":
+      return await loadEmployeeTransfer(companyId, entityId);
+    case "attendance":
+      return await loadAttendance(companyId, entityId);
+    case "discipline_memo":
+      return await loadDisciplineMemo(companyId, entityId);
+    case "fleet_maintenance":
+      return await loadFleetMaintenance(companyId, entityId);
+    case "insurance_policy":
+    case "insurance":
+      return await loadInsurancePolicy(companyId, entityId);
     case "maintenance_request":
       return await loadMaintenanceRequest(companyId, entityId);
     case "payroll":
+    case "payroll_run":
       return await loadPayrollRun(companyId, entityId);
     case "payslip":
       return await loadPayslip(companyId, entityId);
@@ -146,8 +201,6 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadOfficialLetter(companyId, entityId);
     case "employee_contract":
       return await loadEmployeeContract(companyId, entityId);
-    case "discipline_memo":
-      return await loadDisciplineMemo(companyId, entityId);
     case "exit_settlement":
       return await loadExitSettlement(companyId, entityId);
     case "overtime_request":
@@ -164,22 +217,52 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadVehicle(companyId, entityId);
     case "fleet_trip":
       return await loadFleetTrip(companyId, entityId);
-    case "fleet_maintenance":
-      return await loadFleetMaintenance(companyId, entityId);
     case "fuel_log":
       return await loadFuelLog(companyId, entityId);
     case "traffic_violation":
       return await loadTrafficViolation(companyId, entityId);
+    // ─── Master cards + niche transactions (Batches 5-7 presets) ───────
+    case "vendor":
+    case "supplier":
+      return await loadVendorCard(companyId, entityId);
+    case "building":
+      return await loadBuildingCard(companyId, entityId);
+    case "project":
+      return await loadProjectCard(companyId, entityId);
+    case "store_order":
+      return await loadStoreOrder(companyId, entityId);
+    case "crm_opportunity":
+      return await loadCrmOpportunity(companyId, entityId);
+    case "support_ticket":
+      return await loadSupportTicket(companyId, entityId);
     case "umrah_pilgrim":
       return await loadUmrahPilgrim(companyId, entityId);
     case "umrah_group":
       return await loadUmrahGroup(companyId, entityId);
+    case "umrah_invoice":
     case "umrah_sales_invoice":
       return await loadUmrahSalesInvoice(companyId, entityId);
     case "umrah_agent_invoice":
       return await loadUmrahAgentInvoice(companyId, entityId);
     case "umrah_penalty":
       return await loadUmrahPenalty(companyId, entityId);
+    case "salary_advance":
+      return await loadSalaryAdvance(companyId, entityId);
+    case "training_program":
+      return await loadTrainingProgram(companyId, entityId);
+    case "warehouse_product":
+    case "store_product":
+      return await loadWarehouseProductCard(companyId, entityId);
+    case "governance_policy":
+      return await loadGovernancePolicy(companyId, entityId);
+    case "budget":
+      return await loadBudgetCard(companyId, entityId);
+    case "shift":
+      return await loadShiftCard(companyId, entityId);
+    case "umrah_season":
+      return await loadUmrahSeason(companyId, entityId);
+    case "chart_of_account":
+      return await loadChartOfAccount(companyId, entityId);
     // ─── Batch reports (no single row — synthetic entityId encodes filters) ──
     case "report_trial_balance":
       return await loadTrialBalance(companyId, entityId);
@@ -195,6 +278,34 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadFleetReport(companyId, entityId);
     case "report_fleet_trips":
       return await loadFleetTripsReport(companyId, entityId);
+    case "report_balance_sheet":
+      return await loadBalanceSheet(companyId, entityId);
+    case "report_cash_flow":
+      return await loadCashFlow(companyId, entityId);
+    case "report_cash_bank":
+      return await loadCashBankStatement(companyId, entityId);
+    case "report_budget_variance":
+      return await loadBudgetVariance(companyId, entityId);
+    case "report_general_ledger":
+      return await loadGeneralLedger(companyId, entityId);
+    case "report_wht_summary":
+      return await loadWhtSummary(companyId, entityId);
+    case "report_chart_of_accounts":
+      return await loadChartOfAccounts(companyId, entityId);
+    case "report_custody_advances":
+      return await loadCustodyAdvances(companyId, entityId);
+    case "report_expenses_analysis":
+      return await loadExpensesAnalysis(companyId, entityId);
+    case "report_revenue_analysis":
+      return await loadRevenueAnalysis(companyId, entityId);
+    case "report_revenue_by_activity":
+      return await loadRevenueByActivity(companyId, entityId);
+    case "report_expenses_by_cost_center":
+      return await loadExpensesByCostCenter(companyId, entityId);
+    case "customer_statement":
+      return await loadCustomerStatement(companyId, entityId, branchFilter(args));
+    case "vendor_statement":
+      return await loadVendorStatement(companyId, entityId, branchFilter(args));
     default:
       // 1. Entity is in entityRegistry → use its declared table.
       // 2. Otherwise fall back to the static map below for entities the
@@ -220,8 +331,14 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   evaluation_360: "evaluation_cycles",
   training: "training_courses",
   job: "job_postings",
+  employee: "employees",
+  employee_profile: "employees",
+  overtime_request: "hr_overtime_requests",
+  exit_request: "hr_exit_requests",
   // Finance
   project_costing: "project_costs",
+  fixed_asset: "fixed_assets",
+  vendor: "suppliers",
   // account_statement was already moved off gl_accounts in #1084 (its
   // dedicated loader uses chart_of_accounts directly). This fallback entry
   // points to the canonical name so any code path that hits the default
@@ -229,6 +346,19 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   account_statement: "chart_of_accounts",
   // Property / CRM
   tenant: "tenants",
+  property_unit: "property_units",
+  rental_contract: "rental_contracts",
+  client: "clients",
+  crm_lead: "crm_opportunities",
+  // Fleet
+  vehicle: "fleet_vehicles",
+  fleet_trip: "fleet_trips",
+  fuel: "fleet_fuel_logs",
+  driver: "drivers",
+  // Legal
+  legal_contract: "legal_contracts",
+  legal_judgment: "legal_cases",
+  legal_session: "legal_sessions",
   // Inventory / Store
   warehouse_category: "warehouse_categories",
   store_product: "warehouse_products",
@@ -310,7 +440,16 @@ async function loadVoucher(companyId: number, id: string) {
     `SELECT * FROM vouchers WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
     [id, companyId]
   ).catch(() => [null]);
-  return { entity: voucher ?? { id } };
+  if (!voucher) return { entity: { id } };
+  // Fetch the party (client for receipts, supplier for payments).
+  // Some installations have neither, so each lookup is independent + null-safe.
+  const client = voucher.clientId
+    ? (await rawQuery<Record<string, unknown>>(`SELECT id, name, "taxNumber" FROM clients WHERE id = $1`, [voucher.clientId]))[0] ?? null
+    : null;
+  const supplier = voucher.supplierId
+    ? (await rawQuery<Record<string, unknown>>(`SELECT id, name FROM suppliers WHERE id = $1`, [voucher.supplierId]))[0] ?? null
+    : null;
+  return { entity: voucher, client, supplier };
 }
 
 async function loadPurchaseOrder(companyId: number, id: string) {
@@ -355,9 +494,17 @@ async function loadJournalEntry(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   if (!je) return { entity: { id } };
-  // journal_entry_lines table not yet committed to schema_pre.sql — defer to
-  // generic table fallback when present in live DB.
-  return { entity: je, lines: [] };
+  // journal_lines is the canonical name (was `journal_entry_lines` in older
+  // sketches that never landed). Each row carries debit/credit + an
+  // accountCode used by the printed entry sheet.
+  const lines = await rawQuery<Record<string, unknown>>(
+    `SELECT id, "accountCode", description, debit, credit
+       FROM journal_lines
+      WHERE "journalId" = $1
+      ORDER BY id`,
+    [id]
+  ).catch(() => []);
+  return { entity: je, lines, items: lines };
 }
 
 async function loadAccountStatement(companyId: number, id: string) {
@@ -370,19 +517,137 @@ async function loadAccountStatement(companyId: number, id: string) {
 }
 
 async function loadStockTransfer(companyId: number, id: string) {
-  return await loadGeneric("stock_transfers", id, companyId);
+  // The "stock transfer" entityType is virtual: the DB stores per-line moves
+  // in warehouse_movements with type='transfer'. There's no per-document
+  // table. We treat one warehouse_movements row as the printable transfer,
+  // and JOIN the product so {{entity.productName}}/sku resolve correctly.
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT m.id, m.reference AS ref, m."createdAt", m.status,
+            m."fromLocation" AS "fromWarehouseName",
+            m."toLocation"   AS "toWarehouseName",
+            m.notes AS reason,
+            wp.name AS "productName",
+            wp.sku  AS sku,
+            wp.unit AS unit,
+            m.quantity::numeric AS quantity,
+            u.name AS "createdByName"
+     FROM warehouse_movements m
+     LEFT JOIN warehouse_products wp ON wp.id = m."productId"
+     LEFT JOIN users u ON u.id = m."createdBy"
+     WHERE m.id = $1 AND m."companyId" = $2 AND m.type = 'transfer'
+     LIMIT 1`,
+    [id, companyId]
+  );
+  if (!row) return { entity: { id } };
+  // Wrap the single product as a one-row items[] so the preset's #each items
+  // loop renders a real table row (preset can also use {{entity.productName}}).
+  return {
+    entity: row,
+    items: [{
+      productName: row.productName,
+      sku: row.sku,
+      quantity: row.quantity,
+      unit: row.unit,
+    }],
+  };
 }
 
 async function loadStockAdjustment(companyId: number, id: string) {
-  return await loadGeneric("stock_adjustments", id, companyId);
+  // Mirrors loadStockTransfer — same table, type='adjustment'. Stores old/new
+  // qty in unitCost (legacy)/quantity; presets render the variance.
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT m.id, m.reference AS ref, m."createdAt", m.status,
+            m."toLocation" AS "warehouseName",
+            m.type AS "adjustmentType",
+            m.notes AS reason,
+            wp.name AS "productName",
+            wp.sku  AS sku,
+            wp.unit AS unit,
+            m.quantity::numeric AS quantity,
+            COALESCE(m."remainingQty", 0)::numeric AS "newQuantity",
+            (COALESCE(m."remainingQty", 0) - m.quantity)::numeric AS variance,
+            u.name AS "createdByName"
+     FROM warehouse_movements m
+     LEFT JOIN warehouse_products wp ON wp.id = m."productId"
+     LEFT JOIN users u ON u.id = m."createdBy"
+     WHERE m.id = $1 AND m."companyId" = $2 AND m.type IN ('adjustment', 'in', 'out', 'damage')
+     LIMIT 1`,
+    [id, companyId]
+  );
+  if (!row) return { entity: { id } };
+  return {
+    entity: row,
+    items: [{
+      productName: row.productName,
+      oldQuantity: row.quantity,
+      newQuantity: row.newQuantity,
+      variance: row.variance,
+    }],
+  };
+}
+
+async function loadInventoryCount(companyId: number, id: string) {
+  // Inventory count header + line items joined to warehouse_products so the
+  // preset shows real names + skus + variance per item.
+  const [header] = await rawQuery<Record<string, unknown>>(
+    `SELECT ic.id, ic."countDate", ic.status, ic.notes,
+            ic."warehouseLocation" AS "warehouseName",
+            u1.name AS "assigneeName",
+            u2.name AS "approvedByName",
+            ic."approvedAt"
+     FROM inventory_counts ic
+     LEFT JOIN users u1 ON u1.id = ic."conductedBy"
+     LEFT JOIN users u2 ON u2.id = ic."approvedBy"
+     WHERE ic.id = $1 AND ic."companyId" = $2
+     LIMIT 1`,
+    [id, companyId]
+  );
+  if (!header) return { entity: { id } };
+  const lines = await rawQuery<Record<string, unknown>>(
+    `SELECT ici.id, wp.name AS "productName", wp.sku, wp.unit,
+            ici."systemStock"::numeric AS "expectedQty",
+            ici."physicalCount"::numeric AS "actualQty",
+            ici.variance::numeric AS variance,
+            ici.notes
+     FROM inventory_count_items ici
+     LEFT JOIN warehouse_products wp ON wp.id = ici."productId"
+     WHERE ici."countId" = $1
+     ORDER BY ici.id`,
+    [id]
+  );
+  return {
+    entity: {
+      ...header,
+      ref: `IC-${header.id}`,
+      lineCount: lines.length,
+    },
+    items: lines,
+  };
 }
 
 async function loadItemBarcode(companyId: number, id: string) {
+  // warehouse_products has no `barcode` column — labels print the sku
+  // as the scannable code. `sellPrice` is the right column (not `price`).
   const [item] = await rawQuery<Record<string, unknown>>(
-    `SELECT id, name, sku, barcode, price FROM warehouse_products WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    `SELECT id, name, sku, "sellPrice" AS price FROM warehouse_products WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  );
+  return {
+    entity: item
+      ? { ...item, barcode: item.sku ?? String(id) }
+      : { id, name: "—", sku: "—", barcode: String(id), price: 0 },
+  };
+}
+
+async function loadJobPosting(companyId: number, id: string) {
+  const [posting] = await rawQuery<Record<string, unknown>>(
+    `SELECT id, title, department, location, type, description, requirements,
+            "salaryMin", "salaryMax", status, "closingDate", "createdAt",
+            "experienceLevel", education, vacancies, benefits, skills
+     FROM job_postings WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
     [id, companyId]
   ).catch(() => [null]);
-  return { entity: item ?? { id, name: "—", sku: "—", barcode: id, price: 0 } };
+  return { entity: posting ?? { id } };
 }
 
 async function loadLeaveRequest(companyId: number, id: string) {
@@ -395,6 +660,126 @@ async function loadLeaveRequest(companyId: number, id: string) {
     ? (await rawQuery(`SELECT id, name, "empNumber" FROM employees WHERE id = $1`, [lr.employeeId]))[0]
     : null;
   return { entity: lr, employee };
+}
+
+async function loadExcuseRequest(companyId: number, id: string) {
+  const [er] = await rawQuery<Record<string, unknown>>(
+    `SELECT er.*, EXTRACT(EPOCH FROM (er."endTime" - er."startTime"))/3600 AS hours
+     FROM hr_excuse_requests er
+     WHERE er.id = $1 AND er."companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  );
+  if (!er) return { entity: { id } };
+  const employee = er.employeeId
+    ? (await rawQuery(`SELECT id, name, "empNumber" FROM employees WHERE id = $1`, [er.employeeId]))[0]
+    : null;
+  return { entity: er, employee };
+}
+
+async function loadEmployeeTransfer(companyId: number, id: string) {
+  const [t] = await rawQuery<Record<string, unknown>>(
+    `SELECT et.*,
+            fb.name AS "fromBranch", tb.name AS "toBranch",
+            fd.name AS "fromDepartment", td.name AS "toDepartment",
+            fjt.name AS "currentJobTitle", tjt.name AS "newJobTitle"
+     FROM employee_transfers et
+     LEFT JOIN branches fb ON fb.id = et."fromBranchId"
+     LEFT JOIN branches tb ON tb.id = et."toBranchId"
+     LEFT JOIN departments fd ON fd.id = et."fromDepartmentId"
+     LEFT JOIN departments td ON td.id = et."toDepartmentId"
+     LEFT JOIN job_titles fjt ON fjt.id = et."fromJobTitleId"
+     LEFT JOIN job_titles tjt ON tjt.id = et."toJobTitleId"
+     WHERE et.id = $1 AND et."companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  );
+  if (!t) return { entity: { id } };
+  const employee = t.employeeId
+    ? (await rawQuery(`SELECT id, name, "empNumber" FROM employees WHERE id = $1`, [t.employeeId]))[0]
+    : null;
+  return { entity: t, employee };
+}
+
+async function loadAttendance(companyId: number, id: string) {
+  const [att] = await rawQuery<Record<string, unknown>>(
+    `SELECT a.id, a.date AS "attendanceDate",
+            to_char(a.date, 'Day') AS "dayName",
+            a."checkIn"  AS "checkInTime",
+            a."checkOut" AS "checkOutTime",
+            CONCAT(a."checkInLat",  ',', a."checkInLon")  AS "checkInLocation",
+            CONCAT(a."checkOutLat", ',', a."checkOutLon") AS "checkOutLocation",
+            a."lateMinutes", a."earlyMinutes",
+            EXTRACT(EPOCH FROM (a."checkOut" - a."checkIn"))/3600 AS "workedHours",
+            a.status, a.notes,
+            ea.id AS "assignmentId",
+            s.name AS "shiftName",
+            e.id AS "employeeId", e.name AS "employeeName", e."empNumber"
+     FROM attendance a
+     LEFT JOIN employee_assignments ea ON ea.id = a."assignmentId"
+     LEFT JOIN employees e ON e.id = ea."employeeId"
+     LEFT JOIN shifts s ON s.id = ea."shiftId"
+     WHERE a.id = $1 AND a."companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  );
+  if (!att) return { entity: { id } };
+  const employee = att.employeeId
+    ? { id: att.employeeId, name: att.employeeName, empNumber: att.empNumber }
+    : null;
+  return { entity: att, employee };
+}
+
+async function loadDisciplineMemo(companyId: number, id: string) {
+  const [m] = await rawQuery<Record<string, unknown>>(
+    `SELECT dm.id, dm."memoNumber" AS ref, dm.status, dm.notes AS description,
+            dm."penaltyLabel" AS action, dm."totalDeductionAmount",
+            dm."createdAt", v.severity, v."violationType",
+            e.id AS "employeeId", e.name AS "employeeName", e."empNumber",
+            d.name AS "departmentName",
+            (SELECT COUNT(*) FROM hr_violations v2
+              WHERE v2."employeeId" = v."employeeId" AND v2.id <> v.id) AS "priorCount"
+     FROM discipline_memos dm
+     LEFT JOIN hr_violations v ON v.id = dm."violationId"
+     LEFT JOIN employees e ON e.id = v."employeeId"
+     LEFT JOIN departments d ON d.id = e."departmentId"
+     WHERE dm.id = $1 AND dm."companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  );
+  if (!m) return { entity: { id } };
+  const employee = m.employeeId
+    ? { id: m.employeeId, name: m.employeeName, empNumber: m.empNumber, departmentName: m.departmentName }
+    : null;
+  return { entity: m, employee };
+}
+
+async function loadFleetMaintenance(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT fm.id, fm.id AS ref, fm.type AS "serviceType",
+            fm.description, fm.cost AS "totalCost",
+            fm."serviceDate", fm."nextServiceDate", fm."nextServiceKm",
+            fm."performedBy" AS "workshopName",
+            fm."mileageAtService" AS odometer, fm.status,
+            v."plateNumber", d.name AS "driverName"
+     FROM fleet_maintenance fm
+     LEFT JOIN fleet_vehicles v ON v.id = fm."vehicleId"
+     LEFT JOIN fleet_drivers d ON d.id = v."currentDriverId"
+     WHERE fm.id = $1 AND fm."companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadInsurancePolicy(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT fi.id, fi."policyNumber", fi.type AS "policyType",
+            fi.provider AS "insurerName",
+            fi."startDate", fi."endDate" AS "expiryDate",
+            fi."coverageAmount", fi.premium AS "premiumAmount",
+            fi.status, v."plateNumber" AS "insuredEntity"
+     FROM fleet_insurance fi
+     LEFT JOIN fleet_vehicles v ON v.id = fi."vehicleId"
+     WHERE fi.id = $1 AND fi."companyId" = $2 LIMIT 1`,
+    [id, companyId]
+  );
+  return { entity: row ?? { id } };
 }
 
 async function loadLoanRequest(companyId: number, id: string) {
@@ -437,25 +822,46 @@ async function loadPayslip(companyId: number, id: string) {
 }
 
 async function loadPayrollRun(companyId: number, id: string) {
-  // entityType "payroll" → the payroll_runs row + all its payroll_lines.
-  // The frontend opens /finance/payroll/:id where id is a payroll_runs.id.
-  // Before this loader existed, the old loadPayslip queried payroll_slips
-  // (a table that was never created) so every payroll print rendered as
-  // an empty stub.
+  // payroll_run roster — header + per-employee lines. Computes aggregated
+  // allowances + deductions so the preset can show them as single columns.
   const [run] = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM payroll_runs WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+    `SELECT pr.*, u.name AS "approvedByName", pr.period
+     FROM payroll_runs pr
+     LEFT JOIN users u ON u.id = pr."approvedBy"
+     WHERE pr.id = $1 AND pr."companyId" = $2 LIMIT 1`,
     [id, companyId]
-  ).catch(() => [null]);
+  );
   if (!run) return { entity: { id } };
-  const items = await rawQuery<Record<string, unknown>>(
-    `SELECT pl.*, e.name AS "employeeName", e."empNumber"
+  const lines = await rawQuery<Record<string, unknown>>(
+    `SELECT pl.id, pl.basic AS "baseSalary",
+            (COALESCE(pl."housingAllowance",0) + COALESCE(pl."transportAllowance",0)
+              + COALESCE(pl.overtime,0) + COALESCE(pl.commission,0))::numeric AS "totalAllowances",
+            (COALESCE(pl.gosi,0) + COALESCE(pl."lateDeduction",0)
+              + COALESCE(pl."absenceDeduction",0) + COALESCE(pl."violationDeduction",0)
+              + COALESCE(pl."loanDeduction",0))::numeric AS "totalDeductions",
+            pl."netSalary", pl."grossSalary",
+            e.name AS "employeeName", e."empNumber"
        FROM payroll_lines pl
        LEFT JOIN employees e ON e.id = pl."employeeId"
       WHERE pl."runId" = $1 AND pl."deletedAt" IS NULL
       ORDER BY e."empNumber" NULLS LAST, pl.id`,
     [id]
-  ).catch(() => []);
-  return { entity: run, items };
+  );
+  // Aggregate header-level totals so the preset's footer table can render
+  // grand totals without needing a separate query.
+  const totalBaseSalary = lines.reduce((s, l) => s + Number(l.baseSalary ?? 0), 0);
+  const totalAllowances = lines.reduce((s, l) => s + Number(l.totalAllowances ?? 0), 0);
+  const totalDeductions = lines.reduce((s, l) => s + Number(l.totalDeductions ?? 0), 0);
+  const totalNet        = lines.reduce((s, l) => s + Number(l.netSalary ?? 0), 0);
+  return {
+    entity: {
+      ...run,
+      ref: run.reference ?? `PR-${run.id}`,
+      employeeCount: lines.length,
+      totalBaseSalary, totalAllowances, totalDeductions, totalNet,
+    },
+    items: lines,
+  };
 }
 
 async function loadOfficialLetter(companyId: number, id: string) {
@@ -478,32 +884,12 @@ async function loadEmployeeContract(companyId: number, id: string) {
   return { entity: contract, employee };
 }
 
-async function loadDisciplineMemo(companyId: number, id: string) {
-  const [memo] = await rawQuery<Record<string, unknown>>(
-    `SELECT m.*, r.title AS "regulationTitle", r."articleNumber" AS "regulationArticle"
-       FROM hr_inquiry_memos m
-       LEFT JOIN hr_discipline_regulation r ON r.id = m."regulationId"
-      WHERE m.id = $1 AND m."companyId" = $2 LIMIT 1`,
-    [id, companyId]
-  ).catch(() => [null]);
-  if (!memo) return { entity: { id } };
-  const employee = memo.employeeId
-    ? (await rawQuery(
-        `SELECT id, name, "empNumber", "iqamaNumber", "nationalId" FROM employees WHERE id = $1`,
-        [memo.employeeId]
-      ))[0]
-    : null;
-  const manager = memo.managerId
-    ? (await rawQuery(
-        `SELECT e.id, e.name, ea."jobTitle"
-           FROM employee_assignments ea
-           JOIN employees e ON e.id = ea."employeeId"
-          WHERE ea.id = $1`,
-        [memo.managerId]
-      ))[0]
-    : null;
-  return { entity: memo, employee, manager };
-}
+// Note: removed my earlier loadDisciplineMemo (queried hr_inquiry_memos).
+// Main's loadDisciplineMemo (above) queries discipline_memos — a
+// denormalized print-friendly summary table designed for the existing
+// memo templates. Both tables exist in schema_pre.sql; the templates
+// follow main's field shape (penaltyLabel / totalDeductionAmount /
+// memoNumber).
 
 async function loadExitSettlement(companyId: number, id: string) {
   const [exit] = await rawQuery<Record<string, unknown>>(
@@ -664,18 +1050,9 @@ async function loadFleetTrip(companyId: number, id: string) {
   return { entity: trip ?? { id } };
 }
 
-async function loadFleetMaintenance(companyId: number, id: string) {
-  const [m] = await rawQuery<Record<string, unknown>>(
-    `SELECT m.*,
-            v."plateNumber", v.make, v.model, v."currentMileage"
-       FROM fleet_maintenance m
-       LEFT JOIN fleet_vehicles v ON v.id = m."vehicleId" AND v."companyId" = $2
-      WHERE m.id = $1 AND m."companyId" = $2 AND m."deletedAt" IS NULL
-      LIMIT 1`,
-    [id, companyId]
-  ).catch(() => [null]);
-  return { entity: m ?? { id } };
-}
+// Note: removed my earlier loadFleetMaintenance — main's version above
+// has the print-template-friendly aliases (serviceType, totalCost,
+// workshopName, odometer) that the maintenance templates depend on.
 
 async function loadFuelLog(companyId: number, id: string) {
   const [f] = await rawQuery<Record<string, unknown>>(
@@ -822,4 +1199,238 @@ async function loadUmrahPenalty(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   return { entity: penalty ?? { id } };
+}
+
+// ─── Master cards + transactions with JOINs (from main) ─────────────────
+// Each loader fetches the canonical row and JOINs the related lookups the
+// preset references (clientName, branchName, etc.) so {{entity.xxx}}
+// tokens render real values instead of empty placeholders.
+
+async function loadVendorCard(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT s.*, COALESCE(s."paymentTerms"::text, '-') AS "paymentTerms"
+     FROM suppliers s
+     WHERE s.id = $1 AND s."companyId" = $2 AND s."deletedAt" IS NULL LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadBuildingCard(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT b.*, e.name AS "managerName",
+            b.address AS "fullAddress",
+            b."totalUnits" AS "unitsCount"
+     FROM property_buildings b
+     LEFT JOIN employees e ON e.id = b."managerId"
+     WHERE b.id = $1 AND b."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadProjectCard(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT p.*, c.name AS "clientName", e.name AS "managerName",
+            br.name AS "branchName"
+     FROM projects p
+     LEFT JOIN clients c ON c.id = p."clientId"
+     LEFT JOIN employees e ON e.id = p."managerId"
+     LEFT JOIN branches br ON br.id = p."branchId"
+     WHERE p.id = $1 AND p."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadStoreOrder(companyId: number, id: string) {
+  const [header] = await rawQuery<Record<string, unknown>>(
+    `SELECT so.*,
+            c.name AS "customerName",
+            c.phone AS "customerPhone",
+            c.email AS "customerEmail"
+     FROM store_orders so
+     LEFT JOIN clients c ON c.id = so."clientId"
+     WHERE so.id = $1 AND so."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  if (!header) return { entity: { id } };
+  const lines = await rawQuery<Record<string, unknown>>(
+    `SELECT sol.*, wp.name AS "productName", wp.sku
+     FROM store_order_lines sol
+     LEFT JOIN warehouse_products wp ON wp.id = sol."productId"
+     WHERE sol."orderId" = $1 ORDER BY sol.id`,
+    [id],
+  ).catch((err) => {
+    if ((err as { code?: string })?.code === "42P01") return [];
+    throw err;
+  });
+  return { entity: header, items: lines };
+}
+
+async function loadCrmOpportunity(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT co.*, c.name AS "clientName", e.name AS "assigneeName",
+            co.value AS "expectedValue",
+            co."expectedCloseDate" AS "closeDate"
+     FROM crm_opportunities co
+     LEFT JOIN clients c ON c.id = co."clientId"
+     LEFT JOIN employees e ON e.id = co."assignedTo"
+     WHERE co.id = $1 AND co."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadSupportTicket(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT st.*,
+            st.id::text AS "ticketNumber",
+            er.name AS "reporterName",
+            ag.name AS "assigneeName"
+     FROM support_tickets st
+     LEFT JOIN users er ON er.id = st."reporterId"
+     LEFT JOIN users ag ON ag.id = st."assigneeId"
+     WHERE st.id = $1 AND st."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+// Note: removed main's loadUmrahPilgrim — superseded by the richer
+// version above (adds packageName + safer companyId scoping on JOINs).
+// Removed main's loadUmrahInvoice — referenced umrah_sales_invoices.pilgrimId
+// (column does not exist in schema_pre.sql) and umrah_pilgrims.name (the
+// column is fullName). The local loadUmrahSalesInvoice above replaces it
+// and the dispatchLoad switch routes both umrah_invoice and
+// umrah_sales_invoice to the working implementation.
+
+async function loadSalaryAdvance(companyId: number, id: string) {
+  // salary_advance reuses hr_employee_loans (type='advance' typically).
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT l.*,
+            l."installmentAmount" AS "monthlyInstallment",
+            l."installmentCount", l.amount,
+            e.name AS "employeeName", e."empNumber",
+            e.salary AS "baseSalary"
+     FROM hr_employee_loans l
+     LEFT JOIN employees e ON e.id = l."employeeId"
+     WHERE l.id = $1 AND l."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  if (!row) return { entity: { id } };
+  const employee = {
+    name: row.employeeName,
+    empNumber: row.empNumber,
+    baseSalary: row.baseSalary,
+  };
+  return { entity: row, employee };
+}
+
+async function loadTrainingProgram(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT tp.*,
+            tp."totalHours", tp."startDate", tp."endDate"
+     FROM training_programs tp
+     WHERE tp.id = $1 AND tp."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadWarehouseProductCard(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT wp.*,
+            wc.name AS "categoryName",
+            wp."costPrice", wp."sellPrice" AS price,
+            wp.sku AS barcode,
+            b.name AS "warehouseName",
+            wp.status
+     FROM warehouse_products wp
+     LEFT JOIN warehouse_categories wc ON wc.id = wp."categoryId"
+     LEFT JOIN branches b ON b.id = wp."branchId"
+     WHERE wp.id = $1 AND wp."companyId" = $2 AND wp."deletedAt" IS NULL LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadGovernancePolicy(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT gp.*, u1.name AS "ownerName", u2.name AS "approvedByName"
+     FROM governance_policies gp
+     LEFT JOIN users u1 ON u1.id = gp."ownerId"
+     LEFT JOIN users u2 ON u2.id = gp."approvedBy"
+     WHERE gp.id = $1 AND gp."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadBudgetCard(companyId: number, id: string) {
+  const [header] = await rawQuery<Record<string, unknown>>(
+    `SELECT b.*, cc.name AS "costCenterName",
+            u1.name AS "ownerName",
+            b.amount AS "totalBudget"
+     FROM budgets b
+     LEFT JOIN cost_centers cc ON cc.id = b."costCenterId"
+     LEFT JOIN users u1 ON u1.id = b."ownerId"
+     WHERE b.id = $1 AND b."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  if (!header) return { entity: { id } };
+  const totalBudget = Number(header.totalBudget ?? 0);
+  // Lookup consumed from journal_lines if a cost center is set.
+  let consumed = 0;
+  if (header.costCenterId) {
+    const [r] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(jl.debit - jl.credit), 0)::float8 AS spent
+       FROM journal_lines jl
+       JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1 AND je."deletedAt" IS NULL
+       WHERE jl."costCenterId" = $2`,
+      [companyId, header.costCenterId],
+    ).catch(() => [{ spent: 0 }]);
+    consumed = Number(r?.spent ?? 0);
+  }
+  return {
+    entity: { ...header, consumed, remaining: totalBudget - consumed },
+  };
+}
+
+async function loadShiftCard(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT s.*,
+            s."totalHours",
+            s."lateGraceMinutes",
+            br.name AS "branchName"
+     FROM shifts s
+     LEFT JOIN branches br ON br.id = s."branchId"
+     WHERE s.id = $1 AND s."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadUmrahSeason(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT s.*,
+            (SELECT COUNT(*) FROM umrah_agents WHERE "seasonId" = s.id) AS "agentCount",
+            (SELECT COUNT(*) FROM umrah_pilgrims WHERE "seasonId" = s.id) AS "expectedPilgrims"
+     FROM umrah_seasons s
+     WHERE s.id = $1 AND s."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
+}
+
+async function loadChartOfAccount(companyId: number, id: string) {
+  const [row] = await rawQuery<Record<string, unknown>>(
+    `SELECT coa.*,
+            (SELECT name FROM chart_of_accounts WHERE code = coa."parentCode" AND "companyId" = $2 LIMIT 1) AS "parentName",
+            coa."currentBalance"
+     FROM chart_of_accounts coa
+     WHERE coa.id = $1 AND coa."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  return { entity: row ?? { id } };
 }

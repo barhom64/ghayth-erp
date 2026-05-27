@@ -86,7 +86,7 @@ export default function PerformanceDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["performance", String(id)],
-    id ? `/hr/performance/${id}` : null,
+    `/hr/performance/${id}`,
     !!id
   );
 
@@ -166,7 +166,7 @@ export default function PerformanceDetail() {
       { key: "improvements", label: "مجالات التحسين" },
       { key: "comments", label: "ملاحظات" },
     ],
-    invalidateKeys: [["performance-review", String(id)], ["performance-reviews"]],
+    invalidateKeys: [["performance", String(id)], ["performance"]],
     onSaved: () => refetch(),
   });
 

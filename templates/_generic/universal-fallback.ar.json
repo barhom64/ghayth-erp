@@ -1,0 +1,20 @@
+{
+  "code": "_generic.universal-fallback",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "*",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": false,
+  "qr": true,
+  "status": "published",
+  "domain": "platform",
+  "title": "قالب احتياطي",
+  "implementation": {
+    "kind": "universal-fallback",
+    "key": "universal"
+  },
+  "ownerTeam": "platform"
+}

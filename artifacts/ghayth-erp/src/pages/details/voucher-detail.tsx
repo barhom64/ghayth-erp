@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -52,7 +52,6 @@ function statusTone(status?: string | null) {
 }
 
 export default function VoucherDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/vouchers/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("voucher", id ?? 0);
@@ -61,7 +60,7 @@ export default function VoucherDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["voucher", String(id)],
-    id ? `/finance/vouchers/${id}` : null,
+    `/finance/vouchers/${id}`,
     !!id
   );
 
@@ -123,10 +122,6 @@ export default function VoucherDetail() {
     ? VOUCHER_TYPE_LABELS[voucher.voucherType] || voucher.voucherType
     : null;
 
-
-  const handleEdit = () => {
-    setLocation(`/finance/vouchers/${id}/edit`);
-  };
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -305,18 +300,6 @@ export default function VoucherDetail() {
                 entityId={voucher.id ?? id}
                 formats={["a4", "thermal_80"]}/>
             )}
-            <GuardedButton
-              perm="finance:update"
-              variant="outline"
-              size="sm"
-              onClick={handleEdit}
-              disabled={
-                !voucher || ["posted", "paid", "rejected", "cancelled"].includes(voucher.status)
-              }
-            >
-              <Edit className="h-4 w-4 ms-1" />
-              تعديل
-            </GuardedButton>
           </>
         }
       />

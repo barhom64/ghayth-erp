@@ -10,6 +10,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -219,11 +220,33 @@ router.post("/contracts", authorize({ feature: "legal.contracts", action: "creat
       }
     }
 
+    // Numbering center (Issue #1141) — legal contract ref from authority.
+    // Body-supplied ref preserved for legacy imports only.
+    let issuedContract: Awaited<ReturnType<typeof issueNumber>> | null = null;
+    let contractRef = b.ref;
+    if (!contractRef) {
+      issuedContract = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "crm",
+        entityKey: "contract",
+        entityTable: "legal_contracts",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      contractRef = issuedContract.number;
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO legal_contracts ("companyId",ref,title,"contractType","partyName","partyContact","startDate","endDate",value,status,notes,"createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [scope.companyId, b.ref || null, b.title.trim(), b.contractType || null, b.partyName.trim(), b.partyContact || null, b.startDate, b.endDate, b.value || 0, b.status || 'draft', b.notes || null, scope.userId]
+      [scope.companyId, contractRef, b.title.trim(), b.contractType || null, b.partyName.trim(), b.partyContact || null, b.startDate, b.endDate, b.value || 0, b.status || 'draft', b.notes || null, scope.userId]
     );
     assertInsert(insertId, "legal_contracts");
+    if (issuedContract) {
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertId, issuedContract.assignmentId]
+      ).catch(() => { /* non-blocking link */ });
+    }
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     createAuditLog({
@@ -637,11 +660,33 @@ router.post("/cases", authorize({ feature: "legal.cases", action: "create" }), a
     const responsible = await getLegalResponsible(scope.companyId);
     if (!lawyerName && responsible) lawyerName = responsible.employeeName;
 
+    // Numbering center (Issue #1141) — case number from authority.
+    let issuedCase: Awaited<ReturnType<typeof issueNumber>> | null = null;
+    let caseNumber = b.caseNumber;
+    if (!caseNumber) {
+      issuedCase = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "legal",
+        entityKey: "case",
+        entityTable: "legal_cases",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      caseNumber = issuedCase.number;
+    }
+
     const { insertId } = await rawExecute(
       `INSERT INTO legal_cases ("companyId","caseNumber",title,"caseType",court,"filingDate","opposingParty","lawyerName",status,priority,description,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [scope.companyId, b.caseNumber, b.title, b.caseType, b.court, b.filingDate, b.opposingParty, lawyerName, b.status || 'open', b.priority || 'medium', b.description, b.notes ?? null]
+      [scope.companyId, caseNumber, b.title, b.caseType, b.court, b.filingDate, b.opposingParty, lawyerName, b.status || 'open', b.priority || 'medium', b.description, b.notes ?? null]
     );
     assertInsert(insertId, "legal_cases");
+    if (issuedCase) {
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertId, issuedCase.assignmentId]
+      ).catch(() => { /* non-blocking link */ });
+    }
 
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,

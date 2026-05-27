@@ -132,7 +132,10 @@ function getCsrfToken(): string | undefined {
   return match?.[1];
 }
 
-export async function apiFetch<T = any>(path: string, options?: RequestInit): Promise<T> {
+export async function apiFetch<T = any>(
+  path: string,
+  options?: RequestInit & { responseType?: "json" | "text" },
+): Promise<T> {
   const headers: Record<string, string> = {
     ...(options?.headers as Record<string, string> || {}),
   };
@@ -141,6 +144,21 @@ export async function apiFetch<T = any>(path: string, options?: RequestInit): Pr
   if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
     const csrf = getCsrfToken();
     if (csrf) headers["x-csrf-token"] = csrf;
+  }
+  // Send the picked role to the backend so authzEngine narrows grants
+  // to just this role for the request. Backend validates against the
+  // user's actually-assigned roles — unknown keys are safely ignored
+  // (no privilege escalation, no lockout). Only set when the caller
+  // hasn't already provided an explicit header.
+  if (!headers["x-selected-role"]) {
+    try {
+      const pickedRole = typeof window !== "undefined"
+        ? window.localStorage.getItem("erp_selected_role_key")
+        : null;
+      if (pickedRole) headers["x-selected-role"] = pickedRole;
+    } catch {
+      // localStorage may be unavailable (SSR, private mode) — non-fatal.
+    }
   }
 
   let res: Response;
@@ -196,6 +214,9 @@ export async function apiFetch<T = any>(path: string, options?: RequestInit): Pr
   }
   if (res.status === 204 || res.headers.get("content-length") === "0") {
     return {} as T;
+  }
+  if (options?.responseType === "text") {
+    return (await res.text()) as unknown as T;
   }
   return res.json();
 }

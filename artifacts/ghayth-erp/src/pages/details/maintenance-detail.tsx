@@ -53,7 +53,7 @@ export default function MaintenanceDetail() {
 
   const { data: maintenance, isLoading, error, refetch } = useApiQuery<any>(
     ["maintenance-detail", String(id)],
-    id ? `/fleet/maintenance/${id}` : null,
+    `/fleet/maintenance/${id}`,
     !!id
   );
 
@@ -104,7 +104,7 @@ export default function MaintenanceDetail() {
       { key: "odometer", label: "العداد", type: "number" },
       { key: "notes", label: "ملاحظات" },
     ],
-    invalidateKeys: [["maintenance", String(id)], ["maintenance"]],
+    invalidateKeys: [["maintenance-detail", String(id)], ["fleet-maintenance"]],
     onSaved: () => refetch(),
   });
 

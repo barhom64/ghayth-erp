@@ -23,9 +23,8 @@ import {
   emitEvent,
   createAuditLog,
   todayISO,
-  generateTimeRef,
-  generateBranchRef,
 } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
 import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, logSensitiveAccess } from "../lib/fieldEncryption.js";
@@ -1422,10 +1421,21 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
     const subtotal = servicesTotal + penaltiesTotal;
     const commission = subtotal * (Number(agent?.profitMargin || 0) / 100);
     const total = subtotal - commission;
-    // Per-branch invoice numbering (PR #529): branches can override the
-    // umrah-invoice prefix via system_settings; we keep "UMRAH-INV" as
-    // the fallback so existing tenants don't see a behaviour change.
-    const ref = await generateBranchRef(scope, "invoice_prefix", "UMRAH-INV");
+    // Numbering center (Issue #1141) — umrah agent invoice ref from
+    // central authority. Scheme `umrah.umrah_agent_invoice` is scoped
+    // by season + branch, so the seasonId param is mandatory.
+    const issuedInv = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "umrah",
+      entityKey: "umrah_agent_invoice",
+      entityTable: "umrah_agent_invoices",
+      seasonId,
+      actorId: scope.userId,
+      metadata: { agentId },
+      expectedTiming: "on_draft",
+    });
+    const ref = issuedInv.number;
     let invoiceRow: any;
     await withTransaction(async (client) => {
       // C1: generated directly as 'sent'. The umrah_agent_invoices state
@@ -1438,6 +1448,10 @@ router.post("/agent-invoices/generate", authorize({ feature: "umrah", action: "c
         [scope.companyId, agentId, seasonId, ref, pilgrimCount, penaltiesTotal, servicesTotal, subtotal, commission, total]
       );
       invoiceRow = insRes.rows[0];
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [invoiceRow.id, issuedInv.assignmentId]
+      );
       if (penaltiesTotal > 0) {
         // The SUM that produced `penaltiesTotal` (line 1382) excludes
         // soft-deleted penalties. This UPDATE must match the same set,

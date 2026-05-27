@@ -46,7 +46,7 @@ export default function UmrahInvoiceDetail() {
   // sales-invoice collection (GET /umrah/invoices) has no detail route.
   const { data: invoice, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-invoice", String(id)],
-    id ? `/umrah/agent-invoices/${id}` : null,
+    `/umrah/agent-invoices/${id}`,
     !!id
   );
 

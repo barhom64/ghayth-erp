@@ -43,7 +43,7 @@ export default function UmrahSeasonDetail() {
 
   const { data: season, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-season", String(id)],
-    id ? `/umrah/seasons/${id}` : null,
+    `/umrah/seasons/${id}`,
     !!id
   );
 
@@ -51,7 +51,9 @@ export default function UmrahSeasonDetail() {
   const editDelete = useDetailEditDelete({
     entityLabel: "الموسم",
     patchPath: `/umrah/seasons/${id}`,
-    deletePath: `/umrah/seasons/${id}`,
+    // Backend has no DELETE /umrah/seasons/:id — seasons stay in the
+    // archive once created. The hook hides the Trash button when
+    // deletePath is omitted.
     listPath: "/umrah/seasons",
     initialValues: season,
     fields: [
@@ -60,7 +62,7 @@ export default function UmrahSeasonDetail() {
       { key: "capacity", label: "السعة", type: "number" },
       { key: "notes", label: "ملاحظات" },
     ],
-    invalidateKeys: [["umrah-season-detail", id || ""], ["umrah-seasons"]],
+    invalidateKeys: [["umrah-season", id || ""], ["umrah-seasons"]],
     onSaved: () => refetch(),
   });
 

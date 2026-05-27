@@ -8,8 +8,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { useApiQuery, asList } from "@/lib/api";
-import { Brain, Users, Car, Building, FolderKanban, Headphones, TrendingUp, AlertTriangle, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { Brain, Users, Car, Building, FolderKanban, Headphones, TrendingUp, AlertTriangle, Search, Radar, Check, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
@@ -26,6 +28,25 @@ export default function Intelligence() {
     if (!alertSearch) return true;
     return a.title?.includes(alertSearch) || a.description?.includes(alertSearch);
   });
+
+  // Manual scan trigger — fires the same alert-generation pass the
+  // scheduled cron runs, but on demand. Useful when ops have just
+  // fixed an issue and want to confirm the alert clears.
+  const scanMut = useApiMutation<unknown, Record<string, never>>(
+    "/intelligence/alerts/scan",
+    "POST",
+    [["intelligence-alerts"], ["intelligence-overview"]],
+    { successMessage: "تم تشغيل فحص التنبيهات" },
+  );
+
+  // Per-alert mark-as-read. Two separate useApiMutation hooks would be
+  // cleaner per row but RHF prefers one mutation with a URL-factory.
+  const markReadMut = useApiMutation<unknown, { id: number }>(
+    (body) => `/intelligence/alerts/${body.id}/read`,
+    "PATCH",
+    [["intelligence-alerts"], ["intelligence-overview"]],
+    { successMessage: "تم تعليم التنبيه كمقروء" },
+  );
 
   const tasks = (schedule?.tasks || []).filter((t: any) => !taskSearch || t.title?.includes(taskSearch) || t.assigneeName?.includes(taskSearch));
   const attendance = (schedule?.attendance || []).filter((a: any) => !attendSearch || a.employeeName?.includes(attendSearch));
@@ -62,7 +83,20 @@ export default function Intelligence() {
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><Brain className="h-5 w-5" /> التنبيهات الذكية</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2"><Brain className="h-5 w-5" /> التنبيهات الذكية</CardTitle>
+            <GuardedButton
+              perm="intelligence:create"
+              size="sm"
+              variant="outline"
+              onClick={() => scanMut.mutate({})}
+              disabled={scanMut.isPending}
+              className="gap-1.5"
+            >
+              {scanMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Radar className="h-3.5 w-3.5" />}
+              فحص الآن
+            </GuardedButton>
+          </CardHeader>
           <CardContent className="space-y-3">
             <div className="relative">
               <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -73,9 +107,21 @@ export default function Intelligence() {
             <div className="space-y-3">
               {filteredAlerts.slice(0, 10).map((a: any) => (
                 <div key={a.id} className={`p-3 rounded-lg border ${a.severity === 'critical' ? 'bg-rose-50 border-rose-200' : a.severity === 'warning' ? 'bg-status-warning-surface border-status-warning-surface' : 'bg-status-info-surface border-status-info-surface'}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm">{a.title}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-sm flex-1">{a.title}</span>
                     <PageStatusBadge status={a.severity} />
+                    {!a.read && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => markReadMut.mutate({ id: a.id })}
+                        disabled={markReadMut.isPending}
+                        className="h-6 px-2 gap-1"
+                        title="تعليم كمقروء"
+                      >
+                        <Check className="h-3 w-3" />
+                      </Button>
+                    )}
                   </div>
                   {a.description && <p className="text-xs text-muted-foreground mt-1">{a.description}</p>}
                 </div>

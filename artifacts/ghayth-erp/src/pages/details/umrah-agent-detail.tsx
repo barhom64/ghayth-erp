@@ -46,7 +46,7 @@ export default function UmrahAgentDetail() {
 
   const { data: agent, isLoading, error, refetch } = useApiQuery<any>(
     ["umrah-agent", String(id)],
-    id ? `/umrah/agents/${id}` : null,
+    `/umrah/agents/${id}`,
     !!id
   );
 
@@ -81,7 +81,7 @@ export default function UmrahAgentDetail() {
       { key: "address", label: "العنوان" },
       { key: "notes", label: "ملاحظات" },
     ],
-    invalidateKeys: [["umrah-agent-detail", id || ""], ["umrah-agents"]],
+    invalidateKeys: [["umrah-agent", id || ""], ["umrah-agents"]],
     onSaved: () => refetch(),
   });
 

@@ -12,7 +12,8 @@ import {
   exportToCSV,
   PageShell,
 } from "@workspace/ui-core";
-import { Plus, Receipt, Trash2, Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Plus, Receipt, Trash2, Pencil, Percent, FileCheck2 } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
@@ -63,7 +64,7 @@ export default function WhtCategoriesPage() {
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, error, refetch } = useApiQuery<{ data: WhtCategory[] }>(
     ["wht-categories", scopeQueryString],
-    `/finance/accounts/wht-categories${scopeSuffix}`,
+    `/finance/wht-categories${scopeSuffix}`,
   );
   const items = data?.data ?? [];
   const [pendingDelete, setPendingDelete] = useState<WhtCategory | null>(null);
@@ -100,7 +101,7 @@ export default function WhtCategoriesPage() {
       header: "النسبة %",
       sortable: true,
       render: (c) => (
-        <span className="font-mono font-semibold text-amber-700">
+        <span className="font-mono font-semibold text-status-warning-foreground">
           {Number(c.rate).toFixed(2)}%
         </span>
       ),
@@ -145,12 +146,24 @@ export default function WhtCategoriesPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "فئات الاستقطاع" }]}
       loading={isLoading}
       actions={
-        <GuardedButton perm="finance:create" size="sm" asChild>
-          <Link href="/finance/wht-categories/create">
-            <Plus className="h-4 w-4 me-1" />
-            إضافة فئة استقطاع
+        <>
+          <Link href="/finance/tax-codes">
+            <Button variant="outline" size="sm">
+              <Percent className="h-4 w-4 me-1" />رموز الضريبة
+            </Button>
           </Link>
-        </GuardedButton>
+          <Link href="/finance/wht-filing-workbench">
+            <Button variant="outline" size="sm">
+              <FileCheck2 className="h-4 w-4 me-1" />منضدة WHT
+            </Button>
+          </Link>
+          <GuardedButton perm="finance:create" size="sm" asChild>
+            <Link href="/finance/wht-categories/create">
+              <Plus className="h-4 w-4 me-1" />
+              إضافة فئة استقطاع
+            </Link>
+          </GuardedButton>
+        </>
       }
     >
       <FinanceTabsNav />
@@ -199,7 +212,7 @@ export default function WhtCategoriesPage() {
             id: pendingDelete.id,
             name: `${pendingDelete.code} — ${pendingDelete.name}`,
           }}
-          deletePath={`/finance/accounts/wht-categories/${pendingDelete.id}`}
+          deletePath={`/finance/wht-categories/${pendingDelete.id}`}
           invalidateKeys={[["wht-categories"]]}
           successMessage="تم حذف فئة الاستقطاع"
           onDeleted={() => { setPendingDelete(null); refetch(); }}

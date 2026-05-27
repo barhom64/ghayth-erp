@@ -26,6 +26,11 @@ export interface PrintJobInput {
   errorMessage?: string | null;
   ipAddress?: string | null;
   userAgent?: string | null;
+  /** When set, overrides the DB default `gen_random_uuid()` and writes
+   *  this UUID into the print_jobs.jobId column. Needed so the QR code
+   *  baked into the rendered document points at the same row that gets
+   *  inserted here — Phase 6 verify flow. */
+  jobIdOverride?: string;
 }
 
 export interface PrintJobRow extends PrintJobInput {
@@ -43,17 +48,22 @@ export async function writePrintJob(input: PrintJobInput): Promise<PrintJobRow |
       // in multiple expression positions (the approvedAt CASE below used $15
       // both as value and as predicate, which broke type resolution and
       // silently dropped every print_jobs row → audit trail blank).
+      // The "jobId" column has a `gen_random_uuid()` default, so we COALESCE
+      // it with the optional override ($19) — when verify.ts pre-allocated
+      // a UUID for the QR, that UUID is forwarded here so the audit row's
+      // jobId matches what's on paper.
       `INSERT INTO print_jobs (
          "companyId", "branchId", "userId", "entityType", "entityId", "templateId",
          "format", "paperSize", "copyNumber", "isReprint", "watermark",
          "pdfStorageKey", "pdfBytes", "status", "approvedBy", "approvedAt",
-         "errorMessage", "ipAddress", "userAgent"
+         "errorMessage", "ipAddress", "userAgent", "jobId"
        )
        VALUES ($1::integer,$2::integer,$3::integer,$4::varchar,$5::varchar,$6::integer,
                $7::varchar,$8::varchar,$9::integer,$10::boolean,$11::varchar,
                $12::text,$13::integer,$14::varchar,$15::integer,
                CASE WHEN $15::integer IS NOT NULL THEN NOW() ELSE NULL END,
-               $16::text,$17::varchar,$18::text)
+               $16::text,$17::varchar,$18::text,
+               COALESCE($19::uuid, gen_random_uuid()))
        RETURNING id, "jobId", "createdAt", *`,
       [
         input.companyId,
@@ -74,6 +84,7 @@ export async function writePrintJob(input: PrintJobInput): Promise<PrintJobRow |
         input.errorMessage ?? null,
         input.ipAddress ?? null,
         input.userAgent ?? null,
+        input.jobIdOverride ?? null,
       ]
     );
     const row = rows[0];

@@ -1,0 +1,20 @@
+{
+  "code": "hr.training",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "training",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": true,
+  "qr": true,
+  "status": "published",
+  "domain": "hr",
+  "title": "دورة تدريبية",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "training"
+  },
+  "ownerTeam": "hr"
+}

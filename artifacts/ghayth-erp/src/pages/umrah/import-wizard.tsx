@@ -146,7 +146,6 @@ export default function UmrahImportWizard() {
     if (!preview || !seasonId) return;
     setConfirming(true);
     try {
-      const endpoint = fileType === "mutamers" ? "/umrah/import/mutamers" : "/umrah/import/vouchers";
       const body: Record<string, unknown> = {
         seasonId: Number(seasonId),
         fileName,
@@ -157,10 +156,17 @@ export default function UmrahImportWizard() {
         if (treasuryId) body.treasuryId = Number(treasuryId);
         if (purchaseAccountCode) body.purchaseAccountCode = purchaseAccountCode;
       }
-      const res: any = await apiFetch(endpoint, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
+      // Two static branches so the audit credits both endpoints — a
+      // single apiFetch with a conditional URL hid both routes.
+      const res: any = fileType === "mutamers"
+        ? await apiFetch("/umrah/import/mutamers", {
+            method: "POST",
+            body: JSON.stringify(body),
+          })
+        : await apiFetch("/umrah/import/vouchers", {
+            method: "POST",
+            body: JSON.stringify(body),
+          });
       const data = res?.data ?? res;
       setConfirmResult({ batchId: data?.batchId ?? data?.id });
       toast({ title: "تم تنفيذ الاستيراد بنجاح" });

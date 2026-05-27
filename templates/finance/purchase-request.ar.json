@@ -1,0 +1,20 @@
+{
+  "code": "finance.purchase-request",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "purchase_request",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": true,
+  "qr": true,
+  "status": "published",
+  "domain": "finance",
+  "title": "طلب شراء",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "purchase_request"
+  },
+  "ownerTeam": "finance"
+}

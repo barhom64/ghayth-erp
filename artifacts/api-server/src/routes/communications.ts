@@ -6,11 +6,15 @@ import { Router } from "express";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
+import { getCachedVendorConfigSync } from "../lib/vendorSettings.js";
+import { enqueueTranscription } from "../lib/pbxControl.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { sendNotification } from "../lib/notificationService.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { sendMessage } from "../lib/messageSender.js";
 import { aiEngine } from "../lib/aiEngine.js";
 import { sendPushToCompany, getVapidPublicKey } from "../lib/pushService.js";
 import { encryptPushEndpoint, hashPushEndpoint, decryptPushEndpoint } from "../lib/pushCrypto.js";
@@ -83,11 +87,25 @@ const pushUnsubscribeSchema = z.object({
 
 const router = Router();
 
-const WA_VERIFY_TOKEN = config.whatsapp.verifyToken ?? "ghayth_erp_verify";
+// WhatsApp credentials — env values used as the initial cached value;
+// the live read in the route bodies goes through getCachedVendorConfigSync
+// so a UI-driven update via /admin/vendor-settings takes effect after the
+// next cache warm (60s TTL).
+const WA_VERIFY_TOKEN_ENV = config.whatsapp.verifyToken ?? "ghayth_erp_verify";
 const WA_ACCESS_TOKEN = config.whatsapp.accessToken ?? "";
 const WA_PHONE_ID = config.whatsapp.phoneId ?? "";
 const WA_APP_SECRET = config.whatsapp.appSecret ?? "";
-const PBX_WEBHOOK_SECRET = config.pbx.webhookSecret ?? "";
+
+/**
+ * Resolve the PBX webhook secret — DB first (vendor_secrets.pbx-webhook
+ * via the cached sync read), env fallback. Lets the operator rotate
+ * the secret from /admin/vendor-settings without a redeploy.
+ */
+function getPbxWebhookSecret(): string {
+  const vc = getCachedVendorConfigSync("pbx-webhook");
+  const fromDb = typeof vc.config.webhookSecret === "string" ? vc.config.webhookSecret : "";
+  return fromDb || config.pbx.webhookSecret || "";
+}
 
 // RD3-01 — PBX webhook auth. PBX providers (3CX, Twilio, Asterisk
 // connectors, etc.) typically sign callbacks with HMAC-SHA256 over the
@@ -95,16 +113,17 @@ const PBX_WEBHOOK_SECRET = config.pbx.webhookSecret ?? "";
 // (HMAC-SHA256) OR a bearer token `Authorization: Bearer <secret>` to
 // match the simpler shared-secret schemes some on-prem PBXs use.
 // Without verification, any attacker could forge a POST to /pbx/* and
-// fabricate calls / chat_messages / tasks. Fails closed when
-// PBX_WEBHOOK_SECRET is unset.
+// fabricate calls / chat_messages / tasks. Fails closed when no
+// secret is configured (in DB or env).
 function verifyPbxSignature(req: import("express").Request): boolean {
-  if (!PBX_WEBHOOK_SECRET) return false;
+  const pbxSecret = getPbxWebhookSecret();
+  if (!pbxSecret) return false;
   const auth = req.get("authorization") ?? "";
   if (auth.startsWith("Bearer ")) {
     const provided = auth.slice("Bearer ".length).trim();
-    if (provided.length === PBX_WEBHOOK_SECRET.length) {
+    if (provided.length === pbxSecret.length) {
       try {
-        return timingSafeEqual(Buffer.from(provided), Buffer.from(PBX_WEBHOOK_SECRET));
+        return timingSafeEqual(Buffer.from(provided), Buffer.from(pbxSecret));
       } catch { return false; }
     }
     return false;
@@ -113,7 +132,7 @@ function verifyPbxSignature(req: import("express").Request): boolean {
   if (!header.startsWith("sha256=")) return false;
   const raw = (req as unknown as { rawBody?: Buffer }).rawBody;
   if (!raw) return false;
-  const expected = createHmac("sha256", PBX_WEBHOOK_SECRET).update(raw).digest("hex");
+  const expected = createHmac("sha256", pbxSecret).update(raw).digest("hex");
   const provided = header.slice("sha256=".length);
   if (expected.length !== provided.length) return false;
   try {
@@ -203,7 +222,7 @@ router.get("/whatsapp/webhook", (req, res) => {
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
 
-    if (mode === "subscribe" && token === WA_VERIFY_TOKEN) {
+    if (mode === "subscribe" && token === WA_VERIFY_TOKEN_ENV) {
       res.status(200).send(challenge);
     } else {
       throw new ForbiddenError("Verification failed");
@@ -277,7 +296,7 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
         [companyId, from, `WhatsApp from ${sender.name}`, msgText, sender.type !== "unknown" ? sender.type : null, sender.id]
       );
 
-      const categorized = await aiEngine.receptionCategorize(msgText, `Sender: ${sender.name} (${sender.type})`);
+      const categorized = await aiEngine.receptionCategorize(msgText, `Sender: ${sender.name} (${sender.type})`, { companyId });
 
       let relatedType: string | null = null;
       let relatedId: number | null = null;
@@ -444,6 +463,26 @@ router.post("/pbx/completed", async (req, res): Promise<void> => {
       [status, duration, recordingUrl, call.id, companyId]
     );
 
+    // Auto-queue the recording for transcription. The STT worker
+    // (cron: stt_queue_drain) picks it up; lib/pbxControl resolves
+    // an active STT provider from ai_providers (capability='stt')
+    // and falls back to a clear failed state if none is configured.
+    // Persist a pbx_call_recordings row in the same step so the
+    // operator UI has retention metadata.
+    if (recordingUrl && (status === "completed" || duration > 0)) {
+      void rawExecute(
+        `INSERT INTO pbx_call_recordings ("callId", "companyId", "recordingUrl", "durationMs", status)
+         VALUES ($1, $2, $3, $4, 'active')
+         ON CONFLICT ("callId") DO UPDATE
+           SET "recordingUrl" = EXCLUDED."recordingUrl",
+               "durationMs"   = EXCLUDED."durationMs",
+               status         = 'active'`,
+        [call.id, companyId, recordingUrl, (duration ?? 0) * 1000],
+      ).catch((e) => logger.warn(e, "[PBX] recording metadata upsert failed (non-fatal)"));
+      void enqueueTranscription(call.id, companyId, "ar")
+        .catch((e) => logger.warn(e, "[PBX] auto-enqueue STT failed (non-fatal)"));
+    }
+
     if (status === "no_answer" || duration === 0) {
       const sender = await matchSenderToEntity(call.callerNumber, companyId);
       await rawExecute(
@@ -522,9 +561,21 @@ router.get("/log", authorize({ feature: "communications", action: "list" }), asy
     if (channel) { params.push(channel); conditions.push(`channel = $${params.length}`); }
     if (direction) { params.push(direction); conditions.push(`direction = $${params.length}`); }
     const where = conditions.join(" AND ");
-    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM communications_log WHERE ${where}`, params);
+    // Phase 4 contract step 2: read from v_message_log_all. The view
+    // aliases fromAddress/toAddress columns back to fromNumber/toNumber
+    // in the explicit projection so the frontend `<DataTable>` columns
+    // ("من" / "إلى") keep resolving against the same keys.
+    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM v_message_log_all WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM communications_log WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT id, "companyId", channel, direction,
+              "fromAddress" AS "fromNumber", "toAddress" AS "toNumber",
+              subject, body, status, folder, "isStarred",
+              "relatedType", "relatedId", "createdAt", "deletedAt"
+         FROM v_message_log_all WHERE ${where}
+        ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    );
     res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset }));
   } catch (err) { handleRouteError(err, res, "Communications log error:"); }
 });
@@ -535,7 +586,8 @@ router.post("/send", authorize({ feature: "communications", action: "create" }),
     const scope = req.scope!;
 
     const validChannels = ["whatsapp", "sms", "email", "call", "push"];
-    if (!(validChannels as readonly string[]).includes(b.channel.toLowerCase())) {
+    const channel = b.channel.toLowerCase();
+    if (!(validChannels as readonly string[]).includes(channel)) {
       throw new ValidationError(`قناة غير مدعومة: ${b.channel}`, {
         field: "channel",
         fix: `اختر قناة من: ${validChannels.join(", ")}`,
@@ -547,22 +599,62 @@ router.post("/send", authorize({ feature: "communications", action: "create" }),
         fix: "أدخل رقم المستلم أو بريده الإلكتروني",
       });
     }
+    const recipient = b.toEmail ?? b.toNumber ?? "";
 
+    // Phase 4 contract slice 3: real sends (email/sms/whatsapp) now
+    // route through messageSender — same path as /inbox/send. That
+    // gives us DLP enforcement, provider failover telemetry, and
+    // dual-write to message_log / outbound_queue for free. The
+    // /communications/send endpoint stays as a back-compat shim.
+    //
+    // 'call' and 'push' aren't real outbound messages — call is just
+    // an audit row, push goes through pushService — so those keep the
+    // legacy direct-INSERT path until their own seams land.
+    if (channel === "email" || channel === "sms" || channel === "whatsapp") {
+      const result = await sendMessage({
+        channel,
+        recipient,
+        subject: b.subject ?? null,
+        body: b.body.trim(),
+        relatedType: b.relatedType ?? null,
+        relatedId: b.relatedId ?? null,
+        companyId: scope.companyId,
+        userId: scope.userId,
+        eventAction: "communications.message.sent",
+      });
+      // Read the freshly-written row back from the unified view so the
+      // shape matches the legacy response (which the admin UI consumes).
+      const [row] = await rawQuery<Record<string, unknown>>(
+        `SELECT id, "companyId", channel, direction,
+                "fromAddress" AS "fromNumber", "toAddress" AS "toNumber",
+                subject, body, status, folder, "isStarred",
+                "relatedType", "relatedId", "createdAt", "deletedAt"
+           FROM v_message_log_all
+          WHERE id = $1 AND "companyId" = $2`,
+        [result.logId, scope.companyId],
+      );
+      res.status(result.blocked ? 422 : 201).json(row ?? result);
+      return;
+    }
+
+    // Audit-only channels (call / push): keep the direct INSERT —
+    // these are book-keeping rows, not actual sends, and don't need
+    // DLP or queue dispatch.
     const { insertId } = await rawExecute(
       `INSERT INTO communications_log ("companyId",channel,direction,"fromNumber","toNumber",subject,body,status,"relatedType","relatedId") VALUES ($1,$2,'outbound',$3,$4,$5,$6,'queued',$7,$8)`,
-      [scope.companyId, b.channel.toLowerCase(), b.fromNumber ?? null, b.toNumber ?? b.toEmail, b.subject ?? null, b.body.trim(), b.relatedType ?? null, b.relatedId ?? null]
+      [scope.companyId, channel, b.fromNumber ?? null, recipient, b.subject ?? null, b.body.trim(), b.relatedType ?? null, b.relatedId ?? null],
     );
     assertInsert(insertId, "communications_log");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM communications_log WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     if (!row) throw new NotFoundError("فشل في استرجاع السجل");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "communications_log", entityId: insertId, after: { channel: b.channel.toLowerCase(), toNumber: b.toNumber ?? b.toEmail } }).catch((e) => logger.error(e, "communications background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "communications_log", entityId: insertId, after: { channel, toNumber: recipient } }).catch((e) => logger.error(e, "communications background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "communications.message.sent",
       entity: "communications_log",
       entityId: insertId,
-      details: JSON.stringify({ channel: b.channel.toLowerCase(), toNumber: b.toNumber ?? b.toEmail }),
+      details: JSON.stringify({ channel, toNumber: recipient }),
     }).catch((e) => logger.error(e, "communications background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Send communication error:"); }
@@ -579,10 +671,23 @@ router.get("/whatsapp", authorize({ feature: "communications", action: "list" })
     const conditions = [`"companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
-    const where = conditions.join(" AND ");
-    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM whatsapp_queue WHERE ${where}`, params);
+    const where = `${conditions.join(" AND ")} AND channel = 'whatsapp'`;
+    // Phase 4 contract slice 5: read from outbound_queue. After slice 4
+    // (#1293), the worker mirrors status / externalId back into this
+    // table, so the admin monitor sees the same lifecycle it always did.
+    // recipient → phone / recipientPhone aliases keep the frontend
+    // <DataTable> columns resolving against the same keys.
+    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM outbound_queue WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM whatsapp_queue WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT id, "companyId", recipient AS phone, recipient AS "recipientPhone",
+              "recipientName", body AS message, "templateName", "templateParams",
+              status, "externalId", "sentAt", "deliveredAt", "scheduledAt",
+              attempts AS "attemptCount", "errorMessage", "createdAt", "updatedAt"
+         FROM outbound_queue WHERE ${where}
+        ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    );
     res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset }));
   } catch (err) { handleRouteError(err, res, "WhatsApp queue error:"); }
 });
@@ -598,10 +703,18 @@ router.get("/sms", authorize({ feature: "communications", action: "list" }), asy
     const conditions = [`"companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
-    const where = conditions.join(" AND ");
-    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM sms_queue WHERE ${where}`, params);
+    const where = `${conditions.join(" AND ")} AND channel = 'sms'`;
+    // Phase 4 contract slice 5: read from outbound_queue (see /whatsapp).
+    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM outbound_queue WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM sms_queue WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT id, "companyId", recipient AS "recipientPhone", body AS message,
+              status, "externalId", "sentAt", attempts AS "attemptCount",
+              "errorMessage", "createdAt", "updatedAt"
+         FROM outbound_queue WHERE ${where}
+        ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    );
     res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset }));
   } catch (err) { handleRouteError(err, res, "SMS queue error:"); }
 });
@@ -686,20 +799,52 @@ router.post("/log/:id/convert", authorize({ feature: "communications", action: "
         createdId = result.rows[0].id;
         targetPath = "/tasks";
       } else if (targetType === "ticket") {
+        // Numbering center (Issue #1141) — comm-linked ticket gets a real
+        // support_ticket ref so the ticket page and the audit log line up.
+        const issuedTk = await issueNumber({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          moduleKey: "support",
+          entityKey: "support_ticket",
+          entityTable: "support_tickets",
+          actorId: scope.userId,
+          metadata: { source: "communications", logId },
+          expectedTiming: "on_draft",
+        });
         const result = await client.query(
           `INSERT INTO support_tickets ("companyId", title, description, status, priority, ref)
            VALUES ($1, $2, $3, 'open', 'medium', $4) RETURNING id`,
-          [scope.companyId, fullTitle, fullDesc, `TKT-COMM-${logId}`]
+          [scope.companyId, fullTitle, fullDesc, issuedTk.number]
         );
         createdId = result.rows[0].id;
+        await client.query(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [createdId, issuedTk.assignmentId]
+        );
         targetPath = "/support/tickets";
       } else {
+        // Numbering center (Issue #1141) — comm-linked request gets a real
+        // general_request ref so it threads with the regular requests inbox.
+        const issuedReq = await issueNumber({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          moduleKey: "requests",
+          entityKey: "general_request",
+          entityTable: "requests",
+          actorId: scope.userId,
+          metadata: { source: "communications", logId },
+          expectedTiming: "on_draft",
+        });
         const result = await client.query(
-          `INSERT INTO requests ("companyId", title, description, status, priority, "requesterName")
-           VALUES ($1, $2, $3, 'pending', 'medium', $4) RETURNING id`,
-          [scope.companyId, fullTitle, fullDesc, logEntry.fromNumber || "من اتصال"]
+          `INSERT INTO requests ("companyId", title, description, status, priority, "requesterName", ref)
+           VALUES ($1, $2, $3, 'pending', 'medium', $4, $5) RETURNING id`,
+          [scope.companyId, fullTitle, fullDesc, logEntry.fromNumber || "من اتصال", issuedReq.number]
         );
         createdId = result.rows[0].id;
+        await client.query(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [createdId, issuedReq.assignmentId]
+        );
         targetPath = "/requests";
       }
       await client.query(
@@ -755,9 +900,14 @@ router.get("/stats", authorize({ feature: "communications", action: "list" }), a
     const scope = req.scope!;
     const cid = scope.companyId;
     const [[comm], [wa], [sms]] = await Promise.all([
-      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE channel='whatsapp') as whatsapp, COUNT(*) FILTER (WHERE channel='sms') as sms, COUNT(*) FILTER (WHERE channel='email') as email, COUNT(*) FILTER (WHERE channel='pbx') as pbx FROM communications_log WHERE "companyId"=$1`, [cid]),
-      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as pending FROM whatsapp_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
-      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as pending FROM sms_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
+      // Phase 4 contract step 2: counts come from the unified view —
+      // legacy + new rows in one COUNT, no UNION needed.
+      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE channel='whatsapp') as whatsapp, COUNT(*) FILTER (WHERE channel='sms') as sms, COUNT(*) FILTER (WHERE channel='email') as email, COUNT(*) FILTER (WHERE channel='pbx') as pbx FROM v_message_log_all WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
+      // Phase 4 contract slice 5: pending counts from outbound_queue
+      // (channel-filtered) — same data as before but one table query
+      // resolves both with COUNT FILTER.
+      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as pending FROM outbound_queue WHERE "companyId"=$1 AND channel='whatsapp' AND status='pending'`, [cid]),
+      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as pending FROM outbound_queue WHERE "companyId"=$1 AND channel='sms' AND status='pending'`, [cid]),
     ]);
     res.json(maskFields(req, {
       total: Number(comm.total),
@@ -787,24 +937,28 @@ router.get("/queue-stats", authorize({ feature: "communications", action: "list"
     type StatusCount = { status: string; count: string };
     type QueueRow = { id: number; recipient: string; message: string; status: string; attemptCount: number | null; errorMessage: string | null; createdAt: string; sentAt: string | null };
 
+    // Phase 4 contract slice 5: all three queue tabs now read from
+    // outbound_queue, channel-filtered. The buildDateFilter helper
+    // qualifies the column with the alias (here always "oq"), so we
+    // pass that and append the channel predicate after.
     const smsParams: unknown[] = [cid];
-    const smsDateFilter = buildDateFilter("sms_queue", smsParams);
+    const smsDateFilter = buildDateFilter("oq", smsParams);
     const waParams: unknown[] = [cid];
-    const waDateFilter = buildDateFilter("whatsapp_queue", waParams);
+    const waDateFilter = buildDateFilter("oq", waParams);
     const emailParams: unknown[] = [cid];
-    const emailDateFilter = buildDateFilter("email_queue", emailParams);
+    const emailDateFilter = buildDateFilter("oq", emailParams);
 
     const [smsStats, waStats, emailStats, pushCount, recentSms, recentWa] = await Promise.all([
       rawQuery<StatusCount>(
-        `SELECT status, COUNT(*) as count FROM sms_queue WHERE "companyId"=$1${smsDateFilter} GROUP BY status`,
+        `SELECT status, COUNT(*) as count FROM outbound_queue oq WHERE oq."companyId"=$1 AND oq.channel='sms'${smsDateFilter} GROUP BY status`,
         smsParams
       ),
       rawQuery<StatusCount>(
-        `SELECT status, COUNT(*) as count FROM whatsapp_queue WHERE "companyId"=$1${waDateFilter} GROUP BY status`,
+        `SELECT status, COUNT(*) as count FROM outbound_queue oq WHERE oq."companyId"=$1 AND oq.channel='whatsapp'${waDateFilter} GROUP BY status`,
         waParams
       ),
       rawQuery<StatusCount>(
-        `SELECT status, COUNT(*) as count FROM email_queue WHERE "companyId"=$1${emailDateFilter} GROUP BY status`,
+        `SELECT status, COUNT(*) as count FROM outbound_queue oq WHERE oq."companyId"=$1 AND oq.channel='email'${emailDateFilter} GROUP BY status`,
         emailParams
       ),
       rawQuery<{ count: string }>(
@@ -812,13 +966,17 @@ router.get("/queue-stats", authorize({ feature: "communications", action: "list"
         [cid]
       ),
       rawQuery<QueueRow>(
-        `SELECT id, "recipientPhone" AS recipient, message, status, "attemptCount", "errorMessage", "createdAt", "sentAt"
-         FROM sms_queue WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`,
+        `SELECT id, recipient, body AS message, status, attempts AS "attemptCount",
+                "errorMessage", "createdAt", "sentAt"
+           FROM outbound_queue WHERE "companyId"=$1 AND channel='sms'
+          ORDER BY "createdAt" DESC LIMIT 20`,
         [cid]
       ),
       rawQuery<QueueRow>(
-        `SELECT id, phone AS recipient, message, status, "attemptCount", "errorMessage", "createdAt", "sentAt"
-         FROM whatsapp_queue WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`,
+        `SELECT id, recipient, body AS message, status, attempts AS "attemptCount",
+                "errorMessage", "createdAt", "sentAt"
+           FROM outbound_queue WHERE "companyId"=$1 AND channel='whatsapp'
+          ORDER BY "createdAt" DESC LIMIT 20`,
         [cid]
       ),
     ]);

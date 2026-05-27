@@ -9,6 +9,7 @@
 #   1. Broken imports / missing functions       → typecheck
 #   2. Banned legacy patterns                   → lint:patterns
 #   3. Pages built but never wired to a route   → audit:routes
+#   3b. Frontend apiFetch URL → real backend route → audit:wiring
 #   4. Raw SQL referencing dropped/typo columns → audit:schema
 #   5. Route identifiers vs live DB columns     → check:schema-drift
 #   6. Soft-delete tables read w/o IS NULL      → check:ghost-rows
@@ -53,6 +54,13 @@ run_step "typecheck"          pnpm -s run typecheck
 run_step "lint:patterns:tests" node scripts/src/lint-patterns.test.mjs
 run_step "lint:patterns"      pnpm -s run lint:patterns
 run_step "audit:routes"       node scripts/src/audit-routes.mjs
+# Pure-logic fixtures for the wiring audit's string-literal reader,
+# URL normaliser, and segment matcher — runs before the audit itself
+# so a broken heuristic fails with a precise diff rather than a
+# misleading orphan list. Includes an end-to-end check that the
+# 0-orphan baseline still holds.
+run_step "audit:wiring:tests" node scripts/src/check-frontend-backend-wiring.test.mjs
+run_step "audit:wiring"       node scripts/src/check-frontend-backend-wiring.mjs
 run_step "audit:schema"       node scripts/src/audit-schema-drift.mjs
 # Pure-logic fixtures for the ghost-row predicates — no DB needed, so
 # this runs in every environment to guard the guard itself.
@@ -73,6 +81,11 @@ else
 fi
 run_step "audit:boundaries"   node scripts/src/audit-domain-boundaries.mjs
 run_step "audit:domain-routes" node scripts/src/audit-domain-routes.mjs
+# Stop-Ship gate for #1141: every route that INSERTs into an executive
+# document table must also call `numberingService.issueNumber`. A pure
+# lint regex can't catch a fresh INSERT into invoices/contracts/etc.
+# that simply doesn't import issueNumber at all — this audit can.
+run_step "audit:numbering-coverage" node scripts/src/audit-numbering-coverage.mjs
 run_step "check:duplicate-migrations" node scripts/src/check-duplicate-migrations.mjs
 # Pure-logic fixtures for the breaking-change detection — no DB needed,
 # guards the guard itself (same pattern as check:ghost-rows:tests above).
@@ -92,6 +105,11 @@ run_step "check:workflow-silent-failures" node scripts/src/check-workflow-silent
 # PRs #1019 (frontend batch 1), #1026 (frontend batch 2), and #1028
 # (bi.ts + finance-budget.ts route files).
 run_step "check:finance-period-drift" node scripts/src/check-finance-period-drift.mjs
+# Stop-Ship compliance scan (#1139 §8): every write endpoint must have an
+# RBAC guard. File-level audit/event gaps are reported as warnings (the
+# global auditMiddleware provides baseline coverage) and don't fail the
+# build. Route-level exemptions live in scripts/src/audit-stop-ship.mjs.
+run_step "audit:stop-ship"    node scripts/src/audit-stop-ship.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test
 
 END=$(date +%s)

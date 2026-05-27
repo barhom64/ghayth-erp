@@ -199,6 +199,20 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     systemCritical: true, displayOrder: 240 },
 
+  // Override permission for the enforce_line_allocation gate (migration 223).
+  // When the company setting `finance.enforce_line_allocation` is ON, the
+  // invoice/PO approve handlers refuse to post a JE that contains any
+  // line whose resolver status is 'unmapped'. A user holding this grant
+  // may still approve by supplying a written `overrideReason`, which the
+  // backend persists in allocation_override_log for audit. The grant is
+  // intentionally narrow (action="create" only — the only meaningful
+  // action on an override is "record one") and company-scoped because
+  // financial integrity bypass is a CFO-level concern, not a branch one.
+  { key: "finance.allocation.override", parentKey: "finance.accounts", moduleKey: "finance",
+    labelAr: "تجاوز تخصيص البنود (CFO)",
+    availableActions: ["create"], availableScopes: ["company"],
+    systemCritical: true, displayOrder: 241 },
+
   { key: "finance.budget", parentKey: "finance", moduleKey: "finance", labelAr: "الميزانية",
     availableActions: ALL_ACTIONS, availableScopes: ["department", "branch", "company"],
     approvableActions: ["approve"], displayOrder: 250 },
@@ -387,6 +401,32 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: [...READ_ACTIONS, "update"], availableScopes: ["branch", "company"],
     systemCritical: true, displayOrder: 2000 },
 
+  // ─── Numbering center (Issue #1141) ──────────────────────────────
+  // The numbering center is the single authority for issuing official
+  // document numbers. Most operators only need `view`; managing the
+  // policies / overriding numbers / resetting counters is reserved
+  // for admins. Every privileged action carries a mandatory reason
+  // and is audited in `numbering_audit_logs`.
+  { key: "settings.numbering", parentKey: "settings", moduleKey: "settings",
+    labelAr: "إعدادات الترقيم", icon: "Hash",
+    availableActions: ["view", "list", "update", "create", "delete"],
+    availableScopes: ["branch", "company"],
+    systemCritical: true, displayOrder: 2010 },
+  { key: "settings.numbering.override", parentKey: "settings.numbering",
+    moduleKey: "settings", labelAr: "تعديل أرقام المعاملات يدويًا",
+    descriptionAr: "السماح بتعديل رقم مستند صادر — يتطلب سببًا إلزاميًا ويُسجَّل في سجل التدقيق",
+    availableActions: ["update"], availableScopes: ["branch", "company"],
+    systemCritical: true, displayOrder: 2011 },
+  { key: "settings.numbering.reset", parentKey: "settings.numbering",
+    moduleKey: "settings", labelAr: "تصفير عدادات الترقيم",
+    descriptionAr: "تصفير عداد سياسة ترقيم — لا يسمح إذا توجد أرقام صادرة في الفترة الحالية إلا بقرار خاص",
+    availableActions: ["update"], availableScopes: ["company"],
+    systemCritical: true, displayOrder: 2012 },
+  { key: "settings.numbering.audit", parentKey: "settings.numbering",
+    moduleKey: "settings", labelAr: "سجل تدقيق الترقيم",
+    availableActions: READ_ACTIONS, availableScopes: ["company"],
+    displayOrder: 2013 },
+
   // ═══════════════════════════════════════════════════════════════
   // Specialised: Umrah
   // ═══════════════════════════════════════════════════════════════
@@ -417,6 +457,13 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ["view", "list"], availableScopes: ALL_SCOPES, displayOrder: 11 },
   { key: "dashboard.executive", parentKey: "dashboard", moduleKey: "dashboard", labelAr: "لوحة القيادة التنفيذية", icon: "LineChart",
     availableActions: ["view"], availableScopes: ["company", "multi_company", "all"], displayOrder: 12 },
+  // Operational daily command-center — different from my_space (HR personal)
+  // and from action_center (which is approvals-only). Workspace aggregates
+  // today's tasks + unread comms + recent calls + next meetings.
+  { key: "workspace", moduleKey: "dashboard", labelAr: "مساحة العمل", icon: "LayoutGrid",
+    availableActions: ["view"], availableScopes: ["self"], selfService: true, displayOrder: 13 },
+  { key: "workspace.manager", parentKey: "workspace", moduleKey: "dashboard", labelAr: "مساحة المدير", icon: "Users",
+    availableActions: ["view"], availableScopes: ALL_SCOPES, displayOrder: 14 },
 
   // ═══════════════════════════════════════════════════════════════
   // My Space sub-features

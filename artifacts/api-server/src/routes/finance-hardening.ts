@@ -22,6 +22,7 @@ import { Router } from "express";
 import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import {
   createAuditLog,
   emitEvent,
@@ -84,7 +85,9 @@ const approveJournalSchema = z.object({
 });
 
 const createBankGuaranteeSchema = z.object({
-  ref: z.string().min(1),
+  // ref is now optional — the numbering center issues one if absent.
+  // A user-supplied ref is honoured for legacy-data imports only.
+  ref: z.string().optional(),
   bank: z.string().min(1),
   beneficiary: z.string().min(1),
   amount: z.coerce.number(),
@@ -924,13 +927,35 @@ financeHardeningRouter.post("/bank-guarantees", authorize({ feature: "finance.ha
   try {
     const scope = req.scope!;
 
-    const { ref, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = zodParse(createBankGuaranteeSchema.safeParse(req.body ?? {}));
+    const { ref: bodyRef, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = zodParse(createBankGuaranteeSchema.safeParse(req.body ?? {}));
+    // Numbering center (Issue #1141) — bank-guarantee ref from authority.
+    // Body-supplied ref is preserved for legacy imports only.
+    let issuedBg: Awaited<ReturnType<typeof issueNumber>> | null = null;
+    let ref = bodyRef;
+    if (!ref) {
+      issuedBg = await issueNumber({
+        companyId: scope.companyId,
+        branchId: branchId ?? scope.branchId ?? null,
+        moduleKey: "finance",
+        entityKey: "bank_guarantee",
+        entityTable: "bank_guarantees",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      ref = issuedBg.number;
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO bank_guarantees ("companyId","branchId",ref,bank,beneficiary,amount,"issueDate","expiryDate","guaranteeType",notes,"attachmentUrl","createdBy")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [scope.companyId, branchId ?? scope.branchId, ref, bank, beneficiary, Number(amount), issueDate, expiryDate, guaranteeType ?? "performance", notes ?? null, attachmentUrl ?? null, scope.activeAssignmentId]
     );
     assertInsert(insertId, "bank_guarantees");
+    if (issuedBg) {
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertId, issuedBg.assignmentId]
+      ).catch(() => { /* non-blocking link */ });
+    }
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM bank_guarantees WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
 
     emitEvent({
@@ -1432,17 +1457,35 @@ financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening
   try {
     const scope = req.scope!;
 
-    const { name, description, budget, startDate, endDate, ref } = zodParse(createProjectSchema.safeParse(req.body ?? {}));
-    // PRJ-003: the `projects` table has no `ref` or `branchId` column — the
-    // old INSERT referenced both and aborted with SQLSTATE 42703. Insert only
-    // the columns that exist; projectRef is kept for the audit/event details.
-    const projectRef = ref ?? `PRJ-${Date.now()}`;
+    const { name, description, budget, startDate, endDate, ref: bodyRef } = zodParse(createProjectSchema.safeParse(req.body ?? {}));
+    // Numbering center (Issue #1141) — project ref from authority.
+    // The `projects.ref` column was added in migration 217.
+    let projectRef = bodyRef;
+    let issuedProj: Awaited<ReturnType<typeof issueNumber>> | null = null;
+    if (!projectRef) {
+      issuedProj = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "projects",
+        entityKey: "project",
+        entityTable: "projects",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      projectRef = issuedProj.number;
+    }
     const { insertId } = await rawExecute(
-      `INSERT INTO projects ("companyId",name,description,budget,"startDate","endDate","managerId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [scope.companyId, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
+      `INSERT INTO projects ("companyId",ref,name,description,budget,"startDate","endDate","managerId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [scope.companyId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
     );
     assertInsert(insertId, "projects");
+    if (issuedProj) {
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertId, issuedProj.assignmentId]
+      ).catch(() => { /* non-blocking link */ });
+    }
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     emitEvent({

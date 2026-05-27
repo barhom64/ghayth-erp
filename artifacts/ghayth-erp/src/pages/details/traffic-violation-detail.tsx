@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -38,14 +38,13 @@ function statusTone(status: string) {
 }
 
 export default function TrafficViolationDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/fleet/traffic-violations/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("traffic-violation", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["traffic-violation", String(id)],
-    id ? `/fleet/traffic-violations/${id}` : null,
+    `/fleet/traffic-violations/${id}`,
     !!id,
   );
 
@@ -183,10 +182,6 @@ export default function TrafficViolationDetail() {
             entityType="traffic_violation"
             entityId={id ?? 0}
             formats={["a4"]}/>
-          <GuardedButton perm="fleet:update" variant="outline" size="sm" onClick={() => setLocation("/fleet/traffic-violations")} disabled={!item}>
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

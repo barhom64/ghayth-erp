@@ -125,18 +125,18 @@ export default function UnmappedLinesPage() {
     ];
 
     return (
-      <Card key={section.source} className="border-amber-200">
+      <Card key={section.source} className="border-status-warning-surface">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center justify-between">
             <span className="flex items-center gap-2">
-              <FileSearch className="h-4 w-4 text-amber-700" />
+              <FileSearch className="h-4 w-4 text-status-warning-foreground" />
               {SECTION_LABEL[section.source] ?? section.source}
             </span>
-            <Badge className="bg-amber-100 text-amber-800">{section.rows.length}</Badge>
+            <Badge className="bg-amber-100 text-status-warning-foreground">{section.rows.length}</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground bg-amber-50/50 border border-amber-200 rounded p-2">
+          <p className="text-xs text-muted-foreground bg-status-warning-surface/50 border border-status-warning-surface rounded p-2">
             ⓘ {SECTION_HINT[section.source] ?? ""}
           </p>
           <DataTable columns={cols} data={section.rows}
@@ -168,13 +168,13 @@ export default function UnmappedLinesPage() {
     >
       <Card className={isClean
         ? "border-emerald-300 bg-emerald-50/40"
-        : "border-amber-400 bg-amber-50/40"}>
+        : "border-amber-400 bg-status-warning-surface/40"}>
         <CardContent className="p-4 flex items-start gap-3">
           {isClean
             ? <CheckCircle2 className="h-6 w-6 text-emerald-600 mt-0.5 shrink-0" />
-            : <AlertTriangle className="h-6 w-6 text-amber-700 mt-0.5 shrink-0" />}
+            : <AlertTriangle className="h-6 w-6 text-status-warning-foreground mt-0.5 shrink-0" />}
           <div className="flex-1">
-            <p className={`font-bold ${isClean ? "text-emerald-700" : "text-amber-800"}`}>
+            <p className={`font-bold ${isClean ? "text-emerald-700" : "text-status-warning-foreground"}`}>
               {isClean
                 ? "كل البنود مُوجَّهة — تقدر تقفل الفترة بأمان."
                 : `يوجد ${formatNumber(data.summary.totalCount)} بند غير مُوجَّه عبر ${nonEmptySections.length} مصدر`}

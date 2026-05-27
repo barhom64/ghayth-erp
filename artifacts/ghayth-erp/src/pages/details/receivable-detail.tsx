@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -93,7 +93,6 @@ const AGING_CLASS: Record<AgingBucket, string> = {
 };
 
 export default function ReceivableDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/finance/receivables/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("receivable", id ?? 0);
@@ -102,7 +101,7 @@ export default function ReceivableDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["receivable", String(id)],
-    id ? `/finance/receivables/${id}` : null,
+    `/finance/receivables/${id}`,
     !!id
   );
 
@@ -156,10 +155,6 @@ export default function ReceivableDetail() {
     return out;
   }, [receivable]);
 
-
-  const handleEdit = () => {
-    setLocation(`/finance/receivables/${id}/edit`);
-  };
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -358,18 +353,6 @@ export default function ReceivableDetail() {
                 entityId={id ?? 0}
                 formats={["a4"]}/>
             )}
-            <GuardedButton
-              perm="finance:update"
-              variant="outline"
-              size="sm"
-              onClick={handleEdit}
-              disabled={
-                !receivable || ["paid", "cancelled", "written_off"].includes(receivable.status)
-              }
-            >
-              <Edit className="h-4 w-4 ms-1" />
-              تعديل
-            </GuardedButton>
           </>
         }
       />

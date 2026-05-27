@@ -1,13 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError, ForbiddenError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { createAuditLog, createNotification, emitEvent, getLegalResponsible, currentPeriod, currentYear, generateRef } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, getLegalResponsible, currentPeriod } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { logger } from "../lib/logger.js";
 import { MANAGER_ROLES , HR_APPROVAL_ROLES} from "../lib/rbacCatalog.js";
 import type { Request as ExpressRequest } from "express";
@@ -295,13 +296,35 @@ router.post("/", authorize({ feature: "requests.my", action: "create" }), async 
         return !!obj && typeof obj.name === "string" && typeof obj.size === "number" && obj.size <= 5 * 1024 * 1024;
       }).map((a) => ({ name: a.name!, size: a.size!, type: a.type || "", dataUrl: a.dataUrl || "" }));
     }
-    const [seqRow] = await rawQuery<{ seq: number | string }>(`SELECT nextval('request_number_seq') AS seq`).catch((e) => { logger.error(e, "requests query failed"); return [{ seq: Math.floor(Math.random() * 900000 + 100000) }] as { seq: number }[]; });
-    const ref = generateRef("REQ", Number(seqRow.seq));
-
-    const r = await rawExecute(
-      `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments, ref, "requestDate", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,CURRENT_DATE,$12)`,
-      [typeId ? Number(typeId) : null, enforcedRequesterId, resolvedRequesterName ?? null, String(title).trim(), String(description).trim(), "pending", priority || "medium", data ? JSON.stringify(data) : '{}', scope.companyId, JSON.stringify(validatedAttachments), ref, scope.branchId || null]
-    );
+    // Numbering center (Issue #1141 closure) — atomic flow:
+    //   issueNumber  → uses our outer tx via SAVEPOINT reentrancy
+    //   INSERT request
+    //   UPDATE numbering_assignments.entityId
+    // All three commit/rollback together. If the assignment link-back
+    // fails the whole tx rolls back, so we never end up with a request
+    // row whose ref has no audit trail (the previous .catch() pattern
+    // silently allowed exactly that).
+    const r = await withTransaction(async () => {
+      const issued = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "requests",
+        entityKey: "general_request",
+        entityTable: "requests",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      const insertRes = await rawExecute(
+        `INSERT INTO requests ("typeId", "requesterId", "requesterName", title, description, status, priority, data, "companyId", attachments, ref, "requestDate", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,CURRENT_DATE,$12)`,
+        [typeId ? Number(typeId) : null, enforcedRequesterId, resolvedRequesterName ?? null, String(title).trim(), String(description).trim(), "pending", priority || "medium", data ? JSON.stringify(data) : '{}', scope.companyId, JSON.stringify(validatedAttachments), issued.number, scope.branchId || null]
+      );
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertRes.insertId, issued.assignmentId]
+      );
+      return { insertId: insertRes.insertId, ref: issued.number };
+    });
+    const ref = r.ref;
     await logCommunication(
       scope.companyId, 'inbound',
       `طلب جديد: ${title} (${ref})`,

@@ -203,7 +203,13 @@ const RULES = [
     // (BI dashboards, finance reports, my-payslip). New violations are
     // blocked; existing ones drop the baseline as they migrate to
     // <PrintButton entityType="..." entityId={...} />.
-    countBaseline: 9,
+    // Baseline 7 — current live count after this branch's merge of main:
+    // bi-admin-reports, bi-operations, vendor-statement-print, customer-
+    // statement-print, monthly-close-pack, finance/reports, account-
+    // statement (window.print()). Was 9 before Phase D, dropped to 6
+    // during the work, then bumped to 7 to absorb main's two new print
+    // pages. Tighten when those pages migrate to PrintButton.
+    countBaseline: 7,
     message:
       "Direct PDF/print generation in the SPA is forbidden (Ghaith Print Platform, " +
       "Phase 0 architecture lock). Document generation must go through the server: " +
@@ -226,6 +232,105 @@ const RULES = [
       "Declare the variable in the lib/config.ts zod schema, expose it on the " +
       "`AppConfig` shape, and read it through the typed `config` object. This " +
       "keeps validation, defaults and the startup fail-fast gate in one place.",
+  },
+
+  // ─── Unified numbering center (Issue #1141) ──────────────────────────
+  // Every official document number (طلبات / عقود / مراسلات / فواتير /
+  // سندات / قيود / مجموعات عمرة / …) MUST come from
+  // `numberingService.issueNumber`. Direct `nextval(...)` calls on
+  // ref/number/seq-style sequences inside route files (or the bare
+  // `generateTimeRef` shortcut on official refs) bypass the audit log,
+  // skip per-branch scoping, and let routes invent random fallbacks.
+  // See artifacts/api-server/src/lib/numberingService.ts.
+  //
+  // Counter-style sequences (rate limit counters, internal tech refs)
+  // are still allowed inside lib/. The rule only fires inside routes/.
+  // Ratchets: the codebase still has a handful of pre-existing
+  // sequence-direct + time-ref-as-number callsites in priority-2
+  // routes (finance, properties, support, hr, warehouse). Each
+  // rule's baseline matches the count at the time Issue #1141
+  // landed. The lint *fails* when the count grows above the baseline
+  // and silently accepts equal/lower counts — every migration of a
+  // route to the numbering service should drop the baseline in the
+  // same PR. When the count for a rule reaches 0, drop the
+  // `countBaseline` to convert it to a hard rule.
+  {
+    id: "nextval-in-route",
+    scan: [ROUTES_DIR],
+    skip: (file) => file.endsWith("/routes/numbering.ts"),
+    // Match `nextval('something_seq')` or any nextval call inside a
+    // route file. The numbering authority owns all official sequences.
+    // Hardened to a hard rule (baseline 0) — every route now routes
+    // through `numberingService.issueNumber`.
+    regex: /\bnextval\s*\(\s*['"`]?[a-zA-Z_]+_seq/,
+    message:
+      "Direct `nextval('…_seq')` calls inside route handlers are forbidden " +
+      "(Issue #1141 — unified numbering center). Official document numbers " +
+      "must be issued via `numberingService.issueNumber({ companyId, branchId, " +
+      "moduleKey, entityKey, entityTable, actorId })` so the audit log, " +
+      "per-branch scoping, and policy enforcement all apply. Add a row to " +
+      "`numbering_schemes` for the (moduleKey, entityKey) you need, then call " +
+      "issueNumber. If this really is an internal tech sequence (not an " +
+      "official document number), move the call into a `lib/` helper.",
+  },
+  {
+    id: "generateTimeRef-as-official-number",
+    scan: [ROUTES_DIR],
+    // Hardened to a hard rule (baseline 0). Every official document
+    // number now routes through `numberingService.issueNumber`; the
+    // few legitimate internal correlation refs (BATCH, BANK, SIG,
+    // PAY-PORTAL) live in `lib/internalRef.ts` outside this scan path.
+    regex: /\bgenerateTimeRef\s*\(/,
+    message:
+      "`generateTimeRef(...)` is a Date.now()-based tech ref, NOT a valid " +
+      "official document number (Issue #1141). For executive document " +
+      "numbers (طلبات / عقود / فواتير / سندات / …) call " +
+      "`numberingService.issueNumber(...)` so the result lands in " +
+      "`numbering_assignments` with a real per-branch counter. If you need " +
+      "an internal correlation id (e.g. for an outbound webhook), move the " +
+      "code into a lib/ helper outside routes/.",
+  },
+  {
+    id: "random-as-ref-fallback",
+    scan: [ROUTES_DIR],
+    // Catch the specific anti-pattern called out in issue #1141: the
+    // catch-block fallback that uses `Math.random()` to invent a "ref"
+    // when sequence allocation fails. Such a fallback hides the real
+    // problem and emits an audit-unfriendly random number.
+    // The classic fallback shape from issue #1141:
+    //   `.catch(... { seq: Math.floor(Math.random() * …) } …)` —
+    // a `seq` / `ref` / `number` key followed by a Math.random expression
+    // that synthesises a fake value. The regex looks BOTH directions: a
+    // (seq|ref|number) key within ~180 chars before `Math.random()`, OR
+    // the key appearing after the call.
+    // Hardened to a hard rule (baseline 0) — every priority-1 + finance
+    // route now issues numbers through `numberingService.issueNumber`,
+    // so a Math.random fallback near a seq/ref/number is a regression.
+    regex: /(?:\b(?:seq|ref|number)\b[^;]{0,180}Math\.random\s*\(|Math\.random\s*\(\s*\)[^;]{0,180}\b(?:seq|ref|number)\b)/,
+    message:
+      "`Math.random()` near a `ref` / `seq` / `number` value inside a route " +
+      "is forbidden (Issue #1141). Random fallbacks hide the real failure " +
+      "and produce numbers that no audit can trust. If the numbering call " +
+      "fails, let the error bubble — the document must NOT be created " +
+      "without a properly-issued number.",
+  },
+  {
+    // Final guard for #1141 — the two legacy ref-builder helpers from
+    // businessHelpers (generateRef / generateBranchRef) only assemble a
+    // ref string from a sequence value the caller has already obtained.
+    // They have NO audit, NO uniqueness check, and NO branch counter.
+    // Every callsite that survived #1141 has been migrated to
+    // numberingService; this rule prevents a regression in any route.
+    id: "generateRef-or-generateBranchRef-in-route",
+    scan: [ROUTES_DIR],
+    regex: /\bgenerate(?:Branch)?Ref\s*\(/,
+    message:
+      "`generateRef(...)` / `generateBranchRef(...)` inside a route is " +
+      "forbidden (Issue #1141). These helpers just format a string from " +
+      "a seq the caller obtained — there is no audit, no counter, no " +
+      "uniqueness check. Call `numberingService.issueNumber(...)` " +
+      "instead so the resulting number lands in `numbering_assignments` " +
+      "with full audit and per-scope uniqueness enforcement.",
   },
 
   // ─── UI-kit adoption ratchet (UNIFICATION_PLAN §P8) ──────────────────

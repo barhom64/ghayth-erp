@@ -20,7 +20,7 @@ const PRIORITY_LABEL: Record<string, string> = {
 
 const PRIORITY_BADGE_CLASS: Record<string, string> = {
   high: "bg-rose-100 text-rose-700",
-  medium: "bg-amber-100 text-amber-700",
+  medium: "bg-amber-100 text-status-warning-foreground",
   low: "bg-emerald-100 text-emerald-700",
 };
 

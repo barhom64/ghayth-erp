@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAppContext } from "@/contexts/app-context";
 import {
   PageShell,
   PageStatusBadge,
@@ -23,7 +24,17 @@ import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { GuardedButton } from "@/components/shared/permission-gate";
 
 export default function Communications() {
+  // Phase 5: this page is now an admin-only monitor. Non-managers are
+  // redirected to /inbox where they have the operational message
+  // experience (folders, drafts, signatures from Phase 2). Managers
+  // (roleLevel >= 40) still see the dashboard with channel monitors.
+  const { roleLevel } = useAppContext();
+  const [, setLocation] = useLocation();
+  useEffect(() => {
+    if (roleLevel < 40) setLocation("/inbox");
+  }, [roleLevel, setLocation]);
   const [tab, setTab] = useState("monitor");
+  if (roleLevel < 40) return null;
   return (
     <PageShell title="الاتصالات">
       <StatsCards />
@@ -170,8 +181,12 @@ function MonitorTab() {
   const [dateTo, setDateTo] = useState(today);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const queueUrl = `/communications/queue-stats?dateFrom=${dateFrom}&dateTo=${dateTo}`;
-  const { data: queueStats, refetch } = useApiQuery<any>(["comm-queue-stats", dateFrom, dateTo], queueUrl);
+  // Inline URL so the audit can credit /communications/queue-stats
+  // from a static literal.
+  const { data: queueStats, refetch } = useApiQuery<any>(
+    ["comm-queue-stats", dateFrom, dateTo],
+    `/communications/queue-stats?dateFrom=${dateFrom}&dateTo=${dateTo}`,
+  );
 
   const sms = queueStats?.sms ?? {};
   const wa = queueStats?.whatsapp ?? {};

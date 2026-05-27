@@ -16,6 +16,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -340,12 +341,27 @@ router.put("/sub-agents/:id/link", authorize({ feature: "umrah", action: "create
 
     if (createNew) {
       if (!clientName) throw new ValidationError("اسم العميل مطلوب عند إنشاء عميل جديد");
-      const [newClient] = await rawQuery(
-        `INSERT INTO clients ("companyId", name, phone, classification, source, "createdAt")
-         VALUES ($1, $2, $3, 'umrah_agent', 'system', NOW()) RETURNING id`,
-        [scope.companyId, clientName, clientPhone || null]
+      // Numbering center (Issue #1141) — client code from authority.
+      const issuedCli = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "crm",
+        entityKey: "client_code",
+        entityTable: "clients",
+        actorId: scope.userId,
+        metadata: { source: "umrah_agent_creation" },
+        expectedTiming: "on_draft",
+      });
+      const [newClient] = await rawQuery<{ id: number }>(
+        `INSERT INTO clients ("companyId", name, phone, classification, source, code, "createdAt")
+         VALUES ($1, $2, $3, 'umrah_agent', 'system', $4, NOW()) RETURNING id`,
+        [scope.companyId, clientName, clientPhone || null, issuedCli.number]
       );
       finalClientId = newClient.id;
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [finalClientId, issuedCli.assignmentId]
+      ).catch(() => { /* non-blocking link */ });
     } else {
       if (!clientId) throw new ValidationError("معرف العميل مطلوب");
       const [existingClient] = await rawQuery<{ id: number }>(
@@ -607,13 +623,32 @@ router.post("/groups", authorize({ feature: "umrah", action: "create" }), async 
     const scope = req.scope!;
     const b = zodParse(createGroupSchema.safeParse(req.body));
     await requireOpenSeason(b.seasonId, scope.companyId);
-    const rows = await rawQuery(
-      `INSERT INTO umrah_groups ("companyId","branchId","nuskGroupNumber",name,"agentId","subAgentId","seasonId","mutamerCount","programDuration","createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [scope.companyId, scope.branchId || null, b.nuskGroupNumber, b.name || null, b.agentId || null, b.subAgentId || null, b.seasonId, b.mutamerCount, b.programDuration || null, scope.userId]
+    // Numbering center (Issue #1141) — internalRef is our per-season
+    // counter; nuskGroupNumber stays as the external Nusk portal id.
+    const issuedGrp = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "umrah",
+      entityKey: "umrah_group",
+      entityTable: "umrah_groups",
+      seasonId: b.seasonId,
+      actorId: scope.userId,
+      expectedTiming: "on_draft",
+    });
+    const rows = await rawQuery<Record<string, unknown>>(
+      `INSERT INTO umrah_groups ("companyId","branchId","nuskGroupNumber","internalRef",name,"agentId","subAgentId","seasonId","mutamerCount","programDuration","createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [scope.companyId, scope.branchId || null, b.nuskGroupNumber, issuedGrp.number, b.name || null, b.agentId || null, b.subAgentId || null, b.seasonId, b.mutamerCount, b.programDuration || null, scope.userId]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_groups", entityId: rows[0]?.id, after: { nuskGroupNumber: b.nuskGroupNumber } }).catch((e) => logger.error(e, "umrah groups bg"));
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.group.created", entity: "umrah_groups", entityId: rows[0]?.id }).catch((e) => logger.error(e, "umrah groups bg"));
+    if (rows[0]?.id) {
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [rows[0].id as number, issuedGrp.assignmentId]
+      ).catch(() => { /* non-blocking link */ });
+    }
+    const groupId = rows[0]?.id as number | undefined;
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_groups", entityId: groupId as number, after: { nuskGroupNumber: b.nuskGroupNumber, internalRef: issuedGrp.number } }).catch((e) => logger.error(e, "umrah groups bg"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.group.created", entity: "umrah_groups", entityId: groupId as number }).catch((e) => logger.error(e, "umrah groups bg"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create group"); }
 });

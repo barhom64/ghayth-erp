@@ -247,9 +247,8 @@ export default function RecruitmentPage() {
                 return (
                   <InlineEditForm
                     fields={jobEditFields}
-                    form={jobActions.editForm}
-                    setForm={jobActions.setEditForm}
-                    onSave={() => jobActions.handleSave(j.id, jobActions.editForm)}
+                    initialValues={jobActions.editForm}
+                    onSave={(values) => jobActions.handleSave(j.id, values)}
                     onCancel={jobActions.cancelEdit}
                     isPending={jobActions.isPending}
                   />
@@ -283,9 +282,8 @@ export default function RecruitmentPage() {
                 return (
                   <InlineEditForm
                     fields={appEditFields}
-                    form={appActions.editForm}
-                    setForm={appActions.setEditForm}
-                    onSave={() => appActions.handleSave(a.id, appActions.editForm)}
+                    initialValues={appActions.editForm}
+                    onSave={(values) => appActions.handleSave(a.id, values)}
                     onCancel={appActions.cancelEdit}
                     isPending={appActions.isPending}
                   />

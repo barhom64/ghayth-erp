@@ -6,6 +6,14 @@ const AdminRoles = lazy(() => import("@/pages/admin/roles"));
 const AdminLogs = lazy(() => import("@/pages/admin/logs"));
 const AdminIntegrations = lazy(() => import("@/pages/admin-integrations"));
 const AdminMonitoring = lazy(() => import("@/pages/admin-monitoring"));
+const AdminObservability = lazy(() => import("@/pages/admin-observability"));
+const AdminAiGovernance = lazy(() => import("@/pages/admin-ai-governance"));
+const AdminAiPromptDetail = lazy(() => import("@/pages/admin-ai-prompt-detail"));
+const AdminCommunicationControl = lazy(() => import("@/pages/admin-communication-control"));
+const AdminPbxControl = lazy(() => import("@/pages/admin-pbx-control"));
+const AdminMasterPlan = lazy(() => import("@/pages/admin-master-plan"));
+const AdminNotificationRouting = lazy(() => import("@/pages/admin-notification-routing"));
+const AdminVendorSettings = lazy(() => import("@/pages/admin-vendor-settings"));
 const AdminViolationsReport = lazy(() => import("@/pages/admin-violations-report"));
 const AdminSystemGovernor = lazy(() => import("@/pages/admin-system-governor"));
 const AdminPolicyEngine = lazy(() => import("@/pages/admin-policy-engine"));
@@ -16,6 +24,9 @@ const AdminLifecycleMonitor = lazy(() => import("@/pages/admin-lifecycle-monitor
 const AdminRbacMatrix = lazy(() => import("@/pages/admin-rbac-matrix"));
 const AdminGlReconciliation = lazy(() => import("@/pages/admin-gl-reconciliation"));
 const AdminSystemRegistry = lazy(() => import("@/pages/admin-system-registry"));
+const AdminPrintTemplates = lazy(() => import("@/pages/admin/print-templates"));
+const AdminPrintDiagnostics = lazy(() => import("@/pages/admin/print-diagnostics"));
+const AdminApprovalOverrides = lazy(() => import("@/pages/admin/approval-overrides-report"));
 
 export const adminRoutes = [
   { path: "/admin", component: Admin },
@@ -24,6 +35,14 @@ export const adminRoutes = [
   { path: "/admin/logs", component: AdminLogs },
   { path: "/admin/integrations", component: AdminIntegrations },
   { path: "/admin/monitoring", component: AdminMonitoring },
+  { path: "/admin/observability", component: AdminObservability },
+  { path: "/admin/ai-governance", component: AdminAiGovernance },
+  { path: "/admin/ai-governance/prompts/:id", component: AdminAiPromptDetail },
+  { path: "/admin/communication-control", component: AdminCommunicationControl },
+  { path: "/admin/pbx-control", component: AdminPbxControl },
+  { path: "/admin/master-plan", component: AdminMasterPlan },
+  { path: "/admin/notification-routing", component: AdminNotificationRouting },
+  { path: "/admin/vendor-settings", component: AdminVendorSettings },
   { path: "/admin/violations-report", component: AdminViolationsReport },
   { path: "/admin/system-governor", component: AdminSystemGovernor },
   { path: "/admin/policy-engine", component: AdminPolicyEngine },
@@ -34,4 +53,7 @@ export const adminRoutes = [
   { path: "/admin/rbac-matrix", component: AdminRbacMatrix },
   { path: "/admin/gl-reconciliation", component: AdminGlReconciliation },
   { path: "/admin/system-registry", component: AdminSystemRegistry },
+  { path: "/admin/print-templates", component: AdminPrintTemplates },
+  { path: "/admin/print-diagnostics", component: AdminPrintDiagnostics },
+  { path: "/admin/approval-overrides", component: AdminApprovalOverrides },
 ];

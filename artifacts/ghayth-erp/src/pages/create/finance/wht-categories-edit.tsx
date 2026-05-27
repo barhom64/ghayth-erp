@@ -50,12 +50,12 @@ export default function WhtCategoriesEdit() {
 
   const { data: existing, isLoading, isError } = useApiQuery<WhtCategoryRow>(
     ["wht-category-detail", id ?? ""],
-    id ? `/finance/accounts/wht-categories/${id}` : null,
+    id ? `/finance/wht-categories/${id}` : null,
     !!id,
   );
 
   const patchMut = useApiMutation(
-    `/finance/accounts/wht-categories/${id}`, "PATCH",
+    `/finance/wht-categories/${id}`, "PATCH",
     [["wht-categories"], ["wht-category-detail", id ?? ""]],
   );
 

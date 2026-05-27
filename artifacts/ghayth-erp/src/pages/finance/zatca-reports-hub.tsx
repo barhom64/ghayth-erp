@@ -1,11 +1,12 @@
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@workspace/ui-core";
 import {
   Receipt, FileBarChart2, Boxes, Layers, Clock,
   AlertTriangle, RefreshCw, ShieldAlert, Percent, Receipt as ReceiptIcon,
-  FileSearch,
+  FileSearch, Calendar, FileCheck2,
 } from "lucide-react";
 
 /**
@@ -42,7 +43,7 @@ const CARDS: ReportCard[] = [
     title: "ملخص استقطاع الضريبة (WHT)",
     description: "تقرير الاستقطاع الشهري للموردين غير المقيمين — تقسيم حسب الفئة + المورد لتعبئة إقرار زاتكا.",
     icon: Receipt,
-    iconClass: "text-amber-600 bg-amber-50",
+    iconClass: "text-status-warning-foreground bg-status-warning-surface",
     group: "tax",
   },
   {
@@ -50,7 +51,7 @@ const CARDS: ReportCard[] = [
     title: "ملخص التكلفة وهامش الربح (COGS)",
     description: "إيراد − تكلفة المباع = الربح. تقسيم حسب المنتج / العميل / الشهر مع badge ملوّن للهامش.",
     icon: ReceiptIcon,
-    iconClass: "text-blue-600 bg-blue-50",
+    iconClass: "text-status-info-foreground bg-status-info-surface",
     group: "tax",
   },
 
@@ -68,7 +69,7 @@ const CARDS: ReportCard[] = [
     title: "معدل دوران المخزون",
     description: "COGS / قيمة المخزون = معدل الدوران. لرصد المنتجات السريعة والجامدة.",
     icon: RefreshCw,
-    iconClass: "text-amber-600 bg-amber-50",
+    iconClass: "text-status-warning-foreground bg-status-warning-surface",
     group: "inventory",
   },
   {
@@ -76,7 +77,7 @@ const CARDS: ReportCard[] = [
     title: "تنبيهات صلاحية التشغيلات",
     description: "التشغيلات المتجهة للانتهاء (30/60/90 يوم) — تخطيط FIFO ومنع الخسائر.",
     icon: Clock,
-    iconClass: "text-amber-700 bg-amber-50",
+    iconClass: "text-status-warning-foreground bg-status-warning-surface",
     group: "inventory",
   },
   {
@@ -102,7 +103,7 @@ const CARDS: ReportCard[] = [
     title: "البنود غير المُوجَّهة",
     description: "بنود فواتير / أوامر شراء / إيصالات استلام بدون allocation لحساب GL محدد — تخفي قيمتها عن تحليل الإيرادات والمصروفات.",
     icon: FileSearch,
-    iconClass: "text-amber-700 bg-amber-50",
+    iconClass: "text-status-warning-foreground bg-status-warning-surface",
     group: "tax",
   },
 
@@ -120,7 +121,7 @@ const CARDS: ReportCard[] = [
     title: "إدارة فئات الاستقطاع",
     description: "10 فئات سعودية مبذورة (إتاوات 15% / خدمات فنية 15% / إدارة 20% / ...) قابلة للتعديل.",
     icon: Layers,
-    iconClass: "text-amber-700 bg-amber-50",
+    iconClass: "text-status-warning-foreground bg-status-warning-surface",
     group: "registry",
   },
 ];
@@ -148,6 +149,28 @@ export default function ZatcaReportsHubPage() {
         { href: "/finance/reports", label: "التقارير" },
         { label: "ضريبة + مخزون" },
       ]}
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/tax-filing-calendar">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Calendar className="h-3.5 w-3.5 ml-1" />
+              تقويم الإقرارات
+            </Button>
+          </Link>
+          <Link href="/finance/vat-filing-readiness">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <FileCheck2 className="h-3.5 w-3.5 ml-1" />
+              جاهزية VAT
+            </Button>
+          </Link>
+          <Link href="/finance/wht-filing-workbench">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Receipt className="h-3.5 w-3.5 ml-1" />
+              منضدة WHT
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <Card className="mb-6 border-status-info-surface bg-status-info-surface/30">
         <CardContent className="p-4 text-sm">

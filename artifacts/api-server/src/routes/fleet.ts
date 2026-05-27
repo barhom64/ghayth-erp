@@ -12,6 +12,7 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
 import { logger } from "../lib/logger.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { haversineKm } from "../lib/algorithms.js";
 import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
@@ -1169,25 +1170,49 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
       return;
     }
 
+    // Numbering center (Issue #1141) — trip ref from authority.
+    // Issued OUTSIDE the transaction so the counter only burns when
+    // sourceKey upsert is fresh (handled by the link-back below).
+    const issuedTrip = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "fleet",
+      entityKey: "fleet_trip",
+      entityTable: "fleet_trips",
+      actorId: scope.userId,
+      metadata: { sourceKey, vehicleId: selectedVehicleId },
+      expectedTiming: "on_draft",
+    });
     let alreadyExists = false;
     const insertId = await withTransaction(async (client) => {
       const tripResult = await client.query(
-        `INSERT INTO fleet_trips ("companyId","vehicleId","driverId","clientId","fromLocation","toLocation","fromLat","fromLng","toLat","toLng","distance","cost","startTime",status,notes,"sourceKey")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        `INSERT INTO fleet_trips ("companyId","vehicleId","driverId","clientId","fromLocation","toLocation","fromLat","fromLng","toLat","toLng","distance","cost","startTime",status,notes,"sourceKey",ref)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
          ON CONFLICT ("companyId", "sourceKey") WHERE "sourceKey" IS NOT NULL DO NOTHING
          RETURNING id`,
-        [scope.companyId, selectedVehicleId, selectedDriverId, b.clientId, b.fromLocation, b.toLocation, fromLat || null, fromLng || null, toLat || null, toLng || null, estimatedDistanceKm, totalEstimatedCost, b.startTime || new Date().toISOString(), 'in_progress', b.notes, sourceKey]
+        [scope.companyId, selectedVehicleId, selectedDriverId, b.clientId, b.fromLocation, b.toLocation, fromLat || null, fromLng || null, toLat || null, toLng || null, estimatedDistanceKm, totalEstimatedCost, b.startTime || new Date().toISOString(), 'in_progress', b.notes, sourceKey, issuedTrip.number]
       );
       let tripId = tripResult.rows[0]?.id;
+      if (tripId) {
+        await client.query(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [tripId, issuedTrip.assignmentId]
+        );
+      }
       if (!tripId) {
         // Race: a concurrent POST with the same key won the INSERT.
         // Fetch the existing row and short-circuit — the driver/vehicle
-        // UPDATEs already ran on the winning side.
+        // UPDATEs already ran on the winning side. Void the issued
+        // number so it doesn't burn a counter slot on a no-op.
         const { rows: existingRows } = await client.query(
           `SELECT id FROM fleet_trips WHERE "companyId" = $1 AND "sourceKey" = $2 LIMIT 1`,
           [scope.companyId, sourceKey]
         );
         tripId = existingRows[0]?.id;
+        await client.query(
+          `UPDATE numbering_assignments SET status='voided',"voidReason"=$1 WHERE id=$2`,
+          ['fleet trip de-duplicated by sourceKey', issuedTrip.assignmentId]
+        );
         alreadyExists = true;
         return tripId;
       }

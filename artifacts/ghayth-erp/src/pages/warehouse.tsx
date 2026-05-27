@@ -28,8 +28,15 @@ import { useAppContext } from "@/contexts/app-context";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { withListFilters } from "@/lib/list-query";
 
+const WAREHOUSE_PATH_TAB: Record<string, string> = {
+  "/warehouse/movements": "movements",
+  "/warehouse/categories": "categories",
+  "/warehouse/suppliers": "suppliers",
+};
+
 export default function Warehouse() {
-  const [tab, setTab] = useState("products");
+  const [location] = useLocation();
+  const [tab, setTab] = useState(() => WAREHOUSE_PATH_TAB[location] ?? "products");
   return (
     <PageShell
       title="إدارة المستودعات"
@@ -186,7 +193,7 @@ function ProductsTab() {
             onPageChange={setPage}
             onRowClick={(row) => navigate(`/warehouse/products/${row.id}`)}
             renderRowExtras={(p) => {
-              if (editingId === p.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(p.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (editingId === p.id) return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(p.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === p.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(p.id)} onCancel={cancelDelete} isPending={isPending} itemName={p.name} entityType="warehouse-product" entityId={p.id} />;
               return null;
             }}

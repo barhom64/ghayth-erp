@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -199,6 +200,7 @@ export default function LeadDetailPage() {
         <Phone className="h-4 w-4" />
         تسجيل اتصال
       </Button>
+      <EntityPrintButton entityType="crm_lead" entityId={id ?? ""} formats={["a4"]} />
     </div>
   );
 
@@ -229,7 +231,7 @@ export default function LeadDetailPage() {
     <DetailPageLayout
       title={lead?.title || lead?.contactName || "العميل المحتمل"}
       subtitle={lead?.clientName || undefined}
-      backPath="/crm/leads"
+      backPath="/crm"
       backLabel="العودة للعملاء المحتملين"
       status={lead?.stage ? { label: STAGE_LABELS[lead.stage] || lead.stage, tone: "info" } : undefined}
       entityType="crm_lead"

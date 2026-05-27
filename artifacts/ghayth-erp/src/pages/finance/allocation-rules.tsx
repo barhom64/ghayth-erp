@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatNumber } from "@/lib/formatters";
-import { Plus, Workflow, AlertTriangle } from "lucide-react";
+import { Plus, Workflow, AlertTriangle, Pencil, Trash2 } from "lucide-react";
+import { Link } from "wouter";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 interface AllocationRule {
@@ -64,6 +66,10 @@ const STRATEGY_LABEL: Record<string, string> = {
 export default function AllocationRulesPage() {
   const [docTypeFilter, setDocTypeFilter] = useState<string>("");
   const [activeFilter, setActiveFilter] = useState<string>("");
+  // ConfirmDeleteDialog fires DELETE /finance/allocation-rules/:id
+  // itself (audit scanner picks up the deletePath prop). No separate
+  // mutation needed here — the dialog owns the call.
+  const [deleting, setDeleting] = useState<AllocationRule | null>(null);
 
   const params = new URLSearchParams();
   if (docTypeFilter) params.set("documentType", docTypeFilter);
@@ -120,7 +126,7 @@ export default function AllocationRulesPage() {
         : <span className="text-muted-foreground italic">—</span> },
     { key: "requiresEntityLink", header: "يتطلب ربطاً",
       render: (r) => r.requiresEntityLink
-        ? <Badge className="bg-amber-100 text-amber-800 text-[10px]">إلزامي</Badge>
+        ? <Badge className="bg-amber-100 text-status-warning-foreground text-[10px]">إلزامي</Badge>
         : <span className="text-muted-foreground italic">—</span> },
     { key: "autoCreateMissing", header: "إنشاء تلقائي",
       render: (r) => r.autoCreateMissing
@@ -130,6 +136,25 @@ export default function AllocationRulesPage() {
       render: (r) => r.isActive
         ? <Badge className="bg-emerald-100 text-emerald-800 text-xs">نشطة</Badge>
         : <Badge variant="outline" className="text-xs">معطّلة</Badge> },
+    { key: "_actions", header: "إجراءات",
+      render: (r) => (
+        <div className="flex items-center gap-1">
+          <Link href={`/finance/allocation-rules/${r.id}/edit`}>
+            <Button variant="ghost" size="sm" className="h-7 px-2" title="تعديل القاعدة">
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-status-error-foreground"
+            title="حذف القاعدة"
+            onClick={() => setDeleting(r)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ) },
   ];
 
   return (
@@ -142,9 +167,11 @@ export default function AllocationRulesPage() {
         { label: "قواعد التوجيه" },
       ]}
       actions={
-        <GuardedButton perm="finance:create" disabled>
-          <Plus className="h-4 w-4 me-1" /> قاعدة جديدة (قريباً)
-        </GuardedButton>
+        <Link href="/finance/allocation-rules/create">
+          <GuardedButton perm="finance:create">
+            <Plus className="h-4 w-4 me-1" /> قاعدة جديدة
+          </GuardedButton>
+        </Link>
       }
     >
       <FinanceTabsNav />
@@ -183,12 +210,12 @@ export default function AllocationRulesPage() {
             <p className="text-lg font-bold font-mono text-emerald-700">{formatNumber(activeCount)}</p>
           </CardContent>
         </Card>
-        <Card className="border-amber-300">
+        <Card className="border-status-warning-surface">
           <CardContent className="p-3 text-center">
             <p className="text-xs text-muted-foreground flex items-center justify-center gap-1">
               <AlertTriangle className="h-3 w-3" /> تتطلب ربطاً
             </p>
-            <p className="text-lg font-bold font-mono text-amber-700">{formatNumber(requiresLink)}</p>
+            <p className="text-lg font-bold font-mono text-status-warning-foreground">{formatNumber(requiresLink)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -243,6 +270,18 @@ export default function AllocationRulesPage() {
           />
         </CardContent>
       </Card>
+
+      {deleting && (
+        <ConfirmDeleteDialog
+          open={!!deleting}
+          onOpenChange={(o) => { if (!o) setDeleting(null); }}
+          entity={{ type: "allocation-rule", id: deleting.id, name: deleting.name }}
+          deletePath={`/finance/allocation-rules/${deleting.id}`}
+          invalidateKeys={[["allocation-rules"]]}
+          successMessage="تم حذف القاعدة"
+          onDeleted={() => setDeleting(null)}
+        />
+      )}
     </PageShell>
   );
 }

@@ -1,6 +1,9 @@
-import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useMemo, useState } from "react";
+import { useRoute } from "wouter";
+import { z } from "zod";
 import { useApiQuery } from "@/lib/api";
+import { FormGrid, FormTextField, FormTextareaField, FormSelectField, FormNumberField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import {
   DetailPageLayout,
   type RelatedEntity,
@@ -47,15 +50,26 @@ function statusTone(status: string) {
   return "default" as const;
 }
 
+const maintenanceEditSchema = z.object({
+  title: z.string().min(1, "العنوان مطلوب"),
+  description: z.string().optional().default(""),
+  category: z.string().optional().default(""),
+  priority: z.enum(["low", "medium", "high", "urgent"]),
+  status: z.enum(["pending", "in_progress", "completed", "cancelled"]),
+  estimatedCost: z.coerce.number().optional().default(0),
+  scheduledDate: z.string().optional().default(""),
+});
+type MaintenanceEditForm = z.infer<typeof maintenanceEditSchema>;
+
 export default function PropertyMaintenanceDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/properties/maintenance/:id");
   const id = params?.id ? Number(params.id) : null;
+  const [editOpen, setEditOpen] = useState(false);
   const { extraTabs, hideTabs } = useRegistryTabs("property-maintenance", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["property-maintenance", String(id)],
-    id ? `/properties/maintenance/${id}` : null,
+    `/properties/maintenance/${id}`,
     !!id,
   );
 
@@ -187,6 +201,7 @@ export default function PropertyMaintenanceDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={item?.title || "تفاصيل طلب الصيانة"}
       subtitle={item?.type ? TYPE_LABELS[item.type] || item.type : undefined}
@@ -216,8 +231,8 @@ export default function PropertyMaintenanceDetail() {
             perm="properties:update"
             variant="outline"
             size="sm"
-            onClick={() => setLocation("/properties/maintenance")}
-            disabled={!item || item.status === "completed"}
+            onClick={() => setEditOpen(true)}
+            disabled={!item || item?.status === "completed"}
           >
             <Edit className="h-4 w-4 ms-1" />
             تعديل
@@ -225,5 +240,54 @@ export default function PropertyMaintenanceDetail() {
         </>
       }
     />
+    {item && id && (
+      <EntityEditDialog<MaintenanceEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل طلب الصيانة"
+        schema={maintenanceEditSchema}
+        defaultValues={{
+          title: item.title ?? "",
+          description: item.description ?? "",
+          category: item.category ?? "",
+          priority: (item.priority ?? "medium") as MaintenanceEditForm["priority"],
+          status: (item.status ?? "pending") as MaintenanceEditForm["status"],
+          estimatedCost: Number(item.estimatedCost ?? 0),
+          scheduledDate: item.scheduledDate ?? "",
+        }}
+        endpoint={`/properties/maintenance/${id}`}
+        invalidateKeys={[["property-maintenance", String(id)], ["maintenance-requests"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="title" label="العنوان" required className="md:col-span-2" />
+          <FormSelectField
+            name="priority"
+            label="الأولوية"
+            options={[
+              { value: "low", label: "منخفضة" },
+              { value: "medium", label: "متوسطة" },
+              { value: "high", label: "عالية" },
+              { value: "urgent", label: "عاجلة" },
+            ]}
+          />
+          <FormSelectField
+            name="status"
+            label="الحالة"
+            options={[
+              { value: "pending", label: "معلقة" },
+              { value: "in_progress", label: "قيد التنفيذ" },
+              { value: "completed", label: "مكتملة" },
+              { value: "cancelled", label: "ملغاة" },
+            ]}
+          />
+          <FormTextField name="category" label="الفئة" />
+          <FormNumberField name="estimatedCost" label="التكلفة التقديرية" />
+          <FormTextField name="scheduledDate" label="التاريخ المجدول" type="date" />
+          <FormTextareaField name="description" label="الوصف" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }

@@ -24,8 +24,19 @@ import { useAppContext } from "@/contexts/app-context";
 import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
 import { GuardedButton } from "@/components/shared/permission-gate";
 
+// Seed initial tab from the URL — /legal/cases, /legal/contracts, /legal/financial,
+// /legal/documents all route here, and without this seed each would land on
+// the "contracts" tab regardless of the link the user clicked.
+const LEGAL_PATH_TAB: Record<string, string> = {
+  "/legal/cases": "cases",
+  "/legal/contracts": "contracts",
+  "/legal/financial": "financial",
+  "/legal/documents": "contracts",
+};
+
 export default function Legal() {
-  const [tab, setTab] = useState("contracts");
+  const [location] = useLocation();
+  const [tab, setTab] = useState(() => LEGAL_PATH_TAB[location] ?? "contracts");
   const { data: stats } = useApiQuery(["legal-stats"], "/legal/stats");
   const s: any = stats || {};
   return (
@@ -177,7 +188,7 @@ function ContractsTab() {
             pageSize={pageSize}
             onPageChange={setPage}
             renderRowExtras={(c) => {
-              if (editingId === c.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (editingId === c.id) return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(c.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal-contract" entityId={c.id} />;
               return null;
             }}
@@ -293,7 +304,7 @@ function CasesTab() {
             pageSize={20}
             onRowClick={(row) => setLocation(`/legal/cases/${row.id}`)}
             renderRowExtras={(c) => {
-              if (editingId === c.id) return <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(c.id, editForm)} onCancel={cancelEdit} isPending={isPending} />;
+              if (editingId === c.id) return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(c.id, values)} onCancel={cancelEdit} isPending={isPending} />;
               if (deletingId === c.id) return <InlineDeleteConfirm onConfirm={() => handleDelete(c.id)} onCancel={cancelDelete} isPending={isPending} itemName={c.title} entityType="legal-case" entityId={c.id} />;
               return null;
             }}
@@ -358,7 +369,7 @@ function FinancialLegalTab() {
                         <p className="font-medium text-sm">{c.title}</p>
                         <p className="text-xs mt-0.5 opacity-75">{c.court || "-"} — {c.opposingParty || "-"}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-end">
                         <p className="font-bold text-sm">{formatCurrency(c.financialRisk || 0)}</p>
                         <p className="text-xs mt-0.5 font-medium">{RISK_LABELS[c.riskLevel] || c.riskLevel}</p>
                       </div>

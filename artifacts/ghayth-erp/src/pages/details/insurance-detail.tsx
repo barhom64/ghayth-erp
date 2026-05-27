@@ -62,7 +62,7 @@ export default function InsuranceDetail() {
 
   const { data: insurance, isLoading, error, refetch } = useApiQuery<any>(
     ["insurance-detail", String(id)],
-    id ? `/fleet/insurance/${id}` : null,
+    `/fleet/insurance/${id}`,
     !!id
   );
 
@@ -99,7 +99,7 @@ export default function InsuranceDetail() {
       { key: "premium", label: "القسط", type: "number" },
       { key: "coverageAmount", label: "مبلغ التغطية", type: "number" },
     ],
-    invalidateKeys: [["insurance", String(id)], ["insurance"]],
+    invalidateKeys: [["insurance-detail", String(id)], ["fleet-insurance"]],
     onSaved: () => refetch(),
   });
 

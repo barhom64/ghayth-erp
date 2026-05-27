@@ -12,7 +12,8 @@ import {
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, generateRef } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { logger } from "../lib/logger.js";
 
@@ -163,25 +164,41 @@ contractsRouter.post("/", authorize({ feature: "hr.contracts", action: "create" 
       throw new NotFoundError("لا يوجد تعيين فعّال لهذا الموظف. يرجى إنشاء تعيين أولاً.");
     }
 
-    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('contract_number_seq') AS seq`);
-    const ref = generateRef("CTR", seqRow.seq);
-
-    const [row] = await rawQuery<Record<string, unknown>>(
-      `INSERT INTO employee_contracts (
-        "companyId", "employeeId", "assignmentId", "contractType",
-        "startDate", "endDate", "probationEndDate",
-        salary, "housingAllowance", "transportAllowance", "otherAllowances",
-        "templateId", "branchId", notes, ref, "approvalStatus", status
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'draft','draft')
-      RETURNING *`,
-      [
-        scope.companyId, data.employeeId, assignmentId, data.contractType,
-        data.startDate, data.endDate || null, data.probationEndDate || null,
-        data.salary || null, data.housingAllowance || null, data.transportAllowance || null,
-        JSON.stringify(data.otherAllowances || {}),
-        data.templateId || null, data.branchId || null, data.notes || null, ref,
-      ]
-    );
+    // Numbering center (#1141 closure) — atomic issue + INSERT + linkback.
+    const atomic = await withTransaction(async () => {
+      const issued = await issueNumber({
+        companyId: scope.companyId,
+        branchId: data.branchId ?? scope.branchId ?? null,
+        moduleKey: "hr",
+        entityKey: "employee_contract",
+        entityTable: "employee_contracts",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      const [insertedRow] = await rawQuery<Record<string, unknown>>(
+        `INSERT INTO employee_contracts (
+          "companyId", "employeeId", "assignmentId", "contractType",
+          "startDate", "endDate", "probationEndDate",
+          salary, "housingAllowance", "transportAllowance", "otherAllowances",
+          "templateId", "branchId", notes, ref, "approvalStatus", status
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'draft','draft')
+        RETURNING *`,
+        [
+          scope.companyId, data.employeeId, assignmentId, data.contractType,
+          data.startDate, data.endDate || null, data.probationEndDate || null,
+          data.salary || null, data.housingAllowance || null, data.transportAllowance || null,
+          JSON.stringify(data.otherAllowances || {}),
+          data.templateId || null, data.branchId || null, data.notes || null, issued.number,
+        ]
+      );
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertedRow.id as number, issued.assignmentId]
+      );
+      return { row: insertedRow, ref: issued.number };
+    });
+    const row = atomic.row;
+    const ref = atomic.ref;
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_created", entity: "employee_contract", entityId: row.id as number, after: { ref, employeeName: emp.name } });
     // #683 Cluster A — emit event so the notification engine, BI,
@@ -596,12 +613,23 @@ contractsRouter.post("/:id/renew", authorize({ feature: "hr.contracts", action: 
     );
     if (!contract) throw new NotFoundError("الع��د غير موجود");
 
-    const [seqRow] = await rawQuery<{ seq: string | number }>(`SELECT nextval('contract_number_seq') AS seq`);
-    const ref = generateRef("CTR", seqRow.seq);
-
     const newStart = contract.endDate || todayISO();
 
-    const newContract = await withTransaction(async (client) => {
+    // Numbering center (#1141 closure) — atomic issue + renewal INSERT
+    // + renewalDate UPDATE on old contract + linkback. All commit/
+    // rollback together via the outer withTransaction; issueNumber
+    // joins via SAVEPOINT.
+    const renewedAtomic = await withTransaction(async (client) => {
+      const issued = await issueNumber({
+        companyId: scope.companyId,
+        branchId: (contract.branchId as number | null) ?? scope.branchId ?? null,
+        moduleKey: "hr",
+        entityKey: "employee_contract",
+        entityTable: "employee_contracts",
+        actorId: scope.userId,
+        metadata: { renewalOfContractId: id },
+        expectedTiming: "on_draft",
+      });
       const insertRes = await client.query(
         `INSERT INTO employee_contracts (
           "companyId", "employeeId", "assignmentId", "contractType",
@@ -614,18 +642,22 @@ contractsRouter.post("/:id/renew", authorize({ feature: "hr.contracts", action: 
           newStart, newEndDate || null,
           newSalary || contract.salary, contract.housingAllowance, contract.transportAllowance,
           JSON.stringify(contract.otherAllowances || {}),
-          contract.templateId, contract.branchId, ref,
+          contract.templateId, contract.branchId, issued.number,
           `تجديد للعقد رقم ${contract.ref}`,
         ]
       );
-
       await client.query(
         `UPDATE employee_contracts SET "renewalDate" = $2, "updatedAt" = NOW() WHERE id = $1 AND "companyId" = $3 AND "deletedAt" IS NULL`,
         [id, newStart, scope.companyId]
       );
-
-      return insertRes.rows[0];
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertRes.rows[0].id as number, issued.assignmentId]
+      );
+      return { row: insertRes.rows[0], ref: issued.number };
     });
+    const newContract = renewedAtomic.row;
+    const ref = renewedAtomic.ref;
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "contract_renewed", entity: "employee_contract", entityId: newContract.id, after: {
       ref, previousRef: contract.ref,

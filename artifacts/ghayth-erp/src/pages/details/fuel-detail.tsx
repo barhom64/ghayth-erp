@@ -35,7 +35,7 @@ export default function FuelDetail() {
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["fuel-detail", String(id)],
-    id ? `/fleet/fuel-logs/${id}` : null,
+    `/fleet/fuel-logs/${id}`,
     !!id,
   );
 
@@ -80,7 +80,7 @@ export default function FuelDetail() {
       { key: "totalCost", label: "التكلفة الإجمالية", type: "number" },
       { key: "stationName", label: "المحطة" },
     ],
-    invalidateKeys: [["fuel-log", String(id)], ["fuel-logs"]],
+    invalidateKeys: [["fuel-detail", String(id)], ["fuel"]],
     onSaved: () => refetch(),
   });
 

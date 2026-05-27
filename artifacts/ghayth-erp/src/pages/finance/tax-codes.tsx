@@ -12,7 +12,8 @@ import {
   exportToCSV,
   PageShell,
 } from "@workspace/ui-core";
-import { Plus, Percent, Trash2, Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Plus, Percent, Trash2, Pencil, Layers, Receipt } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
@@ -67,7 +68,7 @@ export default function TaxCodesPage() {
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, error, refetch } = useApiQuery<{ data: TaxCode[] }>(
     ["tax-codes", scopeQueryString],
-    `/finance/accounts/tax-codes${scopeSuffix}`,
+    `/finance/tax-codes${scopeSuffix}`,
   );
   const items = data?.data ?? [];
   const [pendingDelete, setPendingDelete] = useState<TaxCode | null>(null);
@@ -168,12 +169,24 @@ export default function TaxCodesPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "رموز الضريبة" }]}
       loading={isLoading}
       actions={
-        <GuardedButton perm="finance:create" size="sm" asChild>
-          <Link href="/finance/tax-codes/create">
-            <Plus className="h-4 w-4 me-1" />
-            إضافة رمز ضريبة
+        <>
+          <Link href="/finance/wht-categories">
+            <Button variant="outline" size="sm">
+              <Layers className="h-4 w-4 me-1" />فئات WHT
+            </Button>
           </Link>
-        </GuardedButton>
+          <Link href="/finance/vat-filing-readiness">
+            <Button variant="outline" size="sm">
+              <Receipt className="h-4 w-4 me-1" />جاهزية VAT
+            </Button>
+          </Link>
+          <GuardedButton perm="finance:create" size="sm" asChild>
+            <Link href="/finance/tax-codes/create">
+              <Plus className="h-4 w-4 me-1" />
+              إضافة رمز ضريبة
+            </Link>
+          </GuardedButton>
+        </>
       }
     >
       <FinanceTabsNav />
@@ -224,7 +237,7 @@ export default function TaxCodesPage() {
             id: pendingDelete.id,
             name: `${pendingDelete.code} — ${pendingDelete.name}`,
           }}
-          deletePath={`/finance/accounts/tax-codes/${pendingDelete.id}`}
+          deletePath={`/finance/tax-codes/${pendingDelete.id}`}
           invalidateKeys={[["tax-codes"]]}
           successMessage="تم حذف رمز الضريبة"
           onDeleted={() => { setPendingDelete(null); refetch(); }}

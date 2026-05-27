@@ -57,13 +57,13 @@ export default function JobDetailPage() {
 
   const { data: job, isLoading, isError, refetch } = useApiQuery<any>(
     ["recruitment-job", id],
-    id ? `/hr/recruitment/postings/${id}` : null,
+    `/hr/recruitment/postings/${id}`,
     !!id
   );
 
   const { data: appsResp } = useApiQuery<any>(
     ["job-applications", id],
-    id ? `/hr/recruitment/applications?postingId=${id}` : null,
+    `/hr/recruitment/applications?postingId=${id}`,
     !!id
   );
   const applicants: any[] = appsResp?.data || [];
@@ -235,7 +235,7 @@ export default function JobDetailPage() {
       actions={
         <div className="flex items-center gap-2">
           {actions}
-          <PrintButton entityType="job" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="job_posting" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
         </div>
       }
       extraTabs={[...extraTabs, ...registryExtraTabs]}

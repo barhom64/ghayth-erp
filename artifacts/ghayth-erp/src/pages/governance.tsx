@@ -1,3 +1,4 @@
+import { useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell } from "@workspace/ui-core";
@@ -12,7 +13,19 @@ import { ComplianceDashboardTab } from "./governance/compliance-dashboard-tab";
 import { ComplianceActionsTab } from "./governance/compliance-actions-tab";
 import { CAPATab } from "./governance/capa-tab";
 
+// Routes /governance/policies, /risks, /audits, /compliance all share this
+// component. Without seeding from URL, those links would always land on the
+// "policies" tab.
+const GOV_PATH_TAB: Record<string, string> = {
+  "/governance/policies": "policies",
+  "/governance/risks": "risks",
+  "/governance/audits": "audits",
+  "/governance/compliance": "compliance",
+};
+
 export default function GovernancePage() {
+  const [location] = useLocation();
+  const initialTab = GOV_PATH_TAB[location] ?? "policies";
   const { data: stats, isLoading, isError } = useApiQuery<any>(["gov-stats"], "/governance/stats");
 
   if (isLoading) return <LoadingSpinner />;
@@ -24,7 +37,7 @@ export default function GovernancePage() {
       subtitle="إدارة السياسات والمخاطر والتدقيق والامتثال"
     >
       <StatsCards stats={stats} />
-      <Tabs defaultValue="policies" dir="rtl">
+      <Tabs defaultValue={initialTab} dir="rtl">
         <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="policies"><FileCheck className="h-4 w-4 me-1" />السياسات</TabsTrigger>
           <TabsTrigger value="risks"><AlertTriangle className="h-4 w-4 me-1" />المخاطر</TabsTrigger>

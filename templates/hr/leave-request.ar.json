@@ -1,0 +1,20 @@
+{
+  "code": "hr.leave-request",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "leave_request",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": false,
+  "qr": true,
+  "status": "published",
+  "domain": "hr",
+  "title": "طلب إجازة",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "leave_request"
+  },
+  "ownerTeam": "hr"
+}

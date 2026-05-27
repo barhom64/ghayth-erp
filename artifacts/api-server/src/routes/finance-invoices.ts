@@ -14,7 +14,9 @@ import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { checkAccess } from "../lib/rbac/authzEngine.js";
 import type { JournalEntryLine } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
 import {
   createNotification,
   emitEvent,
@@ -605,11 +607,20 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
       financialEngine.resolveAccountCode(effectiveCompanyId, "invoice_vat_payable", "credit", "2300"),
     ]);
 
-    const [seqRow] = await rawQuery<Record<string, unknown>>(`SELECT nextval('invoice_number_seq') AS seq`);
-    const seqNum = Number(seqRow?.seq ?? Date.now() % 1000000);
-    const year = currentYear();
-    const month = currentMonthPadded();
-    const ref = `INV-${year}${month}-${String(seqNum).padStart(4, "0")}`;
+    // Numbering center (Issue #1141) — invoice number from central authority.
+    // Scheme: `finance.sales_invoice`. Scope policy is `company` so all
+    // branches share the same counter (matches the previous behaviour of
+    // the global `invoice_number_seq`).
+    const issued = await issueNumber({
+      companyId: effectiveCompanyId,
+      branchId: branchId ?? scope.branchId ?? null,
+      moduleKey: "finance",
+      entityKey: "sales_invoice",
+      entityTable: "invoices",
+      actorId: scope.userId,
+      expectedTiming: "on_draft",
+    });
+    const ref = issued.number;
 
     // Header-level discount (applied to subtotal BEFORE VAT — Saudi
     // ZATCA convention). discountAmount and discountPercent are
@@ -736,6 +747,13 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
             `مهمة تحصيل فاتورة ${ref} – بعد 30 يوم من تاريخ الاستحقاق`, scope.activeAssignmentId]
         );
       }
+
+      // Link the numbering assignment back to the invoice row id so the
+      // audit log can drill from `numbering_assignments` to the invoice.
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [insertId, issued.assignmentId]
+      );
     });
 
     // GL entry deferred to approval (POST /invoices/:id/approve)
@@ -931,7 +949,13 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       // operator's pin always wins. Lines with no rule match fall
       // through to the generic invoice_revenue account (legacy
       // backwards-compat).
-      const { resolveLineAllocation, writeAllocationResult } = await import("../lib/accountingAllocation.js");
+      const {
+        resolveLineAllocation,
+        writeAllocationResult,
+        validateAllocationCompleteness,
+        getEnforceLineAllocation,
+        logAllocationOverride,
+      } = await import("../lib/accountingAllocation.js");
       const lineResolutions = await Promise.all(
         dimLines.rows.map((ln) =>
           resolveLineAllocation({
@@ -962,6 +986,53 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         )
       );
 
+      // ── Enforce gate (migration 223 / finance.enforce_line_allocation).
+      // When the company has enforce_line_allocation=ON, refuse to post a
+      // JE that contains any line the resolver flagged as 'unmapped' or
+      // 'failed'. A user holding finance.allocation.override may still
+      // approve by supplying req.body.overrideReason; the bypass is
+      // recorded on allocation_override_log for audit. With the flag
+      // OFF (default) the code falls through to the legacy fallback-to-
+      // generic-account behavior below, exactly as before — opt-in.
+      const enforce = await getEnforceLineAllocation({ companyId: scope.companyId, branchId: scope.branchId });
+      if (enforce) {
+        const { ok, blockers } = validateAllocationCompleteness(lineResolutions);
+        if (!ok) {
+          const overrideReason = String(req.body?.overrideReason ?? "").trim();
+          if (overrideReason.length < 10) {
+            throw new ValidationError(
+              "لا يمكن اعتماد فاتورة تحتوي على بنود بدون تخصيص محاسبي",
+              {
+                field: "lines",
+                fix: "حدد الحساب ومركز التكلفة لكل بند، أو زوّد سببًا مكتوبًا (overrideReason ≥ 10 حرف) إن كان لديك صلاحية finance.allocation.override.",
+                meta: { blockers, unmappedLineCount: lineResolutions.filter((r) => r.status === "unmapped" || r.status === "failed").length },
+              } as any,
+            );
+          }
+          const overrideAllowed = (await checkAccess(scope, {
+            feature: "finance.allocation.override",
+            action: "create",
+          })).allowed;
+          if (!overrideAllowed) {
+            throw new ForbiddenError(
+              "تجاوز تخصيص البنود يحتاج صلاحية finance.allocation.override",
+              { fix: "اطلب من المدير المالي اعتماد هذه الفاتورة، أو خصّص البنود قبل الاعتماد.", meta: { blockers } } as any,
+            );
+          }
+          await logAllocationOverride({
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            actorAssignmentId: scope.activeAssignmentId ?? null,
+            actorUserId: scope.userId,
+            documentType: "invoice",
+            documentId: id,
+            sourceTable: "invoice_lines",
+            blockers,
+            overrideReason,
+          });
+        }
+      }
+
       const totalNet = Number(invoice.total) - Number(invoice.vatAmount || 0);
       const revenueLines: JournalEntryLine[] = [];
 
@@ -981,6 +1052,8 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           driverId: number | null;
           contractId: number | null;
           productId: number | null;
+          umrahSeasonId: number | null;
+          umrahAgentId: number | null;
         }>();
         let postedNet = 0;
         for (let i = 0; i < dimLines.rows.length; i++) {
@@ -1006,6 +1079,8 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
             dims.driverId ?? "",
             dims.contractId ?? "",
             dims.productId ?? "",
+            dims.umrahSeasonId ?? "",
+            dims.umrahAgentId ?? "",
           ].join("|");
           const amt = roundTo2(Number(ln.lineTotal));
           postedNet += amt;
@@ -1025,6 +1100,8 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
               driverId: dims.driverId,
               contractId: dims.contractId,
               productId: dims.productId,
+              umrahSeasonId: dims.umrahSeasonId,
+              umrahAgentId: dims.umrahAgentId,
             });
           }
         }
@@ -1035,7 +1112,10 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         // balances against the AR debit.
         const diff = roundTo2(totalNet - postedNet);
         if (Math.abs(diff) >= 0.005) {
-          const fallbackKey = `${invRevenueCode}|||||||||`;
+          // Bucket key has 12 dimension slots after `acct` — keep them
+          // all empty for the fallback bucket so it doesn't collide with
+          // any resolved bucket that happens to use invRevenueCode.
+          const fallbackKey = `${invRevenueCode}|||||||||||`;
           const prev = buckets.get(fallbackKey);
           if (prev) {
             prev.amount = roundTo2(prev.amount + diff);
@@ -1045,6 +1125,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
               costCenter: null, activityType: null, projectId: null,
               vehicleId: null, propertyId: null, employeeId: null,
               driverId: null, contractId: null, productId: null,
+              umrahSeasonId: null, umrahAgentId: null,
             });
           }
         }
@@ -1062,6 +1143,8 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
             driverId: b.driverId ?? undefined,
             contractId: b.contractId ?? undefined,
             productId: b.productId ?? undefined,
+            umrahSeasonId: b.umrahSeasonId ?? undefined,
+            umrahAgentId: b.umrahAgentId ?? undefined,
             clientId: invoice.clientId as number | undefined,
           } as any);
         }
@@ -3260,6 +3343,16 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
 
     let advance: any;
     let invoice: any;
+    let applyResult: { journalId: number; alreadyExists: boolean } | null = null;
+    // Atomicity guarantee: customer_advances.appliedAmount, invoices.paidAmount,
+    // AND the GL posting all commit (or all roll back) together. The earlier
+    // shape did the counter updates inside a withTransaction and then called
+    // financialEngine.postJournalEntry OUTSIDE — so a JE post that threw
+    // (closed period, missing account, network blip during the engine's
+    // own period rawQuery) left counters inflated but no ledger movement.
+    // The engine's internal withTransaction joins this one reentrantly via
+    // SAVEPOINT (rawdb.ts:108), so commits / rollbacks remain atomic across
+    // both layers.
     await withTransaction(async (client: any) => {
       let advRes;
       try {
@@ -3310,26 +3403,35 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
          WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
         [applyAmt, Number(invoiceId), scope.companyId]
       );
+
+      // GL post lives INSIDE the same transaction so a throw here (closed
+      // period, missing account, etc.) rolls the counter updates back.
+      // financialEngine.postJournalEntry's internal withTransaction joins
+      // this one via SAVEPOINT (rawdb.ts:108 reentrant logic), so the
+      // nested call doesn't open a second connection.
+      applyResult = await financialEngine.postJournalEntry({
+        companyId: scope.companyId,
+        branchId: advance.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref: `ADV-APPLY-${advanceId}-${invoiceId}`,
+        description: `تطبيق دفعة مقدمة على الفاتورة ${invoice.ref}`,
+        sourceType: "advance_application",
+        sourceId: advanceId,
+        sourceKey: `finance:advance_apply:${advanceId}:${invoiceId}`,
+        lines: [
+          { accountCode: advLiabCode, debit: applyAmt, credit: 0, clientId: advance.clientId },
+          { accountCode: arCode, debit: 0, credit: applyAmt, clientId: advance.clientId },
+        ],
+        guardTable: "customer_advances",
+        guardId: advanceId,
+      });
     });
 
-    const applyResult = await financialEngine.postJournalEntry({
-      companyId: scope.companyId,
-      branchId: advance.branchId,
-      createdBy: scope.activeAssignmentId,
-      ref: `ADV-APPLY-${advanceId}-${invoiceId}`,
-      description: `تطبيق دفعة مقدمة على الفاتورة ${invoice.ref}`,
-      sourceType: "advance_application",
-      sourceId: advanceId,
-      sourceKey: `finance:advance_apply:${advanceId}:${invoiceId}`,
-      lines: [
-        { accountCode: advLiabCode, debit: applyAmt, credit: 0, clientId: advance.clientId },
-        { accountCode: arCode, debit: 0, credit: applyAmt, clientId: advance.clientId },
-      ],
-      guardTable: "customer_advances",
-      guardId: advanceId,
-    });
-    const journalId = applyResult.journalId;
-    markIdempotencyReplay(req, res, applyResult.alreadyExists);
+    // After-commit response wiring. `applyResult` is guaranteed non-null
+    // here — the transaction would have thrown otherwise (and the catch
+    // below would have responded with the error).
+    const journalId = applyResult!.journalId;
+    markIdempotencyReplay(req, res, applyResult!.alreadyExists);
 
     res.json({ advanceId, invoiceId: Number(invoiceId), amount: applyAmt, journalId });
   } catch (err) {
@@ -3378,18 +3480,22 @@ invoicesRouter.get("/customer-advances", authorize({ feature: "finance.invoices"
 // computes eligible invoices and produces the letters to send.
 
 async function ensureDunningTables() {
+  // Schema matches production: stage (int), daysPastDue, outstandingAmount,
+  // letterContent. NO `level`, `subject`, `body`, or `deletedAt` columns.
   await rawQuery(`
     CREATE TABLE IF NOT EXISTS dunning_letters (
       id SERIAL PRIMARY KEY,
       "companyId" INTEGER NOT NULL,
       "invoiceId" INTEGER NOT NULL,
       "clientId" INTEGER,
-      level INTEGER DEFAULT 1,
-      subject VARCHAR(500),
-      body TEXT,
-      "sentAt" TIMESTAMPTZ,
-      "deletedAt" TIMESTAMPTZ,
-      status VARCHAR(50) DEFAULT 'pending'
+      stage INTEGER NOT NULL,
+      "daysPastDue" INTEGER NOT NULL,
+      "outstandingAmount" NUMERIC(18,2) NOT NULL,
+      "letterContent" TEXT,
+      "sentAt" TIMESTAMPTZ DEFAULT NOW(),
+      "sentBy" INTEGER,
+      "sentVia" VARCHAR(16) DEFAULT 'manual',
+      status VARCHAR(16) DEFAULT 'sent'
     )
   `, []);
   await rawQuery(`
@@ -3573,9 +3679,9 @@ invoicesRouter.post("/dunning/send", authorize({ feature: "finance.collection", 
 
       const [row] = await rawQuery<Record<string, unknown>>(
         `INSERT INTO dunning_letters
-         ("companyId","invoiceId","clientId","level",subject,body,"sentAt",status)
-         VALUES ($1,$2,$3,$4,$5,$6,NOW(),'sent') RETURNING id`,
-        [scope.companyId, inv.id, inv.clientId, stg.stage, `تذكير سداد - مرحلة ${stg.stage}`, letter]
+         ("companyId","invoiceId","clientId",stage,"daysPastDue","outstandingAmount","letterContent","sentAt",status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),'sent') RETURNING id`,
+        [scope.companyId, inv.id, inv.clientId, stg.stage, days, outstanding, letter]
       );
       results.push({ invoiceId: inv.id, letterId: row.id, stage: stg.stage, daysPastDue: days, outstanding, status: "sent" });
     }
@@ -3601,7 +3707,7 @@ invoicesRouter.get("/dunning/history", authorize({ feature: "finance.collection"
     let where = `dl."companyId"=$1`;
     if (invoiceId) { params.push(Number(invoiceId)); where += ` AND dl."invoiceId"=$${params.length}`; }
     if (clientId) { params.push(Number(clientId)); where += ` AND dl."clientId"=$${params.length}`; }
-    if (stage) { params.push(Number(stage)); where += ` AND dl.level=$${params.length}`; }
+    if (stage) { params.push(Number(stage)); where += ` AND dl.stage=$${params.length}`; }
 
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT dl.*, i.ref AS "invoiceNumber", c.name AS "clientName"

@@ -20,8 +20,9 @@ import {
   todayISO,
   toDateISO,
   roundTo2,
-  generateTimeRef,
 } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
+import { internalTechRef } from "../lib/internalRef.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { runningWeightedAverageCost } from "../lib/inventory/valuation/running-average.js";
 import { logger } from "../lib/logger.js";
@@ -60,6 +61,28 @@ const patchProductSchema = z.object({
   sellPrice: z.coerce.number().min(0, "سعر البيع غير صالح").optional(),
   location: z.string().optional().nullable(),
   status: z.string().optional(),
+  // Product Accounting Catalog (migration 203 — line-level allocation).
+  // These let an admin author once: "this service routes to revenue
+  // account X, requires a vehicle, cost center comes from the vehicle"
+  // — then every invoice line that picks the product pre-fills.
+  itemType: z.enum(["product", "service", "asset", "consumable", "digital"]).optional().nullable(),
+  defaultRevenueAccountId: z.coerce.number().int().positive().optional().nullable(),
+  defaultExpenseAccountId: z.coerce.number().int().positive().optional().nullable(),
+  defaultInventoryAccountId: z.coerce.number().int().positive().optional().nullable(),
+  defaultAssetAccountId: z.coerce.number().int().positive().optional().nullable(),
+  defaultTaxCode: z.string().optional().nullable(),
+  defaultActivityType: z.string().optional().nullable(),
+  requiresVehicle: z.coerce.boolean().optional(),
+  requiresProperty: z.coerce.boolean().optional(),
+  requiresProject: z.coerce.boolean().optional(),
+  requiresContract: z.coerce.boolean().optional(),
+  requiresUmrahAgent: z.coerce.boolean().optional(),
+  requiresUmrahSeason: z.coerce.boolean().optional(),
+  defaultCostCenterStrategy: z.enum([
+    "from_vehicle", "from_property", "from_unit", "from_project",
+    "from_employee", "from_contract", "from_umrah_agent", "from_umrah_season",
+    "explicit", "none",
+  ]).optional().nullable(),
 });
 
 const createTransferSchema = z.object({
@@ -408,11 +431,32 @@ router.patch("/products/:id", authorize({ feature: "warehouse.inventory", action
     const sellPriceWarning = effectiveSell > 0 && effectiveSell < effectiveCost;
 
     // Build the set of changed non-status fields
-    const nonStatusTracked = ["name","sku","description","categoryId","unit","minStock","maxStock","costPrice","sellPrice","location"] as const;
+    const nonStatusTracked = [
+      "name","sku","description","categoryId","unit","minStock","maxStock","costPrice","sellPrice","location",
+      // Product Accounting Catalog (#1090 line-level allocation P2)
+      "itemType","defaultRevenueAccountId","defaultExpenseAccountId","defaultInventoryAccountId",
+      "defaultAssetAccountId","defaultTaxCode","defaultActivityType",
+      "requiresVehicle","requiresProperty","requiresProject","requiresContract",
+      "requiresUmrahAgent","requiresUmrahSeason","defaultCostCenterStrategy",
+    ] as const;
     const colMap: Record<string, string> = {
       name: "name", sku: "sku", description: "description", categoryId: '"categoryId"',
       unit: "unit", minStock: '"minStock"', maxStock: '"maxStock"',
       costPrice: '"costPrice"', sellPrice: '"sellPrice"', location: "location",
+      itemType: '"itemType"',
+      defaultRevenueAccountId: '"defaultRevenueAccountId"',
+      defaultExpenseAccountId: '"defaultExpenseAccountId"',
+      defaultInventoryAccountId: '"defaultInventoryAccountId"',
+      defaultAssetAccountId: '"defaultAssetAccountId"',
+      defaultTaxCode: '"defaultTaxCode"',
+      defaultActivityType: '"defaultActivityType"',
+      requiresVehicle: '"requiresVehicle"',
+      requiresProperty: '"requiresProperty"',
+      requiresProject: '"requiresProject"',
+      requiresContract: '"requiresContract"',
+      requiresUmrahAgent: '"requiresUmrahAgent"',
+      requiresUmrahSeason: '"requiresUmrahSeason"',
+      defaultCostCenterStrategy: '"defaultCostCenterStrategy"',
     };
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
@@ -665,7 +709,9 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
       }
 
       if (b.type === 'in') {
-        const batchNum = generateTimeRef("BATCH");
+        // Internal correlation id, NOT a customer-visible doc number
+        // (Issue #1141). Stays as a time-based ref by design.
+        const batchNum = internalTechRef("BATCH");
         await client.query(
           `INSERT INTO warehouse_stock_batches ("productId","batchNumber",quantity,"unitCost","receivedDate") VALUES ($1,$2,$3,$4,NOW())`,
           [b.productId, batchNum, b.quantity, b.unitCost || 0]
@@ -865,7 +911,19 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
   );
   const supplierId = preferredSupplier[0]?.id || null;
   const estimatedTotal = reorderQty * estimatedUnitCost;
-  const ref = generateTimeRef("PR-AUTO");
+  // Numbering center (Issue #1141) — auto-generated PR shares the same
+  // numbering scheme as manually-created PRs.
+  const issuedPr = await issueNumber({
+    companyId,
+    branchId: null,
+    moduleKey: "purchase",
+    entityKey: "purchase_request",
+    entityTable: "purchase_requests",
+    actorId: userId,
+    metadata: { autoReorder: true, productId: product.id },
+    expectedTiming: "on_draft",
+  });
+  const ref = issuedPr.number;
 
   let effectiveAssignmentId = assignmentId;
   if (!effectiveAssignmentId) {
@@ -883,6 +941,10 @@ async function triggerMinStockPipeline(companyId: number, product: any, userId: 
       `INSERT INTO purchase_request_items ("requestId","productId",quantity,"unitPrice","totalPrice") VALUES ($1,$2,$3,$4,$5)`,
       [prId, product.id, reorderQty, estimatedUnitCost, estimatedTotal]
     );
+    await client.query(
+      `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+      [prId, issuedPr.assignmentId]
+    );
   });
   return prId || null;
 }
@@ -894,7 +956,18 @@ router.post("/transfers", authorize({ feature: "warehouse.transfers", action: "c
 
     const qtyNum = b.quantity;
 
-    const transferRef = generateTimeRef("TRANSFER");
+    // Numbering center (Issue #1141) — stock transfer ref. Scheme
+    // `warehouse.stock_transfer` was seeded in migration 214.
+    const issuedTransfer = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "warehouse",
+      entityKey: "stock_transfer",
+      entityTable: "warehouse_movements",
+      actorId: scope.userId,
+      expectedTiming: "on_draft",
+    });
+    const transferRef = issuedTransfer.number;
     const fromLocation = b.fromLocation || b.fromWarehouseId ? `مستودع-${b.fromWarehouseId}` : 'المستودع الرئيسي';
     const toLocation = b.toLocation || b.toWarehouseId ? `مستودع-${b.toWarehouseId}` : 'المستودع الفرعي';
 

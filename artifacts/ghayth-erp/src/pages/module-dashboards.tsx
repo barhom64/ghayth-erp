@@ -674,12 +674,18 @@ const tabConfig = [
 ];
 
 export default function ModuleDashboardsPage() {
+  // Sidebar quick-links pass ?tab=hr|finance|fleet|crm|store|support|warehouse
+  // so each module's dashboard opens on the matching tab. Without this
+  // seed every link landed on "hr".
+  const initialTab = new URLSearchParams(window.location.search).get("tab")
+    || "hr";
+  const validTab = tabConfig.some((t) => t.key === initialTab) ? initialTab : "hr";
   return (
     <PageShell
       title="لوحات مؤشرات المسارات"
       subtitle="مؤشرات أداء مخصصة لكل مسار تشغيلي"
     >
-      <Tabs defaultValue="hr" dir="rtl">
+      <Tabs defaultValue={validTab} dir="rtl">
         <TabsList className="flex-wrap h-auto gap-1">
           {tabConfig.map(t => (
             <TabsTrigger key={t.key} value={t.key} className="gap-1.5 text-xs">

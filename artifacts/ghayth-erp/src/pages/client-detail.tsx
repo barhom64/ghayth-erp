@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { ComposeDialog } from "@/pages/inbox";
+import { Send } from "lucide-react";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import {
   PageStatusBadge,
@@ -8,6 +10,7 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +73,7 @@ export default function ClientDetail() {
   const { hideTabs: registryHideTabs } = useRegistryTabs("client", id ?? "");
   const { data: client, isLoading, isError } = useApiQuery<any>(["client", id], `/clients/${id}`, !!id);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [composeOpen, setComposeOpen] = useState(false);
 
   const invoices: any[] = client?.invoices || [];
   const opportunities: any[] = client?.opportunities || [];
@@ -604,10 +608,11 @@ export default function ClientDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title="ملف العميل 360°"
       subtitle={client?.name}
-      backPath="/crm/clients"
+      backPath="/clients"
       entityType="client"
       entityId={id || ""}
       overview={overview}
@@ -630,9 +635,32 @@ export default function ClientDetail() {
               <FileSpreadsheet className="h-4 w-4" /> كشف حساب
             </Button>
           </Link>
+          {client && (
+            <EntityPrintButton
+              entityType="client"
+              entityId={client.id ?? params?.id}
+              formats={["a4"]}
+            />
+          )}
+          {client && (client.email || client.phone) && (
+            <Button size="sm" variant="default" className="gap-1" onClick={() => setComposeOpen(true)}>
+              <Send className="h-4 w-4" />راسل العميل
+            </Button>
+          )}
         </>
       }
     />
+      {composeOpen && (
+        <ComposeDialog
+          open={composeOpen}
+          onClose={() => setComposeOpen(false)}
+          onSent={() => setComposeOpen(false)}
+          initialRecipient={client?.email || client?.phone || ""}
+          initialChannel={client?.email ? "email" : "whatsapp"}
+          initialRelated={client?.id ? { type: "client", id: client.id } : undefined}
+        />
+      )}
+    </>
   );
 }
 
@@ -801,7 +829,7 @@ function ClientPortalTab({ clientId, clientEmail }: { clientId: string; clientEm
 }
 
 function UmrahTab({ clientId }: { clientId: string }) {
-  const { data, isLoading } = useApiQuery<any>(["umrah-client", clientId], clientId ? `/umrah/sub-agents?clientId=${clientId}` : null);
+  const { data, isLoading } = useApiQuery<any>(["umrah-client", clientId], `/umrah/sub-agents?clientId=${clientId}`);
   const subAgents: any[] = data?.rows ?? data ?? [];
 
   if (isLoading) return <Skeleton className="h-48 w-full rounded-xl" />;

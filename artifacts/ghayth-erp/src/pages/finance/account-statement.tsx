@@ -8,8 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { EntityPrintButton } from "@/components/shared/entity-print";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
-import { Download, FileSpreadsheet, Printer } from "lucide-react";
+import { Download, FileSpreadsheet } from "lucide-react";
 
 interface Movement {
   id: number;
@@ -161,9 +162,11 @@ export default function AccountStatementPage({ entityType }: Props) {
           >
             <Download className="h-3.5 w-3.5 me-1" /> تصدير CSV
           </GuardedButton>
-          <Button variant="outline" size="sm" onClick={() => window.print()}>
-            <Printer className="h-3.5 w-3.5 me-1" /> طباعة
-          </Button>
+          <EntityPrintButton
+            entityType={entityType === "customer" ? "customer_statement" : "vendor_statement"}
+            entityId={`${id ?? ""}:${startDate ?? ""}..${endDate ?? ""}`}
+            formats={["a4"]}
+          />
         </div>
       }
     >
@@ -229,7 +232,7 @@ export default function AccountStatementPage({ entityType }: Props) {
               <p className="opacity-70">جاري</p>
               <p className="font-mono font-bold">{formatCurrency(data.aging.current)}</p>
             </div>
-            <div className="p-2 rounded bg-yellow-50 text-yellow-800 text-center">
+            <div className="p-2 rounded bg-status-warning-surface text-yellow-800 text-center">
               <p className="opacity-70">1-30 يوم</p>
               <p className="font-mono font-bold">{formatCurrency(data.aging["1-30"])}</p>
             </div>
@@ -237,7 +240,7 @@ export default function AccountStatementPage({ entityType }: Props) {
               <p className="opacity-70">31-60 يوم</p>
               <p className="font-mono font-bold">{formatCurrency(data.aging["31-60"])}</p>
             </div>
-            <div className="p-2 rounded bg-red-50 text-red-800 text-center">
+            <div className="p-2 rounded bg-status-error-surface text-status-error-foreground text-center">
               <p className="opacity-70">61-90 يوم</p>
               <p className="font-mono font-bold">{formatCurrency(data.aging["61-90"])}</p>
             </div>

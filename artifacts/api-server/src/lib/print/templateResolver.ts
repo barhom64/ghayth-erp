@@ -69,8 +69,14 @@ export async function resolveTemplate(opts: {
   branchId: number | null;
   entityType: string;
   templateId?: number;
+  /** When the caller is printing a list view (entityId="list"), the
+   *  bespoke single-entity preset (invoice, contract, …) doesn't apply
+   *  — its `{{#each items}}` expects line-item shape, not row-of-list
+   *  shape. The route layer flips this on when entityId === "list" so
+   *  list exports get the universal preset's generic itemsTable. */
+  asList?: boolean;
 }): Promise<PrintTemplate | null> {
-  const { companyId, branchId, entityType, templateId } = opts;
+  const { companyId, branchId, entityType, templateId, asList } = opts;
 
   if (templateId) {
     const rows = await safeQuery<TemplateRow>(
@@ -129,6 +135,10 @@ export async function resolveTemplate(opts: {
   // even if nobody seeded or designed a template for it. Renders the branch
   // letterhead, a sensible title, the entity fields as an info-grid, the
   // items table if present, and the branch footer.
+  // List exports bypass the single-entity bespoke preset and go straight
+  // to universal — the universal template's {{entity.itemsTable}}
+  // auto-builds the table from arbitrary row shapes.
+  if (asList) return universalFallback(entityType);
   return BESPOKE_PRESETS[entityType]?.() ?? universalFallback(entityType);
 }
 
@@ -142,7 +152,7 @@ export async function resolveTemplate(opts: {
 const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   official_letter: () => ({
     id: -2,
-    name: "Letterhead — official letter",
+    name: "خطاب رسمي",
     entityType: "official_letter",
     branchId: null,
     companyId: null,
@@ -174,7 +184,7 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   }),
   umrah_statement: () => ({
     id: -3,
-    name: "Umrah — sub-agent statement",
+    name: "كشف حساب وكيل فرعي — عمرة",
     entityType: "umrah_statement",
     branchId: null,
     companyId: null,
@@ -208,7 +218,7 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   }),
   umrah_runsheet: () => ({
     id: -4,
-    name: "Umrah — daily run-sheet",
+    name: "كشف اليوم التشغيلي — عمرة",
     entityType: "umrah_runsheet",
     branchId: null,
     companyId: null,
@@ -245,12 +255,106 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   // payload shape from dataLoader.loadInvoice.
   invoice: () => buildInvoicePreset(),
   sales_invoice: () => buildInvoicePreset(),
+  // Commercial documents that share the invoice loader shape but need
+  // their own labelling/totals layout. Quotations and sales orders skip
+  // paid/remaining (no payment yet); delivery notes hide pricing
+  // (logistics doc); credit notes flip the sign of totals to negative.
+  quotation: () => buildQuotationPreset(),
+  sales_order: () => buildSalesOrderPreset(),
+  delivery_note: () => buildDeliveryNotePreset(),
+  credit_note: () => buildCreditNotePreset(),
+  // Batch-1 bespoke presets — wire every common transactional document
+  // to its own template so the printed page shows real fields from the
+  // loader (party block, items table, totals, signatures) instead of
+  // the universal letterhead-only fallback. Schemas verified against
+  // db/schema_pre.sql, tokens match what dataLoader actually returns.
+  payment_voucher: () => buildVoucherPreset("payment"),
+  receipt_voucher: () => buildVoucherPreset("receipt"),
+  purchase_order: () => buildPurchaseOrderPreset(),
+  purchase_request: () => buildPurchaseRequestPreset(),
+  goods_receipt: () => buildGoodsReceiptPreset(),
+  journal_entry: () => buildJournalEntryPreset(),
+  employee_contract: () => buildEmployeeContractPreset(),
+  payslip: () => buildPayslipPreset(),
+  leave_request: () => buildLeaveRequestPreset(),
+  loan_request: () => buildLoanRequestPreset(),
+  loan: () => buildLoanRequestPreset(),
+  // Batch-2 bespoke presets — operational assets, profiles, contracts.
+  vehicle: () => buildVehiclePreset(),
+  fixed_asset: () => buildFixedAssetPreset(),
+  employee: () => buildEmployeeProfilePreset(),
+  employee_profile: () => buildEmployeeProfilePreset(),
+  rental_contract: () => buildRentalContractPreset(),
+  property_unit: () => buildPropertyUnitPreset(),
+  legal_contract: () => buildLegalContractPreset(),
+  legal_judgment: () => buildLegalCasePreset(),
+  legal_session: () => buildLegalCasePreset(),
+  overtime_request: () => buildOvertimeRequestPreset(),
+  exit_request: () => buildExitRequestPreset(),
+  fleet_trip: () => buildFleetTripPreset(),
+  // Batch-3 bespoke presets — ops + HR + safety + tasks.
+  maintenance_request: () => buildMaintenanceRequestPreset(),
+  fuel: () => buildFuelLogPreset(),
+  evaluation_360: () => buildEvaluationPreset(),
+  training: () => buildTrainingPreset(),
+  traffic_violation: () => buildTrafficViolationPreset(),
+  expense: () => buildExpenseClaimPreset(),
+  task: () => buildTaskPreset(),
+  // Batch-4 — recruitment + warehouse labels.
+  job_posting: () => buildJobPostingPreset(),
+  job: () => buildJobPostingPreset(),
+  item_barcode_label: () => buildBarcodeLabelPreset(),
+  // Batch-5 — thermal POS + warehouse transactions + HR cards.
+  pos_receipt: () => buildPosReceiptPreset(),
+  stock_transfer: () => buildStockTransferPreset(),
+  stock_adjustment: () => buildStockAdjustmentPreset(),
+  inventory_count: () => buildInventoryCountPreset(),
+  excuse_request: () => buildExcuseRequestPreset(),
+  transfer: () => buildTransferRequestPreset(),
+  attendance: () => buildAttendancePreset(),
+  client: () => buildClientCardPreset(),
+  // Batch-6 — master cards + niche transactions to close remaining gaps.
+  building: () => buildBuildingCardPreset(),
+  vendor: () => buildVendorCardPreset(),
+  supplier: () => buildVendorCardPreset(),
+  insurance_policy: () => buildInsurancePolicyPreset(),
+  insurance: () => buildInsurancePolicyPreset(),
+  store_order: () => buildStoreOrderPreset(),
+  crm_opportunity: () => buildOpportunityPreset(),
+  support_ticket: () => buildSupportTicketPreset(),
+  umrah_pilgrim: () => buildUmrahPilgrimPreset(),
+  umrah_invoice: () => buildUmrahInvoicePreset(),
+  umrah_sales_invoice: () => buildUmrahInvoicePreset(),
+  project: () => buildProjectCardPreset(),
+  // Batch-7 — final coverage round (HR docs, finance docs, ops).
+  discipline_memo: () => buildDisciplineMemoPreset(),
+  fleet_maintenance: () => buildFleetMaintenancePreset(),
+  salary_advance: () => buildSalaryAdvancePreset(),
+  custody: () => buildCustodyPreset(),
+  training_program: () => buildTrainingProgramPreset(),
+  warehouse_product: () => buildWarehouseProductPreset(),
+  store_product: () => buildWarehouseProductPreset(),
+  budget: () => buildBudgetPreset(),
+  governance_policy: () => buildGovernancePolicyPreset(),
+  // Aliases — entityRegistry uses slightly different ids than dataLoader's
+  // switch keys; wire them here so the resolver finds the same preset
+  // regardless of which name the call site uses.
+  evaluation_cycle: () => buildEvaluationPreset(),
+  expense_claim: () => buildExpenseClaimPreset(),
+  fuel_log: () => buildFuelLogPreset(),
+  legal_case: () => buildLegalCasePreset(),
+  payroll_run: () => buildPayrollRunPreset(),
+  recurring_journal: () => buildJournalEntryPreset(),
+  // Final config cards (shift roster, season setup, GL account card).
+  shift: () => buildShiftCardPreset(),
+  umrah_season: () => buildUmrahSeasonPreset(),
+  chart_of_account: () => buildChartOfAccountPreset(),
 };
 
 function buildInvoicePreset(): PrintTemplate {
   return {
     id: -5,
-    name: "Invoice — classic A4",
+    name: "فاتورة ضريبية — كلاسيك A4",
     entityType: "invoice",
     branchId: null,
     companyId: null,
@@ -260,11 +364,11 @@ function buildInvoicePreset(): PrintTemplate {
     htmlContent: `<div class="print-doc">
 {{branch.letterhead}}
 <h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">فاتورة ضريبية</h2>
-<div style="text-align:center;color:#475569;margin-bottom:14px">Tax Invoice</div>
+
 <table style="width:100%;margin-bottom:14px;border-collapse:collapse">
   <tr>
     <td style="vertical-align:top;width:50%;padding:0 6px">
-      <div style="font-weight:bold;margin-bottom:4px">العميل / Bill To</div>
+      <div style="font-weight:bold;margin-bottom:4px">العميل</div>
       <div>{{client.name}}</div>
       <div style="color:#64748b;font-size:9pt">الرقم الضريبي: {{client.taxNumber}}</div>
     </td>
@@ -307,6 +411,7 @@ function buildInvoicePreset(): PrintTemplate {
   <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">المدفوع</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.paidAmount}} {{entity.currency}}</td></tr>
 </table>
 <div style="margin-top:18px;font-size:10pt;color:#475569">{{entity.notes}}</div>
+{{system.verifyBlock}}
 {{branch.footer}}
 </div>`,
     layoutJson: null,
@@ -318,11 +423,2429 @@ function buildInvoicePreset(): PrintTemplate {
   };
 }
 
-/** In-memory template that works for any entityType. */
+// ─── Batch-1 bespoke presets ─────────────────────────────────────────────
+// Helper to wrap a preset with the shared scaffolding so each builder
+// stays focused on its body markup. Every preset opens with letterhead,
+// closes with verify block + footer, and uses the same .meta-grid +
+// table CSS that the universal preset uses (defined globally in the
+// adapter wrapper).
+function makePreset(opts: {
+  id: number;
+  presetKey: string;
+  entityType: string;
+  name: string;
+  body: string;
+}): PrintTemplate {
+  return {
+    id: opts.id,
+    name: opts.name,
+    entityType: opts.entityType,
+    branchId: null,
+    companyId: null,
+    paperSize: "A4",
+    mode: "preset",
+    presetKey: opts.presetKey,
+    htmlContent: `<div class="print-doc">
+{{branch.letterhead}}
+${opts.body}
+{{system.verifyBlock}}
+{{branch.footer}}
+</div>`,
+    layoutJson: null,
+    cssOverrides: null,
+    headerOverride: null,
+    footerOverride: null,
+    isThermal: false,
+    version: 1,
+  };
+}
+
+function buildQuotationPreset(): PrintTemplate {
+  return makePreset({
+    id: -39, presetKey: "quotation_classic", entityType: "quotation",
+    name: "عرض سعر",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">عرض سعر</h2>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">العميل</div>
+      <div>{{client.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الرقم الضريبي: {{client.taxNumber}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>المرجع:</strong> {{entity.ref}}</div>
+      <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+      <div><strong>صالح حتى:</strong> {{entity.validUntil}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:right">البيان</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:70px">الكمية</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:100px">سعر الوحدة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">الضريبة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:110px">الإجمالي</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt">{{this.description}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{this.quantity}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.unitPrice}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.vatAmount}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.totalPrice}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<table style="width:280px;margin-right:auto;margin-left:0;border-collapse:collapse">
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">المجموع قبل الضريبة</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.subtotal}} {{entity.currency}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">ضريبة القيمة المضافة ({{entity.vatRate}}%)</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.vatAmount}} {{entity.currency}}</td></tr>
+  <tr style="background:#fef9c3;font-weight:bold"><td style="padding:6px 8px;border:1px solid #ca8a04">الإجمالي المعروض</td><td style="padding:6px 8px;border:1px solid #ca8a04;text-align:left">{{entity.total}} {{entity.currency}}</td></tr>
+</table>
+<div style="margin:18px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:10pt">
+  <div style="font-weight:bold;margin-bottom:4px">شروط العرض</div>
+  <div style="white-space:pre-wrap">{{entity.terms}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>أعدّ العرض<br/>____________________</div>
+  <div>مدير المبيعات<br/>____________________</div>
+  <div>قبول العميل<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildSalesOrderPreset(): PrintTemplate {
+  return makePreset({
+    id: -40, presetKey: "sales_order_classic", entityType: "sales_order",
+    name: "أمر بيع",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">أمر بيع</h2>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">العميل</div>
+      <div>{{client.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الرقم الضريبي: {{client.taxNumber}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>رقم الأمر:</strong> {{entity.ref}}</div>
+      <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+      <div><strong>تاريخ التسليم:</strong> {{entity.deliveryDate}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:right">البيان</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:70px">الكمية</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:100px">سعر الوحدة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:110px">الإجمالي</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt">{{this.description}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{this.quantity}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.unitPrice}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.totalPrice}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<table style="width:280px;margin-right:auto;margin-left:0;border-collapse:collapse">
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">المجموع</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.subtotal}} {{entity.currency}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">الضريبة</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.vatAmount}} {{entity.currency}}</td></tr>
+  <tr style="background:#f1f5f9;font-weight:bold"><td style="padding:6px 8px;border:1px solid #cbd5e1">الإجمالي</td><td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.total}} {{entity.currency}}</td></tr>
+</table>
+<div style="margin-top:14px;font-size:10pt;color:#475569">
+  <strong>عنوان التسليم:</strong> {{entity.deliveryAddress}}
+</div>
+<div style="margin-top:6px;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>
+<div class="signatures" style="margin-top:36px">
+  <div>أعدّ الأمر<br/>____________________</div>
+  <div>المسؤول<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildDeliveryNotePreset(): PrintTemplate {
+  return makePreset({
+    id: -41, presetKey: "delivery_note_classic", entityType: "delivery_note",
+    name: "إذن تسليم",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">إذن تسليم</h2>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">المرسل إليه</div>
+      <div>{{client.name}}</div>
+      <div style="color:#64748b;font-size:9pt">{{entity.deliveryAddress}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>رقم الإذن:</strong> {{entity.ref}}</div>
+      <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+      <div><strong>المرجع الأمر:</strong> {{entity.salesOrderRef}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:right">البيان</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:100px">رقم الصنف</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:80px">الكمية</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:80px">الوحدة</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt">{{this.description}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;font-family:monospace;text-align:center">{{this.sku}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center;font-weight:bold">{{this.quantity}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{this.unit}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<div style="margin:18px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:10pt">
+  <div style="font-weight:bold;margin-bottom:4px">ملاحظات النقل</div>
+  <div style="white-space:pre-wrap">{{entity.notes}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>المسلِّم<br/>____________________</div>
+  <div>الناقل<br/>____________________</div>
+  <div>المستلم<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildCreditNotePreset(): PrintTemplate {
+  return makePreset({
+    id: -42, presetKey: "credit_note_classic", entityType: "credit_note",
+    name: "إشعار دائن",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #dc2626;color:#991b1b">إشعار دائن</h2>
+<div style="text-align:center;color:#991b1b;margin-bottom:14px;font-size:11pt">— مرتجع/تخفيض على فاتورة سابقة —</div>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">العميل</div>
+      <div>{{client.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الرقم الضريبي: {{client.taxNumber}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>رقم الإشعار:</strong> {{entity.ref}}</div>
+      <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+      <div><strong>الفاتورة الأصلية:</strong> {{entity.originalInvoiceRef}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<div style="margin:14px 0;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:10pt">
+  <div style="font-weight:bold;margin-bottom:4px;color:#991b1b">سبب الإصدار</div>
+  <div style="white-space:pre-wrap">{{entity.reason}}</div>
+</div>
+<table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+  <thead>
+    <tr style="background:#fef2f2">
+      <th style="border:1px solid #fecaca;padding:6px;font-size:10pt;width:32px">#</th>
+      <th style="border:1px solid #fecaca;padding:6px;font-size:10pt;text-align:right">البيان</th>
+      <th style="border:1px solid #fecaca;padding:6px;font-size:10pt;width:70px">الكمية</th>
+      <th style="border:1px solid #fecaca;padding:6px;font-size:10pt;width:100px">سعر الوحدة</th>
+      <th style="border:1px solid #fecaca;padding:6px;font-size:10pt;width:90px">الضريبة</th>
+      <th style="border:1px solid #fecaca;padding:6px;font-size:10pt;width:110px">المرتجع</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #fecaca;padding:6px;font-size:10pt;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #fecaca;padding:6px;font-size:10pt">{{this.description}}</td>
+      <td style="border:1px solid #fecaca;padding:6px;font-size:10pt;text-align:center">{{this.quantity}}</td>
+      <td style="border:1px solid #fecaca;padding:6px;font-size:10pt;text-align:left">{{this.unitPrice}}</td>
+      <td style="border:1px solid #fecaca;padding:6px;font-size:10pt;text-align:left">{{this.vatAmount}}</td>
+      <td style="border:1px solid #fecaca;padding:6px;font-size:10pt;text-align:left;font-weight:bold;color:#991b1b">{{this.totalPrice}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<table style="width:280px;margin-right:auto;margin-left:0;border-collapse:collapse">
+  <tr><td style="padding:4px 8px;border:1px solid #fecaca">إجمالي المرتجع قبل الضريبة</td><td style="padding:4px 8px;border:1px solid #fecaca;text-align:left">{{entity.subtotal}} {{entity.currency}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #fecaca">الضريبة المسترَدة</td><td style="padding:4px 8px;border:1px solid #fecaca;text-align:left">{{entity.vatAmount}} {{entity.currency}}</td></tr>
+  <tr style="background:#fef2f2;font-weight:bold;color:#991b1b"><td style="padding:6px 8px;border:1px solid #fecaca">المبلغ المسترَد</td><td style="padding:6px 8px;border:1px solid #fecaca;text-align:left">{{entity.total}} {{entity.currency}}</td></tr>
+</table>
+<div class="signatures" style="margin-top:36px">
+  <div>أعدّ الإشعار<br/>____________________</div>
+  <div>المعتمد<br/>____________________</div>
+  <div>المالية<br/>____________________</div>
+</div>`,
+  });
+}
+
+// ─── End commercial document presets ─────────────────────────────────────
+
+function buildVoucherPreset(kind: "payment" | "receipt"): PrintTemplate {
+  const title = kind === "payment" ? "سند صرف" : "سند قبض";
+  const partyLabel = kind === "payment" ? "المستفيد" : "العميل";
+  const partyToken = kind === "payment" ? "{{supplier.name}}" : "{{client.name}}";
+  return makePreset({
+    id: kind === "payment" ? -10 : -11,
+    presetKey: kind === "payment" ? "payment_voucher_classic" : "receipt_voucher_classic",
+    entityType: `${kind}_voucher`,
+    name: title,
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">${title}</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم السند: <span dir="ltr">{{entity.ref}}</span></div>
+<div class="meta-grid">
+  <div><strong>${partyLabel}:</strong> ${partyToken}</div>
+  <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+  <div><strong>المبلغ:</strong> {{entity.amount}} {{entity.currency}}</div>
+  <div><strong>طريقة الدفع:</strong> {{entity.paymentMethod}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+</div>
+<div style="margin:18px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">البيان</div>
+  <div style="white-space:pre-wrap;font-size:11pt">{{entity.description}}</div>
+</div>
+<div class="signatures" style="margin-top:48px">
+  <div>${kind === "payment" ? "المستلم" : "الدافع"}<br/><br/>____________________</div>
+  <div>المحاسب<br/><br/>____________________</div>
+  <div>الاعتماد<br/><br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildPurchaseOrderPreset(): PrintTemplate {
+  return makePreset({
+    id: -12,
+    presetKey: "purchase_order_classic",
+    entityType: "purchase_order",
+    name: "أمر شراء",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">أمر شراء</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم الأمر: <span dir="ltr">{{entity.ref}}</span></div>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">المورّد</div>
+      <div>{{vendor.name}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>المرجع:</strong> {{entity.ref}}</div>
+      <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+      <div><strong>التسليم المتوقع:</strong> {{entity.expectedDelivery}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:right">البيان</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:70px">الكمية</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:60px">الوحدة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">سعر الوحدة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:100px">الإجمالي</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt">{{this.description}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{this.quantity}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{this.unit}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.unitPrice}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.totalPrice}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<table style="width:280px;margin-right:auto;margin-left:0;border-collapse:collapse">
+  <tr style="background:#f1f5f9;font-weight:bold">
+    <td style="padding:6px 8px;border:1px solid #cbd5e1">الإجمالي</td>
+    <td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.totalAmount}}</td>
+  </tr>
+</table>
+<div style="margin-top:14px;font-size:10pt;color:#475569">{{entity.notes}}</div>
+<div class="signatures" style="margin-top:36px">
+  <div>المُعِد<br/>____________________</div>
+  <div>الاعتماد<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildPurchaseRequestPreset(): PrintTemplate {
+  return makePreset({
+    id: -13,
+    presetKey: "purchase_request_classic",
+    entityType: "purchase_request",
+    name: "طلب شراء",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب شراء</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم الطلب: <span dir="ltr">{{entity.ref}}</span></div>
+<div class="meta-grid">
+  <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>الإجمالي المقدّر:</strong> {{entity.totalAmount}}</div>
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+</div>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:right">البيان</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:70px">الكمية</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:60px">الوحدة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">السعر المقدّر</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:100px">الإجمالي</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt">{{this.name}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{this.quantity}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{this.unit}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.estimatedPrice}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.totalPrice}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<div style="margin-top:14px;font-size:10pt;color:#475569">{{entity.notes}}</div>
+<div class="signatures" style="margin-top:36px">
+  <div>مقدّم الطلب<br/>____________________</div>
+  <div>المراجِع<br/>____________________</div>
+  <div>الاعتماد<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildGoodsReceiptPreset(): PrintTemplate {
+  return makePreset({
+    id: -14,
+    presetKey: "goods_receipt_classic",
+    entityType: "goods_receipt",
+    name: "إيصال استلام بضاعة (GRN)",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">إيصال استلام بضاعة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم الإيصال: <span dir="ltr">{{entity.ref}}</span></div>
+<div class="meta-grid">
+  <div><strong>تاريخ الاستلام:</strong> {{entity.receivedAt}}</div>
+  <div><strong>أمر الشراء المرتبط:</strong> #{{entity.poId}}</div>
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+</div>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:right">الصنف</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">الكمية المستلمة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">سعر الوحدة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:110px">الإجمالي</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt">{{this.itemName}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{this.receivedQty}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.unitPrice}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.lineTotal}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<div style="margin-top:14px;font-size:10pt;color:#475569">{{entity.notes}}</div>
+<div class="signatures" style="margin-top:36px">
+  <div>المُستلم<br/>____________________</div>
+  <div>المراجِع<br/>____________________</div>
+  <div>أمين المخزن<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildJournalEntryPreset(): PrintTemplate {
+  return makePreset({
+    id: -15,
+    presetKey: "journal_entry_classic",
+    entityType: "journal_entry",
+    name: "قيد محاسبي",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">قيد محاسبي</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم القيد: <span dir="ltr">{{entity.ref}}</span></div>
+<div class="meta-grid">
+  <div><strong>التاريخ:</strong> {{entity.date}}</div>
+  <div><strong>النوع:</strong> {{entity.type}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>المرجع:</strong> {{entity.ref}}</div>
+</div>
+<div style="margin:12px 0;padding:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:11pt">{{entity.description}}</div>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:100px">رمز الحساب</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:right">البيان</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:110px">مدين</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:110px">دائن</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each lines}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center" dir="ltr">{{this.accountCode}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt">{{this.description}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.debit}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.credit}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<div class="signatures" style="margin-top:36px">
+  <div>المُعِد<br/>____________________</div>
+  <div>المراجِع<br/>____________________</div>
+  <div>المدير المالي<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildEmployeeContractPreset(): PrintTemplate {
+  return makePreset({
+    id: -16,
+    presetKey: "employee_contract_classic",
+    entityType: "employee_contract",
+    name: "عقد عمل",
+    body: `
+<h1 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">عقد عمل</h1>
+
+<div style="line-height:1.9;font-size:11pt;padding:0 8px">
+  <p>إنه في تاريخ <strong>{{entity.startDate}}</strong> تم إبرام هذا العقد بين:</p>
+  <p><strong>الطرف الأول:</strong> {{branch.companyName}} (الموظِّف)<br/>
+     السجل التجاري: {{branch.crNumber}}<br/>
+     الفرع: {{branch.branchName}} — {{branch.address}}</p>
+  <p><strong>الطرف الثاني:</strong> {{employee.name}} (الموظَّف)<br/>
+     الرقم الوظيفي: {{employee.empNumber}}</p>
+</div>
+<div class="meta-grid" style="margin-top:14px">
+  <div><strong>نوع العقد:</strong> {{entity.contractType}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>تاريخ البداية:</strong> {{entity.startDate}}</div>
+  <div><strong>تاريخ النهاية:</strong> {{entity.endDate}}</div>
+  <div><strong>انتهاء التجربة:</strong> {{entity.probationEndDate}}</div>
+  <div><strong>حالة التجربة:</strong> {{entity.probationStatus}}</div>
+</div>
+<div style="margin:18px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;font-size:11pt;white-space:pre-wrap">{{entity.notes}}</div>
+<div class="signatures" style="margin-top:48px">
+  <div>الموظِّف<br/>الختم<br/><br/>____________________</div>
+  <div>الموظَّف<br/>التوقيع<br/><br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildPayrollRunPreset(): PrintTemplate {
+  // Roster view — many rows, one per employee. Different from payslip
+  // which is a single-employee detail document.
+  return makePreset({
+    id: -73, presetKey: "payroll_run_classic", entityType: "payroll_run",
+    name: "كشف رواتب",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">كشف رواتب</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم المسير: <span dir="ltr">{{entity.ref}}</span> — فترة {{entity.period}}</div>
+<div class="meta-grid">
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+  <div><strong>تاريخ الإصدار:</strong> {{entity.createdAt}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>عدد الموظفين:</strong> {{entity.employeeCount}}</div>
+  <div><strong>تاريخ السداد:</strong> {{entity.paidAt}}</div>
+  <div><strong>المعتمد:</strong> {{entity.approvedByName}}</div>
+</div>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:right">الموظف</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:80px">الرقم</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">الأساسي</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">البدلات</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">الاستقطاعات</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">الصافي</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt">{{this.employeeName}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:9pt;font-family:monospace;text-align:center">{{this.empNumber}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.baseSalary}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.totalAllowances}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.totalDeductions}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left;font-weight:bold">{{this.netSalary}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<table style="width:320px;margin-right:auto;margin-left:0;border-collapse:collapse;margin-top:14px">
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1;background:#f8fafc;font-weight:bold">إجمالي الأساسي</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.totalBaseSalary}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1;background:#f8fafc;font-weight:bold">إجمالي البدلات</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.totalAllowances}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1;background:#f8fafc;font-weight:bold">إجمالي الاستقطاعات</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.totalDeductions}}</td></tr>
+  <tr style="background:#dcfce7;font-weight:bold;font-size:11pt"><td style="padding:6px 8px;border:1px solid #16a34a">إجمالي الصافي</td><td style="padding:6px 8px;border:1px solid #16a34a;text-align:left">{{entity.totalNet}}</td></tr>
+</table>
+<div class="signatures" style="margin-top:36px">
+  <div>المُعِد<br/>____________________</div>
+  <div>الموارد البشرية<br/>____________________</div>
+  <div>المالية<br/>____________________</div>
+  <div>الإدارة العليا<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildPayslipPreset(): PrintTemplate {
+  return makePreset({
+    id: -17,
+    presetKey: "payslip_classic",
+    entityType: "payslip",
+    name: "قسيمة راتب",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">قسيمة راتب</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">عن فترة: <span dir="ltr">{{entity.period}}</span></div>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">الموظف</div>
+      <div>{{employee.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الرقم الوظيفي: {{employee.empNumber}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>الفترة:</strong> {{entity.period}}</div>
+      <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+      <div><strong>حالة الدفعة:</strong> {{entity.runStatus}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin-bottom:8px">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th colspan="2" style="border:1px solid #cbd5e1;padding:6px;font-size:11pt">الاستحقاقات</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">الراتب الأساسي</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.basic}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">بدل السكن</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.housingAllowance}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">بدل النقل</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.transportAllowance}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">العمل الإضافي</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.overtime}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">عمولات</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.commission}}</td></tr>
+    <tr style="background:#f8fafc;font-weight:bold"><td style="border:1px solid #cbd5e1;padding:6px">إجمالي الاستحقاقات</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.grossSalary}}</td></tr>
+  </tbody>
+</table>
+<table style="width:100%;border-collapse:collapse;margin-bottom:8px">
+  <thead>
+    <tr style="background:#fef2f2"><th colspan="2" style="border:1px solid #cbd5e1;padding:6px;font-size:11pt">الاستقطاعات</th></tr>
+  </thead>
+  <tbody>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">التأمينات (GOSI)</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.gosi}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">تأخير</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.lateDeduction}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">غياب</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.absenceDeduction}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">مخالفات</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.violationDeduction}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">قسط قرض</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.loanDeduction}}</td></tr>
+  </tbody>
+</table>
+<table style="width:100%;border-collapse:collapse;background:#ecfdf5">
+  <tr><td style="padding:10px;border:1px solid #10b981;font-weight:bold;font-size:13pt">الصافي المستحق</td><td style="padding:10px;border:1px solid #10b981;text-align:left;font-weight:bold;font-size:13pt;color:#065f46">{{entity.netSalary}}</td></tr>
+</table>
+<div class="signatures" style="margin-top:36px">
+  <div>الموظف<br/>____________________</div>
+  <div>المحاسب<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildLeaveRequestPreset(): PrintTemplate {
+  return makePreset({
+    id: -18,
+    presetKey: "leave_request_classic",
+    entityType: "leave_request",
+    name: "طلب إجازة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب إجازة</h2>
+
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">الموظف</div>
+      <div>{{employee.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الرقم الوظيفي: {{employee.empNumber}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>تاريخ الطلب:</strong> {{entity.createdAt}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<div class="meta-grid">
+  <div><strong>تاريخ البدء:</strong> {{entity.startDate}}</div>
+  <div><strong>تاريخ الانتهاء:</strong> {{entity.endDate}}</div>
+  <div><strong>عدد الأيام:</strong> {{entity.days}}</div>
+  <div><strong>نوع الإجازة:</strong> #{{entity.leaveTypeId}}</div>
+</div>
+<div style="margin:18px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">السبب</div>
+  <div style="white-space:pre-wrap">{{entity.reason}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>الموظف<br/>____________________</div>
+  <div>المدير المباشر<br/>____________________</div>
+  <div>إدارة الموارد البشرية<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildLoanRequestPreset(): PrintTemplate {
+  return makePreset({
+    id: -19,
+    presetKey: "loan_request_classic",
+    entityType: "loan_request",
+    name: "طلب قرض / سُلفة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب قرض / سُلفة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم القرض: <span dir="ltr">{{entity.loanNumber}}</span></div>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">الموظف</div>
+      <div>{{employee.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الرقم الوظيفي: {{employee.empNumber}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>رقم القرض:</strong> {{entity.loanNumber}}</div>
+      <div><strong>النوع:</strong> {{entity.loanType}}</div>
+      <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold;width:50%">المبلغ الإجمالي</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.amount}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">عدد الأقساط</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.installmentCount}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">قيمة القسط الشهري</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.installmentAmount}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">المسدّد حتى الآن</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.paidAmount}}</td></tr>
+  <tr style="background:#fef9c3;font-weight:bold"><td style="border:1px solid #ca8a04;padding:8px">المتبقي</td><td style="border:1px solid #ca8a04;padding:8px;text-align:left">{{entity.remainingAmount}}</td></tr>
+</table>
+<div class="signatures" style="margin-top:36px">
+  <div>الموظف<br/>____________________</div>
+  <div>الموارد البشرية<br/>____________________</div>
+  <div>المالية<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildVehiclePreset(): PrintTemplate {
+  return makePreset({
+    id: -20, presetKey: "vehicle_classic", entityType: "vehicle",
+    name: "بطاقة مركبة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة مركبة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">Vehicle Card — <span dir="ltr">{{entity.plateNumber}}</span></div>
+<div class="meta-grid">
+  <div><strong>رقم اللوحة:</strong> <span dir="ltr">{{entity.plateNumber}}</span></div>
+  <div><strong>الصانع:</strong> {{entity.make}}</div>
+  <div><strong>الموديل:</strong> {{entity.model}}</div>
+  <div><strong>السنة:</strong> {{entity.year}}</div>
+  <div><strong>اللون:</strong> {{entity.color}}</div>
+  <div><strong>نوع الوقود:</strong> {{entity.fuelType}}</div>
+  <div><strong>الهيكل (VIN):</strong> <span dir="ltr">{{entity.vinNumber}}</span></div>
+  <div><strong>العداد الحالي:</strong> {{entity.currentMileage}} كم</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+</div>
+<table style="width:100%;margin-top:14px;border-collapse:collapse">
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#fef9c3;font-weight:bold;width:50%">انتهاء التأمين</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.insuranceExpiry}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#fef9c3;font-weight:bold">انتهاء الاستمارة</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.registrationExpiry}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">آخر صيانة</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.lastMaintenanceDate}}</td></tr>
+</table>`,
+  });
+}
+
+function buildFixedAssetPreset(): PrintTemplate {
+  return makePreset({
+    id: -21, presetKey: "fixed_asset_classic", entityType: "fixed_asset",
+    name: "بطاقة أصل ثابت",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة أصل ثابت</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">Fixed Asset Card — <span dir="ltr">{{entity.code}}</span></div>
+<div class="meta-grid">
+  <div><strong>اسم الأصل:</strong> {{entity.name}}</div>
+  <div><strong>الرمز:</strong> {{entity.code}}</div>
+  <div><strong>الفئة:</strong> {{entity.category}}</div>
+  <div><strong>الموقع:</strong> {{entity.location}}</div>
+</div>
+<table style="width:100%;margin-top:14px;border-collapse:collapse">
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold;width:50%">تاريخ الشراء</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.purchaseDate}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">تكلفة الشراء</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.purchaseCost}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">القيمة التخريدية</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.salvageValue}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">العمر الإنتاجي (سنوات)</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.usefulLifeYears}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">طريقة الإهلاك</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.depreciationMethod}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#fef2f2;font-weight:bold">الإهلاك المتراكم</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.accumulatedDepreciation}}</td></tr>
+  <tr style="background:#ecfdf5;font-weight:bold"><td style="border:1px solid #10b981;padding:10px;font-size:13pt">القيمة الدفترية الحالية</td><td style="border:1px solid #10b981;padding:10px;text-align:left;font-size:13pt;color:#065f46">{{entity.currentBookValue}}</td></tr>
+</table>`,
+  });
+}
+
+function buildEmployeeProfilePreset(): PrintTemplate {
+  return makePreset({
+    id: -22, presetKey: "employee_profile_classic", entityType: "employee_profile",
+    name: "بطاقة موظف",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة موظف</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">Employee Profile — <span dir="ltr">{{entity.empNumber}}</span></div>
+<div class="meta-grid">
+  <div><strong>الاسم:</strong> {{entity.name}}</div>
+  <div><strong>الاسم (إنجليزي):</strong> <span dir="ltr">{{entity.nameEn}}</span></div>
+  <div><strong>الرقم الوظيفي:</strong> {{entity.empNumber}}</div>
+  <div><strong>رقم الهوية:</strong> <span dir="ltr">{{entity.nationalId}}</span></div>
+  <div><strong>الجنس:</strong> {{entity.gender}}</div>
+  <div><strong>الجنسية:</strong> {{entity.nationality}}</div>
+  <div><strong>تاريخ الميلاد:</strong> {{entity.dateOfBirth}}</div>
+  <div><strong>الهاتف:</strong> <span dir="ltr">{{entity.phone}}</span></div>
+  <div><strong>البريد:</strong> <span dir="ltr">{{entity.email}}</span></div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>التوقيع<br/>____________________</div>
+  <div>الموارد البشرية<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildRentalContractPreset(): PrintTemplate {
+  return makePreset({
+    id: -23, presetKey: "rental_contract_classic", entityType: "rental_contract",
+    name: "عقد إيجار",
+    body: `
+<h1 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">عقد إيجار</h1>
+<div style="text-align:center;color:#475569;margin-bottom:18px">Lease Agreement</div>
+<div style="line-height:1.9;font-size:11pt">
+  <p>في يوم <strong>{{entity.startDate}}</strong> تم إبرام هذا العقد بين:</p>
+  <p><strong>المؤجِّر:</strong> {{branch.companyName}} (الطرف الأول)<br/>
+     السجل التجاري: {{branch.crNumber}}<br/>
+     العنوان: {{branch.address}}</p>
+  <p><strong>المستأجِر:</strong> {{entity.tenantName}} (الطرف الثاني)<br/>
+     الهاتف: <span dir="ltr">{{entity.tenantPhone}}</span><br/>
+     البريد: <span dir="ltr">{{entity.tenantEmail}}</span><br/>
+     رقم الهوية: <span dir="ltr">{{entity.tenantIdNumber}}</span></p>
+</div>
+<table style="width:100%;margin-top:14px;border-collapse:collapse">
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold;width:50%">رقم الوحدة</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">#{{entity.unitId}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">تاريخ البداية</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.startDate}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">تاريخ النهاية</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.endDate}}</td></tr>
+  <tr style="background:#ecfdf5;font-weight:bold"><td style="border:1px solid #10b981;padding:10px;font-size:12pt">الإيجار الشهري</td><td style="border:1px solid #10b981;padding:10px;text-align:left;font-size:12pt;color:#065f46">{{entity.monthlyRent}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#fef9c3;font-weight:bold">مبلغ التأمين</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.depositAmount}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;font-weight:bold">يوم السداد الشهري</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.paymentDay}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;font-weight:bold">الحالة</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.status}}</td></tr>
+</table>
+<div style="margin:18px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;white-space:pre-wrap">{{entity.notes}}</div>
+<div class="signatures" style="margin-top:48px">
+  <div>المؤجِّر<br/>الختم<br/>____________________</div>
+  <div>المستأجِر<br/>التوقيع<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildPropertyUnitPreset(): PrintTemplate {
+  return makePreset({
+    id: -24, presetKey: "property_unit_classic", entityType: "property_unit",
+    name: "بطاقة وحدة عقارية",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة وحدة عقارية</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">Property Unit — <span dir="ltr">{{entity.unitNumber}}</span></div>
+<div class="meta-grid">
+  <div><strong>رقم الوحدة:</strong> {{entity.unitNumber}}</div>
+  <div><strong>المبنى:</strong> {{entity.buildingName}}</div>
+  <div><strong>النوع:</strong> {{entity.type}}</div>
+  <div><strong>الدور:</strong> {{entity.floor}}</div>
+  <div><strong>المساحة:</strong> {{entity.area}} م²</div>
+  <div><strong>غرف نوم:</strong> {{entity.bedrooms}}</div>
+  <div><strong>دورات مياه:</strong> {{entity.bathrooms}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<table style="width:100%;margin-top:14px;border-collapse:collapse">
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#ecfdf5;font-weight:bold;width:50%">الإيجار الشهري</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left;font-size:13pt;color:#065f46;font-weight:bold">{{entity.monthlyRent}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;font-weight:bold">العنوان</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.address}}</td></tr>
+</table>`,
+  });
+}
+
+function buildLegalContractPreset(): PrintTemplate {
+  return makePreset({
+    id: -25, presetKey: "legal_contract_classic", entityType: "legal_contract",
+    name: "عقد قانوني",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">{{entity.title}}</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">Legal Contract — <span dir="ltr">{{entity.ref}}</span></div>
+<div class="meta-grid">
+  <div><strong>المرجع:</strong> {{entity.ref}}</div>
+  <div><strong>نوع العقد:</strong> {{entity.contractType}}</div>
+  <div><strong>الطرف المتعاقد:</strong> {{entity.partyName}}</div>
+  <div><strong>تواصل:</strong> <span dir="ltr">{{entity.partyContact}}</span></div>
+  <div><strong>تاريخ البداية:</strong> {{entity.startDate}}</div>
+  <div><strong>تاريخ النهاية:</strong> {{entity.endDate}}</div>
+  <div><strong>القيمة:</strong> {{entity.value}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<div class="signatures" style="margin-top:48px">
+  <div>الطرف الأول<br/>____________________</div>
+  <div>الطرف الثاني<br/>____________________</div>
+  <div>الشاهد<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildLegalCasePreset(): PrintTemplate {
+  return makePreset({
+    id: -26, presetKey: "legal_case_classic", entityType: "legal_case",
+    name: "ملف قضية",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">ملف قضية — {{entity.title}}</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">Case File — <span dir="ltr">{{entity.caseNumber}}</span></div>
+<div class="meta-grid">
+  <div><strong>رقم القضية:</strong> {{entity.caseNumber}}</div>
+  <div><strong>نوع القضية:</strong> {{entity.caseType}}</div>
+  <div><strong>المحكمة:</strong> {{entity.court}}</div>
+  <div><strong>تاريخ الرفع:</strong> {{entity.filingDate}}</div>
+  <div><strong>الطرف الخصم:</strong> {{entity.opposingParty}}</div>
+  <div><strong>المحامي:</strong> {{entity.lawyerName}}</div>
+  <div><strong>الأولوية:</strong> {{entity.priority}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<div style="margin:18px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div style="margin:12px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">ملاحظات</div>
+  <div style="white-space:pre-wrap">{{entity.notes}}</div>
+</div>`,
+  });
+}
+
+function buildOvertimeRequestPreset(): PrintTemplate {
+  return makePreset({
+    id: -27, presetKey: "overtime_request_classic", entityType: "overtime_request",
+    name: "طلب عمل إضافي",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب عمل إضافي</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">Overtime Request — <span dir="ltr">{{entity.requestNumber}}</span></div>
+<div class="meta-grid">
+  <div><strong>الرقم:</strong> {{entity.requestNumber}}</div>
+  <div><strong>التاريخ:</strong> {{entity.overtimeDate}}</div>
+  <div><strong>من:</strong> {{entity.startTime}}</div>
+  <div><strong>إلى:</strong> {{entity.endTime}}</div>
+  <div><strong>عدد الساعات:</strong> {{entity.hours}}</div>
+  <div><strong>السعر/الساعة:</strong> {{entity.hourlyRate}}</div>
+  <div><strong>المضاعف:</strong> {{entity.multiplier}}</div>
+  <div><strong>الإجمالي:</strong> {{entity.totalAmount}}</div>
+</div>
+<div style="margin:18px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">السبب</div>
+  <div style="white-space:pre-wrap">{{entity.reason}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>الموظف<br/>____________________</div>
+  <div>المدير المباشر<br/>____________________</div>
+  <div>الموارد البشرية<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildExitRequestPreset(): PrintTemplate {
+  return makePreset({
+    id: -28, presetKey: "exit_request_classic", entityType: "exit_request",
+    name: "طلب إنهاء خدمة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب إنهاء خدمة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">Exit Request — <span dir="ltr">{{entity.exitNumber}}</span></div>
+<div class="meta-grid">
+  <div><strong>الرقم:</strong> {{entity.exitNumber}}</div>
+  <div><strong>نوع الإنهاء:</strong> {{entity.exitType}}</div>
+  <div><strong>تاريخ الطلب:</strong> {{entity.requestDate}}</div>
+  <div><strong>آخر يوم عمل:</strong> {{entity.lastWorkingDay}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+</div>
+<div style="margin:18px 0;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">سبب الإنهاء</div>
+  <div style="white-space:pre-wrap">{{entity.exitReason}}</div>
+</div>
+<div class="signatures" style="margin-top:48px">
+  <div>الموظف<br/>____________________</div>
+  <div>المدير المباشر<br/>____________________</div>
+  <div>الموارد البشرية<br/>____________________</div>
+  <div>الإدارة العليا<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildFleetTripPreset(): PrintTemplate {
+  return makePreset({
+    id: -29, presetKey: "fleet_trip_classic", entityType: "fleet_trip",
+    name: "كشف رحلة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">كشف رحلة أسطول</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">Fleet Trip — <span dir="ltr">#{{entity.id}}</span></div>
+<div class="meta-grid">
+  <div><strong>المركبة:</strong> #{{entity.vehicleId}}</div>
+  <div><strong>السائق:</strong> #{{entity.driverId}}</div>
+  <div><strong>العميل:</strong> #{{entity.clientId}}</div>
+  <div><strong>المسافة:</strong> {{entity.distance}} كم</div>
+  <div><strong>من:</strong> {{entity.fromLocation}}</div>
+  <div><strong>إلى:</strong> {{entity.toLocation}}</div>
+  <div><strong>وقت البداية:</strong> {{entity.startTime}}</div>
+  <div><strong>وقت النهاية:</strong> {{entity.endTime}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>السائق<br/>____________________</div>
+  <div>مسؤول العمليات<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildMaintenanceRequestPreset(): PrintTemplate {
+  return makePreset({
+    id: -30, presetKey: "maintenance_request_classic", entityType: "maintenance_request",
+    name: "طلب صيانة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب صيانة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم البلاغ: #{{entity.id}}</div>
+<div class="meta-grid">
+  <div><strong>الوحدة:</strong> #{{entity.unitId}}</div>
+  <div><strong>المستأجر:</strong> {{entity.tenantName}}</div>
+  <div><strong>الفئة:</strong> {{entity.category}}</div>
+  <div><strong>الأولوية:</strong> {{entity.priority}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>تاريخ الطلب:</strong> {{entity.createdAt}}</div>
+  <div><strong>الفنّي المُكلّف:</strong> #{{entity.assignedTo}}</div>
+  <div><strong>تاريخ الإنهاء:</strong> {{entity.completedAt}}</div>
+</div>
+<div style="margin:18px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">وصف العطل</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<table style="width:100%;margin-top:14px;border-collapse:collapse">
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#fef9c3;font-weight:bold;width:50%">التكلفة المقدّرة</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.estimatedCost}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#ecfdf5;font-weight:bold">التكلفة الفعلية</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left;font-weight:bold;color:#065f46">{{entity.actualCost}}</td></tr>
+</table>
+<div class="signatures" style="margin-top:36px">
+  <div>مقدّم البلاغ<br/>____________________</div>
+  <div>الفنّي<br/>____________________</div>
+  <div>الإدارة<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildFuelLogPreset(): PrintTemplate {
+  return makePreset({
+    id: -31, presetKey: "fuel_log_classic", entityType: "fuel",
+    name: "إيصال تعبئة وقود",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">إيصال تعبئة وقود</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم العملية: #{{entity.id}}</div>
+<div class="meta-grid">
+  <div><strong>المركبة:</strong> #{{entity.vehicleId}}</div>
+  <div><strong>السائق:</strong> #{{entity.driverId}}</div>
+  <div><strong>التاريخ:</strong> {{entity.fuelDate}}</div>
+  <div><strong>المحطّة:</strong> {{entity.stationName}}</div>
+  <div><strong>عداد المركبة:</strong> {{entity.mileageAtFuel}} كم</div>
+</div>
+<table style="width:100%;margin-top:14px;border-collapse:collapse">
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold;width:50%">عدد اللترات</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.liters}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">السعر/اللتر</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.costPerLiter}}</td></tr>
+  <tr style="background:#ecfdf5;font-weight:bold"><td style="border:1px solid #10b981;padding:10px;font-size:13pt">الإجمالي</td><td style="border:1px solid #10b981;padding:10px;text-align:left;font-size:13pt;color:#065f46">{{entity.totalCost}}</td></tr>
+</table>
+<div class="signatures" style="margin-top:36px">
+  <div>السائق<br/>____________________</div>
+  <div>أمين الأسطول<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildEvaluationPreset(): PrintTemplate {
+  return makePreset({
+    id: -32, presetKey: "evaluation_classic", entityType: "evaluation_360",
+    name: "تقييم 360°",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">تقييم أداء 360°</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">دورة تقييم — {{entity.period}}</div>
+<div class="meta-grid">
+  <div><strong>الموظف:</strong> #{{entity.employeeId}}</div>
+  <div><strong>البادئ:</strong> #{{entity.initiatorId}}</div>
+  <div><strong>الفترة:</strong> {{entity.period}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>تاريخ البداية:</strong> {{entity.startDate}}</div>
+  <div><strong>تاريخ النهاية:</strong> {{entity.endDate}}</div>
+</div>
+<div style="margin:18px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">ملاحظات</div>
+  <div style="white-space:pre-wrap">{{entity.notes}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>الموظف<br/>____________________</div>
+  <div>المدير المباشر<br/>____________________</div>
+  <div>الموارد البشرية<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildTrainingPreset(): PrintTemplate {
+  return makePreset({
+    id: -33, presetKey: "training_classic", entityType: "training",
+    name: "دورة تدريبية",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">{{entity.title}}</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">دورة تدريبية — {{entity.type}}</div>
+<div class="meta-grid">
+  <div><strong>اسم الدورة:</strong> {{entity.title}}</div>
+  <div><strong>النوع:</strong> {{entity.type}}</div>
+  <div><strong>الجهة المقدِّمة:</strong> {{entity.provider}}</div>
+  <div><strong>عدد الساعات:</strong> {{entity.hours}}</div>
+  <div><strong>تاريخ البداية:</strong> {{entity.startDate}}</div>
+  <div><strong>تاريخ النهاية:</strong> {{entity.endDate}}</div>
+</div>
+<div style="margin:18px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>المدرّب<br/>____________________</div>
+  <div>منسّق التدريب<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildTrafficViolationPreset(): PrintTemplate {
+  return makePreset({
+    id: -34, presetKey: "traffic_violation_classic", entityType: "traffic_violation",
+    name: "مخالفة مرورية",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">مخالفة مرورية</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم المخالفة: <span dir="ltr">{{entity.violationNumber}}</span></div>
+<div class="meta-grid">
+  <div><strong>المركبة:</strong> #{{entity.vehicleId}}</div>
+  <div><strong>السائق:</strong> #{{entity.driverId}}</div>
+  <div><strong>نوع المخالفة:</strong> {{entity.violationType}}</div>
+  <div><strong>تاريخ المخالفة:</strong> {{entity.violationDate}}</div>
+  <div><strong>الموقع:</strong> {{entity.location}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<table style="width:100%;margin-top:14px;border-collapse:collapse">
+  <tr style="background:#fef2f2;font-weight:bold"><td style="border:1px solid #fecaca;padding:10px;font-size:13pt;width:50%">قيمة الغرامة</td><td style="border:1px solid #fecaca;padding:10px;text-align:left;font-size:13pt;color:#991b1b">{{entity.fineAmount}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">تاريخ السداد</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.paidAt}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;font-weight:bold">السدّاد</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">#{{entity.paidBy}}</td></tr>
+</table>
+<div style="margin:14px 0;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
+  });
+}
+
+function buildExpenseClaimPreset(): PrintTemplate {
+  return makePreset({
+    id: -35, presetKey: "expense_claim_classic", entityType: "expense",
+    name: "مطالبة نفقات",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">{{entity.title}}</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم المطالبة: <span dir="ltr">{{entity.ref}}</span></div>
+<div class="meta-grid">
+  <div><strong>المرجع:</strong> {{entity.ref}}</div>
+  <div><strong>العنوان:</strong> {{entity.title}}</div>
+  <div><strong>الموظف:</strong> #{{entity.employeeId}}</div>
+  <div><strong>الفئة:</strong> {{entity.category}}</div>
+  <div><strong>تاريخ المصروف:</strong> {{entity.expenseDate}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>اعتُمد من:</strong> #{{entity.approvedBy}}</div>
+  <div><strong>تاريخ السداد:</strong> {{entity.paidAt}}</div>
+</div>
+<table style="width:100%;margin-top:14px;border-collapse:collapse">
+  <tr style="background:#ecfdf5;font-weight:bold"><td style="border:1px solid #10b981;padding:10px;font-size:13pt;width:50%">المبلغ المطلوب</td><td style="border:1px solid #10b981;padding:10px;text-align:left;font-size:13pt;color:#065f46">{{entity.amount}}</td></tr>
+</table>
+<div class="signatures" style="margin-top:36px">
+  <div>الموظف<br/>____________________</div>
+  <div>المدير<br/>____________________</div>
+  <div>المالية<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildTaskPreset(): PrintTemplate {
+  return makePreset({
+    id: -36, presetKey: "task_classic", entityType: "task",
+    name: "بطاقة مهمة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">{{entity.title}}</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">بطاقة مهمة — #{{entity.id}}</div>
+<div class="meta-grid">
+  <div><strong>العنوان:</strong> {{entity.title}}</div>
+  <div><strong>النوع:</strong> {{entity.type}}</div>
+  <div><strong>الأولوية:</strong> {{entity.priority}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>مكلَّف:</strong> #{{entity.assignedTo}}</div>
+  <div><strong>العميل:</strong> #{{entity.clientId}}</div>
+  <div><strong>تاريخ الإنشاء:</strong> {{entity.createdAt}}</div>
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+</div>
+<div style="margin:18px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>`,
+  });
+}
+
+function buildJobPostingPreset(): PrintTemplate {
+  return makePreset({
+    id: -37, presetKey: "job_posting_classic", entityType: "job_posting",
+    name: "إعلان وظيفي",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">إعلان وظيفي</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.title}}</div>
+<div class="meta-grid">
+  <div><strong>المسمى الوظيفي:</strong> {{entity.title}}</div>
+  <div><strong>الإدارة:</strong> {{entity.department}}</div>
+  <div><strong>الموقع:</strong> {{entity.location}}</div>
+  <div><strong>نوع التوظيف:</strong> {{entity.type}}</div>
+  <div><strong>مستوى الخبرة:</strong> {{entity.experienceLevel}}</div>
+  <div><strong>عدد الشواغر:</strong> {{entity.vacancies}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>تاريخ الإقفال:</strong> {{entity.closingDate}}</div>
+  <div><strong>الحد الأدنى للراتب:</strong> {{entity.salaryMin}}</div>
+  <div><strong>الحد الأعلى للراتب:</strong> {{entity.salaryMax}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف الوظيفي</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">المتطلبات</div>
+  <div style="white-space:pre-wrap">{{entity.requirements}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">المهارات المطلوبة</div>
+  <div style="white-space:pre-wrap">{{entity.skills}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">المؤهلات العلمية</div>
+  <div style="white-space:pre-wrap">{{entity.education}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fdf2f8;border:1px solid #fbcfe8;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">المزايا</div>
+  <div style="white-space:pre-wrap">{{entity.benefits}}</div>
+</div>`,
+  });
+}
+
+function buildBarcodeLabelPreset(): PrintTemplate {
+  return makePreset({
+    id: -38, presetKey: "item_barcode_label_classic", entityType: "item_barcode_label",
+    name: "ملصق باركود صنف",
+    body: `
+<div class="label-doc">
+  <div class="l-name">{{entity.name}}</div>
+  <div class="l-sku">SKU: <span dir="ltr">{{entity.sku}}</span></div>
+  <div class="l-barcode" dir="ltr">*{{entity.barcode}}*</div>
+  <div class="l-sku" dir="ltr">{{entity.barcode}}</div>
+  <div class="l-price">{{entity.price}}</div>
+</div>`,
+  });
+}
+
+// ─── Batch-5 presets ─────────────────────────────────────────────────────
+
+function buildPosReceiptPreset(): PrintTemplate {
+  // Thermal 80mm POS receipt. Doesn't go through makePreset because it
+  // intentionally skips the A4 letterhead/footer block.
+  return {
+    id: -43,
+    name: "إيصال نقطة بيع",
+    entityType: "pos_receipt",
+    branchId: null,
+    companyId: null,
+    paperSize: "THERMAL_80",
+    mode: "preset",
+    presetKey: "pos_receipt_thermal",
+    htmlContent: `<div class="thermal-doc" style="width:78mm;font-family:Tahoma,monospace;font-size:9pt;line-height:1.3">
+  <div style="text-align:center;font-weight:bold;font-size:11pt;margin-bottom:2mm">{{branch.companyName}}</div>
+  <div style="text-align:center;font-size:8pt;margin-bottom:2mm">{{branch.branchName}}</div>
+  <div style="text-align:center;font-size:8pt;margin-bottom:2mm">الرقم الضريبي: <span dir="ltr">{{branch.taxNumber}}</span></div>
+  <div style="border-top:1px dashed #000;margin:2mm 0"></div>
+  <div style="text-align:center;font-weight:bold;font-size:10pt">إيصال نقطة بيع</div>
+  <div style="text-align:center;font-size:8pt;margin-bottom:2mm">رقم: {{entity.ref}}</div>
+  <div style="font-size:8pt;margin-bottom:2mm">التاريخ: {{entity.createdAt}}</div>
+  <div style="font-size:8pt;margin-bottom:2mm">الكاشير: {{entity.cashierName}}</div>
+  <div style="border-top:1px dashed #000;margin:2mm 0"></div>
+  <table style="width:100%;font-size:8pt;border-collapse:collapse">
+    <thead><tr><th style="text-align:right;padding:1mm">البيان</th><th style="width:8mm;text-align:center">كمية</th><th style="width:18mm;text-align:left">إجمالي</th></tr></thead>
+    <tbody>
+      {{#each items}}
+      <tr>
+        <td style="padding:0.5mm 1mm">{{this.description}}</td>
+        <td style="text-align:center">{{this.quantity}}</td>
+        <td style="text-align:left">{{this.totalPrice}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+  <div style="border-top:1px dashed #000;margin:2mm 0"></div>
+  <div style="display:flex;justify-content:space-between;font-size:8pt"><span>قبل الضريبة</span><span>{{entity.subtotal}}</span></div>
+  <div style="display:flex;justify-content:space-between;font-size:8pt"><span>الضريبة ({{entity.vatRate}}%)</span><span>{{entity.vatAmount}}</span></div>
+  <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:10pt;border-top:1px solid #000;padding-top:1mm;margin-top:1mm"><span>الإجمالي</span><span>{{entity.total}} {{entity.currency}}</span></div>
+  <div style="display:flex;justify-content:space-between;font-size:8pt"><span>المدفوع</span><span>{{entity.paidAmount}}</span></div>
+  <div style="display:flex;justify-content:space-between;font-size:8pt"><span>الباقي</span><span>{{entity.changeAmount}}</span></div>
+  <div style="border-top:1px dashed #000;margin:2mm 0"></div>
+  <div style="text-align:center;font-size:7pt;margin-top:2mm">{{system.verifyQr}}</div>
+  <div style="text-align:center;font-size:7pt;margin-top:2mm">شكراً لزيارتكم</div>
+</div>`,
+    layoutJson: null,
+    cssOverrides: null,
+    headerOverride: null,
+    footerOverride: null,
+    isThermal: true,
+    version: 1,
+  };
+}
+
+function buildStockTransferPreset(): PrintTemplate {
+  return makePreset({
+    id: -44, presetKey: "stock_transfer_classic", entityType: "stock_transfer",
+    name: "تحويل مخزون",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">سند تحويل مخزون</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم السند: <span dir="ltr">{{entity.ref}}</span></div>
+<div class="meta-grid">
+  <div><strong>من مستودع:</strong> {{entity.fromWarehouseName}}</div>
+  <div><strong>إلى مستودع:</strong> {{entity.toWarehouseName}}</div>
+  <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>السبب:</strong> {{entity.reason}}</div>
+  <div><strong>أنشأ التحويل:</strong> {{entity.createdByName}}</div>
+</div>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:right">الصنف</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:110px">رقم الصنف</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:90px">الكمية</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;width:80px">الوحدة</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px">{{this.productName}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-family:monospace;text-align:center">{{this.sku}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center;font-weight:bold">{{this.quantity}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.unit}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<div class="signatures" style="margin-top:36px">
+  <div>أمين المستودع المُصدِر<br/>____________________</div>
+  <div>الناقل<br/>____________________</div>
+  <div>أمين المستودع المستلِم<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildStockAdjustmentPreset(): PrintTemplate {
+  return makePreset({
+    id: -45, presetKey: "stock_adjustment_classic", entityType: "stock_adjustment",
+    name: "تسوية مخزون",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">سند تسوية مخزون</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم السند: <span dir="ltr">{{entity.ref}}</span></div>
+<div class="meta-grid">
+  <div><strong>المستودع:</strong> {{entity.warehouseName}}</div>
+  <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+  <div><strong>نوع التسوية:</strong> {{entity.adjustmentType}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>أنشأ التسوية:</strong> {{entity.createdByName}}</div>
+  <div><strong>اعتمد التسوية:</strong> {{entity.approvedByName}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">سبب التسوية</div>
+  <div style="white-space:pre-wrap">{{entity.reason}}</div>
+</div>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;text-align:right">الصنف</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:90px">الكمية القديمة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:90px">الكمية الجديدة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:90px">الفرق</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px">{{this.productName}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.oldQuantity}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.newQuantity}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center;font-weight:bold">{{this.variance}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<div class="signatures" style="margin-top:36px">
+  <div>أمين المستودع<br/>____________________</div>
+  <div>المراجع<br/>____________________</div>
+  <div>المدير المالي<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildInventoryCountPreset(): PrintTemplate {
+  return makePreset({
+    id: -46, presetKey: "inventory_count_classic", entityType: "inventory_count",
+    name: "كشف جرد",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">كشف جرد مخزون</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم الجرد: <span dir="ltr">{{entity.ref}}</span></div>
+<div class="meta-grid">
+  <div><strong>المستودع:</strong> {{entity.warehouseName}}</div>
+  <div><strong>تاريخ الجرد:</strong> {{entity.countDate}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>عدد الأصناف:</strong> {{entity.lineCount}}</div>
+  <div><strong>المسؤول:</strong> {{entity.assigneeName}}</div>
+  <div><strong>المعتمد:</strong> {{entity.approvedByName}}</div>
+</div>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;text-align:right">الصنف</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:90px">رقم الصنف</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:80px">المتوقع</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:80px">العدّ الفعلي</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:80px">الفرق</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px">{{this.productName}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;font-family:monospace;text-align:center">{{this.sku}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.expectedQty}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.actualQty}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center;font-weight:bold">{{this.variance}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<div class="signatures" style="margin-top:36px">
+  <div>القائم بالجرد<br/>____________________</div>
+  <div>أمين المستودع<br/>____________________</div>
+  <div>المراجع<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildExcuseRequestPreset(): PrintTemplate {
+  return makePreset({
+    id: -47, presetKey: "excuse_request_classic", entityType: "excuse_request",
+    name: "طلب استئذان",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب استئذان</h2>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">الموظف</div>
+      <div>{{employee.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الرقم الوظيفي: {{employee.empNumber}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>تاريخ الطلب:</strong> {{entity.createdAt}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<div class="meta-grid">
+  <div><strong>تاريخ الاستئذان:</strong> {{entity.excuseDate}}</div>
+  <div><strong>من ساعة:</strong> {{entity.startTime}}</div>
+  <div><strong>إلى ساعة:</strong> {{entity.endTime}}</div>
+  <div><strong>عدد الساعات:</strong> {{entity.hours}}</div>
+</div>
+<div style="margin:18px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">السبب</div>
+  <div style="white-space:pre-wrap">{{entity.reason}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>الموظف<br/>____________________</div>
+  <div>المدير المباشر<br/>____________________</div>
+  <div>الموارد البشرية<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildTransferRequestPreset(): PrintTemplate {
+  return makePreset({
+    id: -48, presetKey: "transfer_request_classic", entityType: "transfer",
+    name: "طلب نقل",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب نقل وظيفي</h2>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">الموظف</div>
+      <div>{{employee.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الرقم الوظيفي: {{employee.empNumber}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>تاريخ الطلب:</strong> {{entity.createdAt}}</div>
+      <div><strong>تاريخ النفاذ:</strong> {{entity.effectiveDate}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <tr>
+    <td style="border:1px solid #cbd5e1;padding:8px;background:#fef9c3;font-weight:bold">من قسم</td>
+    <td style="border:1px solid #cbd5e1;padding:8px">{{entity.fromDepartment}}</td>
+    <td style="border:1px solid #cbd5e1;padding:8px;background:#dcfce7;font-weight:bold">إلى قسم</td>
+    <td style="border:1px solid #cbd5e1;padding:8px">{{entity.toDepartment}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #cbd5e1;padding:8px;background:#fef9c3;font-weight:bold">من فرع</td>
+    <td style="border:1px solid #cbd5e1;padding:8px">{{entity.fromBranch}}</td>
+    <td style="border:1px solid #cbd5e1;padding:8px;background:#dcfce7;font-weight:bold">إلى فرع</td>
+    <td style="border:1px solid #cbd5e1;padding:8px">{{entity.toBranch}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #cbd5e1;padding:8px;background:#fef9c3;font-weight:bold">المسمى الحالي</td>
+    <td style="border:1px solid #cbd5e1;padding:8px">{{entity.currentJobTitle}}</td>
+    <td style="border:1px solid #cbd5e1;padding:8px;background:#dcfce7;font-weight:bold">المسمى الجديد</td>
+    <td style="border:1px solid #cbd5e1;padding:8px">{{entity.newJobTitle}}</td>
+  </tr>
+</table>
+<div style="margin:18px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">سبب النقل</div>
+  <div style="white-space:pre-wrap">{{entity.reason}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>الموظف<br/>____________________</div>
+  <div>مدير القسم المُصدِر<br/>____________________</div>
+  <div>مدير القسم المستلِم<br/>____________________</div>
+  <div>الموارد البشرية<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildAttendancePreset(): PrintTemplate {
+  return makePreset({
+    id: -49, presetKey: "attendance_classic", entityType: "attendance",
+    name: "سجل حضور",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">سجل حضور</h2>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">الموظف</div>
+      <div>{{employee.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الرقم الوظيفي: {{employee.empNumber}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>التاريخ:</strong> {{entity.attendanceDate}}</div>
+      <div><strong>اليوم:</strong> {{entity.dayName}}</div>
+      <div><strong>الوردية:</strong> {{entity.shiftName}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <tr style="background:#f1f5f9">
+    <th style="border:1px solid #cbd5e1;padding:8px">الحدث</th>
+    <th style="border:1px solid #cbd5e1;padding:8px;width:120px">الوقت</th>
+    <th style="border:1px solid #cbd5e1;padding:8px;width:120px">الموقع</th>
+  </tr>
+  <tr>
+    <td style="border:1px solid #cbd5e1;padding:8px">دخول الصباح</td>
+    <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">{{entity.checkInTime}}</td>
+    <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">{{entity.checkInLocation}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #cbd5e1;padding:8px">خروج النهاية</td>
+    <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">{{entity.checkOutTime}}</td>
+    <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">{{entity.checkOutLocation}}</td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <tr>
+    <td style="border:1px solid #cbd5e1;padding:8px;background:#fef9c3;font-weight:bold">دقائق التأخر</td>
+    <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">{{entity.lateMinutes}}</td>
+    <td style="border:1px solid #cbd5e1;padding:8px;background:#fee2e2;font-weight:bold">دقائق المغادرة المبكرة</td>
+    <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">{{entity.earlyMinutes}}</td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #cbd5e1;padding:8px;background:#dcfce7;font-weight:bold">ساعات العمل</td>
+    <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">{{entity.workedHours}}</td>
+    <td style="border:1px solid #cbd5e1;padding:8px;background:#dbeafe;font-weight:bold">الحالة</td>
+    <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">{{entity.status}}</td>
+  </tr>
+</table>
+<div style="margin:14px 0;color:#475569;font-size:10pt;white-space:pre-wrap">{{entity.notes}}</div>
+<div class="signatures" style="margin-top:36px">
+  <div>الموظف<br/>____________________</div>
+  <div>المدير المباشر<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildClientCardPreset(): PrintTemplate {
+  return makePreset({
+    id: -50, presetKey: "client_card_classic", entityType: "client",
+    name: "بطاقة عميل",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة عميل</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>اسم العميل:</strong> {{entity.name}}</div>
+  <div><strong>الاسم بالإنجليزية:</strong> {{entity.nameEn}}</div>
+  <div><strong>نوع العميل:</strong> {{entity.clientType}}</div>
+  <div><strong>التصنيف:</strong> {{entity.category}}</div>
+  <div><strong>الرقم الضريبي:</strong> {{entity.taxNumber}}</div>
+  <div><strong>السجل التجاري:</strong> {{entity.commercialReg}}</div>
+  <div><strong>الهاتف:</strong> {{entity.phone}}</div>
+  <div><strong>البريد الإلكتروني:</strong> {{entity.email}}</div>
+  <div><strong>المدينة:</strong> {{entity.city}}</div>
+  <div><strong>الدولة:</strong> {{entity.country}}</div>
+  <div><strong>سقف الائتمان:</strong> {{entity.creditLimit}}</div>
+  <div><strong>شروط السداد:</strong> {{entity.paymentTerms}}</div>
+  <div><strong>المسؤول:</strong> {{entity.accountManagerName}}</div>
+  <div><strong>تاريخ الإضافة:</strong> {{entity.createdAt}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">العنوان الكامل</div>
+  <div style="white-space:pre-wrap">{{entity.address}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">ملاحظات</div>
+  <div style="white-space:pre-wrap">{{entity.notes}}</div>
+</div>`,
+  });
+}
+
+// ─── Batch-6 presets: master cards + niche transactions ──────────────────
+
+function buildBuildingCardPreset(): PrintTemplate {
+  return makePreset({
+    id: -51, presetKey: "building_card_classic", entityType: "building",
+    name: "بطاقة مبنى",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة مبنى</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>اسم المبنى:</strong> {{entity.name}}</div>
+  <div><strong>الكود:</strong> <span dir="ltr">{{entity.code}}</span></div>
+  <div><strong>المدينة:</strong> {{entity.city}}</div>
+  <div><strong>الحي:</strong> {{entity.district}}</div>
+  <div><strong>الشارع:</strong> {{entity.street}}</div>
+  <div><strong>رقم المبنى:</strong> {{entity.buildingNumber}}</div>
+  <div><strong>عدد الطوابق:</strong> {{entity.floors}}</div>
+  <div><strong>عدد الوحدات:</strong> {{entity.unitsCount}}</div>
+  <div><strong>المساحة الإجمالية:</strong> {{entity.totalArea}} م²</div>
+  <div><strong>المالك:</strong> {{entity.ownerName}}</div>
+  <div><strong>سنة البناء:</strong> {{entity.yearBuilt}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">العنوان الكامل</div>
+  <div style="white-space:pre-wrap">{{entity.fullAddress}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">ملاحظات</div>
+  <div style="white-space:pre-wrap">{{entity.notes}}</div>
+</div>`,
+  });
+}
+
+function buildVendorCardPreset(): PrintTemplate {
+  return makePreset({
+    id: -52, presetKey: "vendor_card_classic", entityType: "vendor",
+    name: "بطاقة مورّد",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة مورّد</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>اسم المورّد:</strong> {{entity.name}}</div>
+  <div><strong>الاسم بالإنجليزية:</strong> {{entity.nameEn}}</div>
+  <div><strong>الرقم الضريبي:</strong> {{entity.taxNumber}}</div>
+  <div><strong>السجل التجاري:</strong> {{entity.commercialReg}}</div>
+  <div><strong>الفئة:</strong> {{entity.category}}</div>
+  <div><strong>الهاتف:</strong> {{entity.phone}}</div>
+  <div><strong>البريد الإلكتروني:</strong> {{entity.email}}</div>
+  <div><strong>المدينة:</strong> {{entity.city}}</div>
+  <div><strong>الدولة:</strong> {{entity.country}}</div>
+  <div><strong>الموقع:</strong> {{entity.website}}</div>
+  <div><strong>شخص الاتصال:</strong> {{entity.contactPerson}}</div>
+  <div><strong>هاتف الاتصال:</strong> {{entity.contactPhone}}</div>
+  <div><strong>شروط السداد:</strong> {{entity.paymentTerms}}</div>
+  <div><strong>سقف الائتمان:</strong> {{entity.creditLimit}}</div>
+  <div><strong>العملة المفضلة:</strong> {{entity.preferredCurrency}}</div>
+  <div><strong>بنك المورّد:</strong> {{entity.bankName}}</div>
+  <div><strong>رقم الحساب (IBAN):</strong> <span dir="ltr">{{entity.iban}}</span></div>
+  <div><strong>تاريخ الإضافة:</strong> {{entity.createdAt}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">العنوان الكامل</div>
+  <div style="white-space:pre-wrap">{{entity.address}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">ملاحظات</div>
+  <div style="white-space:pre-wrap">{{entity.notes}}</div>
+</div>`,
+  });
+}
+
+function buildInsurancePolicyPreset(): PrintTemplate {
+  return makePreset({
+    id: -53, presetKey: "insurance_policy_classic", entityType: "insurance_policy",
+    name: "وثيقة تأمين",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">وثيقة تأمين</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم الوثيقة: <span dir="ltr">{{entity.policyNumber}}</span></div>
+<div class="meta-grid">
+  <div><strong>نوع التأمين:</strong> {{entity.policyType}}</div>
+  <div><strong>الجهة المؤمَّن لها:</strong> {{entity.insuredEntity}}</div>
+  <div><strong>شركة التأمين:</strong> {{entity.insurerName}}</div>
+  <div><strong>الوكيل:</strong> {{entity.agentName}}</div>
+  <div><strong>تاريخ البدء:</strong> {{entity.startDate}}</div>
+  <div><strong>تاريخ الانتهاء:</strong> {{entity.expiryDate}}</div>
+  <div><strong>قيمة التغطية:</strong> {{entity.coverageAmount}}</div>
+  <div><strong>قيمة القسط:</strong> {{entity.premiumAmount}}</div>
+  <div><strong>دورية القسط:</strong> {{entity.paymentFrequency}}</div>
+  <div><strong>نسبة التحمل:</strong> {{entity.deductible}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">التغطية</div>
+  <div style="white-space:pre-wrap">{{entity.coverageDetails}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الاستثناءات</div>
+  <div style="white-space:pre-wrap">{{entity.exclusions}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>الوكيل<br/>____________________</div>
+  <div>المؤمَّن له<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildStoreOrderPreset(): PrintTemplate {
+  return makePreset({
+    id: -54, presetKey: "store_order_classic", entityType: "store_order",
+    name: "طلب متجر",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب متجر إلكتروني</h2>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">العميل</div>
+      <div>{{entity.customerName}}</div>
+      <div style="color:#64748b;font-size:9pt">{{entity.customerPhone}}</div>
+      <div style="color:#64748b;font-size:9pt">{{entity.customerEmail}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>رقم الطلب:</strong> <span dir="ltr">{{entity.orderNumber}}</span></div>
+      <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+      <div><strong>طريقة الدفع:</strong> {{entity.paymentMethod}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<div style="margin:14px 0;padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;font-size:10pt">
+  <div style="font-weight:bold;margin-bottom:4px">عنوان الشحن</div>
+  <div style="white-space:pre-wrap">{{entity.shippingAddress}}</div>
+</div>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;text-align:right">المنتج</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:80px">الكمية</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:100px">السعر</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:100px">الإجمالي</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px">{{this.productName}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.quantity}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{this.unitPrice}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{this.totalPrice}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<table style="width:280px;margin-right:auto;margin-left:0;border-collapse:collapse">
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">المجموع</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.subtotal}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">الشحن</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.shippingFee}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">الضريبة</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.vatAmount}}</td></tr>
+  <tr style="background:#f1f5f9;font-weight:bold"><td style="padding:6px 8px;border:1px solid #cbd5e1">الإجمالي</td><td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.total}} {{entity.currency}}</td></tr>
+</table>
+<div style="margin:14px 0;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
+  });
+}
+
+function buildOpportunityPreset(): PrintTemplate {
+  return makePreset({
+    id: -55, presetKey: "crm_opportunity_classic", entityType: "crm_opportunity",
+    name: "فرصة بيع",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">فرصة بيع</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.title}}</div>
+<div class="meta-grid">
+  <div><strong>اسم الفرصة:</strong> {{entity.title}}</div>
+  <div><strong>العميل المحتمل:</strong> {{entity.clientName}}</div>
+  <div><strong>جهة الاتصال:</strong> {{entity.contactName}}</div>
+  <div><strong>المرحلة:</strong> {{entity.stage}}</div>
+  <div><strong>الاحتمالية:</strong> {{entity.probability}}%</div>
+  <div><strong>القيمة المتوقعة:</strong> {{entity.expectedValue}}</div>
+  <div><strong>تاريخ الإغلاق المتوقع:</strong> {{entity.closeDate}}</div>
+  <div><strong>المسؤول:</strong> {{entity.assigneeName}}</div>
+  <div><strong>المصدر:</strong> {{entity.source}}</div>
+  <div><strong>تاريخ الإنشاء:</strong> {{entity.createdAt}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#dbeafe;border:1px solid #93c5fd;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الخطوة التالية</div>
+  <div style="white-space:pre-wrap">{{entity.nextAction}}</div>
+</div>`,
+  });
+}
+
+function buildSupportTicketPreset(): PrintTemplate {
+  return makePreset({
+    id: -56, presetKey: "support_ticket_classic", entityType: "support_ticket",
+    name: "تذكرة دعم",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">تذكرة دعم</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.subject}}</div>
+<div class="meta-grid">
+  <div><strong>رقم التذكرة:</strong> <span dir="ltr">{{entity.ticketNumber}}</span></div>
+  <div><strong>الموضوع:</strong> {{entity.subject}}</div>
+  <div><strong>الفئة:</strong> {{entity.category}}</div>
+  <div><strong>الأولوية:</strong> {{entity.priority}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>المقدِّم:</strong> {{entity.reporterName}}</div>
+  <div><strong>مكلَّف بـ:</strong> {{entity.assigneeName}}</div>
+  <div><strong>القناة:</strong> {{entity.channel}}</div>
+  <div><strong>تاريخ الفتح:</strong> {{entity.createdAt}}</div>
+  <div><strong>SLA الاستجابة:</strong> {{entity.responseSla}}</div>
+  <div><strong>SLA الحل:</strong> {{entity.resolutionSla}}</div>
+  <div><strong>تاريخ الإغلاق:</strong> {{entity.closedAt}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الحل المطبَّق</div>
+  <div style="white-space:pre-wrap">{{entity.resolution}}</div>
+</div>`,
+  });
+}
+
+function buildUmrahPilgrimPreset(): PrintTemplate {
+  return makePreset({
+    id: -57, presetKey: "umrah_pilgrim_classic", entityType: "umrah_pilgrim",
+    name: "بطاقة معتمر",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة معتمر</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>الاسم بالكامل:</strong> {{entity.name}}</div>
+  <div><strong>الاسم بالإنجليزية:</strong> <span dir="ltr">{{entity.nameEn}}</span></div>
+  <div><strong>رقم الجواز:</strong> <span dir="ltr">{{entity.passportNumber}}</span></div>
+  <div><strong>الجنسية:</strong> {{entity.nationality}}</div>
+  <div><strong>تاريخ الميلاد:</strong> {{entity.birthDate}}</div>
+  <div><strong>الجنس:</strong> {{entity.gender}}</div>
+  <div><strong>الهاتف:</strong> {{entity.phone}}</div>
+  <div><strong>البريد الإلكتروني:</strong> {{entity.email}}</div>
+  <div><strong>الموسم:</strong> {{entity.seasonName}}</div>
+  <div><strong>الباقة:</strong> {{entity.packageName}}</div>
+  <div><strong>المجموعة:</strong> {{entity.groupName}}</div>
+  <div><strong>الوكيل:</strong> {{entity.agentName}}</div>
+  <div><strong>تاريخ الوصول:</strong> {{entity.arrivalDate}}</div>
+  <div><strong>تاريخ المغادرة:</strong> {{entity.departureDate}}</div>
+  <div><strong>السكن:</strong> {{entity.accommodation}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">جهة الاتصال في حالة الطوارئ</div>
+  <div>{{entity.emergencyContact}}</div>
+  <div>{{entity.emergencyPhone}}</div>
+</div>
+<div style="margin:14px 0;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
+  });
+}
+
+function buildUmrahInvoicePreset(): PrintTemplate {
+  return makePreset({
+    id: -58, presetKey: "umrah_invoice_classic", entityType: "umrah_invoice",
+    name: "فاتورة عمرة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">فاتورة عمرة</h2>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">المعتمر / المجموعة</div>
+      <div>{{entity.pilgrimName}}</div>
+      <div style="color:#64748b;font-size:9pt">{{entity.groupName}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>رقم الفاتورة:</strong> <span dir="ltr">{{entity.ref}}</span></div>
+      <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+      <div><strong>الموسم:</strong> {{entity.seasonName}}</div>
+      <div><strong>الباقة:</strong> {{entity.packageName}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;text-align:right">الخدمة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:80px">العدد</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:100px">السعر</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:110px">الإجمالي</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px">{{this.description}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.quantity}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{this.unitPrice}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{this.totalPrice}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<table style="width:280px;margin-right:auto;margin-left:0;border-collapse:collapse">
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">قبل الضريبة</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.subtotal}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">الضريبة</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.vatAmount}}</td></tr>
+  <tr style="background:#f1f5f9;font-weight:bold"><td style="padding:6px 8px;border:1px solid #cbd5e1">الإجمالي</td><td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.total}} {{entity.currency}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">المدفوع</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.paidAmount}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">المتبقي</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.remaining}}</td></tr>
+</table>
+<div style="margin-top:18px;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
+  });
+}
+
+function buildProjectCardPreset(): PrintTemplate {
+  return makePreset({
+    id: -59, presetKey: "project_card_classic", entityType: "project",
+    name: "بطاقة مشروع",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة مشروع</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>اسم المشروع:</strong> {{entity.name}}</div>
+  <div><strong>الكود:</strong> <span dir="ltr">{{entity.code}}</span></div>
+  <div><strong>العميل:</strong> {{entity.clientName}}</div>
+  <div><strong>المدير المسؤول:</strong> {{entity.managerName}}</div>
+  <div><strong>تاريخ البدء:</strong> {{entity.startDate}}</div>
+  <div><strong>تاريخ النهاية المتوقع:</strong> {{entity.endDate}}</div>
+  <div><strong>الميزانية:</strong> {{entity.budget}}</div>
+  <div><strong>المنفَّذ حتى الآن:</strong> {{entity.actualCost}}</div>
+  <div><strong>نسبة الإنجاز:</strong> {{entity.progress}}%</div>
+  <div><strong>المرحلة:</strong> {{entity.stage}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الأهداف الرئيسية</div>
+  <div style="white-space:pre-wrap">{{entity.objectives}}</div>
+</div>`,
+  });
+}
+
+// ─── Batch-7 presets: final coverage round ───────────────────────────────
+
+function buildDisciplineMemoPreset(): PrintTemplate {
+  return makePreset({
+    id: -60, presetKey: "discipline_memo_classic", entityType: "discipline_memo",
+    name: "مذكرة إنذار",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #991b1b;color:#991b1b">مذكرة إنذار</h2>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">الموظف</div>
+      <div>{{employee.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الرقم الوظيفي: {{employee.empNumber}}</div>
+      <div style="color:#64748b;font-size:9pt">القسم: {{employee.departmentName}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>رقم المذكرة:</strong> {{entity.ref}}</div>
+      <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+      <div><strong>المستوى:</strong> {{entity.severity}}</div>
+      <div><strong>عدد المخالفات السابقة:</strong> {{entity.priorCount}}</div>
+    </td>
+  </tr>
+</table>
+<div style="margin:14px 0;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px;color:#991b1b">نوع المخالفة</div>
+  <div>{{entity.violationType}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px;color:#991b1b">تفاصيل المخالفة</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الإجراء المتخَذ</div>
+  <div style="white-space:pre-wrap">{{entity.action}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>الموظف<br/>____________________</div>
+  <div>المدير المباشر<br/>____________________</div>
+  <div>الموارد البشرية<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildFleetMaintenancePreset(): PrintTemplate {
+  return makePreset({
+    id: -61, presetKey: "fleet_maintenance_classic", entityType: "fleet_maintenance",
+    name: "أمر صيانة مركبة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">أمر صيانة مركبة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">رقم الأمر: <span dir="ltr">{{entity.ref}}</span></div>
+<div class="meta-grid">
+  <div><strong>المركبة:</strong> {{entity.plateNumber}}</div>
+  <div><strong>السائق:</strong> {{entity.driverName}}</div>
+  <div><strong>نوع الصيانة:</strong> {{entity.serviceType}}</div>
+  <div><strong>التاريخ:</strong> {{entity.serviceDate}}</div>
+  <div><strong>الورشة:</strong> {{entity.workshopName}}</div>
+  <div><strong>عدد الكيلومترات:</strong> {{entity.odometer}}</div>
+  <div><strong>تاريخ الصيانة القادمة:</strong> {{entity.nextServiceDate}}</div>
+  <div><strong>الكيلومترات للصيانة القادمة:</strong> {{entity.nextServiceKm}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">وصف العطل / الطلب</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الأعمال المنفَّذة</div>
+  <div style="white-space:pre-wrap">{{entity.workPerformed}}</div>
+</div>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold;width:50%">تكلفة قطع الغيار</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.partsCost}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">تكلفة العمالة</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.laborCost}}</td></tr>
+  <tr style="background:#fef9c3;font-weight:bold"><td style="border:1px solid #ca8a04;padding:8px">إجمالي التكلفة</td><td style="border:1px solid #ca8a04;padding:8px;text-align:left">{{entity.totalCost}}</td></tr>
+</table>
+<div class="signatures" style="margin-top:36px">
+  <div>السائق<br/>____________________</div>
+  <div>الورشة<br/>____________________</div>
+  <div>أمين الأسطول<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildSalaryAdvancePreset(): PrintTemplate {
+  return makePreset({
+    id: -62, presetKey: "salary_advance_classic", entityType: "salary_advance",
+    name: "سلفة راتب",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">طلب سلفة راتب</h2>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">الموظف</div>
+      <div>{{employee.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الرقم الوظيفي: {{employee.empNumber}}</div>
+      <div style="color:#64748b;font-size:9pt">الراتب الأساسي: {{employee.baseSalary}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>رقم السلفة:</strong> {{entity.ref}}</div>
+      <div><strong>تاريخ الطلب:</strong> {{entity.createdAt}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold;width:50%">مبلغ السلفة</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left;font-size:13pt;font-weight:bold">{{entity.amount}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">عدد أشهر الخصم</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.installmentCount}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">قيمة القسط الشهري</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.monthlyInstallment}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">تاريخ بدء الخصم</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.firstDeductionDate}}</td></tr>
+</table>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">سبب طلب السلفة</div>
+  <div style="white-space:pre-wrap">{{entity.reason}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>الموظف<br/>____________________</div>
+  <div>المدير المباشر<br/>____________________</div>
+  <div>الموارد البشرية<br/>____________________</div>
+  <div>المالية<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildCustodyPreset(): PrintTemplate {
+  return makePreset({
+    id: -63, presetKey: "custody_classic", entityType: "custody",
+    name: "سند عهدة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">سند عهدة</h2>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">الموظف العهدة</div>
+      <div>{{employee.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الرقم الوظيفي: {{employee.empNumber}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>رقم السند:</strong> {{entity.ref}}</div>
+      <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+      <div><strong>الغرض:</strong> {{entity.purpose}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#fef9c3;font-weight:bold;width:50%">مبلغ العهدة</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left;font-size:13pt;font-weight:bold">{{entity.amount}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">المُسدَّد</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.settledAmount}}</td></tr>
+  <tr style="background:#fef2f2;font-weight:bold"><td style="border:1px solid #fecaca;padding:8px">المتبقي</td><td style="border:1px solid #fecaca;padding:8px;text-align:left">{{entity.remainingAmount}}</td></tr>
+</table>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">وصف الغرض</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>المستلِم<br/>____________________</div>
+  <div>المعتمِد<br/>____________________</div>
+  <div>المالية<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildTrainingProgramPreset(): PrintTemplate {
+  return makePreset({
+    id: -64, presetKey: "training_program_classic", entityType: "training_program",
+    name: "برنامج تدريبي",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">برنامج تدريبي</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.title}}</div>
+<div class="meta-grid">
+  <div><strong>اسم البرنامج:</strong> {{entity.title}}</div>
+  <div><strong>الفئة:</strong> {{entity.category}}</div>
+  <div><strong>المُدرِّب:</strong> {{entity.trainerName}}</div>
+  <div><strong>الجهة المقدِّمة:</strong> {{entity.provider}}</div>
+  <div><strong>تاريخ البدء:</strong> {{entity.startDate}}</div>
+  <div><strong>تاريخ النهاية:</strong> {{entity.endDate}}</div>
+  <div><strong>عدد الساعات:</strong> {{entity.totalHours}}</div>
+  <div><strong>عدد المقاعد:</strong> {{entity.seats}}</div>
+  <div><strong>عدد المسجَّلين:</strong> {{entity.enrolledCount}}</div>
+  <div><strong>الموقع:</strong> {{entity.location}}</div>
+  <div><strong>التكلفة لكل موظف:</strong> {{entity.costPerEmployee}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الهدف من البرنامج</div>
+  <div style="white-space:pre-wrap">{{entity.objectives}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">المحاور</div>
+  <div style="white-space:pre-wrap">{{entity.modules}}</div>
+</div>`,
+  });
+}
+
+function buildWarehouseProductPreset(): PrintTemplate {
+  return makePreset({
+    id: -65, presetKey: "warehouse_product_classic", entityType: "warehouse_product",
+    name: "بطاقة منتج",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة منتج مستودع</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>اسم المنتج:</strong> {{entity.name}}</div>
+  <div><strong>الاسم بالإنجليزية:</strong> <span dir="ltr">{{entity.nameEn}}</span></div>
+  <div><strong>رقم الصنف (SKU):</strong> <span dir="ltr">{{entity.sku}}</span></div>
+  <div><strong>الباركود:</strong> <span dir="ltr">{{entity.barcode}}</span></div>
+  <div><strong>التصنيف:</strong> {{entity.categoryName}}</div>
+  <div><strong>الوحدة:</strong> {{entity.unit}}</div>
+  <div><strong>المستودع:</strong> {{entity.warehouseName}}</div>
+  <div><strong>المخزون الحالي:</strong> {{entity.currentStock}}</div>
+  <div><strong>الحد الأدنى:</strong> {{entity.minStock}}</div>
+  <div><strong>الحد الأعلى:</strong> {{entity.maxStock}}</div>
+  <div><strong>سعر التكلفة:</strong> {{entity.costPrice}}</div>
+  <div><strong>سعر البيع:</strong> {{entity.price}}</div>
+  <div><strong>نسبة الضريبة:</strong> {{entity.vatRate}}%</div>
+  <div><strong>المورّد الافتراضي:</strong> {{entity.defaultSupplierName}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">ملاحظات</div>
+  <div style="white-space:pre-wrap">{{entity.notes}}</div>
+</div>`,
+  });
+}
+
+function buildBudgetPreset(): PrintTemplate {
+  return makePreset({
+    id: -66, presetKey: "budget_classic", entityType: "budget",
+    name: "موازنة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">موازنة تقديرية</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.title}}</div>
+<div class="meta-grid">
+  <div><strong>عنوان الموازنة:</strong> {{entity.title}}</div>
+  <div><strong>السنة المالية:</strong> {{entity.fiscalYear}}</div>
+  <div><strong>الفترة:</strong> {{entity.period}}</div>
+  <div><strong>مركز التكلفة:</strong> {{entity.costCenterName}}</div>
+  <div><strong>المسؤول:</strong> {{entity.ownerName}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>تاريخ الإنشاء:</strong> {{entity.createdAt}}</div>
+  <div><strong>تاريخ الاعتماد:</strong> {{entity.approvedAt}}</div>
+</div>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold;width:33%">إجمالي الموازنة</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left;font-weight:bold;font-size:13pt">{{entity.totalBudget}}</td></tr>
+  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">المُستنفَد حتى الآن</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.consumed}}</td></tr>
+  <tr style="background:#dcfce7;font-weight:bold"><td style="border:1px solid #16a34a;padding:8px">المتبقي</td><td style="border:1px solid #16a34a;padding:8px;text-align:left">{{entity.remaining}}</td></tr>
+</table>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>المُعِد<br/>____________________</div>
+  <div>المراجع<br/>____________________</div>
+  <div>المعتمِد<br/>____________________</div>
+</div>`,
+  });
+}
+
+function buildGovernancePolicyPreset(): PrintTemplate {
+  return makePreset({
+    id: -67, presetKey: "governance_policy_classic", entityType: "governance_policy",
+    name: "سياسة حوكمة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">سياسة حوكمة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.title}}</div>
+<div class="meta-grid">
+  <div><strong>عنوان السياسة:</strong> {{entity.title}}</div>
+  <div><strong>الكود:</strong> <span dir="ltr">{{entity.code}}</span></div>
+  <div><strong>المجال:</strong> {{entity.domain}}</div>
+  <div><strong>الفئة:</strong> {{entity.category}}</div>
+  <div><strong>الإصدار:</strong> {{entity.version}}</div>
+  <div><strong>تاريخ النفاذ:</strong> {{entity.effectiveDate}}</div>
+  <div><strong>تاريخ المراجعة القادمة:</strong> {{entity.nextReviewDate}}</div>
+  <div><strong>المسؤول:</strong> {{entity.ownerName}}</div>
+  <div><strong>المعتمِد:</strong> {{entity.approvedByName}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الغرض</div>
+  <div style="white-space:pre-wrap">{{entity.purpose}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">النطاق</div>
+  <div style="white-space:pre-wrap">{{entity.scope}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">المحتوى</div>
+  <div style="white-space:pre-wrap">{{entity.content}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">المسؤوليات</div>
+  <div style="white-space:pre-wrap">{{entity.responsibilities}}</div>
+</div>
+<div class="signatures" style="margin-top:36px">
+  <div>مالك السياسة<br/>____________________</div>
+  <div>الشؤون القانونية<br/>____________________</div>
+  <div>الإدارة العليا<br/>____________________</div>
+</div>`,
+  });
+}
+
+// ─── Final config-card presets ───────────────────────────────────────────
+
+function buildShiftCardPreset(): PrintTemplate {
+  return makePreset({
+    id: -70, presetKey: "shift_card_classic", entityType: "shift",
+    name: "بطاقة وردية",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة وردية عمل</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>اسم الوردية:</strong> {{entity.name}}</div>
+  <div><strong>الكود:</strong> <span dir="ltr">{{entity.code}}</span></div>
+  <div><strong>وقت البداية:</strong> {{entity.startTime}}</div>
+  <div><strong>وقت النهاية:</strong> {{entity.endTime}}</div>
+  <div><strong>عدد الساعات:</strong> {{entity.totalHours}}</div>
+  <div><strong>أيام العمل:</strong> {{entity.workDays}}</div>
+  <div><strong>أيام الراحة:</strong> {{entity.offDays}}</div>
+  <div><strong>دقائق سماح التأخر:</strong> {{entity.lateGraceMinutes}}</div>
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>`,
+  });
+}
+
+function buildUmrahSeasonPreset(): PrintTemplate {
+  return makePreset({
+    id: -71, presetKey: "umrah_season_classic", entityType: "umrah_season",
+    name: "موسم عمرة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">إعداد موسم عمرة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>اسم الموسم:</strong> {{entity.name}}</div>
+  <div><strong>السنة الهجرية:</strong> {{entity.hijriYear}}</div>
+  <div><strong>السنة الميلادية:</strong> {{entity.gregorianYear}}</div>
+  <div><strong>تاريخ البدء:</strong> {{entity.startDate}}</div>
+  <div><strong>تاريخ النهاية:</strong> {{entity.endDate}}</div>
+  <div><strong>عدد الوكلاء:</strong> {{entity.agentCount}}</div>
+  <div><strong>عدد المعتمرين المتوقَّع:</strong> {{entity.expectedPilgrims}}</div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">ملاحظات الموسم</div>
+  <div style="white-space:pre-wrap">{{entity.notes}}</div>
+</div>`,
+  });
+}
+
+function buildChartOfAccountPreset(): PrintTemplate {
+  return makePreset({
+    id: -72, presetKey: "chart_of_account_classic", entityType: "chart_of_account",
+    name: "بطاقة حساب",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">بطاقة حساب محاسبي</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}} — <span dir="ltr">{{entity.code}}</span></div>
+<div class="meta-grid">
+  <div><strong>رمز الحساب:</strong> <span dir="ltr">{{entity.code}}</span></div>
+  <div><strong>اسم الحساب:</strong> {{entity.name}}</div>
+  <div><strong>الاسم بالإنجليزية:</strong> <span dir="ltr">{{entity.nameEn}}</span></div>
+  <div><strong>نوع الحساب:</strong> {{entity.type}}</div>
+  <div><strong>المستوى:</strong> {{entity.level}}</div>
+  <div><strong>الحساب الأب:</strong> <span dir="ltr">{{entity.parentCode}}</span></div>
+  <div><strong>تحليلي / تجميعي:</strong> {{entity.isAnalytical}}</div>
+  <div><strong>يسمح بالقيود:</strong> {{entity.allowPosting}}</div>
+  <div><strong>الرصيد الحالي:</strong> {{entity.currentBalance}}</div>
+  <div><strong>العملة:</strong> {{entity.currency}}</div>
+  <div><strong>الحالة:</strong> {{entity.isActive}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">الوصف</div>
+  <div style="white-space:pre-wrap">{{entity.description}}</div>
+</div>`,
+  });
+}
+
+/** Map snake_case entityType → Arabic display label. Mirrors the labels
+ *  the SPA uses on detail/list pages so the printed doc reads the same as
+ *  the screen. Anything not in the map falls back to the raw entityType,
+ *  which is rare now that every common type has a bespoke preset. */
+const ARABIC_TITLES: Record<string, string> = {
+  invoice: "فاتورة ضريبية", sales_invoice: "فاتورة مبيعات",
+  credit_note: "إشعار دائن", pos_receipt: "إيصال نقطة بيع",
+  receipt_voucher: "سند قبض", payment_voucher: "سند صرف",
+  quotation: "عرض سعر", sales_order: "أمر بيع", delivery_note: "إذن تسليم",
+  purchase_order: "أمر شراء", purchase_request: "طلب شراء",
+  goods_receipt: "إيصال استلام بضاعة", journal_entry: "قيد محاسبي",
+  account_statement: "كشف حساب",
+  stock_transfer: "تحويل مخزون", stock_adjustment: "تسوية مخزون",
+  item_barcode_label: "ملصق باركود",
+  leave_request: "طلب إجازة", loan_request: "طلب قرض", loan: "قرض موظف",
+  maintenance_request: "طلب صيانة", payroll: "كشف رواتب", payslip: "قسيمة راتب",
+  official_letter: "خطاب رسمي", employee_contract: "عقد عمل",
+  employee: "بطاقة موظف", employee_profile: "بطاقة موظف",
+  overtime_request: "طلب عمل إضافي", exit_request: "طلب إنهاء خدمة",
+  evaluation_360: "تقييم 360°", training: "دورة تدريبية",
+  discipline_memo: "مذكرة إنذار", attendance: "سجل حضور",
+  excuse: "عذر", excuse_request: "طلب استئذان", performance_review: "تقييم أداء",
+  vehicle: "بطاقة مركبة", fleet_trip: "كشف رحلة", driver: "سائق",
+  fuel: "تعبئة وقود", fixed_asset: "بطاقة أصل ثابت",
+  vendor: "بطاقة مورّد", supplier: "بطاقة مورّد",
+  rental_contract: "عقد إيجار", property_unit: "بطاقة وحدة عقارية",
+  tenant: "بطاقة مستأجر", building: "بطاقة مبنى",
+  legal_contract: "عقد قانوني", legal_judgment: "ملف قضية",
+  legal_session: "محضر جلسة",
+  umrah_invoice: "فاتورة عمرة", umrah_statement: "كشف وكيل عمرة",
+  umrah_runsheet: "كشف اليوم — عمرة", umrah_agent: "وكيل عمرة",
+  umrah_sub_agent: "وكيل عمرة فرعي", umrah_pilgrim: "معتمر",
+  umrah_package: "باقة عمرة", umrah_season: "موسم عمرة",
+  umrah_transport: "نقل عمرة", umrah_penalty: "عقوبة عمرة",
+  umrah_violation: "مخالفة عمرة",
+  budget: "موازنة", custody: "عهدة", commitment: "التزام",
+  receivable: "ذمم مدينة", recurring_journal: "قيد متكرر",
+  project: "مشروع", project_costing: "تكلفة مشروع",
+  fleet_maintenance: "صيانة مركبة", salary_advance: "سلفة راتب",
+  training_program: "برنامج تدريبي", warehouse_product: "بطاقة منتج",
+  governance_policy: "سياسة حوكمة",
+  task: "مهمة", request: "طلب", policy: "سياسة", risk: "مخاطرة",
+  compliance: "التزام تنظيمي", audit_record: "سجل تدقيق",
+  insurance: "وثيقة تأمين", traffic_violation: "مخالفة مرورية",
+  shift: "وردية عمل", expense: "مصروف", transfer: "تحويل",
+  job: "وظيفة شاغرة", job_posting: "إعلان وظيفي", store_order: "طلب متجر", store_product: "منتج متجر",
+  support_ticket: "تذكرة دعم", warehouse_category: "تصنيف مستودع",
+  owner: "بطاقة مالك", policy_detail: "تفاصيل سياسة",
+  client: "بطاقة عميل", crm_lead: "عميل محتمل",
+};
+
 function universalFallback(entityType: string): PrintTemplate {
+  const title = ARABIC_TITLES[entityType] ?? entityType;
   return {
     id: -1,
-    name: `Universal fallback — ${entityType}`,
+    name: `قالب احتياطي — ${title}`,
     entityType,
     branchId: null,
     companyId: null,
@@ -331,7 +2854,7 @@ function universalFallback(entityType: string): PrintTemplate {
     presetKey: "universal",
     htmlContent: `<div class="print-doc">
 {{branch.letterhead}}
-<h2 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">${entityType}</h2>
+<h2 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">${title}</h2>
 <div class="meta-grid">
   <div><strong>المرجع:</strong> {{entity.ref}}</div>
   <div><strong>التاريخ:</strong> {{entity.date}}</div>
@@ -339,6 +2862,7 @@ function universalFallback(entityType: string): PrintTemplate {
   <div><strong>المعرّف:</strong> {{entity.id}}</div>
 </div>
 {{entity.itemsTable}}
+{{system.verifyBlock}}
 {{branch.footer}}
 </div>`,
     layoutJson: null,

@@ -49,7 +49,7 @@
 - توحيد error handling عبر `FormShell`
 - اختبار كل صفحة بعد التحويل
 
-**التوصية**: تطبيق incremental — 20-30 صفحة/سبرنت بأولوية finance + HR.
+**حالة 2026-05-25**: 223/431 صفحة على FormShell (51.7%) — تم تجاوز نقطة الـ 50% وكل صفحات `pages/create/*` (76/76) مكتملة، بالإضافة إلى 10 shared/embedded components تنشر FormShell بطريقة fan-out (entity-comments, entity-selects QuickCreateDialog, detail-edit-delete-actions InlineEditCard, approval-actions ApprovalActions، …). الصفحات المتبقية (208) معظمها dashboards، filter-only pages، أو multi-checkbox toggle UIs لا تنطبق عليها نموذج static-schema للـ FormShell. الـ lint rule الصلب `manual-form-instead-of-formshell` يمنع الـ regression. التفاصيل في `docs/forms-migration-report.md`.
 
 ### 4. i18n الكامل + multi-language — ~3-4 أسابيع
 - استكمال `lib/i18n` بدالة `t(key)` كاملة

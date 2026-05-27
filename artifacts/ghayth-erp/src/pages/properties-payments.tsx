@@ -94,11 +94,6 @@ export default function PropertiesPayments() {
             <AlertTriangle className="h-4 w-4" />
             {escalateMut.isPending ? "جاري التصعيد..." : "تصعيد المتأخّرات"}
           </GuardedButton>
-          <Link href="/properties/payments/new/pay">
-            <GuardedButton perm="property:create" className="gap-2">
-              <Banknote className="h-4 w-4" /> تسجيل دفعة
-            </GuardedButton>
-          </Link>
         </div>
       )}
     >

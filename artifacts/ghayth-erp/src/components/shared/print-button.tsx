@@ -151,7 +151,29 @@ export function PrintButton({
         // Arabic / emoji / any non-ASCII content survives the round-trip.
         const bytes = base64ToUint8Array(resp.base64);
         const html = new TextDecoder("utf-8").decode(bytes);
+        // Blank-page guard: strip <style>, <script>, watermark overlay, and
+        // tags, then count the actual visible text. The original guard
+        // looked at the <body> tag presence — but the wrapper always
+        // includes the watermark div + auto-print script in <body>, so a
+        // doc with zero real content (the production "ما يطبع شي" case)
+        // still passed the check. Counting visible chars catches it.
+        const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+        const visibleText = (bodyMatch?.[1] ?? "")
+          .replace(/<style[\s\S]*?<\/style>/gi, "")
+          .replace(/<script[\s\S]*?<\/script>/gi, "")
+          .replace(/<div\s+class="watermark"[\s\S]*?<\/div>/gi, "")
+          .replace(/<[^>]+>/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        const hasBody = visibleText.length >= 40;
         if (previewWindow) {
+          if (!hasBody || html.length < 200) {
+            const diag = `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"/><title>وثيقة فارغة</title></head><body style="font-family:Tahoma,sans-serif;padding:40px;color:#475569"><h2>تعذّر بناء الوثيقة</h2><p>الخادم أعاد رداً صحيحاً ولكن محتوى الوثيقة فارغ.</p><p>الأسباب المحتملة: نوع الكيان (<code>${entityType}</code>) ليس له بيانات في هذا السجل (<code>${entityId}</code>)، أو القالب المُسند له htmlContent فارغ.</p><p>أرسل لقطة لهذه الصفحة + <code>jobId=${resp.jobId ?? "—"}</code> للدعم الفني.</p></body></html>`;
+            previewWindow.document.open();
+            previewWindow.document.write(diag);
+            previewWindow.document.close();
+            return;
+          }
           previewWindow.document.open();
           previewWindow.document.write(html);
           previewWindow.document.close();

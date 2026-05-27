@@ -140,7 +140,7 @@ export default function DriversPage() {
         renderRowExtras={(d) => {
           if (editingId === d.id) {
             return (
-              <InlineEditForm fields={editFields} form={editForm} setForm={setEditForm} onSave={() => handleSave(d.id, editForm)} onCancel={cancelEdit} isPending={isPending} />
+              <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(d.id, values)} onCancel={cancelEdit} isPending={isPending} />
             );
           }
           if (deletingId === d.id) {

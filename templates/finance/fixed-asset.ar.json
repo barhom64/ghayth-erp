@@ -1,0 +1,20 @@
+{
+  "code": "finance.fixed-asset",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "fixed_asset",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": true,
+  "qr": true,
+  "status": "published",
+  "domain": "finance",
+  "title": "بطاقة أصل ثابت",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "fixed_asset"
+  },
+  "ownerTeam": "finance"
+}

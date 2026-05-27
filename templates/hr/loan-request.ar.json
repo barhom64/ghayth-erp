@@ -1,0 +1,20 @@
+{
+  "code": "hr.loan-request",
+  "version": "1.0.0",
+  "locale": "ar",
+  "entityType": "loan_request",
+  "layout": "a4",
+  "paperSize": "A4",
+  "isThermal": false,
+  "branding": true,
+  "signature": true,
+  "qr": true,
+  "status": "published",
+  "domain": "hr",
+  "title": "طلب قرض / سُلفة",
+  "implementation": {
+    "kind": "bespoke-preset",
+    "key": "loan_request"
+  },
+  "ownerTeam": "hr"
+}
