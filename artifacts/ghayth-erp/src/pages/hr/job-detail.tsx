@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -61,6 +66,27 @@ export default function JobDetailPage() {
     !!id
   );
 
+  // PATCH /hr/recruitment/postings/:id is the plain update endpoint
+  // (close goes through /:id/close, not via status PATCH).
+  const editDelete = useDetailEditDelete({
+    entityLabel: "الوظيفة",
+    patchPath: `/hr/recruitment/postings/${id}`,
+    listPath: "/hr/recruitment",
+    initialValues: job,
+    fields: [
+      { key: "title", label: "العنوان" },
+      { key: "department", label: "القسم" },
+      { key: "location", label: "الموقع" },
+      { key: "type", label: "النوع (full_time/part_time/contract)" },
+      { key: "salaryMin", label: "الحد الأدنى للراتب", type: "number" },
+      { key: "salaryMax", label: "الحد الأعلى للراتب", type: "number" },
+      { key: "description", label: "الوصف" },
+      { key: "requirements", label: "المتطلبات" },
+    ],
+    invalidateKeys: [["recruitment-job", id], ["recruitment-postings"]],
+    onSaved: () => refetch(),
+  });
+
   const { data: appsResp } = useApiQuery<any>(
     ["job-applications", id],
     `/hr/recruitment/applications?postingId=${id}`,
@@ -102,10 +128,12 @@ export default function JobDetailPage() {
   );
 
   const overview = (
-    <Card className="border-0 shadow-sm">
-      <CardContent className="p-6 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <InfoRow label="المسمى الوظيفي" value={job?.title} />
+    <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
+      <Card className="border-0 shadow-sm">
+        <CardContent className="p-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InfoRow label="المسمى الوظيفي" value={job?.title} />
           <InfoRow label="القسم" value={job?.department} />
           <InfoRow label="الموقع" value={job?.location} />
           <InfoRow label="نوع العمل" value={job?.type} />
@@ -129,8 +157,9 @@ export default function JobDetailPage() {
             <p className="text-sm text-status-neutral-foreground whitespace-pre-wrap">{job.requirements}</p>
           </div>
         )}
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 
   const actions = (
@@ -236,6 +265,7 @@ export default function JobDetailPage() {
         <div className="flex items-center gap-2">
           {actions}
           <PrintButton entityType="job_posting" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <DetailActionButtons hook={editDelete} editPerm="hr:update" />
         </div>
       }
       extraTabs={[...extraTabs, ...registryExtraTabs]}

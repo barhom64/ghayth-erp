@@ -10,7 +10,8 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Target, Plus, BookOpen, TrendingUp, CheckCircle } from "lucide-react";
+import { Target, Plus, BookOpen, TrendingUp, CheckCircle, Trash2 } from "lucide-react";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import {
   PageShell,
   DataTable,
@@ -46,6 +47,7 @@ const STATUS_OPTIONS = Object.entries(IDP_STATUS).map(([value, { label }]) => ({
 export default function IDPPage() {
   const [showForm, setShowForm] = useState(false);
   const [filters, setFilters] = useFilters();
+  const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null);
 
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["idp"], "/hr/idp");
   const plans = asList(data?.data || data);
@@ -194,6 +196,22 @@ export default function IDPPage() {
         </Select>
       ),
     },
+    {
+      key: "actions",
+      header: "",
+      render: (v) => (
+        <GuardedButton
+          perm="hr:delete"
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-status-error-foreground"
+          onClick={() => setDeleting({ id: v.id, name: v.title || v.employeeName || `خطة #${v.id}` })}
+          title="حذف"
+        >
+          <Trash2 className="h-3 w-3" />
+        </GuardedButton>
+      ),
+    },
   ];
 
   return (
@@ -281,6 +299,18 @@ export default function IDPPage() {
           </FormShell>
         </DialogContent>
       </Dialog>
+
+      {deleting && (
+        <ConfirmDeleteDialog
+          open={!!deleting}
+          onOpenChange={(o) => { if (!o) setDeleting(null); }}
+          entity={{ type: "idp", id: deleting.id, name: deleting.name }}
+          deletePath={`/hr/idp/${deleting.id}`}
+          invalidateKeys={[["idp"]]}
+          successMessage="تم حذف الخطة"
+          onDeleted={() => setDeleting(null)}
+        />
+      )}
     </PageShell>
   );
 }

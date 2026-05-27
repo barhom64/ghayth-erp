@@ -21,8 +21,12 @@ import {
   FormSelectField,
   FormGrid,
 } from "@workspace/ui-core";
-import { Plus, FileText, FileSignature, Send } from "lucide-react";
+import { Plus, FileText, FileSignature, Send, Pencil, Trash2 } from "lucide-react";
 import { PrintButton } from "@/components/shared/print-button";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
@@ -58,6 +62,17 @@ export default function OfficialLettersPage() {
   const [showForm, setShowForm] = useState(false);
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["official-letters"], "/hr/official-letters");
   const items = data?.data || [];
+  const [editing, setEditing] = useState<any | null>(null);
+  const [deleting, setDeleting] = useState<{ id: number; name: string } | null>(null);
+  const updateMut = useApiMutation<unknown, { id: number; subject: string; content: string; type: string }>(
+    (b) => `/hr/official-letters/${b.id}`,
+    "PATCH",
+    [["official-letters"]],
+    {
+      successMessage: "تم تعديل الخطاب",
+      onSuccess: () => setEditing(null),
+    },
+  );
   // HR-U4 — successMessage بدل buildErrorToast اليدوي.
   const createMut = useApiMutation<unknown, Record<string, unknown>>(
     "/hr/official-letters",
@@ -96,6 +111,29 @@ export default function OfficialLettersPage() {
             variant="ghost"
             size="sm"
           />
+          {/* Edit + delete are HR-only on the backend; the GuardedButton
+              hides them for non-HR roles, the PATCH also enforces the
+              draft-only constraint at request time. */}
+          <GuardedButton
+            perm="hr:update"
+            variant="ghost"
+            size="sm"
+            onClick={() => setEditing(l)}
+            disabled={l.status !== "draft"}
+            title={l.status !== "draft" ? "التعديل متاح للمسودات فقط" : "تعديل"}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </GuardedButton>
+          <GuardedButton
+            perm="hr:delete"
+            variant="ghost"
+            size="sm"
+            className="text-status-error-foreground"
+            onClick={() => setDeleting({ id: l.id, name: l.subject || `خطاب #${l.id}` })}
+            title="حذف"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </GuardedButton>
         </div>
       ),
     },
@@ -207,6 +245,57 @@ export default function OfficialLettersPage() {
         emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}
 
       />
+
+      {editing && (
+        <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>تعديل الخطاب</DialogTitle>
+            </DialogHeader>
+            <FormShell
+              key={editing.id}
+              schema={letterFormSchema.pick({ type: true, subject: true, content: true })}
+              defaultValues={{
+                type: editing.type ?? "general",
+                subject: editing.subject ?? "",
+                content: editing.content ?? "",
+              }}
+              submitLabel={updateMut.isPending ? "جاري الحفظ…" : "حفظ"}
+              onSubmit={async (values) => {
+                await updateMut.mutateAsync({
+                  id: editing.id,
+                  subject: values.subject,
+                  content: values.content,
+                  type: values.type,
+                });
+              }}
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={() => setEditing(null)}>
+                  إلغاء
+                </Button>
+              }
+            >
+              <FormGrid cols={2}>
+                <FormSelectField name="type" label="النوع" options={LETTER_TYPE_OPTIONS} />
+                <FormTextField name="subject" label="الموضوع" required />
+                <FormTextareaField name="content" label="المحتوى" rows={6} className="md:col-span-2" />
+              </FormGrid>
+            </FormShell>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {deleting && (
+        <ConfirmDeleteDialog
+          open={!!deleting}
+          onOpenChange={(o) => { if (!o) setDeleting(null); }}
+          entity={{ type: "official-letter", id: deleting.id, name: deleting.name }}
+          deletePath={`/hr/official-letters/${deleting.id}`}
+          invalidateKeys={[["official-letters"]]}
+          successMessage="تم حذف الخطاب"
+          onDeleted={() => setDeleting(null)}
+        />
+      )}
 
     </PageShell>
   );
