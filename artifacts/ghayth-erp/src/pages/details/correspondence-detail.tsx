@@ -7,7 +7,7 @@
 import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
 import { z } from "zod";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
@@ -21,7 +21,7 @@ import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Paperclip, Eye, Inbox, SendHorizonal, Mail } from "lucide-react";
+import { Edit, Paperclip, Eye, Inbox, SendHorizonal, Mail, Send, Reply } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import {
   FormGrid,
@@ -104,6 +104,24 @@ export default function CorrespondenceDetail() {
   );
 
   const item = data;
+
+  // Outbound drafts get "Send"; received items get "Respond". Both hit
+  // their own POST endpoint and flip the correspondence status — the
+  // list page already exposes them per-row but the detail view didn't,
+  // so an operator opening a draft to review had to bounce back to the
+  // list to fire it.
+  const sendMut = useApiMutation<unknown, { id: number }>(
+    (b) => `/correspondence/${b.id}/send`,
+    "POST",
+    [["correspondence-detail", String(id)], ["correspondence"]],
+    { successMessage: "تم الإرسال" },
+  );
+  const respondMut = useApiMutation<unknown, { id: number }>(
+    (b) => `/correspondence/${b.id}/respond`,
+    "POST",
+    [["correspondence-detail", String(id)], ["correspondence"]],
+    { successMessage: "تم تسجيل الرد" },
+  );
 
   const attachments: Array<{ name: string; url?: string; id?: number; mimeType?: string; size?: number }> = useMemo(() => {
     if (!item?.attachments) return [];
@@ -336,6 +354,30 @@ export default function CorrespondenceDetail() {
               <Edit className="h-4 w-4 ms-1" />
               تعديل
             </GuardedButton>
+            {item && id && item.direction === "outgoing" && item.status === "draft" && (
+              <GuardedButton
+                perm="communications:create"
+                variant="default"
+                size="sm"
+                onClick={() => sendMut.mutate({ id })}
+                disabled={sendMut.isPending}
+              >
+                <Send className="h-4 w-4 ms-1" />
+                إرسال
+              </GuardedButton>
+            )}
+            {item && id && item.direction === "incoming" && item.status !== "archived" && !item.responseRef && (
+              <GuardedButton
+                perm="communications:create"
+                variant="outline"
+                size="sm"
+                onClick={() => respondMut.mutate({ id })}
+                disabled={respondMut.isPending}
+              >
+                <Reply className="h-4 w-4 ms-1" />
+                تسجيل رد
+              </GuardedButton>
+            )}
           </>
         }
       />
