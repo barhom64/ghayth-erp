@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Clock, Target, Grid3x3, TrendingUp } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 interface BudgetApprovalRequest {
@@ -249,6 +249,28 @@ export default function BudgetApprovalsPage() {
         { href: "/finance/budget", label: "الميزانية" },
         { label: "اعتمادات التجاوز" },
       ]}
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/budget-variance">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Target className="h-3.5 w-3.5 ml-1" />
+              انحرافات الميزانية
+            </Button>
+          </Link>
+          <Link href="/finance/budget-heatmap">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Grid3x3 className="h-3.5 w-3.5 ml-1" />
+              خريطة الميزانية
+            </Button>
+          </Link>
+          <Link href="/finance/reports/is-vs-budget">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <TrendingUp className="h-3.5 w-3.5 ml-1" />
+              P&L vs Budget
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 

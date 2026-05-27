@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +9,7 @@ import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import {
   BarChart3, Download, TrendingUp, TrendingDown, CheckCircle2,
-  AlertTriangle, Target, ChevronDown, ChevronRight,
+  AlertTriangle, Target, ChevronDown, ChevronRight, Grid3x3,
 } from "lucide-react";
 import {
   formatCurrency, currentYearRiyadh, currentMonthPaddedRiyadh,
@@ -164,6 +165,28 @@ export default function IncomeStatementVsBudgetPage() {
     <PageShell
       title="قائمة الدخل مقابل الميزانية"
       subtitle={`تحليل الانحراف لـ ${period} — هل أنت قبل الميزانية أم بعدها؟`}
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/reports/is-trend">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <TrendingUp className="h-3.5 w-3.5 ml-1" />
+              اتجاه الدخل
+            </Button>
+          </Link>
+          <Link href="/finance/budget-heatmap">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Grid3x3 className="h-3.5 w-3.5 ml-1" />
+              خريطة الميزانية
+            </Button>
+          </Link>
+          <Link href="/finance/budget-variance">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Target className="h-3.5 w-3.5 ml-1" />
+              انحرافات الميزانية
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 

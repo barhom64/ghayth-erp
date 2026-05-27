@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { Plus, FilePlus } from "lucide-react";
+import { Plus, FilePlus, BookOpen, Scale } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   DataTable,
@@ -99,12 +99,24 @@ export default function OpeningBalancesPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الأرصدة الافتتاحية" }]}
       loading={isLoading}
       actions={
-        <Link href="/finance/opening-balances/create">
-          <GuardedButton perm="finance:create" size="sm">
-            <Plus className="h-4 w-4 me-1" />
-            قيد أرصدة افتتاحية جديد
-          </GuardedButton>
-        </Link>
+        <>
+          <Link href="/finance/trial-balance-drilldown">
+            <Button variant="outline" size="sm">
+              <Scale className="h-4 w-4 me-2" />ميزان المراجعة
+            </Button>
+          </Link>
+          <Link href="/finance/accounts">
+            <Button variant="outline" size="sm">
+              <BookOpen className="h-4 w-4 me-2" />دليل الحسابات
+            </Button>
+          </Link>
+          <Link href="/finance/opening-balances/create">
+            <GuardedButton perm="finance:create" size="sm">
+              <Plus className="h-4 w-4 me-1" />
+              قيد أرصدة افتتاحية جديد
+            </GuardedButton>
+          </Link>
+        </>
       }
     >
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">

@@ -10,6 +10,7 @@ import { formatCurrency, formatDateAr, currentYearRiyadh, currentMonthPaddedRiya
 import {
   TrendingUp, TrendingDown, Download, ChevronRight,
   Factory, Building2, Landmark, ArrowUpCircle, ArrowDownCircle, Equal,
+  Calendar, Activity, Banknote,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
@@ -140,6 +141,28 @@ export default function CashFlowStatementPage() {
     <PageShell
       title="قائمة التدفقات النقدية"
       subtitle={`الطريقة المباشرة — ${label}`}
+      actions={
+        <div className="flex gap-2">
+          <Link href="/finance/cashflow">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Activity className="h-3.5 w-3.5 ml-1" />
+              لوحة التدفقات
+            </Button>
+          </Link>
+          <Link href="/finance/cash-13week">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Calendar className="h-3.5 w-3.5 ml-1" />
+              توقع 13 أسبوع
+            </Button>
+          </Link>
+          <Link href="/finance/cash-position-calculator">
+            <Button variant="outline" size="sm" className="h-8 text-xs">
+              <Banknote className="h-3.5 w-3.5 ml-1" />
+              مركز السيولة
+            </Button>
+          </Link>
+        </div>
+      }
     >
       <FinanceTabsNav />
 
