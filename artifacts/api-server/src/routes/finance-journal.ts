@@ -594,6 +594,9 @@ journalRouter.patch("/expenses/:id", authorize({ feature: "finance.journal", act
   }
 });
 
+// Audit F5 — DELETE candidate. UI uses the soft-status `void` flow
+// instead of hard delete. Marked for removal in the F5 follow-up PR
+// (see docs/audits/finance-orphan-endpoints-disposition.md).
 journalRouter.delete("/expenses/:id", authorize({ feature: "finance.journal", action: "delete", resource: { table: "expenses", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1124,6 +1127,9 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
   }
 });
 
+// Audit F5 — DELETE candidate. UI uses approve/reject flows; no direct
+// PATCH on individual vouchers. Marked for removal in the F5 follow-up
+// PR (see docs/audits/finance-orphan-endpoints-disposition.md).
 journalRouter.patch("/vouchers/:id", authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1185,6 +1191,9 @@ journalRouter.patch("/vouchers/:id", authorize({ feature: "finance.journal", act
   }
 });
 
+// Audit F5 — DELETE candidate. UI uses the soft-status `void` flow
+// instead of hard delete. Marked for removal in the F5 follow-up PR
+// (see docs/audits/finance-orphan-endpoints-disposition.md).
 journalRouter.delete("/vouchers/:id", authorize({ feature: "finance.journal", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1198,6 +1207,16 @@ journalRouter.delete("/vouchers/:id", authorize({ feature: "finance.journal", ac
   }
 });
 
+// Audit F2 — Intentional split, not duplication.
+// /finance/salary-advances posts a one-shot advance against
+// salary_advance_receivable (default 1410) with no installment plan,
+// no employee_loans row, no monthly amortization. Approval flows through
+// the finance "advances" chain. Idempotency: SALARY-ADV-<token>.
+// hr-loans (loanType='salary_advance') posts to staff_loans (default 1400),
+// creates an employee_loans row with deductMonths, schedules payroll
+// auto-deductions, and flows through the HR loan-approval chain.
+// Idempotency: LOAN-<id>. Different account, different table, different
+// workflow — keep both.
 journalRouter.get("/salary-advances", authorize({ feature: "finance.journal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
