@@ -188,9 +188,12 @@ export async function calculateCommissionForPlan(
         sourceType: "employee_commission_calculations",
         sourceId: planId,
         sourceKey: `commission:${planId}:${year}:${month}`,
+        // umrahSeasonId carries the season tied to this commission plan
+        // so commission-expense reports can drill by season alongside
+        // the existing employee dimension (financial-integrity audit #5).
         lines: [
-          { accountCode: expenseCode, debit: result.finalAmount, credit: 0, description: `مصروف عمولة — ${plan.planName}`, employeeId: plan.employeeId },
-          { accountCode: payableCode, debit: 0, credit: result.finalAmount, description: `عمولة مستحقة — موظف #${plan.employeeId}`, employeeId: plan.employeeId },
+          { accountCode: expenseCode, debit: result.finalAmount, credit: 0, description: `مصروف عمولة — ${plan.planName}`, employeeId: plan.employeeId, umrahSeasonId: plan.seasonId },
+          { accountCode: payableCode, debit: 0, credit: result.finalAmount, description: `عمولة مستحقة — موظف #${plan.employeeId}`, employeeId: plan.employeeId, umrahSeasonId: plan.seasonId },
         ],
       }, { table: "employee_commission_calculations", id: planId });
     }

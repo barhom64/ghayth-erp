@@ -671,10 +671,23 @@ router.get("/whatsapp", authorize({ feature: "communications", action: "list" })
     const conditions = [`"companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
-    const where = conditions.join(" AND ");
-    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM whatsapp_queue WHERE ${where}`, params);
+    const where = `${conditions.join(" AND ")} AND channel = 'whatsapp'`;
+    // Phase 4 contract slice 5: read from outbound_queue. After slice 4
+    // (#1293), the worker mirrors status / externalId back into this
+    // table, so the admin monitor sees the same lifecycle it always did.
+    // recipient → phone / recipientPhone aliases keep the frontend
+    // <DataTable> columns resolving against the same keys.
+    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM outbound_queue WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM whatsapp_queue WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT id, "companyId", recipient AS phone, recipient AS "recipientPhone",
+              "recipientName", body AS message, "templateName", "templateParams",
+              status, "externalId", "sentAt", "deliveredAt", "scheduledAt",
+              attempts AS "attemptCount", "errorMessage", "createdAt", "updatedAt"
+         FROM outbound_queue WHERE ${where}
+        ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    );
     res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset }));
   } catch (err) { handleRouteError(err, res, "WhatsApp queue error:"); }
 });
@@ -690,10 +703,18 @@ router.get("/sms", authorize({ feature: "communications", action: "list" }), asy
     const conditions = [`"companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`status = $${params.length}`); }
-    const where = conditions.join(" AND ");
-    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM sms_queue WHERE ${where}`, params);
+    const where = `${conditions.join(" AND ")} AND channel = 'sms'`;
+    // Phase 4 contract slice 5: read from outbound_queue (see /whatsapp).
+    const [countRow] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) AS total FROM outbound_queue WHERE ${where}`, params);
     params.push(pageLimit, pageOffset);
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM sms_queue WHERE ${where} ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT id, "companyId", recipient AS "recipientPhone", body AS message,
+              status, "externalId", "sentAt", attempts AS "attemptCount",
+              "errorMessage", "createdAt", "updatedAt"
+         FROM outbound_queue WHERE ${where}
+        ORDER BY "createdAt" DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    );
     res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), limit: pageLimit, offset: pageOffset }));
   } catch (err) { handleRouteError(err, res, "SMS queue error:"); }
 });
@@ -882,8 +903,11 @@ router.get("/stats", authorize({ feature: "communications", action: "list" }), a
       // Phase 4 contract step 2: counts come from the unified view —
       // legacy + new rows in one COUNT, no UNION needed.
       rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE channel='whatsapp') as whatsapp, COUNT(*) FILTER (WHERE channel='sms') as sms, COUNT(*) FILTER (WHERE channel='email') as email, COUNT(*) FILTER (WHERE channel='pbx') as pbx FROM v_message_log_all WHERE "companyId"=$1 AND "deletedAt" IS NULL`, [cid]),
-      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as pending FROM whatsapp_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
-      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as pending FROM sms_queue WHERE "companyId"=$1 AND status='pending'`, [cid]),
+      // Phase 4 contract slice 5: pending counts from outbound_queue
+      // (channel-filtered) — same data as before but one table query
+      // resolves both with COUNT FILTER.
+      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as pending FROM outbound_queue WHERE "companyId"=$1 AND channel='whatsapp' AND status='pending'`, [cid]),
+      rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as pending FROM outbound_queue WHERE "companyId"=$1 AND channel='sms' AND status='pending'`, [cid]),
     ]);
     res.json(maskFields(req, {
       total: Number(comm.total),
@@ -913,24 +937,28 @@ router.get("/queue-stats", authorize({ feature: "communications", action: "list"
     type StatusCount = { status: string; count: string };
     type QueueRow = { id: number; recipient: string; message: string; status: string; attemptCount: number | null; errorMessage: string | null; createdAt: string; sentAt: string | null };
 
+    // Phase 4 contract slice 5: all three queue tabs now read from
+    // outbound_queue, channel-filtered. The buildDateFilter helper
+    // qualifies the column with the alias (here always "oq"), so we
+    // pass that and append the channel predicate after.
     const smsParams: unknown[] = [cid];
-    const smsDateFilter = buildDateFilter("sms_queue", smsParams);
+    const smsDateFilter = buildDateFilter("oq", smsParams);
     const waParams: unknown[] = [cid];
-    const waDateFilter = buildDateFilter("whatsapp_queue", waParams);
+    const waDateFilter = buildDateFilter("oq", waParams);
     const emailParams: unknown[] = [cid];
-    const emailDateFilter = buildDateFilter("email_queue", emailParams);
+    const emailDateFilter = buildDateFilter("oq", emailParams);
 
     const [smsStats, waStats, emailStats, pushCount, recentSms, recentWa] = await Promise.all([
       rawQuery<StatusCount>(
-        `SELECT status, COUNT(*) as count FROM sms_queue WHERE "companyId"=$1${smsDateFilter} GROUP BY status`,
+        `SELECT status, COUNT(*) as count FROM outbound_queue oq WHERE oq."companyId"=$1 AND oq.channel='sms'${smsDateFilter} GROUP BY status`,
         smsParams
       ),
       rawQuery<StatusCount>(
-        `SELECT status, COUNT(*) as count FROM whatsapp_queue WHERE "companyId"=$1${waDateFilter} GROUP BY status`,
+        `SELECT status, COUNT(*) as count FROM outbound_queue oq WHERE oq."companyId"=$1 AND oq.channel='whatsapp'${waDateFilter} GROUP BY status`,
         waParams
       ),
       rawQuery<StatusCount>(
-        `SELECT status, COUNT(*) as count FROM email_queue WHERE "companyId"=$1${emailDateFilter} GROUP BY status`,
+        `SELECT status, COUNT(*) as count FROM outbound_queue oq WHERE oq."companyId"=$1 AND oq.channel='email'${emailDateFilter} GROUP BY status`,
         emailParams
       ),
       rawQuery<{ count: string }>(
@@ -938,13 +966,17 @@ router.get("/queue-stats", authorize({ feature: "communications", action: "list"
         [cid]
       ),
       rawQuery<QueueRow>(
-        `SELECT id, "recipientPhone" AS recipient, message, status, "attemptCount", "errorMessage", "createdAt", "sentAt"
-         FROM sms_queue WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`,
+        `SELECT id, recipient, body AS message, status, attempts AS "attemptCount",
+                "errorMessage", "createdAt", "sentAt"
+           FROM outbound_queue WHERE "companyId"=$1 AND channel='sms'
+          ORDER BY "createdAt" DESC LIMIT 20`,
         [cid]
       ),
       rawQuery<QueueRow>(
-        `SELECT id, phone AS recipient, message, status, "attemptCount", "errorMessage", "createdAt", "sentAt"
-         FROM whatsapp_queue WHERE "companyId"=$1 ORDER BY "createdAt" DESC LIMIT 20`,
+        `SELECT id, recipient, body AS message, status, attempts AS "attemptCount",
+                "errorMessage", "createdAt", "sentAt"
+           FROM outbound_queue WHERE "companyId"=$1 AND channel='whatsapp'
+          ORDER BY "createdAt" DESC LIMIT 20`,
         [cid]
       ),
     ]);
