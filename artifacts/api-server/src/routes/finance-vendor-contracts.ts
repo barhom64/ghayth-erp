@@ -192,6 +192,9 @@ vendorContractsRouter.post(
   }
 );
 
+// Audit F5 — DELETE candidate. No frontend PATCH caller. Marked for
+// removal in the F5 follow-up PR
+// (see docs/audits/finance-orphan-endpoints-disposition.md).
 vendorContractsRouter.patch(
   "/contracts/:id",
   authorize({ feature: "finance.contracts", action: "update" }),
@@ -262,6 +265,9 @@ vendorContractsRouter.patch(
   }
 );
 
+// Audit F5 — DELETE candidate. No frontend DELETE caller. Marked for
+// removal in the F5 follow-up PR
+// (see docs/audits/finance-orphan-endpoints-disposition.md).
 vendorContractsRouter.delete(
   "/contracts/:id",
   authorize({ feature: "finance.contracts", action: "delete" }),

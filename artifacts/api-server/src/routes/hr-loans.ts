@@ -94,6 +94,15 @@ import { logger } from "../lib/logger.js";
 
 const router = Router();
 
+// Audit F2 — Distinct from /finance/salary-advances.
+// hr-loans (loanType='salary_advance' or 'personal_loan') maintains an
+// employee_loans row with installmentCount/installmentAmount/paidAmount,
+// posts to staff_loans (default 1400), schedules auto-deductions from
+// payroll, and routes through the HR loan-approval chain. The standalone
+// /finance/salary-advances endpoint posts a one-shot JE to 1410
+// (salary_advance_receivable) with no installment plan and goes through
+// the finance "advances" chain. Keep both paths.
+
 // ─── إنشاء جدول السلف (إذا لم يكن موجوداً) ─────────────────────────────────
 async function ensureLoanTables(): Promise<void> {
   await rawExecute(`

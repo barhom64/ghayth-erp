@@ -222,11 +222,22 @@ const router = Router();
 
 async function logCommunication(companyId: number, direction: string, subject: string, body: string, relatedType: string, relatedId: number) {
   try {
+    // Phase 4 contract slice 9: dual-write to message_log. The new
+    // channel='internal' value is accepted by the relaxed constraint
+    // shipped in migration 224.
     await rawExecute(
       `INSERT INTO communications_log ("companyId", channel, direction, "fromNumber", "toNumber", subject, body, status, "relatedType", "relatedId")
        VALUES ($1, 'internal', $2, 'system', 'system', $3, $4, $5, $6, $7)`,
       [companyId, direction, subject, body, direction === 'inbound' ? 'received' : 'sent', relatedType, relatedId]
     );
+    await rawExecute(
+      `INSERT INTO message_log
+         ("companyId", channel, direction, "fromAddress", "toAddress",
+          subject, body, status, folder, "relatedType", "relatedId", "createdAt")
+       VALUES ($1, 'internal', $2, 'system', 'system', $3, $4, $5,
+               CASE WHEN $2 = 'inbound' THEN 'inbox' ELSE 'sent' END, $6, $7, NOW())`,
+      [companyId, direction, subject, body, direction === 'inbound' ? 'received' : 'sent', relatedType, relatedId]
+    ).catch((e) => logger.warn(e, "[requests] message_log dual-write failed"));
   } catch (e) {
     logger.error(e, "Failed to log communication:");
   }
