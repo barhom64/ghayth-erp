@@ -860,18 +860,18 @@ describe("Print platform — PrintButton.payload contract (#1286 follow-up)", ()
   });
 });
 
-describe("Print platform — finance reports wave 3 migrated (#1286 Q4 wave 3)", () => {
-  // Continued unification: pages that have CSV exports but no print path
-  // through the official platform get a <PrintButton> next to the CSV
-  // button. Lock the migration so a regression that drops PrintButton
-  // fails CI.
+describe("Print platform — finance reports wave 4 migrated (#1286 Q4 wave 4)", () => {
+  // Continued unification. 7 more pages with CSV exports get PrintButton
+  // next to the CSV button.
   const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
   const PAGES: Array<{ path: string; entityType: string }> = [
-    { path: "pages/finance/trial-balance-drilldown.tsx",     entityType: "report_trial_balance_drilldown" },
-    { path: "pages/finance/fixed-asset-register.tsx",        entityType: "report_fixed_asset_register" },
-    { path: "pages/finance/customer-advances-workbench.tsx", entityType: "report_customer_advances" },
-    { path: "pages/finance/vendor-settlement-workbench.tsx", entityType: "report_vendor_settlement" },
-    { path: "pages/finance/budget-heatmap.tsx",              entityType: "report_budget_heatmap" },
+    { path: "pages/finance/cogs-summary.tsx",                 entityType: "report_cogs_summary" },
+    { path: "pages/finance/gl-integrity-gaps.tsx",            entityType: "report_gl_integrity_gaps" },
+    { path: "pages/finance/inventory-turnover.tsx",           entityType: "report_inventory_turnover" },
+    { path: "pages/finance/income-statement-vs-budget.tsx",   entityType: "report_income_vs_budget" },
+    { path: "pages/finance/unmapped-lines.tsx",               entityType: "report_unmapped_lines" },
+    { path: "pages/finance/vehicle-portfolio-dashboard.tsx",  entityType: "report_vehicle_portfolio" },
+    { path: "pages/finance/vat-reconciliation.tsx",           entityType: "report_vat_reconciliation" },
   ];
 
   for (const { path, entityType } of PAGES) {

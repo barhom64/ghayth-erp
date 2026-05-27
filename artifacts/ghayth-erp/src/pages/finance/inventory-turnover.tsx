@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   DataTable, type DataTableColumn, PageShell,
 } from "@workspace/ui-core";
@@ -178,6 +179,18 @@ export default function InventoryTurnoverPage() {
           >
             <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
           </GuardedButton>
+          <PrintButton
+            entityType="report_inventory_turnover"
+            entityId={`${startDate}..${endDate}`}
+            payload={{
+              entity: {
+                title: "تقرير معدّل دوران المخزون",
+                startDate, endDate,
+                count: rows.length,
+              },
+              items: rows,
+            }}
+          />
         </>
       }
     >
