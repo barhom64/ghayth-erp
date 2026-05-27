@@ -473,7 +473,11 @@ function extractFrontendCalls() {
       // Require an EntityEditDialog opening tag in the preceding span
       // so we don't pick up arbitrary `endpoint=` props on unrelated
       // components (impact-preview, etc. have their own scanners).
-      const before = src.slice(Math.max(0, m.index - 600), m.index);
+      // 1200-char window accommodates large defaultValues={{…}} blocks
+      // between the opening tag and the endpoint prop (correspondence /
+      // pilgrim / judgment detail pages can run 600-800 chars of seed
+      // values).
+      const before = src.slice(Math.max(0, m.index - 1200), m.index);
       if (!/<EntityEditDialog\b/.test(before)) continue;
       const window = src.slice(Math.max(0, m.index - 400), Math.min(src.length, m.index + 400));
       const methodMatch = window.match(/\bmethod\s*=\s*["'`](PATCH|PUT)["'`]/);
