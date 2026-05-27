@@ -16,7 +16,7 @@ import {
   exportToCSV,
   useAdvancedFilters,
 } from "@workspace/ui-core";
-import { Plus, Wallet, TrendingDown, PieChart, Calendar, ChevronDown, ChevronUp, Paperclip, ExternalLink, Link2 } from "lucide-react";
+import { Plus, Wallet, TrendingDown, PieChart, Calendar, ChevronDown, ChevronUp, Paperclip, ExternalLink, Link2, CheckSquare, BarChart3 } from "lucide-react";
 import { formatDateAr, formatCurrency, formatNumber, periodRiyadh, currentPeriodRiyadh } from "@/lib/formatters";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { EntityComments } from "@workspace/entity-kit";
@@ -181,9 +181,21 @@ export default function ExpensesPage() {
       subtitle="مصروفات مرتبطة بالميزانية — لحركات النقد الحرة راجع السندات"
       breadcrumbs={[{ href: "/finance", label: "المالية" }]}
       actions={
-        <Link href="/finance/expenses/create">
-          <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة مصروف</GuardedButton>
-        </Link>
+        <>
+          <Link href="/finance/expense-bulk-approvals">
+            <Button variant="outline" size="sm">
+              <CheckSquare className="h-4 w-4 me-2" />الاعتماد بالجملة
+            </Button>
+          </Link>
+          <Link href="/finance/expense-burn-rate">
+            <Button variant="outline" size="sm">
+              <BarChart3 className="h-4 w-4 me-2" />معدل الحرق
+            </Button>
+          </Link>
+          <Link href="/finance/expenses/create">
+            <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة مصروف</GuardedButton>
+          </Link>
+        </>
       }
     >
       <FinanceTabsNav />
