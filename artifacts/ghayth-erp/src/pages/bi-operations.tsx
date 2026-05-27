@@ -20,7 +20,7 @@ import {
 } from "recharts";
 import {
   AlertTriangle, TrendingUp, Users, Clock, CheckCircle2, XCircle,
-  Activity, Timer, Printer, Download,
+  Activity, Timer, Download,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { BiTabsNav } from "@/components/shared/bi-tabs-nav";
@@ -470,11 +470,7 @@ export default function BiOperationsPage() {
     <PageShell
       title="تحليل الأداء التشغيلي"
       subtitle="تحليل شامل للاختناقات والإنتاجية وأداء العمليات"
-      actions={
-        <GuardedButton perm="bi:export" variant="outline" size="sm" onClick={() => window.print()} className="print:hidden gap-2">
-          <Printer className="w-4 h-4" /> طباعة
-        </GuardedButton>
-      }
+      actions={null}
     >
       <BiTabsNav />
       <Card className="border-0 shadow-sm print:hidden">

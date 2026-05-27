@@ -1263,3 +1263,95 @@ accountsRouter.get("/allocation-results", authorize({ feature: "finance.accounts
     handleRouteError(err, res, "List allocation results error:");
   }
 });
+
+// ── Finance enforce_line_allocation setting (migration 223) ──────────────
+//
+// GET /finance/settings/enforce-line-allocation
+// Returns the resolved value for the caller's company scope (branch row
+// overrides company row overrides system-wide default). The handler is
+// gated by finance.accounts:list so any finance user can READ the flag
+// to render the "enforcement is ON" banner; mutation requires the
+// systemCritical finance.accounts:update grant.
+accountsRouter.get("/settings/enforce-line-allocation",
+  authorize({ feature: "finance.accounts", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { getEnforceLineAllocation } = await import("../lib/accountingAllocation.js");
+      const enforce = await getEnforceLineAllocation({ companyId: scope.companyId, branchId: scope.branchId });
+      res.json({ enforce, key: "finance.enforce_line_allocation" });
+    } catch (err) {
+      handleRouteError(err, res, "Get enforce-line-allocation setting error:");
+    }
+  });
+
+// PUT /finance/settings/enforce-line-allocation { enforce: boolean }
+// Writes a company-scoped row to system_settings (branchId NULL). Idempotent.
+const enforceSettingSchema = z.object({ enforce: z.boolean() });
+accountsRouter.put("/settings/enforce-line-allocation",
+  authorize({ feature: "finance.accounts", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const body = zodParse(enforceSettingSchema.safeParse(req.body ?? {}));
+      const value = body.enforce ? "true" : "false";
+      // UPSERT against the company row. We don't rely on a specific
+      // unique index name (table schema has shifted historically);
+      // explicit UPDATE-then-INSERT keeps the operation portable.
+      const upd = await rawExecute(
+        `UPDATE system_settings
+            SET value = $1, "updatedAt" = NOW()
+          WHERE key = 'finance.enforce_line_allocation'
+            AND "companyId" = $2
+            AND "branchId" IS NULL`,
+        [value, scope.companyId],
+      );
+      if (upd.affectedRows === 0) {
+        await rawExecute(
+          `INSERT INTO system_settings ("companyId", "branchId", key, value)
+           VALUES ($1, NULL, 'finance.enforce_line_allocation', $2)`,
+          [scope.companyId, value],
+        );
+      }
+      createAuditLog({
+        companyId: scope.companyId, userId: scope.userId,
+        action: "update", entity: "system_settings", entityId: 0,
+        after: { key: "finance.enforce_line_allocation", value },
+      }).catch((e) => logger.error(e, "enforce-line-allocation audit failed"));
+      res.json({ enforce: body.enforce, key: "finance.enforce_line_allocation" });
+    } catch (err) {
+      handleRouteError(err, res, "Set enforce-line-allocation setting error:");
+    }
+  });
+
+// GET /finance/allocation-override-log — audit trail of approvals that
+// bypassed the enforce flag via finance.allocation.override. Filtered by
+// company scope; ordered most-recent first; capped at 500 rows.
+accountsRouter.get("/allocation-override-log",
+  authorize({ feature: "finance.accounts", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { documentType, documentId } = req.query as Record<string, string | undefined>;
+      const params: unknown[] = [scope.companyId];
+      let where = `"companyId" = $1`;
+      if (documentType) {
+        params.push(documentType);
+        where += ` AND "documentType" = $${params.length}`;
+      }
+      if (documentId) {
+        params.push(Number(documentId));
+        where += ` AND "documentId" = $${params.length}`;
+      }
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT * FROM allocation_override_log
+          WHERE ${where}
+          ORDER BY "createdAt" DESC
+          LIMIT 500`,
+        params,
+      );
+      res.json(maskFields(req, { data: rows, total: rows.length }));
+    } catch (err) {
+      handleRouteError(err, res, "List allocation-override-log error:");
+    }
+  });

@@ -15,12 +15,11 @@ import {
 } from "recharts";
 import {
   Calendar, TrendingUp, TrendingDown, Users, DollarSign, CheckCircle2,
-  Clock, Headphones, FileText, Printer,
+  Clock, Headphones, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { BiTabsNav } from "@/components/shared/bi-tabs-nav";
-import { GuardedButton } from "@/components/shared/permission-gate";
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -352,11 +351,7 @@ export default function BiAdminReportsPage() {
     <PageShell
       title="التقارير الإدارية"
       subtitle="تقارير يومية وأسبوعية وشهرية شاملة"
-      actions={
-        <GuardedButton perm="bi:export" variant="outline" size="sm" onClick={() => window.print()} className="print:hidden gap-2">
-          <Printer className="w-4 h-4" /> طباعة التقرير
-        </GuardedButton>
-      }
+      actions={null}
     >
       <BiTabsNav />
       <Tabs defaultValue="daily" dir="rtl">
