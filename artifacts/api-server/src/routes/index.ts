@@ -33,6 +33,7 @@ import intelligenceRouter from "./intelligence.js";
 import automationRouter from "./automation.js";
 import communicationsRouter from "./communications.js";
 import inboxRouter from "./inbox.js";
+import mailboxesRouter from "./mailboxes.js";
 import governanceRouter from "./governance.js";
 import biRouter from "./bi.js";
 import storeRouter from "./store.js";
@@ -346,6 +347,7 @@ router.use("/communications", requireModule("comms"), communicationsRouter);
 // to /communications (read-only logs) so the SPA can navigate between
 // them without crossing module boundaries.
 router.use("/inbox", requireModule("comms"), inboxRouter);
+router.use("/mailboxes", requireModule("comms"), mailboxesRouter);
 router.use("/governance", requireModule("governance"), governanceRouter);
 router.use("/bi", requireModule("bi"), biRouter);
 router.use("/store", requireModule("store"), requireGuards("financial"), storeRouter);
