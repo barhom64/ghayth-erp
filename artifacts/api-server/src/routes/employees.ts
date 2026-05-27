@@ -608,12 +608,31 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       }
 
       // ── Step 6: Create employment contract + probation period ──
+      // G11 fix (Issue #1141 coverage report 2026-05-27 §3 G11) —
+      // issue a real contract ref through the numbering center so the
+      // onboarding-created contract has the same audit trail as the
+      // manual creation path in hr-contracts.ts. Scheme:
+      // `hr.employee_contract` (seeded by migration 213).
       const probEnd = new Date(effectiveHireDate);
       probEnd.setDate(probEnd.getDate() + Number(probationDays));
+      const issuedContract = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "hr",
+        entityKey: "employee_contract",
+        entityTable: "employee_contracts",
+        actorId: scope.userId,
+        metadata: { onboardingEmployeeId: empId },
+        expectedTiming: "on_draft",
+      });
+      const contractRes = await client.query(
+        `INSERT INTO employee_contracts ("companyId","employeeId","assignmentId","contractType","startDate","probationEndDate","probationStatus",status,ref)
+         VALUES ($1,$2,$3,$4,$5,$6,'active','active',$7) RETURNING id`,
+        [scope.companyId, empId, assignmentId, contractType, effectiveHireDate, toDateISO(probEnd), issuedContract.number]
+      );
       await client.query(
-        `INSERT INTO employee_contracts ("companyId","employeeId","assignmentId","contractType","startDate","probationEndDate","probationStatus",status)
-         VALUES ($1,$2,$3,$4,$5,$6,'active','active')`,
-        [scope.companyId, empId, assignmentId, contractType, effectiveHireDate, toDateISO(probEnd)]
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [contractRes.rows[0].id, issuedContract.assignmentId]
       );
 
       // ── Step 7: Create 4 onboarding tasks ──
