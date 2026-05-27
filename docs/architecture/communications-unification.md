@@ -107,7 +107,8 @@ easy to bisect.
 | Slice | Migrated | Reads from |
 |---|---|---|
 | 1 (#1284) | `inbox.ts` `/folder-counts`, `/threads`, `/threads/:channel/:address` | `v_message_log_all` |
-| 2 (_this_) | `inbox.ts` `/threads/:id/reply` lookup; `communications.ts` `/log` + `/stats`; `workspace.ts` `recentMessages`, `messagesLast24h`, `teamMessagesToday`, `messagesWeek` | `v_message_log_all` |
+| 2 (#1288) | `inbox.ts` `/threads/:id/reply` lookup; `communications.ts` `/log` + `/stats`; `workspace.ts` `recentMessages`, `messagesLast24h`, `teamMessagesToday`, `messagesWeek` | `v_message_log_all` |
+| 3 (_this_) | `communications.ts` `/send` for email/sms/whatsapp → routes through `messageSender` (DLP + dual-write to message_log + outbound_queue). `call` + `push` keep legacy path (audit-only) | `v_message_log_all` for read-back |
 | follow-up | `cronScheduler.ts` `email_queue_drain` / `sms_queue_drain` / `whatsapp_queue_drain` | `outbound_queue` |
 | final | DROP `communications_log`, `notification_log`, `email_queue`, `sms_queue`, `whatsapp_queue` | — |
 
