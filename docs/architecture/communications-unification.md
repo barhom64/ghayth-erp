@@ -203,7 +203,22 @@ M365 and IMAP — the dispatch picks the right implementation based on
 now confirms the credentials actually authenticate end-to-end before
 the operator commits to a sync schedule.
 
-## Remaining work
+## Final DROP — deferred script
 
-- **Phase 4 final contract**: DROP `communications_log`, `notification_log`,
-  `email_queue`, `sms_queue`, `whatsapp_queue` after the soak window.
+The actual `DROP TABLE` for `communications_log` / `notification_log` /
+`email_queue` / `sms_queue` / `whatsapp_queue` lives at
+`docs/architecture/phase4-final-drop.sql` — NOT in the migrations folder,
+because the migration runner would apply it on the next boot, and the
+DROP requires an operator-confirmed soak first.
+
+The script:
+1. Refuses to run if any legacy table still has unmirrored rows (guard
+   against premature DROP before the dual-writes have fully drained).
+2. DROPs the 5 tables in a single transaction with CASCADE.
+3. Verifies `v_message_log_all` is still intact (it already references
+   only `message_log`, so no rebuild is needed).
+
+After running, deploy a code-cleanup PR that removes the now-dead
+legacy-table writes from `messageSender` / `notificationEngine` /
+`eventListeners` / `requests.logCommunication` / `inbox /calls` /
+`cronScheduler` reverse-mirror.
