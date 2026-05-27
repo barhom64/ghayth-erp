@@ -1178,6 +1178,49 @@ export async function loadVendorStatement(
     return { entity: { id: entityId, title: "كشف حساب مورّد", note: "المورّد غير موجود" }, items: [] };
   }
 
+  // Opening balance — sum the supplier's movements BEFORE `from`. Without
+  // this the statement starts at zero and silently understates the
+  // outstanding liability for any partial-period print (PR1 #1286 wired
+  // the page through the official platform; the loader still had this
+  // mathematical gap — the customer loader at line ~1079 computed it,
+  // the vendor loader did not). Same sign convention as the in-period
+  // computation below: debit (we paid) is positive, credit (we owe) is
+  // negative on running balance, so a vendor we owe shows a NEGATIVE
+  // closing balance.
+  const obOrderParams: unknown[] = [supplierId, companyId, from];
+  let obOrderFilter = "";
+  if (allowedBranches) {
+    obOrderParams.push(allowedBranches);
+    obOrderFilter = ` AND "branchId" = ANY($${obOrderParams.length}::int[])`;
+  }
+  const [obOrders] = await rawQuery<Record<string, unknown>>(
+    `SELECT COALESCE(SUM(total), 0)::float8 AS total FROM purchase_orders
+     WHERE "supplierId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+       AND "createdAt" < $3${obOrderFilter}`,
+    obOrderParams,
+  ).catch((err) => {
+    // Missing purchase_orders table is fine — empty opening contribution.
+    if ((err as { code?: string })?.code === "42P01") return [{ total: 0 }];
+    throw err;
+  });
+
+  const obPayParams: unknown[] = [supplierId, companyId, from];
+  let obPayFilter = "";
+  if (allowedBranches) {
+    obPayParams.push(allowedBranches);
+    obPayFilter = ` AND "branchId" = ANY($${obPayParams.length}::int[])`;
+  }
+  const [obPay] = await rawQuery<Record<string, unknown>>(
+    `SELECT COALESCE(SUM(amount), 0)::float8 AS total FROM payment_vouchers
+     WHERE "supplierId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+       AND "createdAt" < $3${obPayFilter}`,
+    obPayParams,
+  ).catch((err) => {
+    if ((err as { code?: string })?.code === "42P01") return [{ total: 0 }];
+    throw err;
+  });
+  const openingBalance = Number(obPay?.total ?? 0) - Number(obOrders?.total ?? 0);
+
   // Branch filter sql: both purchase_orders and payment_vouchers have a
   // branchId column, so the filter is direct on each table.
   const orderParams: unknown[] = [supplierId, companyId, from, to];
@@ -1224,7 +1267,7 @@ export async function loadVendorStatement(
   const all = [...orders, ...payments].sort(
     (a, b) => new Date(a.date as string).getTime() - new Date(b.date as string).getTime(),
   );
-  let running = 0;
+  let running = openingBalance;
   const items = all.map((m) => {
     running += Number(m.debit ?? 0) - Number(m.credit ?? 0);
     return {
@@ -1250,6 +1293,7 @@ export async function loadVendorStatement(
       supplierTaxNumber: (supplier.taxNumber as string | null) ?? "",
       date: new Date().toLocaleDateString("ar-SA"),
       period: `${from} → ${to}`,
+      openingBalance: Math.round(openingBalance * 100) / 100,
       totalDebit, totalCredit, closingBalance: Math.round(running * 100) / 100,
     },
     items,
