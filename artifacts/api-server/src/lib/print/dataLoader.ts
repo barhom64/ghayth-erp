@@ -170,6 +170,16 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadFuelLog(companyId, entityId);
     case "traffic_violation":
       return await loadTrafficViolation(companyId, entityId);
+    case "umrah_pilgrim":
+      return await loadUmrahPilgrim(companyId, entityId);
+    case "umrah_group":
+      return await loadUmrahGroup(companyId, entityId);
+    case "umrah_sales_invoice":
+      return await loadUmrahSalesInvoice(companyId, entityId);
+    case "umrah_agent_invoice":
+      return await loadUmrahAgentInvoice(companyId, entityId);
+    case "umrah_penalty":
+      return await loadUmrahPenalty(companyId, entityId);
     // ─── Batch reports (no single row — synthetic entityId encodes filters) ──
     case "report_trial_balance":
       return await loadTrialBalance(companyId, entityId);
@@ -696,4 +706,120 @@ async function loadTrafficViolation(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   return { entity: v ?? { id } };
+}
+
+// ─── Umrah loaders ──────────────────────────────────────────────────────────
+// Umrah templates print pilgrim cards, group manifests, sales invoices
+// (often for both the sub-agent who paid and the agent who serviced),
+// agent reconciliation invoices, and penalty letters. Each loader brings
+// the JOIN'd context the bespoke presets reference so the operator
+// doesn't get a blank pilgrim name on a printed visa request.
+
+async function loadUmrahPilgrim(companyId: number, id: string) {
+  const [pilgrim] = await rawQuery<Record<string, unknown>>(
+    `SELECT p.*,
+            s.name AS "seasonName", s."startDate" AS "seasonStart", s."endDate" AS "seasonEnd",
+            a.name AS "agentName", a.country AS "agentCountry",
+            pk.name AS "packageName"
+       FROM umrah_pilgrims p
+       LEFT JOIN umrah_seasons s ON s.id = p."seasonId" AND s."companyId" = $2
+       LEFT JOIN umrah_agents a ON a.id = p."agentId" AND a."companyId" = $2
+       LEFT JOIN umrah_packages pk ON pk.id = p."packageId" AND pk."companyId" = $2
+      WHERE p.id = $1 AND p."companyId" = $2
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: pilgrim ?? { id } };
+}
+
+async function loadUmrahGroup(companyId: number, id: string) {
+  const [group] = await rawQuery<Record<string, unknown>>(
+    `SELECT g.*,
+            a.name AS "agentName", a.country AS "agentCountry",
+            sa.name AS "subAgentName", sa."paymentTerms",
+            s.name AS "seasonName"
+       FROM umrah_groups g
+       LEFT JOIN umrah_agents a ON a.id = g."agentId" AND a."companyId" = $2
+       LEFT JOIN umrah_sub_agents sa ON sa.id = g."subAgentId" AND sa."companyId" = $2
+       LEFT JOIN umrah_seasons s ON s.id = g."seasonId" AND s."companyId" = $2
+      WHERE g.id = $1 AND g."companyId" = $2
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!group) return { entity: { id } };
+  // Pilgrim manifest for the group — the template's "list of names" page.
+  const pilgrims = await rawQuery<Record<string, unknown>>(
+    `SELECT id, "fullName", "passportNumber", "visaNumber", nationality, gender,
+            "arrivalDate", "departureDate", status, "hotelName", "roomNumber"
+       FROM umrah_pilgrims
+      WHERE "companyId" = $2
+        AND ("agentId" = $3 OR "seasonId" = $4)
+      ORDER BY "fullName"
+      LIMIT 500`,
+    [id, companyId, group.agentId, group.seasonId],
+  ).catch(() => []);
+  return { entity: group, pilgrims };
+}
+
+async function loadUmrahSalesInvoice(companyId: number, id: string) {
+  const [invoice] = await rawQuery<Record<string, unknown>>(
+    `SELECT si.*,
+            sa.name AS "subAgentName", sa."nuskCode" AS "subAgentNuskCode",
+            sa.phone AS "subAgentPhone", sa.email AS "subAgentEmail",
+            cl.name AS "clientName", cl."taxNumber" AS "clientVat",
+            s.name AS "seasonName"
+       FROM umrah_sales_invoices si
+       LEFT JOIN umrah_sub_agents sa ON sa.id = si."subAgentId" AND sa."companyId" = $2
+       LEFT JOIN clients cl ON cl.id = si."clientId"
+       LEFT JOIN umrah_seasons s ON s.id = si."seasonId" AND s."companyId" = $2
+      WHERE si.id = $1 AND si."companyId" = $2 AND si."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!invoice) return { entity: { id } };
+  const items = await rawQuery<Record<string, unknown>>(
+    `SELECT id, "itemType", "groupId", "violationId", description,
+            quantity, "unitPrice", "lineTotal"
+       FROM umrah_sales_invoice_items
+      WHERE "invoiceId" = $1
+      ORDER BY id`,
+    [id]
+  ).catch(() => []);
+  return { entity: invoice, items };
+}
+
+async function loadUmrahAgentInvoice(companyId: number, id: string) {
+  const [invoice] = await rawQuery<Record<string, unknown>>(
+    `SELECT ai.*,
+            a.name AS "agentName", a.country AS "agentCountry",
+            a."contactPerson" AS "agentContactPerson",
+            a.phone AS "agentPhone", a.email AS "agentEmail",
+            a.currency AS "agentCurrency",
+            s.name AS "seasonName"
+       FROM umrah_agent_invoices ai
+       LEFT JOIN umrah_agents a ON a.id = ai."agentId" AND a."companyId" = $2
+       LEFT JOIN umrah_seasons s ON s.id = ai."seasonId" AND s."companyId" = $2
+      WHERE ai.id = $1 AND ai."companyId" = $2
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: invoice ?? { id } };
+}
+
+async function loadUmrahPenalty(companyId: number, id: string) {
+  const [penalty] = await rawQuery<Record<string, unknown>>(
+    `SELECT pn.*,
+            p."fullName" AS "pilgrimName", p."passportNumber",
+            p.nationality, p."nuskNumber",
+            a.name AS "agentName", a.country AS "agentCountry",
+            s.name AS "seasonName"
+       FROM umrah_penalties pn
+       LEFT JOIN umrah_pilgrims p ON p.id = pn."pilgrimId" AND p."companyId" = $2
+       LEFT JOIN umrah_agents a ON a.id = pn."agentId" AND a."companyId" = $2
+       LEFT JOIN umrah_seasons s ON s.id = pn."seasonId" AND s."companyId" = $2
+      WHERE pn.id = $1 AND pn."companyId" = $2
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: penalty ?? { id } };
 }
