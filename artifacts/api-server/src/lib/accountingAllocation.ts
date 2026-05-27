@@ -323,6 +323,86 @@ export function validateAllocationCompleteness(results: AllocationResult[]): { o
   return { ok: blockers.length === 0, blockers };
 }
 
+/**
+ * Read the `finance.enforce_line_allocation` setting for the given
+ * scope. Branch row overrides company row overrides system-wide
+ * default; if no row exists the function returns `false` (legacy
+ * fallback-to-generic-account behavior).
+ *
+ * Seeded as 'false' system-wide by migration 223; flip to 'true' per
+ * company once the chart-of-accounts + allocation rules are mature
+ * enough to refuse fallbacks in production.
+ */
+export async function getEnforceLineAllocation(
+  scope: { companyId: number; branchId?: number | null },
+): Promise<boolean> {
+  try {
+    const rows = await rawQuery<{ value: string | null }>(
+      `SELECT value FROM system_settings
+        WHERE key = 'finance.enforce_line_allocation'
+          AND ( ("companyId" = $1 AND "branchId" = $2)
+             OR ("companyId" = $1 AND "branchId" IS NULL)
+             OR ("companyId" IS NULL AND "branchId" IS NULL) )
+        ORDER BY ("branchId" IS NULL) ASC, ("companyId" IS NULL) ASC
+        LIMIT 1`,
+      [scope.companyId, scope.branchId ?? null],
+    );
+    const raw = rows[0]?.value?.trim().toLowerCase();
+    if (!raw) return false;
+    return raw === "true" || raw === "1" || raw === "yes" || raw === "on";
+  } catch {
+    // system_settings query failed (table missing in dev?) — fail OPEN
+    // (allow the legacy fallback). Production deployments must run the
+    // migration so this branch is unreachable.
+    return false;
+  }
+}
+
+/**
+ * Record an enforce_line_allocation bypass on allocation_override_log.
+ * Caller is expected to verify the actor holds the
+ * `finance.allocation.override` permission BEFORE invoking this;
+ * the audit row just preserves the trail.
+ *
+ * `blockers` is the list returned by validateAllocationCompleteness;
+ * persisted verbatim so reviewers can see exactly what the resolver
+ * objected to at approval time even after rules change.
+ */
+export async function logAllocationOverride(params: {
+  companyId: number;
+  branchId: number | null;
+  actorAssignmentId: number | null;
+  actorUserId: number | null;
+  documentType: string;
+  documentId: number;
+  sourceTable: string;
+  blockers: string[];
+  overrideReason: string;
+}): Promise<void> {
+  try {
+    await rawExecute(
+      `INSERT INTO allocation_override_log (
+         "companyId", "branchId", "actorAssignmentId", "actorUserId",
+         "documentType", "documentId", "sourceTable",
+         "blockersJson", "overrideReason"
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        params.companyId,
+        params.branchId,
+        params.actorAssignmentId,
+        params.actorUserId,
+        params.documentType,
+        params.documentId,
+        params.sourceTable,
+        JSON.stringify(params.blockers),
+        params.overrideReason,
+      ],
+    );
+  } catch (err) {
+    logger.error({ err, params: { documentType: params.documentType, documentId: params.documentId } }, "[accountingAllocation] logAllocationOverride failed");
+  }
+}
+
 // ─── Internals ──────────────────────────────────────────────────────────────
 
 function normalizeDimensions(dims: AllocationInput["dimensions"]): Required<NonNullable<AllocationInput["dimensions"]>> {

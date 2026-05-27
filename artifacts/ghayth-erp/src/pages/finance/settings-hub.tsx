@@ -1,11 +1,17 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { useApiQuery, apiFetch } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen, Percent, Receipt, Workflow, Package, Eye, Globe, RefreshCw,
   Calendar, Wallet, Settings as SettingsIcon, Layers, Handshake, ClipboardList,
-  History,
+  History, ShieldAlert, ShieldCheck,
 } from "lucide-react";
 
 /**
@@ -82,6 +88,14 @@ const CARDS: SettingsCard[] = [
     description: "كل قرار توجيه يحفظه الـ resolver — أي بند، أي قاعدة، أي حساب ومركز تكلفة. الـ override اليدوي مع السبب.",
     icon: Eye,
     iconClass: "text-orange-600 bg-orange-50",
+    group: "allocation",
+  },
+  {
+    href: "/finance/allocation-override-log",
+    title: "سجل تجاوزات التخصيص",
+    description: "كل اعتماد بصلاحية finance.allocation.override تجاوز الإلزام — مع السبب المكتوب وقائمة الـ blockers وقت الاعتماد. للمراجعة والحوكمة.",
+    icon: ShieldAlert,
+    iconClass: "text-status-warning-foreground bg-status-warning-surface",
     group: "allocation",
   },
 
@@ -181,6 +195,88 @@ const GROUP_INFO: Record<SettingsCard["group"], { label: string; description: st
 
 const GROUP_ORDER: SettingsCard["group"][] = ["registries", "allocation", "currency", "periods", "procurement"];
 
+function EnforceLineAllocationToggle() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [saving, setSaving] = useState(false);
+  const { data, isLoading } = useApiQuery<{ enforce: boolean; key: string }>(
+    ["finance-settings-enforce-line-allocation"],
+    "/finance/settings/enforce-line-allocation",
+  );
+  const enforce = !!data?.enforce;
+
+  async function toggle() {
+    if (isLoading || saving) return;
+    setSaving(true);
+    try {
+      await apiFetch("/finance/settings/enforce-line-allocation", {
+        method: "PUT",
+        body: JSON.stringify({ enforce: !enforce }),
+      });
+      await qc.invalidateQueries({ queryKey: ["finance-settings-enforce-line-allocation"] });
+      toast({ title: !enforce ? "تم تفعيل الإلزام بتخصيص البنود" : "تم إيقاف الإلزام بتخصيص البنود" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذّر التحديث", description: err?.fix ?? err?.message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className={enforce
+      ? "mb-6 border-status-success-surface bg-status-success-surface/30"
+      : "mb-6 border-status-warning-surface bg-status-warning-surface/30"}>
+      <CardContent className="p-4 flex items-start gap-3">
+        <div className="shrink-0 mt-0.5">
+          {enforce
+            ? <ShieldCheck className="h-6 w-6 text-status-success-foreground" />
+            : <ShieldAlert className="h-6 w-6 text-status-warning-foreground" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <p className="font-semibold">
+              الإلزام بتخصيص بنود المستندات (Line-Level Allocation Enforcement)
+            </p>
+            <div className="flex items-center gap-2 shrink-0">
+              <Badge variant="outline" className={enforce ? "text-status-success-foreground" : "text-status-warning-foreground"}>
+                {enforce ? "مُفعَّل" : "معطّل"}
+              </Badge>
+              <Switch checked={enforce} onCheckedChange={toggle} disabled={isLoading || saving} aria-label="تبديل الإلزام" />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {enforce ? (
+              <>
+                وضع <strong>الإنتاج</strong>: لا يمكن اعتماد أي فاتورة أو إيصال GRN يحتوي على بند بدون
+                تخصيص محاسبي (status=unmapped). الـ fallback إلى الحساب العام مرفوض إلا بصلاحية
+                <code className="px-1 bg-muted rounded mx-1">finance.allocation.override</code>
+                مع سبب مكتوب يُحفظ في سجل التجاوزات.
+              </>
+            ) : (
+              <>
+                وضع <strong>التساهل (الوضع الافتراضي)</strong>: البنود غير المخصصة تنزل تلقائياً على الحساب
+                العام (invoice_revenue / inventory). آمن للهجرة من نظام قديم لكن غير مناسب للإنتاج النهائي —
+                فعّل الإلزام بعد إنشاء قواعد التوجيه المحاسبي.
+              </>
+            )}
+          </p>
+          <div className="flex gap-2 mt-2">
+            <Link href="/finance/allocation-rules">
+              <Button variant="outline" size="sm" className="h-7 text-xs">قواعد التوجيه</Button>
+            </Link>
+            <Link href="/finance/allocation-override-log">
+              <Button variant="outline" size="sm" className="h-7 text-xs">سجل التجاوزات</Button>
+            </Link>
+            <Link href="/finance/allocation-coverage">
+              <Button variant="outline" size="sm" className="h-7 text-xs">تغطية التخصيص</Button>
+            </Link>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function FinanceSettingsHubPage() {
   const grouped = GROUP_ORDER.map((g) => ({
     group: g,
@@ -197,6 +293,8 @@ export default function FinanceSettingsHubPage() {
         { label: "الإعدادات" },
       ]}
     >
+      <EnforceLineAllocationToggle />
+
       <Card className="mb-6 border-status-info-surface bg-status-info-surface/30">
         <CardContent className="p-4 text-sm">
           <p className="font-semibold mb-1 flex items-center gap-2">

@@ -14,6 +14,7 @@ import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { sendNotification } from "../lib/notificationService.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { sendMessage } from "../lib/messageSender.js";
 import { aiEngine } from "../lib/aiEngine.js";
 import { sendPushToCompany, getVapidPublicKey } from "../lib/pushService.js";
 import { encryptPushEndpoint, hashPushEndpoint, decryptPushEndpoint } from "../lib/pushCrypto.js";
@@ -585,7 +586,8 @@ router.post("/send", authorize({ feature: "communications", action: "create" }),
     const scope = req.scope!;
 
     const validChannels = ["whatsapp", "sms", "email", "call", "push"];
-    if (!(validChannels as readonly string[]).includes(b.channel.toLowerCase())) {
+    const channel = b.channel.toLowerCase();
+    if (!(validChannels as readonly string[]).includes(channel)) {
       throw new ValidationError(`قناة غير مدعومة: ${b.channel}`, {
         field: "channel",
         fix: `اختر قناة من: ${validChannels.join(", ")}`,
@@ -597,22 +599,62 @@ router.post("/send", authorize({ feature: "communications", action: "create" }),
         fix: "أدخل رقم المستلم أو بريده الإلكتروني",
       });
     }
+    const recipient = b.toEmail ?? b.toNumber ?? "";
 
+    // Phase 4 contract slice 3: real sends (email/sms/whatsapp) now
+    // route through messageSender — same path as /inbox/send. That
+    // gives us DLP enforcement, provider failover telemetry, and
+    // dual-write to message_log / outbound_queue for free. The
+    // /communications/send endpoint stays as a back-compat shim.
+    //
+    // 'call' and 'push' aren't real outbound messages — call is just
+    // an audit row, push goes through pushService — so those keep the
+    // legacy direct-INSERT path until their own seams land.
+    if (channel === "email" || channel === "sms" || channel === "whatsapp") {
+      const result = await sendMessage({
+        channel,
+        recipient,
+        subject: b.subject ?? null,
+        body: b.body.trim(),
+        relatedType: b.relatedType ?? null,
+        relatedId: b.relatedId ?? null,
+        companyId: scope.companyId,
+        userId: scope.userId,
+        eventAction: "communications.message.sent",
+      });
+      // Read the freshly-written row back from the unified view so the
+      // shape matches the legacy response (which the admin UI consumes).
+      const [row] = await rawQuery<Record<string, unknown>>(
+        `SELECT id, "companyId", channel, direction,
+                "fromAddress" AS "fromNumber", "toAddress" AS "toNumber",
+                subject, body, status, folder, "isStarred",
+                "relatedType", "relatedId", "createdAt", "deletedAt"
+           FROM v_message_log_all
+          WHERE id = $1 AND "companyId" = $2`,
+        [result.logId, scope.companyId],
+      );
+      res.status(result.blocked ? 422 : 201).json(row ?? result);
+      return;
+    }
+
+    // Audit-only channels (call / push): keep the direct INSERT —
+    // these are book-keeping rows, not actual sends, and don't need
+    // DLP or queue dispatch.
     const { insertId } = await rawExecute(
       `INSERT INTO communications_log ("companyId",channel,direction,"fromNumber","toNumber",subject,body,status,"relatedType","relatedId") VALUES ($1,$2,'outbound',$3,$4,$5,$6,'queued',$7,$8)`,
-      [scope.companyId, b.channel.toLowerCase(), b.fromNumber ?? null, b.toNumber ?? b.toEmail, b.subject ?? null, b.body.trim(), b.relatedType ?? null, b.relatedId ?? null]
+      [scope.companyId, channel, b.fromNumber ?? null, recipient, b.subject ?? null, b.body.trim(), b.relatedType ?? null, b.relatedId ?? null],
     );
     assertInsert(insertId, "communications_log");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM communications_log WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     if (!row) throw new NotFoundError("فشل في استرجاع السجل");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "communications_log", entityId: insertId, after: { channel: b.channel.toLowerCase(), toNumber: b.toNumber ?? b.toEmail } }).catch((e) => logger.error(e, "communications background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "communications_log", entityId: insertId, after: { channel, toNumber: recipient } }).catch((e) => logger.error(e, "communications background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "communications.message.sent",
       entity: "communications_log",
       entityId: insertId,
-      details: JSON.stringify({ channel: b.channel.toLowerCase(), toNumber: b.toNumber ?? b.toEmail }),
+      details: JSON.stringify({ channel, toNumber: recipient }),
     }).catch((e) => logger.error(e, "communications background task failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Send communication error:"); }
