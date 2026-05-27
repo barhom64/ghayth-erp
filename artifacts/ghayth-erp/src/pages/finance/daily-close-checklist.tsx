@@ -13,6 +13,7 @@ import {
   Calendar, ListChecks, Download, RefreshCw,
 } from "lucide-react";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Daily Finance Close Checklist
@@ -273,6 +274,25 @@ export default function DailyCloseChecklistPage() {
             <Download className="w-4 h-4 ml-1" />
             CSV
           </Button>
+          <PrintButton
+            entityType="report_daily_close"
+            entityId={date}
+            payload={{
+              entity: {
+                title: "فحص الإغلاق اليومي",
+                date,
+                readinessScore: `${score}%`,
+                checkCount: checks.length,
+              },
+              items: checks.map((c) => ({
+                "الفحص": c.title,
+                "الحالة": c.severity === "ok" ? "ناجح" : c.severity === "warning" ? "تحذير" : "حرج",
+                "العدد": c.count,
+                "المبلغ": c.amount ? Number(c.amount) : "",
+                "التفاصيل": c.description,
+              })),
+            }}
+          />
         </CardContent>
       </Card>
 
