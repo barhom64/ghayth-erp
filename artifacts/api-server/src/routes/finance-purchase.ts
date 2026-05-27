@@ -13,6 +13,7 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { checkAccess } from "../lib/rbac/authzEngine.js";
 import { issueNumber } from "../lib/numberingService.js";
 import {
   emitEvent,
@@ -1114,7 +1115,13 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     // rule match overrides the static TREATMENT_PURPOSE map below.
     // Tenants that haven't authored any rules behave exactly like
     // Phase 4.2 alone (TREATMENT_PURPOSE → defaultInvAccount).
-    const { resolveLineAllocation, writeAllocationResult } = await import("../lib/accountingAllocation.js");
+    const {
+      resolveLineAllocation,
+      writeAllocationResult,
+      validateAllocationCompleteness,
+      getEnforceLineAllocation,
+      logAllocationOverride,
+    } = await import("../lib/accountingAllocation.js");
     const lineResolutions = await Promise.all(
       receiptLineRows.map((ln) =>
         resolveLineAllocation({
@@ -1141,6 +1148,53 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
         })
       )
     );
+
+    // ── Enforce gate (migration 223 / finance.enforce_line_allocation).
+    // Same contract as the invoice approve handler: when the company
+    // setting is ON, refuse to post a GRN JE that contains any line
+    // the resolver flagged 'unmapped'. A user with the
+    // finance.allocation.override grant may pass a written
+    // req.body.overrideReason (>=10 chars) which is logged to
+    // allocation_override_log. With the flag OFF the legacy default-
+    // inventory-account fallback below stays in effect.
+    const enforce = await getEnforceLineAllocation({ companyId: scope.companyId, branchId: scope.branchId });
+    if (enforce) {
+      const { ok, blockers } = validateAllocationCompleteness(lineResolutions);
+      if (!ok) {
+        const overrideReason = String(req.body?.overrideReason ?? "").trim();
+        if (overrideReason.length < 10) {
+          throw new ValidationError(
+            "لا يمكن استلام إيصال يحتوي على بنود بدون تخصيص محاسبي",
+            {
+              field: "items",
+              fix: "حدد الحساب ومركز التكلفة لكل بند، أو زوّد سببًا مكتوبًا (overrideReason ≥ 10 حرف) إن كان لديك صلاحية finance.allocation.override.",
+              meta: { blockers, unmappedLineCount: lineResolutions.filter((r) => r.status === "unmapped" || r.status === "failed").length },
+            } as any,
+          );
+        }
+        const overrideAllowed = (await checkAccess(scope, {
+          feature: "finance.allocation.override",
+          action: "create",
+        })).allowed;
+        if (!overrideAllowed) {
+          throw new ForbiddenError(
+            "تجاوز تخصيص البنود يحتاج صلاحية finance.allocation.override",
+            { fix: "اطلب من المدير المالي اعتماد هذا الاستلام، أو خصّص البنود قبل الاستلام.", meta: { blockers } } as any,
+          );
+        }
+        await logAllocationOverride({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          actorAssignmentId: scope.activeAssignmentId ?? null,
+          actorUserId: scope.userId,
+          documentType: "grn",
+          documentId: grnId,
+          sourceTable: "goods_receipt_items",
+          blockers,
+          overrideReason,
+        });
+      }
+    }
 
     type DrBucket = {
       accountCode: string;
