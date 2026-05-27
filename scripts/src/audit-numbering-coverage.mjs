@@ -133,6 +133,26 @@ const ENGINE_FORWARD_NOTES = new Map([
   ["finance-vendor-contracts.ts", "vendor contracts use ref from numberingService via finance-purchase"],
 ]);
 
+// Non-route exceptions: when a lib/engines/* file legitimately INSERTs
+// into an executive table because the CALLER is expected to issue and
+// pass the ref. The exemption is documented per file. Drift only counts
+// files that have NEITHER issueNumber NOR an entry here.
+//
+// Each entry MUST cite either (a) the route that passes the ref via
+// issueNumber, OR (b) the open issue tracking the gap. No silent
+// exemptions.
+const NON_ROUTE_EXCEPTIONS = new Map([
+  // financialEngine.createPurchaseOrder accepts `ref` as a required
+  // parameter. The contract is: caller MUST issue via numberingService
+  // and pass the result. The audit verifies caller compliance through
+  // the routes-pass; if a caller builds ref inline the new
+  // `inline-date-now-as-ref` lint rule catches it.
+  ["lib/engines/financialEngine.ts", "ref is a required parameter; caller MUST issue. Caller-side audit covers compliance"],
+  ["lib/engines/legalEngine.ts",     "caseNumber must be issued by caller and passed; gap currently tracked in coverage report §3 (G5)"],
+  ["lib/engines/supportEngine.ts",   "ref must be issued by caller (createPortalTicket) or column left NULL (createTicket — gap tracked in coverage report §3 G4)"],
+  ["lib/cronScheduler.ts",           "auto-generated documents from cron — gap tracked in coverage report §3 G6 and G7. Pending fix."],
+]);
+
 // ─── Regex helpers ──────────────────────────────────────────────────
 
 const INSERT_RE = /INSERT\s+INTO\s+(?:public\.)?"?([a-zA-Z_][a-zA-Z0-9_]*)"?/gi;
@@ -143,6 +163,45 @@ const ISSUE_NUMBER_CALL_RE = /\b(?:issueNumber|issueCorrespondenceNumber|reserve
 async function listRouteFiles() {
   const all = await readdir(ROUTES_DIR);
   return all.filter((f) => f.endsWith(".ts") && !f.endsWith(".d.ts"));
+}
+
+// Non-route layers that ALSO write executive tables — scanned as a
+// second pass so the audit doesn't miss them.
+//
+// Lawyer's review (2026-05-27 coverage report) flagged 7 gaps outside
+// routes/: lib/engines/financialEngine.ts (createPurchaseOrder),
+// lib/engines/supportEngine.ts (createTicket), lib/engines/legalEngine.ts
+// (createCase), lib/cronScheduler.ts (purchase_orders + legal_cases
+// auto-creation), lib/disciplineEngine.ts (generateMemoNumber). The
+// audit must reach those layers too.
+const LIB_DIR = join(REPO_ROOT, "artifacts/api-server/src/lib");
+const NON_ROUTE_SCAN_PATHS = [
+  "engines",          // every file in lib/engines/
+  "cronScheduler.ts", // a single file
+  "disciplineEngine.ts",
+];
+
+async function listNonRouteFiles() {
+  const results = [];
+  for (const p of NON_ROUTE_SCAN_PATHS) {
+    const full = join(LIB_DIR, p);
+    try {
+      const stat = await import("node:fs/promises").then((m) => m.stat(full));
+      if (stat.isDirectory()) {
+        const entries = await readdir(full);
+        for (const e of entries) {
+          if (e.endsWith(".ts") && !e.endsWith(".d.ts")) {
+            results.push({ path: join(full, e), label: `lib/${p}/${e}` });
+          }
+        }
+      } else if (stat.isFile()) {
+        results.push({ path: full, label: `lib/${p}` });
+      }
+    } catch {
+      // path doesn't exist — skip silently (drift gates handle that)
+    }
+  }
+  return results;
 }
 
 function findExecutiveInserts(source) {
@@ -230,9 +289,53 @@ async function main() {
   }
   console.log("");
 
-  if (drifts.length === 0 && legacyHits.length === 0) {
-    console.log("✓ audit-numbering-coverage: every route writes through the numbering center AND zero legacy patterns remain.");
+  // ── Second pass: lib/engines/, lib/cronScheduler.ts, lib/disciplineEngine.ts ──
+  // These layers were uncovered by the original scan — the 2026-05-27
+  // coverage report exposed 7 gaps in them. Any executive INSERT here
+  // MUST be paired with issueNumber in the same file (same rule as for
+  // routes), or appear in NON_ROUTE_EXCEPTIONS with a documented reason.
+  const nonRouteFiles = await listNonRouteFiles();
+  const nonRouteRows = [];
+  for (const { path, label } of nonRouteFiles) {
+    const src = await readFile(path, "utf8");
+    const tables = findExecutiveInserts(src);
+    if (tables.length === 0) continue;
+    const issues = routeIssuesNumbering(src);
+    const exempt = NON_ROUTE_EXCEPTIONS.get(label) ?? null;
+    nonRouteRows.push({ label, tables, issues, exempt });
+  }
+
+  if (nonRouteRows.length > 0) {
+    console.log("Non-route layer scan (lib/engines/, lib/cronScheduler.ts, lib/disciplineEngine.ts):");
+    const widthLbl = Math.max(35, ...nonRouteRows.map((r) => r.label.length));
+    const widthTbl = Math.max(25, ...nonRouteRows.map((r) => r.tables.join(", ").length));
+    for (const r of nonRouteRows.sort((a, b) => Number(b.issues) - Number(a.issues) || a.label.localeCompare(b.label))) {
+      const status = r.issues ? "✓"
+        : r.exempt ? "→ exempt"
+        : "✗ MISSING";
+      console.log(
+        "  " + r.label.padEnd(widthLbl, " ") + "  " +
+        r.tables.join(", ").padEnd(widthTbl, " ") + "  " +
+        status.padEnd(13, " ") + "  " +
+        (r.exempt ?? ""),
+      );
+    }
+    console.log("");
+  }
+
+  const nonRouteDrifts = nonRouteRows.filter((r) => !r.issues && !r.exempt);
+
+  if (drifts.length === 0 && legacyHits.length === 0 && nonRouteDrifts.length === 0) {
+    console.log("✓ audit-numbering-coverage: every route AND non-route layer writes through the numbering center AND zero legacy patterns remain.");
     process.exit(0);
+  }
+
+  if (nonRouteDrifts.length > 0) {
+    console.error(`✗ audit-numbering-coverage: ${nonRouteDrifts.length} non-route file(s) INSERT into an executive table without issueNumber:`);
+    for (const r of nonRouteDrifts) {
+      console.error(`  • ${r.label} → ${r.tables.join(", ")}`);
+    }
+    console.error("");
   }
 
   if (legacyHits.length > 0) {

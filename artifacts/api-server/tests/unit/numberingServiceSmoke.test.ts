@@ -644,5 +644,47 @@ describe("phase-7 real-closure (#1141)", () => {
     }
     expect(missingFields, `routes missing expectedTiming: ${missingFields.join(", ")}`).toEqual([]);
   });
+
+  it("coverage report 2026-05-27 exists and documents the 7 known gaps", () => {
+    const fs = require("node:fs") as typeof import("node:fs");
+    const path = join(REPO_ROOT, "docs/architecture/numbering-coverage-report-2026-05-27.md");
+    expect(fs.existsSync(path)).toBe(true);
+    const md = fs.readFileSync(path, "utf8");
+    // Each gap MUST be enumerated by its G-code so the file can't be
+    // silently truncated/edited to hide gaps.
+    for (const id of ["G1", "G2", "G3", "G4", "G5", "G6", "G7"]) {
+      expect(md, `coverage report missing ${id}`).toMatch(new RegExp(`### ${id}\\.`));
+    }
+    // The report must explicitly refuse to claim full closure — the
+    // lawyer's standard from 2026-05-27.
+    expect(md).toMatch(/لا يدّعي الاكتمال|لا تُغلق|7 ثغرات/);
+    expect(md).toContain("7 ثغرات");
+  });
+
+  it("audit-numbering-coverage extends scan to lib/engines + cron + disciplineEngine", () => {
+    // The 2026-05-27 review demanded the audit reach beyond routes/.
+    // This test locks the broader scan in place so a future commit
+    // can't silently revert it.
+    expect(AUDIT).toContain("NON_ROUTE_SCAN_PATHS");
+    expect(AUDIT).toContain("engines");
+    expect(AUDIT).toContain("cronScheduler.ts");
+    expect(AUDIT).toContain("disciplineEngine.ts");
+    expect(AUDIT).toContain("NON_ROUTE_EXCEPTIONS");
+    // Each non-route exception MUST cite either a covering caller or
+    // the open gap in the coverage report — no silent exemptions.
+    expect(AUDIT).toMatch(/coverage report.*G[1-9]|caller MUST issue/);
+  });
+
+  it("inline-date-now-as-ref lint rule exists with explicit baseline", () => {
+    const LINT = readFileSync(join(REPO_ROOT, "scripts/src/lint-patterns.mjs"), "utf8");
+    expect(LINT).toContain('id: "inline-date-now-as-ref"');
+    // Must enumerate the 5 known offenders inline in the comment so a
+    // reviewer can see the live state without running the linter.
+    expect(LINT).toMatch(/communications\.ts.*CALL/);
+    expect(LINT).toMatch(/finance-invoices\.ts.*ADV/);
+    expect(LINT).toMatch(/finance-purchase\.ts.*PR-/);
+    expect(LINT).toMatch(/properties\.ts.*RENT/);
+    expect(LINT).toMatch(/store\.ts.*ORD/);
+  });
 });
 
