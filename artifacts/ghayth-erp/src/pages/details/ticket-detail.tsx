@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Headphones, User, MessageSquare, Send, Trash2, Clock } from "lucide-react";
+import { Headphones, User, MessageSquare, Send, Trash2, Clock, Star } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   DetailPageLayout,
   EntityComments,
@@ -50,6 +51,9 @@ export default function TicketDetail() {
   const [newReply, setNewReply] = useState("");
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [csatScore, setCsatScore] = useState<number>(0);
+  const [csatComment, setCsatComment] = useState("");
+  const [csatSubmitting, setCsatSubmitting] = useState(false);
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("support_ticket", id ?? 0);
 
   const { data: ticket, isLoading, isError, error, refetch } = useApiQuery<any>(["ticket-detail", id || ""], `/support/tickets/${id}`, !!id);
@@ -109,6 +113,28 @@ export default function TicketDetail() {
       navigate("/support");
     } catch (err) {
       toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+  };
+
+  // CSAT — only accepted on resolved/closed tickets per the backend's
+  // 409 guard. The widget reads csatScore from the loaded ticket payload
+  // (if already rated) or shows the entry form.
+  const handleSubmitCsat = async () => {
+    if (csatScore < 1 || csatScore > 5) return;
+    setCsatSubmitting(true);
+    try {
+      await apiFetch(`/support/tickets/${id}/csat`, {
+        method: "POST",
+        body: JSON.stringify({ score: csatScore, comment: csatComment || undefined }),
+      });
+      toast({ title: "تم إرسال التقييم — شكراً لك" });
+      qc.invalidateQueries({ queryKey: ["ticket-detail", id] });
+      setCsatScore(0);
+      setCsatComment("");
+    } catch (err) {
+      toast({ variant: "destructive", title: "تعذر إرسال التقييم", description: getErrorMessage(err) });
+    } finally {
+      setCsatSubmitting(false);
     }
   };
 
@@ -212,6 +238,81 @@ export default function TicketDetail() {
         )}
 
         {id && <ApprovalTimeline entityType="ticket" entityId={id} />}
+
+        {/* CSAT — backend only accepts ratings on resolved/closed
+            tickets (409 otherwise). Show as a form when the ticket
+            qualifies and there's no existing rating, or as a read-only
+            score badge once submitted. */}
+        {(ticket.status === "resolved" || ticket.status === "closed") && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Star className="w-4 h-4 text-amber-500" />
+                تقييم خدمة العملاء (CSAT)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {ticket.csatScore ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star
+                        key={n}
+                        className={cn(
+                          "w-4 h-4",
+                          n <= Number(ticket.csatScore) ? "fill-amber-400 text-amber-400" : "text-gray-300",
+                        )}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {ticket.csatScore}/5
+                  </span>
+                  {ticket.csatComment && (
+                    <p className="text-xs text-muted-foreground border-s ps-2 ms-2">
+                      {ticket.csatComment}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setCsatScore(n)}
+                        className="p-1"
+                        aria-label={`${n} نجوم`}
+                      >
+                        <Star
+                          className={cn(
+                            "w-6 h-6 transition-colors",
+                            n <= csatScore ? "fill-amber-400 text-amber-400" : "text-gray-300 hover:text-amber-300",
+                          )}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                  <Textarea
+                    placeholder="تعليقك على الخدمة (اختياري)"
+                    value={csatComment}
+                    onChange={(e) => setCsatComment(e.target.value)}
+                    className="min-h-[60px] text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleSubmitCsat}
+                    disabled={csatScore < 1 || csatSubmitting}
+                    rateLimitAware
+                  >
+                    إرسال التقييم
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {id && <EntityComments entityType="ticket" entityId={id} />}

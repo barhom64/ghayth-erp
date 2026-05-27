@@ -255,7 +255,7 @@ export default function PropertyMaintenanceDetail() {
           estimatedCost: Number(item.estimatedCost ?? 0),
           scheduledDate: item.scheduledDate ?? "",
         }}
-        endpoint={`/properties/maintenance/${id}`}
+        endpoint={`/properties/maintenance-requests/${id}`}
         invalidateKeys={[["property-maintenance", String(id)], ["maintenance-requests"]]}
         onSaved={() => refetch()}
       >

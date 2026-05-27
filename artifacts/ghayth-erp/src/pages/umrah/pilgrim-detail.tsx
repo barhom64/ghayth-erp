@@ -1,19 +1,24 @@
 import { useState } from "react";
+import { z } from "zod";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import {
   PageStatusBadge,
   DataTable,
   type DataTableColumn,
+  FormGrid,
+  FormTextField,
+  FormTextareaField,
+  FormSelectField,
 } from "@workspace/ui-core";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Save, User, Calendar, AlertTriangle, Trash2 } from "lucide-react";
+import { Save, User, Calendar, AlertTriangle, Trash2, Edit } from "lucide-react";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -39,6 +44,17 @@ const STATUS_TONES: Record<string, "success" | "warning" | "info" | "muted" | "d
   cancelled: "destructive",
 };
 
+const pilgrimEditSchema = z.object({
+  fullName: z.string().min(1, "الاسم مطلوب"),
+  nationality: z.string().optional().default(""),
+  gender: z.enum(["male", "female", ""]).optional().default(""),
+  phone: z.string().optional().default(""),
+  hotelName: z.string().optional().default(""),
+  roomNumber: z.string().optional().default(""),
+  notes: z.string().optional().default(""),
+});
+type PilgrimEditForm = z.infer<typeof pilgrimEditSchema>;
+
 export default function PilgrimDetail() {
   const [, params] = useRoute("/umrah/pilgrims/:id");
   const id = params?.id || "";
@@ -46,6 +62,7 @@ export default function PilgrimDetail() {
   const { data, refetch, isLoading, isError } = useApiQuery<any>(["umrah-pilgrim", id], `/umrah/pilgrims/${id}`);
   const [newStatus, setNewStatus] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
@@ -150,6 +167,16 @@ export default function PilgrimDetail() {
         <Save className="h-4 w-4" />تحديث
       </GuardedButton>
       <GuardedButton
+        perm="umrah:update"
+        variant="outline"
+        size="sm"
+        className="gap-2"
+        onClick={() => setEditOpen(true)}
+        disabled={!data}
+      >
+        <Edit className="h-4 w-4" />تعديل
+      </GuardedButton>
+      <GuardedButton
         perm="umrah:delete"
         variant="outline"
         size="sm"
@@ -196,6 +223,44 @@ export default function PilgrimDetail() {
         successMessage="تم حذف المعتمر"
         onDeleted={() => navigate("/umrah/pilgrims")}
       />
+    )}
+    {id && data && (
+      <EntityEditDialog<PilgrimEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل بيانات المعتمر"
+        schema={pilgrimEditSchema}
+        defaultValues={{
+          fullName: data.fullName ?? "",
+          nationality: data.nationality ?? "",
+          gender: (data.gender ?? "") as PilgrimEditForm["gender"],
+          phone: data.phone ?? "",
+          hotelName: data.hotelName ?? "",
+          roomNumber: data.roomNumber ?? "",
+          notes: data.notes ?? "",
+        }}
+        endpoint={`/umrah/pilgrims/${id}`}
+        invalidateKeys={[["umrah-pilgrim", id], ["umrah-pilgrims"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={2}>
+          <FormTextField name="fullName" label="الاسم الكامل" required className="md:col-span-2" />
+          <FormTextField name="nationality" label="الجنسية" />
+          <FormSelectField
+            name="gender"
+            label="الجنس"
+            options={[
+              { value: "", label: "—" },
+              { value: "male", label: "ذكر" },
+              { value: "female", label: "أنثى" },
+            ]}
+          />
+          <FormTextField name="phone" label="الهاتف" />
+          <FormTextField name="hotelName" label="الفندق" />
+          <FormTextField name="roomNumber" label="رقم الغرفة" />
+          <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+        </FormGrid>
+      </EntityEditDialog>
     )}
     </>
   );
