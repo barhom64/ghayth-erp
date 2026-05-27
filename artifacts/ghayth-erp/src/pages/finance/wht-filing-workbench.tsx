@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -265,6 +266,28 @@ export default function WhtFilingWorkbenchPage() {
             <Download className="w-4 h-4 ml-1" />
             CSV
           </Button>
+          <PrintButton
+            entityType="report_wht_filing"
+            entityId={periodLabel}
+            payload={{
+              entity: {
+                title: "ورشة إقرار ضريبة الاستقطاع (WHT)",
+                period: periodLabel,
+                startDate, endDate,
+                rowCount: rows.length,
+                totalWht: rows.reduce((s, r) => s + Number(r.whtAmount ?? 0), 0),
+              },
+              items: rows.map((r) => ({
+                "التاريخ": r.postingDate ? r.postingDate.split("T")[0] : "",
+                "القيد": r.journalRef ?? `JE-${r.journalEntryId}`,
+                "المورد": r.supplierName ?? "",
+                "الفئة": r.whtCategoryName ?? "",
+                "الأساس": Number(r.amount ?? 0),
+                "النسبة %": Number(r.whtRate ?? 0),
+                "WHT": Number(r.whtAmount ?? 0),
+              })),
+            }}
+          />
         </CardContent>
       </Card>
 
