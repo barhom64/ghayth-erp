@@ -860,18 +860,14 @@ describe("Print platform — PrintButton.payload contract (#1286 follow-up)", ()
   });
 });
 
-describe("Print platform — finance reports wave 3 migrated (#1286 Q4 wave 3)", () => {
-  // Continued unification: pages that have CSV exports but no print path
-  // through the official platform get a <PrintButton> next to the CSV
-  // button. Lock the migration so a regression that drops PrintButton
-  // fails CI.
+describe("Print platform — finance reports wave 5 migrated (#1286 Q4 wave 5)", () => {
+  // Final wave: 4 pages with non-standard CSV anchors (camel-case exportCsv).
   const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
   const PAGES: Array<{ path: string; entityType: string }> = [
-    { path: "pages/finance/trial-balance-drilldown.tsx",     entityType: "report_trial_balance_drilldown" },
-    { path: "pages/finance/fixed-asset-register.tsx",        entityType: "report_fixed_asset_register" },
-    { path: "pages/finance/customer-advances-workbench.tsx", entityType: "report_customer_advances" },
-    { path: "pages/finance/vendor-settlement-workbench.tsx", entityType: "report_vendor_settlement" },
-    { path: "pages/finance/budget-heatmap.tsx",              entityType: "report_budget_heatmap" },
+    { path: "pages/finance/cash-13week.tsx",                 entityType: "report_cash_13week" },
+    { path: "pages/finance/income-statement-trend.tsx",      entityType: "report_income_trend" },
+    { path: "pages/finance/trial-balance-comparison.tsx",    entityType: "report_trial_balance_comparison" },
+    { path: "pages/finance/cost-center-pnl.tsx",             entityType: "report_cost_center_pnl" },
   ];
 
   for (const { path, entityType } of PAGES) {

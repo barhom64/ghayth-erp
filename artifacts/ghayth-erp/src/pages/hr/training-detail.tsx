@@ -1,10 +1,17 @@
+import { useState } from "react";
 import { useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
+import { EmployeeSelect } from "@/components/shared/entity-selects";
 import { Badge } from "@/components/ui/badge";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   PageStatusBadge,
   DataTable,
@@ -17,7 +24,10 @@ import {
 } from "@workspace/entity-kit";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import {
-  GraduationCap, Users, MapPin, User, BookOpen,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  GraduationCap, Users, MapPin, User, BookOpen, UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -55,6 +65,11 @@ const STATUS_TONE_MAP: Record<string, "success" | "warning" | "info" | "muted" |
 export default function TrainingDetailPage() {
   const [, params] = useRoute("/hr/training/:id");
   const id = params?.id;
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [enrollEmployeeId, setEnrollEmployeeId] = useState<string>("");
+  const [enrolling, setEnrolling] = useState(false);
 
   const { extraTabs, hideTabs } = useRegistryTabs("training_program", id ?? "");
 
@@ -70,6 +85,26 @@ export default function TrainingDetailPage() {
     { enabled: !!id },
   );
   const enrollments = enrollmentsData?.data || [];
+
+  const handleEnroll = async () => {
+    if (!id || !enrollEmployeeId) return;
+    setEnrolling(true);
+    try {
+      await apiFetch("/hr/training/enrollments", {
+        method: "POST",
+        body: JSON.stringify({ programId: Number(id), employeeId: Number(enrollEmployeeId) }),
+      });
+      toast({ title: "تم تسجيل الموظف في البرنامج" });
+      qc.invalidateQueries({ queryKey: ["training-enrollments", id] });
+      qc.invalidateQueries({ queryKey: ["training-program", id] });
+      setEnrollOpen(false);
+      setEnrollEmployeeId("");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر التسجيل", description: err.message });
+    } finally {
+      setEnrolling(false);
+    }
+  };
 
   const kpis = [
     {
@@ -225,10 +260,22 @@ export default function TrainingDetailPage() {
 
       <Card className="border-0 shadow-sm">
         <CardContent className="p-6">
-          <h3 className="text-sm font-semibold text-status-neutral-foreground mb-4 flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            المشاركون ({enrollments.length})
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-status-neutral-foreground flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              المشاركون ({enrollments.length})
+            </h3>
+            <GuardedButton
+              perm="hr:create"
+              size="sm"
+              variant="outline"
+              onClick={() => setEnrollOpen(true)}
+              disabled={program.status === "completed" || program.status === "cancelled"}
+            >
+              <UserPlus className="h-4 w-4 me-1" />
+              تسجيل موظف
+            </GuardedButton>
+          </div>
           <DataTable
             columns={enrollmentColumns}
             data={enrollments}
@@ -258,6 +305,7 @@ export default function TrainingDetailPage() {
   ) : null;
 
   return (
+    <>
     <DetailPageLayout
       actions={<PrintButton entityType="training" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
       title={program?.title || "تفاصيل البرنامج التدريبي"}
@@ -276,5 +324,30 @@ export default function TrainingDetailPage() {
       createdAt={program?.createdAt}
       updatedAt={program?.updatedAt}
     />
+    <Dialog open={enrollOpen} onOpenChange={(o) => { if (!o) { setEnrollOpen(false); setEnrollEmployeeId(""); } }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>تسجيل موظف في البرنامج</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <EmployeeSelect
+            value={enrollEmployeeId}
+            onChange={(v) => setEnrollEmployeeId(v)}
+            label="الموظف"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setEnrollOpen(false)}>إلغاء</Button>
+          <Button
+            disabled={!enrollEmployeeId || enrolling}
+            onClick={handleEnroll}
+            rateLimitAware
+          >
+            {enrolling ? "جاري التسجيل…" : "تسجيل"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -8,7 +8,7 @@ import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
-import { Edit, CalendarDays } from "lucide-react";
+import { Edit, CalendarDays, XCircle, ChevronsUp } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 
@@ -55,6 +55,7 @@ export default function LeaveDetail() {
   const [, params] = useRoute("/hr/leaves/:id");
   const id = params?.id ? Number(params.id) : null;
   const { toast } = useToast();
+  const [cancelling, setCancelling] = useState(false);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["leave", String(id)],
@@ -85,6 +86,40 @@ export default function LeaveDetail() {
     return out;
   }, [leave]);
 
+
+  const handleEscalate = async () => {
+    if (!id) return;
+    if (!window.confirm("سيتم تصعيد الطلب للمرحلة التالية إذا انقضت مهلة 48 ساعة. متابعة؟")) return;
+    try {
+      await apiFetch(`/hr/leave-requests/${id}/escalate`, {
+        method: "PATCH",
+        body: JSON.stringify({}),
+      });
+      toast({ title: "تم تصعيد الطلب" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر التصعيد", description: err.message });
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!id) return;
+    const reason = window.prompt("سبب إلغاء الإجازة:", "");
+    if (reason == null) return;
+    setCancelling(true);
+    try {
+      await apiFetch(`/hr/leave-requests/${id}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason || undefined }),
+      });
+      toast({ title: "تم إلغاء الإجازة" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر الإلغاء", description: err.message });
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const handleEdit = () => {
     setLocation(`/hr/leaves/${id}/edit`);
@@ -253,6 +288,30 @@ export default function LeaveDetail() {
             <Edit className="h-4 w-4 ms-1" />
             تعديل
           </GuardedButton>
+          <GuardedButton
+            perm="hr:update"
+            variant="outline"
+            size="sm"
+            className="text-status-error-foreground"
+            onClick={handleCancel}
+            disabled={!leave || leave.status !== "approved" || cancelling}
+            title={leave && leave.status !== "approved" ? "الإلغاء متاح للإجازات المعتمدة فقط" : undefined}
+          >
+            <XCircle className="h-4 w-4 ms-1" />
+            إلغاء الإجازة
+          </GuardedButton>
+          {leave && leave.status === "pending" && (
+            <GuardedButton
+              perm="hr:update"
+              variant="outline"
+              size="sm"
+              onClick={handleEscalate}
+              title="يصبح متاحاً بعد 48 ساعة من بدء المرحلة الحالية"
+            >
+              <ChevronsUp className="h-4 w-4 ms-1" />
+              تصعيد
+            </GuardedButton>
+          )}
         </>
       }
     />
