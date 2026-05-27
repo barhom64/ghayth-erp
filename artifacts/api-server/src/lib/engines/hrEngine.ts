@@ -7,6 +7,7 @@ import { financialEngine } from "./financialEngine.js";
 import { rawQuery, rawExecute } from "../rawdb.js";
 import { registerCrossDomainHandler } from "../eventBus.js";
 import { roundTo2 } from "../businessHelpers.js";
+import { logger } from "../logger.js";
 import type { DomainEngine } from "./domainEngineBase.js";
 
 interface HRGLContext {
@@ -97,12 +98,24 @@ class HREngineImpl implements DomainEngine {
 
   async postLoanDisbursementGL(
     ctx: HRGLContext,
-    loan: { id: number; employeeId: number; amount: number }
+    loan: {
+      id: number;
+      employeeId: number;
+      amount: number;
+      departmentId?: number | null;
+      branchId?: number | null;
+    }
   ) {
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_receivable", "debit", "1400"),
       financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_disbursement", "credit", "1100"),
     ]);
+
+    const dims = {
+      employeeId: loan.employeeId,
+      ...(loan.departmentId != null ? { departmentId: loan.departmentId } : {}),
+      ...(loan.branchId != null ? { branchId: loan.branchId } : {}),
+    };
 
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
@@ -117,8 +130,8 @@ class HREngineImpl implements DomainEngine {
       guardTable: "hr_loans",
       guardId: loan.id,
       lines: [
-        { accountCode: debitCode, debit: loan.amount, credit: 0, description: "ذمم سلف موظفين", employeeId: loan.employeeId },
-        { accountCode: creditCode, debit: 0, credit: loan.amount, description: "صرف سلفة", employeeId: loan.employeeId },
+        { accountCode: debitCode, debit: loan.amount, credit: 0, description: "ذمم سلف موظفين", ...dims },
+        { accountCode: creditCode, debit: 0, credit: loan.amount, description: "صرف سلفة", ...dims },
       ],
     });
   }
@@ -131,6 +144,12 @@ class HREngineImpl implements DomainEngine {
       eosAmount: number;
       remainingLeaveAmount: number;
       totalSettlement: number;
+      /** Department/branch resolved from the employee's assignment so
+       *  EOS cost rolls up by dept and branch in the dimensional GL.
+       *  Either may be null when the assignment record is missing
+       *  those fields — the line still posts with employeeId only. */
+      departmentId?: number | null;
+      branchId?: number | null;
     }
   ) {
     const [eosExpense, leaveExpense, settlementPayable] = await Promise.all([
@@ -138,6 +157,15 @@ class HREngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "leave_settlement_expense", "debit", "6160"),
       financialEngine.resolveAccountCode(ctx.companyId, "settlement_payable", "credit", "2140"),
     ]);
+
+    // Common dimensional payload for every line in this entry — the EOS
+    // expense, the leave settlement, AND the matching payable all share
+    // the same employee context, so dept/branch reports tie out cleanly.
+    const dims = {
+      employeeId: exit.employeeId,
+      ...(exit.departmentId != null ? { departmentId: exit.departmentId } : {}),
+      ...(exit.branchId != null ? { branchId: exit.branchId } : {}),
+    };
 
     const lines = [];
 
@@ -147,7 +175,7 @@ class HREngineImpl implements DomainEngine {
         debit: exit.eosAmount,
         credit: 0,
         description: `مكافأة نهاية خدمة — موظف #${exit.employeeId}`,
-        employeeId: exit.employeeId,
+        ...dims,
       });
     }
 
@@ -157,7 +185,7 @@ class HREngineImpl implements DomainEngine {
         debit: exit.remainingLeaveAmount,
         credit: 0,
         description: `بدل إجازات — موظف #${exit.employeeId}`,
-        employeeId: exit.employeeId,
+        ...dims,
       });
     }
 
@@ -166,7 +194,7 @@ class HREngineImpl implements DomainEngine {
       debit: 0,
       credit: exit.totalSettlement,
       description: `تسوية نهاية خدمة — موظف #${exit.employeeId}`,
-      employeeId: exit.employeeId,
+      ...dims,
     });
 
     return financialEngine.postJournalEntry({
@@ -309,13 +337,15 @@ class HREngineImpl implements DomainEngine {
     // expense.
     const debitLines: Array<{
       accountCode: string; debit: number; credit: number;
-      employeeId?: number; departmentId?: number;
+      employeeId?: number; departmentId?: number; branchId?: number;
     }> = [];
 
     if (payroll.breakdown && payroll.breakdown.length > 0) {
       // Validate the breakdown sums match the aggregates within a
       // small rounding tolerance. If they diverge by more than a
-      // cent the breakdown is unreliable — fall back to aggregate.
+      // cent the breakdown is unreliable — fall back to aggregate
+      // BUT emit a warning so reviewers know the dimensional report
+      // for this run will be incomplete (financial-integrity gap #6).
       let sumBasic = 0, sumOT = 0, sumGosi = 0;
       for (const e of payroll.breakdown) {
         sumBasic += roundTo2(e.basic);
@@ -344,35 +374,44 @@ class HREngineImpl implements DomainEngine {
           const gosiRounded = i === lastIdx
             ? roundTo2(gosiEmployer - runningGosi)
             : roundTo2(e.gosiEmployer);
+          // Build the common dimensional payload once per employee so
+          // every line for the same employee carries the same set of
+          // dimensions verbatim. branchId is migration-224-new.
+          const dims = {
+            employeeId: e.employeeId,
+            ...(e.departmentId != null ? { departmentId: e.departmentId } : {}),
+            ...(e.branchId != null ? { branchId: e.branchId } : {}),
+          };
           if (basicRounded > 0) {
-            debitLines.push({
-              accountCode: salaryExpenseCode, debit: basicRounded, credit: 0,
-              employeeId: e.employeeId,
-              ...(e.departmentId != null ? { departmentId: e.departmentId } : {}),
-            });
+            debitLines.push({ accountCode: salaryExpenseCode, debit: basicRounded, credit: 0, ...dims });
             runningBasic = roundTo2(runningBasic + basicRounded);
           }
           if (otRounded > 0) {
-            debitLines.push({
-              accountCode: overtimeExpenseCode, debit: otRounded, credit: 0,
-              employeeId: e.employeeId,
-              ...(e.departmentId != null ? { departmentId: e.departmentId } : {}),
-            });
+            debitLines.push({ accountCode: overtimeExpenseCode, debit: otRounded, credit: 0, ...dims });
             runningOT = roundTo2(runningOT + otRounded);
           }
           if (gosiRounded > 0) {
-            debitLines.push({
-              accountCode: gosiExpenseCode, debit: gosiRounded, credit: 0,
-              employeeId: e.employeeId,
-              ...(e.departmentId != null ? { departmentId: e.departmentId } : {}),
-            });
+            debitLines.push({ accountCode: gosiExpenseCode, debit: gosiRounded, credit: 0, ...dims });
             runningGosi = roundTo2(runningGosi + gosiRounded);
           }
         }
       } else {
         // Breakdown didn't reconcile — fall back to aggregate lines
         // so the entry still posts; the dimensional split would be
-        // misleading.
+        // misleading. Surface the mismatch so payroll admin can fix
+        // the source data before the next run (financial-integrity
+        // gap #6: "وعند غيابه يظهر warning قبل الترحيل بأن التقرير
+        // التحليلي سيكون مجمعًا").
+        logger.warn(
+          {
+            runId: payroll.runId,
+            period: payroll.period,
+            companyId: ctx.companyId,
+            grossDiff, otDiff, gosiDiff,
+            breakdownRows: payroll.breakdown.length,
+          },
+          "[hrEngine.postPayrollRunGL] breakdown failed reconciliation — posting aggregated JE; per-employee/department reports will be empty for this run",
+        );
         debitLines.push(
           { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
           { accountCode: overtimeExpenseCode, debit: totalOvertime, credit: 0 },
@@ -380,7 +419,14 @@ class HREngineImpl implements DomainEngine {
         );
       }
     } else {
-      // Legacy 3-line aggregate.
+      // Legacy 3-line aggregate. Caller didn't pass breakdown at all,
+      // so per-employee/department/branch reporting won't be possible
+      // for this run. Surface a warning so the team can adopt the
+      // breakdown path (the calling route already has the data).
+      logger.warn(
+        { runId: payroll.runId, period: payroll.period, companyId: ctx.companyId },
+        "[hrEngine.postPayrollRunGL] no per-employee breakdown supplied — posting aggregated JE; payroll-by-dimension reports will be empty for this run",
+      );
       debitLines.push(
         { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
         { accountCode: overtimeExpenseCode, debit: totalOvertime, credit: 0 },

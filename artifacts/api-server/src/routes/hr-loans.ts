@@ -571,9 +571,22 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
         period = advancePeriod(period);
       }
 
+      // Pull department/branch from the loan's assignment so the GL
+      // lines on both legs carry the dimensional context (financial-
+      // integrity gap #6). Read inside the transaction so the lookup
+      // sees the same row state.
+      const asnRows = await client.query<{ departmentId: number | null; branchId: number | null }>(
+        `SELECT "departmentId", "branchId" FROM employee_assignments WHERE id = $1 AND "companyId" = $2`,
+        [loan.assignmentId, scope.companyId],
+      );
+      const asn = asnRows.rows[0];
       await hrEngine.postLoanDisbursementGL(
         { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
-        { id: loan.id, employeeId: loan.employeeId ?? 0, amount: Number(loan.amount) },
+        {
+          id: loan.id, employeeId: loan.employeeId ?? 0, amount: Number(loan.amount),
+          departmentId: asn?.departmentId ?? null,
+          branchId: asn?.branchId ?? null,
+        },
       );
     });
 

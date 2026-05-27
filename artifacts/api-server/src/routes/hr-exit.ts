@@ -648,10 +648,25 @@ router.patch("/exit/:id/complete", authorize({ feature: "hr.exit", action: "upda
     const remainingLeaveAmount = Number(item.leaveCompensation || 0);
     const totalSettlement = Number(item.netSettlement || 0);
     if (totalSettlement > 0) {
+      // Resolve department/branch from the assignment so the EOS GL
+      // lines can roll up by dept/branch (financial-integrity gap #6).
+      // hr_exit_requests already carries branchId but not departmentId
+      // — fetch both from employee_assignments in one read to keep the
+      // posting site self-contained.
+      const [asn] = await rawQuery<{ departmentId: number | null; branchId: number | null }>(
+        `SELECT "departmentId", "branchId" FROM employee_assignments
+          WHERE id = $1 AND "companyId" = $2`,
+        [item.assignmentId, scope.companyId],
+      );
       const { hrEngine } = await import("../lib/engines/index.js");
       hrEngine.postExitSettlementGL(
         { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
-        { id: item.id, employeeId: item.employeeId ?? 0, eosAmount, remainingLeaveAmount, totalSettlement },
+        {
+          id: item.id, employeeId: item.employeeId ?? 0,
+          eosAmount, remainingLeaveAmount, totalSettlement,
+          departmentId: asn?.departmentId ?? null,
+          branchId: asn?.branchId ?? item.branchId ?? null,
+        },
       ).catch((e: unknown) => logger.error(e, "Exit settlement GL error:"));
     }
 

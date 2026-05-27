@@ -55,7 +55,7 @@ describe("postPayrollRunGL accepts optional breakdown", () => {
   });
 
   it("legacy callers (no breakdown) get the original 3-line debit aggregate", () => {
-    expect(HR_ENGINE).toMatch(/\/\/ Legacy 3-line aggregate\.[\s\S]{0,500}debitLines\.push\([\s\S]{0,200}salaryExpenseCode/);
+    expect(HR_ENGINE).toMatch(/\/\/ Legacy 3-line aggregate\.[\s\S]{0,800}debitLines\.push\([\s\S]{0,200}salaryExpenseCode/);
   });
 });
 

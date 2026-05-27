@@ -1240,6 +1240,11 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
 
     const { financialEngine } = await import("../lib/engines/index.js");
     let advanceAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "salary_advance_receivable", "debit", "1410");
+    // Resolve department/branch from the employee's active assignment so
+    // BOTH JE lines (receivable DR + cash CR) carry the dimensional
+    // context — keeps salary-advance reports drillable by dept/branch
+    // (financial-integrity gap #6).
+    let empDims: { employeeId?: number; departmentId?: number; branchId?: number } = {};
     if (employeeId) {
       const [subAcc] = await rawQuery<Record<string, unknown>>(
         `SELECT ca.code FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId"
@@ -1247,11 +1252,22 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
         [scope.companyId, Number(employeeId)]
       );
       if (subAcc) advanceAccountCode = subAcc.code as string;
+      const [asn] = await rawQuery<{ departmentId: number | null; branchId: number | null }>(
+        `SELECT "departmentId", "branchId" FROM employee_assignments
+          WHERE "employeeId" = $1 AND "companyId" = $2 AND status = 'active'
+          ORDER BY id DESC LIMIT 1`,
+        [Number(employeeId), scope.companyId],
+      );
+      empDims = {
+        employeeId: Number(employeeId),
+        ...(asn?.departmentId != null ? { departmentId: asn.departmentId } : {}),
+        ...(asn?.branchId != null ? { branchId: asn.branchId } : {}),
+      };
     }
 
     const advanceLines = [
-      { accountCode: advanceAccountCode, debit: Number(amount), credit: 0, employeeId: employeeId ? Number(employeeId) : undefined },
-      { accountCode: sourceAcct, debit: 0, credit: Number(amount) },
+      { accountCode: advanceAccountCode, debit: Number(amount), credit: 0, ...empDims },
+      { accountCode: sourceAcct, debit: 0, credit: Number(amount), ...empDims },
     ];
     const advanceDescription = description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`;
 

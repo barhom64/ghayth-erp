@@ -430,6 +430,11 @@ export interface JournalEntryLine {
   credit: number;
   description?: string;
   departmentId?: number;
+  /** Per-line branch attribution (migration 224). Lets a single JE
+   *  span multiple branches — e.g. a company-wide monthly payroll
+   *  batch where each employee's debit line carries its own branch.
+   *  NULL → inherit from journal_entries.branchId (legacy behavior). */
+  branchId?: number;
   projectId?: number;
   employeeId?: number;
   vehicleId?: number;
@@ -583,14 +588,14 @@ export async function createJournalEntry(params: {
           "activityType","templateId",
           "productId","clientId","vendorId","driverId",
           "costCenterId","unitId","assetId","umrahSeasonId","umrahAgentId",
-          "sourceLineTable","sourceLineId","dimensionJson"
+          "sourceLineTable","sourceLineId","dimensionJson","branchId"
          ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,
           $8,$9,$10,$11,$12,$13,
           $14,$15,
           $16,$17,$18,$19,
           $20,$21,$22,$23,$24,
-          $25,$26,$27
+          $25,$26,$27,$28
          )`,
         [
           jId, line.accountCode, accountId, line.debit, line.credit,
@@ -603,6 +608,7 @@ export async function createJournalEntry(params: {
           line.umrahSeasonId ?? null, line.umrahAgentId ?? null,
           line.sourceLineTable ?? null, line.sourceLineId ?? null,
           line.dimensionJson ? JSON.stringify(line.dimensionJson) : null,
+          line.branchId ?? null,
         ]
       );
     }
