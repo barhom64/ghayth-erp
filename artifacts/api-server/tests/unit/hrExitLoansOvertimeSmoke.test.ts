@@ -206,7 +206,12 @@ describe("Exit completion flow", () => {
 
   it("complete posts GL settlement via hrEngine", () => {
     const idx = EXIT_ROUTE.indexOf('"/exit/:id/complete"');
-    const section = EXIT_ROUTE.slice(idx, idx + 2000);
+    // Widen the slice window — PR #1304 inserted an employee_assignments
+    // SELECT (to resolve departmentId + branchId) between the route
+    // declaration and the postExitSettlementGL call, pushing the body
+    // past the original 2000-char window. 4000 chars is comfortably
+    // larger than the current ~2500 and still excludes the next router.
+    const section = EXIT_ROUTE.slice(idx, idx + 4000);
     expect(section).toContain("hrEngine.postExitSettlementGL");
   });
 });
