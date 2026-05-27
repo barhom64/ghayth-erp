@@ -309,6 +309,19 @@ const allNavSections: NavSection[] = [
         { label: "Unmapped Lines", path: "/finance/reports/unmapped-lines", icon: AlertTriangle },
         { label: "Posting Activity", path: "/finance/journal/activity", icon: Activity },
       ]},
+      // محرك التوجيه المحاسبي — صفحات Line-Level Allocation cluster (PRs 1291,
+      // 1297, 1304, 1307, 1309, 1311). الترابط بينها مكتمل عبر AllocationTabsNav
+      // و AllocationHealthCard، وهذا المدخل في القائمة الجانبية يخلي الكلستر
+      // قابلاً للوصول من أي صفحة في النظام (ليس من finance فقط).
+      { label: "محرك التوجيه المحاسبي", path: "/finance/settings-hub", icon: Network, module: "finance", children: [
+        { label: "مركز الإعدادات", path: "/finance/settings-hub", icon: Settings },
+        { label: "قواعد التوجيه", path: "/finance/allocation-rules", icon: Network },
+        { label: "كتالوج المنتجات", path: "/finance/product-catalog", icon: Package },
+        { label: "تشخيص التغطية", path: "/finance/allocation-coverage", icon: Target },
+        { label: "سجل التوجيه", path: "/finance/allocation-results", icon: Activity },
+        { label: "التعديلات اليدوية", path: "/finance/overrides-report", icon: BookOpen },
+        { label: "تجاوزات الإلزام", path: "/finance/allocation-override-log", icon: ShieldAlert },
+      ]},
       { label: "ارتباطات الموظفين", path: "/finance/salary-advances", icon: DollarSign, module: "finance", children: [
         { label: "سلف الرواتب", path: "/finance/salary-advances", icon: DollarSign },
         { label: "الطلبات المالية", path: "/finance/financial-requests", icon: ClipboardCheck },
