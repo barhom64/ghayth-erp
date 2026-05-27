@@ -186,6 +186,20 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     systemCritical: true, displayOrder: 240 },
 
+  // Override permission for the enforce_line_allocation gate (migration 223).
+  // When the company setting `finance.enforce_line_allocation` is ON, the
+  // invoice/PO approve handlers refuse to post a JE that contains any
+  // line whose resolver status is 'unmapped'. A user holding this grant
+  // may still approve by supplying a written `overrideReason`, which the
+  // backend persists in allocation_override_log for audit. The grant is
+  // intentionally narrow (action="create" only — the only meaningful
+  // action on an override is "record one") and company-scoped because
+  // financial integrity bypass is a CFO-level concern, not a branch one.
+  { key: "finance.allocation.override", parentKey: "finance.accounts", moduleKey: "finance",
+    labelAr: "تجاوز تخصيص البنود (CFO)",
+    availableActions: ["create"], availableScopes: ["company"],
+    systemCritical: true, displayOrder: 241 },
+
   { key: "finance.budget", parentKey: "finance", moduleKey: "finance", labelAr: "الميزانية",
     availableActions: ALL_ACTIONS, availableScopes: ["department", "branch", "company"],
     approvableActions: ["approve"], displayOrder: 250 },
