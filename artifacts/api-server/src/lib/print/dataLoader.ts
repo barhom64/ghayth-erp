@@ -160,6 +160,16 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadLegalJudgment(companyId, entityId);
     case "legal_correspondence":
       return await loadLegalCorrespondence(companyId, entityId);
+    case "vehicle":
+      return await loadVehicle(companyId, entityId);
+    case "fleet_trip":
+      return await loadFleetTrip(companyId, entityId);
+    case "fleet_maintenance":
+      return await loadFleetMaintenance(companyId, entityId);
+    case "fuel_log":
+      return await loadFuelLog(companyId, entityId);
+    case "traffic_violation":
+      return await loadTrafficViolation(companyId, entityId);
     // ─── Batch reports (no single row — synthetic entityId encodes filters) ──
     case "report_trial_balance":
       return await loadTrialBalance(companyId, entityId);
@@ -597,4 +607,93 @@ async function loadLegalCorrespondence(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   return { entity: corr ?? { id } };
+}
+
+// ─── Fleet loaders ──────────────────────────────────────────────────────────
+// Each loader composes the vehicle plate + driver name + linked employee
+// (when present) so the printed document carries the operational context
+// the bespoke templates expect — without the template needing to do its
+// own lookups via {{#with}} blocks.
+
+async function loadVehicle(companyId: number, id: string) {
+  const [vehicle] = await rawQuery<Record<string, unknown>>(
+    `SELECT * FROM fleet_vehicles
+      WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!vehicle) return { entity: { id } };
+  // Most-recent active insurance for the vehicle — useful on a
+  // vehicle profile printout. NOTE: the canonical table is
+  // `fleet_insurance` (singular), not `fleet_insurance_policies`. The
+  // entityRegistry entry above still references the policies name for
+  // backwards compatibility; touching that is a separate cleanup.
+  const insurance = await rawQuery<Record<string, unknown>>(
+    `SELECT id, "policyNumber", provider, type, "startDate", "endDate", premium, status
+       FROM fleet_insurance
+      WHERE "vehicleId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+      ORDER BY "endDate" DESC NULLS LAST LIMIT 1`,
+    [id, companyId]
+  ).catch(() => []);
+  return { entity: vehicle, insurance: insurance[0] ?? null };
+}
+
+async function loadFleetTrip(companyId: number, id: string) {
+  const [trip] = await rawQuery<Record<string, unknown>>(
+    `SELECT t.*,
+            v."plateNumber", v.make, v.model,
+            d.name AS "driverName", d."licenseNumber", d.phone AS "driverPhone",
+            c.name AS "clientName"
+       FROM fleet_trips t
+       LEFT JOIN fleet_vehicles v ON v.id = t."vehicleId" AND v."companyId" = $2
+       LEFT JOIN fleet_drivers d ON d.id = t."driverId" AND d."companyId" = $2
+       LEFT JOIN clients c ON c.id = t."clientId"
+      WHERE t.id = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: trip ?? { id } };
+}
+
+async function loadFleetMaintenance(companyId: number, id: string) {
+  const [m] = await rawQuery<Record<string, unknown>>(
+    `SELECT m.*,
+            v."plateNumber", v.make, v.model, v."currentMileage"
+       FROM fleet_maintenance m
+       LEFT JOIN fleet_vehicles v ON v.id = m."vehicleId" AND v."companyId" = $2
+      WHERE m.id = $1 AND m."companyId" = $2 AND m."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: m ?? { id } };
+}
+
+async function loadFuelLog(companyId: number, id: string) {
+  const [f] = await rawQuery<Record<string, unknown>>(
+    `SELECT f.*,
+            v."plateNumber", v.make, v.model,
+            d.name AS "driverName"
+       FROM fleet_fuel_logs f
+       LEFT JOIN fleet_vehicles v ON v.id = f."vehicleId" AND v."companyId" = $2
+       LEFT JOIN fleet_drivers d ON d.id = f."driverId" AND d."companyId" = $2
+      WHERE f.id = $1 AND f."companyId" = $2 AND f."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: f ?? { id } };
+}
+
+async function loadTrafficViolation(companyId: number, id: string) {
+  const [v] = await rawQuery<Record<string, unknown>>(
+    `SELECT tv.*,
+            veh."plateNumber", veh.make, veh.model,
+            d.name AS "driverName", d."licenseNumber",
+            d."employeeId" AS "driverEmployeeId"
+       FROM fleet_traffic_violations tv
+       LEFT JOIN fleet_vehicles veh ON veh.id = tv."vehicleId" AND veh."companyId" = $2
+       LEFT JOIN fleet_drivers d ON d.id = tv."driverId" AND d."companyId" = $2
+      WHERE tv.id = $1 AND tv."companyId" = $2 AND tv."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: v ?? { id } };
 }

@@ -817,13 +817,14 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     type: "master",
     owner: "fleet",
     origin: ["/fleet/vehicles/create"],
-    relatedEntities: ["fleet_trip", "fleet_maintenance", "fuel_log", "insurance_policy"],
+    relatedEntities: ["fleet_trip", "fleet_maintenance", "fuel_log", "insurance_policy", "traffic_violation"],
     routes: { list: "/fleet", create: "/fleet/vehicles/create", detail: "/fleet/:id" },
     attachments: { supported: true },
     events: ["fleet.vehicle.created", "fleet.vehicle.status_changed"],
     permissions: ["fleet:create", "fleet:read", "fleet:update"],
     notifications: ["vehicle_maintenance_due", "insurance_expiry", "license_expiry"],
     reports: ["vehicle_list", "vehicle_utilization"],
+    print: { hasTemplate: true, templateKey: "vehicle", formats: ["a4"], defaultFormat: "a4", permission: "print:vehicle:create" },
   },
   {
     id: "fleet_trip",
@@ -834,7 +835,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     owner: "fleet",
     origin: ["/fleet/trips/create"],
     parentEntity: "vehicle",
-    relatedEntities: ["vehicle"],
+    relatedEntities: ["vehicle", "fleet_driver"],
     routes: { list: "/fleet/trips", create: "/fleet/trips/create", detail: "/fleet/trips/:id" },
     lifecycle: {
       statusColumn: "status",
@@ -843,10 +844,16 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
       terminalStates: ["completed", "cancelled"],
     },
     attachments: { supported: false },
+    // fleetEngine.postTripCompletionGL / postTripGL ship cost-revenue
+    // journal entries on trip completion — declare it so the
+    // entity-action-matrix and gap audits stop flagging fleet_trip as
+    // GL-orphan.
+    financialImpact: { hasGLImpact: true, journalType: "trip_revenue", sourceKey: "fleet_trip" },
     events: ["fleet.trip.created", "fleet.trip.started", "fleet.trip.completed"],
     permissions: ["fleet:create", "fleet:read", "fleet:update"],
     notifications: ["trip_started", "trip_completed"],
     reports: ["trip_summary"],
+    print: { hasTemplate: true, templateKey: "fleet_trip", formats: ["a4"], defaultFormat: "a4", permission: "print:fleet_trip:create" },
   },
   {
     id: "fleet_maintenance",
@@ -871,6 +878,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["fleet:create", "fleet:read", "fleet:update"],
     notifications: ["maintenance_due", "maintenance_completed"],
     reports: ["maintenance_history", "maintenance_costs"],
+    print: { hasTemplate: true, templateKey: "fleet_maintenance", formats: ["a4"], defaultFormat: "a4", permission: "print:fleet_maintenance:create" },
   },
   {
     id: "fuel_log",
@@ -881,7 +889,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     owner: "fleet",
     origin: ["/fleet/fuel/create"],
     parentEntity: "vehicle",
-    relatedEntities: ["vehicle"],
+    relatedEntities: ["vehicle", "fleet_driver"],
     routes: { list: "/fleet/fuel", create: "/fleet/fuel/create", detail: "/fleet/fuel/:id" },
     attachments: { supported: true },
     financialImpact: { hasGLImpact: true, journalType: "expense", sourceKey: "fuel" },
@@ -889,6 +897,53 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["fleet:create", "fleet:read"],
     notifications: [],
     reports: ["fuel_consumption"],
+    print: { hasTemplate: true, templateKey: "fuel_log", formats: ["a4"], defaultFormat: "a4", permission: "print:fuel_log:create" },
+  },
+  {
+    id: "fleet_driver",
+    label: "سائق",
+    domain: "fleet",
+    table: "fleet_drivers",
+    type: "master",
+    owner: "fleet",
+    origin: ["/fleet/drivers/create"],
+    relatedEntities: ["vehicle", "fleet_trip", "traffic_violation", "employee"],
+    routes: { list: "/fleet/drivers", create: "/fleet/drivers/create", detail: "/fleet/drivers/:id" },
+    attachments: { supported: true },
+    events: ["fleet.driver.created", "fleet.driver.assigned"],
+    permissions: ["fleet:create", "fleet:read", "fleet:update"],
+    notifications: ["license_expiry"],
+    reports: ["driver_list", "driver_performance"],
+    print: { hasTemplate: true, templateKey: "fleet_driver", formats: ["a4"], defaultFormat: "a4", permission: "print:fleet_driver:create" },
+  },
+  {
+    id: "traffic_violation",
+    label: "مخالفة مرورية",
+    domain: "fleet",
+    table: "fleet_traffic_violations",
+    type: "transaction",
+    owner: "fleet",
+    origin: ["/fleet/traffic-violations/create"],
+    parentEntity: "vehicle",
+    relatedEntities: ["vehicle", "fleet_driver"],
+    routes: { list: "/fleet/traffic-violations", create: "/fleet/traffic-violations/create", detail: "/fleet/traffic-violations/:id" },
+    lifecycle: {
+      statusColumn: "status",
+      states: ["pending", "paid", "contested", "waived"],
+      initialState: "pending",
+      terminalStates: ["paid", "waived"],
+    },
+    attachments: { supported: true },
+    // fleetEngine.postTrafficViolationGL fires on company-borne fines;
+    // postViolationPaymentGL closes the loop. Cross-domain: driver-borne
+    // fines emit fleet.violation.deduction_requested → hrEngine creates
+    // payroll_deductions row (see eventListeners).
+    financialImpact: { hasGLImpact: true, journalType: "expense", sourceKey: "traffic_violation" },
+    events: ["fleet.violation.created", "fleet.violation.paid", "fleet.violation.deduction_requested"],
+    permissions: ["fleet:create", "fleet:read", "fleet:update"],
+    notifications: ["violation_recorded", "violation_payment_due"],
+    reports: ["violations_register", "violations_by_driver"],
+    print: { hasTemplate: true, templateKey: "traffic_violation", formats: ["a4"], defaultFormat: "a4", permission: "print:traffic_violation:create" },
   },
   {
     id: "insurance_policy",
@@ -913,6 +968,7 @@ export const ENTITY_REGISTRY: EntityOperationalProfile[] = [
     permissions: ["fleet:create", "fleet:read", "fleet:update"],
     notifications: ["insurance_expiry_reminder"],
     reports: ["insurance_coverage"],
+    print: { hasTemplate: true, templateKey: "insurance_policy", formats: ["a4"], defaultFormat: "a4", permission: "print:insurance_policy:create" },
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
