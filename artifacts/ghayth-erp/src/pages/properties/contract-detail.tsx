@@ -110,27 +110,27 @@ export default function ContractDetailPage() {
   );
 
   const handleRenew = async () => {
+    // Use the dedicated /renew endpoint — it runs the audited
+    // applyTransition, generates the new installments and resets
+    // obligations correctly. The previous code cloned the row via raw
+    // POST /properties/contracts which skipped all that side-effect.
+    // Empty body → backend defaults to the contract's existing
+    // renewalPeriodMonths (or 12) and the current endDate as the new
+    // start. Frontend can later prompt for overrides if needed.
     try {
-      const oldEnd = contract?.endDate || todayLocal();
-      const newStart = oldEnd;
-      const endDate = new Date(oldEnd);
-      endDate.setFullYear(endDate.getFullYear() + 1);
-      const newEnd = endDate.toISOString().split("T")[0];
-
-      const { id: _oldId, ...contractData } = contract || {};
-      const newContract = await apiFetch<any>("/properties/contracts", {
+      const result = await apiFetch<any>(`/properties/contracts/${id}/renew`, {
         method: "POST",
-        body: JSON.stringify({
-          ...contractData,
-          startDate: newStart,
-          endDate: newEnd,
-          status: "active",
-        }),
+        body: JSON.stringify({}),
       });
-      queryClient.invalidateQueries({ queryKey: ["properties-contract"] });
+      queryClient.invalidateQueries({ queryKey: ["properties-contract", id] });
+      queryClient.invalidateQueries({ queryKey: ["properties-contracts"] });
       toast({ title: "تم تجديد العقد بنجاح" });
-      const newId = newContract?.id || newContract?.data?.id;
-      navigate(newId ? `/properties/contracts/${newId}` : "/properties/contracts");
+      // The endpoint returns the updated contract (or a new id if the
+      // backend chose to chain a successor row). Navigate accordingly.
+      const newId = result?.id || result?.data?.id;
+      if (newId && newId !== Number(id)) {
+        navigate(`/properties/contracts/${newId}`);
+      }
     } catch (err: any) {
       toast({
         variant: "destructive",

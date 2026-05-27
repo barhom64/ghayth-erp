@@ -96,7 +96,10 @@ export default function LeavesPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [filters, setFilters] = useFilters();
+  // Sidebar "اعتماد الطلبات" arrives with ?status=pending so reviewers
+  // land on the pending list directly.
+  const initialStatus = new URLSearchParams(window.location.search).get("status") || "";
+  const [filters, setFilters] = useFilters({ status: initialStatus });
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["leaves", scopeQueryString], `/hr/leave-requests${scopeSuffix}`);
   const { data: stats } = useApiQuery<any>(["leave-stats", scopeQueryString], `/hr/leave-stats${scopeSuffix}`);
   const items = asList(data);

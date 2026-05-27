@@ -119,9 +119,15 @@ export default function UmrahCommissionPlanEditor() {
   const { toast } = useToast();
   const [tab, setTab] = useState("basic");
 
+  // Bare template string — the third `enabled` arg already gates the
+  // fetch when isEditMode/planId aren't ready, so the previous
+  // `isEditMode && planId ? URL : null` wrapper was redundant and hid
+  // the URL from the wiring audit's static scan. The ?? "0" placeholder
+  // keeps the URL well-formed when not enabled (the query never fires).
   const loadQ = useApiQuery<{ data: CommissionPlan }>(
     ["umrah-commission-plan", planId ?? ""],
-    isEditMode && planId ? `/umrah/commission-plans/${planId}` : null,
+    `/umrah/commission-plans/${planId ?? "0"}`,
+    !!(isEditMode && planId),
   );
 
   const employeesQ = useApiQuery<{ data: any[] }>(["employees"], "/employees");
@@ -178,21 +184,44 @@ export default function UmrahCommissionPlanEditor() {
   })();
   const remountKey = isEditMode ? (loadQ.data?.data?.id ?? "loading") : "new";
 
-  const saveMut = useApiMutation<any, PlanForm>(
-    (body) => (body.id ? `/umrah/commission-plans/${body.id}` : "/umrah/commission-plans"),
-    isEditMode ? "PATCH" : "POST",
+  // Split into two static mutations — POST for create, PATCH for
+  // edit — so the wiring audit can see each URL + method as a literal
+  // string. The previous factory `(body) => body.id ? URL : URL` +
+  // dynamic `isEditMode ? "PATCH" : "POST"` meant the audit couldn't
+  // statically prove which backend route either branch hit, so both
+  // POST /umrah/commission-plans and PATCH /:id appeared unused.
+  const createPlanMut = useApiMutation<any, PlanForm>(
+    "/umrah/commission-plans",
+    "POST",
     [["umrah-commission-plans"]],
     {
-      successMessage: isEditMode ? "تم تحديث الخطة" : "تم إنشاء الخطة",
+      successMessage: "تم إنشاء الخطة",
       onSuccess: (res: any) => {
         const newId = res?.data?.id;
-        if (newId) setPlanRowId(newId);
-        if (!isEditMode && newId) {
+        if (newId) {
+          setPlanRowId(newId);
           setLocation(`/umrah/commission-plans/${newId}/edit`);
         }
       },
     },
   );
+  const updatePlanMut = useApiMutation<any, PlanForm>(
+    (body) => `/umrah/commission-plans/${body.id}`,
+    "PATCH",
+    [["umrah-commission-plans"]],
+    {
+      successMessage: "تم تحديث الخطة",
+      onSuccess: (res: any) => {
+        const newId = res?.data?.id;
+        if (newId) setPlanRowId(newId);
+      },
+    },
+  );
+  const saveMut = {
+    isPending: createPlanMut.isPending || updatePlanMut.isPending,
+    mutate: (body: PlanForm) => (isEditMode ? updatePlanMut.mutate(body) : createPlanMut.mutate(body)),
+    mutateAsync: (body: PlanForm) => (isEditMode ? updatePlanMut.mutateAsync(body) : createPlanMut.mutateAsync(body)),
+  };
 
   // Simulator status flags — stay as useState (not form data).
   const [simResult, setSimResult] = useState<any>(null);
@@ -432,7 +461,8 @@ function AssignmentField({ disabled }: { disabled: boolean }) {
   const enabled = !!employeeId && employeeId > 0;
   const assignmentsQ = useApiQuery<{ data: any[] }>(
     ["umrah-employee-assignments", String(employeeId ?? "")],
-    enabled ? `/umrah/employees/${employeeId}/assignments` : null,
+    `/umrah/employees/${employeeId}/assignments`,
+    enabled,
   );
   const assignments = assignmentsQ.data?.data ?? [];
   return (

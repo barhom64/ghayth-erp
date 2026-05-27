@@ -28,8 +28,15 @@ import { useAppContext } from "@/contexts/app-context";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { withListFilters } from "@/lib/list-query";
 
+const WAREHOUSE_PATH_TAB: Record<string, string> = {
+  "/warehouse/movements": "movements",
+  "/warehouse/categories": "categories",
+  "/warehouse/suppliers": "suppliers",
+};
+
 export default function Warehouse() {
-  const [tab, setTab] = useState("products");
+  const [location] = useLocation();
+  const [tab, setTab] = useState(() => WAREHOUSE_PATH_TAB[location] ?? "products");
   return (
     <PageShell
       title="إدارة المستودعات"

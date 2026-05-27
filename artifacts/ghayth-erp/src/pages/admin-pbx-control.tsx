@@ -178,11 +178,16 @@ export default function AdminPbxControl() {
     useApiQuery<{ data: IvrMenuRow[] }>(["pbx-control-menus"], "/admin/pbx-control/ivr-menus");
   const { data: recResp, refetch: refetchRec } =
     useApiQuery<{ data: RecordingRow[] }>(["pbx-control-recordings"], "/admin/pbx-control/recordings");
-  const transcriptsPath = transcriptStatusFilter
-    ? `/admin/pbx-control/transcripts?status=${transcriptStatusFilter}`
-    : "/admin/pbx-control/transcripts";
+  // Static path + QS suffix so the audit can credit
+  // /admin/pbx-control/transcripts via its scanner.
+  const suffix = transcriptStatusFilter
+    ? `?status=${transcriptStatusFilter}`
+    : "";
   const { data: trResp, refetch: refetchTr } =
-    useApiQuery<{ data: TranscriptRow[] }>(["pbx-control-transcripts", transcriptStatusFilter], transcriptsPath);
+    useApiQuery<{ data: TranscriptRow[] }>(
+      ["pbx-control-transcripts", transcriptStatusFilter],
+      `/admin/pbx-control/transcripts${suffix}`,
+    );
 
   const extensions = extResp?.data ?? [];
   const menus = menusResp?.data ?? [];

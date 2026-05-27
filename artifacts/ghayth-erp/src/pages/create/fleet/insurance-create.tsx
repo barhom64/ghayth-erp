@@ -22,7 +22,7 @@ const INITIAL = {
 export default function InsuranceCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const createMut = useApiMutation("/fleet/insurance", "POST", [["insurance"]]);
+  const createMut = useApiMutation("/fleet/insurance", "POST", [["fleet-insurance"]]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { fieldErrors, validate, setApiError } = useFieldErrors();

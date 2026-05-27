@@ -47,6 +47,12 @@ const PAYMENT_TERMS_LABEL: Record<PaymentTerms, string> = {
 
 export default function UmrahSubAgents() {
   const subAgentsQ = useApiQuery<{ data: SubAgent[] }>(["umrah-sub-agents"], "/umrah/sub-agents");
+  // Mirror query — same rows filtered to those without a clientId. Powers
+  // the "غير مرتبطين" banner up top. Backend has a dedicated index for
+  // this case so it's cheap; we keep it as a separate request so the
+  // banner refreshes from cache after a link/unlink without waiting on
+  // the main list to re-fetch and re-render.
+  const unlinkedQ = useApiQuery<{ data: SubAgent[] }>(["umrah-sub-agents-unlinked"], "/umrah/sub-agents/unlinked");
   const agentsQ = useApiQuery<{ data: any[] }>(["umrah-agents"], "/umrah/agents");
   // Reuses existing clients endpoint
   const clientsQ = useApiQuery<{ data: any[] }>(["clients"], "/clients");
@@ -65,13 +71,13 @@ export default function UmrahSubAgents() {
   const createMut = useApiMutation<any, Partial<SubAgent>>(
     "/umrah/sub-agents",
     "POST",
-    [["umrah-sub-agents"]],
+    [["umrah-sub-agents"], ["umrah-sub-agents-unlinked"]],
     { successMessage: "تم حفظ الوكيل الفرعي", onSuccess: () => setEditing(null) },
   );
   const updateMut = useApiMutation<any, Partial<SubAgent>>(
     (body) => `/umrah/sub-agents/${body.id}`,
     "PATCH",
-    [["umrah-sub-agents"]],
+    [["umrah-sub-agents"], ["umrah-sub-agents-unlinked"]],
     { successMessage: "تم تحديث الوكيل الفرعي", onSuccess: () => setEditing(null) },
   );
   const saveMut = { isPending: createMut.isPending || updateMut.isPending, mutate: (body: Partial<SubAgent>) => body.id ? updateMut.mutate(body) : createMut.mutate(body) };
@@ -79,7 +85,7 @@ export default function UmrahSubAgents() {
   const linkMut = useApiMutation<any, { id: number; clientId: number }>(
     (body) => `/umrah/sub-agents/${body.id}/link-client`,
     "POST",
-    [["umrah-sub-agents"]],
+    [["umrah-sub-agents"], ["umrah-sub-agents-unlinked"]],
     {
       successMessage: "تم ربط العميل",
       onSuccess: () => {
@@ -87,6 +93,25 @@ export default function UmrahSubAgents() {
         setLinkClientId("");
       },
     },
+  );
+  // PUT /sub-agents/:id/link is the alternative link endpoint that also
+  // supports `createNew + clientName + clientPhone` to create the client
+  // on the fly. We surface it as a second action only when the operator
+  // wants to create a brand-new client rather than pick an existing one.
+  const linkAndCreateMut = useApiMutation<any, { id: number; createNew: true; clientName: string; clientPhone?: string }>(
+    (body) => `/umrah/sub-agents/${body.id}/link`,
+    "PUT",
+    [["umrah-sub-agents"], ["umrah-sub-agents-unlinked"]],
+    {
+      successMessage: "تم إنشاء العميل وربطه",
+      onSuccess: () => { setLinking(null); setLinkClientId(""); },
+    },
+  );
+  const deleteMut = useApiMutation<any, { id: number }>(
+    (body) => `/umrah/sub-agents/${body.id}`,
+    "DELETE",
+    [["umrah-sub-agents"], ["umrah-sub-agents-unlinked"]],
+    { successMessage: "تم حذف الوكيل الفرعي" },
   );
 
   const filtered = useMemo(() => {
@@ -179,6 +204,20 @@ export default function UmrahSubAgents() {
           >
             <Pencil className="h-3.5 w-3.5" />
           </GuardedButton>
+          <GuardedButton
+            perm="umrah:delete"
+            size="sm"
+            variant="ghost"
+            className="text-status-error-foreground"
+            onClick={() => {
+              if (window.confirm(`حذف الوكيل الفرعي "${s.name}"?`)) {
+                deleteMut.mutate({ id: s.id });
+              }
+            }}
+            disabled={deleteMut.isPending}
+          >
+            حذف
+          </GuardedButton>
         </div>
       ),
     },
@@ -226,7 +265,13 @@ export default function UmrahSubAgents() {
             <Link2 className="w-5 h-5 text-status-error-foreground" />
           </div>
           <div>
-            <p className="text-2xl font-bold text-status-error-foreground">{formatNumber(unlinkedCount)}</p>
+            {/* Prefer the dedicated /unlinked endpoint count when it's
+                loaded — backend has a covering index so it's cheaper
+                than client-filtering the full list. Falls back to the
+                derived count before the response lands. */}
+            <p className="text-2xl font-bold text-status-error-foreground">
+              {formatNumber(unlinkedQ.data?.data?.length ?? unlinkedCount)}
+            </p>
             <p className="text-xs text-muted-foreground">غير مربوطين</p>
           </div>
         </CardContent></Card>
@@ -371,6 +416,26 @@ export default function UmrahSubAgents() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLinking(null)}>إلغاء</Button>
+            {/* "إنشاء عميل وربط" routes through PUT /sub-agents/:id/link
+                with `createNew: true` + the sub-agent's name as a fresh
+                client record. The plain "ربط" button below uses the
+                POST /link-client variant against an existing pick. */}
+            <GuardedButton
+              perm="umrah:write"
+              variant="outline"
+              disabled={!linking || linkAndCreateMut.isPending}
+              onClick={() => {
+                if (!linking) return;
+                linkAndCreateMut.mutate({
+                  id: linking.id,
+                  createNew: true,
+                  clientName: linking.name,
+                  clientPhone: linking.phone ?? undefined,
+                });
+              }}
+            >
+              إنشاء عميل وربط
+            </GuardedButton>
             <GuardedButton
               perm="umrah:write"
               disabled={!linkClientId || linkMut.isPending}

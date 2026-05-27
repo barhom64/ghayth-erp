@@ -31,7 +31,7 @@ export default function LeavesCreate() {
   // HR-U2 — successMessage + onSuccess (callbacks) بدل try/catch العام.
   // الـ useApiMutation الافتراضي يعرض toast مكتوبًا (ValidationError/Conflict…)
   // فالـ catch السابق كان يبتلع الخطأ الحقيقي ويعرض "حدث خطأ" عامًا.
-  const createMut = useApiMutation("/hr/leave-requests", "POST", [["leave-requests"], ["leaves"], ["leave-balance"]], {
+  const createMut = useApiMutation("/hr/leave-requests", "POST", [["leaves"], ["leave-balance"], ["leave-stats"]], {
     successMessage: "تم إرسال طلب الإجازة بنجاح",
   });
   const leaveTypesQ = useApiQuery<any>(["leave-types"], "/hr/leave-types");

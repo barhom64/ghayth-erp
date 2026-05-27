@@ -17,7 +17,7 @@ const TABS = [
   { href: "/umrah/pricing", label: "التسعير", icon: Tag, match: ["/umrah/pricing"] },
   { href: "/umrah/invoices", label: "الفواتير", icon: Receipt, match: ["/umrah/invoices"] },
   { href: "/umrah/violations", label: "المخالفات", icon: ShieldAlert, match: ["/umrah/violations"] },
-  { href: "/umrah/commission-plans", label: "العمولات", icon: Briefcase, match: ["/umrah/commission-plans"] },
+  { href: "/umrah/commission-plans", label: "العمولات", icon: Briefcase, match: ["/umrah/commission-plans", "/umrah/commission-calculations"] },
   { href: "/umrah/transport", label: "النقل", icon: Bus, match: ["/umrah/transport"] },
   { href: "/umrah/penalties", label: "الغرامات", icon: AlertTriangle, match: ["/umrah/penalties"] },
   { href: "/umrah/import", label: "الاستيراد", icon: Upload, match: ["/umrah/import"] },

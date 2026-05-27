@@ -280,7 +280,7 @@ export default function OpportunityDetail() {
       <DetailPageLayout
         title={opportunity?.title || "الفرصة"}
         subtitle={opportunity?.clientName || opportunity?.contactName || undefined}
-        backPath="/crm/opportunities"
+        backPath="/crm"
         backLabel="العودة"
         entityType="opportunity"
         entityId={id!}

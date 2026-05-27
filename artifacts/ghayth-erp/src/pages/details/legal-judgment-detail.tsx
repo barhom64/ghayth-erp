@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
@@ -49,7 +49,6 @@ function outcomeTone(outcome?: string | null) {
 }
 
 export default function LegalJudgmentDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/legal/judgments/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("legal-judgment", id ?? 0);
@@ -80,10 +79,6 @@ export default function LegalJudgmentDetail() {
   const hasMonetaryAmount =
     judgment?.amount != null && Number(judgment.amount) > 0;
 
-
-  const handleEdit = () => {
-    setLocation(`/legal/judgments/${id}/edit`);
-  };
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -243,16 +238,6 @@ export default function LegalJudgmentDetail() {
               entityId={id ?? 0}
               formats={["a4"]}/>
           )}
-          <GuardedButton
-            perm="legal:update"
-            variant="outline"
-            size="sm"
-            onClick={handleEdit}
-            disabled={!judgment || ["final", "executed", "reversed"].includes(judgment?.status)}
-          >
-            <Edit className="h-4 w-4 ms-1" />
-            تعديل
-          </GuardedButton>
         </>
       }
     />

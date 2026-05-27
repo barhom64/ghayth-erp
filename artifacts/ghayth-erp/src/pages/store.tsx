@@ -317,6 +317,8 @@ function OrdersTab() {
 }
 
 export default function StorePage() {
+  const [location] = useLocation();
+  const initialTab = location === "/store/orders" ? "orders" : "products";
   const { data: stats, isLoading, isError } = useApiQuery<any>(["store-stats"], "/store/stats");
 
   if (isLoading) return <LoadingSpinner />;
@@ -345,7 +347,7 @@ export default function StorePage() {
           </Card>
         ))}
       </div>
-      <Tabs defaultValue="products" dir="rtl">
+      <Tabs defaultValue={initialTab} dir="rtl">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="products">المنتجات</TabsTrigger>
           <TabsTrigger value="orders">الطلبات</TabsTrigger>

@@ -316,6 +316,17 @@ function extractFrontendCalls() {
         // Skip `=>` and whitespace.
         while (i < src.length && /[\s=>]/.test(src[i])) i++;
       }
+      // Conditional URL form: `cond ? "..." : null`. The URL we want
+      // is the truthy branch. The audit used to miss these because
+      // readString stopped at the leading identifier. Detect a
+      // `<ident>(?.<ident>)*\s*\?\s*` prefix and skip to the URL.
+      // useApiQuery's third arg is the `enabled` flag so a bare-template
+      // URL is the recommended shape, but legacy pages use the
+      // conditional shape extensively (44 sites at last count).
+      const cond = /^[a-zA-Z_$][\w$]*(?:\?\.[a-zA-Z_$][\w$]*|\.[a-zA-Z_$][\w$]*)*\s*\?\s*/.exec(src.slice(i));
+      if (cond) {
+        i += cond[0].length;
+      }
       const lit = readString(src, i);
       if (!lit) continue;
       if (!lit.value.startsWith("/")) continue;
@@ -382,6 +393,90 @@ function extractFrontendCalls() {
       calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "DELETE", source: "prop" });
     }
 
+    // Raw anchor href to /api/* — file-serving endpoints (PDFs,
+    // downloads, previews) can't use apiFetch because the response
+    // is a stream, not JSON. The convention across the app is
+    // `<a href="/api/documents/:id/download" download>` or
+    // `<a href="/api/documents/:id/preview" target="_blank">`.
+    // Crediting these so download/preview routes don't show as
+    // unused even though the user-visible flow works.
+    const hrefRe = /\bhref\s*=\s*[`"']\/api\//g;
+    for (const m of src.matchAll(hrefRe)) {
+      let i = m.index + 5; // skip "href="
+      while (i < src.length && /\s/.test(src[i])) i++;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/api/")) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "prop" });
+    }
+
+    // <ExportButton endpoint="/export/excel/x" /> + the array form
+    // { endpoint: "/export/...", … } inside <MultiExportButton items={[…]}>
+    // The shared shared/export-buttons.tsx component fires a
+    // window-level fetch with auth headers; the `endpoint` prop is the
+    // URL path. Same JSX-blind-spot pattern as ApprovalActions —
+    // covered here with a dedicated scanner so every report-export
+    // route gets credit.
+    //
+    // ExportButton variants accept either a string literal or a
+    // template literal (for per-row IDs). readString handles both.
+    const exportRe = /\b(?:ExportButton[^/>]*?\bendpoint\s*=\s*|endpoint\s*:\s*)[`"']/g;
+    for (const m of src.matchAll(exportRe)) {
+      let i = m.index + m[0].length - 1; // back up onto the opening quote
+      const lit = readString(src, i);
+      if (!lit) continue;
+      // The /export/* prefix is the marker that this `endpoint:` is for
+      // an export button (rather than EntityEditDialog or ImpactPreviewButton
+      // which have their own scanners and matchers).
+      if (!/^\/export\//.test(lit.value)) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "prop" });
+    }
+
+    // useDetailEditDelete({ patchPath: "/...", deletePath: "/..." })
+    // wraps apiPatch + apiDelete with variable URLs — invisible to the
+    // helper-call scanner. Credits the PATCH + DELETE per call.
+    const detailRe = /\b(patchPath|deletePath)\s*:\s*[`"']/g;
+    for (const m of src.matchAll(detailRe)) {
+      const kind = m[1];
+      let i = m.index + m[1].length;
+      while (i < src.length && /[\s:]/.test(src[i])) i++;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      // Require a useDetailEditDelete( ancestor within the preceding span
+      // so we don't pick up an unrelated property name.
+      const before = src.slice(Math.max(0, m.index - 800), m.index);
+      if (!/useDetailEditDelete\s*\(/.test(before)) continue;
+      const method = kind === "patchPath" ? "PATCH" : "DELETE";
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method, source: "prop" });
+    }
+
+    // EntityEditDialog's `endpoint` prop maps to PATCH (or PUT). The
+    // dialog wraps useApiMutation internally so the URL never appears
+    // in a helper call the scanner can read directly. Without this
+    // pass, every detail-page Edit dialog (governance, legal,
+    // warehouse, finance, admin/ai-prompt-detail, …) had its PATCH
+    // route flagged as "unused" even though clicking save fires it.
+    // Sibling `method="PUT"` on the same element overrides the
+    // default PATCH.
+    const editRe = /\bendpoint\s*=\s*\{/g;
+    for (const m of src.matchAll(editRe)) {
+      let i = m.index + m[0].length;
+      while (i < src.length && /\s/.test(src[i])) i++;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      // Require an EntityEditDialog opening tag in the preceding span
+      // so we don't pick up arbitrary `endpoint=` props on unrelated
+      // components (impact-preview, etc. have their own scanners).
+      const before = src.slice(Math.max(0, m.index - 600), m.index);
+      if (!/<EntityEditDialog\b/.test(before)) continue;
+      const window = src.slice(Math.max(0, m.index - 400), Math.min(src.length, m.index + 400));
+      const methodMatch = window.match(/\bmethod\s*=\s*["'`](PATCH|PUT)["'`]/);
+      const method = methodMatch ? methodMatch[1].toUpperCase() : "PATCH";
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method, source: "prop" });
+    }
+
     // useInlineActions({ endpoint: "/x", ... }) — the shared hook in
     // components/inline-actions.tsx that wraps PATCH /:id + (optionally)
     // DELETE /:id for per-row actions on list pages. The hook itself
@@ -390,11 +485,13 @@ function extractFrontendCalls() {
     // were invisible on every page using the hook (recruitment / crm /
     // legal / fleet / support / store / etc. — 22 pages total).
     //
-    // Per-call: always emit PATCH. Only emit DELETE if the page's
-    // destructure pulls `handleDelete` or `startDelete` — pages that
-    // don't (governance/capa-tab.tsx) intentionally suppress the delete
-    // affordance because the backend doesn't expose a DELETE route.
-    const inlineRe = /(?:const\s*\{([^}]*)\}\s*=\s*)?useInlineActions\s*\(\s*\{[^}]*endpoint\s*:\s*/g;
+    // Per-call: always emit PATCH. Only emit DELETE if delete-related
+    // identifiers (handleDelete / startDelete / deletingId) appear
+    // either in the destructure literal OR as `.method` accessors on
+    // the returned object — covers both `const { startDelete } = use…`
+    // (governance/capa-tab.tsx style) and `const jobActions = use…;
+    // jobActions.startDelete(…)` (hr/recruitment.tsx style).
+    const inlineRe = /(?:const\s+(?:\{([^}]*)\}|([a-zA-Z_$][\w$]*))\s*=\s*)?useInlineActions\s*\(\s*\{[^}]*endpoint\s*:\s*/g;
     for (const m of src.matchAll(inlineRe)) {
       let i = m.index + m[0].length;
       while (i < src.length && /\s/.test(src[i])) i++;
@@ -405,9 +502,37 @@ function extractFrontendCalls() {
       const line = lineOf(src, m.index);
       calls.push({ file: rel, url, line, method: "PATCH", source: "prop" });
       const destructure = m[1] ?? "";
-      if (/\b(handleDelete|startDelete|deletingId)\b/.test(destructure)) {
+      const varName = m[2] ?? "";
+      const usesDelete =
+        /\b(handleDelete|startDelete|deletingId)\b/.test(destructure) ||
+        (varName && new RegExp(`\\b${varName}\\.(handleDelete|startDelete|deletingId)\\b`).test(src));
+      if (usesDelete) {
         calls.push({ file: rel, url, line, method: "DELETE", source: "prop" });
       }
+    }
+
+    // <ImpactPreviewButton endpoint="/x/impact-preview" ... /> — the
+    // shared shared/impact-preview.tsx wrapper around apiFetch(endpoint,
+    // { method: "POST" }). The `endpoint` is a JSX-string prop the
+    // helper-call scan can't trace, so without this scanner the six
+    // call-sites (invoices-create, expenses-create, purchase-orders-
+    // create, projects-create, properties/contracts-create, hr/leave-
+    // management) all marked their impact-preview endpoints as unused.
+    const impactRe = /\bImpactPreviewButton\b[^/>]*?\bendpoint\s*=\s*/g;
+    for (const m of src.matchAll(impactRe)) {
+      let i = m.index + m[0].length;
+      while (i < src.length && /\s/.test(src[i])) i++;
+      // JSX prop value can be `"…"` (string literal) or `{…}` (expression
+      // — typically a template). Handle the string case directly; the
+      // brace case falls through to readString which handles backticks.
+      if (src[i] === "{") {
+        let depth = 1; i++;
+        while (i < src.length && /\s/.test(src[i])) i++;
+      }
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "POST", source: "prop" });
     }
   }
   return calls;
@@ -510,8 +635,11 @@ function normaliseFrontendUrl(url) {
     const looksLikeQs =
       // Plain QS variable: scopeSuffix, filterParams, querystring, qs,
       // dateParams (period-close-preflight + finance reports inherit
-      // this idiom from main), …
-      /^(scope|filter|date)?(qs|querystring|queryparams|filterparams|dateparams|suffix|query|params)$/i.test(body.trim()) ||
+      // this idiom from main), inboxSuffix, transcriptsSuffix, …
+      // Accept any *Suffix / *Query / *Params / *QS name — page code
+      // commonly prefixes with the entity (inbox/transcripts/etc.)
+      // when more than one suffix lives in scope.
+      /^([a-z][a-zA-Z0-9]*)?(qs|querystring|queryparams|filterparams|dateparams|suffix|query|params)$/i.test(body.trim()) ||
       // Already a literal query string inside: `?key=…`
       /\?\s*[\w]+\s*=/.test(body) ||
       // Conditional QS suffix: `X ? "?…" : ""`  or  `X ? \`?${…}\` : ""`

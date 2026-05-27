@@ -38,7 +38,7 @@ export default function ShiftDetail() {
       { key: "endTime", label: "وقت النهاية" },
       { key: "notes", label: "ملاحظات" },
     ],
-    invalidateKeys: [["shift", String(id)], ["shifts"]],
+    invalidateKeys: [["shifts"]],
     onSaved: () => refetch(),
   });
 

@@ -1,11 +1,14 @@
-import { useMemo } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useMemo, useState } from "react";
+import { useRoute } from "wouter";
+import { z } from "zod";
 import { useApiQuery } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
   EntityComments,
 } from "@workspace/entity-kit";
+import { FormGrid, FormTextField } from "@workspace/ui-core";
+import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,10 +24,15 @@ import { PrintButton } from "@/components/shared/print-button";
  * product count and the rolled-up stock value.
  */
 
+const categoryEditSchema = z.object({
+  name: z.string().min(1, "الاسم مطلوب"),
+});
+type CategoryEditForm = z.infer<typeof categoryEditSchema>;
+
 export default function WarehouseCategoryDetail() {
-  const [, setLocation] = useLocation();
   const [, params] = useRoute("/warehouse/categories/:id");
   const id = params?.id ? Number(params.id) : null;
+  const [editOpen, setEditOpen] = useState(false);
   const { extraTabs, hideTabs } = useRegistryTabs("warehouse-category", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -52,10 +60,6 @@ export default function WarehouseCategoryDetail() {
     }
     return out;
   }, [category]);
-
-  const handleEdit = () => {
-    setLocation(`/warehouse/categories/${id}/edit`);
-  };
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
@@ -141,6 +145,7 @@ export default function WarehouseCategoryDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={category?.name ? category.name : "تفاصيل التصنيف"}
       subtitle={category?.parentName ? `ضمن: ${category.parentName}` : undefined}
@@ -160,13 +165,29 @@ export default function WarehouseCategoryDetail() {
       onRetry={refetch}
       actions={
         <div className="flex items-center gap-2">
-          <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!category}>
-          <Edit className="h-4 w-4 ms-1" />
-          تعديل
-        </GuardedButton>
           <PrintButton entityType="warehouse_category" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={() => setEditOpen(true)} disabled={!category}>
+            <Edit className="h-4 w-4 ms-1" /> تعديل
+          </GuardedButton>
         </div>
       }
     />
+    {category && id && (
+      <EntityEditDialog<CategoryEditForm>
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="تعديل التصنيف"
+        schema={categoryEditSchema}
+        defaultValues={{ name: category.name ?? "" }}
+        endpoint={`/warehouse/categories/${id}`}
+        invalidateKeys={[["warehouse-category", String(id)], ["warehouse-categories"]]}
+        onSaved={() => refetch()}
+      >
+        <FormGrid cols={1}>
+          <FormTextField name="name" label="اسم التصنيف" required />
+        </FormGrid>
+      </EntityEditDialog>
+    )}
+    </>
   );
 }

@@ -17,7 +17,7 @@ const INITIAL = { title: "", category: "general", status: "draft", effectiveDate
 export default function PoliciesCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const createMut = useApiMutation<unknown, Record<string, string | Attachment[]>>("/governance/policies", "POST", [["governance-policies"]]);
+  const createMut = useApiMutation<unknown, Record<string, string | Attachment[]>>("/governance/policies", "POST", [["gov-policies"]]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const { fieldErrors, validate, setApiError } = useFieldErrors();

@@ -24,8 +24,19 @@ import { useAppContext } from "@/contexts/app-context";
 import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
 import { GuardedButton } from "@/components/shared/permission-gate";
 
+// Seed initial tab from the URL — /legal/cases, /legal/contracts, /legal/financial,
+// /legal/documents all route here, and without this seed each would land on
+// the "contracts" tab regardless of the link the user clicked.
+const LEGAL_PATH_TAB: Record<string, string> = {
+  "/legal/cases": "cases",
+  "/legal/contracts": "contracts",
+  "/legal/financial": "financial",
+  "/legal/documents": "contracts",
+};
+
 export default function Legal() {
-  const [tab, setTab] = useState("contracts");
+  const [location] = useLocation();
+  const [tab, setTab] = useState(() => LEGAL_PATH_TAB[location] ?? "contracts");
   const { data: stats } = useApiQuery(["legal-stats"], "/legal/stats");
   const s: any = stats || {};
   return (
