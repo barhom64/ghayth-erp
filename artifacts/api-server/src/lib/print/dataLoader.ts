@@ -152,6 +152,14 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadExitSettlement(companyId, entityId);
     case "overtime_request":
       return await loadOvertimeRequest(companyId, entityId);
+    case "legal_case":
+      return await loadLegalCase(companyId, entityId);
+    case "legal_session":
+      return await loadLegalSession(companyId, entityId);
+    case "legal_judgment":
+      return await loadLegalJudgment(companyId, entityId);
+    case "legal_correspondence":
+      return await loadLegalCorrespondence(companyId, entityId);
     // ─── Batch reports (no single row — synthetic entityId encodes filters) ──
     case "report_trial_balance":
       return await loadTrialBalance(companyId, entityId);
@@ -518,4 +526,75 @@ async function loadOvertimeRequest(companyId: number, id: string) {
       ))[0]
     : null;
   return { entity: ot, employee };
+}
+
+// ─── Legal loaders ──────────────────────────────────────────────────────────
+// Note: legal_sessions has NO companyId column — tenant isolation is
+// enforced by joining through legal_cases.companyId. Skipping the JOIN
+// would fall back to the unscoped second SELECT in loadByTable and leak
+// rows across tenants.
+
+async function loadLegalCase(companyId: number, id: string) {
+  const [legalCase] = await rawQuery<Record<string, unknown>>(
+    `SELECT * FROM legal_cases WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!legalCase) return { entity: { id } };
+  // Pull upcoming sessions + recorded judgments so the case summary
+  // prints the full picture, not just the header.
+  const sessions = await rawQuery<Record<string, unknown>>(
+    `SELECT id, "sessionDate", location, judge, result, "nextSessionDate", notes
+       FROM legal_sessions
+      WHERE "caseId" = $1 AND "deletedAt" IS NULL
+      ORDER BY "sessionDate" DESC LIMIT 50`,
+    [id]
+  ).catch(() => []);
+  const judgments = await rawQuery<Record<string, unknown>>(
+    `SELECT id, "judgmentDate", "judgmentType", verdict, amount, "paidAmount", "dueDate"
+       FROM legal_judgments
+      WHERE "caseId" = $1 AND "companyId" = $2
+      ORDER BY "judgmentDate" DESC LIMIT 20`,
+    [id, companyId]
+  ).catch(() => []);
+  return { entity: legalCase, sessions, judgments };
+}
+
+async function loadLegalSession(companyId: number, id: string) {
+  // legal_sessions.companyId doesn't exist — gate via legal_cases.
+  const [session] = await rawQuery<Record<string, unknown>>(
+    `SELECT s.*, c.title AS "caseTitle", c."caseNumber", c.court, c."lawyerName",
+            c."opposingParty", c."caseType"
+       FROM legal_sessions s
+       JOIN legal_cases c ON c.id = s."caseId"
+      WHERE s.id = $1 AND c."companyId" = $2 AND s."deletedAt" IS NULL
+              AND c."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: session ?? { id } };
+}
+
+async function loadLegalJudgment(companyId: number, id: string) {
+  const [judgment] = await rawQuery<Record<string, unknown>>(
+    `SELECT j.*, c.title AS "caseTitle", c."caseNumber", c.court, c."lawyerName",
+            c."opposingParty"
+       FROM legal_judgments j
+       LEFT JOIN legal_cases c ON c.id = j."caseId" AND c."companyId" = $2
+      WHERE j.id = $1 AND j."companyId" = $2
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: judgment ?? { id } };
+}
+
+async function loadLegalCorrespondence(companyId: number, id: string) {
+  const [corr] = await rawQuery<Record<string, unknown>>(
+    `SELECT cr.*, c.title AS "caseTitle", c."caseNumber", c.court, c."lawyerName"
+       FROM legal_correspondence cr
+       LEFT JOIN legal_cases c ON c.id = cr."caseId" AND c."companyId" = $2
+      WHERE cr.id = $1 AND cr."companyId" = $2
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: corr ?? { id } };
 }
