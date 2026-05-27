@@ -75,6 +75,15 @@ export interface AllocationResult {
   taxCode: string | null;
   ruleId: number | null;
   warnings: AllocationWarning[];
+  /** What the resolver WOULD have picked if no manual override had
+   *  been applied. Only populated when status='manual_override' —
+   *  used by the "before/after" Manual Overrides report (audit gap
+   *  #7 / migration 225). For status='resolved' these equal the
+   *  resolvedAccountCode/costCenterId; for status='unmapped' or
+   *  'failed' they are null (the resolver had nothing to propose). */
+  proposedAccountCode?: string | null;
+  proposedAccountId?: number | null;
+  proposedCostCenterId?: number | null;
 }
 
 // Minimal shape we use from a rule row at resolve-time.
@@ -133,8 +142,17 @@ export async function resolveLineAllocation(input: AllocationInput): Promise<All
 
   const dims = normalizeDimensions(input.dimensions);
 
-  // Step 1 — caller-pinned account always wins.
+  // Step 1 — caller-pinned account always wins, but we ALSO run the
+  // rule-driven path with the pin stripped so the "Manual Overrides"
+  // report can show what the resolver WOULD have picked otherwise
+  // (audit gap #7). The proposed fields are then surfaced on
+  // accounting_allocation_results via migration 225 columns.
   if (input.accountCode || input.accountId) {
+    const ruleProposal = await computeRuleProposal({
+      ...input,
+      accountCode: undefined,
+      accountId: undefined,
+    });
     return {
       status: "manual_override",
       resolvedAccountCode: input.accountCode ?? null,
@@ -142,8 +160,11 @@ export async function resolveLineAllocation(input: AllocationInput): Promise<All
       costCenterId: input.costCenterId ?? null,
       dimensions: dims,
       taxCode: input.taxCode ?? null,
-      ruleId: null,
+      ruleId: ruleProposal.ruleId,
       warnings,
+      proposedAccountCode: ruleProposal.accountCode,
+      proposedAccountId: ruleProposal.accountId,
+      proposedCostCenterId: ruleProposal.costCenterId,
     };
   }
 
@@ -237,7 +258,56 @@ export async function resolveLineAllocation(input: AllocationInput): Promise<All
     taxCode: input.taxCode ?? null,
     ruleId: matched.id,
     warnings,
+    // For status='resolved' the proposal IS the result — no override
+    // happened. Populating both keeps the report query shape uniform.
+    proposedAccountCode: accountCode,
+    proposedAccountId: accountId,
+    proposedCostCenterId: costCenterId,
   };
+}
+
+/**
+ * Compute what the resolver would have picked WITHOUT any caller-
+ * pinned account, returning just the rule-driven account + cost-centre
+ * + rule id. Used by resolveLineAllocation to capture the "would have
+ * been" half of a manual-override audit row (migration 225).
+ *
+ * Returns nulls when no rule matches or the rule has no account for
+ * this documentType — the manual override is then "purely additive"
+ * (the operator pinned a value the resolver couldn't have produced).
+ */
+async function computeRuleProposal(
+  input: AllocationInput,
+): Promise<{ accountCode: string | null; accountId: number | null; costCenterId: number | null; ruleId: number | null }> {
+  try {
+    const dims = normalizeDimensions(input.dimensions);
+    const rules = await rawQuery<AllocationRuleRow>(
+      `SELECT id, name, "documentType", "lineType", "activityType", "entityType",
+              "conditionsJson", "debitAccountId", "creditAccountId",
+              "revenueAccountId", "expenseAccountId", "assetAccountId",
+              "inventoryAccountId", "vatAccountId",
+              "costCenterStrategy", "dimensionStrategyJson",
+              "requiresEntityLink", priority
+         FROM accounting_allocation_rules
+        WHERE "companyId" = $1
+          AND "documentType" = $2
+          AND "isActive" = true
+          AND "deletedAt" IS NULL
+        ORDER BY priority ASC, id ASC`,
+      [input.companyId, input.documentType],
+    );
+    const matched = rules.find((r) => ruleMatches(r, input));
+    if (!matched) return { accountCode: null, accountId: null, costCenterId: null, ruleId: null };
+    const accountId = pickAccountFromRule(matched, input.documentType, input.lineType);
+    if (!accountId) return { accountCode: null, accountId: null, costCenterId: null, ruleId: matched.id };
+    const accountCode = await lookupAccountCode(input.companyId, accountId);
+    const costCenterId = await resolveCostCenter(input.companyId, matched.costCenterStrategy, dims, null);
+    return { accountCode, accountId, costCenterId, ruleId: matched.id };
+  } catch {
+    // The proposal is best-effort metadata; an error here must not
+    // break the actual resolution path.
+    return { accountCode: null, accountId: null, costCenterId: null, ruleId: null };
+  }
 }
 
 /**
@@ -276,8 +346,10 @@ export async function writeAllocationResult(input: AllocationInput, result: Allo
          "companyId", "sourceTable", "sourceLineId", "documentType",
          "resolvedAccountId", "resolvedAccountCode", "costCenterId",
          "dimensionsJson", "ruleId", "resolutionStatus", "warningsJson",
-         "resolvedBy"
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         "resolvedBy",
+         "proposedAccountId", "proposedAccountCode", "proposedCostCenterId",
+         "proposedDimensionsJson"
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        ON CONFLICT ("sourceTable", "sourceLineId", "companyId")
        DO UPDATE SET
          "resolvedAccountId" = EXCLUDED."resolvedAccountId",
@@ -288,6 +360,10 @@ export async function writeAllocationResult(input: AllocationInput, result: Allo
          "resolutionStatus" = EXCLUDED."resolutionStatus",
          "warningsJson" = EXCLUDED."warningsJson",
          "resolvedBy" = EXCLUDED."resolvedBy",
+         "proposedAccountId" = EXCLUDED."proposedAccountId",
+         "proposedAccountCode" = EXCLUDED."proposedAccountCode",
+         "proposedCostCenterId" = EXCLUDED."proposedCostCenterId",
+         "proposedDimensionsJson" = EXCLUDED."proposedDimensionsJson",
          "resolvedAt" = NOW()`,
       [
         input.companyId,
@@ -302,6 +378,13 @@ export async function writeAllocationResult(input: AllocationInput, result: Allo
         result.status,
         result.warnings.length > 0 ? JSON.stringify(result.warnings) : null,
         actorAssignmentId ?? null,
+        result.proposedAccountId ?? null,
+        result.proposedAccountCode ?? null,
+        result.proposedCostCenterId ?? null,
+        // Proposed dimensions are the same as resolved dimensions —
+        // the resolver computes them from the input line, not from the
+        // pin. We still store them for query symmetry.
+        JSON.stringify(result.dimensions),
       ]
     );
   } catch (err) {

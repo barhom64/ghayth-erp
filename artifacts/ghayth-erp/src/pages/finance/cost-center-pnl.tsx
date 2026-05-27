@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import {
   TrendingUp, TrendingDown, Crown, Frown, Download,
@@ -265,6 +266,25 @@ export default function CostCenterPnlPage() {
           <Button variant="outline" size="sm" onClick={exportCsv} disabled={rows.length === 0}>
             <Download className="h-4 w-4 me-1" /> CSV
           </Button>
+          <PrintButton
+            entityType="report_cost_center_pnl"
+            entityId={`${startDate}..${endDate}`}
+            payload={{
+              entity: {
+                title: "ربحية مراكز التكلفة",
+                startDate, endDate,
+                centerCount: rows.length,
+              },
+              items: rows.map((r) => ({
+                "مركز التكلفة": r.costCenter,
+                "الإيراد": r.revenue,
+                "المصروف": r.expense,
+                "الصافي": r.net,
+                "هامش %": Number(r.margin ?? 0).toFixed(2),
+                "عدد القيود": r.entryCount,
+              })),
+            }}
+          />
         </div>
       }
     >

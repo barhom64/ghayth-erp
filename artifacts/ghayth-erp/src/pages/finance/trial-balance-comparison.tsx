@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -261,6 +262,27 @@ export default function TbComparisonPage() {
           <Button variant="outline" size="sm" onClick={exportCsv} disabled={filtered.length === 0}>
             <Download className="h-4 w-4 me-1" /> CSV
           </Button>
+          <PrintButton
+            entityType="report_trial_balance_comparison"
+            entityId={`${curStart}..${curEnd}_vs_${priorStart}..${priorEnd}`}
+            payload={{
+              entity: {
+                title: "ميزان مراجعة — مقارنة فترتين",
+                currentPeriod: `${curStart} → ${curEnd}`,
+                priorPeriod: `${priorStart} → ${priorEnd}`,
+                accountCount: filtered.length,
+              },
+              items: filtered.map((r) => ({
+                "الكود": r.code,
+                "اسم الحساب": r.name,
+                "النوع": r.type,
+                "الرصيد الحالي": Number(r.currentBalance ?? 0),
+                "الرصيد السابق": Number(r.priorBalance ?? 0),
+                "الفارق": Number(r.variance ?? 0),
+                "%": Number(r.variancePct ?? 0).toFixed(2),
+              })),
+            }}
+          />
           <Button variant="outline" size="sm" onClick={() => { qCurrent.refetch(); qPrior.refetch(); }}>
             <RefreshCw className="h-4 w-4 me-1" /> تحديث
           </Button>

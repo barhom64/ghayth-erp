@@ -479,7 +479,12 @@ router.get("/daily-close/checklist", authorize({ feature: "projects", action: "l
   }
 });
 
-router.post("/daily-close/execute", authorize({ feature: "finance", action: "create" }), async (req, res) => {
+// F4 (audit fix) — migrated from broad `feature: "finance"` to the
+// granular `finance.hardening` sub-feature. This endpoint runs the
+// daily-close routine (AR/AP aging snapshots, posting failures sweep,
+// GL integrity check). All those concerns belong to the hardening
+// surface that already exists in featureCatalog.ts.
+router.post("/daily-close/execute", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const parsed = zodParse(dailyCloseExecuteSchema.safeParse(req.body));
     const scope = req.scope!;
