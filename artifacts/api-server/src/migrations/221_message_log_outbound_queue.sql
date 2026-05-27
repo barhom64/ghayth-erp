@@ -67,7 +67,9 @@ CREATE TABLE IF NOT EXISTS public.message_log (
   "legacyId"          integer,                                  -- nullable; backfill only
   "createdAt"         timestamp with time zone NOT NULL DEFAULT now(),
   "deletedAt"         timestamp with time zone,
-  CONSTRAINT message_log_channel_check CHECK (channel IN ('email','sms','whatsapp','push','in_app')),
+  -- 'internal' included so the communications_log backfill (which carries
+  -- legacy internal-notification rows) doesn't violate the constraint.
+  CONSTRAINT message_log_channel_check CHECK (channel IN ('email','sms','whatsapp','push','in_app','internal')),
   CONSTRAINT message_log_direction_check CHECK (direction IN ('inbound','outbound')),
   CONSTRAINT message_log_legacy_source_check CHECK ("legacySource" IN ('message_log','communications_log','notification_log'))
 );
@@ -179,7 +181,9 @@ INSERT INTO public.message_log
    subject, body, status, folder, "isStarred", "errorMessage",
    "legacySource", "legacyId", "createdAt")
 SELECT
-  nl."companyId", COALESCE(nl.channel, 'email'), 'outbound',
+  -- Some legacy rows store a comma-joined channel list (e.g. 'in_app,email').
+  -- Take the first token so the message_log CHECK constraint accepts it.
+  nl."companyId", COALESCE(split_part(nl.channel, ',', 1), 'email'), 'outbound',
   NULL, nl.recipient, nl.subject, nl.body, nl.status,
   'sent', false, nl."errorMessage",
   'notification_log', nl.id, nl."createdAt"
@@ -200,7 +204,12 @@ INSERT INTO public.outbound_queue
    "legacySource", "legacyId", "createdAt", "updatedAt")
 SELECT
   eq."companyId", 'email', eq."toEmail", eq."recipientName", eq.cc, eq.bcc,
-  eq.subject, eq.body, eq."isHtml", eq.priority, eq.status, eq."refType", eq."refId",
+  eq.subject, eq.body, eq."isHtml", eq.priority,
+  -- Legacy queues used 'queued' as the not-yet-sent state; the new check
+  -- constraint standardises on 'pending'. Map any other unknown status
+  -- to 'pending' so the constraint never rejects a backfill row.
+  CASE WHEN eq.status IN ('pending','sending','sent','failed','cancelled') THEN eq.status ELSE 'pending' END,
+  eq."refType", eq."refId",
   eq."scheduledAt", eq."sentAt", NULL, eq.attempts, eq."maxAttempts",
   eq."lastAttemptAt", eq."errorMessage", eq.metadata,
   'email_queue', eq.id, eq."createdAt", eq."updatedAt"
@@ -216,7 +225,8 @@ INSERT INTO public.outbound_queue
    "sentAt", "externalId", attempts, "errorMessage",
    "legacySource", "legacyId", "createdAt", "updatedAt")
 SELECT
-  sq."companyId", 'sms', sq."recipientPhone", sq.message, sq.status,
+  sq."companyId", 'sms', sq."recipientPhone", sq.message,
+  CASE WHEN sq.status IN ('pending','sending','sent','failed','cancelled') THEN sq.status ELSE 'pending' END,
   sq."sentAt", sq."externalId", sq."attemptCount", sq."errorMessage",
   'sms_queue', sq.id, sq."createdAt", sq."updatedAt"
 FROM public.sms_queue sq
@@ -235,7 +245,9 @@ INSERT INTO public.outbound_queue
    "legacySource", "legacyId", "createdAt", "updatedAt")
 SELECT
   wq."companyId", 'whatsapp', wq.phone, wq."recipientName", wq.message,
-  wq."templateName", wq."templateParams", wq.status, wq."sentAt", wq."deliveredAt",
+  wq."templateName", wq."templateParams",
+  CASE WHEN wq.status IN ('pending','sending','sent','failed','cancelled') THEN wq.status ELSE 'pending' END,
+  wq."sentAt", wq."deliveredAt",
   wq."scheduledAt", wq."externalId", wq."attemptCount", wq."errorMessage",
   'whatsapp_queue', wq.id, wq."createdAt", wq."updatedAt"
 FROM public.whatsapp_queue wq
