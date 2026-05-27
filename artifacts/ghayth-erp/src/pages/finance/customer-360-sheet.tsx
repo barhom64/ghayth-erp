@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { ClientSelect } from "@/components/shared/entity-selects";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Building2, Phone, Mail, Printer, Download, AlertTriangle,
   TrendingUp, TrendingDown, FileText, DollarSign, ExternalLink,
@@ -190,10 +191,38 @@ export default function Customer360SheetPage() {
             CSV
           </Button>
           {clientId && (
+            <PrintButton
+              entityType="report_customer_360"
+              entityId={String(clientId)}
+              variant="default"
+              label="طباعة ملف 360°"
+              payload={{
+                entity: {
+                  title: "ملف العميل 360°",
+                  clientId,
+                  clientName: client?.name ?? "",
+                  asOfDate: todayLocal(),
+                  endingBalance: stmt?.endingBalance ?? 0,
+                  creditLimit: client?.creditLimit ?? 0,
+                  overdueAmount,
+                  seriousOverdue,
+                },
+                items: (stmt?.movements ?? []).map((m: any) => ({
+                  "التاريخ": m.date?.split("T")[0] ?? "",
+                  "المرجع": m.ref ?? "",
+                  "البيان": m.description ?? "",
+                  "مدين": Number(m.debit ?? 0),
+                  "دائن": Number(m.credit ?? 0),
+                  "الرصيد": Number(m.runningBalance ?? 0),
+                })),
+              }}
+            />
+          )}
+          {clientId && (
             <Link href={`/finance/customer-statement-print?clientId=${clientId}`}>
-              <Button size="sm">
+              <Button variant="outline" size="sm">
                 <Printer className="w-4 h-4 ml-1" />
-                نسخة قابلة للطباعة
+                كشف حساب مفصّل
               </Button>
             </Link>
           )}

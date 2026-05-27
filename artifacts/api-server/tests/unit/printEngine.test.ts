@@ -615,6 +615,31 @@ describe("Print Engine v2 — retention legal hold", () => {
   });
 });
 
+describe("Print Engine v2 — statement bespoke presets", () => {
+  // PR1 of issue #1286 wired customer-statement-print.tsx and
+  // vendor-statement-print.tsx through <PrintButton entityType="…_statement">.
+  // Without bespoke presets the platform falls back to the universal renderer
+  // which produces a database-dump look. These presets give the printed
+  // statement a proper letterhead, party-info block, totals card, and a
+  // ledger table — close enough to the inline UI that finance users won't
+  // notice the move to server-side rendering.
+  const src = readFileSync(join(PRINT_LIB, "templateResolver.ts"), "utf8");
+
+  it("registers customer_statement and vendor_statement in BESPOKE_PRESETS", () => {
+    expect(src).toMatch(/customer_statement:\s*\(\)\s*=>\s*buildCustomerStatementPreset/);
+    expect(src).toMatch(/vendor_statement:\s*\(\)\s*=>\s*buildVendorStatementPreset/);
+  });
+
+  it("statement presets surface the loader's note field for the not-found path", () => {
+    // When the loader can't find the client/supplier it returns a `note`.
+    // The preset must conditionally render that note instead of an empty
+    // ledger, otherwise "no client" produces a blank page that looks like a
+    // platform bug. The {{#if entity.note}} guard is the contract.
+    expect(src).toMatch(/buildCustomerStatementPreset[\s\S]*?\{\{#if entity\.note\}\}/);
+    expect(src).toMatch(/buildVendorStatementPreset[\s\S]*?\{\{#if entity\.note\}\}/);
+  });
+});
+
 describe("Print platform — Stop-Ship: no parallel print systems", () => {
   // The print platform is the only path that produces audited, archived,
   // verifiable documents. A stray `window.print()` in any user-facing page
@@ -745,5 +770,154 @@ describe("Print platform — granular permissions (issue #1286)", () => {
   it("/jobs and /jobs.csv accept either print_jobs:read OR print:diagnostics:read", () => {
     expect(routes).toContain('router.get("/jobs", requireAnyPermission("print_jobs:read", "print:diagnostics:read")');
     expect(routes).toContain('router.get("/jobs.csv", requireAnyPermission("print_jobs:read", "print:diagnostics:read")');
+  });
+});
+
+describe("Print Engine v2 — statement loaders compute opening balance", () => {
+  // Both statement loaders must compute opening balance from movements
+  // BEFORE the start date — without this a partial-period print silently
+  // understates the outstanding balance (started at zero, ignored all
+  // prior activity). The customer loader had this from day one; the
+  // vendor loader was missing it until this fix. Locking both down with
+  // a single test stops a future refactor from regressing either side.
+  const src = readFileSync(join(PRINT_LIB, "reportLoaders.ts"), "utf8");
+
+  it("loadCustomerStatement computes openingBalance and returns it in the entity dict", () => {
+    // Slice the function body so the test only matches inside the right
+    // loader — otherwise vendor's openingBalance assignment would satisfy
+    // the customer assertion too.
+    const fnIdx = src.indexOf("export async function loadCustomerStatement");
+    const endIdx = src.indexOf("export async function loadVendorStatement", fnIdx);
+    expect(fnIdx).toBeGreaterThan(0);
+    expect(endIdx).toBeGreaterThan(fnIdx);
+    const body = src.slice(fnIdx, endIdx);
+    expect(body).toMatch(/const\s+openingBalance\s*=/);
+    expect(body).toMatch(/openingBalance:\s*Math\.round/);
+    expect(body).toMatch(/let\s+running\s*=\s*openingBalance/);
+  });
+
+  it("loadVendorStatement computes openingBalance and returns it in the entity dict", () => {
+    const fnIdx = src.indexOf("export async function loadVendorStatement");
+    expect(fnIdx).toBeGreaterThan(0);
+    const body = src.slice(fnIdx);
+    expect(body).toMatch(/const\s+openingBalance\s*=/);
+    expect(body).toMatch(/openingBalance:\s*Math\.round/);
+    expect(body).toMatch(/let\s+running\s*=\s*openingBalance/);
+  });
+
+  it("vendor opening-balance SQL gracefully handles missing tables (older tenants)", () => {
+    // purchase_orders may not exist on pre-procurement tenants. The
+    // catch-42P01 pattern is what stops the entire statement from
+    // 500-ing in that case — without it, customers without procurement
+    // can't print a vendor statement at all.
+    const fnIdx = src.indexOf("export async function loadVendorStatement");
+    const body = src.slice(fnIdx);
+    expect(body).toMatch(/openingBalance[\s\S]*?42P01/);
+  });
+});
+
+describe("Print platform — 360 sheets + finance workbenches migrated (#1286 Q4)", () => {
+  // Q4 wave 2: the customer/vendor 360 sheets and the AR collection +
+  // AP payment workbenches had a CSV export but no native print path
+  // (only a Link to a sibling page). Adding <PrintButton> here means
+  // a single click prints the same 360 view the user is staring at,
+  // through the audited platform — no jump to another page first.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const PAGES: Array<{ path: string; entityType: string }> = [
+    { path: "pages/finance/customer-360-sheet.tsx",                entityType: "report_customer_360" },
+    { path: "pages/finance/vendor-360-sheet.tsx",                  entityType: "report_vendor_360" },
+    { path: "pages/finance/account-reconciliation-workpaper.tsx",  entityType: "report_account_reconciliation" },
+    { path: "pages/finance/ar-collection-workbench.tsx",           entityType: "report_ar_collection_plan" },
+    { path: "pages/finance/ap-payment-calendar.tsx",               entityType: "report_ap_payment_calendar" },
+  ];
+
+  for (const { path, entityType } of PAGES) {
+    it(`${path} mounts <PrintButton entityType="${entityType}" payload={...}>`, () => {
+      const src = readFileSync(join(SPA, path), "utf8");
+      expect(src, `${path} must import PrintButton`).toContain('from "@/components/shared/print-button"');
+      expect(src, `${path} must render PrintButton`).toContain("<PrintButton");
+      expect(src, `${path} must use entityType="${entityType}"`).toContain(`entityType="${entityType}"`);
+      expect(src, `${path} must pass payload`).toMatch(/payload=\{/);
+    });
+  }
+});
+
+describe("Print platform — entity registry sync (#1286 follow-up)", () => {
+  // Before this sync, 39 of 51 entities had a BESPOKE_PRESET in
+  // templateResolver but no `print: { hasTemplate: true }` declaration in
+  // entityRegistry.ts. That gap meant getEntityPrintProfile fell through to
+  // the permissive fallback ("anyone with print:create can print this")
+  // instead of enforcing per-entity perms, which silently broke owners'
+  // ability to mint roles that print SOME documents but not others.
+  // After the sync, every entity declares its print profile and points at
+  // a real per-entity permission listed in the catalogue.
+  const registrySrc = readFileSync(ENTITY_REGISTRY, "utf8");
+  const rbacSrc = readFileSync(RBAC_CATALOG, "utf8");
+
+  function entityIds(): string[] {
+    const ids: string[] = [];
+    const re = /^\s+id:\s*"([a-z_][a-z0-9_]*)"\s*,\s*$/gm;
+    let m;
+    while ((m = re.exec(registrySrc)) !== null) ids.push(m[1]);
+    return ids;
+  }
+
+  function entityPrintBlock(id: string): string | null {
+    const startIdx = registrySrc.indexOf(`    id: "${id}",`);
+    if (startIdx < 0) return null;
+    const endIdx = registrySrc.indexOf("\n  },\n", startIdx);
+    if (endIdx < 0) return null;
+    return registrySrc.slice(startIdx, endIdx);
+  }
+
+  it("every entity in the registry declares print.hasTemplate: true", () => {
+    const missing: string[] = [];
+    for (const id of entityIds()) {
+      const block = entityPrintBlock(id);
+      if (!block || !/print:\s*\{\s*hasTemplate:\s*true/.test(block)) {
+        missing.push(id);
+      }
+    }
+    expect(
+      missing,
+      `entities without print.hasTemplate: true — every registered entity needs ` +
+      `a print profile so getEntityPrintProfile returns its per-entity perm ` +
+      `instead of falling back to the generic print:create gate:\n${missing.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("every entity's print.permission exists in the RBAC catalogue", () => {
+    const orphans: Array<{ entity: string; perm: string }> = [];
+    for (const id of entityIds()) {
+      const block = entityPrintBlock(id);
+      if (!block) continue;
+      const permMatch = block.match(/permission:\s*"([^"]+)"/);
+      if (!permMatch) continue;
+      const perm = permMatch[1];
+      // permission is declared in PERMISSIONS or is a known module wildcard
+      if (!rbacSrc.includes(`"${perm}"`) && !perm.endsWith(":*") && perm !== "*") {
+        orphans.push({ entity: id, perm });
+      }
+    }
+    expect(
+      orphans,
+      `entities pointing at perms not in PERMISSIONS — these would fail ` +
+      `isKnownPermission() at role-assignment time:\n` +
+      orphans.map((o) => `  ${o.entity} → ${o.perm}`).join("\n"),
+    ).toEqual([]);
+  });
+
+  it("getEntityPrintProfile's permissive fallback still uses generic print:create", () => {
+    // Even though every registered entity now has its own perm, the
+    // fallback path for UNREGISTERED entities (transient internal entities,
+    // entities added by future modules before being seeded) must stay
+    // permissive — using "print:create" not a synthesized per-entity perm
+    // that nobody has. Locking the fallback prevents a future "tighten the
+    // fallback" PR from silently 403'ing every new entity type.
+    const src = readFileSync(ENTITY_REGISTRY, "utf8");
+    const fallbackIdx = src.indexOf("Permissive fallback");
+    expect(fallbackIdx, "the fallback comment block must still document the choice").toBeGreaterThan(0);
+    const tail = src.slice(fallbackIdx);
+    expect(tail).toContain('permission: "print:create"');
   });
 });

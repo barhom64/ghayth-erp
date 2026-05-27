@@ -251,16 +251,27 @@ function ConnectDialog({ open, onClose, onSuccess }: { open: boolean; onClose: (
           </div>
 
           {provider === "microsoft365" ? (
-            <div className="space-y-2">
-              <Input placeholder="Access Token" value={form.accessToken}
-                onChange={(e) => setForm({ ...form, accessToken: e.target.value })} />
-              <Input placeholder="Refresh Token" value={form.refreshToken}
-                onChange={(e) => setForm({ ...form, refreshToken: e.target.value })} />
-              <Input placeholder="Azure Tenant ID" value={form.tenantId}
-                onChange={(e) => setForm({ ...form, tenantId: e.target.value })} />
-              <p className="text-xs text-muted-foreground">
-                التوكنات تُشفّر قبل الحفظ. مسار OAuth التلقائي يضاف لاحقاً.
+            <div className="space-y-3 rounded border border-border/40 p-3">
+              <p className="text-sm">
+                ربط صندوق Microsoft 365 يتم عبر تسجيل دخول آمن — سيُحوّلك للموقع الرسمي ثم يعود لك تلقائياً.
               </p>
+              <Button
+                type="button"
+                className="w-full gap-2"
+                onClick={() => { window.location.href = "/api/mailboxes/oauth/microsoft365/authorize"; }}
+              >
+                <Mail className="w-4 h-4" />
+                تسجيل دخول بحساب Microsoft 365
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                التوكنات تُشفّر قبل الحفظ. أو ألصق Access/Refresh tokens يدوياً أدناه إذا كنت تعرفهم.
+              </p>
+              <Input placeholder="Access Token (اختياري — للإدخال اليدوي)" value={form.accessToken}
+                onChange={(e) => setForm({ ...form, accessToken: e.target.value })} />
+              <Input placeholder="Refresh Token (اختياري)" value={form.refreshToken}
+                onChange={(e) => setForm({ ...form, refreshToken: e.target.value })} />
+              <Input placeholder="Azure Tenant ID (اختياري)" value={form.tenantId}
+                onChange={(e) => setForm({ ...form, tenantId: e.target.value })} />
             </div>
           ) : (
             <>

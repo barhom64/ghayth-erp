@@ -8,6 +8,7 @@ import { Link } from "wouter";
 import { formatNumber, formatDateAr } from "@/lib/formatters";
 import { Eye, AlertCircle, CheckCircle2, Pencil } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
 
 interface AllocationResult {
   id: number;
@@ -168,6 +169,7 @@ export default function AllocationResultsPage() {
       ]}
     >
       <FinanceTabsNav />
+      <AllocationTabsNav />
 
       <Card className="mb-4 border-status-info-surface bg-status-info-surface/30">
         <CardContent className="p-4 text-sm">
