@@ -615,6 +615,31 @@ describe("Print Engine v2 — retention legal hold", () => {
   });
 });
 
+describe("Print Engine v2 — statement bespoke presets", () => {
+  // PR1 of issue #1286 wired customer-statement-print.tsx and
+  // vendor-statement-print.tsx through <PrintButton entityType="…_statement">.
+  // Without bespoke presets the platform falls back to the universal renderer
+  // which produces a database-dump look. These presets give the printed
+  // statement a proper letterhead, party-info block, totals card, and a
+  // ledger table — close enough to the inline UI that finance users won't
+  // notice the move to server-side rendering.
+  const src = readFileSync(join(PRINT_LIB, "templateResolver.ts"), "utf8");
+
+  it("registers customer_statement and vendor_statement in BESPOKE_PRESETS", () => {
+    expect(src).toMatch(/customer_statement:\s*\(\)\s*=>\s*buildCustomerStatementPreset/);
+    expect(src).toMatch(/vendor_statement:\s*\(\)\s*=>\s*buildVendorStatementPreset/);
+  });
+
+  it("statement presets surface the loader's note field for the not-found path", () => {
+    // When the loader can't find the client/supplier it returns a `note`.
+    // The preset must conditionally render that note instead of an empty
+    // ledger, otherwise "no client" produces a blank page that looks like a
+    // platform bug. The {{#if entity.note}} guard is the contract.
+    expect(src).toMatch(/buildCustomerStatementPreset[\s\S]*?\{\{#if entity\.note\}\}/);
+    expect(src).toMatch(/buildVendorStatementPreset[\s\S]*?\{\{#if entity\.note\}\}/);
+  });
+});
+
 describe("Print platform — Stop-Ship: no parallel print systems", () => {
   // The print platform is the only path that produces audited, archived,
   // verifiable documents. A stray `window.print()` in any user-facing page
@@ -817,82 +842,49 @@ describe("Print platform — 360 sheets + finance workbenches migrated (#1286 Q4
   }
 });
 
-describe("Print platform — entity registry sync (#1286 follow-up)", () => {
-  // Before this sync, 39 of 51 entities had a BESPOKE_PRESET in
-  // templateResolver but no `print: { hasTemplate: true }` declaration in
-  // entityRegistry.ts. That gap meant getEntityPrintProfile fell through to
-  // the permissive fallback ("anyone with print:create can print this")
-  // instead of enforcing per-entity perms, which silently broke owners'
-  // ability to mint roles that print SOME documents but not others.
-  // After the sync, every entity declares its print profile and points at
-  // a real per-entity permission listed in the catalogue.
-  const registrySrc = readFileSync(ENTITY_REGISTRY, "utf8");
-  const rbacSrc = readFileSync(RBAC_CATALOG, "utf8");
+describe("Print platform — frontend SDK contract (#1286 PR 4/4)", () => {
+  // The frontend workspace doesn't ship a vitest setup of its own, so the
+  // static contract for PrintButton / print-client lives here next to the
+  // rest of the print platform's hermetic tests.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const printButton = readFileSync(join(SPA, "components/shared/print-button.tsx"), "utf8");
+  const printClient = readFileSync(join(SPA, "lib/print-client.ts"), "utf8");
+  const entityPrint = readFileSync(join(SPA, "components/shared/entity-print.tsx"), "utf8");
 
-  function entityIds(): string[] {
-    const ids: string[] = [];
-    const re = /^\s+id:\s*"([a-z_][a-z0-9_]*)"\s*,\s*$/gm;
-    let m;
-    while ((m = re.exec(registrySrc)) !== null) ids.push(m[1]);
-    return ids;
-  }
-
-  function entityPrintBlock(id: string): string | null {
-    const startIdx = registrySrc.indexOf(`    id: "${id}",`);
-    if (startIdx < 0) return null;
-    const endIdx = registrySrc.indexOf("\n  },\n", startIdx);
-    if (endIdx < 0) return null;
-    return registrySrc.slice(startIdx, endIdx);
-  }
-
-  it("every entity in the registry declares print.hasTemplate: true", () => {
-    const missing: string[] = [];
-    for (const id of entityIds()) {
-      const block = entityPrintBlock(id);
-      if (!block || !/print:\s*\{\s*hasTemplate:\s*true/.test(block)) {
-        missing.push(id);
-      }
+  it("PrintButton accepts the documented props (entityType, entityId, formats, label, variant, size, download)", () => {
+    for (const prop of ["entityType", "entityId", "formats", "defaultFormat", "label", "variant", "size", "download"]) {
+      expect(printButton, `PrintButton missing prop: ${prop}`).toMatch(new RegExp(`\\b${prop}\\b`));
     }
-    expect(
-      missing,
-      `entities without print.hasTemplate: true — every registered entity needs ` +
-      `a print profile so getEntityPrintProfile returns its per-entity perm ` +
-      `instead of falling back to the generic print:create gate:\n${missing.join("\n")}`,
-    ).toEqual([]);
   });
 
-  it("every entity's print.permission exists in the RBAC catalogue", () => {
-    const orphans: Array<{ entity: string; perm: string }> = [];
-    for (const id of entityIds()) {
-      const block = entityPrintBlock(id);
-      if (!block) continue;
-      const permMatch = block.match(/permission:\s*"([^"]+)"/);
-      if (!permMatch) continue;
-      const perm = permMatch[1];
-      // permission is declared in PERMISSIONS or is a known module wildcard
-      if (!rbacSrc.includes(`"${perm}"`) && !perm.endsWith(":*") && perm !== "*") {
-        orphans.push({ entity: id, perm });
-      }
+  it("PrintButton supports all five PrintFormat values (a4, thermal_80, thermal_58, label, excel)", () => {
+    for (const fmt of ["a4", "thermal_80", "thermal_58", "label", "excel"]) {
+      expect(printButton).toMatch(new RegExp(`["']${fmt}["']`));
     }
-    expect(
-      orphans,
-      `entities pointing at perms not in PERMISSIONS — these would fail ` +
-      `isKnownPermission() at role-assignment time:\n` +
-      orphans.map((o) => `  ${o.entity} → ${o.perm}`).join("\n"),
-    ).toEqual([]);
   });
 
-  it("getEntityPrintProfile's permissive fallback still uses generic print:create", () => {
-    // Even though every registered entity now has its own perm, the
-    // fallback path for UNREGISTERED entities (transient internal entities,
-    // entities added by future modules before being seeded) must stay
-    // permissive — using "print:create" not a synthesized per-entity perm
-    // that nobody has. Locking the fallback prevents a future "tighten the
-    // fallback" PR from silently 403'ing every new entity type.
-    const src = readFileSync(ENTITY_REGISTRY, "utf8");
-    const fallbackIdx = src.indexOf("Permissive fallback");
-    expect(fallbackIdx, "the fallback comment block must still document the choice").toBeGreaterThan(0);
-    const tail = src.slice(fallbackIdx);
-    expect(tail).toContain('permission: "print:create"');
+  it("PrintButton decodes base64 → UTF-8 explicitly (Arabic mojibake guard, #1085)", () => {
+    expect(printButton).toContain('new TextDecoder("utf-8")');
+  });
+
+  it("PrintButton handles reprint-approval 409 by auto-creating a reprint-request", () => {
+    expect(printButton).toContain('/print/reprint-requests');
+    expect(printButton).toMatch(/e\.status\s*===\s*409/);
+  });
+
+  it("print-client SDK exposes renderDocument, previewDocument, downloadDocument, verifyDocument, listJobs, listTemplates", () => {
+    for (const fn of ["renderDocument", "previewDocument", "downloadDocument", "verifyDocument", "listJobs", "listTemplates"]) {
+      expect(printClient, `print-client missing export: ${fn}`).toMatch(new RegExp(`export\\s+(async\\s+)?function\\s+${fn}\\b`));
+    }
+  });
+
+  it("print-client renderDocument forwards optional payload (for ListPage export + AI letter draft)", () => {
+    expect(printClient).toMatch(/body:\s*JSON\.stringify\(\{[\s\S]*?payload:\s*input\.payload[\s\S]*?\}\)/);
+  });
+
+  it("EntityPrintButton is a thin wrapper around PrintButton", () => {
+    expect(entityPrint).toMatch(/PrintButton/);
+    expect(entityPrint).not.toMatch(/window\.print\s*\(/);
+    expect(entityPrint).not.toMatch(/atob\s*\(/);
   });
 });

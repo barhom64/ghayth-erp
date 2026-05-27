@@ -104,14 +104,63 @@ export async function testMailboxConnection(id: number, companyId: number): Prom
       detail: "بيانات الاعتماد ناقصة — أعد ربط الحساب",
     };
   }
-  // The real provider RPC lands in the follow-up slice. For now we
-  // return a tentative ok so the UI flow can be tested end-to-end and
-  // the operator gets feedback that the credentials at least parsed.
-  return {
-    ok: true,
-    provider: account.provider,
-    detail: "بيانات الاعتماد محفوظة — اختبار شبكي حي يفعّل في الـ slice التالي",
-  };
+  // Live RPC: M365 hits /me, IMAP opens a connection and runs NOOP.
+  // Both verify the credentials actually authenticate before the
+  // operator commits to a full sync.
+  if (account.provider === "microsoft365") {
+    const accessToken = decryptSecret(account.accessToken);
+    if (!accessToken) {
+      return { ok: false, provider: "microsoft365", detail: "access token غير قابل لفك التشفير" };
+    }
+    try {
+      const r = await fetch("https://graph.microsoft.com/v1.0/me", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!r.ok) {
+        const t = await r.text().catch(() => "");
+        return {
+          ok: false,
+          provider: "microsoft365",
+          detail: `Graph رفض الـ token (${r.status}): ${t.slice(0, 200)}`,
+        };
+      }
+      return { ok: true, provider: "microsoft365", detail: "الاتصال بـ Microsoft Graph سليم" };
+    } catch (err) {
+      return {
+        ok: false,
+        provider: "microsoft365",
+        detail: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  // IMAP / Hostinger — minimal connect + NOOP + logout.
+  const password = decryptSecret(account.imapPassword);
+  if (!account.imapHost || !account.imapUsername || !password) {
+    return { ok: false, provider: account.provider, detail: "IMAP credentials غير مكتملة" };
+  }
+  const { ImapFlow } = await import("imapflow");
+  const client = new ImapFlow({
+    host: account.imapHost,
+    port: account.imapPort ?? 993,
+    secure: (account.imapPort ?? 993) === 993,
+    auth: { user: account.imapUsername, pass: password },
+    logger: false,
+    emitLogs: false,
+  });
+  try {
+    await client.connect();
+    await client.noop();
+    return { ok: true, provider: account.provider, detail: "الاتصال بـ IMAP سليم" };
+  } catch (err) {
+    return {
+      ok: false,
+      provider: account.provider,
+      detail: err instanceof Error ? err.message : String(err),
+    };
+  } finally {
+    try { await client.logout(); } catch { /* ignore */ }
+  }
 }
 
 /**
@@ -151,7 +200,12 @@ export async function syncMailbox(
       break;
     case "imap":
     case "hostinger":
-      result = await syncImapStub(account);
+      result = await syncImap(account).catch((err) => ({
+        ok: false,
+        status: "error" as const,
+        messagesFetched: 0,
+        error: err instanceof Error ? err.message : String(err),
+      }));
       break;
     default:
       result = { ok: false, status: "error", messagesFetched: 0, error: "unknown provider" };
@@ -321,15 +375,122 @@ async function syncMicrosoft365(account: MailboxAccountRow): Promise<SyncResult>
   return { ok: true, status: "ok", messagesFetched };
 }
 
-async function syncImapStub(account: MailboxAccountRow): Promise<SyncResult> {
-  logger.info(
-    { accountId: account.id, email: account.emailAddress, host: account.imapHost },
-    "[mailboxSync] imap sync stub — real node-imap client lands in follow-up slice"
+async function syncImap(account: MailboxAccountRow): Promise<SyncResult> {
+  const password = decryptSecret(account.imapPassword);
+  if (!account.imapHost || !account.imapUsername || !password) {
+    return { ok: false, status: "auth_expired", messagesFetched: 0, error: "IMAP credentials missing" };
+  }
+
+  // Lazy import to keep startup cost off the hot path. imapflow + mailparser
+  // are heavy and only needed when the worker actually has IMAP accounts.
+  const { ImapFlow } = await import("imapflow");
+  const { simpleParser } = await import("mailparser");
+
+  const port = account.imapPort ?? 993;
+  const client = new ImapFlow({
+    host: account.imapHost,
+    port,
+    secure: port === 993,
+    auth: { user: account.imapUsername, pass: password },
+    logger: false,
+    emitLogs: false,
+  });
+
+  // Resume from the saved UID cursor — IMAP UIDs are monotonically
+  // increasing per mailbox, so SEARCH UID > N gives us only new messages.
+  const [cursorRow] = await rawQuery<{ lastUid: string | null }>(
+    `SELECT "lastUid" FROM mailbox_sync_cursors
+      WHERE "accountId" = $1 AND folder = 'INBOX' LIMIT 1`,
+    [account.id],
   );
-  return {
-    ok: true,
-    status: "not_implemented",
-    messagesFetched: 0,
-    error: "IMAP client integration is the next slice — credentials saved, sync deferred",
-  };
+  const sinceUid = cursorRow?.lastUid ? Number(cursorRow.lastUid) : 0;
+
+  let messagesFetched = 0;
+  let maxUid = sinceUid;
+
+  try {
+    await client.connect();
+    const lock = await client.getMailboxLock("INBOX");
+    try {
+      // SEARCH UID N:* — IMAP wildcard range. With sinceUid=0 on first
+      // run, this returns every message; subsequent runs return only
+      // UIDs greater than the saved cursor.
+      const range = `${sinceUid + 1}:*`;
+      // for-await-of yields lightweight message stubs first; we fetch
+      // source bytes per message so simpleParser can extract body.
+      for await (const msg of client.fetch(range, { uid: true, envelope: true, source: true })) {
+        if (msg.uid <= sinceUid) continue; // belt-and-suspenders
+        const parsed = await simpleParser(msg.source!);
+        const fromAddress = parsed.from?.value?.[0]?.address ?? null;
+        const toAddress =
+          (Array.isArray(parsed.to) ? parsed.to[0]?.value?.[0]?.address : parsed.to?.value?.[0]?.address)
+          ?? account.emailAddress;
+        const subject = parsed.subject ?? null;
+        const body = parsed.text ?? parsed.html ?? "";
+        const receivedAt = parsed.date?.toISOString() ?? new Date().toISOString();
+
+        // Dedupe by Message-ID header if present, else fall back to the
+        // (companyId, from, receivedAt) probe used for the M365 path.
+        if (parsed.messageId) {
+          const [dup] = await rawQuery<{ id: number }>(
+            `SELECT id FROM communications_log
+              WHERE "companyId" = $1 AND direction = 'inbound' AND channel = 'email'
+                AND body LIKE $2 LIMIT 1`,
+            [account.companyId, `%Message-ID: ${parsed.messageId}%`],
+          );
+          if (dup) { maxUid = Math.max(maxUid, msg.uid); continue; }
+        }
+
+        const { insertId } = await rawExecute(
+          `INSERT INTO communications_log
+             ("companyId", channel, direction, "fromNumber", "toNumber",
+              subject, body, status, folder, "createdAt")
+           VALUES ($1, 'email', 'inbound', $2, $3, $4, $5, 'received', 'inbox', $6)`,
+          [account.companyId, fromAddress, toAddress, subject, body, receivedAt],
+        );
+        if (insertId > 0) {
+          await rawExecute(
+            `INSERT INTO message_log
+               ("companyId", channel, direction, "fromAddress", "toAddress",
+                subject, body, status, folder,
+                "legacySource", "legacyId", "createdAt")
+             VALUES ($1, 'email', 'inbound', $2, $3, $4, $5, 'received', 'inbox',
+                     'communications_log', $6, $7)`,
+            [account.companyId, fromAddress, toAddress, subject, body, insertId, receivedAt],
+          ).catch((e) => logger.warn(e, "[mailboxSync imap] message_log mirror failed"));
+          messagesFetched++;
+        }
+        maxUid = Math.max(maxUid, msg.uid);
+        // One page per tick — keep latency bounded even on large mailboxes.
+        if (messagesFetched >= 50) break;
+      }
+    } finally {
+      lock.release();
+    }
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    // Authentication failures from IMAP servers — surfaced as auth_expired
+    // so the operator re-enters the password (most likely cause is rotation).
+    if (/auth|login|invalid credentials/i.test(errMsg)) {
+      return { ok: false, status: "auth_expired", messagesFetched, error: errMsg.slice(0, 300) };
+    }
+    return { ok: false, status: "error", messagesFetched, error: errMsg.slice(0, 300) };
+  } finally {
+    try { await client.logout(); } catch { /* ignore */ }
+  }
+
+  if (maxUid > sinceUid) {
+    await rawExecute(
+      `INSERT INTO mailbox_sync_cursors ("accountId", folder, "lastUid", "lastFetchedAt", "messagesFetched", "createdAt", "updatedAt")
+       VALUES ($1, 'INBOX', $2, NOW(), $3, NOW(), NOW())
+       ON CONFLICT ("accountId", folder) DO UPDATE
+         SET "lastUid" = EXCLUDED."lastUid",
+             "lastFetchedAt" = NOW(),
+             "messagesFetched" = mailbox_sync_cursors."messagesFetched" + EXCLUDED."messagesFetched",
+             "updatedAt" = NOW()`,
+      [account.id, maxUid, messagesFetched],
+    ).catch((e) => logger.warn(e, "[mailboxSync imap] cursor persist failed"));
+  }
+
+  return { ok: true, status: "ok", messagesFetched };
 }
