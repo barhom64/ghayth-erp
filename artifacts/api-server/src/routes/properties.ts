@@ -3513,6 +3513,361 @@ router.delete("/owners/:id", authorize({ feature: "properties.owners", action: "
   } catch (err) { handleRouteError(err, res, "Delete owner error:"); }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /properties/owners/:id/statement — كشف حساب المالك للفترة
+// يُجمّع: إيجارات مستحقة + محصَّلة + مصاريف صيانة + عمولة الإدارة + الصافي
+// لا يقوم بأي ترحيل GL — تقرير قراءة فقط (read-model).
+// ═══════════════════════════════════════════════════════════════════════════════
+router.get(
+  "/owners/:id/statement",
+  authorize({
+    feature: "properties.owners",
+    action: "view",
+    resource: { table: "property_owners", idParam: "id" },
+  }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+
+      const today = todayISO();
+      const fromRaw = (req.query.from as string | undefined) || `${today.slice(0, 7)}-01`;
+      const toRaw = (req.query.to as string | undefined) || today;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fromRaw) || !/^\d{4}-\d{2}-\d{2}$/.test(toRaw)) {
+        throw new ValidationError("صيغة التاريخ غير صحيحة (YYYY-MM-DD)", { field: "from/to" });
+      }
+      if (fromRaw > toRaw) {
+        throw new ValidationError("'إلى' يجب أن يكون بعد 'من'", { field: "to" });
+      }
+
+      // Commission rate priority: query override → system setting → 5% default.
+      let commissionRate = 5;
+      const queryRate = req.query.commissionRate as string | undefined;
+      if (queryRate !== undefined && queryRate !== "") {
+        const r = Number(queryRate);
+        if (!Number.isFinite(r) || r < 0 || r > 100) {
+          throw new ValidationError("نسبة العمولة يجب أن تكون بين 0 و 100", {
+            field: "commissionRate",
+          });
+        }
+        commissionRate = r;
+      } else {
+        const [setting] = await rawQuery<{ value: string | null }>(
+          `SELECT value FROM system_settings
+            WHERE key = 'property.management_fee_rate'
+              AND ("companyId" = $1 OR "companyId" IS NULL)
+            ORDER BY "companyId" DESC NULLS LAST LIMIT 1`,
+          [scope.companyId],
+        ).catch(() => [{ value: null }]);
+        const v = Number(setting?.value);
+        if (Number.isFinite(v) && v >= 0 && v <= 100) commissionRate = v;
+      }
+
+      const [owner] = await rawQuery<Record<string, unknown>>(
+        `SELECT id, name, "nationalId", "crNumber", phone, email, iban, "bankName",
+                "authorizationNumber", "authorizationDate", "authorizationExpiry"
+           FROM property_owners
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!owner) throw new NotFoundError("المالك غير موجود");
+
+      // Rent collected vs due within the window — joined to rental_contracts
+      // so rent_payments (no companyId column) is tenant-scoped via the
+      // contract. Same isolation pattern as legal_sessions.
+      const rentRows = await rawQuery<Record<string, unknown>>(
+        `SELECT
+            u.id                   AS "unitId",
+            u."unitNumber",
+            u."buildingName",
+            c.id                   AS "contractId",
+            c."contractNumber",
+            c."tenantName",
+            COALESCE(SUM(rp.amount), 0)        AS "totalDue",
+            COALESCE(SUM(rp."paidAmount"), 0)  AS "totalCollected",
+            COALESCE(SUM(rp.amount), 0) - COALESCE(SUM(rp."paidAmount"), 0) AS "outstanding"
+           FROM property_units u
+           JOIN rental_contracts c ON c."unitId" = u.id AND c."deletedAt" IS NULL
+           LEFT JOIN rent_payments rp ON rp."contractId" = c.id
+                AND rp."dueDate" BETWEEN $3::date AND $4::date
+          WHERE u."ownerId" = $1
+            AND u."companyId" = $2
+            AND u."deletedAt" IS NULL
+            AND c."companyId" = $2
+          GROUP BY u.id, u."unitNumber", u."buildingName",
+                   c.id, c."contractNumber", c."tenantName"
+          ORDER BY u."unitNumber"`,
+        [id, scope.companyId, fromRaw, toRaw],
+      );
+
+      // Outstanding rent (unpaid past dueDate as of "to" date) — useful for
+      // the lawyer-owner to see what's still owed.
+      const outstandingRows = await rawQuery<Record<string, unknown>>(
+        `SELECT
+            rp.id, rp."contractId", rp."dueDate", rp.amount, rp."paidAmount",
+            rp.amount - rp."paidAmount" AS "outstanding",
+            ($4::date - rp."dueDate") AS "daysPastDue",
+            u."unitNumber", u."buildingName", c."tenantName"
+           FROM rent_payments rp
+           JOIN rental_contracts c ON c.id = rp."contractId" AND c."deletedAt" IS NULL
+           JOIN property_units u ON u.id = c."unitId" AND u."deletedAt" IS NULL
+          WHERE u."ownerId" = $1
+            AND u."companyId" = $2
+            AND c."companyId" = $2
+            AND rp."dueDate" BETWEEN $3::date AND $4::date
+            AND rp.amount > COALESCE(rp."paidAmount", 0)
+          ORDER BY rp."dueDate"`,
+        [id, scope.companyId, fromRaw, toRaw],
+      );
+
+      // Maintenance expenses charged against the owner's units in the window.
+      const maintRows = await rawQuery<Record<string, unknown>>(
+        `SELECT
+            mr.id, mr.category, mr.description, mr."actualCost",
+            mr."estimatedCost", mr."completedAt", mr.status,
+            u.id AS "unitId", u."unitNumber", u."buildingName"
+           FROM maintenance_requests mr
+           JOIN property_units u ON u.id = mr."unitId" AND u."deletedAt" IS NULL
+          WHERE u."ownerId" = $1
+            AND mr."companyId" = $2
+            AND u."companyId" = $2
+            AND mr."completedAt" BETWEEN $3::date AND ($4::date + INTERVAL '1 day')
+          ORDER BY mr."completedAt" DESC`,
+        [id, scope.companyId, fromRaw, toRaw],
+      );
+
+      const totalRentDue = rentRows.reduce((s, r) => s + Number(r.totalDue || 0), 0);
+      const totalRentCollected = rentRows.reduce((s, r) => s + Number(r.totalCollected || 0), 0);
+      const totalRentOutstanding = totalRentDue - totalRentCollected;
+      const totalMaintenance = maintRows.reduce(
+        (s, m) => s + Number(m.actualCost || 0),
+        0,
+      );
+      const commissionAmount = roundTo2(totalRentCollected * (commissionRate / 100));
+      const netDueToOwner = roundTo2(totalRentCollected - totalMaintenance - commissionAmount);
+
+      res.json(
+        maskFields(req, {
+          owner,
+          period: { from: fromRaw, to: toRaw },
+          commission: { rate: commissionRate, amount: commissionAmount },
+          summary: {
+            totalRentDue: roundTo2(totalRentDue),
+            totalRentCollected: roundTo2(totalRentCollected),
+            totalRentOutstanding: roundTo2(totalRentOutstanding),
+            totalMaintenance: roundTo2(totalMaintenance),
+            commissionAmount,
+            netDueToOwner,
+            unitsCount: rentRows.length,
+            outstandingPaymentsCount: outstandingRows.length,
+            maintenanceCount: maintRows.length,
+          },
+          rentByUnit: rentRows,
+          outstandingPayments: outstandingRows,
+          maintenance: maintRows,
+        }),
+      );
+    } catch (err) {
+      handleRouteError(err, res, "Owner statement error:");
+    }
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /properties/owners/:id/payouts — تاريخ مدفوعات المالك
+// ═══════════════════════════════════════════════════════════════════════════════
+router.get(
+  "/owners/:id/payouts",
+  authorize({
+    feature: "properties.owners",
+    action: "view",
+    resource: { table: "property_owners", idParam: "id" },
+  }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+
+      const rows = await rawQuery<Record<string, unknown>>(
+        `SELECT id, period, "fromDate", "toDate",
+                "totalRentCollected", "totalMaintenance",
+                "commissionRate", "commissionAmount", "netAmount",
+                "paymentMethod", reference, "paidAt", "paidBy",
+                "journalEntryId", notes, "createdAt"
+           FROM property_owner_payouts
+          WHERE "companyId" = $1 AND "ownerId" = $2 AND "deletedAt" IS NULL
+          ORDER BY "paidAt" DESC, id DESC
+          LIMIT 200`,
+        [scope.companyId, id],
+      );
+
+      res.json(maskFields(req, { data: rows, total: rows.length }));
+    } catch (err) {
+      handleRouteError(err, res, "Owner payouts list error:");
+    }
+  },
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// POST /properties/owners/:id/payouts — سداد مستحق المالك عن فترة
+// الـbody يأتي من نتيجة /statement (snapshot للأرقام لحظة الدفع)
+// ═══════════════════════════════════════════════════════════════════════════════
+const createPayoutSchema = z.object({
+  period: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الفترة YYYY-MM"),
+  fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "صيغة التاريخ YYYY-MM-DD"),
+  toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "صيغة التاريخ YYYY-MM-DD"),
+  totalRentCollected: z.coerce.number().min(0, "قيمة غير صالحة"),
+  totalMaintenance: z.coerce.number().min(0).default(0),
+  commissionRate: z.coerce.number().min(0).max(100, "النسبة من 0 إلى 100"),
+  commissionAmount: z.coerce.number().min(0).default(0),
+  netAmount: z.coerce.number().min(0, "الصافي لا يمكن أن يكون سالباً"),
+  paymentMethod: z.enum(["bank_transfer", "cash", "cheque", "other"]).default("bank_transfer"),
+  reference: z.string().max(120).optional(),
+  paidAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  notes: z.string().optional(),
+});
+
+router.post(
+  "/owners/:id/payouts",
+  authorize({
+    feature: "properties.owners",
+    action: "create",
+    resource: { table: "property_owners", idParam: "id" },
+  }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const b = zodParse(createPayoutSchema.safeParse(req.body));
+
+      if (b.toDate < b.fromDate) {
+        throw new ValidationError("'إلى' يجب أن يكون بعد 'من'", { field: "toDate" });
+      }
+      if (b.netAmount <= 0) {
+        throw new ValidationError("لا يوجد مبلغ مستحق للسداد", {
+          field: "netAmount",
+          fix: "تحقق من حساب الفترة قبل تسجيل الدفعة",
+        });
+      }
+
+      const [owner] = await rawQuery<{ id: number; name: string }>(
+        `SELECT id, name FROM property_owners
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!owner) throw new NotFoundError("المالك غير موجود");
+
+      // Block re-payouts for the same period — operator must soft-delete
+      // the prior row before recording a corrected one. Partial unique
+      // index uq_owner_payouts_company_owner_period enforces this at
+      // the DB; we surface the conflict cleanly here.
+      const [existing] = await rawQuery<{ id: number }>(
+        `SELECT id FROM property_owner_payouts
+          WHERE "companyId" = $1 AND "ownerId" = $2 AND period = $3 AND "deletedAt" IS NULL`,
+        [scope.companyId, id, b.period],
+      );
+      if (existing) {
+        throw new ConflictError("تم تسجيل دفعة لهذا المالك في هذه الفترة سابقاً", {
+          meta: { existingPayoutId: existing.id, period: b.period },
+        });
+      }
+
+      const paidAt = b.paidAt ?? todayISO();
+      const { insertId } = await rawExecute(
+        `INSERT INTO property_owner_payouts (
+           "companyId", "branchId", "ownerId", period, "fromDate", "toDate",
+           "totalRentCollected", "totalMaintenance",
+           "commissionRate", "commissionAmount", "netAmount",
+           "paymentMethod", reference, "paidAt", "paidBy", notes
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+         RETURNING id`,
+        [
+          scope.companyId,
+          scope.branchId ?? null,
+          id,
+          b.period,
+          b.fromDate,
+          b.toDate,
+          roundTo2(b.totalRentCollected),
+          roundTo2(b.totalMaintenance),
+          b.commissionRate,
+          roundTo2(b.commissionAmount),
+          roundTo2(b.netAmount),
+          b.paymentMethod,
+          b.reference ?? null,
+          paidAt,
+          scope.activeAssignmentId,
+          b.notes ?? null,
+        ],
+      );
+      assertInsert(insertId, "property_owner_payouts");
+
+      // Post the GL closing leg. If it fails we soft-delete the payout
+      // row immediately so the operator doesn't see a payout that has
+      // no journal entry behind it.
+      let journalEntryId: number | null = null;
+      try {
+        const glResult = await propertiesEngine.postOwnerPayoutGL(
+          { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+          { payoutId: insertId, ownerId: id, period: b.period, amount: roundTo2(b.netAmount) },
+        );
+        journalEntryId = glResult.journalId;
+        await rawExecute(
+          `UPDATE property_owner_payouts SET "journalEntryId" = $1, "updatedAt" = NOW() WHERE id = $2`,
+          [journalEntryId, insertId],
+        );
+      } catch (glErr) {
+        logger.error(glErr, "Owner payout GL post failed — rolling back payout row");
+        await rawExecute(
+          `UPDATE property_owner_payouts SET "deletedAt" = NOW() WHERE id = $1`,
+          [insertId],
+        ).catch((e) => logger.error(e, "Failed to soft-delete payout after GL error"));
+        throw new IntegrationError("تعذّر إنشاء القيد المحاسبي للسداد — لم يُسجَّل", {
+          field: "journalEntry",
+          fix: "تحقق من ربط الحسابات (owner_payable / cash) ثم أعد المحاولة",
+        });
+      }
+
+      createAuditLog({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "create",
+        entity: "property_owner_payouts",
+        entityId: insertId,
+        after: {
+          ownerId: id,
+          period: b.period,
+          netAmount: b.netAmount,
+          commissionAmount: b.commissionAmount,
+          paymentMethod: b.paymentMethod,
+          reference: b.reference,
+          journalEntryId,
+        },
+      }).catch((e) => logger.error(e, "properties background task failed"));
+
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "property.owner.payout.recorded",
+        entity: "property_owner_payouts",
+        entityId: insertId,
+        details: `سداد ${b.netAmount.toFixed(2)} ﷼ للمالك ${owner.name} عن ${b.period}`,
+      }).catch((e) => logger.error(e, "properties background task failed"));
+
+      res.status(201).json({
+        id: insertId,
+        period: b.period,
+        netAmount: roundTo2(b.netAmount),
+        journalEntryId,
+        paidAt,
+      });
+    } catch (err) {
+      handleRouteError(err, res, "Create owner payout error:");
+    }
+  },
+);
+
 router.get("/contracts/:id/schedule", authorize({ feature: "properties.contracts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   DollarSign, Search, Users, CheckCircle2, AlertTriangle,
   ChevronDown, ChevronRight, Download, ExternalLink, Plus,
@@ -202,6 +203,28 @@ export default function CustomerAdvancesWorkbenchPage() {
               <Download className="w-4 h-4 ml-1" />
               CSV
             </Button>
+            <PrintButton
+              entityType="report_customer_advances"
+              entityId="all"
+              payload={{
+                entity: {
+                  title: "ورشة دفعات العملاء المقدّمة",
+                  count: data?.data?.length ?? 0,
+                  totalAdvances: (data?.data ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0),
+                  totalRemaining: (data?.data ?? []).reduce((s, r) => s + Number(r.remaining ?? 0), 0),
+                },
+                items: (data?.data ?? []).map((r) => ({
+                  "المرجع": r.ref,
+                  "العميل": r.clientName ?? `#${r.clientId ?? ""}`,
+                  "المبلغ": Number(r.amount ?? 0),
+                  "المطبَّق": Number(r.appliedAmount ?? 0),
+                  "المتبقي": Number(r.remaining ?? 0),
+                  "طريقة الاستلام": r.method ?? "",
+                  "تاريخ الاستلام": r.receivedDate,
+                  "الحالة": r.status,
+                })),
+              }}
+            />
           </div>
         </CardContent>
       </Card>
