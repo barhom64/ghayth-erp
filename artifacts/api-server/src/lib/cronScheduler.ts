@@ -1834,63 +1834,36 @@ async function retryStuckOfficialLetters(): Promise<string> {
   return `Stuck official letters retried: ${retried}`;
 }
 
-/**
- * Phase 4 contract slice 4: mirror legacy queue status updates back to
- * outbound_queue so the unified table reflects the full send lifecycle
- * (queued → sent / failed) without changing the worker's read path.
- *
- * Why this approach: flipping the worker's SELECT to outbound_queue in
- * one PR risks a missed-send window if the new index isn't perfect.
- * Mirroring updates lets outbound_queue catch up to legacy without
- * touching the dispatch loop. A future PR can swap the SELECT
- * direction confidently once outbound_queue has full lifecycle data.
- *
- * Best-effort: failures are logged but never abort the worker — the
- * legacy table remains source-of-truth during the soak.
- */
-async function mirrorOutboundQueueStatus(
-  legacySource: "email_queue" | "sms_queue" | "whatsapp_queue",
-  legacyId: number,
-  fields: { status?: string; errorMessage?: string | null; externalId?: string | null; sentAt?: boolean },
-): Promise<void> {
-  const setClauses: string[] = [];
-  const params: unknown[] = [];
-  if (fields.status !== undefined) {
-    params.push(fields.status);
-    setClauses.push(`status = $${params.length}`);
-  }
-  if (fields.errorMessage !== undefined) {
-    params.push(fields.errorMessage);
-    setClauses.push(`"errorMessage" = $${params.length}`);
-  }
-  if (fields.externalId !== undefined) {
-    params.push(fields.externalId);
-    setClauses.push(`"externalId" = $${params.length}`);
-  }
-  if (fields.sentAt) {
-    setClauses.push(`"sentAt" = NOW()`);
-  }
-  setClauses.push(`"updatedAt" = NOW()`);
-  setClauses.push(`attempts = COALESCE(attempts, 0) + 1`);
-  params.push(legacySource, legacyId);
-  await rawExecute(
-    `UPDATE outbound_queue SET ${setClauses.join(", ")}
-       WHERE "legacySource" = $${params.length - 1} AND "legacyId" = $${params.length}`,
-    params,
-  ).catch((e) => logger.warn(e, `[outbound_queue mirror] ${legacySource}#${legacyId}`));
-}
+// Phase 4 contract slice 6: the standalone mirror helper from slice 4
+// (#1293) is now obsolete — each worker has its own `updateBothXxx`
+// closure that does outbound_queue first + legacy mirror after, using
+// the (legacyId, legacySource) carried on the row it selected. Removed.
+
+
 
 async function processEmailQueue(): Promise<string> {
+  // Phase 4 contract slice 6: read directly from outbound_queue
+  // (channel='email'). All writers landed there via messageSender's
+  // dual-write since slice 3 (#1292), and slice 4 (#1293) mirrored
+  // legacy status updates into outbound_queue so backfilled rows
+  // are in sync. Slice 5 (#1294) migrated every reader off the
+  // legacy queue tables. The legacy email_queue is now status-mirror
+  // only (see updateBothEmail below) for the soak window before the
+  // final DROP.
   const pending = await rawQuery<Record<string, unknown>>(
-    `SELECT eq.*, i.config AS "smtpSettings"
-     FROM email_queue eq
+    `SELECT oq.id, oq."companyId", oq.recipient AS "toEmail",
+            oq."recipientName", oq.subject, oq.body,
+            oq.metadata, oq."legacyId", oq."legacySource",
+            i.config AS "smtpSettings"
+     FROM outbound_queue oq
      LEFT JOIN LATERAL (
        SELECT config FROM integrations
-       WHERE "companyId" = eq."companyId" AND type IN ('smtp', 'email') AND status = 'active'
+       WHERE "companyId" = oq."companyId" AND type IN ('smtp', 'email') AND status = 'active'
        ORDER BY id DESC LIMIT 1
      ) i ON true
-     WHERE eq.status = 'pending'
-     ORDER BY eq."createdAt" ASC
+     WHERE oq.status = 'pending' AND oq.channel = 'email'
+       AND (oq."scheduledAt" IS NULL OR oq."scheduledAt" <= NOW())
+     ORDER BY oq."createdAt" ASC
      LIMIT 50`
   );
 
@@ -1898,19 +1871,45 @@ async function processEmailQueue(): Promise<string> {
 
   let sent = 0, failed = 0;
 
+  // Helper: update outbound_queue + mirror back to the linked legacy
+  // row (email_queue) if there is one. Mirror direction is the
+  // reverse of slice 4's helper, kept inline because we hold the
+  // legacyId on the row we just selected.
+  const updateBothEmail = async (
+    row: Record<string, unknown>,
+    status: "sent" | "failed",
+    errorMessage: string | null,
+  ) => {
+    const id = row.id as number;
+    const legacyId = row.legacyId as number | null;
+    const sentAtClause = status === "sent" ? `, "sentAt" = NOW()` : "";
+    await rawExecute(
+      `UPDATE outbound_queue
+         SET status = $1, "errorMessage" = $2,
+             attempts = COALESCE(attempts, 0) + 1,
+             "updatedAt" = NOW()${sentAtClause}
+       WHERE id = $3`,
+      [status, errorMessage, id],
+    );
+    if (legacyId && row.legacySource === "email_queue") {
+      const legacySentClause = status === "sent" ? `, "sentAt" = NOW()` : "";
+      await rawExecute(
+        `UPDATE email_queue
+           SET status = $1, "errorMessage" = $2,
+               "attemptCount" = COALESCE("attemptCount", 0) + 1,
+               "updatedAt" = NOW()${legacySentClause}
+         WHERE id = $3`,
+        [status, errorMessage, legacyId],
+      ).catch((e) => logger.warn(e, `[cronScheduler] legacy email_queue mirror #${legacyId}`));
+    }
+  };
+
   for (const email of pending) {
     try {
       const smtp = (email.smtpSettings as { host?: string; port?: number; secure?: boolean; user?: string; password?: string; from?: string } | null) ?? null;
 
       if (!smtp || !smtp.host) {
-        await rawExecute(
-          `UPDATE email_queue SET status = 'failed', "errorMessage" = $1, "attemptCount" = COALESCE("attemptCount",0) + 1, "updatedAt" = NOW() WHERE id = $2`,
-          ["No active SMTP integration configured for this company", email.id]
-        );
-        await mirrorOutboundQueueStatus("email_queue", email.id as number, {
-          status: "failed",
-          errorMessage: "No active SMTP integration configured for this company",
-        });
+        await updateBothEmail(email, "failed", "No active SMTP integration configured for this company");
         failed++;
         continue;
       }
@@ -1939,23 +1938,13 @@ async function processEmailQueue(): Promise<string> {
       }
       await transporter.sendMail(mailOptions);
 
-      await rawExecute(
-        `UPDATE email_queue SET status = 'sent', "sentAt" = NOW(), "attemptCount" = COALESCE("attemptCount",0) + 1, "updatedAt" = NOW() WHERE id = $1`,
-        [email.id]
-      );
-      await mirrorOutboundQueueStatus("email_queue", email.id as number, {
-        status: "sent", sentAt: true, errorMessage: null,
-      });
+      await updateBothEmail(email, "sent", null);
       sent++;
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      await rawExecute(
-        `UPDATE email_queue SET status = 'failed', "errorMessage" = $1, "attemptCount" = COALESCE("attemptCount",0) + 1, "updatedAt" = NOW() WHERE id = $2`,
-        [errMsg, email.id]
-      ).catch((e) => logger.error(e, "[cronScheduler] background task failed"));
-      await mirrorOutboundQueueStatus("email_queue", email.id as number, {
-        status: "failed", errorMessage: errMsg,
-      });
+      await updateBothEmail(email, "failed", errMsg).catch((e) =>
+        logger.error(e, "[cronScheduler] background task failed"),
+      );
       failed++;
     }
   }
@@ -1980,34 +1969,85 @@ async function hourlyWorkflowSlaCheck(): Promise<string> {
 }
 
 async function processSmsQueue(): Promise<string> {
+  // Phase 4 contract slice 6: read from outbound_queue. See
+  // processEmailQueue for the rationale.
   const pending = await rawQuery<Record<string, unknown>>(
-    `SELECT sq.*, ss_sid.value AS "accountSid", ss_token.value AS "authToken", ss_from.value AS "fromNumber",
+    `SELECT oq.id, oq."companyId", oq.recipient AS "recipientPhone",
+            oq.body AS message, oq.attempts AS "attemptCount",
+            oq."legacyId", oq."legacySource",
+            ss_sid.value AS "accountSid", ss_token.value AS "authToken",
+            ss_from.value AS "fromNumber",
             COALESCE(ss_enabled.value, 'true') AS "channelEnabled"
-     FROM sms_queue sq
-     LEFT JOIN system_settings ss_sid ON ss_sid.key='sms_account_sid' AND ss_sid."companyId"=sq."companyId"
-     LEFT JOIN system_settings ss_token ON ss_token.key='sms_auth_token' AND ss_token."companyId"=sq."companyId"
-     LEFT JOIN system_settings ss_from ON ss_from.key='sms_from_number' AND ss_from."companyId"=sq."companyId"
-     LEFT JOIN system_settings ss_enabled ON ss_enabled.key='sms_enabled' AND ss_enabled."companyId"=sq."companyId"
-     WHERE sq.status='pending' AND COALESCE(sq."attemptCount",0) < 3
-     ORDER BY sq."createdAt" ASC LIMIT 50`
+     FROM outbound_queue oq
+     LEFT JOIN system_settings ss_sid ON ss_sid.key='sms_account_sid' AND ss_sid."companyId"=oq."companyId"
+     LEFT JOIN system_settings ss_token ON ss_token.key='sms_auth_token' AND ss_token."companyId"=oq."companyId"
+     LEFT JOIN system_settings ss_from ON ss_from.key='sms_from_number' AND ss_from."companyId"=oq."companyId"
+     LEFT JOIN system_settings ss_enabled ON ss_enabled.key='sms_enabled' AND ss_enabled."companyId"=oq."companyId"
+     WHERE oq.status='pending' AND oq.channel='sms'
+       AND COALESCE(oq.attempts,0) < 3
+       AND (oq."scheduledAt" IS NULL OR oq."scheduledAt" <= NOW())
+     ORDER BY oq."createdAt" ASC LIMIT 50`
   );
 
   let sent = 0, failed = 0, skipped = 0;
 
+  const updateBothSms = async (
+    row: Record<string, unknown>,
+    fields: { status?: string; errorMessage?: string | null; externalId?: string | null; sentAt?: boolean },
+    bumpAttempts: boolean = true,
+  ) => {
+    const id = row.id as number;
+    const legacyId = row.legacyId as number | null;
+    const setClauses: string[] = [];
+    const params: unknown[] = [];
+    if (fields.status !== undefined) {
+      params.push(fields.status); setClauses.push(`status = $${params.length}`);
+    }
+    if (fields.errorMessage !== undefined) {
+      params.push(fields.errorMessage); setClauses.push(`"errorMessage" = $${params.length}`);
+    }
+    if (fields.externalId !== undefined) {
+      params.push(fields.externalId); setClauses.push(`"externalId" = $${params.length}`);
+    }
+    if (fields.sentAt) setClauses.push(`"sentAt" = NOW()`);
+    if (bumpAttempts) setClauses.push(`attempts = COALESCE(attempts, 0) + 1`);
+    setClauses.push(`"updatedAt" = NOW()`);
+    params.push(id);
+    await rawExecute(
+      `UPDATE outbound_queue SET ${setClauses.join(", ")} WHERE id = $${params.length}`,
+      params,
+    );
+    if (legacyId && row.legacySource === "sms_queue") {
+      const legacyClauses: string[] = [];
+      const legacyParams: unknown[] = [];
+      if (fields.status !== undefined) {
+        legacyParams.push(fields.status); legacyClauses.push(`status = $${legacyParams.length}`);
+      }
+      if (fields.errorMessage !== undefined) {
+        legacyParams.push(fields.errorMessage); legacyClauses.push(`"errorMessage" = $${legacyParams.length}`);
+      }
+      if (fields.externalId !== undefined) {
+        legacyParams.push(fields.externalId); legacyClauses.push(`"externalId" = $${legacyParams.length}`);
+      }
+      if (fields.sentAt) legacyClauses.push(`"sentAt" = NOW()`);
+      if (bumpAttempts) legacyClauses.push(`"attemptCount" = COALESCE("attemptCount", 0) + 1`);
+      legacyClauses.push(`"updatedAt" = NOW()`);
+      legacyParams.push(legacyId);
+      await rawExecute(
+        `UPDATE sms_queue SET ${legacyClauses.join(", ")} WHERE id = $${legacyParams.length}`,
+        legacyParams,
+      ).catch((e) => logger.warn(e, `[cronScheduler] legacy sms_queue mirror #${legacyId}`));
+    }
+  };
+
   for (const sms of pending) {
     if (sms.channelEnabled === "false") {
-      await rawExecute(
-        `UPDATE sms_queue SET "errorMessage"='قناة SMS معطلة — سيتم الإرسال عند التفعيل', "updatedAt"=NOW() WHERE id=$1`,
-        [sms.id]
-      );
+      await updateBothSms(sms, { errorMessage: "قناة SMS معطلة — سيتم الإرسال عند التفعيل" }, false);
       skipped++;
       continue;
     }
     if (!sms.accountSid || !sms.authToken || !sms.fromNumber) {
-      await rawExecute(
-        `UPDATE sms_queue SET "errorMessage"='بيانات Twilio غير مضبوطة — يرجى إعداد المفاتيح في الإعدادات', "updatedAt"=NOW() WHERE id=$1`,
-        [sms.id]
-      );
+      await updateBothSms(sms, { errorMessage: "بيانات Twilio غير مضبوطة — يرجى إعداد المفاتيح في الإعدادات" }, false);
       skipped++;
       continue;
     }
@@ -2032,38 +2072,22 @@ async function processSmsQueue(): Promise<string> {
 
       if (resp.ok) {
         const data = await resp.json() as { sid?: string };
-        await rawExecute(
-          `UPDATE sms_queue SET status='sent', "externalId"=$1, "sentAt"=NOW(), "attemptCount"=COALESCE("attemptCount",0)+1, "updatedAt"=NOW() WHERE id=$2`,
-          [data.sid ?? null, sms.id]
-        );
-        await mirrorOutboundQueueStatus("sms_queue", sms.id as number, {
-          status: "sent", sentAt: true, externalId: data.sid ?? null, errorMessage: null,
+        await updateBothSms(sms, {
+          status: "sent", externalId: data.sid ?? null, sentAt: true, errorMessage: null,
         });
         sent++;
       } else {
         const errText = await resp.text();
         const newCount = (Number(sms.attemptCount) || 0) + 1;
         const newStatus = newCount >= 3 ? "failed" : "pending";
-        await rawExecute(
-          `UPDATE sms_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
-          [newStatus, errText.substring(0, 500), newCount, sms.id]
-        );
-        await mirrorOutboundQueueStatus("sms_queue", sms.id as number, {
-          status: newStatus, errorMessage: errText.substring(0, 500),
-        });
+        await updateBothSms(sms, { status: newStatus, errorMessage: errText.substring(0, 500) });
         failed++;
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       const newCount = (Number(sms.attemptCount) || 0) + 1;
       const newStatus = newCount >= 3 ? "failed" : "pending";
-      await rawExecute(
-        `UPDATE sms_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
-        [newStatus, errMsg, newCount, sms.id]
-      );
-      await mirrorOutboundQueueStatus("sms_queue", sms.id as number, {
-        status: newStatus, errorMessage: errMsg,
-      });
+      await updateBothSms(sms, { status: newStatus, errorMessage: errMsg });
       failed++;
     }
   }
@@ -2072,33 +2096,70 @@ async function processSmsQueue(): Promise<string> {
 }
 
 async function processWhatsAppQueue(): Promise<string> {
+  // Phase 4 contract slice 6: read from outbound_queue.
   const pending = await rawQuery<Record<string, unknown>>(
-    `SELECT wq.*, ss_token.value AS "accessToken", ss_phone.value AS "phoneNumberId",
+    `SELECT oq.id, oq."companyId", oq.recipient AS phone,
+            oq.body AS message, oq.attempts AS "attemptCount",
+            oq."legacyId", oq."legacySource",
+            ss_token.value AS "accessToken", ss_phone.value AS "phoneNumberId",
             COALESCE(ss_enabled.value, 'true') AS "channelEnabled"
-     FROM whatsapp_queue wq
-     LEFT JOIN system_settings ss_token ON ss_token.key='whatsapp_access_token' AND ss_token."companyId"=wq."companyId"
-     LEFT JOIN system_settings ss_phone ON ss_phone.key='whatsapp_phone_id' AND ss_phone."companyId"=wq."companyId"
-     LEFT JOIN system_settings ss_enabled ON ss_enabled.key='whatsapp_enabled' AND ss_enabled."companyId"=wq."companyId"
-     WHERE wq.status='pending' AND COALESCE(wq."attemptCount",0) < 3
-     ORDER BY wq."createdAt" ASC LIMIT 50`
+     FROM outbound_queue oq
+     LEFT JOIN system_settings ss_token ON ss_token.key='whatsapp_access_token' AND ss_token."companyId"=oq."companyId"
+     LEFT JOIN system_settings ss_phone ON ss_phone.key='whatsapp_phone_id' AND ss_phone."companyId"=oq."companyId"
+     LEFT JOIN system_settings ss_enabled ON ss_enabled.key='whatsapp_enabled' AND ss_enabled."companyId"=oq."companyId"
+     WHERE oq.status='pending' AND oq.channel='whatsapp'
+       AND COALESCE(oq.attempts,0) < 3
+       AND (oq."scheduledAt" IS NULL OR oq."scheduledAt" <= NOW())
+     ORDER BY oq."createdAt" ASC LIMIT 50`
   );
 
   let sent = 0, failed = 0, skipped = 0;
 
+  const updateBothWa = async (
+    row: Record<string, unknown>,
+    fields: { status?: string; errorMessage?: string | null; externalId?: string | null; sentAt?: boolean },
+    bumpAttempts: boolean = true,
+  ) => {
+    const id = row.id as number;
+    const legacyId = row.legacyId as number | null;
+    const set: string[] = [];
+    const params: unknown[] = [];
+    if (fields.status !== undefined) { params.push(fields.status); set.push(`status = $${params.length}`); }
+    if (fields.errorMessage !== undefined) { params.push(fields.errorMessage); set.push(`"errorMessage" = $${params.length}`); }
+    if (fields.externalId !== undefined) { params.push(fields.externalId); set.push(`"externalId" = $${params.length}`); }
+    if (fields.sentAt) set.push(`"sentAt" = NOW()`);
+    if (bumpAttempts) set.push(`attempts = COALESCE(attempts, 0) + 1`);
+    set.push(`"updatedAt" = NOW()`);
+    params.push(id);
+    await rawExecute(
+      `UPDATE outbound_queue SET ${set.join(", ")} WHERE id = $${params.length}`,
+      params,
+    );
+    if (legacyId && row.legacySource === "whatsapp_queue") {
+      const ls: string[] = [];
+      const lp: unknown[] = [];
+      if (fields.status !== undefined) { lp.push(fields.status); ls.push(`status = $${lp.length}`); }
+      if (fields.errorMessage !== undefined) { lp.push(fields.errorMessage); ls.push(`"errorMessage" = $${lp.length}`); }
+      if (fields.externalId !== undefined) { lp.push(fields.externalId); ls.push(`"externalId" = $${lp.length}`); }
+      if (fields.sentAt) ls.push(`"sentAt" = NOW()`);
+      if (bumpAttempts) ls.push(`"attemptCount" = COALESCE("attemptCount", 0) + 1`);
+      ls.push(`"updatedAt" = NOW()`);
+      lp.push(legacyId);
+      await rawExecute(
+        `UPDATE whatsapp_queue SET ${ls.join(", ")} WHERE id = $${lp.length}`,
+        lp,
+      ).catch((e) => logger.warn(e, `[cronScheduler] legacy whatsapp_queue mirror #${legacyId}`));
+    }
+  };
+
   for (const msg of pending) {
     if (msg.channelEnabled === "false") {
-      await rawExecute(
-        `UPDATE whatsapp_queue SET "errorMessage"='قناة واتساب معطلة — سيتم الإرسال عند التفعيل', "updatedAt"=NOW() WHERE id=$1`,
-        [msg.id]
-      );
+      await updateBothWa(msg, { errorMessage: "قناة واتساب معطلة — سيتم الإرسال عند التفعيل" }, false);
       skipped++;
       continue;
     }
     if (!msg.accessToken || !msg.phoneNumberId) {
-      await rawExecute(
-        `UPDATE whatsapp_queue SET "errorMessage"='بيانات Meta API غير مضبوطة — يرجى إعداد المفاتيح في الإعدادات', "updatedAt"=NOW() WHERE id=$1`,
-        [msg.id]
-      );
+      await updateBothWa(msg, { errorMessage: "بيانات Meta API غير مضبوطة — يرجى إعداد المفاتيح في الإعدادات" }, false);
       skipped++;
       continue;
     }
@@ -2124,38 +2185,22 @@ async function processWhatsAppQueue(): Promise<string> {
       if (resp.ok) {
         const data = await resp.json() as { messages?: { id?: string }[] };
         const msgId = data?.messages?.[0]?.id ?? null;
-        await rawExecute(
-          `UPDATE whatsapp_queue SET status='sent', "externalId"=$1, "sentAt"=NOW(), "attemptCount"=COALESCE("attemptCount",0)+1, "updatedAt"=NOW() WHERE id=$2`,
-          [msgId, msg.id]
-        );
-        await mirrorOutboundQueueStatus("whatsapp_queue", msg.id as number, {
-          status: "sent", sentAt: true, externalId: msgId, errorMessage: null,
+        await updateBothWa(msg, {
+          status: "sent", externalId: msgId, sentAt: true, errorMessage: null,
         });
         sent++;
       } else {
         const errText = await resp.text();
         const newCount = (Number(msg.attemptCount) || 0) + 1;
         const newStatus = newCount >= 3 ? "failed" : "pending";
-        await rawExecute(
-          `UPDATE whatsapp_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
-          [newStatus, errText.substring(0, 500), newCount, msg.id]
-        );
-        await mirrorOutboundQueueStatus("whatsapp_queue", msg.id as number, {
-          status: newStatus, errorMessage: errText.substring(0, 500),
-        });
+        await updateBothWa(msg, { status: newStatus, errorMessage: errText.substring(0, 500) });
         failed++;
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       const newCount = (Number(msg.attemptCount) || 0) + 1;
       const newStatus = newCount >= 3 ? "failed" : "pending";
-      await rawExecute(
-        `UPDATE whatsapp_queue SET status=$1, "errorMessage"=$2, "attemptCount"=$3, "updatedAt"=NOW() WHERE id=$4`,
-        [newStatus, errMsg, newCount, msg.id]
-      );
-      await mirrorOutboundQueueStatus("whatsapp_queue", msg.id as number, {
-        status: newStatus, errorMessage: errMsg,
-      });
+      await updateBothWa(msg, { status: newStatus, errorMessage: errMsg });
       failed++;
     }
   }

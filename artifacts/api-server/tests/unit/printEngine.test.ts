@@ -747,3 +747,46 @@ describe("Print platform — granular permissions (issue #1286)", () => {
     expect(routes).toContain('router.get("/jobs.csv", requireAnyPermission("print_jobs:read", "print:diagnostics:read")');
   });
 });
+
+describe("Print Engine v2 — statement loaders compute opening balance", () => {
+  // Both statement loaders must compute opening balance from movements
+  // BEFORE the start date — without this a partial-period print silently
+  // understates the outstanding balance (started at zero, ignored all
+  // prior activity). The customer loader had this from day one; the
+  // vendor loader was missing it until this fix. Locking both down with
+  // a single test stops a future refactor from regressing either side.
+  const src = readFileSync(join(PRINT_LIB, "reportLoaders.ts"), "utf8");
+
+  it("loadCustomerStatement computes openingBalance and returns it in the entity dict", () => {
+    // Slice the function body so the test only matches inside the right
+    // loader — otherwise vendor's openingBalance assignment would satisfy
+    // the customer assertion too.
+    const fnIdx = src.indexOf("export async function loadCustomerStatement");
+    const endIdx = src.indexOf("export async function loadVendorStatement", fnIdx);
+    expect(fnIdx).toBeGreaterThan(0);
+    expect(endIdx).toBeGreaterThan(fnIdx);
+    const body = src.slice(fnIdx, endIdx);
+    expect(body).toMatch(/const\s+openingBalance\s*=/);
+    expect(body).toMatch(/openingBalance:\s*Math\.round/);
+    expect(body).toMatch(/let\s+running\s*=\s*openingBalance/);
+  });
+
+  it("loadVendorStatement computes openingBalance and returns it in the entity dict", () => {
+    const fnIdx = src.indexOf("export async function loadVendorStatement");
+    expect(fnIdx).toBeGreaterThan(0);
+    const body = src.slice(fnIdx);
+    expect(body).toMatch(/const\s+openingBalance\s*=/);
+    expect(body).toMatch(/openingBalance:\s*Math\.round/);
+    expect(body).toMatch(/let\s+running\s*=\s*openingBalance/);
+  });
+
+  it("vendor opening-balance SQL gracefully handles missing tables (older tenants)", () => {
+    // purchase_orders may not exist on pre-procurement tenants. The
+    // catch-42P01 pattern is what stops the entire statement from
+    // 500-ing in that case — without it, customers without procurement
+    // can't print a vendor statement at all.
+    const fnIdx = src.indexOf("export async function loadVendorStatement");
+    const body = src.slice(fnIdx);
+    expect(body).toMatch(/openingBalance[\s\S]*?42P01/);
+  });
+});

@@ -110,8 +110,8 @@ easy to bisect.
 | 2 (#1288) | `inbox.ts` `/threads/:id/reply` lookup; `communications.ts` `/log` + `/stats`; `workspace.ts` `recentMessages`, `messagesLast24h`, `teamMessagesToday`, `messagesWeek` | `v_message_log_all` |
 | 3 (#1292) | `communications.ts` `/send` for email/sms/whatsapp → routes through `messageSender` (DLP + dual-write to message_log + outbound_queue). `call` + `push` keep legacy path (audit-only) | `v_message_log_all` for read-back |
 | 4 (#1293) | `cronScheduler.ts` workers mirror status updates to `outbound_queue` after legacy `email_queue` / `sms_queue` / `whatsapp_queue` UPDATEs (sent / failed / externalId / errorMessage) — `outbound_queue` now has full lifecycle visibility | legacy queues remain primary, `outbound_queue` mirrored |
-| 5 (_this_) | `communications.ts` `/whatsapp` + `/sms` queue listings + `/stats` pending counts + `/metrics` channel COUNT(*) GROUP BY status + recent queue tabs → all read from `outbound_queue` channel-filtered. Frontend `<DataTable>` keys preserved via SELECT aliases (`recipient AS phone` etc.) | `outbound_queue` |
-| follow-up | flip cron worker SELECT direction to `outbound_queue` (now safe — no remaining readers depend on legacy `status`) | `outbound_queue` |
+| 5 (#1294) | `communications.ts` `/whatsapp` + `/sms` queue listings + `/stats` pending counts + `/metrics` channel COUNT(*) GROUP BY status + recent queue tabs → all read from `outbound_queue` channel-filtered. Frontend `<DataTable>` keys preserved via SELECT aliases (`recipient AS phone` etc.) | `outbound_queue` |
+| 6 (_this_) | `cronScheduler.ts` `processEmailQueue` / `processSmsQueue` / `processWhatsAppQueue` flip SELECT to `outbound_queue` (channel-filtered) + UPDATE outbound_queue directly. Reverse-mirror to legacy `email_queue`/`sms_queue`/`whatsapp_queue` via the `legacyId` carried on each row, so any reader still pinned to legacy stays in sync through the soak. The obsolete `mirrorOutboundQueueStatus` helper from slice 4 is removed | `outbound_queue` (primary) |
 | final | DROP `communications_log`, `notification_log`, `email_queue`, `sms_queue`, `whatsapp_queue` | — |
 
 The view's `fromAddress` / `toAddress` columns alias back to the
@@ -122,7 +122,40 @@ but `/threads/:id/reply` still looked the id up in `communications_log`
 — different sequence, different rows. Both endpoints now query the
 same view, so the id passed from the UI resolves correctly.
 
+## Phase 2.x — Microsoft 365 OAuth flow (SHIPPED)
+
+Replaces the manual access/refresh token paste in the /mailboxes connect
+dialog with a proper "Sign in with Microsoft" button. Backend:
+
+- `GET /api/mailboxes/oauth/microsoft365/authorize` (auth required) —
+  mints an HMAC-signed state token bound to the caller's userId + companyId
+  (10-min TTL) and 302-redirects to Microsoft's authorize endpoint with
+  the right scopes (`offline_access`, `Mail.Read`, `Mail.Send`, `User.Read`).
+- `GET /api/mailboxes/oauth/microsoft365/callback` (anonymous) — verifies
+  the returned state, exchanges the `code` for access + refresh tokens at
+  `https://login.microsoftonline.com/common/oauth2/v2.0/token`, calls
+  `/me` to derive the email, then upserts the `mailbox_accounts` row.
+  Tokens are `encryptSecret()`-wrapped before insert.
+
+Required env: `MICROSOFT365_CLIENT_ID`, `MICROSOFT365_CLIENT_SECRET`,
+`MICROSOFT365_REDIRECT_URI` (or set them via `vendor_secrets.microsoft365`
+in the admin UI).
+
+Frontend: connect dialog shows a "تسجيل دخول بحساب Microsoft 365" button
+that navigates to `/api/mailboxes/oauth/microsoft365/authorize`. Manual
+token paste fields are still available as a fallback for credentials
+the operator already holds.
+
+What this does NOT do: the actual mailbox sync (`syncMicrosoft365Stub`)
+is still stubbed. Replacing the stub with real Graph `/me/messages`
+delta calls is the next slice — but now that the OAuth credentials
+land cleanly, that slice is purely a body change inside `mailboxSync.ts`.
+
 ## Remaining work
 
-- **Phase 4 contract — follow-ups**: cron worker swap to outbound_queue; finally DROP legacy tables after soak.
-- **Phase 2.x live sync**: replace `syncMicrosoft365Stub` / `syncImapStub` with real Microsoft Graph + node-imap clients (needs Azure AD app + credentials); add `mailbox_sync_drain` to cronScheduler; build OAuth callback for hands-off Microsoft 365 connect.
+- **Phase 4 final contract**: DROP `communications_log`, `notification_log`,
+  `email_queue`, `sms_queue`, `whatsapp_queue` after the soak window.
+- **Phase 2.x live sync**: replace `syncMicrosoft365Stub` / `syncImapStub`
+  with real Graph delta + IMAP polling (the OAuth credentials now flow
+  cleanly through the storage layer); add `mailbox_sync_drain` to
+  cronScheduler.

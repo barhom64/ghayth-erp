@@ -29,6 +29,12 @@ import { encryptSecret } from "../lib/secrets.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { syncMailbox, testMailboxConnection } from "../lib/mailboxSync.js";
+import {
+  buildAuthorizeUrl,
+  exchangeCodeForTokens,
+  signOauthState,
+  verifyOauthState,
+} from "../lib/microsoftOauth.js";
 
 const router = Router();
 
@@ -278,6 +284,139 @@ router.post("/:id/test", authorize({ feature: "communications", action: "view" }
     res.json(maskFields(req, { data: result }));
   } catch (err) {
     handleRouteError(err, res, "mailboxes/test");
+  }
+});
+
+// ─────────────────────── Microsoft 365 OAuth flow ────────────────────────
+// Two-step browser flow replacing the manual token paste in the
+// connect dialog. The frontend opens GET /authorize → redirects user
+// to Microsoft → Microsoft redirects back to GET /callback with `code`.
+
+// 302 redirect to Microsoft's authorize endpoint. The browser navigates
+// here from the connect dialog; we mint a signed state token and
+// redirect. Returning JSON would have forced the frontend to do a
+// two-step (fetch then navigate), which the dialog UX doesn't need.
+router.get("/oauth/microsoft365/authorize", authorize({ feature: "communications", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const state = signOauthState(scope.userId, scope.companyId);
+    const url = buildAuthorizeUrl(state);
+    if (!url) {
+      throw new ValidationError(
+        "Microsoft 365 OAuth غير مفعّل",
+        { fix: "ضع MICROSOFT365_CLIENT_ID + MICROSOFT365_CLIENT_SECRET + MICROSOFT365_REDIRECT_URI أو حدّث vendor_secrets.microsoft365" },
+      );
+    }
+    res.redirect(url);
+  } catch (err) {
+    handleRouteError(err, res, "mailboxes/oauth/authorize");
+  }
+});
+
+// Microsoft redirects back here. We can't require an authMiddleware
+// session because the user could have lost their session during the
+// browser bounce — instead we rely on the signed `state` token that
+// only the originally-authenticated user could have minted (10-min
+// TTL, HMAC-signed with JWT_SECRET).
+//
+// NOTE: this endpoint is unauthenticated. It MUST NOT trust any field
+// other than state for the identity binding. The `code` is exchanged
+// with Microsoft, the resulting tokens get stored against the userId
+// the state was minted for, period.
+router.get("/oauth/microsoft365/callback", async (req, res) => {
+  try {
+    const { code, state, error: oauthErr } = req.query as Record<string, string | undefined>;
+    if (oauthErr) {
+      logger.warn({ oauthErr }, "[m365 oauth] user denied authorization");
+      res.redirect("/mailboxes?m365_error=denied");
+      return;
+    }
+    if (!code || !state) {
+      res.redirect("/mailboxes?m365_error=missing_code_or_state");
+      return;
+    }
+    const verified = verifyOauthState(state);
+    if (!verified) {
+      logger.warn("[m365 oauth] state verification failed — possible CSRF or expired");
+      res.redirect("/mailboxes?m365_error=invalid_state");
+      return;
+    }
+    const tokens = await exchangeCodeForTokens(code).catch((err) => {
+      logger.error(err, "[m365 oauth] code exchange failed");
+      return null;
+    });
+    if (!tokens) {
+      res.redirect("/mailboxes?m365_error=token_exchange_failed");
+      return;
+    }
+    if (!tokens.email) {
+      res.redirect("/mailboxes?m365_error=no_email_in_token");
+      return;
+    }
+
+    // Upsert: if the user already connected this mailbox, refresh the
+    // tokens in place. Otherwise insert a new row.
+    const [existing] = await rawQuery<{ id: number }>(
+      `SELECT id FROM mailbox_accounts
+        WHERE "companyId" = $1 AND "userId" = $2 AND "emailAddress" = $3 AND "deletedAt" IS NULL`,
+      [verified.companyId, verified.userId, tokens.email],
+    );
+
+    if (existing) {
+      await rawExecute(
+        `UPDATE mailbox_accounts
+            SET "accessToken" = $1, "refreshToken" = $2, "tokenExpiresAt" = $3,
+                "lastSyncStatus" = NULL, "lastSyncError" = NULL,
+                "updatedAt" = NOW()
+          WHERE id = $4`,
+        [
+          encryptSecret(tokens.accessToken),
+          encryptSecret(tokens.refreshToken),
+          tokens.expiresAt.toISOString(),
+          existing.id,
+        ],
+      );
+      res.redirect(`/mailboxes?m365_connected=${encodeURIComponent(tokens.email)}&reused=1`);
+      return;
+    }
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO mailbox_accounts
+         ("companyId", "userId", provider, "emailAddress",
+          "accessToken", "refreshToken", "tokenExpiresAt",
+          "syncEnabled", "createdAt", "updatedAt")
+       VALUES ($1, $2, 'microsoft365', $3, $4, $5, $6, true, NOW(), NOW())`,
+      [
+        verified.companyId, verified.userId, tokens.email,
+        encryptSecret(tokens.accessToken),
+        encryptSecret(tokens.refreshToken),
+        tokens.expiresAt.toISOString(),
+      ],
+    );
+    assertInsert(insertId, "mailbox_accounts");
+
+    void emitEvent({
+      companyId: verified.companyId,
+      userId: verified.userId,
+      action: "mailbox.connected",
+      entity: "mailbox_accounts",
+      entityId: insertId,
+      details: JSON.stringify({ provider: "microsoft365", emailAddress: tokens.email, via: "oauth" }),
+    }).catch((e) => logger.warn(e, "[event] mailbox.connected oauth"));
+
+    void createAuditLog({
+      companyId: verified.companyId,
+      userId: verified.userId,
+      action: "create",
+      entity: "mailbox_accounts",
+      entityId: insertId,
+      after: { provider: "microsoft365", emailAddress: tokens.email, via: "oauth" },
+    }).catch((e) => logger.warn(e, "[audit] mailbox.connected oauth"));
+
+    res.redirect(`/mailboxes?m365_connected=${encodeURIComponent(tokens.email)}`);
+  } catch (err) {
+    logger.error(err, "[m365 oauth] callback failed");
+    res.redirect("/mailboxes?m365_error=internal");
   }
 });
 
