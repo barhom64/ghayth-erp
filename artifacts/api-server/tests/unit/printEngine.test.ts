@@ -897,6 +897,23 @@ describe("Print platform — print-log self-print (#1286 closeout)", () => {
   });
 });
 
+describe("Print platform — umrah daily runsheet (#1286 final closeout)", () => {
+  // The umrah daily runsheet had its own /api/umrah/reports/daily-runsheet/pdf
+  // endpoint — a parallel PDF generator that bypassed the official platform
+  // entirely. The page now ALSO offers a <PrintButton entityType="umrah_runsheet">
+  // path that goes through the platform (bespoke preset already registered
+  // in BESPOKE_PRESETS). The legacy "تصدير PDF" button stays for backward
+  // compat with any external integration that depends on it.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  it("pages/umrah/daily-runsheet.tsx mounts <PrintButton entityType=\"umrah_runsheet\" payload={...}>", () => {
+    const src = readFileSync(join(SPA, "pages/umrah/daily-runsheet.tsx"), "utf8");
+    expect(src).toContain('from "@/components/shared/print-button"');
+    expect(src).toContain("<PrintButton");
+    expect(src).toContain('entityType="umrah_runsheet"');
+    expect(src).toMatch(/payload=\{/);
+  });
+});
+
 describe("Print platform — finance reports wave 6 migrated (#1286 last sweep)", () => {
   // 12 more pages discovered in the closeout audit: pages with Blob downloads
   // but no PrintButton, hidden among the dashboards + workbenches that
