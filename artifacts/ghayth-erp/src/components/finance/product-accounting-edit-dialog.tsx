@@ -222,7 +222,7 @@ export function ProductAccountingEditDialog({ open, onOpenChange, product, onSav
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
-          <Button onClick={handleSave} disabled={mut.isPending}>
+          <Button onClick={handleSave} disabled={mut.isPending} rateLimitAware>
             {mut.isPending ? "جاري الحفظ..." : "حفظ التوجيه المحاسبي"}
           </Button>
         </DialogFooter>
