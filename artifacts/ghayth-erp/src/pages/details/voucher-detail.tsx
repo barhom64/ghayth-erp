@@ -9,6 +9,11 @@ import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
@@ -66,6 +71,22 @@ export default function VoucherDetail() {
   );
 
   const voucher = data;
+
+  // PATCH /finance/vouchers/:id — accepts `description` only; backend
+  // refuses edits on terminal states (approved/paid/posted/cancelled/
+  // rejected/reversed). DELETE soft-deletes drafts.
+  const editDelete = useDetailEditDelete({
+    entityLabel: "السند",
+    patchPath: `/finance/vouchers/${id}`,
+    deletePath: `/finance/vouchers/${id}`,
+    listPath: "/finance/vouchers",
+    initialValues: voucher,
+    fields: [
+      { key: "description", label: "الوصف" },
+    ],
+    invalidateKeys: [["voucher", String(id)], ["vouchers"]],
+    onSaved: () => refetch(),
+  });
 
   const amount = useMemo(() => {
     return Number(voucher?.amount ?? 0);
@@ -129,6 +150,8 @@ export default function VoucherDetail() {
   };
 
   const overview = (
+    <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
     <div className="grid gap-4 md:grid-cols-3">
       {/* Primary info — big amount + core metadata */}
       <Card className="md:col-span-2">
@@ -269,6 +292,7 @@ export default function VoucherDetail() {
       </div>
 
     </div>
+    </div>
   );
 
   return (
@@ -317,6 +341,7 @@ export default function VoucherDetail() {
               <Edit className="h-4 w-4 ms-1" />
               تعديل
             </GuardedButton>
+            <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
           </>
         }
       />
