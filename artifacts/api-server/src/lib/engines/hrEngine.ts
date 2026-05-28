@@ -19,6 +19,12 @@ class HREngineImpl implements DomainEngine {
   readonly domainId = "hr";
   readonly label = "الموارد البشرية";
 
+  // @deprecated — legacy aggregate-line payroll poster, retained only
+  // for the contract tests in tests/unit/hrEngineContracts.test.ts.
+  // The production payroll flow uses postPayrollRunGL below (per-employee
+  // breakdown carrying employeeId + departmentId + branchId on every
+  // line so payroll cost rolls up by branch and dept in the dimensional
+  // GL). No active route calls postPayrollGL; do not add new callers.
   async postPayrollGL(
     ctx: HRGLContext,
     payroll: {
