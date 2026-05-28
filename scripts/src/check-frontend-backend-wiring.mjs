@@ -433,6 +433,19 @@ function extractFrontendCalls() {
       }
     }
 
+    // <ImpactPreviewButton endpoint="/x/impact-preview" payload={...} />
+    // — shared component that POSTs to the given endpoint with the
+    // assembled payload. Same JSX-prop scan as ApprovalActions.
+    const impactRe = /\bImpactPreviewButton[\s\S]{0,40}?\bendpoint\s*=\s*/g;
+    for (const m of src.matchAll(impactRe)) {
+      let i = m.index + m[0].length;
+      while (i < src.length && /\s/.test(src[i])) i++;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "POST", source: "prop" });
+    }
+
     // useDetailEditDelete({ patchPath, deletePath }) — the shared hook in
     // components/shared/detail-edit-delete-actions.tsx that backs the
     // canonical inline-edit + soft-delete pattern on detail pages

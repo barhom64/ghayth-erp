@@ -20,6 +20,7 @@ import {
   Send,
   FileText,
   FilePlus,
+  CheckCircle,
 } from "lucide-react";
 import {
   DataTable,
@@ -162,6 +163,16 @@ export default function InvoiceDetailPage() {
     },
   );
 
+  // POST /finance/invoices/:id/post — moves approved → posted, the
+  // final state that locks the GL entry. Permission gate matches the
+  // backend (finance.invoices/approve).
+  const postMut = useApiMutation<unknown, Record<string, never>>(
+    `/finance/invoices/${id}/post`,
+    "POST",
+    [["invoice-detail", id || ""], ["invoices"]],
+    { successMessage: "تم ترحيل الفاتورة" },
+  );
+
   // Loading / error states are now handled by DetailPageLayout.
 
   const lines = invoice?.lines || [];
@@ -226,6 +237,20 @@ export default function InvoiceDetailPage() {
         <GuardedButton perm="finance:create" variant="outline" size="sm" onClick={() => setShowDebitMemo(true)}>
           <FilePlus className="h-4 w-4 me-1" />
           إصدار إشعار مدين
+        </GuardedButton>
+      )}
+      {invoice?.status === "approved" && (
+        <GuardedButton
+          perm="finance:approve"
+          variant="outline"
+          size="sm"
+          onClick={() => postMut.mutate({})}
+          disabled={postMut.isPending}
+          rateLimitAware
+          className="gap-1"
+        >
+          <CheckCircle className="h-4 w-4" />
+          ترحيل
         </GuardedButton>
       )}
       {invoice && (
