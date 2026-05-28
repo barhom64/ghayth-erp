@@ -470,6 +470,22 @@ function extractFrontendCalls() {
       }
     }
 
+    // `window.open("/api/x")` and `<a href="/api/x">` — used for direct
+    // file downloads where the browser handles the response (PDF blob,
+    // Excel export). Always GET.
+    const winOpenRe = /\bwindow\.open\s*\(\s*[`"']/g;
+    for (const m of src.matchAll(winOpenRe)) {
+      let i = m.index + m[0].length - 1;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      let url = lit.value;
+      url = url.replace(/^\$\{BASE\}\s*\/api/, "")
+               .replace(/^https?:\/\/[^/]+\/api/, "")
+               .replace(/^\/api(?=\/)/, "");
+      if (!url.startsWith("/")) continue;
+      calls.push({ file: rel, url, line: lineOf(src, m.index), method: "GET", source: "helper" });
+    }
+
     // Raw `fetch(\`${BASE}/api/x\`, { method: ... })` calls — used in a
     // handful of places where the helper layer can't handle the response
     // (blob downloads, custom credentials, etc.). The scanner reads the
