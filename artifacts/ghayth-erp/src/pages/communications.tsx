@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateAr , todayLocal } from "@/lib/formatters";
-import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
 import { ErrorState } from "@/components/shared/loading-error-states";
 import { MessageCircle, Mail, Phone, Send, Search, ArrowRightLeft, ClipboardList, Headphones, FileText, ChevronDown, ChevronUp, Bell, BellOff, BellRing, CheckCircle2, XCircle, Clock, Activity, Pencil, Trash2, Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -170,8 +170,10 @@ function MonitorTab() {
   const [dateTo, setDateTo] = useState(today);
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const queueUrl = `/communications/queue-stats?dateFrom=${dateFrom}&dateTo=${dateTo}`;
-  const { data: queueStats, refetch } = useApiQuery<any>(["comm-queue-stats", dateFrom, dateTo], queueUrl);
+  const { data: queueStats, refetch } = useApiQuery<any>(
+    ["comm-queue-stats", dateFrom, dateTo],
+    `/communications/queue-stats?dateFrom=${dateFrom}&dateTo=${dateTo}`,
+  );
 
   const sms = queueStats?.sms ?? {};
   const wa = queueStats?.whatsapp ?? {};
@@ -501,6 +503,60 @@ function CommLogActions({ logEntry, onSuccess }: { logEntry: any; onSuccess: () 
   );
 }
 
+function ManualSendPanel({ onSent }: { onSent: () => void }) {
+  // POST /communications/send — single ad-hoc send for the operator to
+  // verify deliverability of an SMS / WhatsApp / email path without
+  // attaching a template.
+  const [channel, setChannel] = useState("sms");
+  const [to, setTo] = useState("");
+  const [body, setBody] = useState("");
+  const sendMut = useApiMutation<unknown, { channel: string; to: string; body: string }>(
+    "/communications/send",
+    "POST",
+    [["comm-log"], ["comm-stats"], ["comm-queue-stats"]],
+    { successMessage: "أُرسلت الرسالة" },
+  );
+  return (
+    <Card className="mb-3 border-dashed">
+      <CardContent className="p-3 space-y-2">
+        <p className="text-sm font-semibold">إرسال يدوي</p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <select
+            value={channel}
+            onChange={(e) => setChannel(e.target.value)}
+            className="h-8 text-xs border rounded px-2 bg-white"
+          >
+            <option value="sms">SMS</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="email">Email</option>
+          </select>
+          <input
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            placeholder={channel === "email" ? "to@example.com" : "+966..."}
+            dir="ltr"
+            className="h-8 text-xs border rounded px-2 md:col-span-1"
+          />
+          <input
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="نص الرسالة"
+            className="h-8 text-xs border rounded px-2 md:col-span-2"
+          />
+        </div>
+        <button
+          type="button"
+          className="text-xs h-7 px-3 rounded bg-status-info-foreground text-white"
+          disabled={!to.trim() || !body.trim() || sendMut.isPending}
+          onClick={() => sendMut.mutate({ channel, to: to.trim(), body: body.trim() }, { onSuccess: () => { setTo(""); setBody(""); onSent(); } })}
+        >
+          إرسال
+        </button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function CommLogTab() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -530,6 +586,7 @@ function CommLogTab() {
     <Card>
       <CardHeader><CardTitle>سجل الاتصالات</CardTitle></CardHeader>
       <CardContent className="space-y-4">
+        <ManualSendPanel onSent={refetch} />
         <div className="relative">
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input className="ps-9" placeholder="بحث بالرقم أو الموضوع..." value={search} onChange={(e) => setSearch(e.target.value)} />
