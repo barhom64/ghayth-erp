@@ -1,5 +1,5 @@
 import { useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -17,11 +17,15 @@ import {
 } from "@workspace/entity-kit";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import {
-  GraduationCap, Users, MapPin, User, BookOpen,
+  GraduationCap, Users, MapPin, User, BookOpen, UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PrintButton } from "@/components/shared/print-button";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { EmployeeSelect } from "@/components/shared/entity-selects";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 const TRAINING_LIFECYCLE = [
   { key: "planned",   label: "مخطط" },
@@ -64,12 +68,36 @@ export default function TrainingDetailPage() {
     { enabled: !!id },
   );
 
-  const { data: enrollmentsData } = useApiQuery<any>(
+  const { data: enrollmentsData, refetch: refetchEnrollments } = useApiQuery<any>(
     ["training-enrollments", id ?? ""],
     `/hr/training/enrollments?programId=${id ?? 0}`,
     { enabled: !!id },
   );
   const enrollments = enrollmentsData?.data || [];
+
+  const { toast } = useToast();
+  const [enrollEmployeeId, setEnrollEmployeeId] = useState<string>("");
+
+  // POST /hr/training/enrollments — server refuses duplicates per
+  // (programId, employeeId). Refetch on success to surface the new row
+  // in the participants table.
+  const enrollMut = useApiMutation<unknown, { programId: number; employeeId: number; status: string }>(
+    "/hr/training/enrollments",
+    "POST",
+    [["training-enrollments", id ?? ""], ["training-program", id ?? ""]],
+    {
+      successMessage: "تم تسجيل الموظف في البرنامج",
+      onSuccess: () => { setEnrollEmployeeId(""); refetchEnrollments(); },
+    },
+  );
+
+  const handleEnroll = () => {
+    if (!id || !enrollEmployeeId) {
+      toast({ variant: "destructive", title: "اختر الموظف" });
+      return;
+    }
+    enrollMut.mutate({ programId: Number(id), employeeId: Number(enrollEmployeeId), status: "enrolled" });
+  };
 
   const kpis = [
     {
@@ -229,6 +257,26 @@ export default function TrainingDetailPage() {
             <Users className="h-4 w-4" />
             المشاركون ({enrollments.length})
           </h3>
+          <div className="flex items-end gap-2 mb-4">
+            <div className="flex-1 max-w-md">
+              <EmployeeSelect
+                value={enrollEmployeeId}
+                onChange={(v) => setEnrollEmployeeId(v)}
+                label="إضافة موظف للبرنامج"
+              />
+            </div>
+            <GuardedButton
+              perm="hr:create"
+              size="sm"
+              onClick={handleEnroll}
+              disabled={!enrollEmployeeId || enrollMut.isPending}
+              rateLimitAware
+              className="gap-1"
+            >
+              <UserPlus className="h-4 w-4" />
+              تسجيل
+            </GuardedButton>
+          </div>
           <DataTable
             columns={enrollmentColumns}
             data={enrollments}
