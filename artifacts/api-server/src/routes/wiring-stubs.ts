@@ -155,7 +155,7 @@ warehouseStubsRouter.get("/serials/:id", async (req, res) => {
     const { companyId } = scope(req as any);
     const id = Number(req.params.id);
     const rows = await rawQuery(
-      `SELECT * FROM warehouse_stock_serials WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+      `SELECT * FROM warehouse_stock_serials WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [id, companyId]
     ).catch(() => []);
     if (!rows.length) { res.status(404).json({ message: "غير موجود" }); return; }
@@ -190,7 +190,7 @@ warehouseStubsRouter.get("/reports/expiring", async (req, res) => {
       `SELECT l.id, l."lotNumber", l."productId", p.name as "productName",
               l.quantity, l."expiryDate", l."warehouseId"
        FROM warehouse_stock_lots l
-       LEFT JOIN warehouse_products p ON p.id=l."productId"
+       LEFT JOIN warehouse_products p ON p.id=l."productId" AND p."deletedAt" IS NULL
        WHERE l."companyId"=$1 AND l."deletedAt" IS NULL
          AND l."expiryDate" IS NOT NULL
          AND l."expiryDate" <= (CURRENT_DATE + INTERVAL '1 day' * $2)
@@ -208,7 +208,7 @@ warehouseStubsRouter.get("/reports/lot-aging", async (req, res) => {
               l.quantity, l."receivedDate",
               (CURRENT_DATE - l."receivedDate"::date)::int as "ageDays"
        FROM warehouse_stock_lots l
-       LEFT JOIN warehouse_products p ON p.id=l."productId"
+       LEFT JOIN warehouse_products p ON p.id=l."productId" AND p."deletedAt" IS NULL
        WHERE l."companyId"=$1 AND l."deletedAt" IS NULL
        ORDER BY l."receivedDate" ASC LIMIT 500`,
       [companyId]
@@ -278,14 +278,14 @@ hrStubsRouter.get("/saudi/wps/runs/:id", async (req, res) => {
     const { companyId } = scope(req as any);
     const id = Number(req.params.id);
     const rows = await rawQuery(
-      `SELECT * FROM payroll_runs WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+      `SELECT * FROM payroll_runs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [id, companyId]
     ).catch(() => []);
     if (!rows.length) { res.status(404).json({ message: "غير موجود" }); return; }
     const lines = await rawQuery(
       `SELECT pl.*, e.name as "employeeName", e."empNumber"
        FROM payroll_lines pl
-       LEFT JOIN employees e ON e.id = pl."employeeId"
+       LEFT JOIN employees e ON e.id = pl."employeeId" AND e."deletedAt" IS NULL
        WHERE pl."runId"=$1 AND e."companyId"=$2 AND pl."deletedAt" IS NULL`,
       [id, companyId]
     ).catch(() => []);
@@ -380,7 +380,7 @@ financeStubsRouter.get("/zatca/misrouted-b2c-invoices", async (req, res) => {
       `SELECT i.id, i.ref, i.total, i."createdAt", i."clientId", c.name as "clientName",
               c."taxNumber"
        FROM invoices i
-       JOIN clients c ON c.id=i."clientId"
+       JOIN clients c ON c.id=i."clientId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$1 AND i."deletedAt" IS NULL
          AND i."invoiceTypeCode"='388'
          AND (c."taxNumber" IS NULL OR LENGTH(c."taxNumber") < 15)
