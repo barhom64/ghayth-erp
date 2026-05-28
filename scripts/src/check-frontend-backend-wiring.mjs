@@ -367,10 +367,13 @@ function extractFrontendCalls() {
           if (/^[\w.$\s]+\?/.test(inside)) i++;
         }
         const savedI = i;
-        // Also accept `&&` / `||` in the condition so that
-        // `a.x && a.y ? "/x" : null` and `a || b ? "/x" : null` parse.
-        const condArgRe = /^[\w.$\s&|!=]+\?/;
-        const rest = src.slice(i, i + 300);
+        // Also accept `&&` / `||` / string literals in the condition so
+        // that `a.x && a.y ? "/x" : null`, `a || b ? "/x" : null`, and
+        // `x === "all" ? "/x" : "/y"` all parse. The regex now allows
+        // whole quoted literals (with non-` chars inside) as opaque
+        // tokens — they're only consumed up to the `?` operator.
+        const condArgRe = /^(?:[\w.$\s&|!=]|"[^"\n]*"|'[^'\n]*')+\?/;
+        const rest = src.slice(i, i + 400);
         if (condArgRe.test(rest) && !/^[\s]*[`"']/.test(rest)) {
           while (i < src.length && src[i] !== "?") i++;
           if (src[i] === "?") {

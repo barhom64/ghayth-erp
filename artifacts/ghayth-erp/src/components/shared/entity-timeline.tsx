@@ -227,16 +227,18 @@ interface WorkflowTimelineProps {
 }
 
 export function WorkflowTimeline({ instanceId, refTable, refId, className }: WorkflowTimelineProps) {
-  const endpoint = instanceId
-    ? `/workflows/${instanceId}/timeline`
-    : refTable && refId
-      ? `/workflows/timeline/${refTable}/${refId}`
-      : null;
-
+  // Inline conditional URLs so the wiring scanner can resolve both
+  // GET /workflows/:id/timeline and GET /workflows/timeline/:refTable/
+  // :refId statically. The dual-branch handler in
+  // scripts/src/check-frontend-backend-wiring.mjs picks both up.
   const { data } = useApiQuery<any>(
     ["workflow-timeline", String(instanceId ?? ""), String(refTable ?? ""), String(refId ?? "")],
-    endpoint!,
-    !!endpoint
+    instanceId
+      ? `/workflows/${instanceId}/timeline`
+      : refTable && refId
+        ? `/workflows/timeline/${refTable}/${refId}`
+        : null,
+    !!(instanceId || (refTable && refId)),
   );
 
   const instance = data?.instance;
