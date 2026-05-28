@@ -896,3 +896,35 @@ describe("Print platform — print-log self-print (#1286 closeout)", () => {
     expect(src).toMatch(/payload=\{/);
   });
 });
+
+describe("Print platform — finance reports wave 6 migrated (#1286 last sweep)", () => {
+  // 12 more pages discovered in the closeout audit: pages with Blob downloads
+  // but no PrintButton, hidden among the dashboards + workbenches that
+  // earlier waves missed (camel-case wrappers, GuardedButton instead of
+  // Button, no FinanceTabsNav, etc.). This sweep is the literal last batch.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const PAGES: Array<{ path: string; entityType: string }> = [
+    { path: "pages/finance/overrides-report.tsx",          entityType: "report_overrides" },
+    { path: "pages/finance/custody-workbench.tsx",         entityType: "report_custody_workbench" },
+    { path: "pages/finance/vendor-contracts-tracker.tsx",  entityType: "report_vendor_contracts" },
+    { path: "pages/finance/negative-stock.tsx",            entityType: "report_negative_stock" },
+    { path: "pages/finance/vat-filing-readiness.tsx",      entityType: "report_vat_filing_readiness" },
+    { path: "pages/finance/bank-accounts-watch.tsx",       entityType: "report_bank_accounts_watch" },
+    { path: "pages/finance/cash-flow-statement.tsx",       entityType: "report_cash_flow_statement" },
+    { path: "pages/finance/lot-expiry-alerts.tsx",         entityType: "report_lot_expiry_alerts" },
+    { path: "pages/finance/yoy-comparison.tsx",            entityType: "report_yoy_comparison" },
+    { path: "pages/finance/invoice-send-queue.tsx",        entityType: "report_invoice_send_queue" },
+    { path: "pages/finance/expense-burn-rate.tsx",         entityType: "report_expense_burn_rate" },
+    { path: "pages/finance/profitability.tsx",             entityType: "report_profitability" },
+  ];
+
+  for (const { path, entityType } of PAGES) {
+    it(`${path} mounts <PrintButton entityType="${entityType}" payload={...}>`, () => {
+      const src = readFileSync(join(SPA, path), "utf8");
+      expect(src, `${path} must import PrintButton`).toContain('from "@/components/shared/print-button"');
+      expect(src, `${path} must render PrintButton`).toContain("<PrintButton");
+      expect(src, `${path} must use entityType="${entityType}"`).toContain(`entityType="${entityType}"`);
+      expect(src, `${path} must pass payload`).toMatch(/payload=\{/);
+    });
+  }
+});

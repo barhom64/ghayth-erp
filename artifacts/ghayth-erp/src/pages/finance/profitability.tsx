@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, todayLocal, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import { Download, ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
 
@@ -210,6 +211,14 @@ export default function ProfitabilityPage({ entityType }: Props) {
           >
             <Download className="h-3.5 w-3.5 me-1" /> تصدير CSV
           </GuardedButton>
+          <PrintButton
+            entityType="report_profitability"
+            entityId="all"
+            payload={{
+              entity: { title: `تحليل الربحية — ${config.label}`, summary: data.summary },
+              items: data.accounts ?? [],
+            }}
+          />
         </div>
       }
     >
