@@ -298,15 +298,14 @@ const RULES = [
     // segments. The `[A-Z]{2,}` requires a SHOUTY prefix so we don't
     // false-positive on date strings like `${Date.now()}.json`.
     //
-    // Soft ratchet with baseline 5 — the report identified exactly 5
-    // remaining offenders. Each fix drops the baseline by 1; new
-    // additions fail CI. Drop to 0 once every offender is fixed:
+    // Soft ratchet — baseline 4 after G14 fix dropped one offender.
+    // Each fix drops the baseline by 1; new additions fail CI. Drop
+    // to 0 once every offender is fixed:
     //   • routes/communications.ts:365  CALL-${Date.now()}          — PBX call id (tech)
     //   • routes/finance-invoices.ts:3246  ADV-${Date.now()}        — customer advance
-    //   • routes/finance-purchase.ts:1654  PR-${Date.now()}         — payment run
     //   • routes/properties.ts:2054  RENT-${payment.id}-${Date.now()} — legal case
     //   • routes/store.ts:262  ORD-${Date.now()}                    — store order
-    countBaseline: 5,
+    countBaseline: 4,
     regex: /`[A-Z]{2,}[^`]*\$\{\s*Date\.now\s*\(\s*\)/,
     message:
       "Inline `${Date.now()}` inside a refish string is the same anti-pattern " +

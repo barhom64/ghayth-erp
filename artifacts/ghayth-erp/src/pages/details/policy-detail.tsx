@@ -1,19 +1,29 @@
 import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
 import { z } from "zod";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
+  type ExtraTab,
   EntityComments,
 } from "@workspace/entity-kit";
-import { FormGrid, FormTextField, FormTextareaField, FormSelectField } from "@workspace/ui-core";
+import {
+  FormGrid,
+  FormTextField,
+  FormTextareaField,
+  FormSelectField,
+  FormDateField,
+  FormShell,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, FileText } from "lucide-react";
+import { Edit, FileText, ListChecks, Link2, Plus, X } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -44,11 +54,170 @@ const policyEditSchema = z.object({
 });
 type PolicyEditForm = z.infer<typeof policyEditSchema>;
 
+const complianceActionSchema = z.object({
+  action: z.string().min(1, "وصف الإجراء مطلوب"),
+  status: z.enum(["open", "in_progress", "done", "overdue"]),
+  responsiblePerson: z.string(),
+  dueDate: z.string(),
+  notes: z.string(),
+});
+type ComplianceActionForm = z.infer<typeof complianceActionSchema>;
+const defaultComplianceActionForm: ComplianceActionForm = {
+  action: "", status: "open", responsiblePerson: "", dueDate: "", notes: "",
+};
+
+function AddComplianceActionForm({ policyId, onSuccess }: { policyId: number; onSuccess: () => void }) {
+  const saveMut = useApiMutation<unknown, ComplianceActionForm>(
+    `/governance/policies/${policyId}/compliance-actions`,
+    "POST",
+    [["policy-compliance-actions", String(policyId)]],
+    { successMessage: "تمت إضافة الإجراء", onSuccess },
+  );
+  return (
+    <Card className="border-dashed">
+      <CardContent className="p-4">
+        <h4 className="font-semibold mb-3 text-sm">إجراء امتثال جديد</h4>
+        <FormShell
+          schema={complianceActionSchema}
+          defaultValues={defaultComplianceActionForm}
+          submitLabel="حفظ الإجراء"
+          onSubmit={async (values, ctx) => {
+            await saveMut.mutateAsync(values);
+            ctx.reset();
+          }}
+        >
+          <FormGrid cols={2}>
+            <FormTextField name="action" label="الإجراء" required className="md:col-span-2" />
+            <FormSelectField
+              name="status"
+              label="الحالة"
+              options={[
+                { value: "open", label: "مفتوح" },
+                { value: "in_progress", label: "قيد التنفيذ" },
+                { value: "done", label: "منجز" },
+                { value: "overdue", label: "متأخر" },
+              ]}
+            />
+            <FormDateField name="dueDate" label="الموعد المستهدف" />
+            <FormTextField name="responsiblePerson" label="المسؤول" />
+            <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+          </FormGrid>
+        </FormShell>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function PolicyDetail() {
   const [, params] = useRoute("/governance/policies/:id");
   const id = params?.id ? Number(params.id) : null;
-  const { extraTabs, hideTabs } = useRegistryTabs("policy", id ?? 0);
+  const { extraTabs: registryExtraTabs, hideTabs } = useRegistryTabs("policy", id ?? 0);
   const [editOpen, setEditOpen] = useState(false);
+  const [showAddAction, setShowAddAction] = useState(false);
+
+  // Sub-resource fetches for the new Compliance Actions + Module Links tabs.
+  const { data: actionsResp, refetch: refetchActions } = useApiQuery<{ data: any[] }>(
+    ["policy-compliance-actions", String(id)],
+    `/governance/policies/${id}/compliance-actions`,
+    !!id,
+  );
+  const { data: linksResp } = useApiQuery<{ data: any[] }>(
+    ["policy-module-links", String(id)],
+    `/governance/policies/${id}/module-links`,
+    !!id,
+  );
+  const complianceActions = asList(actionsResp?.data ?? actionsResp);
+  const moduleLinks = asList(linksResp?.data ?? linksResp);
+
+  const ACTION_STATUS_LABELS: Record<string, string> = {
+    open: "مفتوح",
+    in_progress: "قيد التنفيذ",
+    done: "منجز",
+    overdue: "متأخر",
+  };
+
+  const handleActionAdded = () => {
+    setShowAddAction(false);
+    refetchActions();
+  };
+
+  const customTabs: ExtraTab[] = [
+    {
+      key: "compliance-actions",
+      label: "إجراءات الامتثال",
+      icon: ListChecks,
+      badge: complianceActions.length || undefined,
+      content: (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">إجراءات الامتثال للسياسة</h3>
+            <GuardedButton perm="governance:create" size="sm" onClick={() => setShowAddAction(!showAddAction)}>
+              {showAddAction ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إجراء جديد</>}
+            </GuardedButton>
+          </div>
+          {showAddAction && id && <AddComplianceActionForm policyId={id} onSuccess={handleActionAdded} />}
+          {complianceActions.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <ListChecks className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">لا توجد إجراءات امتثال مسجلة</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <DataTable
+              columns={[
+                { key: "title", header: "الإجراء", render: (a) => <span className="text-sm">{a.title || a.action}</span> },
+                { key: "status", header: "الحالة", sortable: true, render: (a) => (
+                  <Badge variant="outline">{ACTION_STATUS_LABELS[a.status] || a.status || "—"}</Badge>
+                )},
+                { key: "owner", header: "المسؤول", render: (a) => a.owner || a.responsiblePerson || "—" },
+                { key: "dueDate", header: "الموعد", render: (a) => a.dueDate ? formatDateAr(a.dueDate) : "—" },
+                { key: "createdAt", header: "التاريخ", render: (a) => formatDateAr(a.createdAt) },
+              ] as DataTableColumn<any>[]}
+              data={complianceActions}
+              noToolbar
+              pageSize={10}
+            />
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "module-links",
+      label: "ارتباطات الوحدات",
+      icon: Link2,
+      badge: moduleLinks.length || undefined,
+      content: (
+        <div className="space-y-4">
+          <h3 className="font-semibold text-sm">الوحدات المرتبطة بالسياسة</h3>
+          {moduleLinks.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <Link2 className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">لا توجد ارتباطات بوحدات النظام</p>
+                <p className="text-xs mt-1">
+                  يتم إنشاء الروابط تلقائياً عند تطبيق السياسة على وحدة معينة.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <DataTable
+              columns={[
+                { key: "module", header: "الوحدة", render: (l) => <span className="font-mono text-xs">{l.module || l.moduleKey || "—"}</span> },
+                { key: "scope", header: "النطاق", render: (l) => l.scope || "—" },
+                { key: "createdAt", header: "التاريخ", render: (l) => l.createdAt ? formatDateAr(l.createdAt) : "—" },
+              ] as DataTableColumn<any>[]}
+              data={moduleLinks}
+              noToolbar
+              pageSize={10}
+            />
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  const extraTabs = [...customTabs, ...registryExtraTabs];
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["policy", String(id)],
