@@ -401,10 +401,27 @@ pub/sub channel (`fleet:telematics:breaker-open`):
 يكشف ما إذا كان pub/sub نشطاً (`mode: "redis-pubsub"`) أو
 per-replica (`mode: "per-replica"`).
 
+## AI Media Evidence Archive
+
+`GET /telematics/media-evidence` و `GET /telematics/media-evidence/:id`
+يكشفان أرشيف الأدلة (`fleet_media_evidence`) مع:
+- فلاتر: `vehicleId`, `mediaType` (image/video/audio), `category`
+  (adas/dms/bsd/safety/other), `from`, `to`
+- whitelist enforcement على `mediaType` و `category` يمنع injection
+- JOIN على `fleet_ai_alerts` لإظهار "لماذا تم الالتقاط" في نفس الاستعلام
+- LIMIT 200، ترتيب `uploadedAt DESC`
+
+الواجهة `/fleet/telematics/evidence` تعرض:
+- KPIs: total / images / videos / from AI
+- Thumbnails inline قابلة للنقر
+- Drill-down لكل دليل مع category + severity
+- مرشحات date-range + vehicle + type + category
+
 ## Known Limitations (المتبقية بعد Hardening)
 
 1. **رفع الأدلة auto-only من URL alert**: لا يوجد آلية pull للملفات
-   من MDVR SSD مباشرة (يفترض CMSV6 ترفعها).
+   من MDVR SSD مباشرة (يفترض CMSV6 ترفعها). لكن الأرشيف الجديد يكشف
+   كل ما تم استلامه ويسمح بالبحث الجنائي.
 2. **161 legacy migrations بدون `@rollback`**: technical debt قبل
    #1141 (خارج نطاق هذا الـ branch).
 

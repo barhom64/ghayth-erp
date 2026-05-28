@@ -397,6 +397,7 @@ const allNavSections: NavSection[] = [
         { label: "التتبع المباشر", path: "/fleet/telematics/live-map", icon: Satellite },
         { label: "تنبيهات السلامة الذكية", path: "/fleet/telematics/ai-alerts", icon: Bot },
         { label: "قراءات الحساسات", path: "/fleet/telematics/sensors", icon: Activity },
+        { label: "أرشيف الأدلة", path: "/fleet/telematics/evidence", icon: Archive },
         { label: "أدلة الفيديو", path: "/fleet/telematics/video-evidence", icon: VideoIcon },
         { label: "أجهزة MDVR", path: "/fleet/telematics/devices", icon: HardDrive },
         { label: "إعدادات CMSV6", path: "/fleet/telematics/settings", icon: Settings },

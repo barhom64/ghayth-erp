@@ -2040,7 +2040,115 @@ router.get(
 );
 
 // ─────────────────────────────────────────────────────────────────────────
-// Persistence helpers — return TRUE iff a new row was created.
+// AI Media Evidence search — operator-facing forensic archive.
+//
+// Media rows accumulate from two paths:
+//   • Auto-attached at alert persist time (image / video URLs that
+//     CMSV6 ships in the alarm payload). One row per URL.
+//   • Future: manual operator uploads via a "request evidence" workflow.
+//
+// This endpoint surfaces the archive with the filters operators
+// actually need: date range, vehicle, mediaType (image / video / audio),
+// and AI alert category. The query joins the alert row so the operator
+// can see WHY the evidence was captured without a second round-trip.
+//
+// Pagination: cursor-based on (uploadedAt DESC, id DESC) would scale
+// to millions of rows, but for the Pilot a hard LIMIT of 200 with
+// `from`/`to` filtering is enough — the retention cron + per-tenant
+// retentionDays bound the search space.
+// ─────────────────────────────────────────────────────────────────────────
+router.get(
+  "/telematics/media-evidence",
+  authorize({ feature: "fleet.telematics.ai_alerts", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const from = req.query.from ? String(req.query.from) : null;
+      const to = req.query.to ? String(req.query.to) : null;
+      const vehicleId = req.query.vehicleId ? Number(req.query.vehicleId) : null;
+      const mediaType = req.query.mediaType ? String(req.query.mediaType) : null;
+      const category = req.query.category ? String(req.query.category) : null;
+
+      const conditions: string[] = [`m."companyId" = ANY($1::int[])`];
+      const params: unknown[] = [scope.allowedCompanies];
+      let paramIdx = 2;
+      if (from) {
+        conditions.push(`m."uploadedAt" >= $${paramIdx++}`);
+        params.push(from);
+      }
+      if (to) {
+        conditions.push(`m."uploadedAt" <= $${paramIdx++}`);
+        params.push(to);
+      }
+      if (vehicleId !== null && Number.isFinite(vehicleId)) {
+        conditions.push(`m."vehicleId" = $${paramIdx++}`);
+        params.push(vehicleId);
+      }
+      if (mediaType && ["image", "video", "audio"].includes(mediaType)) {
+        conditions.push(`m."mediaType" = $${paramIdx++}`);
+        params.push(mediaType);
+      }
+      if (category && ["adas", "dms", "bsd", "safety", "other"].includes(category)) {
+        conditions.push(`a.category = $${paramIdx++}`);
+        params.push(category);
+      }
+
+      const rows = await rawQuery(
+        `SELECT m.id, m."mediaType", m."mediaUrl", m."thumbnailUrl",
+                m."durationSec", m."sizeBytes", m."occurredAt", m."uploadedAt",
+                m."uploadedBy", m."channelNo",
+                m."alertId", m."vehicleId", m."deviceId",
+                a.category AS "alertCategory",
+                a."alertType",
+                a.severity AS "alertSeverity",
+                v."plateNumber" AS "vehiclePlate",
+                d."deviceLabel"
+           FROM fleet_media_evidence m
+           LEFT JOIN fleet_ai_alerts a ON a.id = m."alertId"
+           LEFT JOIN vehicles v ON v.id = m."vehicleId"
+           LEFT JOIN fleet_telematics_devices d ON d.id = m."deviceId"
+          WHERE ${conditions.join(" AND ")}
+          ORDER BY m."uploadedAt" DESC, m.id DESC
+          LIMIT 200`,
+        params,
+      );
+      res.json({ data: rows });
+    } catch (e) {
+      handleRouteError(e, res, "fleet-telematics");
+    }
+  },
+);
+
+// Single-row detail — used by the modal/drawer on the evidence search
+// page so the operator can see the raw payload + the originating
+// session if any.
+router.get(
+  "/telematics/media-evidence/:id",
+  authorize({ feature: "fleet.telematics.ai_alerts", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id);
+      const [row] = await rawQuery(
+        `SELECT m.*, a.category AS "alertCategory", a."alertType",
+                a.severity AS "alertSeverity", a.confidence AS "alertConfidence",
+                a."occurredAt" AS "alertOccurredAt",
+                v."plateNumber" AS "vehiclePlate",
+                d."deviceLabel"
+           FROM fleet_media_evidence m
+           LEFT JOIN fleet_ai_alerts a ON a.id = m."alertId"
+           LEFT JOIN vehicles v ON v.id = m."vehicleId"
+           LEFT JOIN fleet_telematics_devices d ON d.id = m."deviceId"
+          WHERE m.id = $1 AND m."companyId" = ANY($2::int[])`,
+        [id, scope.allowedCompanies],
+      );
+      if (!row) throw new NotFoundError("الدليل غير موجود");
+      res.json({ data: row });
+    } catch (e) {
+      handleRouteError(e, res, "fleet-telematics");
+    }
+  },
+);
 // Idempotency lives in the DB unique indexes; ON CONFLICT DO NOTHING is
 // the right level of strictness here.
 // ─────────────────────────────────────────────────────────────────────────
