@@ -399,6 +399,21 @@ function extractFrontendCalls() {
     for (const m of src.matchAll(delRe)) {
       let i = m.index + m[0].length;
       while (i < src.length && /\s/.test(src[i])) i++;
+      // Skip an inline `<cond> ? "..." : "..."` conditional — common
+      // when the dialog is rendered with a maybe-null target row. Move
+      // past the condition to the first quoted string.
+      const savedI = i;
+      const condRe = /^[\w.$?\s]+\?/;
+      const rest = src.slice(i, i + 200);
+      if (condRe.test(rest) && !/^[\s]*[`"']/.test(rest)) {
+        while (i < src.length && src[i] !== "?") i++;
+        if (src[i] === "?") {
+          i++;
+          while (i < src.length && /\s/.test(src[i])) i++;
+        } else {
+          i = savedI;
+        }
+      }
       const lit = readString(src, i);
       if (!lit) continue;
       if (!lit.value.startsWith("/")) continue;

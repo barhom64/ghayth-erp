@@ -5,21 +5,73 @@ import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/shared/print-button";
 import {
   DataTable,
+  PageStatusBadge,
   type DataTableColumn,
   resolveStatus,
 } from "@workspace/ui-core";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { ShoppingCart, User, Phone, Mail, Calendar, Package, Copy } from "lucide-react";
+import { ShoppingCart, User, Phone, Mail, Calendar, Package, Copy, Truck, CheckSquare } from "lucide-react";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
-import { DetailPageLayout } from "@workspace/entity-kit";
+import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PurchaseOrderReceiveSection } from "@/components/finance/purchase-order-receive-section";
 
 export default function PurchaseOrderDetailPage() {
   const [, params] = useRoute("/finance/purchase-orders/:id");
   const id = params?.id;
-  const { extraTabs, hideTabs } = useRegistryTabs("purchase_order", id || "");
+  const { extraTabs: registryExtraTabs, hideTabs } = useRegistryTabs("purchase_order", id || "");
   const { data: po, isLoading, isError } = useApiQuery<any>(["po-detail", id || ""], `/finance/purchase-orders/${id}`, !!id);
+
+  // PO receipts / 3-way match endpoints — lazy GET, only when the
+  // user actually opens the tab. Keeps initial load fast.
+  const { data: receiptsResp } = useApiQuery<any>(
+    ["po-receipts", id || ""],
+    id ? `/finance/purchase-orders/${id}/receipts` : null,
+    !!id,
+  );
+  const receipts: any[] = receiptsResp?.data || (Array.isArray(receiptsResp) ? receiptsResp : []);
+
+  const { data: matchResp } = useApiQuery<any>(
+    ["po-match", id || ""],
+    id ? `/finance/purchase-orders/${id}/match` : null,
+    !!id,
+  );
+  const matchData = matchResp?.data ?? matchResp ?? null;
+
+  const receiptColumns: DataTableColumn<any>[] = [
+    { key: "ref", header: "المرجع", sortable: true, render: (r) => <span className="font-mono text-xs">{r.ref || r.grnRef || `#${r.id}`}</span> },
+    { key: "receivedAt", header: "تاريخ الاستلام", sortable: true, render: (r) => r.receivedAt || r.createdAt ? formatDateAr(r.receivedAt || r.createdAt) : "—" },
+    { key: "totalQty", header: "الكمية", sortable: true, render: (r) => Number(r.totalQty || r.quantity || 0) },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => <PageStatusBadge status={r.status || "received"} /> },
+  ];
+
+  const extraTabs: ExtraTab[] = [
+    ...(receipts.length > 0 ? [{
+      key: "receipts",
+      label: "إيصالات الاستلام",
+      icon: Truck,
+      badge: receipts.length || undefined,
+      content: () => (
+        <DataTable columns={receiptColumns} data={receipts} pageSize={10} noToolbar emptyMessage="لا توجد إيصالات استلام" />
+      ),
+    } as ExtraTab] : []),
+    ...(matchData ? [{
+      key: "match",
+      label: "المطابقة الثلاثية",
+      icon: CheckSquare,
+      content: () => (
+        <Card>
+          <CardContent className="p-4 space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-muted-foreground">إجمالي PO</span><span className="font-mono">{formatCurrency(Number(matchData.poTotal || 0))}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">إجمالي الاستلام</span><span className="font-mono">{formatCurrency(Number(matchData.grnTotal || 0))}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">إجمالي الفواتير</span><span className="font-mono">{formatCurrency(Number(matchData.invoiceTotal || 0))}</span></div>
+            <div className="flex justify-between border-t pt-2 font-semibold"><span>حالة المطابقة</span><span>{matchData.matchStatus || matchData.status || "—"}</span></div>
+          </CardContent>
+        </Card>
+      ),
+    } as ExtraTab] : []),
+    ...registryExtraTabs,
+  ];
 
   if (!isLoading && !isError && !po) return (
     <div className="text-center py-12">
