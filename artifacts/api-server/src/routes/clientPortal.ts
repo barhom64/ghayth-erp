@@ -303,7 +303,50 @@ protectedRouter.get("/me", withPortalScope(async (req, res) => {
       params
     );
     if (!client) throw new NotFoundError("العميل غير موجود");
-    res.json(client);
+
+    // Compute which portal sections this customer has access to — works
+    // like the employee role system: the client's "role" is implicit
+    // from which tables actually reference their clientId.
+    //
+    // Each section is enabled only when real data exists, so a CRM-only
+    // client never sees an empty "Projects" tab, and a sub-agent never
+    // sees a phantom "Legal" tab. The portal SPA reads `availableSections`
+    // from /me to render only the tabs relevant to this customer.
+    const [counts] = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT
+         (SELECT COUNT(*) FROM invoices WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS invoices,
+         (SELECT COUNT(*) FROM support_tickets WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS tickets,
+         (SELECT COUNT(*) FROM projects WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS projects,
+         (SELECT COUNT(*) FROM umrah_sub_agents WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS "umrahSubAgents",
+         (SELECT COUNT(*) FROM tenants WHERE "clientId" = $1 AND "companyId" = $2)::int AS "tenantLinks",
+         (SELECT COUNT(*) FROM legal_cases WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS "legalCases"`,
+      params
+    );
+
+    // Build the section list — order matches the SPA tab order. "core"
+    // sections (overview + profile) are always present; everything else
+    // is data-gated.
+    const sections: string[] = ["overview", "profile"];
+    if (Number(counts?.invoices ?? 0) > 0) sections.push("invoices");
+    if (Number(counts?.tenantLinks ?? 0) > 0) sections.push("property");
+    if (Number(counts?.legalCases ?? 0) > 0) sections.push("legal");
+    if (Number(counts?.projects ?? 0) > 0) sections.push("projects");
+    if (Number(counts?.umrahSubAgents ?? 0) > 0) sections.push("umrah");
+    if (Number(counts?.tickets ?? 0) > 0) sections.push("support");
+    sections.push("knowledge-base"); // always available — no scoping
+
+    res.json({
+      ...client,
+      availableSections: sections,
+      sectionCounts: {
+        invoices: Number(counts?.invoices ?? 0),
+        tickets: Number(counts?.tickets ?? 0),
+        projects: Number(counts?.projects ?? 0),
+        umrahSubAgents: Number(counts?.umrahSubAgents ?? 0),
+        tenantLinks: Number(counts?.tenantLinks ?? 0),
+        legalCases: Number(counts?.legalCases ?? 0),
+      },
+    });
   } catch (err) {
     handleRouteError(err, res, "Portal me error:");
   }
@@ -769,6 +812,229 @@ protectedRouter.post("/kb/:id/feedback", withPortalScope(async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Portal KB feedback error:");
+  }
+}));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Customer-type-aware sections — each surface is data-gated by /me's
+// availableSections. The SPA only renders the tab when the section is
+// listed there, so the endpoint is a safe no-op for customers without
+// the data type (returns an empty list rather than 404).
+//
+// Each section follows the same shape as /invoices + /tickets: list
+// endpoint + per-row detail. Tenant isolation is enforced via
+// portalScopedQuery just like the existing handlers.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── Projects (for contracting / project-based clients) ─────────────────────
+protectedRouter.get("/projects", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const { where, params } = buildPortalWhere(scope);
+    const rows = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT id, name, status, "startDate", "endDate", budget, progress, "createdAt"
+         FROM projects
+        WHERE ${where} AND "deletedAt" IS NULL
+        ORDER BY "createdAt" DESC LIMIT 100`,
+      params
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal projects error:");
+  }
+}));
+
+protectedRouter.get("/projects/:id", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const id = parseId(req.params.id, "id");
+    const { where, params } = buildPortalWhere(scope);
+    const [project] = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT id, name, description, status, "startDate", "endDate", budget,
+              progress, "managerName", "createdAt", "updatedAt"
+         FROM projects
+        WHERE id = $${params.length + 1} AND ${where} AND "deletedAt" IS NULL`,
+      [...params, id]
+    );
+    if (!project) throw new NotFoundError("المشروع غير موجود");
+    res.json(project);
+  } catch (err) {
+    handleRouteError(err, res, "Portal project detail error:");
+  }
+}));
+
+// ─── Umrah sub-agent dashboard (for sub-agents linked via clientId) ─────────
+protectedRouter.get("/umrah/invoices", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    // umrah_sales_invoices links to sub-agents, not directly to clients —
+    // resolve through the sub-agent → client linkage.
+    const rows = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT si.id, si.ref, si."invoiceDate", si.subtotal, si."vatAmount", si.total,
+              si."paidAmount", si.status, si."dueDate", si."pilgrimCount",
+              sa.name AS "subAgentName"
+         FROM umrah_sales_invoices si
+         JOIN umrah_sub_agents sa ON sa.id = si."subAgentId"
+        WHERE sa."clientId" = $1 AND si."companyId" = $2 AND si."deletedAt" IS NULL
+        ORDER BY si."invoiceDate" DESC LIMIT 100`,
+      [scope.clientId, scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal umrah invoices error:");
+  }
+}));
+
+protectedRouter.get("/umrah/groups", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const rows = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT g.id, g."nuskGroupNumber", g.name, g."mutamerCount",
+              g."programDuration", g.status, g."nuskInvoiceNumber", g."createdAt"
+         FROM umrah_groups g
+         JOIN umrah_sub_agents sa ON sa.id = g."subAgentId"
+        WHERE sa."clientId" = $1 AND g."companyId" = $2 AND g."deletedAt" IS NULL
+        ORDER BY g."createdAt" DESC LIMIT 100`,
+      [scope.clientId, scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal umrah groups error:");
+  }
+}));
+
+protectedRouter.get("/umrah/payments", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const rows = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT p.id, p.ref, p."paymentDate", p.amount, p.currency, p."sarAmount",
+              p.method, p."externalReference"
+         FROM umrah_payments p
+         JOIN umrah_sub_agents sa ON sa.id = p."subAgentId"
+        WHERE sa."clientId" = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL
+        ORDER BY p."paymentDate" DESC LIMIT 100`,
+      [scope.clientId, scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal umrah payments error:");
+  }
+}));
+
+// ─── Property tenants (gated by tenants.clientId from migration 230) ────────
+// A single portal account (bound to clients.id) may map to multiple
+// tenant records — e.g. a corporate client leasing several units. All
+// queries scope by `t.clientId = me AND t.companyId = me` so a tenant
+// record from another company can't leak even if ids collide.
+
+protectedRouter.get("/property/contracts", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const rows = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT rc.id, rc."contractNumber", rc."ejarNumber", rc."contractType",
+              rc."startDate", rc."endDate", rc."monthlyRent", rc."yearlyRent",
+              rc."depositAmount", rc.status, rc."paymentFrequency",
+              rc."autoRenewal", rc."renewalNoticeDays",
+              u."unitNumber", u."buildingName", u.address AS "unitAddress"
+         FROM rental_contracts rc
+         JOIN tenants t ON t.id = rc."tenantId" AND t."companyId" = rc."companyId"
+         LEFT JOIN property_units u ON u.id = rc."unitId" AND u."companyId" = rc."companyId"
+        WHERE t."clientId" = $1 AND rc."companyId" = $2 AND rc."deletedAt" IS NULL
+        ORDER BY rc."startDate" DESC LIMIT 100`,
+      [scope.clientId, scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal property contracts error:");
+  }
+}));
+
+protectedRouter.get("/property/rent-payments", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    // rent_payments has no companyId column — same defensive pattern as
+    // the Property Owner Statement (PR #5a2c1aed). Gate via rental_contracts.
+    const rows = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT rp.id, rp."contractId", rp."dueDate", rp.amount, rp."paidAmount",
+              rp."paidDate", rp.method, rp.status, rp."receiptNumber",
+              rp.amount - rp."paidAmount" AS "outstanding",
+              (CURRENT_DATE - rp."dueDate") AS "daysPastDue"
+         FROM rent_payments rp
+         JOIN rental_contracts rc ON rc.id = rp."contractId" AND rc."deletedAt" IS NULL
+         JOIN tenants t ON t.id = rc."tenantId" AND t."companyId" = rc."companyId"
+        WHERE t."clientId" = $1 AND rc."companyId" = $2
+        ORDER BY rp."dueDate" DESC LIMIT 200`,
+      [scope.clientId, scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal rent payments error:");
+  }
+}));
+
+protectedRouter.get("/property/maintenance-requests", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const rows = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT mr.id, mr.category, mr.description, mr.priority, mr.status,
+              mr."estimatedCost", mr."actualCost", mr."completedAt",
+              mr."createdAt",
+              u."unitNumber", u."buildingName"
+         FROM maintenance_requests mr
+         JOIN rental_contracts rc ON rc.id = mr."contractId" AND rc."deletedAt" IS NULL
+         JOIN tenants t ON t.id = rc."tenantId" AND t."companyId" = rc."companyId"
+         LEFT JOIN property_units u ON u.id = mr."unitId" AND u."companyId" = mr."companyId"
+        WHERE t."clientId" = $1 AND mr."companyId" = $2
+        ORDER BY mr."createdAt" DESC LIMIT 100`,
+      [scope.clientId, scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal maintenance requests error:");
+  }
+}));
+
+// ─── Legal cases (gated by legal_cases.clientId from migration 230) ─────────
+// A client portal user may be a plaintiff or defendant in cases the firm
+// represents. legal_cases.clientId is the new link added by migration 230.
+
+protectedRouter.get("/legal/cases", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const { where, params } = buildPortalWhere(scope);
+    const rows = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT id, "caseNumber", title, "caseType", court, "filingDate",
+              "opposingParty", "lawyerName", status, priority,
+              "financialRisk", "riskLevel", "createdAt"
+         FROM legal_cases
+        WHERE ${where} AND "deletedAt" IS NULL
+        ORDER BY "createdAt" DESC LIMIT 100`,
+      params
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal legal cases error:");
+  }
+}));
+
+protectedRouter.get("/legal/sessions/upcoming", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const rows = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT ls.id, ls."sessionDate", ls.location, ls.judge,
+              ls.result, ls."nextSessionDate", ls.notes,
+              c.id AS "caseId", c."caseNumber", c.title AS "caseTitle"
+         FROM legal_sessions ls
+         JOIN legal_cases c ON c.id = ls."caseId" AND c."deletedAt" IS NULL
+        WHERE c."clientId" = $1 AND c."companyId" = $2
+              AND ls."deletedAt" IS NULL
+              AND ls."sessionDate" >= CURRENT_DATE - INTERVAL '30 days'
+        ORDER BY ls."sessionDate" ASC LIMIT 100`,
+      [scope.clientId, scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal legal sessions error:");
   }
 }));
 

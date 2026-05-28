@@ -54,7 +54,22 @@ class SupportEngineImpl implements DomainEngine {
     title: string;
     description: string;
     priority: string;
+    /**
+     * Optional ref issued by numberingService. When supplied, written
+     * into support_tickets.ref so the row carries a real numbering
+     * assignment. When omitted (legacy callers) the ref column is
+     * left NULL — coverage report §3 G4 closure tracks elimination
+     * of all NULL-ref code paths.
+     */
+    ref?: string;
   }): Promise<{ insertId: number }> {
+    if (params.ref !== undefined) {
+      const { insertId } = await rawExecute(
+        `INSERT INTO support_tickets ("companyId", title, description, status, priority, ref, "createdAt") VALUES ($1, $2, $3, 'open', $4, $5, NOW())`,
+        [params.companyId, params.title, params.description, params.priority, params.ref]
+      );
+      return { insertId };
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO support_tickets ("companyId", title, description, status, priority, "createdAt") VALUES ($1, $2, $3, 'open', $4, NOW())`,
       [params.companyId, params.title, params.description, params.priority]
