@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   TrendingDown, TrendingUp, Flame, Calendar, AlertTriangle,
   Banknote, Clock, Download, BarChart3,
@@ -209,6 +210,11 @@ export default function ExpenseBurnRatePage() {
             <Download className="w-4 h-4 ml-1" />
             CSV
           </Button>
+          <PrintButton
+            entityType="report_expense_burn_rate"
+            entityId="all"
+            payload={{ entity: { title: "معدل حرق المصاريف" }, items: [] }}
+          />
         </CardContent>
       </Card>
 

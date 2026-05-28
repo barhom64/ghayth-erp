@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download, Repeat, Printer, AlertTriangle, FileDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@workspace/ui-core";
+import { PrintButton } from "@/components/shared/print-button";
 
 interface JobRow {
   id: number;
@@ -195,6 +196,36 @@ export default function PrintLogPage() {
             <Button size="sm" variant="outline" onClick={exportCsv} disabled={!total}>
               <FileDown className="h-3 w-3 ml-1" /> تصدير CSV
             </Button>
+            <PrintButton
+              entityType="report_print_log"
+              entityId={`${from || "all"}..${to || "all"}`}
+              variant="outline"
+              size="sm"
+              label="طباعة السجل"
+              payload={{
+                entity: {
+                  title: "سجل الطباعة",
+                  from: from || "—",
+                  to: to || "—",
+                  branchFilter: branchId === "all" ? "كل الفروع" : branchId,
+                  statusFilter: status === "all" ? "الكل" : status,
+                  entityTypeFilter: entityType === "all" ? "الكل" : entityType,
+                  total,
+                },
+                items: (data?.items ?? []).map((j: JobRow) => ({
+                  "رقم الوظيفة": j.jobId,
+                  "نوع الكيان": j.entityType,
+                  "المعرف": j.entityId,
+                  "الصيغة": j.format,
+                  "نسخة": j.copyNumber,
+                  "نسخة مكررة؟": j.isReprint ? "نعم" : "",
+                  "الفرع": j.branchName ?? "",
+                  "المستخدم": j.userName ?? j.userEmail ?? "",
+                  "الحالة": j.status,
+                  "التاريخ": j.createdAt,
+                })),
+              }}
+            />
           </CardTitle>
         </CardHeader>
         <CardContent>
