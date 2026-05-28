@@ -383,14 +383,29 @@ signature = "sha256=" + hex(digest)
 الـ player يتجاوز fallback أو يُظهر فجوة — لا يستطيع إجبارنا على proxy
 لخادم آخر.
 
+## Multi-Replica Coordination (مُنجَز)
+
+الـ Circuit Breaker يدعم الآن multi-replica deployments عبر Redis
+pub/sub channel (`fleet:telematics:breaker-open`):
+
+- كل replica يحتفظ بـ in-memory state للسرعة (no Redis round-trip في
+  cron hot path).
+- عند التحوّل closed → open محلياً، الـ replica يُذيع `{integrationId,
+  openedAt, cooldownMs, origin}` على الـ channel.
+- الـ replicas الأخرى تستقبل وتستدعي `breaker.markOpen()` محلياً.
+- Loopback guard عبر `origin` id يمنع feedback loop.
+- Graceful fallback: لو `REDIS_URL` غير معد، الـ coordinator يُسجّل
+  info ويبقى per-replica (لا أخطاء، لا behaviour change).
+
+الـ admin endpoint `/telematics/breaker-state` يُرجع `meta.coordination`
+يكشف ما إذا كان pub/sub نشطاً (`mode: "redis-pubsub"`) أو
+per-replica (`mode: "per-replica"`).
+
 ## Known Limitations (المتبقية بعد Hardening)
 
-1. **CircuitBreaker per-process**: في multi-replica، كل replica
-   تحتفظ بـ state خاص. مقبول حتى عشرات التكاملات؛ Redis-backed
-   counter يحتاج فقط في حالة 50+ تكامل نشطة (ليس مركبات — تكاملات).
-2. **رفع الأدلة auto-only من URL alert**: لا يوجد آلية pull للملفات
+1. **رفع الأدلة auto-only من URL alert**: لا يوجد آلية pull للملفات
    من MDVR SSD مباشرة (يفترض CMSV6 ترفعها).
-3. **161 legacy migrations بدون `@rollback`**: technical debt قبل
+2. **161 legacy migrations بدون `@rollback`**: technical debt قبل
    #1141 (خارج نطاق هذا الـ branch).
 
 ## ملفات المرجع

@@ -96,18 +96,49 @@ interface BreakerState {
 }
 
 /**
- * Per-integration breaker. Single instance lives in-process; on a multi-
- * replica deployment each replica has its own view, which is acceptable
- * for the pilot — a true centralized breaker would require a Redis
- * counter, which is overkill for ≤20 integrations.
+ * Callback invoked when a breaker transitions to open. The coordinator
+ * (lib/fleet/telematicsBreakerCoordinator.ts) uses this to publish the
+ * open-state to Redis so sibling replicas in a multi-replica deployment
+ * honour the same open circuit. Synchronous in-memory deployments leave
+ * the callback unset; the breaker behaves as before.
+ */
+export type BreakerOpenCallback = (
+  integrationId: number,
+  openedAt: number,
+  cooldownMs: number,
+) => void;
+
+/**
+ * Per-integration breaker. The in-process Map remains the hot path so
+ * isOpen/recordFailure stay synchronous and zero-allocation in the cron
+ * loop. Cross-replica coordination is opt-in via the `onOpen` callback +
+ * the public `markOpen()` method: the coordinator publishes opens via
+ * Redis pub/sub and forwards remote opens back into local state. This
+ * keeps the singleton's contract synchronous + lock-free while still
+ * giving multi-replica deployments a shared view of which integrations
+ * are currently shorted-out.
  */
 export class CircuitBreaker {
   private state = new Map<number, BreakerState>();
+  private onOpenCallback: BreakerOpenCallback | null = null;
 
   constructor(
     private readonly failureThreshold = 3,
     private readonly cooldownMs = 60_000,
   ) {}
+
+  /** Returns the cooldown in ms — needed by the coordinator for TTL. */
+  get cooldown(): number {
+    return this.cooldownMs;
+  }
+
+  /**
+   * Register a callback invoked when this breaker transitions to open.
+   * Replaces any prior callback. Passing null disables coordination.
+   */
+  setOnOpenCallback(cb: BreakerOpenCallback | null): void {
+    this.onOpenCallback = cb;
+  }
 
   /** Returns true iff the integration is currently shorted-out. */
   isOpen(integrationId: number): boolean {
@@ -127,10 +158,26 @@ export class CircuitBreaker {
     this.state.delete(integrationId);
   }
 
+  /**
+   * Mark an integration as open externally (e.g. from a Redis pub/sub
+   * broadcast). Idempotent: marking an already-open integration is a
+   * no-op. We do NOT invoke the onOpenCallback here — that would create
+   * a feedback loop where every replica's mark-open broadcast triggers
+   * every other replica's broadcast forever.
+   */
+  markOpen(integrationId: number, openedAt: number): void {
+    const s = this.state.get(integrationId) ?? { failures: 0, openedAt: null };
+    s.openedAt = openedAt;
+    s.failures = Math.max(s.failures, this.failureThreshold);
+    this.state.set(integrationId, s);
+  }
+
   recordFailure(integrationId: number): boolean {
     const s = this.state.get(integrationId) ?? { failures: 0, openedAt: null };
     s.failures += 1;
-    if (s.failures >= this.failureThreshold && s.openedAt === null) {
+    const justOpened =
+      s.failures >= this.failureThreshold && s.openedAt === null;
+    if (justOpened) {
       s.openedAt = Date.now();
       logger.warn(
         { integrationId, failures: s.failures, cooldownMs: this.cooldownMs },
@@ -138,6 +185,20 @@ export class CircuitBreaker {
       );
     }
     this.state.set(integrationId, s);
+    // Fire the callback OUTSIDE the state update so a slow coordinator
+    // doesn't extend critical-section latency. We only fire on the
+    // transition edge (closed → open) to avoid republishing on every
+    // subsequent failure.
+    if (justOpened && this.onOpenCallback) {
+      try {
+        this.onOpenCallback(integrationId, s.openedAt!, this.cooldownMs);
+      } catch (err) {
+        logger.error(
+          { err, integrationId },
+          "[telematicsReliability] onOpenCallback threw — ignoring",
+        );
+      }
+    }
     return s.openedAt !== null;
   }
 

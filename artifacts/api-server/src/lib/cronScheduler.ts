@@ -37,6 +37,8 @@ import {
   fleetTelematicsHeartbeat,
   fleetTelematicsPoll,
 } from "./fleet/telematicsCron.js";
+import { telematicsBreaker } from "./fleet/telematicsReliability.js";
+import { setupBreakerCoordination } from "./fleet/telematicsBreakerCoordinator.js";
 import { scanObligations } from "./obligationsEngine.js";
 import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
 import { getRedisRateLimitStatus, type RedisRateLimitStatus } from "./rateLimitStore.js";
@@ -3911,6 +3913,13 @@ const scheduledTasks: ReturnType<typeof cron.schedule>[] = [];
 export async function startCronScheduler(): Promise<void> {
   await seedCronJobs();
   registerProactiveEventListeners();
+  // #1354 — wire the telematics breaker into cross-replica Redis pub/sub.
+  // No-ops when REDIS_URL is unset (single-replica deployments behave
+  // exactly as before). When configured, this is the path that closes
+  // Known Limitation #1 from the Phase 2 commit.
+  void setupBreakerCoordination(telematicsBreaker).catch((err) => {
+    logger.warn({ err }, "[CRON] telematics breaker coordination init failed");
+  });
 
   for (const def of JOB_DEFINITIONS) {
     try {

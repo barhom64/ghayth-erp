@@ -400,6 +400,7 @@ const allNavSections: NavSection[] = [
         { label: "أدلة الفيديو", path: "/fleet/telematics/video-evidence", icon: VideoIcon },
         { label: "أجهزة MDVR", path: "/fleet/telematics/devices", icon: HardDrive },
         { label: "إعدادات CMSV6", path: "/fleet/telematics/settings", icon: Settings },
+        { label: "لوحة التشغيل", path: "/fleet/telematics/operations", icon: ShieldAlert },
         { label: "التقارير", path: "/fleet/reports", icon: FileBarChart },
       ]},
       { label: "المستودعات", path: "/warehouse", icon: Package, module: "warehouse", children: [

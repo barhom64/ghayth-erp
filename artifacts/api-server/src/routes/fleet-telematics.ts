@@ -33,6 +33,7 @@ import { auditMutation, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { encryptSecret, decryptSecret, isEncrypted } from "../lib/secrets.js";
 import { telematicsBreaker } from "../lib/fleet/telematicsReliability.js";
+import { isCoordinationHealthy } from "../lib/fleet/telematicsBreakerCoordinator.js";
 import { config } from "../lib/config.js";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
@@ -1571,8 +1572,12 @@ function rewriteHlsPlaylist(
       return null;
     }
     if (resolved.host !== base.host) return null;
+    // Preserve the absolute pathname (with leading `/`) so when the
+    // segment / playlist endpoint resolves the encoded tail against the
+    // session's streamUrl, it lands on the right absolute path instead
+    // of being doubled up under the playlist's own directory.
     const tail =
-      resolved.pathname.replace(/^\//, "") +
+      resolved.pathname +
       (resolved.search.length > 0 ? resolved.search : "");
     if (mode === "variant") {
       return `${playlistRoot}?token=${encodedToken}&variant=${encodeURIComponent(tail)}`;
@@ -1733,8 +1738,15 @@ router.get(
       //                             single-variant — caller doesn't know)
       //   • variant=<encoded path> → variant playlist, resolved against
       //                              the master playlist URL with same-
-      //                              origin enforcement
+      //                              origin + same-prefix enforcement
       const base = new URL(gate.session.streamUrl!);
+      // The "allowed directory" for variant + segment lookups. URL
+      // normalisation absorbs `..` segments so we can't catch traversal
+      // with a string scan — instead we require the resolved path to
+      // start with the playlist's parent directory. This still allows
+      // legitimate sibling files (high.m3u8, audio/ar.m3u8) while
+      // refusing `../../etc/passwd` which would normalise to `/etc/...`.
+      const basePathDir = base.pathname.replace(/\/[^/]*$/, "/") || "/";
       let targetUrl: string;
       if (variantParam) {
         let resolved: URL;
@@ -1748,8 +1760,8 @@ router.get(
           res.status(400).json({ error: "playlist خارج النطاق المسموح" });
           return;
         }
-        if (resolved.pathname.includes("..")) {
-          res.status(400).json({ error: "playlist غير صالح" });
+        if (!resolved.pathname.startsWith(basePathDir)) {
+          res.status(400).json({ error: "playlist خارج المجلد المسموح" });
           return;
         }
         targetUrl = resolved.toString();
@@ -1834,8 +1846,12 @@ router.get(
         res.status(gate.httpStatus).json(gate.body);
         return;
       }
-      // Resolve segment URL against the playlist URL, enforce same-origin.
+      // Resolve segment URL against the playlist URL, enforce same-origin
+      // AND same-prefix (the playlist's parent directory). URL constructor
+      // normalises `..` segments so a string scan won't catch traversal —
+      // the basePathDir startsWith check does.
       const base = new URL(gate.session.streamUrl!);
+      const basePathDir = base.pathname.replace(/\/[^/]*$/, "/") || "/";
       let target: URL;
       try {
         // filename was URL-encoded by the rewriter to preserve any
@@ -1849,9 +1865,8 @@ router.get(
         res.status(400).json({ error: "المقطع خارج النطاق المسموح" });
         return;
       }
-      // Defence in depth: reject path traversal.
-      if (target.pathname.includes("..")) {
-        res.status(400).json({ error: "اسم المقطع غير صالح" });
+      if (!target.pathname.startsWith(basePathDir)) {
+        res.status(400).json({ error: "المقطع خارج المجلد المسموح" });
         return;
       }
 
@@ -2005,7 +2020,19 @@ router.get(
           openedAt: s.openedAt,
           status: s.openedAt ? "open" : "closed",
         }));
-      res.json({ data: filtered });
+      res.json({
+        data: filtered,
+        meta: {
+          // Surfaces whether multi-replica Redis pub/sub coordination is
+          // currently up — so an operator looking at "why are all
+          // replicas still hammering CMSV6?" can see immediately whether
+          // they're seeing per-replica state or coordinated state.
+          coordination: {
+            enabled: isCoordinationHealthy(),
+            mode: isCoordinationHealthy() ? "redis-pubsub" : "per-replica",
+          },
+        },
+      });
     } catch (e) {
       handleRouteError(e, res, "fleet-telematics");
     }

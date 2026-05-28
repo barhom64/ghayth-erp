@@ -40,7 +40,7 @@ function rewriteHlsPlaylist(
     }
     if (resolved.host !== base.host) return null;
     const tail =
-      resolved.pathname.replace(/^\//, "") +
+      resolved.pathname +
       (resolved.search.length > 0 ? resolved.search : "");
     if (mode === "variant") {
       return `${playlistRoot}?token=${encodedToken}&variant=${encodeURIComponent(tail)}`;
@@ -124,7 +124,7 @@ describe("Phase 2 — HLS playlist rewriter", () => {
     const playlist = ["#EXTM3U", "#EXTINF:5.0,", "seg-1.ts"].join("\n");
     const out = rewriteHlsPlaylist(playlist, BASE, SESSION, TOKEN);
     expect(out).toContain(
-      "/api/fleet/telematics/video/proxy/42/segment/live%2Fdev-001%2Fseg-1.ts?token=test-token-AbCdEf",
+      "/api/fleet/telematics/video/proxy/42/segment/%2Flive%2Fdev-001%2Fseg-1.ts?token=test-token-AbCdEf",
     );
     expect(out).not.toContain("gps.example.com");
   });
@@ -186,7 +186,7 @@ describe("Phase 2 — HLS playlist rewriter", () => {
     // The original query string is part of the path component encoded in
     // the segment name; the segment proxy decodes it before calling
     // CMSV6, so the signed URL still works upstream.
-    expect(out).toContain("seg-1.ts%3Fsig%3Dabc123%26exp%3D999");
+    expect(out).toContain("%2Flive%2Fdev-001%2Fseg-1.ts%3Fsig%3Dabc123%26exp%3D999");
   });
 
   it("URL-encodes the token in the query string", () => {
@@ -220,8 +220,8 @@ describe("Phase 2 — master playlist (multi-variant) rewriting", () => {
     ].join("\n");
     const out = rewriteHlsPlaylist(master, BASE, SESSION, TOKEN);
     expect(out).toContain("/api/fleet/telematics/video/proxy/42/playlist.m3u8");
-    expect(out).toContain("variant=live%2Fdev-001%2Fhigh.m3u8");
-    expect(out).toContain("variant=live%2Fdev-001%2Flow.m3u8");
+    expect(out).toContain("variant=%2Flive%2Fdev-001%2Fhigh.m3u8");
+    expect(out).toContain("variant=%2Flive%2Fdev-001%2Flow.m3u8");
     // Variant URLs are NOT routed to the segment endpoint
     expect(out).not.toMatch(/segment\/[^?]*high\.m3u8/);
   });
@@ -237,7 +237,7 @@ describe("Phase 2 — master playlist (multi-variant) rewriting", () => {
     // I-FRAME variant via URI="..."
     expect(out).toMatch(/URI="\/api\/fleet\/telematics\/video\/proxy\/42\/playlist\.m3u8/);
     // Regular STREAM-INF variant via bare line
-    expect(out).toContain("variant=live%2Fdev-001%2Fhigh.m3u8");
+    expect(out).toContain("variant=%2Flive%2Fdev-001%2Fhigh.m3u8");
   });
 
   it("rewrites EXT-X-MEDIA alternate audio/subtitle URIs as variants", () => {
@@ -249,8 +249,8 @@ describe("Phase 2 — master playlist (multi-variant) rewriting", () => {
       "high.m3u8",
     ].join("\n");
     const out = rewriteHlsPlaylist(master, BASE, SESSION, TOKEN);
-    expect(out).toMatch(/URI="\/api\/fleet\/telematics\/video\/proxy\/42\/playlist\.m3u8\?token=[^"]+&variant=live%2Fdev-001%2Faudio%2Far\.m3u8"/);
-    expect(out).toMatch(/URI="\/api\/fleet\/telematics\/video\/proxy\/42\/playlist\.m3u8\?token=[^"]+&variant=live%2Fdev-001%2Fsubs%2Far\.m3u8"/);
+    expect(out).toMatch(/URI="\/api\/fleet\/telematics\/video\/proxy\/42\/playlist\.m3u8\?token=[^"]+&variant=%2Flive%2Fdev-001%2Faudio%2Far\.m3u8"/);
+    expect(out).toMatch(/URI="\/api\/fleet\/telematics\/video\/proxy\/42\/playlist\.m3u8\?token=[^"]+&variant=%2Flive%2Fdev-001%2Fsubs%2Far\.m3u8"/);
   });
 
   it("rewrites EXT-X-MAP init segment URI as a segment proxy URL", () => {

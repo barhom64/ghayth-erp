@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
-  MapPin, Bot, Activity, Video, HardDrive, Settings,
+  MapPin, Bot, Activity, Video, HardDrive, Settings, ShieldCheck,
 } from "lucide-react";
 
 const TABS = [
@@ -10,6 +10,7 @@ const TABS = [
   { href: "/fleet/telematics/sensors", label: "قراءات الحساسات", icon: Activity },
   { href: "/fleet/telematics/video-evidence", label: "أدلة الفيديو", icon: Video },
   { href: "/fleet/telematics/devices", label: "أجهزة MDVR", icon: HardDrive },
+  { href: "/fleet/telematics/operations", label: "لوحة التشغيل", icon: ShieldCheck },
   { href: "/fleet/telematics/settings", label: "إعدادات CMSV6", icon: Settings },
 ];
 
