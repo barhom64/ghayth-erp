@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
-import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch, getErrorMessage } from "@/lib/api";
 import { formatDateAr, formatTimeAr } from "@/lib/formatters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -8,8 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Headphones, User, MessageSquare, Send, Trash2, Clock } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { Headphones, User, MessageSquare, Send, Trash2, Clock, MapPin, Star, Timer } from "lucide-react";
 import {
   DetailPageLayout,
   EntityComments,
@@ -53,6 +59,56 @@ export default function TicketDetail() {
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("support_ticket", id ?? 0);
 
   const { data: ticket, isLoading, isError, error, refetch } = useApiQuery<any>(["ticket-detail", id || ""], `/support/tickets/${id}`, !!id);
+
+  // POST /support/tickets/:id/field-visit — schedule a technician visit.
+  const fieldVisitMut = useApiMutation<unknown, {
+    scheduledAt: string;
+    technicianId?: number;
+    notes?: string;
+  }>(
+    () => `/support/tickets/${id}/field-visit`,
+    "POST",
+    [["ticket-detail", id || ""], ["tickets"]],
+    { successMessage: "تم جدولة الزيارة الميدانية" },
+  );
+  // POST /support/tickets/:id/csat — submit customer satisfaction rating.
+  const csatMut = useApiMutation<unknown, { rating: number; comment?: string }>(
+    () => `/support/tickets/${id}/csat`,
+    "POST",
+    [["ticket-detail", id || ""]],
+    { successMessage: "تم تسجيل التقييم — شكراً لك" },
+  );
+  // POST /support/tickets/check-sla — runs the SLA recompute job
+  // server-side and refreshes the breached flag.
+  const checkSlaMut = useApiMutation<unknown, Record<string, never>>(
+    "/support/tickets/check-sla",
+    "POST",
+    [["ticket-detail", id || ""], ["tickets"]],
+    { successMessage: "تم إعادة فحص اتفاقية الخدمة" },
+  );
+  const [fvOpen, setFvOpen] = useState(false);
+  const [fvScheduled, setFvScheduled] = useState("");
+  const [fvNotes, setFvNotes] = useState("");
+  const [csatOpen, setCsatOpen] = useState(false);
+  const [csatRating, setCsatRating] = useState(5);
+  const [csatComment, setCsatComment] = useState("");
+  const submitFieldVisit = () => {
+    if (!fvScheduled) {
+      toast({ variant: "destructive", title: "موعد الزيارة مطلوب" });
+      return;
+    }
+    fieldVisitMut.mutate(
+      { scheduledAt: fvScheduled, notes: fvNotes.trim() || undefined },
+      { onSuccess: () => { setFvOpen(false); setFvNotes(""); setFvScheduled(""); refetch(); } },
+    );
+  };
+  const submitCsat = () => {
+    if (csatRating < 1 || csatRating > 5) return;
+    csatMut.mutate(
+      { rating: csatRating, comment: csatComment.trim() || undefined },
+      { onSuccess: () => { setCsatOpen(false); setCsatComment(""); setCsatRating(5); refetch(); } },
+    );
+  };
 
   const priorityMap: Record<string, { label: string; color: string }> = {
     critical: { label: "حرجة", color: "bg-red-200 text-status-error-foreground" },
@@ -237,7 +293,35 @@ export default function TicketDetail() {
       hideTabs={registryHideTabs}
       overview={overview}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <GuardedButton
+            perm="support:update"
+            variant="outline"
+            size="sm"
+            onClick={() => setFvOpen(true)}
+            disabled={!ticket}
+          >
+            <MapPin className="h-4 w-4 me-1" /> زيارة ميدانية
+          </GuardedButton>
+          <GuardedButton
+            perm="support:create"
+            variant="outline"
+            size="sm"
+            onClick={() => setCsatOpen(true)}
+            disabled={!ticket || (ticket?.status !== "resolved" && ticket?.status !== "closed")}
+          >
+            <Star className="h-4 w-4 me-1" /> تقييم العميل
+          </GuardedButton>
+          <GuardedButton
+            perm="support:update"
+            variant="outline"
+            size="sm"
+            onClick={() => checkSlaMut.mutate({})}
+            disabled={checkSlaMut.isPending || !ticket}
+            rateLimitAware
+          >
+            <Timer className="h-4 w-4 me-1" /> فحص SLA
+          </GuardedButton>
           <PrintButton entityType="support_ticket" entityId={id ?? 0} formats={["a4"]} label="طباعة" />
           {deleting ? (
             <div className="flex gap-2">
@@ -247,6 +331,66 @@ export default function TicketDetail() {
           ) : (
             <Button variant="outline" size="sm" className="text-status-error-foreground" onClick={() => setDeleting(true)}><Trash2 className="h-4 w-4 me-1" />حذف</Button>
           )}
+
+          <Dialog open={fvOpen} onOpenChange={setFvOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>جدولة زيارة ميدانية</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-3 py-2">
+                <div>
+                  <Label className="text-xs">موعد الزيارة *</Label>
+                  <Input type="datetime-local" value={fvScheduled} onChange={(e) => setFvScheduled(e.target.value)} dir="ltr" />
+                </div>
+                <div>
+                  <Label className="text-xs">ملاحظات</Label>
+                  <Textarea value={fvNotes} onChange={(e) => setFvNotes(e.target.value)} rows={2} />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setFvOpen(false)}>إلغاء</Button>
+                <Button onClick={submitFieldVisit} disabled={fieldVisitMut.isPending}>
+                  جدولة
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={csatOpen} onOpenChange={setCsatOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>تقييم رضا العميل</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-3 py-2">
+                <div>
+                  <Label className="text-xs">التقييم</Label>
+                  <div className="flex items-center gap-1 mt-1">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        className={n <= csatRating ? "text-amber-500" : "text-muted-foreground"}
+                        onClick={() => setCsatRating(n)}
+                      >
+                        <Star className="h-6 w-6" fill={n <= csatRating ? "currentColor" : "none"} />
+                      </button>
+                    ))}
+                    <span className="text-sm text-muted-foreground ms-2">{csatRating}/5</span>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">تعليق (اختياري)</Label>
+                  <Textarea value={csatComment} onChange={(e) => setCsatComment(e.target.value)} rows={2} />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCsatOpen(false)}>إلغاء</Button>
+                <Button onClick={submitCsat} disabled={csatMut.isPending}>
+                  إرسال التقييم
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       }
     />

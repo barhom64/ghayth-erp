@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
@@ -10,7 +10,12 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { Edit, FileText, Link2, ShieldCheck, Plus } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -44,6 +49,55 @@ export default function PolicyDetail() {
   );
 
   const policy = data;
+  const { toast } = useToast();
+
+  // GET /governance/policies/:id/module-links — which app modules
+  // declare a dependency on this policy (e.g. finance.invoices must
+  // adhere to "Purchase Approval Policy"). Used by auditors to walk
+  // from policy → enforcement points.
+  const moduleLinksQ = useApiQuery<any>(
+    ["policy-module-links", String(id)],
+    id ? `/governance/policies/${id}/module-links` : null,
+    { enabled: !!id },
+  );
+  // GET /governance/policies/:id/compliance-actions — list of remedial
+  // actions opened against the policy (e.g. "training plan for new
+  // staff"). POST adds a new action.
+  const complianceActionsQ = useApiQuery<any>(
+    ["policy-compliance-actions", String(id)],
+    id ? `/governance/policies/${id}/compliance-actions` : null,
+    { enabled: !!id },
+  );
+  const addActionMut = useApiMutation<any, { actionType: string; description?: string; dueDate?: string }>(
+    () => `/governance/policies/${id}/compliance-actions`,
+    "POST",
+    [["policy-compliance-actions", String(id)]],
+    { successMessage: "تمت إضافة إجراء الامتثال" },
+  );
+  const [actionType, setActionType] = useState("");
+  const [actionDesc, setActionDesc] = useState("");
+  const [actionDue, setActionDue] = useState("");
+  const submitAction = () => {
+    if (!actionType.trim()) {
+      toast({ variant: "destructive", title: "نوع الإجراء مطلوب" });
+      return;
+    }
+    addActionMut.mutate(
+      {
+        actionType: actionType.trim(),
+        description: actionDesc.trim() || undefined,
+        dueDate: actionDue || undefined,
+      },
+      {
+        onSuccess: () => {
+          setActionType(""); setActionDesc(""); setActionDue("");
+        },
+      },
+    );
+  };
+
+  const moduleLinks: any[] = moduleLinksQ.data?.data ?? moduleLinksQ.data?.modules ?? [];
+  const complianceActions: any[] = complianceActionsQ.data?.data ?? complianceActionsQ.data?.actions ?? [];
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -168,6 +222,80 @@ export default function PolicyDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Module links — which features declare a dependency on this policy */}
+      {moduleLinks.length > 0 && (
+        <Card className="md:col-span-3">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Link2 className="h-4 w-4 text-muted-foreground" />
+              ارتباط الوحدات
+              <Badge variant="outline" className="text-[10px]">{moduleLinks.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {moduleLinks.map((m: any, i: number) => (
+                <Badge key={m.id ?? i} variant="secondary" className="text-xs">
+                  {m.moduleLabel ?? m.module ?? m.feature ?? m.name ?? "—"}
+                  {m.action && <span className="ms-1 text-muted-foreground">/{m.action}</span>}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Compliance actions — remedial work tied to this policy */}
+      <Card className="md:col-span-3">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+            إجراءات الامتثال
+            <Badge variant="outline" className="text-[10px]">{complianceActions.length}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {complianceActions.length === 0 && (
+            <p className="text-xs text-muted-foreground">لا توجد إجراءات بعد — أضِف إجراءً جديداً أدناه.</p>
+          )}
+          {complianceActions.map((a: any) => (
+            <div key={a.id} className="text-xs border rounded p-2 bg-muted/30">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">{a.actionType ?? a.type}</span>
+                {a.status && <Badge variant="outline" className="text-[10px]">{a.status}</Badge>}
+              </div>
+              {a.description && <p className="text-muted-foreground mt-1">{a.description}</p>}
+              {a.dueDate && <p className="text-[10px] text-muted-foreground mt-1">الاستحقاق: {formatDateAr(a.dueDate)}</p>}
+            </div>
+          ))}
+          <div className="border-t pt-2 mt-2 grid grid-cols-1 md:grid-cols-4 gap-2">
+            <div>
+              <Label className="text-xs">نوع الإجراء *</Label>
+              <Input value={actionType} onChange={(e) => setActionType(e.target.value)} className="text-sm" placeholder="تدريب / تدقيق / ..." />
+            </div>
+            <div className="md:col-span-2">
+              <Label className="text-xs">الوصف</Label>
+              <Textarea value={actionDesc} onChange={(e) => setActionDesc(e.target.value)} rows={1} className="text-sm" />
+            </div>
+            <div>
+              <Label className="text-xs">الاستحقاق</Label>
+              <Input type="date" value={actionDue} onChange={(e) => setActionDue(e.target.value)} className="text-sm" dir="ltr" />
+            </div>
+            <div className="md:col-span-4">
+              <GuardedButton
+                perm="governance:update"
+                size="sm"
+                onClick={submitAction}
+                disabled={addActionMut.isPending}
+                rateLimitAware
+              >
+                <Plus className="h-3 w-3 me-1" /> إضافة إجراء
+              </GuardedButton>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {id && <EntityComments entityType="policy" entityId={id} />}
       {id && <EntityTags entityType="policy" entityId={id} />}
