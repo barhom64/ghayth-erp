@@ -45,11 +45,26 @@ export default function ExecDashboard() {
     ["exec-dashboard"],
     "/exec-dashboard/overview"
   );
+  // GET /exec-dashboard/overdue-invoices — top overdue AR with days
+  // past due. Surfaced as a "فواتير متجاوزة" focus card.
+  const overdueInvoicesQ = useApiQuery<any>(
+    ["exec-overdue-invoices"],
+    "/exec-dashboard/overdue-invoices",
+  );
+  // GET /exec-dashboard/critical-obligations — non-financial deadlines
+  // (licence renewal, KSA government commitments) that need executive
+  // attention this week.
+  const criticalObligationsQ = useApiQuery<any>(
+    ["exec-critical-obligations"],
+    "/exec-dashboard/critical-obligations",
+  );
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
   const d = data || {};
+  const overdueInvoices: any[] = overdueInvoicesQ.data?.data ?? overdueInvoicesQ.data?.invoices ?? [];
+  const criticalObligations: any[] = criticalObligationsQ.data?.data ?? criticalObligationsQ.data?.obligations ?? [];
 
   return (
     <PageShell
@@ -257,6 +272,53 @@ export default function ExecDashboard() {
           </CardContent>
         </Card>
       )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {overdueInvoices.length > 0 && (
+          <Card className="border-status-error-surface">
+            <CardContent className="p-4">
+              <p className="text-sm font-semibold mb-2 flex items-center gap-2 text-status-error-foreground">
+                <AlertTriangle className="w-4 h-4" />
+                فواتير متجاوزة ({overdueInvoices.length})
+              </p>
+              <div className="space-y-1">
+                {overdueInvoices.slice(0, 6).map((inv: any) => (
+                  <div key={inv.id} className="flex items-center justify-between text-xs border-b pb-1">
+                    <span className="truncate max-w-[55%]">
+                      <span className="font-mono me-2">#{inv.ref ?? inv.id}</span>
+                      {inv.clientName ?? "—"}
+                    </span>
+                    <span className="font-mono text-status-error-foreground whitespace-nowrap">
+                      {formatCurrency(Number(inv.amount ?? inv.totalAmount ?? 0))} — {inv.daysPastDue ?? "?"}ي
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {criticalObligations.length > 0 && (
+          <Card className="border-status-warning-surface">
+            <CardContent className="p-4">
+              <p className="text-sm font-semibold mb-2 flex items-center gap-2 text-status-warning-foreground">
+                <Shield className="w-4 h-4" />
+                التزامات حرجة هذا الأسبوع ({criticalObligations.length})
+              </p>
+              <div className="space-y-1">
+                {criticalObligations.slice(0, 6).map((o: any) => (
+                  <div key={o.id} className="flex items-center justify-between text-xs border-b pb-1">
+                    <span className="truncate max-w-[60%]">{o.title ?? "—"}</span>
+                    <Badge variant="outline" className="text-[10px]">
+                      {o.dueAt ? new Date(o.dueAt).toLocaleDateString("ar-SA") : o.daysUntilDue ?? "—"}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </PageShell>
   );
 }

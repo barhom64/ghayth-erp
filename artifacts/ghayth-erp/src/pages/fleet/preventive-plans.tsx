@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { z } from "zod";
 import { useApiQuery, asList, useApiMutation } from "@/lib/api";
+import { todayLocal } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,20 @@ export default function PreventivePlansPage() {
     {
       successMessage: "تم إضافة خطة الصيانة الوقائية",
       onSuccess: () => { setShowForm(false); refetch(); },
+    },
+  );
+
+  // PATCH /fleet/preventive-plans/:id — quick "mark serviced" action
+  // resets lastServiceDate to today + advances nextServiceDate by
+  // intervalDays (server handles the recompute). Saves the operator
+  // from opening the full edit form for the common case.
+  const markServicedMut = useApiMutation<unknown, { id: number; lastServiceDate: string }>(
+    (b) => `/fleet/preventive-plans/${b.id}`,
+    "PATCH",
+    [["preventive-plans"]],
+    {
+      successMessage: "تم تسجيل الصيانة",
+      onSuccess: () => refetch(),
     },
   );
 
@@ -178,6 +193,26 @@ export default function PreventivePlansPage() {
       sortable: true,
       align: "end",
       render: (row) => row.estimatedCost > 0 ? `${row.estimatedCost} ر.س` : "-",
+    },
+    {
+      key: "_serviced",
+      header: "",
+      render: (row) => (
+        <GuardedButton
+          perm="fleet:update"
+          size="sm"
+          variant="ghost"
+          className="h-7 text-xs"
+          onClick={() => markServicedMut.mutate({
+            id: row.id,
+            lastServiceDate: todayLocal(),
+          })}
+          disabled={markServicedMut.isPending}
+          rateLimitAware
+        >
+          تم الصيانة
+        </GuardedButton>
+      ),
     },
   ];
 

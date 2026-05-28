@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Target, BarChart3, Plus, Eye, DollarSign, TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
@@ -69,6 +69,34 @@ const OPP_STAGE_OPTIONS = [
   { value: "closed_lost", label: "تم الإغلاق (خسارة)" },
 ];
 
+function FollowupCheckTrigger() {
+  // POST /crm/followup-check — runs the followup nag job on demand.
+  // Surfaces a "تم/فشل" toast via the mutation defaults; the result
+  // count is shown inline as a subtitle once it lands.
+  const [result, setResult] = useState<{ created: number } | null>(null);
+  const mut = useApiMutation<{ created?: number }, Record<string, never>>(
+    "/crm/followup-check",
+    "POST",
+    [["crm-stats"], ["crm-analytics"]],
+    { successMessage: false },
+  );
+  const run = () => {
+    mut.mutate({}, { onSuccess: (r) => setResult({ created: r?.created ?? 0 }) });
+  };
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      {result && (
+        <span className="text-muted-foreground">
+          نشأت {result.created} مهمة متابعة
+        </span>
+      )}
+      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={run} disabled={mut.isPending}>
+        فحص المتابعات الآن
+      </Button>
+    </div>
+  );
+}
+
 function OpportunitiesTab() {
   const [, navigate] = useLocation();
   const { roleLevel } = useAppContext();
@@ -76,6 +104,11 @@ function OpportunitiesTab() {
   // Scope (companyIds/branchIds) + scope-aware queryKey are injected
   // automatically by useApiQuery → injectScope.
   const { data: stats } = useApiQuery(["crm-stats"], `/crm/stats`);
+  // GET /crm/analytics — historical funnel + conversion ratios that
+  // /crm/stats doesn't expose. Shown as a compact "تحليلات الفرص"
+  // banner above the table for managers.
+  const { data: analyticsResp } = useApiQuery<any>(["crm-analytics"], "/crm/analytics");
+  const analytics = analyticsResp?.data ?? analyticsResp ?? null;
   const [page, setPage] = useState(1);
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [filters, setFilters] = useFilters();
@@ -164,6 +197,37 @@ function OpportunitiesTab() {
         { label: "مكسوبة", value: stats?.wonOpportunities || 0, icon: Eye, color: "text-emerald-600 bg-emerald-50" },
         { label: "قيمة الصفقات", value: formatCurrency(stats?.pipelineValue || 0), icon: DollarSign, color: "text-purple-600 bg-purple-50" },
       ]} />
+
+      {analytics && (
+        <Card className="border-indigo-100 bg-indigo-50/30">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold flex items-center gap-2 text-indigo-700">
+                <TrendingUp className="w-4 h-4" /> تحليلات الفرص
+              </p>
+              <FollowupCheckTrigger />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <div>
+                <p className="text-muted-foreground">نسبة التحويل</p>
+                <p className="font-mono font-bold">{(Number(analytics.conversionRate ?? 0) * 100).toFixed(1)}%</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">متوسط دورة الإغلاق</p>
+                <p className="font-mono font-bold">{analytics.avgCycleDays ?? "—"} يوم</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">قيمة الصفقات هذا الشهر</p>
+                <p className="font-mono font-bold">{formatCurrency(Number(analytics.mtdValue ?? 0))}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">صفقات قيد التفاوض</p>
+                <p className="font-mono font-bold">{analytics.inNegotiation ?? "—"}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex items-center gap-4">
         <div className="flex-1">
