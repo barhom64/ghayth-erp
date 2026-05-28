@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   DataTable, type DataTableColumn, PageShell,
 } from "@workspace/ui-core";
@@ -189,12 +190,22 @@ export default function NegativeStockPage() {
       ]}
       actions={
         rows.length > 0 ? (
-          <GuardedButton
-            perm="finance:export" variant="outline" size="sm"
-            onClick={() => exportCSV(rows, `negative-stock-${todayLocal()}.csv`)}
-          >
-            <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
-          </GuardedButton>
+          <>
+            <GuardedButton
+              perm="finance:export" variant="outline" size="sm"
+              onClick={() => exportCSV(rows, `negative-stock-${todayLocal()}.csv`)}
+            >
+              <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
+            </GuardedButton>
+            <PrintButton
+              entityType="report_negative_stock"
+              entityId={todayLocal()}
+              payload={{
+                entity: { title: "تنبيهات المخزون السالب", asOfDate: todayLocal(), count: rows.length },
+                items: rows,
+              }}
+            />
+          </>
         ) : null
       }
     >
