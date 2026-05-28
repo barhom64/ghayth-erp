@@ -13,8 +13,9 @@
 // بين المرحلتين عبر employee_violations."inquiryMemoId" (FK في هجرة 195).
 // ============================================================================
 
-import { rawQuery, rawExecute } from "./rawdb.js";
-import { currentYear, roundTo2 } from "./businessHelpers.js";
+import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
+import { issueNumber, type IssueResult } from "./numberingService.js";
+import { roundTo2 } from "./businessHelpers.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -325,20 +326,45 @@ export async function getDailyWage(assignmentId: number): Promise<number> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Memo number generator — رقم محضر متسلسل آمن لكل شركة
+// Memo number issuer — uses the numbering center (#1141 G1 closure)
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// The previous implementation used SELECT COUNT(*) + 1 to compute a
+// per-year memoNumber. That was NOT atomic (two concurrent callers got
+// the same count), did NOT log to numbering_assignments, and did NOT
+// enforce the scheme policy. Migration 230 seeds the
+// `hr.inquiry_memo` scheme and this function now routes through
+// `numberingService.issueNumber` which runs SELECT … FOR UPDATE inside
+// a transaction.
 
+export async function issueMemoNumber(
+  companyId: number,
+  branchId: number | null,
+  actorId: number | null,
+): Promise<IssueResult> {
+  return issueNumber({
+    companyId,
+    branchId,
+    moduleKey: "hr",
+    entityKey: "inquiry_memo",
+    entityTable: "hr_inquiry_memos",
+    actorId,
+    expectedTiming: "on_draft",
+  });
+}
+
+/**
+ * Deprecated. Use `issueMemoNumber` instead so the assignment is logged
+ * and the caller can link it back via `entityId`. Kept temporarily for
+ * the route caller in hr-discipline.ts; will be removed once the route
+ * migrates.
+ *
+ * @deprecated Use {@link issueMemoNumber} which returns an IssueResult
+ *             so the assignment can be linked back to the memo row.
+ */
 export async function generateMemoNumber(companyId: number): Promise<string> {
-  const year = currentYear();
-  const [row] = await rawQuery<{ cnt: string }>(
-    `SELECT COUNT(*)::int AS cnt
-       FROM hr_inquiry_memos
-      WHERE "companyId" = $1
-        AND EXTRACT(YEAR FROM "createdAt") = $2`,
-    [companyId, year]
-  );
-  const seq = Number(row?.cnt ?? 0) + 1;
-  return `MEMO-${year}-${String(seq).padStart(5, "0")}`;
+  const issued = await issueMemoNumber(companyId, null, null);
+  return issued.number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -371,55 +397,69 @@ export async function ensureInquiryMemoForViolation(params: {
     if (existing) return { memoId: existing.id, created: false };
   }
 
-  const memoNumber = await generateMemoNumber(params.companyId);
-
-  // RD11-01 — the SELECT above is a best-effort cache, not a true
-  // idempotency lock; two concurrent callers (e.g. dailyDeductionCheck
-  // running back-to-back, or a manual disciplinary action overlapping
-  // the cron) both see "no existing memo" and both INSERT. The schema
-  // side adds a partial unique index `uq_hr_inquiry_memos_violation`
-  // on (companyId, violationId) WHERE deletedAt IS NULL AND
-  // violationId IS NOT NULL (migration 199); this catch handles the
-  // race by re-fetching the row the other caller won the race for.
-  let insertId: number;
+  // G1 fix (#1141 coverage report §3 G1) — issue + INSERT + linkback
+  // are now atomic. If the INSERT fails (e.g. duplicate violationId
+  // races against uq_hr_inquiry_memos_violation), the whole tx rolls
+  // back including the counter increment — no burnt memo number.
+  // issueNumber's inner withTransaction joins ours via SAVEPOINT.
+  let insertId: number = 0;
+  let earlyExitWinnerId: number | null = null;
   try {
-    const inserted = await rawExecute(
-      `INSERT INTO hr_inquiry_memos (
-         "companyId","branchId","memoNumber","assignmentId","employeeId",
-         "regulationId","violationId","incidentType","incidentDate",
-         "incidentDurationMinutes","incidentDescription", source, status, "createdBy"
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending_employee',$13)
-       RETURNING id`,
-      [
+    insertId = await withTransaction(async (client) => {
+      const issued = await issueMemoNumber(
         params.companyId,
         params.branchId,
-        memoNumber,
-        params.assignmentId,
-        params.employeeId,
-        params.regulationId ?? null,
-        params.violationId ?? null,
-        params.incidentType,
-        params.incidentDate,
-        params.incidentDurationMinutes ?? null,
-        params.incidentDescription,
-        params.source ?? "auto",
         params.createdBy ?? null,
-      ]
-    );
-    insertId = inserted.insertId;
+      );
+      const ins = await client.query(
+        `INSERT INTO hr_inquiry_memos (
+           "companyId","branchId","memoNumber","assignmentId","employeeId",
+           "regulationId","violationId","incidentType","incidentDate",
+           "incidentDurationMinutes","incidentDescription", source, status, "createdBy"
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending_employee',$13)
+         RETURNING id`,
+        [
+          params.companyId,
+          params.branchId,
+          issued.number,
+          params.assignmentId,
+          params.employeeId,
+          params.regulationId ?? null,
+          params.violationId ?? null,
+          params.incidentType,
+          params.incidentDate,
+          params.incidentDurationMinutes ?? null,
+          params.incidentDescription,
+          params.source ?? "auto",
+          params.createdBy ?? null,
+        ]
+      );
+      const newId = ins.rows[0].id;
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [newId, issued.assignmentId]
+      );
+      return newId;
+    });
   } catch (e) {
     const code = (e as { code?: string } | null)?.code;
     const constraint = (e as { constraint?: string } | null)?.constraint;
     if (params.violationId && code === "23505" && (constraint === "uq_hr_inquiry_memos_violation" || !constraint)) {
+      // RD11-01 — concurrent caller raced us and won; their memo is the
+      // canonical one. Our counter slot was already rolled back by the
+      // withTransaction wrapper above.
       const [winner] = await rawQuery<{ id: number }>(
         `SELECT id FROM hr_inquiry_memos
           WHERE "companyId" = $1 AND "violationId" = $2 AND "deletedAt" IS NULL
           LIMIT 1`,
         [params.companyId, params.violationId]
       );
-      if (winner) return { memoId: winner.id, created: false };
+      if (winner) earlyExitWinnerId = winner.id;
     }
-    throw e;
+    if (earlyExitWinnerId === null) throw e;
+  }
+  if (earlyExitWinnerId !== null) {
+    return { memoId: earlyExitWinnerId, created: false };
   }
 
   // ربط المحضر بالمخالفة (إن وُجدت)
