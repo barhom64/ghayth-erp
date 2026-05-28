@@ -55,6 +55,7 @@ class PropertiesEngineImpl implements DomainEngine {
         description: `إيرادات إيجار — عقد #${payment.contractId}`,
         propertyId: payment.propertyId,
         contractId: payment.contractId,
+        clientId: payment.tenantId,
       },
     ];
 
@@ -66,6 +67,7 @@ class PropertiesEngineImpl implements DomainEngine {
         description: `ضريبة القيمة المضافة — إيجار`,
         propertyId: payment.propertyId,
         contractId: payment.contractId,
+        clientId: payment.tenantId,
       });
     }
 
