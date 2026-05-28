@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   FileCheck2, Download, ArrowDownCircle, ArrowUpCircle, Equal,
   AlertTriangle, CheckCircle2, Calendar, ExternalLink, Building2, Receipt,
@@ -204,6 +205,14 @@ export default function VatFilingReadinessPage() {
             <Download className="w-4 h-4 ml-1" />
             CSV
           </Button>
+          <PrintButton
+            entityType="report_vat_filing_readiness"
+            entityId="all"
+            payload={{
+              entity: { title: "جاهزية إقرار ضريبة القيمة المضافة" },
+              items: [],
+            }}
+          />
         </CardContent>
       </Card>
 
