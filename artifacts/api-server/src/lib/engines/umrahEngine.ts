@@ -108,7 +108,19 @@ class UmrahEngineImpl implements DomainEngine {
 
   async postPenaltyGL(
     ctx: UmrahGLContext,
-    penalty: { id: number; amount: number; pilgrimName: string; agentName?: string; type: string }
+    penalty: {
+      id: number;
+      amount: number;
+      pilgrimName: string;
+      agentName?: string;
+      type: string;
+      /** umrah_agents.id — propagates onto both lines so per-agent
+       *  penalty income reports work from the GL. */
+      agentId?: number;
+      /** umrah_seasons.id — propagates onto both lines so per-season
+       *  penalty income breakdowns work from the GL. */
+      seasonId?: number;
+    }
   ) {
     const [receivableCode, revenueCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_receivable", "debit", "1220"),
@@ -128,15 +140,24 @@ class UmrahEngineImpl implements DomainEngine {
       guardTable: "umrah_penalties",
       guardId: penalty.id,
       lines: [
-        { accountCode: receivableCode, debit: penalty.amount, credit: 0, description: `ذمم غرامة — ${penalty.pilgrimName}` },
-        { accountCode: revenueCode, debit: 0, credit: penalty.amount, description: `إيراد غرامة ${penalty.type}` },
+        { accountCode: receivableCode, debit: penalty.amount, credit: 0, description: `ذمم غرامة — ${penalty.pilgrimName}`, umrahAgentId: penalty.agentId, umrahSeasonId: penalty.seasonId },
+        { accountCode: revenueCode, debit: 0, credit: penalty.amount, description: `إيراد غرامة ${penalty.type}`, umrahAgentId: penalty.agentId, umrahSeasonId: penalty.seasonId },
       ],
     });
   }
 
   async postPenaltyWaiverGL(
     ctx: UmrahGLContext,
-    penalty: { id: number; amount: number; pilgrimName: string }
+    penalty: {
+      id: number;
+      amount: number;
+      pilgrimName: string;
+      /** Same agent/season dims as postPenaltyGL so a waiver reverses
+       *  cleanly against the original posting in per-agent / per-season
+       *  reports. */
+      agentId?: number;
+      seasonId?: number;
+    }
   ) {
     const [receivableCode, revenueCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_receivable", "debit", "1220"),
@@ -156,8 +177,8 @@ class UmrahEngineImpl implements DomainEngine {
       guardTable: "umrah_penalties",
       guardId: penalty.id,
       lines: [
-        { accountCode: revenueCode, debit: penalty.amount, credit: 0, description: `عكس إيراد غرامة — إعفاء` },
-        { accountCode: receivableCode, debit: 0, credit: penalty.amount, description: `إلغاء ذمم غرامة — إعفاء` },
+        { accountCode: revenueCode, debit: penalty.amount, credit: 0, description: `عكس إيراد غرامة — إعفاء`, umrahAgentId: penalty.agentId, umrahSeasonId: penalty.seasonId },
+        { accountCode: receivableCode, debit: 0, credit: penalty.amount, description: `إلغاء ذمم غرامة — إعفاء`, umrahAgentId: penalty.agentId, umrahSeasonId: penalty.seasonId },
       ],
     });
   }
