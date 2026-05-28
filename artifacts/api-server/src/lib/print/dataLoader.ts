@@ -173,11 +173,14 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "job_posting":
       return await loadJobPosting(companyId, entityId);
     case "leave_request":
+    case "leave":
+    case "request":
       return await loadLeaveRequest(companyId, entityId);
     case "loan_request":
     case "loan":
       return await loadLoanRequest(companyId, entityId);
     case "excuse_request":
+    case "excuse":
       return await loadExcuseRequest(companyId, entityId);
     case "transfer":
       return await loadEmployeeTransfer(companyId, entityId);
@@ -191,6 +194,7 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "insurance":
       return await loadInsurancePolicy(companyId, entityId);
     case "maintenance_request":
+    case "maintenance":
       return await loadMaintenanceRequest(companyId, entityId);
     case "payroll":
     case "payroll_run":
@@ -220,20 +224,24 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "fuel_log":
       return await loadFuelLog(companyId, entityId);
     case "traffic_violation":
+    case "violation":
       return await loadTrafficViolation(companyId, entityId);
     // ─── Master cards + niche transactions (Batches 5-7 presets) ───────
     case "vendor":
     case "supplier":
       return await loadVendorCard(companyId, entityId);
     case "building":
+    case "property":
       return await loadBuildingCard(companyId, entityId);
     case "project":
       return await loadProjectCard(companyId, entityId);
     case "store_order":
       return await loadStoreOrder(companyId, entityId);
     case "crm_opportunity":
+    case "opportunity":
       return await loadCrmOpportunity(companyId, entityId);
     case "support_ticket":
+    case "ticket":
       return await loadSupportTicket(companyId, entityId);
     case "umrah_pilgrim":
       return await loadUmrahPilgrim(companyId, entityId);
@@ -260,8 +268,10 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "shift":
       return await loadShiftCard(companyId, entityId);
     case "umrah_season":
+    case "season":
       return await loadUmrahSeason(companyId, entityId);
     case "chart_of_account":
+    case "account":
       return await loadChartOfAccount(companyId, entityId);
     // ─── Batch reports (no single row — synthetic entityId encodes filters) ──
     case "report_trial_balance":
