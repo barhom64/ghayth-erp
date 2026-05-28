@@ -159,7 +159,7 @@ Legacy-pattern guard:
 | G12 | `routes/finance-invoices.ts:2560` credit_memos.ref NULL | ✅ مُصلَحة (#1333) |
 | G13 | `routes/finance-invoices.ts:2901` debit_memos.ref NULL | ✅ مُصلَحة (#1333) |
 | G14 | `routes/finance-purchase.ts:1654` payment_runs Date.now() | ✅ مُصلَحة في هذا الـPR (مهاجرة 227) |
-| G15 | 8 schemes ميتة في الـUI (vendor_invoice, lead, ...) | 🔓 مفتوحة |
+| G15 | 8 schemes ميتة في الـUI (vendor_invoice, lead, ...) | ✅ مُصلَحة في هذا الـPR (مهاجرة 229 تُعطّلها) |
 
 **13 ثغرة مفتوحة + 2 مُغلَقة في هذا الـPR.**
 
