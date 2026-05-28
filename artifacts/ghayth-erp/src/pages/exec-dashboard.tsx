@@ -1,13 +1,14 @@
-import { PageShell } from "@workspace/ui-core";
+import { Link } from "wouter";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
   Shield, DollarSign, TrendingUp, TrendingDown, AlertTriangle,
-  Clock, FileText, Truck, Users, Building2, BarChart3,
+  Clock, FileText, Truck, Users, Building2, BarChart3, FileX, BadgeAlert,
 } from "lucide-react";
 
 const riskColors: Record<string, string> = {
@@ -40,11 +41,47 @@ function AgingBar({ label, amount, total }: { label: string; amount: number; tot
   );
 }
 
+interface OverdueInvoiceRow {
+  id: number;
+  invoiceNumber: string;
+  dueDate: string;
+  total: number;
+  paidAmount: number;
+  outstanding: number;
+  daysPastDue: number;
+  dunningStage: number;
+  clientName: string | null;
+}
+
+interface CriticalObligationRow {
+  id: number;
+  entityType: string;
+  entityId: number;
+  description: string | null;
+  dueDate: string;
+  daysUntilDue: number;
+  status: string;
+  amount: number | null;
+}
+
 export default function ExecDashboard() {
   const { data, isLoading, isError } = useApiQuery<any>(
     ["exec-dashboard"],
     "/exec-dashboard/overview"
   );
+
+  // Drill-down endpoints — only fetched once the overview lands (they
+  // share the same role gate so failing them separately is fine).
+  const { data: overdueResp } = useApiQuery<{ data: OverdueInvoiceRow[] }>(
+    ["exec-dashboard-overdue"],
+    "/exec-dashboard/overdue-invoices",
+  );
+  const { data: obligResp } = useApiQuery<{ data: CriticalObligationRow[] }>(
+    ["exec-dashboard-obligations"],
+    "/exec-dashboard/critical-obligations",
+  );
+  const overdueInvoices = overdueResp?.data ?? [];
+  const criticalObligations = obligResp?.data ?? [];
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -254,6 +291,82 @@ export default function ExecDashboard() {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Drill-down: overdue invoices */}
+      {overdueInvoices.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileX className="w-5 h-5 text-status-error-foreground" />
+              فواتير متأخرة ({overdueInvoices.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <DataTable
+              columns={[
+                { key: "invoiceNumber", header: "الرقم", render: (r) => (
+                  <Link href={`/finance/invoices/${r.id}`}>
+                    <span className="font-mono text-xs text-status-info-foreground hover:underline cursor-pointer">{r.invoiceNumber}</span>
+                  </Link>
+                )},
+                { key: "clientName", header: "العميل", render: (r) => <span className="text-xs">{r.clientName || "—"}</span> },
+                { key: "outstanding", header: "المتبقي", render: (r) => (
+                  <span className="font-bold text-status-error-foreground">{formatCurrency(Number(r.outstanding))}</span>
+                )},
+                { key: "daysPastDue", header: "أيام التأخر", render: (r) => (
+                  <Badge variant={r.daysPastDue > 60 ? "destructive" : "secondary"} className="text-xs">
+                    {r.daysPastDue} يوم
+                  </Badge>
+                )},
+                { key: "dunningStage", header: "مرحلة المطالبة", render: (r) => (
+                  <span className="font-mono text-xs">{r.dunningStage > 0 ? `#${r.dunningStage}` : "—"}</span>
+                )},
+                { key: "dueDate", header: "تاريخ الاستحقاق", render: (r) => (
+                  <span className="text-xs text-muted-foreground">{formatDateAr(r.dueDate)}</span>
+                )},
+              ] as DataTableColumn<OverdueInvoiceRow>[]}
+              data={overdueInvoices}
+              noToolbar
+              pageSize={10}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Drill-down: critical obligations */}
+      {criticalObligations.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <BadgeAlert className="w-5 h-5 text-status-warning-foreground" />
+              التزامات حرجة ({criticalObligations.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <DataTable
+              columns={[
+                { key: "description", header: "الوصف", render: (r) => <span className="text-xs">{r.description || "—"}</span> },
+                { key: "entityType", header: "النوع", render: (r) => <Badge variant="outline" className="text-xs">{r.entityType}</Badge> },
+                { key: "amount", header: "المبلغ", render: (r) => (
+                  r.amount ? <span className="font-mono text-xs">{formatCurrency(Number(r.amount))}</span> : <span className="text-muted-foreground">—</span>
+                )},
+                { key: "daysUntilDue", header: "متبقي", render: (r) => (
+                  <Badge variant={r.daysUntilDue < 7 ? "destructive" : "secondary"} className="text-xs">
+                    {r.daysUntilDue < 0 ? `متأخر ${Math.abs(r.daysUntilDue)} يوم` : `${r.daysUntilDue} يوم`}
+                  </Badge>
+                )},
+                { key: "dueDate", header: "الاستحقاق", render: (r) => (
+                  <span className="text-xs text-muted-foreground">{formatDateAr(r.dueDate)}</span>
+                )},
+                { key: "status", header: "الحالة", render: (r) => <Badge variant="outline" className="text-xs">{r.status}</Badge> },
+              ] as DataTableColumn<CriticalObligationRow>[]}
+              data={criticalObligations}
+              noToolbar
+              pageSize={10}
+            />
           </CardContent>
         </Card>
       )}
