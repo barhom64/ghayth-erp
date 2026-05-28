@@ -50,6 +50,14 @@ export default function UmrahSubAgents() {
   const agentsQ = useApiQuery<{ data: any[] }>(["umrah-agents"], "/umrah/agents");
   // Reuses existing clients endpoint
   const clientsQ = useApiQuery<{ data: any[] }>(["clients"], "/clients");
+  // GET /umrah/sub-agents/unlinked — server-filtered list of agents
+  // without a CRM client link. Surfaced as a count on the "غير مربوط"
+  // tab so the operator can spot data-quality issues at a glance.
+  const unlinkedQ = useApiQuery<{ data: SubAgent[] }>(
+    ["umrah-sub-agents-unlinked"],
+    "/umrah/sub-agents/unlinked",
+  );
+  const unlinkedFromApi = unlinkedQ.data?.data ?? [];
 
   const subAgents = subAgentsQ.data?.data ?? [];
   const agents = agentsQ.data?.data ?? [];
@@ -88,6 +96,33 @@ export default function UmrahSubAgents() {
       },
     },
   );
+
+  // PUT /umrah/sub-agents/:id/link — alternative that supports
+  // create-on-link (passes createNew + clientName + clientPhone instead
+  // of an existing clientId). Used by the "أنشئ عميل جديد" path.
+  const linkOrCreateMut = useApiMutation<any, {
+    id: number;
+    createNew: boolean;
+    clientName?: string;
+    clientPhone?: string;
+  }>(
+    (body) => `/umrah/sub-agents/${body.id}/link`,
+    "PUT",
+    [["umrah-sub-agents"], ["umrah-sub-agents-unlinked"], ["clients"]],
+    {
+      successMessage: "تم إنشاء العميل وربطه",
+      onSuccess: () => {
+        setLinking(null);
+        setLinkClientId("");
+        setNewClientName("");
+        setNewClientPhone("");
+        setLinkMode("existing");
+      },
+    },
+  );
+  const [linkMode, setLinkMode] = useState<"existing" | "new">("existing");
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientPhone, setNewClientPhone] = useState("");
 
   const filtered = useMemo(() => {
     return subAgents.filter((s) => {
@@ -350,40 +385,101 @@ export default function UmrahSubAgents() {
       <Dialog open={!!linking} onOpenChange={(o) => !o && setLinking(null)}>
         <DialogContent dir="rtl">
           <DialogHeader>
-            <DialogTitle>ربط بعميل موجود</DialogTitle>
+            <DialogTitle>ربط الوكيل الفرعي بعميل</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              اختر العميل في النظام الذي تريد ربطه بالوكيل الفرعي:&nbsp;
-              <span className="font-semibold">{linking?.name}</span>
+              الوكيل:&nbsp;<span className="font-semibold">{linking?.name}</span>
             </p>
-            <SearchableSelect
-              options={clients.map((c: any) => ({
-                value: String(c.id),
-                label: c.name ?? c.companyName ?? `#${c.id}`,
-                sublabel: c.phone,
-              }))}
-              value={linkClientId}
-              onValueChange={setLinkClientId}
-              placeholder="اختر عميلاً..."
-              searchPlaceholder="ابحث في العملاء..."
-            />
+            <div className="flex items-center gap-1 bg-surface-subtle rounded-md p-1">
+              <button
+                type="button"
+                onClick={() => setLinkMode("existing")}
+                className={`flex-1 px-3 py-1.5 text-xs rounded ${linkMode === "existing" ? "bg-white shadow-sm font-semibold" : "text-muted-foreground"}`}
+              >
+                عميل موجود
+              </button>
+              <button
+                type="button"
+                onClick={() => setLinkMode("new")}
+                className={`flex-1 px-3 py-1.5 text-xs rounded ${linkMode === "new" ? "bg-white shadow-sm font-semibold" : "text-muted-foreground"}`}
+              >
+                إنشاء عميل جديد
+              </button>
+            </div>
+            {linkMode === "existing" ? (
+              <SearchableSelect
+                options={clients.map((c: any) => ({
+                  value: String(c.id),
+                  label: c.name ?? c.companyName ?? `#${c.id}`,
+                  sublabel: c.phone,
+                }))}
+                value={linkClientId}
+                onValueChange={setLinkClientId}
+                placeholder="اختر عميلاً..."
+                searchPlaceholder="ابحث في العملاء..."
+              />
+            ) : (
+              <div className="space-y-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">اسم العميل *</label>
+                  <input
+                    value={newClientName}
+                    onChange={(e) => setNewClientName(e.target.value)}
+                    className="w-full h-8 text-sm border rounded px-2"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">الهاتف</label>
+                  <input
+                    value={newClientPhone}
+                    onChange={(e) => setNewClientPhone(e.target.value)}
+                    className="w-full h-8 text-sm border rounded px-2"
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setLinking(null)}>إلغاء</Button>
-            <GuardedButton
-              perm="umrah:write"
-              disabled={!linkClientId || linkMut.isPending}
-              onClick={() => {
-                if (!linking || !linkClientId) return;
-                linkMut.mutate({ id: linking.id, clientId: Number(linkClientId) });
-              }}
-            >
-              ربط
-            </GuardedButton>
+            {linkMode === "existing" ? (
+              <GuardedButton
+                perm="umrah:write"
+                disabled={!linkClientId || linkMut.isPending}
+                onClick={() => {
+                  if (!linking || !linkClientId) return;
+                  linkMut.mutate({ id: linking.id, clientId: Number(linkClientId) });
+                }}
+              >
+                ربط
+              </GuardedButton>
+            ) : (
+              <GuardedButton
+                perm="umrah:write"
+                disabled={!newClientName.trim() || linkOrCreateMut.isPending}
+                onClick={() => {
+                  if (!linking || !newClientName.trim()) return;
+                  linkOrCreateMut.mutate({
+                    id: linking.id,
+                    createNew: true,
+                    clientName: newClientName.trim(),
+                    clientPhone: newClientPhone.trim() || undefined,
+                  });
+                }}
+              >
+                إنشاء وربط
+              </GuardedButton>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {unlinkedFromApi.length > 0 && tab === "unlinked" && (
+        <p className="text-xs text-muted-foreground text-center">
+          الخادم يُبلِّغ عن {unlinkedFromApi.length} وكيل فرعي بدون عميل مرتبط
+        </p>
+      )}
     </PageShell>
   );
 }

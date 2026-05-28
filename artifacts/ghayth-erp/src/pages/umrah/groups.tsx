@@ -63,6 +63,15 @@ interface Pilgrim {
 export default function UmrahGroups() {
   const { toast } = useToast();
   const { data: resp, isLoading, isError, refetch } = useApiQuery<{ data: Group[] }>(["umrah-groups"], "/umrah/groups");
+  // GET /umrah/groups/:id — full detail (per-pilgrim assignments,
+  // assigned transport, room blocks). Fetched lazily when the operator
+  // clicks "تفاصيل" on a row.
+  const [detailGroupId, setDetailGroupId] = useState<number | null>(null);
+  const groupDetailQ = useApiQuery<any>(
+    ["umrah-group-detail", String(detailGroupId ?? 0)],
+    detailGroupId ? `/umrah/groups/${detailGroupId}` : null,
+    { enabled: detailGroupId !== null },
+  );
 
   // PATCH /umrah/groups/:id + DELETE /umrah/groups/:id wired via the
   // shared inline-actions hook. Edit fields are minimal (name +
@@ -221,6 +230,14 @@ export default function UmrahGroups() {
             rateLimitAware
           >
             <Split className="h-3.5 w-3.5" /> تقسيم
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1"
+            onClick={() => setDetailGroupId(g.id)}
+          >
+            تفاصيل
           </Button>
           <RowActions
             onDelete={() => groupActions.startDelete(g.id)}
@@ -419,6 +436,43 @@ export default function UmrahGroups() {
           <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
             <AlertDialogAction onClick={handleCreateGroup} disabled={createGroupMut.isPending}>إنشاء</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={detailGroupId !== null} onOpenChange={(o) => !o && setDetailGroupId(null)}>
+        <AlertDialogContent className="max-w-lg" dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تفاصيل المجموعة #{detailGroupId}</AlertDialogTitle>
+          </AlertDialogHeader>
+          <div className="py-2 text-sm space-y-2">
+            {groupDetailQ.isLoading ? (
+              <p className="text-muted-foreground">جاري التحميل...</p>
+            ) : groupDetailQ.data ? (
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div><span className="text-muted-foreground">الاسم:</span> {groupDetailQ.data.name ?? "—"}</div>
+                <div><span className="text-muted-foreground">رقم نُسك:</span> {groupDetailQ.data.nuskGroupNumber ?? "—"}</div>
+                <div><span className="text-muted-foreground">الموسم:</span> {groupDetailQ.data.seasonName ?? groupDetailQ.data.seasonId ?? "—"}</div>
+                <div><span className="text-muted-foreground">الوكيل:</span> {groupDetailQ.data.agentName ?? "—"}</div>
+                <div><span className="text-muted-foreground">عدد المعتمرين:</span> {groupDetailQ.data.mutamerCount ?? "—"}</div>
+                <div><span className="text-muted-foreground">مدة البرنامج:</span> {groupDetailQ.data.programDuration ?? "—"} يوم</div>
+                {Array.isArray(groupDetailQ.data.pilgrims) && (
+                  <div className="col-span-2">
+                    <p className="text-muted-foreground mb-1">المعتمرون ({groupDetailQ.data.pilgrims.length})</p>
+                    <ul className="text-xs space-y-0.5 max-h-32 overflow-y-auto">
+                      {groupDetailQ.data.pilgrims.slice(0, 20).map((p: any) => (
+                        <li key={p.id}>{p.fullName ?? p.name ?? `#${p.id}`}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-muted-foreground">لا توجد بيانات</p>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDetailGroupId(null)}>إغلاق</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
