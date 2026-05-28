@@ -96,6 +96,45 @@ export default function UmrahGroups() {
     { successMessage: false } as any,
   );
 
+  // Create state — POST /umrah/groups. Numbering centre stamps the
+  // ref / internalRef; the dialog only needs name + agentId +
+  // seasonId + mutamerCount.
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    name: "",
+    agentId: "",
+    seasonId: "",
+    mutamerCount: "",
+    programDuration: "",
+    nuskGroupNumber: "",
+  });
+  const createGroupMut = useApiMutation<unknown, Record<string, unknown>>(
+    "/umrah/groups",
+    "POST",
+    [["umrah-groups"]],
+    {
+      successMessage: "تم إنشاء المجموعة",
+      onSuccess: () => {
+        setCreateOpen(false);
+        setCreateForm({ name: "", agentId: "", seasonId: "", mutamerCount: "", programDuration: "", nuskGroupNumber: "" });
+      },
+    },
+  );
+  const handleCreateGroup = () => {
+    if (!createForm.seasonId || !createForm.mutamerCount) {
+      toast({ variant: "destructive", title: "الموسم وعدد المعتمرين مطلوبان" });
+      return;
+    }
+    createGroupMut.mutate({
+      name: createForm.name.trim() || undefined,
+      nuskGroupNumber: createForm.nuskGroupNumber.trim() || undefined,
+      agentId: createForm.agentId ? Number(createForm.agentId) : undefined,
+      seasonId: Number(createForm.seasonId),
+      mutamerCount: Number(createForm.mutamerCount),
+      programDuration: createForm.programDuration ? Number(createForm.programDuration) : undefined,
+    });
+  };
+
   // Merge state
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeTarget, setMergeTarget] = useState<string>("");
@@ -206,12 +245,18 @@ export default function UmrahGroups() {
           <h1 className="text-2xl font-bold">المجموعات</h1>
           <p className="text-sm text-muted-foreground">إدارة مجموعات العمرة — تقسيم ودمج</p>
         </div>
-        {selectedIds.length >= 1 && (
-          <GuardedButton perm="umrah:approve" onClick={() => setMergeOpen(true)} className="gap-2" rateLimitAware>
-            <Merge className="h-4 w-4" />
-            دمج المحدد ({selectedIds.length})
+        <div className="flex items-center gap-2">
+          {selectedIds.length >= 1 && (
+            <GuardedButton perm="umrah:approve" onClick={() => setMergeOpen(true)} className="gap-2" rateLimitAware>
+              <Merge className="h-4 w-4" />
+              دمج المحدد ({selectedIds.length})
+            </GuardedButton>
+          )}
+          <GuardedButton perm="umrah:create" onClick={() => setCreateOpen(true)} className="gap-2" rateLimitAware>
+            <Users className="h-4 w-4" />
+            مجموعة جديدة
           </GuardedButton>
-        )}
+        </div>
       </header>
 
       <Card>
@@ -338,6 +383,45 @@ export default function UmrahGroups() {
           isPending={groupActions.isPending}
         />
       )}
+
+      <AlertDialog open={createOpen} onOpenChange={setCreateOpen}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>مجموعة جديدة</AlertDialogTitle>
+            <AlertDialogDescription>الموسم وعدد المعتمرين مطلوبان. مركز الترقيم يصدر الرقم الداخلي.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid grid-cols-2 gap-3 py-2">
+            <div className="col-span-2">
+              <Label className="text-xs">الاسم</Label>
+              <Input value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-xs">رقم نُسك (اختياري)</Label>
+              <Input value={createForm.nuskGroupNumber} onChange={(e) => setCreateForm({ ...createForm, nuskGroupNumber: e.target.value })} dir="ltr" className="font-mono" />
+            </div>
+            <div>
+              <Label className="text-xs">معرّف الوكيل</Label>
+              <Input type="number" value={createForm.agentId} onChange={(e) => setCreateForm({ ...createForm, agentId: e.target.value })} dir="ltr" />
+            </div>
+            <div>
+              <Label className="text-xs">الموسم *</Label>
+              <Input type="number" value={createForm.seasonId} onChange={(e) => setCreateForm({ ...createForm, seasonId: e.target.value })} dir="ltr" />
+            </div>
+            <div>
+              <Label className="text-xs">عدد المعتمرين *</Label>
+              <Input type="number" value={createForm.mutamerCount} onChange={(e) => setCreateForm({ ...createForm, mutamerCount: e.target.value })} dir="ltr" />
+            </div>
+            <div>
+              <Label className="text-xs">مدة البرنامج (يوم)</Label>
+              <Input type="number" value={createForm.programDuration} onChange={(e) => setCreateForm({ ...createForm, programDuration: e.target.value })} dir="ltr" />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCreateGroup} disabled={createGroupMut.isPending}>إنشاء</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
