@@ -1,17 +1,67 @@
+import { useState } from "react";
+import { z } from "zod";
 import { useRoute, Link } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DetailPageLayout,
+  type ExtraTab,
   EntityComments,
 } from "@workspace/entity-kit";
+import {
+  FormShell,
+  FormGrid,
+  FormNumberField,
+  FormTextField,
+  DataTable,
+  type DataTableColumn,
+} from "@workspace/ui-core";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { EntityTags } from "@/components/shared/entity-tags";
-import { UserPlus, FileText, ExternalLink, Phone, Mail, MapPin } from "lucide-react";
+import { UserPlus, FileText, ExternalLink, Phone, Mail, MapPin, DollarSign, Plus, X } from "lucide-react";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
+
+const paymentFormSchema = z.object({
+  sarAmount: z.coerce.number().positive("المبلغ مطلوب"),
+  method: z.string().trim(),
+  reference: z.string().trim(),
+});
+type PaymentForm = z.infer<typeof paymentFormSchema>;
+
+function AddPaymentForm({ subAgentId, onSuccess }: { subAgentId: number; onSuccess: () => void }) {
+  const saveMut = useApiMutation<unknown, PaymentForm & { subAgentId: number }>(
+    "/umrah/payments",
+    "POST",
+    [["umrah-sub-agent-payments", String(subAgentId)]],
+    { successMessage: "تم تسجيل الدفعة", onSuccess },
+  );
+  return (
+    <Card className="border-dashed">
+      <CardContent className="p-4">
+        <h4 className="font-semibold mb-3 text-sm">تسجيل دفعة جديدة</h4>
+        <FormShell
+          schema={paymentFormSchema}
+          defaultValues={{ sarAmount: 0, method: "", reference: "" }}
+          submitLabel="حفظ الدفعة"
+          onSubmit={async (values, ctx) => {
+            await saveMut.mutateAsync({ ...values, subAgentId });
+            ctx.reset();
+          }}
+        >
+          <FormGrid cols={2}>
+            <FormNumberField name="sarAmount" label="المبلغ (ر.س)" />
+            <FormTextField name="method" label="طريقة الدفع" placeholder="cash / bank / transfer" />
+            <FormTextField name="reference" label="المرجع" className="md:col-span-2" />
+          </FormGrid>
+        </FormShell>
+      </CardContent>
+    </Card>
+  );
+}
 
 // Detail view for `umrah_sub_agents`. Reuses the polymorphic
 // UmrahAttachmentsPanel + EntityComments + EntityTags helpers so the
@@ -47,12 +97,62 @@ const PAYMENT_TERMS_LABEL: Record<string, string> = {
 export default function UmrahSubAgentDetail() {
   const [, params] = useRoute("/umrah/sub-agents/:id");
   const id = params?.id ? Number(params.id) : null;
+  const [showAddPayment, setShowAddPayment] = useState(false);
 
   const { data: sa, isLoading, error, refetch } = useApiQuery<SubAgent>(
     ["umrah-sub-agent", String(id ?? 0)],
     `/umrah/sub-agents/${id}`,
     !!id,
   );
+
+  const { data: paymentsResp, refetch: refetchPayments } = useApiQuery<{ data: any[] }>(
+    ["umrah-sub-agent-payments", String(id ?? 0)],
+    id ? `/umrah/payments?subAgentId=${id}` : null,
+    !!id,
+  );
+  const payments = asList(paymentsResp?.data ?? paymentsResp);
+
+  const paymentsTab: ExtraTab = {
+    key: "payments",
+    label: "الدفعات",
+    icon: DollarSign,
+    badge: payments.length || undefined,
+    content: (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-sm">دفعات الوكيل الفرعي</h3>
+          <GuardedButton perm="umrah:create" size="sm" onClick={() => setShowAddPayment(!showAddPayment)}>
+            {showAddPayment ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />دفعة جديدة</>}
+          </GuardedButton>
+        </div>
+        {showAddPayment && id && (
+          <AddPaymentForm subAgentId={id} onSuccess={() => { setShowAddPayment(false); refetchPayments(); }} />
+        )}
+        {payments.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center text-muted-foreground">
+              <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">لا توجد دفعات مسجلة</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <DataTable
+            columns={[
+              { key: "paymentDate", header: "التاريخ", sortable: true, render: (p) => formatDateAr(p.paymentDate) },
+              { key: "sarAmount", header: "المبلغ", sortable: true, render: (p) => (
+                <span className="font-bold text-status-success-foreground">{formatCurrency(Number(p.sarAmount || p.amount || 0))}</span>
+              )},
+              { key: "method", header: "الطريقة", render: (p) => p.method || "—" },
+              { key: "reference", header: "المرجع", render: (p) => p.reference || "—" },
+            ] as DataTableColumn<any>[]}
+            data={payments}
+            noToolbar
+            pageSize={10}
+          />
+        )}
+      </div>
+    ),
+  };
 
   const status = sa
     ? sa.isActive
@@ -200,6 +300,7 @@ export default function UmrahSubAgentDetail() {
       error={error ? true : undefined}
       onRetry={() => refetch()}
       overview={overview}
+      extraTabs={[paymentsTab]}
     />
   );
 }
