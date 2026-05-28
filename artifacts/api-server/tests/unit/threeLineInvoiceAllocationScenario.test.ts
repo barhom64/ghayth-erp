@@ -218,21 +218,30 @@ describe("link 7 — runtime simulation: 3 lines on same account, 3 different di
     expect(a).toBe(b);
   });
 
-  it("the fallback key (12 empty slots) matches what finance-invoices.ts uses", () => {
-    // The fallback bucket key is `${invRevenueCode}|||||||||||` (11 pipes
-    // = 12 empty slots after the accountCode). The string literal must
-    // appear verbatim in the route.
-    expect(INVOICES).toContain("`${invRevenueCode}|||||||||||`");
+  it("the fallback key (14 empty slots) matches what finance-invoices.ts uses", () => {
+    // The fallback bucket key is `${invRevenueCode}|||||||||||||` (13 pipes
+    // = 14 empty slots after the accountCode). The bucket grew from 12 to
+    // 14 slots when unitId + assetId were added (silent dim-loss bug fix
+    // — without those slots, two lines on different units/assets would
+    // collapse into one bucket and the JE line would carry NULL for both).
+    expect(INVOICES).toContain("`${invRevenueCode}|||||||||||||`");
   });
 });
 
 // ─── Link 8: smoke that the fallback bucket also lists all 4 dim families ──
 
-describe("link 8 — fallback bucket initializer carries all 4 dim families", () => {
+describe("link 8 — fallback bucket initializer carries all dim families", () => {
   it("fallback bucket sets umrahSeasonId + umrahAgentId to null (not omitted)", () => {
     const fallbackMatch = INVOICES.match(/buckets\.set\(fallbackKey,\s*\{[\s\S]{0,600}?\}\)/);
     expect(fallbackMatch).not.toBeNull();
     expect(fallbackMatch![0]).toContain("umrahSeasonId: null");
     expect(fallbackMatch![0]).toContain("umrahAgentId: null");
+  });
+
+  it("fallback bucket sets unitId + assetId to null (silent dim-loss bug fix)", () => {
+    const fallbackMatch = INVOICES.match(/buckets\.set\(fallbackKey,\s*\{[\s\S]{0,600}?\}\)/);
+    expect(fallbackMatch).not.toBeNull();
+    expect(fallbackMatch![0]).toContain("unitId: null");
+    expect(fallbackMatch![0]).toContain("assetId: null");
   });
 });

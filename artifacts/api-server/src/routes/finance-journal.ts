@@ -37,6 +37,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
+import { logAllocationOverride } from "../lib/accountingAllocation.js";
 import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
@@ -523,9 +524,10 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
 
     // Audit item #2 — apply operator-supplied allocation overrides on top
     // of the auto-derived entityLink. Each field that the operator pinned
-    // through the LineAllocationPanel wins over the rule-resolved value;
-    // the override pair (proposed vs resolved) is logged downstream via
-    // logAllocationOverride() in the allocation resolver pipeline.
+    // through the LineAllocationPanel wins over the rule-resolved value.
+    // The override gets logged via logAllocationOverride() INSIDE the
+    // withTransaction block below (after the JE id is known) so the
+    // allocation_override_log row rolls back with the JE on failure.
     let overrideAccountCode = accountCode;
     if (lineAllocation) {
       if (lineAllocation.accountCode) overrideAccountCode = lineAllocation.accountCode;
@@ -580,6 +582,39 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
               [effectiveCompanyId, Number(govIntegrationId), govEntityType, Number(govEntityId), ref]
             );
           }).catch((e) => logger.error(e, "finance-journal background task failed"));
+        }
+      }
+
+      // Item #2 follow-through — actually log the override (the previous
+      // comment claimed this would happen "downstream in the resolver
+      // pipeline" but no downstream code fires for the expense path).
+      // Fires only when the operator pinned BOTH an override reason AND
+      // at least one dimension/accountCode — otherwise the operator is
+      // accepting the auto-derived allocation and no override exists.
+      if (lineAllocation?.manualOverrideReason) {
+        const blockers: string[] = [];
+        if (lineAllocation.accountCode) blockers.push(`account:${lineAllocation.accountCode}`);
+        if (lineAllocation.costCenterId != null) blockers.push(`costCenter:${lineAllocation.costCenterId}`);
+        if (lineAllocation.activityType) blockers.push(`activityType:${lineAllocation.activityType}`);
+        if (lineAllocation.projectId != null) blockers.push(`project:${lineAllocation.projectId}`);
+        if (lineAllocation.vehicleId != null) blockers.push(`vehicle:${lineAllocation.vehicleId}`);
+        if (lineAllocation.propertyId != null) blockers.push(`property:${lineAllocation.propertyId}`);
+        if (lineAllocation.unitId != null) blockers.push(`unit:${lineAllocation.unitId}`);
+        if (lineAllocation.assetId != null) blockers.push(`asset:${lineAllocation.assetId}`);
+        if (lineAllocation.contractId != null) blockers.push(`contract:${lineAllocation.contractId}`);
+        if (lineAllocation.umrahAgentId != null) blockers.push(`umrahAgent:${lineAllocation.umrahAgentId}`);
+        if (blockers.length > 0) {
+          await logAllocationOverride({
+            companyId: effectiveCompanyId,
+            branchId: branchId ?? scope.branchId ?? null,
+            actorAssignmentId: scope.activeAssignmentId ?? null,
+            actorUserId: scope.userId,
+            documentType: "expense",
+            documentId: posted.journalId,
+            sourceTable: "journal_lines",
+            blockers,
+            overrideReason: lineAllocation.manualOverrideReason,
+          });
         }
       }
 
@@ -1751,8 +1786,28 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
         );
       }
 
+      // Carry the FULL dimensional payload onto the reversal entry so
+      // every drilldown (vehicle/property/contract/umrah-agent/asset/
+      // activity-type) reverses cleanly. The previous SELECT pulled only
+      // 4 of ~18 dim columns, so per-vehicle profitability reports
+      // showed the original posting but not the reversal — silently
+      // double-counting the cost. Audit-trail dims (sourceLineTable/Id,
+      // activityType) propagate too so the reversal links back to the
+      // same source row.
+      //
+      // NOTE: `branchId` on the journal_line is intentionally NOT carried
+      // here because the JournalEntryLine interface in businessHelpers
+      // omits it — branchId lives on the journal_entries header. PR #1304
+      // adds it to the line shape; once merged, this SELECT + map can
+      // grow to include "branchId" too.
       const { rows: originalLines } = await client.query(
-        `SELECT "accountCode", debit, credit, description, "costCenter", "departmentId", "projectId", "employeeId"
+        `SELECT "accountCode", debit, credit, description,
+                "costCenter", "departmentId", "projectId", "employeeId",
+                "costCenterId", "vehicleId", "propertyId",
+                "unitId", "assetId", "contractId",
+                "umrahSeasonId", "umrahAgentId", "activityType",
+                "productId", "clientId", "vendorId", "driverId",
+                "sourceLineTable", "sourceLineId"
          FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL ORDER BY id ASC`,
         [id]
       );
@@ -1769,6 +1824,21 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
         departmentId: l.departmentId as number | undefined,
         projectId: l.projectId as number | undefined,
         employeeId: l.employeeId as number | undefined,
+        costCenterId: l.costCenterId as number | undefined,
+        vehicleId: l.vehicleId as number | undefined,
+        propertyId: l.propertyId as number | undefined,
+        unitId: l.unitId as number | undefined,
+        assetId: l.assetId as number | undefined,
+        contractId: l.contractId as number | undefined,
+        umrahSeasonId: l.umrahSeasonId as number | undefined,
+        umrahAgentId: l.umrahAgentId as number | undefined,
+        activityType: l.activityType as string | undefined,
+        productId: l.productId as number | undefined,
+        clientId: l.clientId as number | undefined,
+        vendorId: l.vendorId as number | undefined,
+        driverId: l.driverId as number | undefined,
+        sourceLineTable: l.sourceLineTable as string | undefined,
+        sourceLineId: l.sourceLineId as number | undefined,
       }));
 
       const newRef = `REV-${original.ref}`;

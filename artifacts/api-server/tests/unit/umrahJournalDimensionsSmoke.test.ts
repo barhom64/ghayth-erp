@@ -61,9 +61,11 @@ describe("finance-invoices.ts bucket carries umrah dimensions", () => {
   });
 
   it("fallback bucket key has the right slot count (no collision)", () => {
-    // We extended the key from 10 to 12 dimension slots. The header-level
-    // fallback bucket must use an empty key with the matching slot count.
-    expect(INVOICES).toContain("`${invRevenueCode}|||||||||||`");
+    // We extended the key from 10 → 12 → 14 dimension slots
+    // (added umrahAgentId + umrahSeasonId, then unitId + assetId to close
+    // a silent dim-loss bug). The header-level fallback bucket must use
+    // an empty key with the matching slot count: 13 pipes for 14 slots.
+    expect(INVOICES).toContain("`${invRevenueCode}|||||||||||||`");
   });
 });
 
