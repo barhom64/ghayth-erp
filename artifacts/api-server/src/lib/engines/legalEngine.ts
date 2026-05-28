@@ -254,7 +254,22 @@ class LegalEngineImpl implements DomainEngine {
     priority: string;
     caseType: string;
     lawyerName: string | null;
+    /**
+     * Optional caseNumber issued by numberingService. When supplied,
+     * written into legal_cases.caseNumber so the row carries a real
+     * numbering assignment. When omitted (legacy callers) the column
+     * is left NULL — coverage report §3 G5 closure tracks elimination
+     * of all NULL-caseNumber code paths.
+     */
+    caseNumber?: string;
   }): Promise<{ insertId: number }> {
+    if (params.caseNumber !== undefined) {
+      const { insertId } = await rawExecute(
+        `INSERT INTO legal_cases ("companyId", title, description, status, priority, "caseType", "lawyerName", "caseNumber", "createdAt") VALUES ($1, $2, $3, 'open', $4, $5, $6, $7, NOW())`,
+        [params.companyId, params.title, params.description, params.priority, params.caseType, params.lawyerName, params.caseNumber]
+      );
+      return { insertId };
+    }
     const { insertId } = await rawExecute(
       `INSERT INTO legal_cases ("companyId", title, description, status, priority, "caseType", "lawyerName", "createdAt") VALUES ($1, $2, $3, 'open', $4, $5, $6, NOW())`,
       [params.companyId, params.title, params.description, params.priority, params.caseType, params.lawyerName]

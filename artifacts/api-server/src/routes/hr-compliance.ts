@@ -20,7 +20,7 @@ import {
   ValidationError,
   zodParse,
 } from "../lib/errorHandler.js";
-import { createAuditLog, currentPeriod, todayISO } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, currentPeriod, todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { computeSnapshot, classifyNitaqat } from "../lib/saudi-compliance/index.js";
 
@@ -200,6 +200,22 @@ router.post(
           category: classified.category,
         },
       }).catch((e) => logger.error(e, "saudization audit failed"));
+
+      emitEvent({
+        companyId: scope.companyId,
+        userId: scope.userId,
+        action: "saudization.snapshot_refreshed",
+        entity: "saudization_snapshots",
+        entityId: 0,
+        details: JSON.stringify({
+          period,
+          sector,
+          totalEmployees: snapshot.totalEmployees,
+          saudiEmployees: snapshot.saudiEmployees,
+          saudizationPercent: classified.saudizationPercent,
+          category: classified.category,
+        }),
+      }).catch((e) => logger.error(e, "saudization event failed"));
 
       res.json({
         period,

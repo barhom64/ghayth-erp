@@ -233,6 +233,12 @@ const updateTenantSchema = z.object({
   previousLandlord: z.string().optional().nullable(),
   previousLandlordPhone: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  // clientId — link tenant to a CRM client account so that client can
+  // see this tenancy's contracts / rent payments / maintenance requests
+  // through the customer portal. Nullable: existing tenants keep working
+  // without a link (their portal account, if any, just doesn't get the
+  // "property" section). Column added in migration 230.
+  clientId: z.coerce.number().optional().nullable(),
 });
 
 const payRentPaymentSchema = z.object({
@@ -1793,6 +1799,22 @@ router.patch("/tenants/:id", authorize({ feature: "properties.tenants", action: 
     addField("previousLandlord", b.previousLandlord);
     addField("previousLandlordPhone", b.previousLandlordPhone);
     addField("notes", b.notes);
+    // Portal link — validates the client exists in the same tenant before
+    // writing. Pass null explicitly to unlink.
+    if (b.clientId !== undefined) {
+      if (b.clientId !== null) {
+        const [client] = await rawQuery<{ id: number }>(
+          `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+          [b.clientId, scope.companyId],
+        );
+        if (!client) {
+          throw new ValidationError("العميل غير موجود في هذه الشركة", {
+            field: "clientId",
+          });
+        }
+      }
+      addField("clientId", b.clientId);
+    }
     if (fields.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
     const rows = await rawQuery<Record<string, unknown>>(`UPDATE tenants SET ${fields.join(", ")}, "updatedAt"=NOW() WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`, params);
@@ -2671,13 +2693,20 @@ router.get("/tenants/:id", authorize({ feature: "properties.tenants", action: "v
     let tenantName: string | null = null;
 
     if (numericId) {
+      // LEFT JOIN clients to resolve the portal-linked client's name in
+      // one query — saves the UI a follow-up fetch. Migration 230 added
+      // the clientId column; rows that haven't been linked yet just
+      // carry NULL for both clientId + clientName.
       const rows = await rawQuery<Record<string, unknown>>(
-        `SELECT * FROM tenants WHERE id=$1 AND "companyId"=$2`,
+        `SELECT t.*, c.name AS "clientName"
+           FROM tenants t
+           LEFT JOIN clients c ON c.id = t."clientId" AND c."companyId" = t."companyId" AND c."deletedAt" IS NULL
+          WHERE t.id = $1 AND t."companyId" = $2`,
         [numericId, scope.companyId]
       );
       if (rows.length > 0) {
         tenantRecord = rows[0];
-        tenantName = tenantRecord.name;
+        tenantName = tenantRecord.name as string;
       }
     }
 
