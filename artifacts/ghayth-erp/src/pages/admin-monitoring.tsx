@@ -233,8 +233,47 @@ function formatUptime(seconds: number): string {
   return `${m} دقيقة`;
 }
 
+interface HealthCheck {
+  name: string;
+  status: "ok" | "warn" | "error";
+  detail?: string;
+}
+
+interface DependencyEdge {
+  from: string;
+  to: string;
+  via: string;
+}
+
+interface DependencyNode {
+  id: string;
+  label: string;
+  glIntegration: boolean;
+}
+
 export default function AdminMonitoring() {
   const { data: health, isLoading, error, refetch } = useApiQuery<any>(["system-health"], "/admin/system-health");
+
+  // Per-check health detail — granular alternative to the rolled-up
+  // /system-health response. Surfaces individual checks (database,
+  // domain_tables, etc.) as their own pass/warn/fail rows.
+  const { data: healthChecksResp } = useApiQuery<{ checks?: HealthCheck[] } | HealthCheck[]>(
+    ["system-health-checks"],
+    "/admin/system-health-checks",
+  );
+  const healthChecks: HealthCheck[] = Array.isArray(healthChecksResp)
+    ? healthChecksResp
+    : healthChecksResp?.checks ?? [];
+
+  // Cross-domain dependency graph derived from GL integration + event
+  // catalog consumers. Same data the architecture docs reference but
+  // computed live from the registry.
+  const { data: depGraph } = useApiQuery<{
+    nodes: DependencyNode[];
+    edges: DependencyEdge[];
+    totalDependencies: number;
+  }>(["system-dependency-graph"], "/admin/system-health/dependency-graph");
+  const depEdges = depGraph?.edges ?? [];
 
   const services = health?.services || {};
   const memUsage = health?.memoryUsage || {};
@@ -523,6 +562,77 @@ export default function AdminMonitoring() {
               noToolbar
               pageSize={0}
             />
+          </CardContent>
+        </Card>
+      )}
+
+      {healthChecks.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Activity className="w-4 h-4" />
+              فحوصات الصحة التفصيلية ({healthChecks.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-surface-subtle">
+                  <th className="text-start p-2">الفحص</th>
+                  <th className="text-start p-2">الحالة</th>
+                  <th className="text-start p-2">التفاصيل</th>
+                </tr>
+              </thead>
+              <tbody>
+                {healthChecks.map((c) => (
+                  <tr key={c.name} className="border-t hover:bg-muted/30">
+                    <td className="p-2 font-mono text-xs">{c.name}</td>
+                    <td className="p-2">
+                      <Badge variant="outline" className={cn(
+                        "text-xs",
+                        c.status === "ok" && "bg-status-success-surface text-status-success-foreground",
+                        c.status === "warn" && "bg-status-warning-surface text-status-warning-foreground",
+                        c.status === "error" && "bg-status-error-surface text-status-error-foreground",
+                      )}>
+                        {c.status === "ok" ? "OK" : c.status === "warn" ? "تحذير" : "خطأ"}
+                      </Badge>
+                    </td>
+                    <td className="p-2 text-xs text-muted-foreground">{c.detail || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {depEdges.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Server className="w-4 h-4" />
+              خريطة التبعيات بين الوحدات ({depEdges.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-surface-subtle">
+                  <th className="text-start p-2">من</th>
+                  <th className="text-start p-2">إلى</th>
+                  <th className="text-start p-2">عبر</th>
+                </tr>
+              </thead>
+              <tbody>
+                {depEdges.map((e, i) => (
+                  <tr key={`${e.from}->${e.to}:${e.via}:${i}`} className="border-t hover:bg-muted/30">
+                    <td className="p-2"><Badge variant="outline" className="text-xs">{e.from}</Badge></td>
+                    <td className="p-2"><Badge variant="outline" className="text-xs">{e.to}</Badge></td>
+                    <td className="p-2 font-mono text-xs text-muted-foreground">{e.via}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
       )}

@@ -897,6 +897,103 @@ describe("Print platform — print-log self-print (#1286 closeout)", () => {
   });
 });
 
+describe("Print platform — detail-page entityTypes have a data source (#1286 bug fix)", () => {
+  // User reported: "pressing print produces a unified empty form".
+  // Root cause: 30 entityTypes used by detail pages (expense, leave, ticket,
+  // unit, opportunity, …) had no data source — they fell through to the
+  // bare stub `{ entity: { id } }` because:
+  //   1. They weren't a switch case in dataLoader.ts
+  //   2. They weren't a registered entity in entityRegistry.ts
+  //   3. They weren't in FALLBACK_TABLE_MAP
+  //
+  // This test scans every entityType used in SPA detail pages and asserts
+  // it resolves to ONE of those three sources — so a new detail-page
+  // entityType that doesn't have a backing data source fails CI before
+  // a user clicks Print and sees an empty document.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const registry = readFileSync(ENTITY_REGISTRY, "utf8");
+  const dataLoader = readFileSync(join(PRINT_LIB, "dataLoader.ts"), "utf8");
+
+  function entityTypesFromDetailPages(): string[] {
+    const fs = readdirSync(join(SPA, "pages/details"));
+    const set = new Set<string>();
+    for (const f of fs) {
+      if (!f.endsWith(".tsx")) continue;
+      const src = readFileSync(join(SPA, "pages/details", f), "utf8");
+      for (const m of src.matchAll(/entityType="([a-z_]+)"/g)) {
+        set.add(m[1]);
+      }
+    }
+    return [...set];
+  }
+
+  function isStub(et: string): boolean {
+    if (registry.match(new RegExp(`^\\s+id:\\s*"${et}"\\s*,\\s*$`, "m"))) return false;
+    if (dataLoader.match(new RegExp(`case\\s+"${et}"\\s*:`))) return false;
+    const fbMatch = dataLoader.match(/FALLBACK_TABLE_MAP:[^=]+=\s*\{([\s\S]*?)\n\};/);
+    if (fbMatch && fbMatch[1].match(new RegExp(`^\\s+${et}:`, "m"))) return false;
+    return true;
+  }
+
+  // Known-broken — these pages call endpoints that don't exist on the
+  // backend yet (no table, no route). Track them as documented gaps
+  // until the upstream entity is implemented.
+  const ACCEPTED_STUBS = new Set([
+    "commitment",   // /finance/commitments/:id — endpoint not implemented
+    "receivable",   // /finance/receivables/:id — endpoint not implemented
+  ]);
+
+  it("every entityType used by a SPA detail page resolves to a data source", () => {
+    const types = entityTypesFromDetailPages();
+    const broken: string[] = [];
+    for (const et of types) {
+      if (ACCEPTED_STUBS.has(et)) continue;
+      if (isStub(et)) broken.push(et);
+    }
+    expect(
+      broken,
+      `These entityTypes are used in detail pages but have no data source — ` +
+      `printing them produces an empty document. Wire them via a switch case ` +
+      `in dataLoader.ts, an entityRegistry entry, or FALLBACK_TABLE_MAP.\n${broken.join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("Print platform — ListPage opt-in pages (#1286 continuation)", () => {
+  // ListPage component has `printEntityType` prop built-in (auto-emits
+  // PrintButton when set). Pages using <ListPage> can opt in by passing
+  // the entityType — they then get the platform-routed print path for
+  // free. Locking this here so a future refactor doesn't drop the prop.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const PAGES: Array<{ path: string; entityType: string }> = [
+    { path: "pages/finance/fiscal-periods-v2.tsx", entityType: "report_fiscal_periods" },
+    { path: "pages/finance/journal-manual.tsx",    entityType: "journal_entry" },
+  ];
+  for (const { path, entityType } of PAGES) {
+    it(`${path} passes printEntityType="${entityType}" to ListPage`, () => {
+      const src = readFileSync(join(SPA, path), "utf8");
+      expect(src).toContain(`printEntityType="${entityType}"`);
+    });
+  }
+});
+
+describe("Print platform — umrah daily runsheet (#1286 final closeout)", () => {
+  // The umrah daily runsheet had its own /api/umrah/reports/daily-runsheet/pdf
+  // endpoint — a parallel PDF generator that bypassed the official platform
+  // entirely. The page now ALSO offers a <PrintButton entityType="umrah_runsheet">
+  // path that goes through the platform (bespoke preset already registered
+  // in BESPOKE_PRESETS). The legacy "تصدير PDF" button stays for backward
+  // compat with any external integration that depends on it.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  it("pages/umrah/daily-runsheet.tsx mounts <PrintButton entityType=\"umrah_runsheet\" payload={...}>", () => {
+    const src = readFileSync(join(SPA, "pages/umrah/daily-runsheet.tsx"), "utf8");
+    expect(src).toContain('from "@/components/shared/print-button"');
+    expect(src).toContain("<PrintButton");
+    expect(src).toContain('entityType="umrah_runsheet"');
+    expect(src).toMatch(/payload=\{/);
+  });
+});
+
 describe("Print platform — finance reports wave 6 migrated (#1286 last sweep)", () => {
   // 12 more pages discovered in the closeout audit: pages with Blob downloads
   // but no PrintButton, hidden among the dashboards + workbenches that

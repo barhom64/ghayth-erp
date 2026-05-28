@@ -173,11 +173,14 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "job_posting":
       return await loadJobPosting(companyId, entityId);
     case "leave_request":
+    case "leave":
+    case "request":
       return await loadLeaveRequest(companyId, entityId);
     case "loan_request":
     case "loan":
       return await loadLoanRequest(companyId, entityId);
     case "excuse_request":
+    case "excuse":
       return await loadExcuseRequest(companyId, entityId);
     case "transfer":
       return await loadEmployeeTransfer(companyId, entityId);
@@ -191,6 +194,7 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "insurance":
       return await loadInsurancePolicy(companyId, entityId);
     case "maintenance_request":
+    case "maintenance":
       return await loadMaintenanceRequest(companyId, entityId);
     case "payroll":
     case "payroll_run":
@@ -220,20 +224,24 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "fuel_log":
       return await loadFuelLog(companyId, entityId);
     case "traffic_violation":
+    case "violation":
       return await loadTrafficViolation(companyId, entityId);
     // ─── Master cards + niche transactions (Batches 5-7 presets) ───────
     case "vendor":
     case "supplier":
       return await loadVendorCard(companyId, entityId);
     case "building":
+    case "property":
       return await loadBuildingCard(companyId, entityId);
     case "project":
       return await loadProjectCard(companyId, entityId);
     case "store_order":
       return await loadStoreOrder(companyId, entityId);
     case "crm_opportunity":
+    case "opportunity":
       return await loadCrmOpportunity(companyId, entityId);
     case "support_ticket":
+    case "ticket":
       return await loadSupportTicket(companyId, entityId);
     case "umrah_pilgrim":
       return await loadUmrahPilgrim(companyId, entityId);
@@ -260,8 +268,10 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "shift":
       return await loadShiftCard(companyId, entityId);
     case "umrah_season":
+    case "season":
       return await loadUmrahSeason(companyId, entityId);
     case "chart_of_account":
+    case "account":
       return await loadChartOfAccount(companyId, entityId);
     // ─── Batch reports (no single row — synthetic entityId encodes filters) ──
     case "report_trial_balance":
@@ -366,6 +376,39 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   umrah_sub_agent: "umrah_sub_agents",
   umrah_transport: "umrah_transport",
   umrah_violation: "umrah_violations",
+  // Short-name aliases for entityTypes the SPA detail pages actually use
+  // (issue #1286). Each one was returning an empty stub before because the
+  // SPA passes the short name (e.g. "expense") but the registry lists the
+  // long form (e.g. "expense_claim"). Aliasing here makes the bespoke
+  // preset render real data — see the audit in #1286 follow-up.
+  expense: "expense_claims",
+  leave: "hr_leave_requests",
+  excuse: "hr_excuse_requests",
+  maintenance: "maintenance_requests",
+  voucher: "payment_vouchers",
+  season: "umrah_seasons",
+  agent: "umrah_agents",
+  transport: "umrah_transport",
+  violation: "traffic_violations",
+  opportunity: "crm_opportunities",
+  task: "tasks",
+  ticket: "support_tickets",
+  unit: "property_units",
+  contract: "rental_contracts",
+  policy: "insurance_policies",
+  property: "buildings",
+  sub_agent: "umrah_sub_agents",
+  umrah_package: "umrah_packages",
+  performance: "evaluation_cycles",
+  performance_review: "evaluation_cycles",
+  account: "chart_of_accounts",
+  audit: "audit_logs",
+  audit_record: "audit_logs",
+  correspondence: "correspondence",
+  request: "hr_leave_requests",
+  compliance: "governance_compliance",
+  owner: "property_owners",
+  risk: "governance_risks",
 };
 
 // ─── Focused loaders ────────────────────────────────────────────────────────

@@ -115,6 +115,14 @@ export default function AdminSystemRegistry() {
   const { data: printRegistry, isLoading: printLoading } =
     useApiQuery<any>(["system-registry-print"], "/admin/system-registry/print-templates");
 
+  const { data: pagesRegistry } =
+    useApiQuery<{ pages: Array<{ path: string; component: string; domain: string; lazy?: boolean; minLevel?: number }>; total: number; byDomain: Record<string, number> }>(
+      ["system-registry-pages"],
+      "/admin/system-registry/pages",
+    );
+  const pages = pagesRegistry?.pages ?? [];
+  const pagesByDomain = pagesRegistry?.byDomain ?? {};
+
   const overview = registry?.overview ?? {};
   const domains = registry?.domains ?? [];
   const entityList = entities?.entities ?? [];
@@ -264,8 +272,59 @@ export default function AdminSystemRegistry() {
               <TabsTrigger value="print">
                 <Printer className="w-3.5 h-3.5 me-1" />الطباعة ({printRegistry?.total ?? 0})
               </TabsTrigger>
+              <TabsTrigger value="pages">
+                الصفحات ({pagesRegistry?.total ?? 0})
+              </TabsTrigger>
               <TabsTrigger value="gaps">الفجوات (قديم)</TabsTrigger>
             </TabsList>
+
+            {/* Pages Tab — exposes /admin/system-registry/pages */}
+            <TabsContent value="pages" className="space-y-3 mt-4">
+              {Object.entries(pagesByDomain).length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">الصفحات حسب النطاق</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(pagesByDomain).map(([d, n]) => (
+                        <span key={d} className="text-xs bg-status-info-surface text-status-info-foreground px-2 py-1 rounded-full">
+                          {d}: {n}
+                        </span>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              {pages.length > 0 && (
+                <Card>
+                  <CardContent className="p-0">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-surface-subtle">
+                          <th className="text-start p-2">المسار</th>
+                          <th className="text-start p-2">المكوّن</th>
+                          <th className="text-start p-2">النطاق</th>
+                          <th className="text-start p-2">Lazy</th>
+                          <th className="text-start p-2">حد الصلاحية</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pages.map((p) => (
+                          <tr key={p.path} className="border-t hover:bg-muted/30">
+                            <td className="p-2 font-mono text-xs">{p.path}</td>
+                            <td className="p-2 text-xs">{p.component}</td>
+                            <td className="p-2"><Badge variant="outline" className="text-xs">{p.domain}</Badge></td>
+                            <td className="p-2 text-xs">{p.lazy ? "نعم" : "—"}</td>
+                            <td className="p-2 text-xs">{p.minLevel ? `≥ ${p.minLevel}` : "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
 
             {/* Domains Tab */}
             <TabsContent value="domains" className="space-y-4 mt-4">
