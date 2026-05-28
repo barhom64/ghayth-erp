@@ -23,6 +23,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, Link2 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import {
@@ -119,10 +123,27 @@ const EMPTY_DEFAULTS: FormValues = {
 };
 
 export default function SubsidiaryAccountsPage() {
-  const { data, isLoading, error, refetch } = useApiQuery<{ data: SubsidiaryAccountRow[] }>(
+  const [entityFilter, setEntityFilter] = useState<{ type: EntityType | ""; id: string }>({ type: "", id: "" });
+
+  // Two queries — the list endpoint when no entity is selected, and the
+  // per-entity endpoint when the user wants to focus on a specific
+  // employee / vendor / vehicle. Either is enabled at a time.
+  const listQ = useApiQuery<{ data: SubsidiaryAccountRow[] }>(
     ["finance-subsidiary-accounts"],
     "/finance/subsidiary-accounts",
+    { enabled: !(entityFilter.type && entityFilter.id) },
   );
+  const entityQ = useApiQuery<{ data: SubsidiaryAccountRow[] }>(
+    ["finance-subsidiary-accounts-entity", entityFilter.type, entityFilter.id],
+    entityFilter.type && entityFilter.id
+      ? `/finance/subsidiary-accounts/entity/${entityFilter.type}/${entityFilter.id}`
+      : null,
+    { enabled: !!(entityFilter.type && entityFilter.id) },
+  );
+
+  const { data, isLoading, error, refetch } =
+    entityFilter.type && entityFilter.id ? entityQ : listQ;
+
   const rows: SubsidiaryAccountRow[] = data?.data ?? [];
   const [filters, setFilters] = useFilters();
   const [creating, setCreating] = useState(false);
@@ -223,6 +244,45 @@ export default function SubsidiaryAccountsPage() {
       }
     >
       <FinanceTabsNav />
+
+      <Card className="border-status-info-surface/40">
+        <CardContent className="p-3 flex flex-wrap items-end gap-2">
+          <div>
+            <Label className="text-xs text-muted-foreground">عرض حسابات كيان معين</Label>
+            <Select
+              value={entityFilter.type || ""}
+              onValueChange={(v) => setEntityFilter({ type: v as EntityType, id: entityFilter.id })}
+            >
+              <SelectTrigger className="w-40 h-8 text-xs"><SelectValue placeholder="نوع الكيان" /></SelectTrigger>
+              <SelectContent>
+                {ENTITY_TYPES.map((e) => (
+                  <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">رقم الكيان</Label>
+            <Input
+              type="number"
+              value={entityFilter.id}
+              onChange={(e) => setEntityFilter({ type: entityFilter.type, id: e.target.value })}
+              placeholder="#"
+              className="w-28 h-8 text-xs"
+              dir="ltr"
+            />
+          </div>
+          {(entityFilter.type || entityFilter.id) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEntityFilter({ type: "", id: "" })}
+            >
+              مسح الفلتر
+            </Button>
+          )}
+        </CardContent>
+      </Card>
 
       <PageStateWrapper isLoading={isLoading} error={error} onRetry={() => refetch()}>
         <AdvancedFilters values={filters} onChange={setFilters} />
