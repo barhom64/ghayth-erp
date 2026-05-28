@@ -65,9 +65,11 @@ export default function ViolationDetail() {
   // PATCH /hr/violations/:id — backend gates this on HR_APPROVAL_ROLES
   // so the Edit button is also permission-gated. Fields the backend
   // accepts: type, severity, deduction, period, description, notes.
+  // DELETE /hr/violations/:id is soft-delete, gated on HR_ROLES.
   const editDelete = useDetailEditDelete({
     entityLabel: "المخالفة",
     patchPath: `/hr/violations/${id}`,
+    deletePath: `/hr/violations/${id}`,
     listPath: "/hr/violations",
     initialValues: item,
     fields: [
@@ -254,7 +256,7 @@ export default function ViolationDetail() {
         <div className="flex items-center gap-2">
           <Badge className={cn("text-sm px-3 py-1", severity.color)}>{severity.label}</Badge>
           <PrintButton entityType="discipline_memo" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
-          <DetailActionButtons hook={editDelete} editPerm="hr:approve" />
+          <DetailActionButtons hook={editDelete} editPerm="hr:approve" deletePerm="hr:delete" />
         </div>
       }
     />
