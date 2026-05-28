@@ -1,6 +1,7 @@
 import { useRoute } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
@@ -74,6 +75,16 @@ export default function TrainingDetailPage() {
     { enabled: !!id },
   );
   const enrollments = enrollmentsData?.data || [];
+
+  // GET /hr/training/enrollments/:id — full per-enrollment detail
+  // (attendance log, daily scores, feedback). Fetched lazily when the
+  // operator clicks "تفاصيل" on an enrollment row.
+  const [enrollmentDetailId, setEnrollmentDetailId] = useState<number | null>(null);
+  const enrollmentDetailQ = useApiQuery<any>(
+    ["training-enrollment-detail", String(enrollmentDetailId ?? 0)],
+    enrollmentDetailId ? `/hr/training/enrollments/${enrollmentDetailId}` : null,
+    { enabled: enrollmentDetailId !== null },
+  );
 
   const { toast } = useToast();
   const [enrollEmployeeId, setEnrollEmployeeId] = useState<string>("");
@@ -185,6 +196,15 @@ export default function TrainingDetailPage() {
         </span>
       ),
     },
+    {
+      key: "_view",
+      header: "",
+      render: (e) => (
+        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEnrollmentDetailId(e.id)}>
+          تفاصيل
+        </Button>
+      ),
+    },
   ];
 
   const overview = program ? (
@@ -284,6 +304,33 @@ export default function TrainingDetailPage() {
             emptyMessage="لا يوجد مشاركون في هذا البرنامج"
             pageSize={20}
           />
+          {enrollmentDetailId !== null && (
+            <Card className="mt-3 border-status-info-surface bg-status-info-surface/30">
+              <CardContent className="p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">تفاصيل تسجيل #{enrollmentDetailId}</p>
+                  <Button variant="ghost" size="sm" onClick={() => setEnrollmentDetailId(null)}>إغلاق</Button>
+                </div>
+                {enrollmentDetailQ.isLoading ? (
+                  <p className="text-xs text-muted-foreground">جاري التحميل...</p>
+                ) : enrollmentDetailQ.data ? (
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div><span className="text-muted-foreground">الموظف:</span> {enrollmentDetailQ.data.employeeName ?? "—"}</div>
+                    <div><span className="text-muted-foreground">الحالة:</span> {enrollmentDetailQ.data.status ?? "—"}</div>
+                    <div><span className="text-muted-foreground">الدرجة:</span> {enrollmentDetailQ.data.score ?? "—"}</div>
+                    <div><span className="text-muted-foreground">الحضور:</span> {enrollmentDetailQ.data.attendanceRate ?? enrollmentDetailQ.data.attendance ?? "—"}</div>
+                    {enrollmentDetailQ.data.feedback && (
+                      <div className="col-span-2 whitespace-pre-wrap text-muted-foreground">
+                        {enrollmentDetailQ.data.feedback}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">لا توجد بيانات</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </CardContent>
       </Card>
 
