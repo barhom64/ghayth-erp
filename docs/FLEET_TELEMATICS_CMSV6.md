@@ -338,17 +338,44 @@ signature = "sha256=" + hex(digest)
 الـ SSRF guard (RFC1918 / loopback / link-local) يعمل بصرف النظر عن
 البروتوكول.
 
+## Phase 2 — Full byte-level video stream proxy (مُنجَز)
+
+في commit Phase 2:
+
+- **HLS streams**: الـ raw streamUrl لا يصل للمتصفح أبداً.
+  الـ workflow:
+  1. `POST /video/session` → response يحتوي `proxyUrl` فقط
+  2. الواجهة تستدعي `GET /video/proxy/:id?token=…` → response يحتوي
+     `playlistUrl` (يشير لمسار `playlist.m3u8` داخلنا) + `proxyMode:"phase2-stream"`
+  3. الـ HLS player يطلب `GET /video/proxy/:id/playlist.m3u8?token=…`
+     - الخادم يجلب الـ M3U8 من CMSV6
+     - يعيد كتابة كل segment URL ليشير إلى `/video/proxy/:id/segment/:filename?token=…`
+     - يعيد الـ playlist المُعَدَّل
+  4. لكل segment الـ player يطلب `GET /video/proxy/:id/segment/:filename?token=…`
+     - الخادم يجلب البايتات من CMSV6 ويـ stream-pipe إلى الـ client
+- **SSRF guard**: الـ rewriter يُسقط أي segment URL خارج host الـ
+  playlist الأصلي (`base.host !== resolved.host` ⇒ drop). الـ segment
+  proxy يعيد التحقق + يرفض path traversal.
+- **No upstream auth pass-through**: لا cookies ولا Authorization ولا
+  Set-Cookie تُمَرَّر بين CMSV6 والـ client.
+- **Cache headers**: `no-store, no-cache, must-revalidate, private`
+  على كل من الـ playlist والـ segments — لا shared caching.
+- **Non-HLS streams** (RTSP, http-flv, webrtc): تظل على Phase 1
+  (JSON gate + audit) لأن player native يحتاج للـ URL الخام
+  ولا يستطيع المتصفح تشغيلها أصلاً.
+- **TTL alignment**: لجلسات HLS، `streamProxyExpiresAt` يساوي
+  `expiresAt` السيشن بدل افتراضي 60 ث، فلا ينتهي التوكن وسط بث حي.
+
 ## Known Limitations (المتبقية بعد Hardening)
 
-1. **Full byte-level video stream proxying** (Phase 2): حالياً الـ
-   proxy endpoint يعيد الـ URL في JSON بعد التحقق + Audit. مرحلة 2 من
-   التشدد ستقوم بـ stream-proxying فعلي للـ HLS playlist + segments
-   فلا يصل الـ URL الخام للمتصفح أبداً.
-2. **CircuitBreaker per-process**: في multi-replica، كل replica
+1. **CircuitBreaker per-process**: في multi-replica، كل replica
    تحتفظ بـ state خاص. مقبول حتى عشرات التكاملات؛ Redis-backed
    counter يحتاج فقط في حالة 50+ تكامل نشطة (ليس مركبات — تكاملات).
-3. **رفع الأدلة auto-only من URL alert**: لا يوجد آلية pull للملفات
+2. **رفع الأدلة auto-only من URL alert**: لا يوجد آلية pull للملفات
    من MDVR SSD مباشرة (يفترض CMSV6 ترفعها).
+3. **HLS variant playlists (multi-bitrate)**: الـ rewriter الحالي يدعم
+   single-variant playlists. multi-variant playlists تحتاج تعديل
+   إضافي لإعادة كتابة الـ variant URLs أيضاً. ليس في خطة Pilot.
 4. **161 legacy migrations بدون `@rollback`**: technical debt قبل
    #1141 (خارج نطاق هذا الـ branch).
 

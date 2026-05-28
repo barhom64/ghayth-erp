@@ -1209,16 +1209,23 @@ router.post(
       const expiresAt = handle.expiresAt
         ?? new Date(Date.now() + (body.durationSec ?? 300) * 1000);
 
-      // #1354 Ibrahim review — Video Security Layer. The client never
-      // receives the raw CMSV6 streamUrl on session open. Instead it
-      // gets a one-shot proxy token bound to this session, valid for
-      // config.fleetTelematics.proxyTtlSec seconds. The proxy endpoint
-      // verifies the token, audits the access, and ONLY then returns
-      // the underlying URL (or in a future iteration, stream-proxies
-      // the bytes themselves).
+      // #1354 Ibrahim review — Video Security Layer.
+      //
+      // Phase 1 (cb870a1): the client never receives the raw streamUrl
+      // on session open; only a proxy URL bound to a short-lived token.
+      //
+      // Phase 2 (this commit): for HLS streams (the browser-playable
+      // format) the proxy URL leads to a server-side stream proxy —
+      // the raw streamUrl never reaches the browser at all.
+      //
+      // The proxy token TTL matches the session duration so HLS players
+      // can keep fetching segments throughout a live stream (60s default
+      // would expire mid-playback). Clearing on close + retention sweep
+      // bounds the leak window to the session lifetime.
       const proxyToken = randomBytes(32).toString("base64url");
-      const proxyTtlMs = config.fleetTelematics.proxyTtlSec * 1000;
-      const proxyExpiresAt = new Date(Date.now() + proxyTtlMs);
+      const sessionTtlMs = expiresAt.getTime() - Date.now();
+      const baseTtlMs = config.fleetTelematics.proxyTtlSec * 1000;
+      const proxyExpiresAt = new Date(Date.now() + Math.max(baseTtlMs, sessionTtlMs));
 
       const { insertId } = await rawExecute(
         `INSERT INTO fleet_video_sessions
@@ -1369,21 +1376,210 @@ router.post(
 // ─────────────────────────────────────────────────────────────────────────
 // Video Security Layer — signed proxy (Ibrahim PR review, #1354).
 //
-// The raw CMSV6 streamUrl never leaves this server. The frontend calls
-// /telematics/video/proxy/:sessionId?token=<short-lived> to redeem the
-// underlying URL; this endpoint:
-//   1. Verifies the token against fleet_video_sessions.streamProxyToken
-//      with a timing-safe compare so brute-force is observable but
-//      doesn't leak via response timing.
-//   2. Checks streamProxyExpiresAt > now (60-second window by default).
-//   3. Checks the session is still 'active' and the streamUrl exists.
-//   4. Records the access in fleet_video_access_logs WHETHER OR NOT
-//      it is granted — denied attempts are forensically visible.
-//   5. Confirms the caller is the user who opened the session (the
-//      `fleet.telematics.video:list` permission is required to even
-//      reach this route, but per-user binding stops one auditor from
-//      hot-link to another's open session).
+// Phase 1 (cb870a1): the raw CMSV6 streamUrl never appears in the open
+// session response; the client gets a one-shot proxy URL bound to a
+// short-lived token, and every redemption is audited in
+// fleet_video_access_logs.
+//
+// Phase 2 (this commit): for HLS streams the raw URL never reaches the
+// browser AT ALL. The proxy fetches the M3U8 playlist server-side,
+// rewrites every segment line to point back at our /segment/:filename
+// route, and streams segment bytes through Express → the client. The
+// CMSV6 URL stays inside the server boundary; an attacker watching the
+// network tab sees only our proxy URLs.
+//
+// Non-HLS streams (RTSP, http-flv, webrtc) still use the JSON gate —
+// they need a native player anyway and aren't browser-replayable
+// without one. The proxy URL there returns the underlying URL only
+// after token + user + audit checks pass.
 // ─────────────────────────────────────────────────────────────────────────
+
+interface VideoSessionGate {
+  id: number;
+  companyId: number;
+  status: string;
+  streamUrl: string | null;
+  streamType: string;
+  streamProxyToken: string | null;
+  streamProxyExpiresAt: Date | null;
+  requestedBy: number;
+}
+
+type AccessLogStatus =
+  | "granted"
+  | "denied_token"
+  | "denied_expired"
+  | "denied_session"
+  | "denied_user";
+
+/**
+ * Loads the session row needed by every proxy variant. Filters by the
+ * caller's allowedCompanies so cross-tenant probing returns 404.
+ */
+async function loadVideoSession(
+  sessionId: number,
+  allowedCompanies: number[],
+): Promise<VideoSessionGate | null> {
+  const rows = await rawQuery<VideoSessionGate>(
+    `SELECT id, "companyId", status, "streamUrl", "streamType",
+            "streamProxyToken", "streamProxyExpiresAt", "requestedBy"
+       FROM fleet_video_sessions
+      WHERE id = $1 AND "companyId" = ANY($2::int[])`,
+    [sessionId, allowedCompanies],
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Forensic write to fleet_video_access_logs. Best-effort: a DB failure
+ * here MUST NOT crash the stream request, but it IS logged loudly so
+ * the operator can investigate.
+ */
+async function logVideoAccess(
+  companyId: number,
+  sessionId: number,
+  userId: number | null,
+  status: AccessLogStatus,
+  accessIp: string | null,
+  userAgent: string | null,
+  errorReason?: string,
+): Promise<void> {
+  try {
+    await rawExecute(
+      `INSERT INTO fleet_video_access_logs
+         ("companyId","sessionId","accessedBy","accessIp","userAgent",
+          status,"errorReason")
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [companyId, sessionId, userId, accessIp, userAgent, status, errorReason ?? null],
+    );
+  } catch (err) {
+    logger.error({ err, sessionId }, "video access log insert failed");
+  }
+}
+
+/**
+ * Returns null when the request is allowed to proceed, otherwise the
+ * (status, errorReason) tuple to log + the HTTP status + JSON message
+ * the caller should write. Centralised so the four proxy routes
+ * (playlist, segment, JSON, and the existing one-shot endpoint) all
+ * apply the same five-layer gate identically — a future change to the
+ * security model touches one function, not four.
+ */
+async function gateVideoProxyRequest(opts: {
+  sessionId: number;
+  allowedCompanies: number[];
+  userId: number;
+  presentedToken: string;
+  accessIp: string | null;
+  userAgent: string | null;
+}): Promise<
+  | { ok: true; session: VideoSessionGate }
+  | { ok: false; httpStatus: number; body: { error: string } }
+> {
+  const session = await loadVideoSession(opts.sessionId, opts.allowedCompanies);
+  if (!session) {
+    return { ok: false, httpStatus: 404, body: { error: "الجلسة غير موجودة" } };
+  }
+  // Token: timing-safe compare + length guard.
+  if (
+    !opts.presentedToken ||
+    !session.streamProxyToken ||
+    opts.presentedToken.length !== session.streamProxyToken.length ||
+    !timingSafeEqual(Buffer.from(opts.presentedToken), Buffer.from(session.streamProxyToken))
+  ) {
+    await logVideoAccess(
+      session.companyId, session.id, opts.userId, "denied_token",
+      opts.accessIp, opts.userAgent, "token mismatch",
+    );
+    return { ok: false, httpStatus: 401, body: { error: "رمز الوصول غير صالح" } };
+  }
+  // TTL.
+  if (!session.streamProxyExpiresAt || session.streamProxyExpiresAt.getTime() < Date.now()) {
+    await logVideoAccess(
+      session.companyId, session.id, opts.userId, "denied_expired",
+      opts.accessIp, opts.userAgent, "proxy token expired",
+    );
+    return { ok: false, httpStatus: 401, body: { error: "انتهت صلاحية رمز الوصول" } };
+  }
+  // Session lifecycle.
+  if (session.status !== "active" || !session.streamUrl) {
+    await logVideoAccess(
+      session.companyId, session.id, opts.userId, "denied_session",
+      opts.accessIp, opts.userAgent, `session status=${session.status}`,
+    );
+    return { ok: false, httpStatus: 409, body: { error: "الجلسة غير نشطة" } };
+  }
+  // User binding.
+  if (session.requestedBy !== opts.userId) {
+    await logVideoAccess(
+      session.companyId, session.id, opts.userId, "denied_user",
+      opts.accessIp, opts.userAgent, "different user",
+    );
+    return { ok: false, httpStatus: 403, body: { error: "هذه الجلسة لمستخدم آخر" } };
+  }
+  return { ok: true, session };
+}
+
+/**
+ * Rewrites an HLS playlist (`.m3u8` text) so every segment URL points at
+ * our segment-proxy route instead of the original CMSV6 host. Same-
+ * origin enforcement: a hostile playlist that injects an off-host
+ * segment URL is rejected at the rewrite step — we never construct a
+ * proxy URL for a host other than the original streamUrl's host.
+ *
+ * The proxy preserves all `#` lines (EXTINF, EXT-X-VERSION, EXT-X-MAP,
+ * EXT-X-KEY, …) verbatim. URL lines are replaced with our route.
+ *
+ * @param body            text of the original .m3u8 fetched from CMSV6
+ * @param originalUrl     full CMSV6 playlist URL (used to resolve
+ *                        relative segment URLs and enforce same-origin)
+ * @param sessionId       fleet_video_sessions.id
+ * @param token           streamProxyToken
+ * @returns rewritten playlist (still valid M3U8 syntax)
+ */
+function rewriteHlsPlaylist(
+  body: string,
+  originalUrl: string,
+  sessionId: number,
+  token: string,
+): string {
+  const base = new URL(originalUrl);
+  const proxyRoot = `/api/fleet/telematics/video/proxy/${sessionId}/segment`;
+  const out: string[] = [];
+  for (const rawLine of body.split(/\r?\n/)) {
+    const line = rawLine.trimEnd();
+    if (line.length === 0 || line.startsWith("#")) {
+      out.push(rawLine);
+      continue;
+    }
+    // Resolve against the playlist URL — handles both relative and
+    // absolute segment references.
+    let resolved: URL;
+    try {
+      resolved = new URL(line, base);
+    } catch {
+      // Unparseable line — skip it rather than silently embedding
+      // arbitrary text in the rewritten playlist.
+      continue;
+    }
+    if (resolved.host !== base.host) {
+      // Refuse to proxy off-origin URLs — that would turn this endpoint
+      // into an open relay. Drop the line; the player will show a gap.
+      continue;
+    }
+    // Filename component used for routing back to the segment proxy.
+    // We URL-encode it because some HLS variants use `?` query strings
+    // (e.g. signed CDN URLs); the segment proxy decodes again.
+    const tail =
+      resolved.pathname.replace(/^\//, "") +
+      (resolved.search.length > 0 ? resolved.search : "");
+    out.push(
+      `${proxyRoot}/${encodeURIComponent(tail)}?token=${encodeURIComponent(token)}`,
+    );
+  }
+  return out.join("\n");
+}
+
 router.get(
   "/telematics/video/proxy/:id",
   authorize({ feature: "fleet.telematics.video", action: "view" }),
@@ -1393,95 +1589,217 @@ router.get(
     const accessIp = req.ip ?? null;
     const userAgent = req.header("user-agent") ?? null;
 
-    const logAccess = async (
-      companyId: number,
-      userId: number | null,
-      status: "granted" | "denied_token" | "denied_expired" | "denied_session" | "denied_user",
-      errorReason?: string,
-    ) => {
-      try {
-        await rawExecute(
-          `INSERT INTO fleet_video_access_logs
-             ("companyId","sessionId","accessedBy","accessIp","userAgent",
-              status,"errorReason")
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [companyId, sessionId, userId, accessIp, userAgent, status, errorReason ?? null],
-        );
-      } catch (err) {
-        logger.error({ err, sessionId }, "video access log insert failed");
-      }
-    };
-
     try {
       const scope = req.scope!;
-      const [sess] = await rawQuery<{
-        id: number;
-        companyId: number;
-        status: string;
-        streamUrl: string | null;
-        streamType: string;
-        streamProxyToken: string | null;
-        streamProxyExpiresAt: Date | null;
-        requestedBy: number;
-      }>(
-        `SELECT id, "companyId", status, "streamUrl", "streamType",
-                "streamProxyToken", "streamProxyExpiresAt", "requestedBy"
-           FROM fleet_video_sessions
-          WHERE id = $1 AND "companyId" = ANY($2::int[])`,
-        [sessionId, scope.allowedCompanies],
+      const gate = await gateVideoProxyRequest({
+        sessionId,
+        allowedCompanies: scope.allowedCompanies,
+        userId: scope.userId,
+        presentedToken,
+        accessIp,
+        userAgent,
+      });
+      if (!gate.ok) {
+        res.status(gate.httpStatus).json(gate.body);
+        return;
+      }
+      await logVideoAccess(
+        gate.session.companyId, sessionId, scope.userId, "granted",
+        accessIp, userAgent,
       );
-      if (!sess) {
-        // Don't audit — there's no session row to FK against.
-        throw new NotFoundError("الجلسة غير موجودة");
-      }
-
-      // Layer 1: token presence + timing-safe compare.
-      if (!presentedToken || !sess.streamProxyToken ||
-          presentedToken.length !== sess.streamProxyToken.length ||
-          !timingSafeEqual(Buffer.from(presentedToken), Buffer.from(sess.streamProxyToken))) {
-        await logAccess(sess.companyId, scope.userId, "denied_token", "token mismatch");
-        res.status(401).json({ error: "رمز الوصول غير صالح" });
+      // For HLS streams Phase 2 takes over: redirect the caller to the
+      // playlist proxy so the raw streamUrl never leaves this server.
+      if (gate.session.streamType === "hls") {
+        const playlistPath = `/api/fleet/telematics/video/proxy/${sessionId}/playlist.m3u8?token=${encodeURIComponent(presentedToken)}`;
+        res.json({
+          data: {
+            playlistUrl: playlistPath,
+            streamType: "hls",
+            expiresAt: gate.session.streamProxyExpiresAt!.toISOString(),
+            proxyMode: "phase2-stream",
+          },
+        });
         return;
       }
-
-      // Layer 2: expiry.
-      if (!sess.streamProxyExpiresAt || sess.streamProxyExpiresAt.getTime() < Date.now()) {
-        await logAccess(sess.companyId, scope.userId, "denied_expired", "proxy token expired");
-        res.status(401).json({ error: "انتهت صلاحية رمز الوصول" });
-        return;
-      }
-
-      // Layer 3: session must still be active.
-      if (sess.status !== "active" || !sess.streamUrl) {
-        await logAccess(sess.companyId, scope.userId, "denied_session", `session status=${sess.status}`);
-        res.status(409).json({ error: "الجلسة غير نشطة" });
-        return;
-      }
-
-      // Layer 4: user binding. The requester must be the user who opened
-      // the session; an auditor with the same permission still has to
-      // open their own session to view a stream.
-      if (sess.requestedBy !== scope.userId) {
-        await logAccess(sess.companyId, scope.userId, "denied_user", "different user");
-        res.status(403).json({ error: "هذه الجلسة لمستخدم آخر" });
-        return;
-      }
-
-      await logAccess(sess.companyId, scope.userId, "granted");
-
-      // Pilot delivery: return the URL in a tightly-scoped JSON response.
-      // Phase 2 production hardening (tracked in known limitations) will
-      // upgrade this to true HTTP byte-proxying so the raw CMSV6 URL
-      // never reaches the browser at all.
+      // Non-HLS (RTSP, http-flv, webrtc): native players need the
+      // underlying URL; the gate + audit are the protection layer.
       res.json({
         data: {
-          streamUrl: sess.streamUrl,
-          streamType: sess.streamType,
-          expiresAt: sess.streamProxyExpiresAt.toISOString(),
+          streamUrl: gate.session.streamUrl,
+          streamType: gate.session.streamType,
+          expiresAt: gate.session.streamProxyExpiresAt!.toISOString(),
+          proxyMode: "phase1-json",
         },
       });
     } catch (e) {
       handleRouteError(e, res, "fleet-telematics-video-proxy");
+    }
+  },
+);
+
+// ─── Phase 2: HLS playlist proxy ─────────────────────────────────────────
+// Server-side fetches CMSV6's .m3u8, rewrites every segment URL to point
+// back at this server, returns the rewritten playlist. The browser's
+// HLS player sees ONLY our URLs; the CMSV6 URL never appears in the
+// network tab, the page source, or any leak surface.
+router.get(
+  "/telematics/video/proxy/:id/playlist.m3u8",
+  authorize({ feature: "fleet.telematics.video", action: "view" }),
+  async (req, res) => {
+    const sessionId = parseId(req.params.id);
+    const presentedToken = String(req.query.token ?? "");
+    const accessIp = req.ip ?? null;
+    const userAgent = req.header("user-agent") ?? null;
+
+    try {
+      const scope = req.scope!;
+      const gate = await gateVideoProxyRequest({
+        sessionId,
+        allowedCompanies: scope.allowedCompanies,
+        userId: scope.userId,
+        presentedToken,
+        accessIp,
+        userAgent,
+      });
+      if (!gate.ok) {
+        res.status(gate.httpStatus).json(gate.body);
+        return;
+      }
+      await logVideoAccess(
+        gate.session.companyId, sessionId, scope.userId, "granted",
+        accessIp, userAgent, "playlist",
+      );
+      // Fetch the M3U8 server-side. AbortController so a stuck CMSV6
+      // can't tie up an Express handler indefinitely.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10_000);
+      let upstream: Response;
+      try {
+        upstream = await fetch(gate.session.streamUrl!, {
+          signal: controller.signal,
+          headers: { accept: "application/vnd.apple.mpegurl, application/x-mpegURL, text/plain" },
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (!upstream.ok) {
+        res.status(502).json({ error: `CMSV6 playlist fetch failed: HTTP ${upstream.status}` });
+        return;
+      }
+      const body = await upstream.text();
+      const rewritten = rewriteHlsPlaylist(
+        body,
+        gate.session.streamUrl!,
+        sessionId,
+        presentedToken,
+      );
+      res.setHeader("content-type", "application/vnd.apple.mpegurl");
+      // No-cache: live streams update; recorded streams shouldn't be
+      // stored in shared caches because each token-bound URL is unique.
+      res.setHeader("cache-control", "no-store, no-cache, must-revalidate, private");
+      res.send(rewritten);
+    } catch (e) {
+      handleRouteError(e, res, "fleet-telematics-video-playlist");
+    }
+  },
+);
+
+// ─── Phase 2: HLS segment proxy ──────────────────────────────────────────
+// The rewritten playlist sends segment requests back here. We re-validate
+// the token (segment requests are independent — the player can retry,
+// seek, etc.) and stream the bytes from CMSV6 to the client without
+// buffering the whole segment in memory.
+//
+// Same-origin guard: the resolved upstream URL must share host with the
+// session's streamUrl. A hostile playlist that bypassed the rewriter
+// (or a fabricated request) cannot make us proxy arbitrary URLs.
+router.get(
+  "/telematics/video/proxy/:id/segment/:filename",
+  authorize({ feature: "fleet.telematics.video", action: "view" }),
+  async (req, res) => {
+    const sessionId = parseId(req.params.id);
+    const presentedToken = String(req.query.token ?? "");
+    const accessIp = req.ip ?? null;
+    const userAgent = req.header("user-agent") ?? null;
+    const filename = String(req.params.filename);
+
+    try {
+      const scope = req.scope!;
+      const gate = await gateVideoProxyRequest({
+        sessionId,
+        allowedCompanies: scope.allowedCompanies,
+        userId: scope.userId,
+        presentedToken,
+        accessIp,
+        userAgent,
+      });
+      if (!gate.ok) {
+        res.status(gate.httpStatus).json(gate.body);
+        return;
+      }
+      // Resolve segment URL against the playlist URL, enforce same-origin.
+      const base = new URL(gate.session.streamUrl!);
+      let target: URL;
+      try {
+        // filename was URL-encoded by the rewriter to preserve any
+        // query string (signed CDN segments). Decode once.
+        target = new URL(decodeURIComponent(filename), base);
+      } catch {
+        res.status(400).json({ error: "اسم المقطع غير صالح" });
+        return;
+      }
+      if (target.host !== base.host) {
+        res.status(400).json({ error: "المقطع خارج النطاق المسموح" });
+        return;
+      }
+      // Defence in depth: reject path traversal.
+      if (target.pathname.includes("..")) {
+        res.status(400).json({ error: "اسم المقطع غير صالح" });
+        return;
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15_000);
+      let upstream: Response;
+      try {
+        upstream = await fetch(target.toString(), { signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (!upstream.ok) {
+        res.status(upstream.status === 404 ? 404 : 502).end();
+        return;
+      }
+      // Pass through useful headers but never the upstream Set-Cookie or
+      // any auth-bearing header.
+      const ct = upstream.headers.get("content-type") ?? "video/mp2t";
+      const cl = upstream.headers.get("content-length");
+      res.setHeader("content-type", ct);
+      if (cl) res.setHeader("content-length", cl);
+      res.setHeader("cache-control", "no-store, no-cache, must-revalidate, private");
+
+      // Cheap audit: count granted segments. Logging EVERY segment would
+      // flood the table during a long live stream (1 segment/2-10s).
+      // The playlist log + start-of-session log + end-of-session log are
+      // enough for forensic reconstruction.
+      const body = upstream.body;
+      if (!body) {
+        res.end();
+        return;
+      }
+      // Stream the response. Web ReadableStream → Node Buffer chunks.
+      const reader = body.getReader();
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!res.write(Buffer.from(value))) {
+          // Backpressure: wait for the client to drain before pulling more.
+          await new Promise<void>((resolve) => res.once("drain", () => resolve()));
+        }
+      }
+      res.end();
+    } catch (e) {
+      handleRouteError(e, res, "fleet-telematics-video-segment");
     }
   },
 );
