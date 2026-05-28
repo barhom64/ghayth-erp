@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   KeyRound, AlertTriangle, ChevronDown, ChevronRight, Search,
   ExternalLink, Download, Users, Clock, CheckCircle2,
@@ -223,6 +224,14 @@ export default function CustodyWorkbenchPage() {
               <Download className="w-4 h-4 ml-1" />
               CSV
             </Button>
+            <PrintButton
+              entityType="report_custody_workbench"
+              entityId="all"
+              payload={{
+                entity: { title: "ورشة العُهَد", count: data?.data?.length ?? 0 },
+                items: data?.data ?? [],
+              }}
+            />
           </div>
         </CardContent>
       </Card>

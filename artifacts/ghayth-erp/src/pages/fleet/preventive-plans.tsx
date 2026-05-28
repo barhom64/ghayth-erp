@@ -83,6 +83,18 @@ export default function PreventivePlansPage() {
     },
   );
 
+  // Quick status transitions per the backend's enforced lifecycle:
+  // pending → in_progress / cancelled ; in_progress → completed / cancelled.
+  // PATCH /fleet/preventive-plans/:id was unused even though the page
+  // displays the status column — operators had no way to advance a row
+  // without re-opening the create flow.
+  const statusMut = useApiMutation<unknown, { id: number; status: string }>(
+    (body) => `/fleet/preventive-plans/${body.id}`,
+    "PATCH",
+    [["preventive-plans"]],
+    { successMessage: "تم تحديث حالة الخطة" },
+  );
+
   const handleSave = async (values: PlanForm) => {
     await createMut.mutateAsync({
       vehicleId: Number(values.vehicleId),
@@ -170,6 +182,43 @@ export default function PreventivePlansPage() {
           <Badge className="bg-status-success-surface text-status-success-foreground">{dueDays} يوم</Badge>
         );
         return <span className="text-muted-foreground">-</span>;
+      },
+    },
+    {
+      key: "actions",
+      header: "إجراء",
+      render: (row) => {
+        const status = row.status || "pending";
+        if (status === "completed" || status === "cancelled") {
+          return <Badge variant="outline">{status === "completed" ? "مكتمل" : "ملغى"}</Badge>;
+        }
+        // pending → in_progress; in_progress → completed
+        const nextStatus = status === "pending" ? "in_progress" : "completed";
+        const nextLabel = nextStatus === "in_progress" ? "بدء" : "إكمال";
+        return (
+          <div className="flex items-center gap-1">
+            <GuardedButton
+              perm="fleet:update"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={(e: any) => { e.stopPropagation(); statusMut.mutate({ id: row.id, status: nextStatus }); }}
+              disabled={statusMut.isPending}
+            >
+              {nextLabel}
+            </GuardedButton>
+            <GuardedButton
+              perm="fleet:update"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-status-error-foreground"
+              onClick={(e: any) => { e.stopPropagation(); statusMut.mutate({ id: row.id, status: "cancelled" }); }}
+              disabled={statusMut.isPending}
+            >
+              إلغاء
+            </GuardedButton>
+          </div>
+        );
       },
     },
     {
