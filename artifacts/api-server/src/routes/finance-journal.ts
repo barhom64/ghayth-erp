@@ -37,6 +37,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
+import { logAllocationOverride } from "../lib/accountingAllocation.js";
 import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
@@ -523,9 +524,10 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
 
     // Audit item #2 — apply operator-supplied allocation overrides on top
     // of the auto-derived entityLink. Each field that the operator pinned
-    // through the LineAllocationPanel wins over the rule-resolved value;
-    // the override pair (proposed vs resolved) is logged downstream via
-    // logAllocationOverride() in the allocation resolver pipeline.
+    // through the LineAllocationPanel wins over the rule-resolved value.
+    // The override gets logged via logAllocationOverride() INSIDE the
+    // withTransaction block below (after the JE id is known) so the
+    // allocation_override_log row rolls back with the JE on failure.
     let overrideAccountCode = accountCode;
     if (lineAllocation) {
       if (lineAllocation.accountCode) overrideAccountCode = lineAllocation.accountCode;
@@ -580,6 +582,39 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
               [effectiveCompanyId, Number(govIntegrationId), govEntityType, Number(govEntityId), ref]
             );
           }).catch((e) => logger.error(e, "finance-journal background task failed"));
+        }
+      }
+
+      // Item #2 follow-through — actually log the override (the previous
+      // comment claimed this would happen "downstream in the resolver
+      // pipeline" but no downstream code fires for the expense path).
+      // Fires only when the operator pinned BOTH an override reason AND
+      // at least one dimension/accountCode — otherwise the operator is
+      // accepting the auto-derived allocation and no override exists.
+      if (lineAllocation?.manualOverrideReason) {
+        const blockers: string[] = [];
+        if (lineAllocation.accountCode) blockers.push(`account:${lineAllocation.accountCode}`);
+        if (lineAllocation.costCenterId != null) blockers.push(`costCenter:${lineAllocation.costCenterId}`);
+        if (lineAllocation.activityType) blockers.push(`activityType:${lineAllocation.activityType}`);
+        if (lineAllocation.projectId != null) blockers.push(`project:${lineAllocation.projectId}`);
+        if (lineAllocation.vehicleId != null) blockers.push(`vehicle:${lineAllocation.vehicleId}`);
+        if (lineAllocation.propertyId != null) blockers.push(`property:${lineAllocation.propertyId}`);
+        if (lineAllocation.unitId != null) blockers.push(`unit:${lineAllocation.unitId}`);
+        if (lineAllocation.assetId != null) blockers.push(`asset:${lineAllocation.assetId}`);
+        if (lineAllocation.contractId != null) blockers.push(`contract:${lineAllocation.contractId}`);
+        if (lineAllocation.umrahAgentId != null) blockers.push(`umrahAgent:${lineAllocation.umrahAgentId}`);
+        if (blockers.length > 0) {
+          await logAllocationOverride({
+            companyId: effectiveCompanyId,
+            branchId: branchId ?? scope.branchId ?? null,
+            actorAssignmentId: scope.activeAssignmentId ?? null,
+            actorUserId: scope.userId,
+            documentType: "expense",
+            documentId: posted.journalId,
+            sourceTable: "journal_lines",
+            blockers,
+            overrideReason: lineAllocation.manualOverrideReason,
+          });
         }
       }
 

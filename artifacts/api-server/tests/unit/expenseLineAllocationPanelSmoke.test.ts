@@ -104,3 +104,38 @@ describe("expenses-create form wires the panel", () => {
     expect(FORM).toContain("buildAllocationPayload(allocation)");
   });
 });
+
+// ─── Override audit-trail real-call ────────────────────────────────────────
+// Audit follow-through: the original PR #1346 added a comment claiming
+// the override would be "logged downstream in the resolver pipeline",
+// but no downstream code fires for the expense path. This block locks
+// the contract that the route now ACTUALLY calls logAllocationOverride.
+describe("expense handler actually logs overrides", () => {
+  it("imports logAllocationOverride from accountingAllocation", () => {
+    expect(ROUTE).toContain('import { logAllocationOverride } from "../lib/accountingAllocation.js"');
+  });
+
+  it("calls logAllocationOverride when manualOverrideReason is set", () => {
+    expect(ROUTE).toContain("if (lineAllocation?.manualOverrideReason)");
+    expect(ROUTE).toContain("await logAllocationOverride({");
+    expect(ROUTE).toContain('documentType: "expense"');
+    expect(ROUTE).toContain('sourceTable: "journal_lines"');
+  });
+
+  it("builds a blockers list from the pinned dimensions", () => {
+    expect(ROUTE).toContain('blockers.push(`account:');
+    expect(ROUTE).toContain('blockers.push(`costCenter:');
+    expect(ROUTE).toContain('blockers.push(`vehicle:');
+    expect(ROUTE).toContain('blockers.push(`property:');
+    expect(ROUTE).toContain('blockers.push(`umrahAgent:');
+  });
+
+  it("fires inside the withTransaction block so the log rolls back with the JE", () => {
+    // The log call sits between the financialEngine.postJournalEntry and
+    // the initiateApprovalChain call, both of which are inside withTransaction.
+    const txStart = ROUTE.indexOf("await withTransaction(async () => {");
+    expect(txStart).toBeGreaterThan(-1);
+    const txBody = ROUTE.slice(txStart, txStart + 7000);
+    expect(txBody).toContain("await logAllocationOverride({");
+  });
+});
