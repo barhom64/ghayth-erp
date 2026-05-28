@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
 import { useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -75,6 +76,32 @@ export default function CustodyDetailPage() {
   );
 
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("custody", id || "");
+
+  // POST /finance/custodies/:id/settle — per-id settle endpoint (vs the
+  // bulk /custodies/settle used on the list page). Backend gates this on
+  // approval status — pending_approval/draft/rejected/returned block.
+  // Operators settle remaining balance from the detail page without
+  // bouncing back to the list.
+  const settleMut = useApiMutation<unknown, { amount: number; description?: string }>(
+    () => `/finance/custodies/${id}/settle`,
+    "POST",
+    [["custody-detail", id || ""], ["custodies"]],
+    { successMessage: "تمت التسوية", onSuccess: () => refetch() },
+  );
+  const handleSettleRemaining = () => {
+    const remaining = Number(data?.remainingAmount || 0);
+    if (remaining <= 0) {
+      return;
+    }
+    const amountStr = window.prompt(`مبلغ التسوية (المتبقي: ${remaining})`, String(remaining));
+    if (!amountStr) return;
+    const amount = Number(amountStr);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return;
+    }
+    const description = window.prompt("وصف التسوية (اختياري):", "") ?? "";
+    settleMut.mutate({ amount, description: description || undefined });
+  };
 
   const progressPercent =
     data?.amount > 0 ? Math.min(100, Math.round((data.settledAmount / data.amount) * 100)) : 0;
@@ -305,9 +332,27 @@ export default function CustodyDetailPage() {
     </>
   );
 
+  const isSettleable = data && !["pending_approval", "draft", "rejected", "returned"].includes(data?.approvalStatus) && Number(data?.remainingAmount || 0) > 0;
+
   return (
     <DetailPageLayout
-      actions={<PrintButton entityType="custody" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
+      actions={
+        <div className="flex items-center gap-2">
+          {isSettleable && (
+            <GuardedButton
+              perm="finance:create"
+              size="sm"
+              variant="outline"
+              onClick={handleSettleRemaining}
+              disabled={settleMut.isPending}
+            >
+              <ArrowLeftRight className="h-4 w-4 me-1" />
+              تسوية المتبقي
+            </GuardedButton>
+          )}
+          <PrintButton entityType="custody" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />
+        </div>
+      }
       title={data?.ref ? `عهدة ${data.ref}` : "العهدة"}
       subtitle={data?.description || data?.purpose || undefined}
       backPath="/finance/custodies"
