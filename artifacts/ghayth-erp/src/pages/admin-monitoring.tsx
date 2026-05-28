@@ -1,21 +1,220 @@
+import { useState } from "react";
 import {
   PageShell,
   PageStatusBadge,
   DataTable,
   type DataTableColumn,
 } from "@workspace/ui-core";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
   Activity, Database, Clock, AlertTriangle, Shield,
   Server, CheckCircle, XCircle, Users, Building2,
   HardDrive, Cpu, MemoryStick, RefreshCw, Plug, Gauge,
+  Power, PowerOff, Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
+
+interface SystemStopRow {
+  id: number;
+  scope: string;
+  reason: string;
+  active: boolean;
+  activatedBy: number | null;
+  activatedByName: string | null;
+  deactivatedBy: number | null;
+  deactivatedAt: string | null;
+  createdAt: string;
+}
+
+function SystemStopsCard() {
+  const { data, refetch } = useApiQuery<{ data: SystemStopRow[] }>(
+    ["admin-system-stops"],
+    "/admin/system-stops",
+  );
+  const stops = data?.data ?? [];
+  const active = stops.filter((s) => s.active);
+
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newScope, setNewScope] = useState<string>("all");
+  const [newReason, setNewReason] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const [deactivatingId, setDeactivatingId] = useState<number | null>(null);
+
+  const refreshAll = () => {
+    refetch();
+    qc.invalidateQueries({ queryKey: ["system-health"] });
+  };
+
+  const createStop = async () => {
+    if (!newReason.trim()) {
+      toast({ variant: "destructive", title: "سبب الإيقاف مطلوب" });
+      return;
+    }
+    if (!window.confirm(`سيتم تفعيل إيقاف النظام للنطاق "${newScope}". متابعة؟`)) return;
+    setBusy(true);
+    try {
+      await apiFetch("/admin/system-stops", {
+        method: "POST",
+        body: JSON.stringify({ scope: newScope, reason: newReason.trim() }),
+      });
+      toast({ title: "تم تفعيل الإيقاف" });
+      setCreateOpen(false);
+      setNewReason("");
+      refreshAll();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر التفعيل", description: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deactivateStop = async (id: number) => {
+    if (!window.confirm("تأكيد إلغاء تفعيل الإيقاف؟")) return;
+    setDeactivatingId(id);
+    try {
+      await apiFetch(`/admin/system-stops/${id}/deactivate`, { method: "PATCH" });
+      toast({ title: "تم إلغاء التفعيل" });
+      refreshAll();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر التنفيذ", description: err.message });
+    } finally {
+      setDeactivatingId(null);
+    }
+  };
+
+  return (
+    <>
+      <Card className={cn("border-2", active.length > 0 ? "border-status-error-surface bg-status-error-surface/30" : "")}>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center justify-between gap-2">
+            <span className="flex items-center gap-2">
+              <PowerOff className={cn("w-4 h-4", active.length > 0 ? "text-status-error-foreground" : "text-muted-foreground")} />
+              إيقافات النظام {active.length > 0 && <Badge variant="destructive">{active.length} نشطة</Badge>}
+            </span>
+            <GuardedButton
+              perm="admin:update"
+              size="sm"
+              variant="outline"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus className="w-3 h-3 me-1" />تفعيل إيقاف
+            </GuardedButton>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {stops.length === 0 ? (
+            <p className="text-sm text-muted-foreground p-6 text-center">
+              لا توجد إيقافات مسجلة. النظام يعمل بشكل كامل.
+            </p>
+          ) : (
+            <DataTable
+              columns={[
+                { key: "scope", header: "النطاق", render: (r) => (
+                  <Badge variant="outline" className="font-mono text-xs">{r.scope}</Badge>
+                )},
+                { key: "reason", header: "السبب", render: (r) => (
+                  <span className="text-xs max-w-[400px] truncate block" title={r.reason}>{r.reason}</span>
+                )},
+                { key: "active", header: "الحالة", render: (r) => r.active ? (
+                  <Badge variant="destructive" className="text-xs">نشط</Badge>
+                ) : (
+                  <Badge variant="outline" className="text-xs">متوقف</Badge>
+                )},
+                { key: "activatedByName", header: "فعّل بواسطة", render: (r) => (
+                  <span className="text-xs">{r.activatedByName || "—"}</span>
+                )},
+                { key: "createdAt", header: "تاريخ التفعيل", render: (r) => (
+                  <span className="text-xs">{formatDateAr(r.createdAt)}</span>
+                )},
+                { key: "actions", header: "", render: (r) => r.active ? (
+                  <GuardedButton
+                    perm="admin:update"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => deactivateStop(r.id)}
+                    disabled={deactivatingId === r.id}
+                    title="إلغاء التفعيل"
+                  >
+                    <Power className="w-3 h-3" />
+                  </GuardedButton>
+                ) : null },
+              ] as DataTableColumn<SystemStopRow>[]}
+              data={stops}
+              noToolbar
+              pageSize={10}
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={createOpen} onOpenChange={(o) => { if (!o) { setCreateOpen(false); setNewReason(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-status-error-foreground">
+              <PowerOff className="h-4 w-4" />
+              تفعيل إيقاف نظام
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">النطاق</Label>
+              <Select value={newScope} onValueChange={setNewScope}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل النظام</SelectItem>
+                  <SelectItem value="financial">المالية فقط</SelectItem>
+                  <SelectItem value="hr">الموارد البشرية فقط</SelectItem>
+                  <SelectItem value="operational">العمليات فقط</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">سبب الإيقاف</Label>
+              <Textarea
+                value={newReason}
+                onChange={(e) => setNewReason(e.target.value)}
+                placeholder="مثال: صيانة قواعد البيانات — متوقع 30 دقيقة"
+                rows={3}
+              />
+            </div>
+            <div className="rounded-md bg-status-error-surface border border-status-error-surface p-3 text-xs text-status-error-foreground">
+              ⚠️ سيؤدي تفعيل الإيقاف إلى منع المستخدمين من تنفيذ عمليات في النطاق المختار حتى يتم إلغاء التفعيل.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>إلغاء</Button>
+            <Button
+              variant="destructive"
+              disabled={busy || !newReason.trim()}
+              onClick={createStop}
+              rateLimitAware
+            >
+              تفعيل الإيقاف
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
 function formatBytes(bytes: number): string {
   if (!bytes) return "0 B";
@@ -327,6 +526,8 @@ export default function AdminMonitoring() {
           </CardContent>
         </Card>
       )}
+
+      <SystemStopsCard />
       </div>
       </PageStateWrapper>
     </PageShell>

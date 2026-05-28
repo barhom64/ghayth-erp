@@ -8,7 +8,8 @@ import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
-import { Edit, CalendarDays, XCircle, ChevronsUp } from "lucide-react";
+import { Edit, CalendarDays, XCircle, ChevronsUp, Trash2 } from "lucide-react";
+import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 
@@ -56,6 +57,7 @@ export default function LeaveDetail() {
   const id = params?.id ? Number(params.id) : null;
   const { toast } = useToast();
   const [cancelling, setCancelling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["leave", String(id)],
@@ -236,6 +238,7 @@ export default function LeaveDetail() {
   );
 
   return (
+    <>
     <DetailPageLayout
       title={leave?.ref ? `إجازة ${leave.ref}` : "تفاصيل الإجازة"}
       subtitle={
@@ -312,8 +315,33 @@ export default function LeaveDetail() {
               تصعيد
             </GuardedButton>
           )}
+          {leave && leave.status === "pending" && (
+            <GuardedButton
+              perm="hr:delete"
+              variant="outline"
+              size="sm"
+              className="text-status-error-foreground"
+              onClick={() => setDeleting(true)}
+              title="حذف الطلب — متاح للطلبات المعلقة فقط"
+            >
+              <Trash2 className="h-4 w-4 ms-1" />
+              حذف
+            </GuardedButton>
+          )}
         </>
       }
     />
+    {deleting && leave && id && (
+      <ConfirmDeleteDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        entity={{ type: "leave-request", id, name: `طلب إجازة #${id}` }}
+        deletePath={`/hr/leave-requests/${id}`}
+        invalidateKeys={[["leave", String(id)], ["leaves"], ["leave-requests"]]}
+        successMessage="تم حذف طلب الإجازة"
+        onDeleted={() => setLocation("/hr/leaves")}
+      />
+    )}
+    </>
   );
 }
