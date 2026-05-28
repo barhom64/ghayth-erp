@@ -404,6 +404,21 @@ function extractFrontendCalls() {
       calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "DELETE", source: "prop" });
     }
 
+    // apiUrl("/…") helper from lib/api.ts — wraps a path with /api prefix
+    // for use in `<a href={apiUrl(…)} download>` anchors. The href scanner
+    // below sees `href={…}` but the value is a function call, not a
+    // string literal, so the URL stays dark. Catch the apiUrl call sites
+    // directly. Tag method=? since anchors don't carry HTTP verb info
+    // and could be download or POST-via-form.
+    const apiUrlRe = /\bapiUrl\s*\(\s*[`"']/g;
+    for (const m of src.matchAll(apiUrlRe)) {
+      let i = m.index + m[0].length - 1;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "?", source: "prop" });
+    }
+
     // Raw anchor href to /api/* — file-serving endpoints (PDFs,
     // downloads, previews) can't use apiFetch because the response
     // is a stream, not JSON. The convention across the app is
