@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 import { PlaneTakeoff, PlaneLanding, AlertTriangle, Download, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { todayLocal } from "@/lib/formatters";
@@ -137,8 +138,24 @@ export default function UmrahDailyRunsheet() {
             <RefreshCw className="h-4 w-4" /> تحديث
           </Button>
           <GuardedButton perm="umrah:export" onClick={handleExport} className="gap-1" rateLimitAware>
-            <Download className="h-4 w-4" /> تصدير PDF
+            <Download className="h-4 w-4" /> تصدير PDF (قديم)
           </GuardedButton>
+          <PrintButton
+            entityType="umrah_runsheet"
+            entityId={date}
+            payload={{
+              entity: {
+                title: "كشف رحلات يومي — عمرة",
+                date,
+                arrivalCount: arrivals.length,
+                departureCount: departures.length,
+                overstayCount: overstays.length,
+              },
+              arrivals,
+              departures,
+              overstays,
+            }}
+          />
         </div>
       </header>
 
