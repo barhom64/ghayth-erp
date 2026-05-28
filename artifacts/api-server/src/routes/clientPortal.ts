@@ -317,7 +317,9 @@ protectedRouter.get("/me", withPortalScope(async (req, res) => {
          (SELECT COUNT(*) FROM invoices WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS invoices,
          (SELECT COUNT(*) FROM support_tickets WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS tickets,
          (SELECT COUNT(*) FROM projects WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS projects,
-         (SELECT COUNT(*) FROM umrah_sub_agents WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS "umrahSubAgents"`,
+         (SELECT COUNT(*) FROM umrah_sub_agents WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS "umrahSubAgents",
+         (SELECT COUNT(*) FROM tenants WHERE "clientId" = $1 AND "companyId" = $2)::int AS "tenantLinks",
+         (SELECT COUNT(*) FROM legal_cases WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS "legalCases"`,
       params
     );
 
@@ -326,14 +328,12 @@ protectedRouter.get("/me", withPortalScope(async (req, res) => {
     // is data-gated.
     const sections: string[] = ["overview", "profile"];
     if (Number(counts?.invoices ?? 0) > 0) sections.push("invoices");
+    if (Number(counts?.tenantLinks ?? 0) > 0) sections.push("property");
+    if (Number(counts?.legalCases ?? 0) > 0) sections.push("legal");
     if (Number(counts?.projects ?? 0) > 0) sections.push("projects");
     if (Number(counts?.umrahSubAgents ?? 0) > 0) sections.push("umrah");
     if (Number(counts?.tickets ?? 0) > 0) sections.push("support");
     sections.push("knowledge-base"); // always available — no scoping
-    // Note: property-tenant + legal-client + vehicle-renter sections
-    // require schema work (tenants table lacks clientId; legal_cases
-    // ditto). Tracked separately — when those FKs land, just add to
-    // the COUNT query above and the section gets exposed automatically.
 
     res.json({
       ...client,
@@ -343,6 +343,8 @@ protectedRouter.get("/me", withPortalScope(async (req, res) => {
         tickets: Number(counts?.tickets ?? 0),
         projects: Number(counts?.projects ?? 0),
         umrahSubAgents: Number(counts?.umrahSubAgents ?? 0),
+        tenantLinks: Number(counts?.tenantLinks ?? 0),
+        legalCases: Number(counts?.legalCases ?? 0),
       },
     });
   } catch (err) {
@@ -916,6 +918,123 @@ protectedRouter.get("/umrah/payments", withPortalScope(async (req, res) => {
     res.json({ data: rows, total: rows.length });
   } catch (err) {
     handleRouteError(err, res, "Portal umrah payments error:");
+  }
+}));
+
+// ─── Property tenants (gated by tenants.clientId from migration 230) ────────
+// A single portal account (bound to clients.id) may map to multiple
+// tenant records — e.g. a corporate client leasing several units. All
+// queries scope by `t.clientId = me AND t.companyId = me` so a tenant
+// record from another company can't leak even if ids collide.
+
+protectedRouter.get("/property/contracts", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const rows = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT rc.id, rc."contractNumber", rc."ejarNumber", rc."contractType",
+              rc."startDate", rc."endDate", rc."monthlyRent", rc."yearlyRent",
+              rc."depositAmount", rc.status, rc."paymentFrequency",
+              rc."autoRenewal", rc."renewalNoticeDays",
+              u."unitNumber", u."buildingName", u.address AS "unitAddress"
+         FROM rental_contracts rc
+         JOIN tenants t ON t.id = rc."tenantId" AND t."companyId" = rc."companyId"
+         LEFT JOIN property_units u ON u.id = rc."unitId" AND u."companyId" = rc."companyId"
+        WHERE t."clientId" = $1 AND rc."companyId" = $2 AND rc."deletedAt" IS NULL
+        ORDER BY rc."startDate" DESC LIMIT 100`,
+      [scope.clientId, scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal property contracts error:");
+  }
+}));
+
+protectedRouter.get("/property/rent-payments", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    // rent_payments has no companyId column — same defensive pattern as
+    // the Property Owner Statement (PR #5a2c1aed). Gate via rental_contracts.
+    const rows = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT rp.id, rp."contractId", rp."dueDate", rp.amount, rp."paidAmount",
+              rp."paidDate", rp.method, rp.status, rp."receiptNumber",
+              rp.amount - rp."paidAmount" AS "outstanding",
+              (CURRENT_DATE - rp."dueDate") AS "daysPastDue"
+         FROM rent_payments rp
+         JOIN rental_contracts rc ON rc.id = rp."contractId" AND rc."deletedAt" IS NULL
+         JOIN tenants t ON t.id = rc."tenantId" AND t."companyId" = rc."companyId"
+        WHERE t."clientId" = $1 AND rc."companyId" = $2
+        ORDER BY rp."dueDate" DESC LIMIT 200`,
+      [scope.clientId, scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal rent payments error:");
+  }
+}));
+
+protectedRouter.get("/property/maintenance-requests", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const rows = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT mr.id, mr.category, mr.description, mr.priority, mr.status,
+              mr."estimatedCost", mr."actualCost", mr."completedAt",
+              mr."createdAt",
+              u."unitNumber", u."buildingName"
+         FROM maintenance_requests mr
+         JOIN rental_contracts rc ON rc.id = mr."contractId" AND rc."deletedAt" IS NULL
+         JOIN tenants t ON t.id = rc."tenantId" AND t."companyId" = rc."companyId"
+         LEFT JOIN property_units u ON u.id = mr."unitId" AND u."companyId" = mr."companyId"
+        WHERE t."clientId" = $1 AND mr."companyId" = $2
+        ORDER BY mr."createdAt" DESC LIMIT 100`,
+      [scope.clientId, scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal maintenance requests error:");
+  }
+}));
+
+// ─── Legal cases (gated by legal_cases.clientId from migration 230) ─────────
+// A client portal user may be a plaintiff or defendant in cases the firm
+// represents. legal_cases.clientId is the new link added by migration 230.
+
+protectedRouter.get("/legal/cases", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const { where, params } = buildPortalWhere(scope);
+    const rows = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT id, "caseNumber", title, "caseType", court, "filingDate",
+              "opposingParty", "lawyerName", status, priority,
+              "financialRisk", "riskLevel", "createdAt"
+         FROM legal_cases
+        WHERE ${where} AND "deletedAt" IS NULL
+        ORDER BY "createdAt" DESC LIMIT 100`,
+      params
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal legal cases error:");
+  }
+}));
+
+protectedRouter.get("/legal/sessions/upcoming", withPortalScope(async (req, res) => {
+  try {
+    const scope = req.portalScope;
+    const rows = await portalScopedQuery<Record<string, unknown>>(scope,
+      `SELECT ls.id, ls."sessionDate", ls.location, ls.judge,
+              ls.result, ls."nextSessionDate", ls.notes,
+              c.id AS "caseId", c."caseNumber", c.title AS "caseTitle"
+         FROM legal_sessions ls
+         JOIN legal_cases c ON c.id = ls."caseId" AND c."deletedAt" IS NULL
+        WHERE c."clientId" = $1 AND c."companyId" = $2
+              AND ls."deletedAt" IS NULL
+              AND ls."sessionDate" >= CURRENT_DATE - INTERVAL '30 days'
+        ORDER BY ls."sessionDate" ASC LIMIT 100`,
+      [scope.clientId, scope.companyId]
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "Portal legal sessions error:");
   }
 }));
 
