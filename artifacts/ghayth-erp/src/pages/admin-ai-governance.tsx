@@ -921,6 +921,80 @@ function SimulatePromptDialog({ promptId, onClose }: {
   );
 }
 
+interface EvaluationResultRow {
+  id: number;
+  testCaseId: number;
+  testCaseName: string | null;
+  status: string;
+  actualOutput: string | null;
+  errorMessage: string | null;
+  durationMs: number;
+  costUsd: number;
+  tokensUsed: number;
+  expectedContains: string | null;
+}
+
+function EvaluationRunRow({ run }: { run: EvaluationRow }) {
+  const [expanded, setExpanded] = useState(false);
+  const { data: resultsResp } = useApiQuery<{ data: EvaluationResultRow[] }>(
+    ["ai-eval-results", String(run.id)],
+    expanded ? `/admin/ai-governance/evaluations/${run.id}/results` : null,
+    { enabled: expanded },
+  );
+  const results = resultsResp?.data ?? [];
+  return (
+    <div className={cn(
+      "text-xs p-2 rounded border",
+      run.failedCases > 0 ? "bg-status-error-surface/40 border-status-error-surface" :
+      run.skippedCases > 0 ? "bg-status-warning-surface/40 border-status-warning-surface" :
+      "bg-status-success-surface border-status-success-surface",
+    )}>
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          className="text-start hover:underline cursor-pointer"
+          onClick={() => setExpanded(!expanded)}
+        >
+          <Badge variant="outline" className="text-[10px]">v{run.promptVersion}</Badge>
+          <span className="ms-2">{run.passedCases}/{run.totalCases} نجحت</span>
+          {run.failedCases > 0 && <span className="ms-2 text-status-error-foreground">{run.failedCases} فشلت</span>}
+          {run.skippedCases > 0 && <span className="ms-2 text-status-warning-foreground">{run.skippedCases} تخطّت</span>}
+          <span className="ms-2 text-[10px] text-muted-foreground">{expanded ? "▼" : "◀"}</span>
+        </button>
+        <span className="text-[10px] text-muted-foreground">
+          ${run.totalCostUsd.toFixed(4)} · {run.totalTokens} tok · {run.durationMs}ms · {formatDateAr(run.startedAt)}
+        </span>
+      </div>
+      {expanded && results.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-current/20 space-y-1">
+          {results.map((r) => (
+            <div key={r.id} className="text-[10px] p-1.5 rounded bg-white/40">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">{r.testCaseName || `#${r.testCaseId}`}</span>
+                <Badge
+                  variant={r.status === "passed" ? "default" : r.status === "skipped" ? "secondary" : "destructive"}
+                  className="text-[9px]"
+                >
+                  {r.status}
+                </Badge>
+              </div>
+              {r.expectedContains && (
+                <div className="text-muted-foreground mt-0.5">يحوي: <span className="font-mono">{r.expectedContains}</span></div>
+              )}
+              {r.errorMessage && (
+                <div className="text-status-error-foreground mt-0.5">خطأ: {r.errorMessage}</div>
+              )}
+              <div className="text-muted-foreground text-[9px] mt-0.5">
+                {r.durationMs}ms · {r.tokensUsed} tok · ${Number(r.costUsd).toFixed(4)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EvaluatePromptDialog({ prompt, onClose }: {
   prompt: PromptRow | null; onClose: () => void;
 }) {
@@ -992,24 +1066,7 @@ function EvaluatePromptDialog({ prompt, onClose }: {
               <Label className="text-sm mb-2 block">آخر تقييمات ({evals.length})</Label>
               <div className="space-y-1">
                 {evals.slice(0, 10).map((e) => (
-                  <div key={e.id} className={cn(
-                    "text-xs p-2 rounded border",
-                    e.failedCases > 0 ? "bg-status-error-surface/40 border-status-error-surface" :
-                    e.skippedCases > 0 ? "bg-status-warning-surface/40 border-status-warning-surface" :
-                    "bg-status-success-surface border-status-success-surface",
-                  )}>
-                    <div className="flex items-center justify-between">
-                      <span>
-                        <Badge variant="outline" className="text-[10px]">v{e.promptVersion}</Badge>
-                        <span className="ms-2">{e.passedCases}/{e.totalCases} نجحت</span>
-                        {e.failedCases > 0 && <span className="ms-2 text-status-error-foreground">{e.failedCases} فشلت</span>}
-                        {e.skippedCases > 0 && <span className="ms-2 text-status-warning-foreground">{e.skippedCases} تخطّت</span>}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        ${e.totalCostUsd.toFixed(4)} · {e.totalTokens} tok · {e.durationMs}ms · {formatDateAr(e.startedAt)}
-                      </span>
-                    </div>
-                  </div>
+                  <EvaluationRunRow key={e.id} run={e} />
                 ))}
               </div>
             </div>
