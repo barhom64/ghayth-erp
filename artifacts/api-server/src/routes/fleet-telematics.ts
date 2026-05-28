@@ -121,6 +121,10 @@ export interface IntegrationRow {
   config: Record<string, unknown>;
   /** Encrypted HMAC secret for /api/webhooks/cmsv6/:id (migration 229). */
   webhookSecret: string | null;
+  /** Per-tenant retention / heartbeat tunables (migration 230). */
+  positionRetentionDays: number;
+  syncLogRetentionDays: number;
+  offlineThresholdSec: number;
   notes: string | null;
 }
 
@@ -1355,6 +1359,20 @@ router.get(
 // Idempotency lives in the DB unique indexes; ON CONFLICT DO NOTHING is
 // the right level of strictness here.
 // ─────────────────────────────────────────────────────────────────────────
+/**
+ * Per-device throttle for `fleet.telematics.position.updated`. Persistence
+ * still happens on every GPS point (the live map needs that) but emitting
+ * an event for every point at 20 vehicles × every-30s would mean 57k
+ * events/day, each one fanning out to every listener registered on the
+ * bus. Throttle to 1 event/device/minute so the bus stays useful.
+ *
+ * In-memory map is fine: missing a throttle window across a process
+ * restart just means one extra event — same effect as if the next
+ * point landed in a new window.
+ */
+const POSITION_EVENT_THROTTLE_MS = 60_000;
+const lastPositionEventAt = new Map<number, number>();
+
 export async function persistPosition(
   companyId: number,
   branchId: number | null,
@@ -1392,16 +1410,21 @@ export async function persistPosition(
     [p.occurredAt, device.id],
   );
   if (affectedRows > 0) {
-    void emitEvent({
-      companyId,
-      branchId: branchId ?? undefined,
-      userId: null,
-      action: "fleet.telematics.position.updated",
-      entity: "fleet_device_positions",
-      entityId: device.id,
-      details: `موقع جديد للجهاز #${device.id}`,
-      after: { deviceId: device.id, vehicleId: device.vehicleId, lat: p.lat, lng: p.lng, speed: p.speed },
-    });
+    const now = Date.now();
+    const last = lastPositionEventAt.get(device.id) ?? 0;
+    if (now - last >= POSITION_EVENT_THROTTLE_MS) {
+      lastPositionEventAt.set(device.id, now);
+      void emitEvent({
+        companyId,
+        branchId: branchId ?? undefined,
+        userId: null,
+        action: "fleet.telematics.position.updated",
+        entity: "fleet_device_positions",
+        entityId: device.id,
+        details: `موقع جديد للجهاز #${device.id}`,
+        after: { deviceId: device.id, vehicleId: device.vehicleId, lat: p.lat, lng: p.lng, speed: p.speed },
+      });
+    }
   }
   return affectedRows > 0;
 }
@@ -1547,6 +1570,19 @@ export async function persistAlert(
   return affectedRows > 0;
 }
 
+/**
+ * Sensor-type-specific thresholds for `*_changed` event emission. Without
+ * these, every fuel/weight reading would emit an event (57k+/day for a
+ * 20-vehicle fleet) — most listeners only care about meaningful deltas
+ * (a top-up, a load drop, a dump truck unloading). Numbers are tunable
+ * but conservative enough to surface real operational events while
+ * suppressing sensor noise.
+ */
+const SENSOR_DELTA_THRESHOLDS: Record<string, number> = {
+  fuel_level: 5,    // litres — sub-5L drift is noise; ≥5L is a fill/drain.
+  weight: 200,      // kg     — under 200kg is suspension noise.
+};
+
 export async function persistSensor(
   companyId: number,
   branchId: number | null,
@@ -1583,17 +1619,41 @@ export async function persistSensor(
         : s.sensorType === "dump_piston"
           ? dumpPistonEventForState(s.readingState)
           : sensorEventMap[s.sensorType];
+
     if (eventName) {
-      void emitEvent({
-        companyId,
-        branchId: branchId ?? undefined,
-        userId: null,
-        action: eventName,
-        entity: "fleet_sensor_readings",
-        entityId: insertId,
-        details: `${s.sensorType} — ${s.readingValue ?? s.readingState ?? "—"}`,
-        after: { readingId: insertId, vehicleId: device.vehicleId, readingValue: s.readingValue },
-      });
+      let shouldEmit = true;
+      const threshold = SENSOR_DELTA_THRESHOLDS[s.sensorType];
+
+      // Delta-aware emission for fuel/weight. PTO and dump_piston are
+      // state-transitions (on/off, up/down) and already emit only on
+      // genuine changes via *EventForState above — so we only enforce
+      // a threshold when the sensor type has a numeric threshold AND
+      // the current reading is numeric.
+      if (threshold !== undefined && s.readingValue !== undefined && s.readingValue !== null) {
+        const prev = await rawQuery<{ readingValue: string | null }>(
+          `SELECT "readingValue" FROM fleet_sensor_readings
+            WHERE "deviceId" = $1 AND "sensorType" = $2 AND id <> $3
+            ORDER BY "occurredAt" DESC LIMIT 1`,
+          [device.id, s.sensorType, insertId],
+        );
+        const prevVal = prev[0]?.readingValue != null ? Number(prev[0].readingValue) : null;
+        if (prevVal !== null && Math.abs(s.readingValue - prevVal) < threshold) {
+          shouldEmit = false;
+        }
+      }
+
+      if (shouldEmit) {
+        void emitEvent({
+          companyId,
+          branchId: branchId ?? undefined,
+          userId: null,
+          action: eventName,
+          entity: "fleet_sensor_readings",
+          entityId: insertId,
+          details: `${s.sensorType} — ${s.readingValue ?? s.readingState ?? "—"}`,
+          after: { readingId: insertId, vehicleId: device.vehicleId, readingValue: s.readingValue },
+        });
+      }
     }
   }
   return affectedRows > 0;
