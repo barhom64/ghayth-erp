@@ -521,6 +521,49 @@ function extractFrontendCalls() {
       calls.push({ file: rel, url, line: lineOf(src, m.index), method, source: "helper" });
     }
 
+    // <ExportButton endpoint="/export/excel/x" /> + array form
+    // `[{ endpoint: "/export/...", ... }]` used in ExportGroup.
+    // Component fires GET via fetch + blob, no method on options.
+    const exportBtnRe = /\bExportButton[\s\S]{0,80}?\bendpoint\s*=\s*[`"']/g;
+    for (const m of src.matchAll(exportBtnRe)) {
+      let i = m.index + m[0].length - 1;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "prop" });
+    }
+    // JSX brace form: `endpoint={\`/export/pdf/voucher/${v.id}\`}` —
+    // ExportButton row buttons with dynamic ids.
+    const exportBtnBraceRe = /\bExportButton[\s\S]{0,80}?\bendpoint\s*=\s*\{/g;
+    for (const m of src.matchAll(exportBtnBraceRe)) {
+      let i = m.index + m[0].length;
+      while (i < src.length && /\s/.test(src[i])) i++;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "prop" });
+    }
+    // ExportGroup-style array: `items=[{ endpoint: "/x", ... }]`. The
+    // component shape is "endpoint:" followed by a string in an object
+    // literal. Scan generally — anything `endpoint:` + string that
+    // resolves to /api/export/* is almost certainly an ExportGroup row.
+    const exportObjRe = /\bendpoint\s*:\s*[`"']/g;
+    for (const m of src.matchAll(exportObjRe)) {
+      let i = m.index + m[0].length - 1;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/export/")) continue;
+      calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "GET", source: "prop" });
+    }
+    // Same idiom but with `endpoint: \`/x/${id}\`` dynamic URLs in
+    // ExportGroup arrays.
+    const exportObjTplRe = /\bendpoint\s*:\s*`(\/export\/[^`]+)`/g;
+    for (const m of src.matchAll(exportObjTplRe)) {
+      const raw = m[1];
+      const url = raw.replace(/\$\{[^}]+\}/g, ":param");
+      calls.push({ file: rel, url, line: lineOf(src, m.index), method: "GET", source: "prop" });
+    }
+
     // <ImpactPreviewButton endpoint="/x/impact-preview" payload={...} />
     // — shared component that POSTs to the given endpoint with the
     // assembled payload. Same JSX-prop scan as ApprovalActions.
