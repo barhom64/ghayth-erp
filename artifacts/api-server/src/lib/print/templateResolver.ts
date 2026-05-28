@@ -380,6 +380,10 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   violation: () => buildTrafficViolationPreset(),
   voucher: () => buildVoucherPreset("receipt"),
   request: () => buildLeaveRequestPreset(),
+  // Final batch — entityTypes used in detail pages that fell through to
+  // universalFallback. payroll is the high-value one (HR prints these as
+  // salary slips); the rest get the same bespoke render as the long form.
+  payroll: () => buildPayrollRunPreset(),
 };
 
 function buildInvoicePreset(): PrintTemplate {
