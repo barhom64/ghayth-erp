@@ -59,6 +59,17 @@ export default function UmrahSubAgentDetail() {
     !!id,
   );
 
+  // GET /umrah/statements/:subAgentId — accounting statement (detailed
+  // by default) for this sub-agent. Shows last 90 days of activity in a
+  // collapsible card. The existing PDF button on the same row hits the
+  // /pdf variant.
+  const { data: stmtResp } = useApiQuery<any>(
+    ["umrah-statement-summary", String(id ?? 0)],
+    id ? `/umrah/statements/${id}?type=summary` : null,
+    { enabled: !!id },
+  );
+  const statement = stmtResp?.data ?? stmtResp;
+
   // PATCH /umrah/sub-agents/:id + DELETE soft-delete.
   const editDelete = useDetailEditDelete({
     entityLabel: "الوكيل الفرعي",
@@ -87,6 +98,26 @@ export default function UmrahSubAgentDetail() {
   const overview = (
     <div className="space-y-4">
       <InlineEditCard hook={editDelete} />
+      {statement && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">ملخص كشف الحساب</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+            {Object.entries(statement as Record<string, any>)
+              .filter(([k]) => typeof (statement as any)[k] !== "object" || (statement as any)[k] === null)
+              .slice(0, 8)
+              .map(([k, v]) => (
+                <div key={k} className="flex justify-between border rounded p-1">
+                  <span className="text-muted-foreground">{k}</span>
+                  <span className="font-mono">
+                    {v == null ? "—" : typeof v === "number" ? formatCurrency(v) : String(v)}
+                  </span>
+                </div>
+              ))}
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="inline-flex items-center gap-2 text-sm">
