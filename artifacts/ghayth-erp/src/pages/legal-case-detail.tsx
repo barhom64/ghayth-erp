@@ -266,7 +266,55 @@ export default function LegalCaseDetail() {
     transitionMut.mutate({ status: newStatus });
   };
 
+  // POST /legal/cases/:id/close — dedicated transition (cancels all
+  // open obligations on the case, runs through applyTransition for
+  // proper audit). The PATCH route above accepts status='closed' too
+  // but skips the obligation cancellation step.
+  const closeMut = useApiMutation<any, { closureReason: string; outcome?: string }>(
+    `/legal/cases/${id}/close`,
+    "POST",
+    [["legal-case", String(id)], ["legal-cases"]],
+    {
+      successMessage: "تم إغلاق القضية",
+      onSuccess: () => { refetch(); qc.invalidateQueries({ queryKey: ["legal-stats"] }); },
+    },
+  );
+
+  // PATCH /legal/cases/:id/financial-risk — admin-only update to the
+  // expected liability / risk band on a case. Surfaced as a tiny
+  // edit button in the actions row.
+  const updateRiskMut = useApiMutation<any, { expectedLiability?: number; riskBand?: string; notes?: string }>(
+    `/legal/cases/${id}/financial-risk`,
+    "PATCH",
+    [["legal-case", String(id)]],
+    { successMessage: "تم تحديث المخاطر المالية" },
+  );
+
+  const handleCloseCase = () => {
+    const reason = window.prompt("سبب الإغلاق:");
+    if (reason === null) return;
+    if (!reason.trim()) {
+      toast({ variant: "destructive", title: "سبب الإغلاق مطلوب" });
+      return;
+    }
+    const outcome = window.prompt("نتيجة القضية (اختياري):") ?? "";
+    closeMut.mutate({ closureReason: reason.trim(), outcome: outcome.trim() || undefined });
+  };
+
+  const handleUpdateRisk = () => {
+    const liabStr = window.prompt("الالتزام المتوقع (ر.س):", String(caseData?.expectedLiability ?? ""));
+    if (liabStr === null) return;
+    const liab = Number(liabStr);
+    if (!Number.isFinite(liab)) {
+      toast({ variant: "destructive", title: "أدخل رقماً صحيحاً" });
+      return;
+    }
+    const notes = window.prompt("ملاحظات (اختياري):") ?? "";
+    updateRiskMut.mutate({ expectedLiability: liab, notes: notes.trim() || undefined });
+  };
+
   const allowedTransitions: string[] = caseData?.allowedTransitions || [];
+  const canClose = caseData && ["open", "in_progress", "on_hold", "judgment", "execution"].includes(caseData.status);
 
   // --- Status mapping for DetailPageLayout ---
   const statusToneMap: Record<string, "default" | "success" | "warning" | "destructive" | "info" | "muted"> = {
@@ -297,6 +345,31 @@ export default function LegalCaseDetail() {
           {resolveStatus(t, "legal_case")?.label || t}
         </GuardedButton>
       ))}
+      {canClose && (
+        <GuardedButton
+          perm="legal:create"
+          size="sm"
+          variant="outline"
+          className="text-xs gap-1 text-status-error-foreground border-status-error-surface"
+          onClick={handleCloseCase}
+          disabled={closeMut.isPending}
+          rateLimitAware
+        >
+          إغلاق نهائي
+        </GuardedButton>
+      )}
+      <GuardedButton
+        perm="legal:update"
+        size="sm"
+        variant="ghost"
+        className="text-xs"
+        onClick={handleUpdateRisk}
+        disabled={updateRiskMut.isPending}
+        rateLimitAware
+        title="تعديل المخاطر المالية"
+      >
+        تحديث المخاطر
+      </GuardedButton>
       <EntityPrintButton entityType="legal_judgment" entityId={id ?? ""} formats={["a4"]} />
     </div>
   );
