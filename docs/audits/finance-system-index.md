@@ -4,7 +4,19 @@
 >
 > **Scope:** 24 backend route files (~185 GL endpoints) + 4 GL engines + 181 frontend pages + 8 cross-reference checks.
 >
-> **Verdict:** **PASS WITH 7 FINDINGS.** Every GL posting goes through a canonical engine. Every mutating endpoint has audit + period-gate enforcement. Multi-tenant + branch isolation correct. The 7 findings are operational/cleanup items, **not safety violations.**
+> **Verdict:** **PASS — all 7 findings now CLOSED (2026-05-28).** Every GL posting goes through a canonical engine. Every mutating endpoint has audit + period-gate enforcement. Multi-tenant + branch isolation correct. The 7 findings were operational/cleanup items, **not safety violations.**
+>
+> **Closure tracker:**
+>
+> | Finding | Severity | Closure |
+> |---|---|---|
+> | F1 — cost-center dual naming | 🔴 HIGH | ✅ PR #1327 (mig 226 + dual-write resolver) |
+> | F2 — salary-advance duplication | 🟡 MEDIUM | ✅ PR #1330 (false positive — clarifying DOC comments) |
+> | F3 — fiscal-period close paths | 🟡 MEDIUM | ✅ PR #1338 (closeFiscalPeriodCanonical helper) |
+> | F4 — broad `feature:"finance"` | 🟡 MEDIUM | ✅ PR #1328 (granular RBAC keys) |
+> | F5 — 30 orphan endpoints | 🟡 MEDIUM | ✅ PR #1330 + #1341 (15 KEEP / 15 DOC / 0 DELETE) |
+> | F6 — 31 finance pages off-sidebar | 🔵 LOW | ✅ PRs #1330 + #1356 + #1363 (31 → 2 intentional aliases) |
+> | F7 — 9 zero-backend pages | 🔵 LOW | ✅ PR #1328 (6 wrappers documented, 3 substantial hubs) |
 
 ---
 
