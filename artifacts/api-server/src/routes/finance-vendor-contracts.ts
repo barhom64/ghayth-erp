@@ -192,9 +192,9 @@ vendorContractsRouter.post(
   }
 );
 
-// Audit F5 — DELETE candidate. No frontend PATCH caller. Marked for
-// removal in the F5 follow-up PR
-// (see docs/audits/finance-orphan-endpoints-disposition.md).
+// Audit F5 — DOC. Admin surface kept for defensive completeness. No
+// frontend caller today but audit + event hooks already wired for the
+// planned vendor-contracts UI.
 vendorContractsRouter.patch(
   "/contracts/:id",
   authorize({ feature: "finance.contracts", action: "update" }),
@@ -265,9 +265,9 @@ vendorContractsRouter.patch(
   }
 );
 
-// Audit F5 — DELETE candidate. No frontend DELETE caller. Marked for
-// removal in the F5 follow-up PR
-// (see docs/audits/finance-orphan-endpoints-disposition.md).
+// Audit F5 — DOC. Admin surface (soft-delete with audit + event hooks).
+// Kept for parity with the PATCH variant — both are defensive completeness
+// for the planned vendor-contracts UI.
 vendorContractsRouter.delete(
   "/contracts/:id",
   authorize({ feature: "finance.contracts", action: "delete" }),
