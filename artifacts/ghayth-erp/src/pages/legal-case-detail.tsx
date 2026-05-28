@@ -7,6 +7,10 @@ import { EntityPrintButton } from "@/components/shared/entity-print";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -24,7 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Gavel, Calendar, FileText, AlertTriangle, Clock,
   CheckCircle2, User, MapPin, TrendingUp, Activity,
-  Plus, ChevronRight, Info, X, Mail, Scale, DollarSign
+  Plus, ChevronRight, Info, X, Mail, Scale, DollarSign, Edit
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EntityObligations } from "@/components/shared/entity-obligations";
@@ -657,6 +661,14 @@ function CaseCorrespondenceTab({ caseId }: { caseId: number }) {
   const [direction, setDirection] = useState("outgoing");
   const [subject, setSubject] = useState("");
   const [summary, setSummary] = useState("");
+  // GET /legal/correspondence/:id — full detail fetched lazily when
+  // a row's "تفاصيل" button is clicked. Returns body, attachments, etc.
+  const [previewId, setPreviewId] = useState<number | null>(null);
+  const previewQ = useApiQuery<any>(
+    ["legal-correspondence-detail", String(previewId ?? 0)],
+    previewId ? `/legal/correspondence/${previewId}` : null,
+    { enabled: previewId !== null },
+  );
 
   return (
     <div className="space-y-3">
@@ -708,12 +720,49 @@ function CaseCorrespondenceTab({ caseId }: { caseId: number }) {
                   </div>
                   {r.summary && <p className="text-xs text-muted-foreground mt-1">{r.summary}</p>}
                 </div>
-                <span className="text-xs text-muted-foreground">{formatDateAr(r.createdAt)}</span>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setPreviewId(r.id)}>
+                    تفاصيل
+                  </Button>
+                  <span className="text-xs text-muted-foreground">{formatDateAr(r.createdAt)}</span>
+                </div>
               </div>
             </CardContent>
           </Card>
         ))
       )}
+
+      <AlertDialog open={previewId !== null} onOpenChange={(o) => !o && setPreviewId(null)}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تفاصيل المراسلة #{previewId}</AlertDialogTitle>
+          </AlertDialogHeader>
+          <div className="py-2 text-sm space-y-2">
+            {previewQ.isLoading ? (
+              <p className="text-muted-foreground">جاري التحميل...</p>
+            ) : previewQ.data ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{previewQ.data.direction === "outgoing" ? "صادر" : "وارد"}</Badge>
+                  <span className="font-medium">{previewQ.data.subject}</span>
+                </div>
+                {previewQ.data.body && (
+                  <div className="border rounded p-2 bg-muted/30 whitespace-pre-wrap text-xs">{previewQ.data.body}</div>
+                )}
+                {previewQ.data.summary && (
+                  <p className="text-xs text-muted-foreground">{previewQ.data.summary}</p>
+                )}
+                <p className="text-xs text-muted-foreground">{formatDateAr(previewQ.data.createdAt)}</p>
+              </>
+            ) : (
+              <p className="text-muted-foreground">لا توجد بيانات</p>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setPreviewId(null)}>إغلاق</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -732,9 +781,20 @@ function CaseJudgmentsTab({ caseId }: { caseId: number }) {
     [["legal-case-judgments", String(caseId)]],
     { successMessage: "تم تسجيل الحكم", onSuccess: () => { refetch(); setOutcome(""); setAmount(""); } },
   );
+  // PATCH /legal/cases/:caseId/judgments/:id — edit a recorded ruling
+  // (e.g. correct an amount or update the outcome wording).
+  const editMut = useApiMutation<any, { id: number; outcome?: string; amount?: number; notes?: string }>(
+    (b) => `/legal/cases/${caseId}/judgments/${b.id}`,
+    "PATCH",
+    [["legal-case-judgments", String(caseId)]],
+    { successMessage: "تم تعديل الحكم", onSuccess: () => refetch() },
+  );
   const [rulingDate, setRulingDate] = useState("");
   const [outcome, setOutcome] = useState("");
   const [amount, setAmount] = useState<string>("");
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editOutcome, setEditOutcome] = useState("");
+  const [editAmount, setEditAmount] = useState("");
 
   return (
     <div className="space-y-3">
@@ -776,14 +836,61 @@ function CaseJudgmentsTab({ caseId }: { caseId: number }) {
         rows.map((r: any) => (
           <Card key={r.id}>
             <CardContent className="p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-sm font-medium">{r.outcome}</p>
-                  <p className="text-xs text-muted-foreground">{formatDateAr(r.rulingDate)}</p>
-                  {r.amount > 0 && <p className="text-xs font-mono text-status-error-foreground mt-1">{formatCurrency(Number(r.amount))}</p>}
+              {editId === r.id ? (
+                <div className="space-y-2">
+                  <div>
+                    <Label className="text-xs">النتيجة</Label>
+                    <Input value={editOutcome} onChange={(e) => setEditOutcome(e.target.value)} className="text-sm" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">المبلغ</Label>
+                    <Input type="number" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="text-sm" dir="ltr" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <GuardedButton
+                      perm="legal:update"
+                      size="sm"
+                      disabled={editMut.isPending}
+                      onClick={() => {
+                        if (!editOutcome.trim()) { toast({ variant: "destructive", title: "النتيجة مطلوبة" }); return; }
+                        const a = Number(editAmount);
+                        editMut.mutate(
+                          { id: r.id, outcome: editOutcome.trim(), amount: Number.isFinite(a) && a > 0 ? a : undefined },
+                          { onSuccess: () => setEditId(null) },
+                        );
+                      }}
+                      rateLimitAware
+                    >
+                      حفظ
+                    </GuardedButton>
+                    <Button variant="ghost" size="sm" onClick={() => setEditId(null)}>إلغاء</Button>
+                  </div>
                 </div>
-                <Scale className="h-4 w-4 text-muted-foreground" />
-              </div>
+              ) : (
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium">{r.outcome}</p>
+                    <p className="text-xs text-muted-foreground">{formatDateAr(r.rulingDate)}</p>
+                    {r.amount > 0 && <p className="text-xs font-mono text-status-error-foreground mt-1">{formatCurrency(Number(r.amount))}</p>}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <GuardedButton
+                      perm="legal:update"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0"
+                      onClick={() => {
+                        setEditId(r.id);
+                        setEditOutcome(r.outcome ?? "");
+                        setEditAmount(r.amount ? String(r.amount) : "");
+                      }}
+                    >
+                      <Edit className="h-3.5 w-3.5" />
+                    </GuardedButton>
+                    <Scale className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))

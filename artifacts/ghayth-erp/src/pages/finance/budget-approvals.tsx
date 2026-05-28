@@ -90,6 +90,29 @@ export default function BudgetApprovalsPage() {
     { successMessage: "تم إرسال طلب الاعتماد" },
   );
 
+  // POST /finance/budget/validate — preflight check that tells the
+  // operator whether this amount would auto-approve, need CFO, or be
+  // outright blocked. We surface the result inline before they submit.
+  type ValidateBudgetResp = {
+    status: string;
+    message?: string;
+    canProceed?: boolean;
+    utilization?: number;
+    requiresApproval?: boolean;
+    approvalLevel?: string;
+  };
+  const [validationResult, setValidationResult] = useState<ValidateBudgetResp | null>(null);
+  const validateMut = useApiMutation<ValidateBudgetResp, {
+    accountCode: string;
+    period: string;
+    amount: number;
+  }>(
+    "/finance/budget/validate",
+    "POST",
+    [],
+    { successMessage: false },
+  );
+
   // Inline new-request dialog
   const [requestOpen, setRequestOpen] = useState(false);
   const [reqAccount, setReqAccount] = useState("");
@@ -113,8 +136,22 @@ export default function BudgetApprovalsPage() {
         onSuccess: () => {
           setRequestOpen(false);
           setReqAccount(""); setReqPeriod(""); setReqAmount(""); setReqReason("");
+          setValidationResult(null);
         },
       },
+    );
+  };
+
+  const handleValidate = () => {
+    const amt = Number(reqAmount);
+    if (!reqAccount.trim() || !reqPeriod.trim() || !Number.isFinite(amt) || amt <= 0) {
+      toast({ variant: "destructive", title: "الحقول الإلزامية ناقصة للفحص" });
+      return;
+    }
+    setValidationResult(null);
+    validateMut.mutate(
+      { accountCode: reqAccount.trim(), period: reqPeriod.trim(), amount: amt },
+      { onSuccess: (r) => setValidationResult(r) },
     );
   };
 
@@ -398,9 +435,41 @@ export default function BudgetApprovalsPage() {
               <Label className="text-xs">سبب الطلب</Label>
               <Textarea value={reqReason} onChange={(e) => setReqReason(e.target.value)} rows={2} />
             </div>
+            {validationResult && (
+              <div className={
+                `text-xs rounded border p-2 ${
+                  validationResult.status === "rejected"
+                    ? "bg-red-50 border-red-200 text-status-error-foreground"
+                    : validationResult.status === "blocked_gm"
+                      ? "bg-amber-50 border-amber-200 text-status-warning-foreground"
+                      : validationResult.status === "warning_cfo"
+                        ? "bg-amber-50 border-amber-200 text-status-warning-foreground"
+                        : "bg-emerald-50 border-emerald-200 text-emerald-800"
+                }`
+              }>
+                <p className="font-semibold">
+                  {validationResult.status === "rejected" ? "محظور — يتجاوز السقف" :
+                   validationResult.status === "blocked_gm" ? "يتطلب موافقة المدير العام" :
+                   validationResult.status === "warning_cfo" ? "يتطلب موافقة المدير المالي" :
+                   validationResult.status === "no_budget" ? "لا توجد ميزانية محددة" :
+                   "ضمن السقف — اعتماد تلقائي"}
+                </p>
+                {validationResult.message && <p className="mt-1">{validationResult.message}</p>}
+                {validationResult.utilization !== undefined && (
+                  <p className="mt-1 font-mono">% الاستخدام: {Number(validationResult.utilization).toFixed(1)}%</p>
+                )}
+              </div>
+            )}
           </div>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="flex-wrap gap-2">
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={handleValidate}
+              disabled={validateMut.isPending}
+            >
+              فحص الميزانية
+            </Button>
             <AlertDialogAction onClick={handleSubmitRequest} disabled={createRequestMut.isPending}>إرسال الطلب</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

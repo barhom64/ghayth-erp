@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PageShell } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
@@ -5,11 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatDateAr } from "@/lib/formatters";
 import {
   Shield, ShieldCheck, ShieldAlert, RefreshCw, AlertTriangle, CheckCircle,
-  Activity, Inbox, Pause, RotateCw, Trash2,
+  Activity, Inbox, Pause, RotateCw, Trash2, Plus,
 } from "lucide-react";
 
 interface DlqEntry {
@@ -85,6 +94,37 @@ export default function AdminSystemGovernor() {
     [["admin-system-stops"]],
     { successMessage: "تم إيقاف الحظر" },
   );
+
+  // POST /admin/system-stops — admin creates a manual halt for a
+  // scope (financial / hr / operational / all). Used in incident
+  // response, e.g. block all journal posting until a data issue is
+  // resolved.
+  const createStopMut = useApiMutation<unknown, { scope: string; reason: string }>(
+    "/admin/system-stops",
+    "POST",
+    [["admin-system-stops"]],
+    { successMessage: "تم تفعيل الإيقاف" },
+  );
+  const { toast: stopToast } = useToast();
+  const [stopOpen, setStopOpen] = useState(false);
+  const [stopScope, setStopScope] = useState<"financial" | "hr" | "operational" | "all">("all");
+  const [stopReason, setStopReason] = useState("");
+  const submitNewStop = () => {
+    if (!stopReason.trim()) {
+      stopToast({ variant: "destructive", title: "السبب مطلوب" });
+      return;
+    }
+    createStopMut.mutate(
+      { scope: stopScope, reason: stopReason.trim() },
+      {
+        onSuccess: () => {
+          setStopOpen(false);
+          setStopReason("");
+          setStopScope("all");
+        },
+      },
+    );
+  };
 
   // Pages registry — what's mounted in the SystemRegistry vs what
   // the UI actually exposes. Useful for the audit team.
@@ -325,9 +365,14 @@ export default function AdminSystemGovernor() {
               <CardTitle className="text-sm flex items-center gap-2">
                 <Pause className="h-4 w-4" /> إيقافات النظام
               </CardTitle>
-              <Button variant="outline" size="sm" onClick={() => refetchStops()}>
-                <RefreshCw className="h-3 w-3 me-1" /> تحديث
-              </Button>
+              <div className="flex items-center gap-2">
+                <GuardedButton perm="admin:update" size="sm" onClick={() => setStopOpen(true)}>
+                  <Plus className="h-3 w-3 me-1" /> إيقاف جديد
+                </GuardedButton>
+                <Button variant="outline" size="sm" onClick={() => refetchStops()}>
+                  <RefreshCw className="h-3 w-3 me-1" /> تحديث
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {stops.length === 0 ? (
@@ -452,6 +497,43 @@ export default function AdminSystemGovernor() {
         </TabsContent>
         </Tabs>
       </PageStateWrapper>
+
+      <Dialog open={stopOpen} onOpenChange={setStopOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>تفعيل إيقاف نظام</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <div>
+              <Label className="text-xs">النطاق</Label>
+              <Select value={stopScope} onValueChange={(v) => setStopScope(v as typeof stopScope)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل العمليات</SelectItem>
+                  <SelectItem value="financial">المالية</SelectItem>
+                  <SelectItem value="hr">الموارد البشرية</SelectItem>
+                  <SelectItem value="operational">العمليات</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">سبب الإيقاف *</Label>
+              <Textarea
+                value={stopReason}
+                onChange={(e) => setStopReason(e.target.value)}
+                rows={3}
+                placeholder="اشرح سبب الإيقاف بوضوح حتى يفهم بقية الفريق..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStopOpen(false)}>إلغاء</Button>
+            <Button onClick={submitNewStop} disabled={createStopMut.isPending}>
+              {createStopMut.isPending ? "جارٍ التفعيل..." : "تفعيل الإيقاف"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }
