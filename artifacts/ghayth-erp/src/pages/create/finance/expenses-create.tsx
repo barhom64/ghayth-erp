@@ -17,6 +17,7 @@ import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { AlertCircle, Paperclip, Link2 } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect, EmployeeSelect, VehicleSelect } from "@/components/shared/entity-selects";
+import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { useAppContext } from "@/contexts/app-context";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
@@ -268,6 +269,26 @@ export default function ExpensesCreate() {
   const { form, setForm, clearDraft, isDirty, hasDraft } = useAutoDraft("expense-create", defaultForm);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
+  // Audit item #2 — per-line allocation overrides. Default state mirrors
+  // the auto-derived fields (accountCode + costCenter + relatedEntity)
+  // so the panel reflects what the backend will resolve before the
+  // operator opens it. Any manual edit becomes an override that the
+  // submit handler ships under `lineAllocation` and the backend logs.
+  const [allocation, setAllocation] = useState<LineAllocation>({});
+  useEffect(() => {
+    setAllocation((prev) => {
+      if (prev.manualOverrideReason) return prev; // operator has pinned — don't clobber
+      const next: LineAllocation = {
+        accountCode: form.accountCode || undefined,
+        projectId: form.projectId || undefined,
+        vehicleId: form.relatedEntityType === "vehicle" && form.relatedEntityId ? form.relatedEntityId : undefined,
+        propertyId: form.relatedEntityType === "property" && form.relatedEntityId ? form.relatedEntityId : undefined,
+        contractId: form.relatedEntityType === "contract" && form.relatedEntityId ? form.relatedEntityId : undefined,
+      };
+      return next;
+    });
+  }, [form.accountCode, form.projectId, form.relatedEntityType, form.relatedEntityId]);
+
   const attachmentRequired = ATTACHMENT_REQUIRED_TYPES.includes(form.operationType) ||
     (form.operationType === "payment" && Number(form.amount) >= 5000);
 
@@ -360,6 +381,10 @@ export default function ExpensesCreate() {
         govIntegrationId: form.govIntegrationId ? Number(form.govIntegrationId) : undefined,
         govEntityType: form.govEntityType || undefined,
         govEntityId: form.govEntityId ? Number(form.govEntityId) : undefined,
+        // Audit item #2 — ship operator overrides (if any field was pinned)
+        lineAllocation: Object.values(allocation).some((v) => v != null && v !== "")
+          ? buildAllocationPayload(allocation)
+          : undefined,
       });
       toast({ title: "تم إضافة المصروف بنجاح" });
       clearDraft();
@@ -614,6 +639,21 @@ export default function ExpensesCreate() {
           <TextField label="البيان" value={form.description} onChange={(v) => setForm({ ...form, description: v })}
             placeholder={form.autoDescription ? "سيتم توليده تلقائياً..." : "أدخل وصفاً للمصروف"}
             disabled={form.autoDescription} />
+        </div>
+
+        <div className="border rounded-lg p-4 mb-4 space-y-3">
+          <h3 className="font-semibold text-sm text-muted-foreground">التفاصيل المحاسبية للبند (Allocation)</h3>
+          <p className="text-xs text-muted-foreground">
+            القاعدة التلقائية ستوزّع المصروف بناءً على بند المصروفات + الجهة المرتبطة.
+            افتح هذا القسم فقط إذا أردت تجاوز الحساب أو إضافة بُعد مفقود (مركبة / عقار / مشروع / عمرة).
+            أي تجاوز يدوي يجب أن يُرفَق بسبب نصّي وسيُسجَّل في تقرير "Manual Overrides".
+          </p>
+          <LineAllocationPanel
+            value={allocation}
+            onChange={setAllocation}
+            status={deriveAllocationStatus(allocation)}
+            required={false}
+          />
         </div>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
