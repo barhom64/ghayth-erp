@@ -258,6 +258,8 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadSalaryAdvance(companyId, entityId);
     case "training_program":
       return await loadTrainingProgram(companyId, entityId);
+    case "custody":
+      return await loadCustody(companyId, entityId);
     case "warehouse_product":
     case "store_product":
       return await loadWarehouseProductCard(companyId, entityId);
@@ -1452,6 +1454,66 @@ async function loadShiftCard(companyId: number, id: string) {
     [id, companyId],
   );
   return { entity: row ?? { id } };
+}
+
+// Custody is modeled as journal_entries with ref starting "CUSTODY" (the
+// custody assignment) and "CUSTODY-SETTLE" (the partial/full settlement).
+// The custody preset needs the originating JE plus the running total of
+// settlements plus the holder's employee record. The route handler
+// /api/finance/custodies/:id (finance-custodies.ts) does the same joins;
+// we mirror its query here so prints stay in sync with the detail page.
+async function loadCustody(companyId: number, id: string) {
+  const [c] = await rawQuery<Record<string, unknown>>(
+    `SELECT je.id, je.ref, je.description,
+            je.notes AS purpose,
+            je."createdAt",
+            je.status,
+            COALESCE(SUM(jl.debit), 0)::float8 AS amount,
+            je."dueDate" AS "expectedReturnDate",
+            ea."employeeId" AS "employeeId"
+       FROM journal_entries je
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl.debit > 0
+       LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
+      WHERE je.id = $1
+        AND je."companyId" = $2
+        AND je."deletedAt" IS NULL
+        AND je.ref LIKE 'CUSTODY%'
+        AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
+      GROUP BY je.id, je.ref, je.description, je.notes, je."createdAt", je.status, je."dueDate", ea."employeeId"
+      LIMIT 1`,
+    [id, companyId],
+  ).catch(() => [null]);
+  if (!c) return { entity: { id } };
+
+  const [settle] = await rawQuery<Record<string, unknown>>(
+    `SELECT COALESCE(SUM(jl.credit), 0)::float8 AS amt
+       FROM journal_entries je2
+       JOIN journal_lines jl ON jl."journalId" = je2.id AND jl.credit > 0
+      WHERE je2."companyId" = $1
+        AND je2."deletedAt" IS NULL
+        AND je2.ref LIKE 'CUSTODY-SETTLE%'
+        AND je2.description = $2`,
+    [companyId, c.ref],
+  ).catch(() => [{ amt: 0 }]);
+
+  const settledAmount = Number(settle?.amt ?? 0);
+  const remainingAmount = Math.max(0, Number(c.amount) - settledAmount);
+
+  const employee = c.employeeId
+    ? (await rawQuery<Record<string, unknown>>(
+        `SELECT id, name, "empNumber" FROM employees WHERE id = $1`,
+        [c.employeeId],
+      ))[0]
+    : null;
+
+  return {
+    entity: {
+      ...c,
+      settledAmount,
+      remainingAmount,
+    },
+    employee,
+  };
 }
 
 async function loadUmrahSeason(companyId: number, id: string) {
