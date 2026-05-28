@@ -13,6 +13,7 @@ import { FormShell, FormTextField, FormSelectField } from "@workspace/ui-core";
 import { FileText, Upload, Download, Plus, X, FileUp, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AttachmentPreview, type PreviewableAttachment } from "./attachment-preview";
+import { formatDateAr } from "@/lib/formatters";
 
 const uploadDocSchema = z.object({
   title: z.string().min(1, "العنوان مطلوب"),
@@ -57,6 +58,18 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
     !!entityId
   );
   const docs = asList(docsResp);
+
+  // GET /print/archive/:entityType/:entityId — printed copies of this
+  // entity (PDFs the engine rendered). Shown alongside user-uploaded
+  // documents so the operator sees both in one place.
+  const { data: printArchiveResp } = useApiQuery<{ items: any[] }>(
+    ["entity-print-archive", entityType, String(entityId)],
+    entityType && entityId
+      ? `/print/archive/${entityType}/${entityId}`
+      : null,
+    !!(entityType && entityId),
+  );
+  const printArchive: any[] = printArchiveResp?.items ?? [];
   const [previewDoc, setPreviewDoc] = useState<PreviewableAttachment | null>(null);
 
   const handleDownload = async (docId: number, fileName: string) => {
@@ -152,6 +165,19 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
                 </div>
               );
             })}
+          </div>
+        )}
+        {printArchive.length > 0 && (
+          <div className="mt-4 pt-3 border-t">
+            <p className="text-xs font-semibold text-muted-foreground mb-2">نسخ مطبوعة محفوظة ({printArchive.length})</p>
+            <div className="space-y-1">
+              {printArchive.slice(0, 5).map((p: any) => (
+                <div key={p.id ?? p.jobId} className="flex items-center justify-between p-2 rounded bg-surface-subtle text-xs">
+                  <span className="font-mono">{p.format ?? p.templateName ?? "PDF"}</span>
+                  <span className="text-muted-foreground">{p.createdAt ? formatDateAr(p.createdAt) : ""}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </CardContent>
