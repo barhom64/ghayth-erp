@@ -101,15 +101,29 @@ export async function fleetTelematicsRetention(): Promise<string> {
   // Video session cleanup is global — expiry is intrinsic to the session
   // row, not the integration, so we don't iterate by tenant.
   try {
+    // Two-pass cleanup: (1) close expired sessions and clear their
+    // proxy tokens so a leaked URL can never resurrect; (2) clear
+    // any stale token on an already-non-active session as a safety
+    // net for paths that closed without clearing.
     const vidRes = await rawExecute(
       `UPDATE fleet_video_sessions
-          SET status = 'expired', "endedAt" = COALESCE("endedAt", NOW())
+          SET status = 'expired',
+              "endedAt" = COALESCE("endedAt", NOW()),
+              "streamProxyToken" = NULL,
+              "streamProxyExpiresAt" = NULL
         WHERE status = 'active'
           AND "expiresAt" IS NOT NULL
           AND "expiresAt" < NOW()`,
       [],
     );
     videosExpired = vidRes.affectedRows ?? 0;
+    await rawExecute(
+      `UPDATE fleet_video_sessions
+          SET "streamProxyToken" = NULL,
+              "streamProxyExpiresAt" = NULL
+        WHERE status <> 'active' AND "streamProxyToken" IS NOT NULL`,
+      [],
+    );
   } catch (err) {
     logger.error({ err }, "[telematicsCron] video expiry sweep failed");
   }

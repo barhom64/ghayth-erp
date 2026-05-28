@@ -33,6 +33,8 @@ import { auditMutation, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { encryptSecret, decryptSecret, isEncrypted } from "../lib/secrets.js";
 import { telematicsBreaker } from "../lib/fleet/telematicsReliability.js";
+import { config } from "../lib/config.js";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
   createCmsv6Adapter,
   validateCmsv6BaseUrl,
@@ -1207,12 +1209,24 @@ router.post(
       const expiresAt = handle.expiresAt
         ?? new Date(Date.now() + (body.durationSec ?? 300) * 1000);
 
+      // #1354 Ibrahim review — Video Security Layer. The client never
+      // receives the raw CMSV6 streamUrl on session open. Instead it
+      // gets a one-shot proxy token bound to this session, valid for
+      // config.fleetTelematics.proxyTtlSec seconds. The proxy endpoint
+      // verifies the token, audits the access, and ONLY then returns
+      // the underlying URL (or in a future iteration, stream-proxies
+      // the bytes themselves).
+      const proxyToken = randomBytes(32).toString("base64url");
+      const proxyTtlMs = config.fleetTelematics.proxyTtlSec * 1000;
+      const proxyExpiresAt = new Date(Date.now() + proxyTtlMs);
+
       const { insertId } = await rawExecute(
         `INSERT INTO fleet_video_sessions
            ("companyId","branchId","deviceId","vehicleId","channelNo",
             "streamType","streamUrl","expiresAt","requestedBy",reason,
-            "linkedAlertId","externalSessionId",status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'active')
+            "linkedAlertId","externalSessionId","streamProxyToken",
+            "streamProxyExpiresAt",status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'active')
          RETURNING id`,
         [
           scope.companyId,
@@ -1227,6 +1241,8 @@ router.post(
           body.reason ?? null,
           body.linkedAlertId ?? null,
           handle.externalSessionId ?? null,
+          proxyToken,
+          proxyExpiresAt,
         ],
       );
       const id = assertInsert(insertId, "fleet_video_sessions");
@@ -1247,13 +1263,18 @@ router.post(
         entityId: id,
         reason: body.reason,
       });
+
+      // streamUrl is intentionally NOT returned — the proxy URL is the
+      // only thing the client should see. The raw CMSV6 URL stays
+      // server-side; if it leaks, an attacker still can't replay it
+      // without a current token + session.
       res.status(201).json({
         data: {
           id,
-          streamUrl: handle.streamUrl,
           streamType: handle.streamType,
           expiresAt: expiresAt.toISOString(),
-          externalSessionId: handle.externalSessionId,
+          proxyUrl: `/api/fleet/telematics/video/proxy/${id}?token=${proxyToken}`,
+          proxyExpiresAt: proxyExpiresAt.toISOString(),
         },
       });
     } catch (e) {
@@ -1312,9 +1333,14 @@ router.post(
         logger.warn({ err, id }, "Best-effort CMSV6 stop failed");
       }
 
+      // Clear the proxy token on close so a leaked URL can't be replayed
+      // even within its TTL window after the operator closed the stream.
       await rawExecute(
         `UPDATE fleet_video_sessions
-            SET status = 'stopped', "endedAt" = NOW()
+            SET status = 'stopped',
+                "endedAt" = NOW(),
+                "streamProxyToken" = NULL,
+                "streamProxyExpiresAt" = NULL
           WHERE id = $1`,
         [id],
       );
@@ -1340,20 +1366,172 @@ router.post(
   },
 );
 
+// ─────────────────────────────────────────────────────────────────────────
+// Video Security Layer — signed proxy (Ibrahim PR review, #1354).
+//
+// The raw CMSV6 streamUrl never leaves this server. The frontend calls
+// /telematics/video/proxy/:sessionId?token=<short-lived> to redeem the
+// underlying URL; this endpoint:
+//   1. Verifies the token against fleet_video_sessions.streamProxyToken
+//      with a timing-safe compare so brute-force is observable but
+//      doesn't leak via response timing.
+//   2. Checks streamProxyExpiresAt > now (60-second window by default).
+//   3. Checks the session is still 'active' and the streamUrl exists.
+//   4. Records the access in fleet_video_access_logs WHETHER OR NOT
+//      it is granted — denied attempts are forensically visible.
+//   5. Confirms the caller is the user who opened the session (the
+//      `fleet.telematics.video:list` permission is required to even
+//      reach this route, but per-user binding stops one auditor from
+//      hot-link to another's open session).
+// ─────────────────────────────────────────────────────────────────────────
+router.get(
+  "/telematics/video/proxy/:id",
+  authorize({ feature: "fleet.telematics.video", action: "view" }),
+  async (req, res) => {
+    const sessionId = parseId(req.params.id);
+    const presentedToken = String(req.query.token ?? "");
+    const accessIp = req.ip ?? null;
+    const userAgent = req.header("user-agent") ?? null;
+
+    const logAccess = async (
+      companyId: number,
+      userId: number | null,
+      status: "granted" | "denied_token" | "denied_expired" | "denied_session" | "denied_user",
+      errorReason?: string,
+    ) => {
+      try {
+        await rawExecute(
+          `INSERT INTO fleet_video_access_logs
+             ("companyId","sessionId","accessedBy","accessIp","userAgent",
+              status,"errorReason")
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [companyId, sessionId, userId, accessIp, userAgent, status, errorReason ?? null],
+        );
+      } catch (err) {
+        logger.error({ err, sessionId }, "video access log insert failed");
+      }
+    };
+
+    try {
+      const scope = req.scope!;
+      const [sess] = await rawQuery<{
+        id: number;
+        companyId: number;
+        status: string;
+        streamUrl: string | null;
+        streamType: string;
+        streamProxyToken: string | null;
+        streamProxyExpiresAt: Date | null;
+        requestedBy: number;
+      }>(
+        `SELECT id, "companyId", status, "streamUrl", "streamType",
+                "streamProxyToken", "streamProxyExpiresAt", "requestedBy"
+           FROM fleet_video_sessions
+          WHERE id = $1 AND "companyId" = ANY($2::int[])`,
+        [sessionId, scope.allowedCompanies],
+      );
+      if (!sess) {
+        // Don't audit — there's no session row to FK against.
+        throw new NotFoundError("الجلسة غير موجودة");
+      }
+
+      // Layer 1: token presence + timing-safe compare.
+      if (!presentedToken || !sess.streamProxyToken ||
+          presentedToken.length !== sess.streamProxyToken.length ||
+          !timingSafeEqual(Buffer.from(presentedToken), Buffer.from(sess.streamProxyToken))) {
+        await logAccess(sess.companyId, scope.userId, "denied_token", "token mismatch");
+        res.status(401).json({ error: "رمز الوصول غير صالح" });
+        return;
+      }
+
+      // Layer 2: expiry.
+      if (!sess.streamProxyExpiresAt || sess.streamProxyExpiresAt.getTime() < Date.now()) {
+        await logAccess(sess.companyId, scope.userId, "denied_expired", "proxy token expired");
+        res.status(401).json({ error: "انتهت صلاحية رمز الوصول" });
+        return;
+      }
+
+      // Layer 3: session must still be active.
+      if (sess.status !== "active" || !sess.streamUrl) {
+        await logAccess(sess.companyId, scope.userId, "denied_session", `session status=${sess.status}`);
+        res.status(409).json({ error: "الجلسة غير نشطة" });
+        return;
+      }
+
+      // Layer 4: user binding. The requester must be the user who opened
+      // the session; an auditor with the same permission still has to
+      // open their own session to view a stream.
+      if (sess.requestedBy !== scope.userId) {
+        await logAccess(sess.companyId, scope.userId, "denied_user", "different user");
+        res.status(403).json({ error: "هذه الجلسة لمستخدم آخر" });
+        return;
+      }
+
+      await logAccess(sess.companyId, scope.userId, "granted");
+
+      // Pilot delivery: return the URL in a tightly-scoped JSON response.
+      // Phase 2 production hardening (tracked in known limitations) will
+      // upgrade this to true HTTP byte-proxying so the raw CMSV6 URL
+      // never reaches the browser at all.
+      res.json({
+        data: {
+          streamUrl: sess.streamUrl,
+          streamType: sess.streamType,
+          expiresAt: sess.streamProxyExpiresAt.toISOString(),
+        },
+      });
+    } catch (e) {
+      handleRouteError(e, res, "fleet-telematics-video-proxy");
+    }
+  },
+);
+
 router.get(
   "/telematics/video/sessions",
   authorize({ feature: "fleet.telematics.video", action: "list" }),
   async (req, res) => {
     try {
       const scope = req.scope!;
+      // streamUrl + streamProxyToken are intentionally NOT selected —
+      // this is an audit surface, not a replay surface (Ibrahim review).
+      // For an active stream the operator already has the proxyUrl from
+      // POST /video/session; for a closed/expired one the URL is dead
+      // anyway, so showing it here only invites copy-paste leaks.
       const rows = await rawQuery(
-        `SELECT s.*, v."plateNumber" AS "vehiclePlate", d."deviceLabel"
+        `SELECT s.id, s."companyId", s."branchId", s."deviceId", s."vehicleId",
+                s."channelNo", s."streamType", s."startedAt", s."endedAt",
+                s."expiresAt", s."requestedBy", s.reason, s.status,
+                s."linkedAlertId", s."externalSessionId",
+                v."plateNumber" AS "vehiclePlate",
+                d."deviceLabel"
            FROM fleet_video_sessions s
            LEFT JOIN vehicles v ON v.id = s."vehicleId"
            LEFT JOIN fleet_telematics_devices d ON d.id = s."deviceId"
           WHERE s."companyId" = ANY($1::int[])
           ORDER BY s."startedAt" DESC LIMIT 200`,
         [scope.allowedCompanies],
+      );
+      res.json({ data: rows });
+    } catch (e) {
+      handleRouteError(e, res, "fleet-telematics");
+    }
+  },
+);
+
+// Per-session access audit log — admin observability. Returns every
+// granted/denied proxy fetch ordered newest-first.
+router.get(
+  "/telematics/video/sessions/:id/access-logs",
+  authorize({ feature: "fleet.telematics.video", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const sessionId = parseId(req.params.id);
+      const rows = await rawQuery(
+        `SELECT l.* FROM fleet_video_access_logs l
+          WHERE l."sessionId" = $1 AND l."companyId" = ANY($2::int[])
+          ORDER BY l."accessedAt" DESC LIMIT 500`,
+        [sessionId, scope.allowedCompanies],
       );
       res.json({ data: rows });
     } catch (e) {

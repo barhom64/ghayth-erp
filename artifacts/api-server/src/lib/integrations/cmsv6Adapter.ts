@@ -29,6 +29,7 @@
 
 import dns from "node:dns/promises";
 import { logger } from "../logger.js";
+import { config } from "../config.js";
 
 /** Vendor protocol identifier — keep in sync with the migration CHECK. */
 export type TelematicsProvider = "cmsv6" | "wialon" | "teltonika" | "manual";
@@ -230,6 +231,12 @@ export async function validateCmsv6BaseUrl(rawUrl: string): Promise<string | nul
   }
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     return "عنوان CMSV6 يجب أن يستخدم http(s)";
+  }
+  // #1354 hardening (Ibrahim review): production deployments must use
+  // https. Lab/dev can opt out via FLEET_TELEMATICS_ALLOW_HTTP=true.
+  // The SSRF guard below still rejects private IPs regardless of scheme.
+  if (parsed.protocol === "http:" && config.isProduction && !config.fleetTelematics.allowHttp) {
+    return "عنوان CMSV6 يجب أن يكون https في الإنتاج (للتطوير: FLEET_TELEMATICS_ALLOW_HTTP=true)";
   }
   const host = parsed.hostname;
   if (

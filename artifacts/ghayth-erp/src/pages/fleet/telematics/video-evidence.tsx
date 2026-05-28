@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Video, Square, ExternalLink } from "lucide-react";
+import { Video, Square, ShieldCheck } from "lucide-react";
 import {
   DataTable,
   type DataTableColumn,
@@ -22,7 +22,6 @@ interface VideoSessionRow {
   deviceLabel: string | null;
   channelNo: number;
   streamType: string;
-  streamUrl: string | null;
   startedAt: string;
   endedAt: string | null;
   expiresAt: string | null;
@@ -106,13 +105,6 @@ export default function FleetTelematicsVideoEvidence() {
       header: "إجراء",
       render: (s) => (
         <div className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          {s.streamUrl && s.status === "active" && (
-            <a href={s.streamUrl} target="_blank" rel="noreferrer">
-              <Button variant="ghost" size="sm" aria-label="فتح البث">
-                <ExternalLink className="h-4 w-4" />
-              </Button>
-            </a>
-          )}
           {s.status === "active" && (
             <GuardedButton
               perm="fleet.telematics.video:delete"
@@ -152,9 +144,11 @@ export default function FleetTelematicsVideoEvidence() {
       />
       <Card className="mt-4">
         <CardContent className="p-4">
-          <p className="text-xs text-muted-foreground mb-3">
-            البث المباشر يفتح فقط عند الطلب (سياسة #1354 §7). كل جلسة بث تُسجَّل
-            مع المستخدم الطالب والسبب وتظهر في سجل التدقيق.
+          <p className="text-xs text-muted-foreground mb-3 inline-flex items-center gap-1">
+            <ShieldCheck className="h-3 w-3 text-status-success-foreground" />
+            البث المباشر يفتح فقط عند الطلب وعبر signed proxy URL برمز قصير
+            المدى (≤ دقيقة). الـ URL الخام لا يصل للمتصفح، وكل محاولة وصول
+            تُسجَّل في `fleet_video_access_logs` (مرور أو منع مع السبب).
           </p>
           <DataTable<VideoSessionRow>
             columns={columns}

@@ -289,14 +289,54 @@ signature = "sha256=" + hex(digest)
 
 كل هذه الحقول قابلة للتعديل من شاشة الإعدادات في الواجهة.
 
+## Video Security Layer (Ibrahim PR review)
+
+بعد مراجعة Ibrahim للـ PR، أُضيف Layer أمني كامل للفيديو في migration
+231 و routes/fleet-telematics.ts:
+
+### كيف يعمل
+1. عند فتح جلسة `POST /telematics/video/session`:
+   - يُولَّد `streamProxyToken` عشوائي 32-byte (base64url)
+   - يُخزَّن في `fleet_video_sessions.streamProxyToken`
+   - له صلاحية قصيرة `streamProxyExpiresAt` (60 ث افتراضي، أقصى 300)
+   - الـ response يُرجع **proxyUrl فقط** — لا streamUrl خام
+2. الواجهة تستدعي `GET /telematics/video/proxy/:id?token=...`:
+   - تحقق timing-safe من التوكن
+   - تحقق من الـ TTL (`streamProxyExpiresAt > NOW`)
+   - تحقق من status='active' وstreamUrl موجود
+   - تحقق من `requestedBy === scope.userId` (مالك الجلسة فقط)
+   - **تسجيل كل محاولة** في `fleet_video_access_logs` (granted أو
+     denied_token / denied_expired / denied_session / denied_user)
+3. عند إغلاق الجلسة أو cron retention sweep:
+   - يُمسح `streamProxyToken` فوراً
+   - أي URL مسرّب لا يصلح للـ replay حتى لو ضمن نافذة الـ TTL
+
+### Configuration
+- `FLEET_TELEMATICS_PROXY_TTL_SEC` (افتراضي 60، يُقصَر إلى 15..300)
+
+### مراقبة Forensic
+- `GET /telematics/video/sessions/:id/access-logs` — يعرض كل محاولة
+  وصول لكل جلسة (محمي بـ `fleet.telematics.video:list`).
+
+## HTTPS Enforcement (Ibrahim PR review)
+
+`validateCmsv6BaseUrl` يرفض `http://` في الإنتاج. الـ Lab/Dev يمكنه
+السماح به عبر `FLEET_TELEMATICS_ALLOW_HTTP=true` (افتراضي false).
+الـ SSRF guard (RFC1918 / loopback / link-local) يعمل بصرف النظر عن
+البروتوكول.
+
 ## Known Limitations (المتبقية بعد Hardening)
 
-1. **Stream URLs unsigned passthrough**: عنوان البث من CMSV6 يصل للـ
-   client كما هو. يفترض أن CMSV6 تعطي URLs تنتهي صلاحيتها.
+1. **Full byte-level video stream proxying** (Phase 2): حالياً الـ
+   proxy endpoint يعيد الـ URL في JSON بعد التحقق + Audit. مرحلة 2 من
+   التشدد ستقوم بـ stream-proxying فعلي للـ HLS playlist + segments
+   فلا يصل الـ URL الخام للمتصفح أبداً.
 2. **CircuitBreaker per-process**: في multi-replica، كل replica
    تحتفظ بـ state خاص. مقبول لـ ≤ 20 تكامل.
 3. **رفع الأدلة auto-only من URL alert**: لا يوجد آلية pull للملفات
    من MDVR SSD مباشرة (يفترض CMSV6 ترفعها).
+4. **161 legacy migrations بدون `@rollback`**: technical debt قبل
+   #1141 (خارج نطاق هذا الـ branch).
 
 ## ملفات المرجع
 

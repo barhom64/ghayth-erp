@@ -22,6 +22,11 @@
 --          configuration row can be retired without losing audit history.
 --
 -- @rollback:
+--   -- Drop in FK-respecting order: children before parents. The previous
+--   -- ordering dropped `fleet_telematics_integrations` before
+--   -- `fleet_telematics_devices`, but devices.integrationId FK-references
+--   -- integrations — Postgres would reject the parent DROP while the child
+--   -- still existed. Caught by Ibrahim during final review.
 --   DROP TABLE IF EXISTS public.fleet_device_sync_logs;
 --   DROP TABLE IF EXISTS public.fleet_media_evidence;
 --   DROP TABLE IF EXISTS public.fleet_ai_alerts;
@@ -30,8 +35,8 @@
 --   DROP TABLE IF EXISTS public.fleet_sensor_readings;
 --   DROP TABLE IF EXISTS public.fleet_device_events;
 --   DROP TABLE IF EXISTS public.fleet_device_positions;
---   DROP TABLE IF EXISTS public.fleet_telematics_integrations;
 --   DROP TABLE IF EXISTS public.fleet_telematics_devices;
+--   DROP TABLE IF EXISTS public.fleet_telematics_integrations;
 -- ===========================================================================
 
 -- 1) Per-company CMSV6 (or other vendor) integration row. Stores the
