@@ -2,6 +2,11 @@ import { useState } from "react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import {
+  useInlineActions,
+  RowActions,
+  InlineDeleteConfirm,
+} from "@/components/inline-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
@@ -50,10 +55,19 @@ export default function PayrollPage() {
   const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
-  const { data, isLoading, isError } = useApiQuery<any>(["payroll", scopeQueryString], `/hr/payroll${scopeSuffix}`);
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(["payroll", scopeQueryString], `/hr/payroll${scopeSuffix}`);
   const items = data?.data || [];
   const [selectedRun, setSelectedRun] = useState<any>(null);
   const [filters, setFilters] = useFilters();
+
+  // DELETE /hr/payroll/:id — soft-delete a draft payroll run. Backend
+  // refuses once the run has been approved or paid, so the row action
+  // only renders when status === "draft".
+  const payrollActions = useInlineActions({
+    endpoint: "/hr/payroll",
+    queryKeys: [["payroll", scopeQueryString]],
+    onSuccess: () => refetch(),
+  });
 
   const filtered = applyFilters(items, filters, { searchFields: ["period"], statusField: "status", dateField: "createdAt" });
 
@@ -103,9 +117,17 @@ export default function PayrollPage() {
       key: "actions",
       header: "إجراءات",
       render: (p) => (
-        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedRun(p.id); }}>
-          <Eye className="h-4 w-4 me-1" />التفاصيل
-        </Button>
+        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setSelectedRun(p.id)}>
+            <Eye className="h-4 w-4 me-1" />التفاصيل
+          </Button>
+          <RowActions
+            onDelete={() => payrollActions.startDelete(p.id)}
+            canEdit={false}
+            canDelete={p.status === "draft"}
+            deletePerm="hr:delete"
+          />
+        </div>
       ),
     },
   ];
@@ -171,6 +193,14 @@ export default function PayrollPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {payrollActions.deletingId !== null && (
+        <InlineDeleteConfirm
+          onConfirm={() => payrollActions.handleDelete(payrollActions.deletingId!)}
+          onCancel={payrollActions.cancelDelete}
+          isPending={payrollActions.isPending}
+        />
+      )}
     </PageShell>
   );
 }
