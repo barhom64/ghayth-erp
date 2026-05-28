@@ -1,5 +1,11 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
+import {
+  useInlineActions,
+  RowActions,
+  InlineEditForm,
+  InlineDeleteConfirm,
+} from "@/components/inline-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   PageShell,
@@ -62,6 +68,18 @@ export default function CostCentersPage() {
   );
 
   const createMut = useApiMutation("/finance/cost-centers", "POST", [["cost-centers"]]);
+
+  const ccActions = useInlineActions({
+    endpoint: "/finance/cost-centers",
+    queryKeys: [["cost-centers"]],
+  });
+
+  const ccEditFields = [
+    { key: "code", label: "الرمز" },
+    { key: "name", label: "الاسم" },
+    { key: "type", label: "النوع" },
+    { key: "allocatedAmount", label: "المخصص", type: "number" as const },
+  ];
 
   const [form, setForm] = useState({
     code: "",
@@ -160,6 +178,22 @@ export default function CostCentersPage() {
       render: (r) => r.status === "active"
         ? <Badge className="bg-emerald-100 text-emerald-800 text-xs">نشط</Badge>
         : <Badge variant="outline" className="text-xs">{r.status}</Badge>,
+    },
+    {
+      key: "_actions" as any,
+      header: "",
+      render: (r) => (
+        <RowActions
+          onEdit={() => ccActions.startEdit(r.id, {
+            code: r.code ?? "",
+            name: r.name,
+            type: r.type ?? "",
+            allocatedAmount: r.allocatedAmount ? String(r.allocatedAmount) : "",
+          })}
+          onDelete={() => ccActions.startDelete(r.id)}
+          deletePerm="finance:delete"
+        />
+      ),
     },
   ];
 
@@ -304,12 +338,23 @@ export default function CostCentersPage() {
         </CardContent>
       </Card>
 
-      <Card className="mt-4 bg-status-warning-surface/30 border-status-warning-surface">
-        <CardContent className="p-3 text-xs text-status-warning-foreground">
-          ⓘ التعديل والحذف + ربط الكيانات (vehicle/project/...) follow-up PR.
-          المسارات PATCH/DELETE /finance/cost-centers/:id موجودة في الـ backend.
-        </CardContent>
-      </Card>
+      {ccActions.editingId !== null && (
+        <InlineEditForm
+          fields={ccEditFields}
+          initialValues={ccActions.editForm}
+          onSave={(values) => ccActions.handleSave(ccActions.editingId!, values)}
+          onCancel={ccActions.cancelEdit}
+          isPending={ccActions.isPending}
+        />
+      )}
+
+      {ccActions.deletingId !== null && (
+        <InlineDeleteConfirm
+          onConfirm={() => ccActions.handleDelete(ccActions.deletingId!)}
+          onCancel={ccActions.cancelDelete}
+          isPending={ccActions.isPending}
+        />
+      )}
     </PageShell>
   );
 }
