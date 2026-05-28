@@ -3,6 +3,7 @@ import { z } from "zod";
 import { useLocation } from "wouter";
 import { formatDateAr } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -71,6 +72,26 @@ export default function OfficialLettersPage() {
   const canApprove = roleLevel >= 70;
   const [advFilters, setAdvFilters] = useFilters();
 
+  // Inline edit + delete for letters. The backend's PATCH/DELETE on
+  // /hr/official-letters/:id refuses edits/deletes on letters past the
+  // draft state — the row actions are still shown but the server is
+  // authoritative.
+  const {
+    editingId, deletingId, editForm, setEditForm,
+    startEdit, startDelete, cancelEdit, cancelDelete,
+    isPending, handleSave, handleDelete,
+  } = useInlineActions({
+    endpoint: "/hr/official-letters",
+    queryKeys: [["official-letters"]],
+    onSuccess: () => refetch(),
+  });
+
+  const letterEditFields = [
+    { key: "subject", label: "الموضوع" },
+    { key: "body", label: "النص" },
+    { key: "notes", label: "ملاحظات" },
+  ];
+
   const filtered = applyFilters(items, advFilters, {
     searchFields: ["subject", "employeeName"] as any,
     statusField: "status" as any,
@@ -87,7 +108,7 @@ export default function OfficialLettersPage() {
       key: "actions",
       header: "إجراءات",
       render: (l) => (
-        <div className="flex gap-1">
+        <div className="flex gap-1 items-center">
           <PrintButton
             entityType="official_letter"
             entityId={l.id}
@@ -95,6 +116,13 @@ export default function OfficialLettersPage() {
             label=""
             variant="ghost"
             size="sm"
+          />
+          <RowActions
+            onEdit={() => startEdit(l.id, { subject: l.subject, body: l.body, notes: l.notes })}
+            onDelete={() => startDelete(l.id)}
+            canEdit={["draft", "rejected"].includes(l.status)}
+            canDelete={["draft", "rejected"].includes(l.status)}
+            deletePerm="hr:delete"
           />
         </div>
       ),
@@ -207,6 +235,24 @@ export default function OfficialLettersPage() {
         emptyIcon={<FileText className="h-6 w-6 text-slate-400" />}
 
       />
+
+      {editingId !== null && (
+        <InlineEditForm
+          fields={letterEditFields}
+          initialValues={editForm}
+          onSave={(values) => handleSave(editingId, values)}
+          onCancel={cancelEdit}
+          isPending={isPending}
+        />
+      )}
+
+      {deletingId !== null && (
+        <InlineDeleteConfirm
+          onConfirm={() => handleDelete(deletingId)}
+          onCancel={cancelDelete}
+          isPending={isPending}
+        />
+      )}
 
     </PageShell>
   );

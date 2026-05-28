@@ -1,14 +1,19 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 import { DetailPageLayout, type RelatedEntity } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+} from "@/components/shared/detail-edit-delete-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
-import { Edit, CalendarDays } from "lucide-react";
+import { Edit, CalendarDays, XCircle } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 
@@ -64,6 +69,51 @@ export default function LeaveDetail() {
 
   const leave = data;
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("leave_request", id ?? 0);
+
+  const queryClient = useQueryClient();
+
+  // DELETE /hr/leave-requests/:id — soft-delete. Backend refuses on
+  // approved/cancelled leaves; the Edit/Delete buttons hide when the
+  // status enters a terminal state.
+  const editDelete = useDetailEditDelete({
+    entityLabel: "طلب الإجازة",
+    patchPath: `/hr/leave-requests/${id}`,
+    deletePath: `/hr/leave-requests/${id}`,
+    listPath: "/hr/leaves",
+    initialValues: leave,
+    fields: [
+      { key: "reason", label: "السبب" },
+      { key: "notes", label: "ملاحظات" },
+    ],
+    invalidateKeys: [["leave", String(id)], ["hr-leaves"]],
+    onSaved: () => refetch(),
+  });
+
+  const handleCancel = async () => {
+    // POST /hr/leave-requests/:id/cancel — requires reason; backend
+    // gates this to either the leave owner or HR.
+    const reason = window.prompt("سبب الإلغاء:");
+    if (reason === null) return;
+    if (!reason.trim()) {
+      toast({ variant: "destructive", title: "سبب الإلغاء مطلوب" });
+      return;
+    }
+    try {
+      await apiFetch(`/hr/leave-requests/${id}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["leave", String(id)] });
+      toast({ title: "تم إلغاء الإجازة" });
+      refetch();
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "تعذر إلغاء الإجازة",
+        description: err.message || "حدث خطأ",
+      });
+    }
+  };
 
   const duration = useMemo(() => {
     if (leave?.duration) return leave.duration;
@@ -253,6 +303,18 @@ export default function LeaveDetail() {
             <Edit className="h-4 w-4 ms-1" />
             تعديل
           </GuardedButton>
+          <GuardedButton
+            perm="hr:update"
+            variant="outline"
+            size="sm"
+            onClick={handleCancel}
+            disabled={!leave || !["pending", "approved"].includes(leave?.status)}
+            rateLimitAware
+          >
+            <XCircle className="h-4 w-4 ms-1" />
+            إلغاء الإجازة
+          </GuardedButton>
+          <DetailActionButtons hook={editDelete} editPerm="hr:update" deletePerm="hr:delete" />
         </>
       }
     />
