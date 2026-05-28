@@ -137,13 +137,43 @@ export default function Evaluation360DetailPage() {
     `/hr/evaluation-cycles/${cycleId}`
   );
 
+  // GET /hr/evaluation-cycles/:id/system-report — full system-generated
+  // performance breakdown (KPI hits, tardiness, etc). Separate from the
+  // bundled systemEval that the cycle endpoint returns; this is the
+  // detailed log used by HR for back-checking.
+  const sysReportQ = useApiQuery<any>(
+    ["evaluation-system-report", cycleId],
+    cycleId ? `/hr/evaluation-cycles/${cycleId}/system-report` : null,
+    { enabled: !!cycleId },
+  );
+  // GET /hr/evaluation-cycles/:id/summary — server-computed weighted
+  // summary, source of truth for the final 360° score. Falls back to
+  // the bundled `summary` when this endpoint hasn't been refreshed yet.
+  const summaryQ = useApiQuery<any>(
+    ["evaluation-summary", cycleId],
+    cycleId ? `/hr/evaluation-cycles/${cycleId}/summary` : null,
+    { enabled: !!cycleId },
+  );
+
   const cycle = data?.cycle;
   const systemEval = data?.systemEval;
+  const systemReport = sysReportQ.data?.data ?? sysReportQ.data;
   const peerEvals = data?.peerEvals ?? [];
-  const summary = data?.summary;
+  const summary = summaryQ.data?.data ?? summaryQ.data ?? data?.summary;
   const upwardSummary = data?.upwardSummary;
   const managerEvals = peerEvals.filter((p: any) => p.evaluatorRole === 'manager');
   const peerOnlyEvals = peerEvals.filter((p: any) => p.evaluatorRole === 'peer');
+
+  // GET /hr/upward-reviews/manager/:managerId — anonymized aggregate
+  // of all upward reviews received by the cycle's evaluatee (the
+  // manager being reviewed). Surfaced under the "upward" tab.
+  const managerId = cycle?.employeeId ?? cycle?.evaluateeId ?? null;
+  const managerUpwardQ = useApiQuery<any>(
+    ["upward-reviews-manager", String(managerId ?? 0)],
+    managerId ? `/hr/upward-reviews/manager/${managerId}` : null,
+    { enabled: !!managerId },
+  );
+  const managerUpward: any[] = managerUpwardQ.data?.data ?? managerUpwardQ.data?.reviews ?? [];
 
   const tabs = [
     { id: "summary", label: "ملخص 360°", icon: BarChart3 },
@@ -252,6 +282,24 @@ export default function Evaluation360DetailPage() {
 
       {tab === "system" && (
         <div className="space-y-4">
+          {systemReport && Array.isArray(systemReport.items) && systemReport.items.length > 0 && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">تقرير النظام المفصّل ({systemReport.items.length} بند)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1 text-xs max-h-64 overflow-y-auto">
+                  {systemReport.items.slice(0, 30).map((row: any, i: number) => (
+                    <div key={row.id ?? i} className="flex items-center justify-between border-b pb-1">
+                      <span>{row.metric ?? row.label ?? row.kpi ?? "—"}</span>
+                      <span className="font-mono">{row.value ?? row.score ?? "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {!systemEval ? (
             <Card><CardContent className="p-8 text-center text-muted-foreground">لم يتم توليد التقرير الآلي بعد</CardContent></Card>
           ) : (
@@ -452,6 +500,24 @@ export default function Evaluation360DetailPage() {
                   يتطلب عدد كافٍ من التقييمات لعرض النتائج
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">الحد الأدنى: 3 تقييمات لضمان السرية</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {managerUpward.length > 0 && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">تاريخ التقييمات العكسية لهذا المدير ({managerUpward.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 text-xs">
+                  {managerUpward.slice(0, 8).map((r: any, i: number) => (
+                    <div key={r.id ?? i} className="flex items-center justify-between border-b pb-1">
+                      <span className="text-muted-foreground">دورة #{r.cycleId ?? r.cycleNumber ?? "—"}</span>
+                      <span className="font-mono">{r.avgScore ?? r.score ?? "—"}% — {r.count ?? r.reviewCount ?? 0} تقييم</span>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           )}
