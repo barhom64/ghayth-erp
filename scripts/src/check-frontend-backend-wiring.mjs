@@ -404,6 +404,30 @@ function extractFrontendCalls() {
       calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "DELETE", source: "prop" });
     }
 
+    // useApiMutation((body) => body.url, "METHOD") + later
+    // \`const url = \`/...\`\` patterns. action-center.tsx uses this to
+    // dispatch workflow URLs at runtime; the URL string never reaches
+    // the helper's first arg, so the helper scanner can't see it.
+    //
+    // Ambiguity guard: skip when the file has more than one such
+    // useApiMutation match — the audit can't tell which method each
+    // `const url` binds to (action-center has separate workflow/POST
+    // and approval/PATCH mutations sharing the same body shape; the
+    // workflow URL would falsely match the approval verb and trip the
+    // method-mismatch gate). When unambiguous, emit each `const url`
+    // with the matched method.
+    const bodyUrlRe = /\buseApiMutation\b[\s\S]{0,200}?\(\s*body\s*\)\s*=>\s*body\.url\s*,\s*[`"']([A-Z]+)["'`]/g;
+    const bodyUrlMatches = [...src.matchAll(bodyUrlRe)];
+    if (bodyUrlMatches.length === 1) {
+      const method = bodyUrlMatches[0][1].toUpperCase();
+      const urlConstRe = /\b(?:const|let)\s+url\s*=\s*[`"'](\/[^`"']*)[`"']/g;
+      for (const u of src.matchAll(urlConstRe)) {
+        const url = u[1];
+        if (!url.startsWith("/")) continue;
+        calls.push({ file: rel, url, line: lineOf(src, u.index), method, source: "prop" });
+      }
+    }
+
     // Raw fetch() calls — used for file uploads (multipart), file
     // downloads (stream-as-blob), and the print client (streams base64
     // HTML payload). The pattern is \`fetch(\`${BASE}/api/...\`)\` or
