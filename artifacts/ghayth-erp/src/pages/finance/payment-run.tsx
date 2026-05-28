@@ -67,6 +67,16 @@ export default function PaymentRunPage() {
     `/finance/payment-run/pending${qs ? `?${qs}` : ""}`,
   );
 
+  // GET /finance/payment-run — historical payment-run rows
+  // (paymentDate / method / total / status / refs). The pending tab is
+  // forward-looking; this one is backward-looking, so users can audit
+  // past runs without going through the GL ledger.
+  const { data: historyResp } = useApiQuery<any>(
+    ["payment-run-history"],
+    "/finance/payment-run",
+  );
+  const history: any[] = historyResp?.data || [];
+
   const pos: PendingPo[] = asList(data?.data || []);
   const vendors: VendorGroup[] = data?.byVendor ?? [];
   const totalDue = Number(data?.totalDue ?? 0);
@@ -243,6 +253,40 @@ export default function PaymentRunPage() {
                     </GuardedButton>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {history.length > 0 && (
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="text-sm font-semibold mb-3">آخر دفعات تنفيذية ({history.length})</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-muted-foreground border-b">
+                        <th className="text-right py-2">المرجع</th>
+                        <th className="text-right py-2">التاريخ</th>
+                        <th className="text-right py-2">الطريقة</th>
+                        <th className="text-right py-2">الإجمالي</th>
+                        <th className="text-right py-2">PO</th>
+                        <th className="text-right py-2">الحالة</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {history.slice(0, 20).map((row: any) => (
+                        <tr key={row.id} className="border-b last:border-0">
+                          <td className="py-1.5 font-mono">{row.ref || `#${row.id}`}</td>
+                          <td className="py-1.5">{row.paymentDate ? new Date(row.paymentDate).toLocaleDateString("ar") : "—"}</td>
+                          <td className="py-1.5">{row.method || "—"}</td>
+                          <td className="py-1.5 font-mono">{formatCurrency(Number(row.totalAmount || 0))}</td>
+                          <td className="py-1.5">{row.poCount || 0}</td>
+                          <td className="py-1.5">{row.status || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
           )}
