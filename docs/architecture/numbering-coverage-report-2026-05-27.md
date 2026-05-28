@@ -150,8 +150,8 @@ Legacy-pattern guard:
 | G3 | `routes/requests.ts:916` PO-REQ-${id} | 🔓 مفتوحة |
 | G4 | `routes/requests.ts:904` ticket بلا ref | 🔓 مفتوحة |
 | G5 | `routes/requests.ts:925` case بلا caseNumber | 🔓 مفتوحة |
-| G6 | `lib/cronScheduler.ts:1158` PO تلقائي بلا ref | 🔓 مفتوحة |
-| G7 | `lib/cronScheduler.ts:1408` RENT-${id}-${Date.now()} | 🔓 مفتوحة |
+| G6 | `lib/cronScheduler.ts:1158` PO تلقائي بلا ref | ✅ مُصلَحة في هذا الـPR |
+| G7 | `lib/cronScheduler.ts:1408` RENT-${id}-${Date.now()} | ✅ مُصلَحة في هذا الـPR |
 | G8 | `routes/fleet.ts:1213` UPDATE numbering_assignments مباشر | ✅ مُصلَحة في هذا الـPR |
 | G9 | crm.client_code seed-pattern (false-finding) | ✅ مُغلَقة (regex fix) |
 | G10 | `routes/crm.ts:742` opp→client بلا code | ✅ مُصلَحة (#1325) |
