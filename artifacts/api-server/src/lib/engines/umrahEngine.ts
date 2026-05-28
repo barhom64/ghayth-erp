@@ -35,17 +35,24 @@ class UmrahEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_commission", "debit", "5200"),
     ]);
 
-    const lines: { accountCode: string; debit: number; credit: number; description: string; vendorId?: number }[] = [
-      { accountCode: arCode, debit: invoice.total, credit: 0, description: `ذمم وكيل عمرة — ${invoice.agentName}`, vendorId: invoice.agentId },
+    // Carry umrahAgentId on every line so per-agent revenue/AR/penalty/
+    // commission reports tie out from the GL. The previous shape used
+    // `vendorId: invoice.agentId` on the AR line only — a semantic bug
+    // (umrah_agents is its own table, not vendors) AND a coverage gap
+    // (CR + commission lines dropped the agent dim entirely). Migration
+    // 201 added the umrahAgentId column to journal_lines for exactly
+    // this drilldown.
+    const lines: { accountCode: string; debit: number; credit: number; description: string; umrahAgentId?: number }[] = [
+      { accountCode: arCode, debit: invoice.total, credit: 0, description: `ذمم وكيل عمرة — ${invoice.agentName}`, umrahAgentId: invoice.agentId },
     ];
     if (invoice.servicesTotal > 0) {
-      lines.push({ accountCode: revenueCode, debit: 0, credit: invoice.servicesTotal, description: `إيراد خدمات عمرة — ${invoice.agentName}` });
+      lines.push({ accountCode: revenueCode, debit: 0, credit: invoice.servicesTotal, description: `إيراد خدمات عمرة — ${invoice.agentName}`, umrahAgentId: invoice.agentId });
     }
     if (invoice.penaltiesTotal > 0) {
-      lines.push({ accountCode: penaltyCode, debit: 0, credit: invoice.penaltiesTotal, description: `إيراد غرامات تأخر — ${invoice.agentName}` });
+      lines.push({ accountCode: penaltyCode, debit: 0, credit: invoice.penaltiesTotal, description: `إيراد غرامات تأخر — ${invoice.agentName}`, umrahAgentId: invoice.agentId });
     }
     if (invoice.commission > 0) {
-      lines.push({ accountCode: commissionCode, debit: invoice.commission, credit: 0, description: `عمولة وكيل — ${invoice.agentName}` });
+      lines.push({ accountCode: commissionCode, debit: invoice.commission, credit: 0, description: `عمولة وكيل — ${invoice.agentName}`, umrahAgentId: invoice.agentId });
     }
 
     return financialEngine.postJournalEntry({
@@ -94,7 +101,7 @@ class UmrahEngineImpl implements DomainEngine {
       guardId: transport.id,
       lines: [
         { accountCode: expenseCode, debit: transport.cost, credit: 0, description: `مصروف نقل — ${transport.fromLocation} → ${transport.toLocation}`, vehicleId: transport.vehicleId, driverId: transport.driverId },
-        { accountCode: payableCode, debit: 0, credit: transport.cost, description: `مستحقات نقل عمرة` },
+        { accountCode: payableCode, debit: 0, credit: transport.cost, description: `مستحقات نقل عمرة`, vehicleId: transport.vehicleId, driverId: transport.driverId },
       ],
     });
   }
