@@ -22,7 +22,7 @@ import {
   User, Phone, Mail, FileText, Target, Headphones, FolderKanban,
   Clock, DollarSign, MessageCircle, TrendingUp, AlertTriangle,
   CheckCircle, Activity, BookOpen, CheckSquare, Globe, Plane,
-  FileSpreadsheet,
+  FileSpreadsheet, Home, Scale,
 } from "lucide-react";
 import { useRoute, Link } from "wouter";
 import { cn } from "@/lib/utils";
@@ -45,6 +45,8 @@ const TABS = [
   { key: "opportunities", label: "الفرص", icon: Target },
   { key: "tickets", label: "التذاكر", icon: Headphones },
   { key: "projects", label: "المشاريع", icon: FolderKanban },
+  { key: "tenancies", label: "الإيجارات", icon: Home },
+  { key: "legal", label: "القضايا", icon: Scale },
   { key: "conversations", label: "المحادثات", icon: MessageCircle },
   { key: "umrah", label: "العمرة", icon: Plane },
   { key: "portal", label: "بوابة العميل", icon: Globe },
@@ -83,6 +85,12 @@ export default function ClientDetail() {
   const conversations: any[] = client?.conversations || [];
   const timeline: any[] = client?.timeline || [];
   const activeServices: any = client?.activeServices || {};
+  // Customer-type relationships — populated by the GET /clients/:id
+  // additions in this PR. Each list mirrors a section in the customer
+  // portal (/portal/me availableSections).
+  const tenancies: any[] = client?.tenancies || [];
+  const legalCases: any[] = client?.legalCases || [];
+  const umrahSubAgents: any[] = client?.umrahSubAgents || [];
 
   const overview = (
     <div className="space-y-4">
@@ -149,6 +157,9 @@ export default function ClientDetail() {
             : tab.key === "opportunities" ? opportunities.length
             : tab.key === "tickets" ? tickets.length
             : tab.key === "projects" ? projects.length
+            : tab.key === "tenancies" ? tenancies.length
+            : tab.key === "legal" ? legalCases.length
+            : tab.key === "umrah" ? umrahSubAgents.length
             : tab.key === "timeline" ? timeline.length
             : tab.key === "conversations" ? conversations.length : 0;
           return (
@@ -590,6 +601,90 @@ export default function ClientDetail() {
                     <p className="text-sm">{msg.message}</p>
                     {msg.phone && <p className="text-xs text-muted-foreground mt-1" dir="ltr">{msg.phone}</p>}
                   </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === "tenancies" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Home className="h-5 w-5" />
+              الإيجارات المرتبطة ({tenancies.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {tenancies.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8 text-sm">
+                لا توجد إيجارات مرتبطة بهذا العميل — اربط مستأجراً من صفحة تفاصيله ليظهر هنا
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {tenancies.map((t: any) => (
+                  <Link key={t.id} href={`/properties/tenants/${t.id}`}>
+                    <a className="block p-3 rounded-md border hover:bg-muted/30 transition">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">{t.name}</div>
+                          <div className="text-xs text-muted-foreground space-x-2 space-x-reverse">
+                            {t.phone && <span><Phone className="inline h-3 w-3 ml-1" />{t.phone}</span>}
+                            {t.nationalId && <span>هوية: {t.nationalId}</span>}
+                          </div>
+                        </div>
+                        <Badge variant={Number(t.activeContracts) > 0 ? "default" : "outline"}>
+                          {t.activeContracts} عقد نشط
+                        </Badge>
+                      </div>
+                    </a>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === "legal" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Scale className="h-5 w-5" />
+              القضايا القانونية ({legalCases.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {legalCases.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8 text-sm">
+                لا توجد قضايا قانونية مرتبطة بهذا العميل
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {legalCases.map((lc: any) => (
+                  <Link key={lc.id} href={`/legal/cases/${lc.id}`}>
+                    <a className="block p-3 rounded-md border hover:bg-muted/30 transition">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium truncate">{lc.title}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5 space-x-2 space-x-reverse">
+                            {lc.caseNumber && <span className="font-mono">#{lc.caseNumber}</span>}
+                            {lc.court && <span>{lc.court}</span>}
+                            {lc.filingDate && <span>{formatDateAr(lc.filingDate)}</span>}
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <Badge variant="outline" className="text-xs">{lc.status}</Badge>
+                          {lc.financialRisk && Number(lc.financialRisk) > 0 && (
+                            <span className="text-xs font-medium text-red-700">
+                              {formatCurrency(Number(lc.financialRisk))}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </a>
+                  </Link>
                 ))}
               </div>
             )}

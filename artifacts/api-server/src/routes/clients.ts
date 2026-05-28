@@ -359,6 +359,39 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
       openTickets: tickets.filter((t) => t.status === 'open' || t.status === 'in_progress'),
     };
 
+    // Customer-portal linkages — populated from clientId columns added
+    // in migration 230 (tenants, legal_cases) and the pre-existing
+    // umrah_sub_agents.clientId. Each list mirrors a section the customer
+    // portal exposes under /portal/me availableSections, so an operator
+    // looking at a CRM client can see at-a-glance every relationship
+    // they hold.
+    const [tenancies, legalCases, umrahSubAgents] = await Promise.all([
+      rawQuery<Record<string, unknown>>(
+        `SELECT t.id, t.name, t.phone, t."nationalId",
+                (SELECT COUNT(*) FROM rental_contracts rc
+                  WHERE rc."tenantId" = t.id AND rc.status = 'active' AND rc."deletedAt" IS NULL)::int AS "activeContracts"
+           FROM tenants t
+          WHERE t."clientId" = $1 AND t."companyId" = $2
+          ORDER BY t.id DESC LIMIT 20`,
+        [id, scope.companyId]
+      ).catch((e) => { logger.error(e, "clients-tenancies query failed"); return []; }),
+      rawQuery<Record<string, unknown>>(
+        `SELECT id, "caseNumber", title, "caseType", court, status, priority,
+                "financialRisk", "riskLevel", "filingDate"
+           FROM legal_cases
+          WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          ORDER BY "createdAt" DESC LIMIT 20`,
+        [id, scope.companyId]
+      ).catch((e) => { logger.error(e, "clients-legal-cases query failed"); return []; }),
+      rawQuery<Record<string, unknown>>(
+        `SELECT id, "nuskCode", name, country, "paymentTerms", "isActive"
+           FROM umrah_sub_agents
+          WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          ORDER BY id DESC LIMIT 20`,
+        [id, scope.companyId]
+      ).catch((e) => { logger.error(e, "clients-umrah-sub-agents query failed"); return []; }),
+    ]);
+
     res.json(maskFields(req, {
       ...client,
       invoices,
@@ -369,6 +402,11 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
       conversations,
       timeline,
       activeServices,
+      // Customer-type relationships — surface them under their own keys
+      // so the client-detail UI can render dedicated cards per type.
+      tenancies,
+      legalCases,
+      umrahSubAgents,
     }));
   } catch (err) {
     handleRouteError(err, res, "Get client error:");
