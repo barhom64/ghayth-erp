@@ -316,7 +316,40 @@ function extractFrontendCalls() {
         // Skip `=>` and whitespace.
         while (i < src.length && /[\s=>]/.test(src[i])) i++;
       }
-      // Inline-conditional URL: `useApiQuery([...], id ? \`/x/${id}\` : null)`
+      // useApiMutation((body) => body.url, "METHOD") + later `.mutate(
+    // { url: "/x" })` — the URL travels through the mutation body. The
+    // arrow-function scan above bails because body.url isn't a string
+    // literal. Scan for `.mutate({ url: "..."` calls elsewhere in the
+    // same file and credit them all with the method that the original
+    // useApiMutation declared. Only fires when the mutation explicitly
+    // returns `body.url` (or `body.__url`) and not anything else, so
+    // we don't accidentally credit a wholly different mutation.
+    if (helper === "useApiMutation" && src[i] === "b" && /^body\.(__)?url\s*[,)]/.test(src.slice(i))) {
+      // Walk to the method literal after the arrow body.
+      let j = i;
+      while (j < src.length && src[j] !== ",") j++;
+      j++;
+      while (j < src.length && /\s/.test(src[j])) j++;
+      const methodLit = readString(src, j);
+      const method = methodLit ? methodLit.value.toUpperCase() : "POST";
+      // Find all `.mutate({ url: "..."` in the file. Single-pass —
+      // some files have multiple muts; we credit all URLs because
+      // overcrediting an unused URL is harmless and we'd rather miss
+      // none.
+      const mutRe = /\.\s*mutate(?:Async)?\s*\(\s*\{[^}]*\b(?:__)?url\s*:\s*[`"']([^`"']+)[`"']/g;
+      const fileMutMatches = [...src.matchAll(mutRe)];
+      // Only emit when there's exactly one matching mutation in the
+      // file — otherwise we can't tell which URL belongs to this
+      // method.
+      if (fileMutMatches.length === 1 && fileMutMatches[0]) {
+        const url = fileMutMatches[0][1];
+        if (url && url.startsWith("/")) {
+          calls.push({ file: rel, url, line: lineOf(src, m.index), method, source: "helper" });
+        }
+      }
+    }
+
+    // Inline-conditional URL: `useApiQuery([...], id ? \`/x/${id}\` : null)`
       // is the canonical "skip fetch when id missing" idiom for detail
       // pages. The arg starts with the condition variable name, not a
       // string opener, so readString fails. Walk forward to the `?` and
