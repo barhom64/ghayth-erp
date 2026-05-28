@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   Plus,
@@ -65,6 +66,15 @@ export default function PurchaseOrdersPage() {
     `/finance/purchase-orders${scopeSuffix}`,
   );
   const items = data?.data || [];
+
+  // GET /finance/purchase-orders/pending-grn — POs awaiting goods
+  // receipt. Surfaced as a "بانتظار الاستلام" banner above the table
+  // so the operator can spot what's stuck waiting on the receiving end.
+  const { data: pendingGrnResp } = useApiQuery<{ data: any[] }>(
+    ["purchase-orders-pending-grn"],
+    "/finance/purchase-orders/pending-grn",
+  );
+  const pendingGrnRows: any[] = pendingGrnResp?.data ?? [];
   const [filters, setFilters] = useFilters();
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
@@ -246,6 +256,28 @@ export default function PurchaseOrdersPage() {
         ]}
         csvFileName="طلبات_الشراء"
       />
+
+      {pendingGrnRows.length > 0 && (
+        <Card className="border-status-warning-surface bg-status-warning-surface/30">
+          <CardContent className="p-3">
+            <p className="text-sm font-medium text-status-warning-foreground mb-2">
+              بانتظار الاستلام ({pendingGrnRows.length})
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+              {pendingGrnRows.slice(0, 6).map((p: any) => (
+                <div
+                  key={p.id}
+                  className="flex justify-between px-2 py-1 rounded bg-white/40 cursor-pointer hover:bg-white/60"
+                  onClick={() => navigate(`/finance/purchase-orders/${p.id}`)}
+                >
+                  <span className="font-mono">{p.ref ?? `#${p.id}`}</span>
+                  <span className="text-muted-foreground">{p.supplierName ?? ""}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <DataTable
         columns={columns}

@@ -1,5 +1,10 @@
 import { useState } from "react";
 import { useApiQuery } from "@/lib/api";
+import {
+  useInlineActions,
+  RowActions,
+  InlineDeleteConfirm,
+} from "@/components/inline-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,6 +76,11 @@ export default function AllocationRulesPage() {
   if (activeFilter) params.set("isActive", activeFilter);
   const qs = params.toString();
 
+  const ruleActions = useInlineActions({
+    endpoint: "/finance/allocation-rules",
+    queryKeys: [["allocation-rules", docTypeFilter, activeFilter]],
+  });
+
   const { data, isLoading, isError } = useApiQuery<{ data: AllocationRule[]; total: number }>(
     ["allocation-rules", docTypeFilter, activeFilter],
     `/finance/allocation-rules${qs ? `?${qs}` : ""}`,
@@ -131,13 +141,20 @@ export default function AllocationRulesPage() {
       render: (r) => r.isActive
         ? <Badge className="bg-emerald-100 text-emerald-800 text-xs">نشطة</Badge>
         : <Badge variant="outline" className="text-xs">معطّلة</Badge> },
-    { key: "_actions", header: "تعديل",
+    { key: "_actions", header: "إجراءات",
       render: (r) => (
-        <Link href={`/finance/allocation-rules/${r.id}/edit`}>
-          <Button variant="ghost" size="sm" className="h-7 px-2" title="تعديل القاعدة">
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-        </Link>
+        <div className="flex items-center gap-1">
+          <Link href={`/finance/allocation-rules/${r.id}/edit`}>
+            <Button variant="ghost" size="sm" className="h-7 px-2" title="تعديل القاعدة">
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+          <RowActions
+            onDelete={() => ruleActions.startDelete(r.id)}
+            canEdit={false}
+            deletePerm="finance:delete"
+          />
+        </div>
       ) },
   ];
 
@@ -254,6 +271,13 @@ export default function AllocationRulesPage() {
           />
         </CardContent>
       </Card>
+      {ruleActions.deletingId !== null && (
+        <InlineDeleteConfirm
+          onConfirm={() => ruleActions.handleDelete(ruleActions.deletingId!)}
+          onCancel={ruleActions.cancelDelete}
+          isPending={ruleActions.isPending}
+        />
+      )}
     </PageShell>
   );
 }

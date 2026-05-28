@@ -86,6 +86,22 @@ export default function PurchaseRequestsPage() {
     [["purchase-requests"]],
   );
 
+  // POST /finance/purchase-requests/:id/convert-to-po — convert an
+  // approved PR into a purchase order. POST /:id/convert is the legacy
+  // alias (kept for back-compat). The "تحويل إلى PO" button appears
+  // only on approved rows; backend enforces the same gate.
+  const convertMut = useApiMutation<unknown, { id: number; expectedDelivery?: string; notes?: string }>(
+    (b) => `/finance/purchase-requests/${b.id}/convert-to-po`,
+    "POST",
+    [["purchase-requests"], ["purchase-orders"]],
+    { successMessage: "تم تحويل الطلب إلى أمر شراء" },
+  );
+
+  const handleConvert = (id: number) => {
+    const notes = window.prompt("ملاحظات (اختياري):") ?? "";
+    convertMut.mutate({ id, notes: notes.trim() || undefined });
+  };
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -182,11 +198,24 @@ export default function PurchaseRequestsPage() {
             </>
           )}
           {r.status === "approved" && (
-            <Link href={`/finance/purchase-orders/create?fromRequestId=${r.id}`}>
-              <Button variant="ghost" size="sm" className="h-7 text-xs text-purple-700">
-                <ArrowRight className="h-3 w-3 me-1" /> تحويل إلى PO
+            <>
+              <Link href={`/finance/purchase-orders/create?fromRequestId=${r.id}`}>
+                <Button variant="ghost" size="sm" className="h-7 text-xs text-purple-700">
+                  <ArrowRight className="h-3 w-3 me-1" /> صفحة التحويل
+                </Button>
+              </Link>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-purple-700"
+                onClick={() => handleConvert(r.id)}
+                disabled={convertMut.isPending}
+                rateLimitAware
+                title="تحويل مباشر إلى PO"
+              >
+                <ArrowRight className="h-3 w-3 me-1" /> تحويل سريع
               </Button>
-            </Link>
+            </>
           )}
         </div>
       ),
