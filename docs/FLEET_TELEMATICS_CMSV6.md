@@ -231,14 +231,70 @@ fleet.telematics.ai_alerts
 5. لفتح كاميرا مركبة معينة: من تفاصيل المركبة → *فتح بث* → يُكتب صف
    في `fleet_video_sessions` ويُسجَّل في الـAudit.
 
+## Hardening (Engineering review — مكتمل)
+
+تمت معالجة جميع نقاط Critical / High التي رصدها الـ engineering review:
+
+| القلق | الحالة | المرجع |
+|---|---|---|
+| Credentials في JSONB plain-text | ✅ مُغلق | migration 229 + `encryptSecret/decryptSecret` |
+| Webhook بدون HMAC | ✅ مُغلق | `/api/webhooks/cmsv6/:id` + HMAC + replay window |
+| Video `externalSessionId` غير محفوظ | ✅ مُغلق | migration 229 |
+| rawPayload بدون حد حجم | ✅ مُغلق | migration 229 CHECK ≤ 64KB |
+| لا retention policy | ✅ مُغلق | migration 230 + `fleet_telematics_retention` يومي 03:00 |
+| لا passive offline heartbeat | ✅ مُغلق | `fleet_telematics_heartbeat` كل دقيقتين |
+| fuel/weight events بدون delta | ✅ مُغلق | fuel ≥ 5L، weight ≥ 200kg |
+| Position events غير throttled | ✅ مُغلق | حد 1 حدث/جهاز/دقيقة |
+| لا cron poller | ✅ مُغلق | `fleet_telematics_poll` كل دقيقة |
+| لا retry/backoff + circuit breaker | ✅ مُغلق | `executeWithRetry` + `CircuitBreaker` |
+
+### Webhook Signing — تعليمات للموفِّر
+
+العنوان: `POST https://erp.example.com/api/webhooks/cmsv6/{integrationId}`
+
+الرؤوس المطلوبة:
+
+```
+x-cmsv6-timestamp: <unix ms>
+x-cmsv6-signature: sha256=<hex digest>
+```
+
+كيف يُحسب التوقيع:
+
+```
+digest = HMAC_SHA256(secret, timestamp + "." + raw_body)
+signature = "sha256=" + hex(digest)
+```
+
+* النافذة الزمنية: ±5 دقائق.
+* المقارنة timing-safe.
+* الطلبات بدون توقيع، أو بتوقيع خاطئ، أو بـ timestamp قديم تُرفض بـ 401.
+
+## Known Limitations (المتبقية بعد Hardening)
+
+1. **Stream URLs unsigned passthrough**: عنوان البث من CMSV6 يصل للـ
+   client كما هو. يفترض أن CMSV6 تعطي URLs تنتهي صلاحيتها.
+2. **CircuitBreaker per-process**: في multi-replica، كل replica
+   تحتفظ بـ state خاص. مقبول لـ ≤ 20 تكامل.
+3. **رفع الأدلة auto-only من URL alert**: لا يوجد آلية pull للملفات
+   من MDVR SSD مباشرة (يفترض CMSV6 ترفعها).
+
 ## ملفات المرجع
 
 * `artifacts/api-server/src/migrations/228_fleet_telematics.sql`
+* `artifacts/api-server/src/migrations/229_fleet_telematics_security.sql`
+* `artifacts/api-server/src/migrations/230_fleet_telematics_retention.sql`
 * `artifacts/api-server/src/lib/integrations/cmsv6Adapter.ts`
+* `artifacts/api-server/src/lib/fleet/telematicsCron.ts`
+* `artifacts/api-server/src/lib/fleet/telematicsReliability.ts`
 * `artifacts/api-server/src/routes/fleet-telematics.ts`
+* `artifacts/api-server/src/routes/fleet-telematics-webhook.ts`
 * `artifacts/api-server/src/lib/eventCatalog.ts` (الإضافات)
 * `artifacts/api-server/src/lib/rbac/featureCatalog.ts` (الإضافات)
 * `artifacts/api-server/tests/unit/cmsv6AdapterSmoke.test.ts`
+* `artifacts/api-server/tests/unit/cmsv6WebhookHmacSmoke.test.ts`
+* `artifacts/api-server/tests/unit/telematicsHardeningSmoke.test.ts`
+* `artifacts/api-server/tests/unit/telematicsReliabilitySmoke.test.ts`
 * `artifacts/ghayth-erp/src/pages/fleet/telematics/`
 * `artifacts/ghayth-erp/src/components/shared/fleet-telematics-tabs-nav.tsx`
 * `artifacts/ghayth-erp/src/routes/fleetRoutes.tsx` (الإضافات)

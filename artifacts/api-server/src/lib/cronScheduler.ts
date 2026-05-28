@@ -35,6 +35,7 @@ import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
 import {
   fleetTelematicsRetention,
   fleetTelematicsHeartbeat,
+  fleetTelematicsPoll,
 } from "./fleet/telematicsCron.js";
 import { scanObligations } from "./obligationsEngine.js";
 import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
@@ -3728,6 +3729,7 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "fleet_status_check", description: "فحص حالة الأسطول", schedule: "0 6 * * *", handler: fleetStatusCheck },
   { name: "fleet_telematics_retention", description: "تنظيف بيانات Telematics القديمة (مواقع + سجلات مزامنة + جلسات بث منتهية)", schedule: "0 3 * * *", handler: fleetTelematicsRetention },
   { name: "fleet_telematics_heartbeat", description: "كشف الأجهزة غير المتصلة بناءً على آخر موقع", schedule: "*/2 * * * *", handler: fleetTelematicsHeartbeat },
+  { name: "fleet_telematics_poll", description: "Auto-poll للمواقع من CMSV6 لكل تكامل نشط (مع retry + circuit breaker)", schedule: "* * * * *", handler: fleetTelematicsPoll },
   { name: "leave_escalation_check", description: "تصعيد طلبات الإجازة", schedule: "0 7 * * *", handler: leaveEscalationCheck },
   { name: "leave_return_to_work_closure", description: "إغلاق الإجازات المنتهية وتنبيه العودة للعمل", schedule: "5 0 * * *", handler: leaveReturnToWorkClosure },
   { name: "inquiry_memo_escalation", description: "تصعيد محاضر الاستفسار المعلقة 72 ساعة", schedule: "0 */6 * * *", handler: inquiryMemoEscalation },

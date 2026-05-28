@@ -27,6 +27,22 @@
 import { rawQuery, rawExecute } from "../rawdb.js";
 import { logger } from "../logger.js";
 import { emitEvent } from "../businessHelpers.js";
+import { decryptSecret, isEncrypted } from "../secrets.js";
+import { createCmsv6Adapter } from "../integrations/cmsv6Adapter.js";
+import {
+  executeWithRetry,
+  telematicsBreaker,
+  CircuitOpenError,
+} from "./telematicsReliability.js";
+import {
+  persistPosition,
+  persistEvent,
+  persistAlert,
+  persistSensor,
+  logSync,
+  type DeviceRow,
+  type IntegrationRow,
+} from "../../routes/fleet-telematics.js";
 
 interface RetentionRow {
   id: number;
@@ -157,4 +173,154 @@ export async function fleetTelematicsHeartbeat(): Promise<string> {
   }
 
   return `heartbeat: ${flipped} device(s) flipped to offline`;
+}
+
+const POLL_RUN_INTERVAL_SEC = 60;
+
+/**
+ * Auto-poll handler. Runs every minute. For each active CMSV6 integration
+ * whose `pollIntervalSec` window has elapsed since `lastSyncAt`, pulls
+ * latest positions for all linked devices, applies retry-with-backoff,
+ * and routes failures through the circuit breaker so a dead vendor
+ * doesn't drag every subsequent cron tick into a 15-second hang.
+ *
+ * Sensor / event / alarm pulls run on a slower cadence (5x the position
+ * interval, capped at 5min) because they are mostly server-pushed via
+ * webhook in production; polling is the safety net.
+ */
+export async function fleetTelematicsPoll(): Promise<string> {
+  const integrations = await rawQuery<IntegrationRow>(
+    `SELECT * FROM fleet_telematics_integrations
+      WHERE "deletedAt" IS NULL AND status = 'active'`,
+  );
+
+  if (integrations.length === 0) {
+    return "poll: no active integrations";
+  }
+
+  let attempted = 0;
+  let succeeded = 0;
+  let breakerSkipped = 0;
+  let totalCreated = 0;
+
+  for (const integ of integrations) {
+    // Honour the per-tenant cadence: if it's only been 10s and the
+    // operator picked a 60s interval, skip this tick.
+    const lastSync = integ.lastSyncAt ? new Date(integ.lastSyncAt).getTime() : 0;
+    const dueAt = lastSync + Math.max(POLL_RUN_INTERVAL_SEC, integ.pollIntervalSec) * 1000;
+    if (Date.now() < dueAt) continue;
+
+    if (telematicsBreaker.isOpen(integ.id)) {
+      breakerSkipped++;
+      continue;
+    }
+
+    attempted++;
+
+    // Credentials live encrypted in config — decrypt only here, never
+    // expose plaintext to anyone above this function.
+    const cfg = integ.config ?? {};
+    const account = (cfg as Record<string, unknown>).account as string | undefined;
+    const password = (() => {
+      const v = (cfg as Record<string, unknown>).password as string | undefined;
+      if (!v) return undefined;
+      return isEncrypted(v) ? (decryptSecret(v) ?? undefined) : v;
+    })();
+    if (!account || !password) {
+      logger.warn(
+        { integrationId: integ.id },
+        "[telematicsPoll] integration missing credentials — skipping",
+      );
+      continue;
+    }
+    const apiKey = (() => {
+      const v = (cfg as Record<string, unknown>).apiKey as string | undefined;
+      if (!v) return undefined;
+      return isEncrypted(v) ? (decryptSecret(v) ?? undefined) : v;
+    })();
+
+    const adapter = createCmsv6Adapter({
+      baseUrl: integ.baseUrl,
+      account,
+      password,
+      apiKey,
+    });
+
+    const devices = await rawQuery<DeviceRow>(
+      `SELECT * FROM fleet_telematics_devices
+        WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status <> 'decommissioned'`,
+      [integ.companyId],
+    );
+    if (devices.length === 0) continue;
+
+    const devByNo = new Map(devices.map((d) => [d.cmsv6DeviceNo, d]));
+
+    let created = 0;
+    let processed = 0;
+    const started = Date.now();
+    try {
+      await telematicsBreaker.execute(integ.id, async () => {
+        const positions = await executeWithRetry(
+          () => adapter.getLatestPositions(Array.from(devByNo.keys())),
+          { maxAttempts: 3 },
+        );
+        processed = positions.length;
+        for (const p of positions) {
+          const dev = devByNo.get(p.cmsv6DeviceNo);
+          if (!dev) continue;
+          if (await persistPosition(integ.companyId, integ.branchId, dev, p)) created++;
+        }
+      });
+
+      await rawExecute(
+        `UPDATE fleet_telematics_integrations
+            SET "lastSyncAt" = NOW(),
+                "lastSyncStatus" = 'success',
+                "lastSyncError" = NULL
+          WHERE id = $1`,
+        [integ.id],
+      );
+      void logSync({
+        companyId: integ.companyId,
+        integrationId: integ.id,
+        operation: "cron_poll_positions",
+        status: "success",
+        durationMs: Date.now() - started,
+        itemsProcessed: processed,
+        itemsCreated: created,
+      });
+
+      succeeded++;
+      totalCreated += created;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isCircuit = err instanceof CircuitOpenError;
+      if (!isCircuit) {
+        await rawExecute(
+          `UPDATE fleet_telematics_integrations
+              SET "lastSyncAt" = NOW(),
+                  "lastSyncStatus" = 'failure',
+                  "lastSyncError" = $1
+            WHERE id = $2`,
+          [msg.slice(0, 1000), integ.id],
+        );
+      }
+      void logSync({
+        companyId: integ.companyId,
+        integrationId: integ.id,
+        operation: "cron_poll_positions",
+        status: isCircuit ? "skipped" : "failure",
+        durationMs: Date.now() - started,
+        message: msg,
+      });
+      if (!isCircuit) {
+        logger.error(
+          { err, integrationId: integ.id },
+          "[telematicsPoll] integration sync failed",
+        );
+      }
+    }
+  }
+
+  return `poll: ${attempted} attempted, ${succeeded} ok, ${breakerSkipped} breaker-skipped, ${totalCreated} positions created`;
 }
