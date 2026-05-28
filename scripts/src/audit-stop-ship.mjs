@@ -76,6 +76,7 @@ const ALLOWLIST = new Map([
   ["auth.ts", "anonymous login/register/refresh endpoints — pre-auth by design"],
   ["careersPortal.ts", "uses its own careersPortalJwt middleware, not authorize()"],
   ["clientPortal.ts", "uses its own clientPortalJwt middleware, not authorize()"],
+  ["fleet-telematics-webhook.ts", "anonymous HMAC-signed CMSV6 push (#1354) — audit + events fire inside the shared persist* helpers in fleet-telematics.ts; webhook itself only orchestrates"],
 ]);
 
 // Accepted RBAC patterns. The newer RBAC-v2 layer uses authorize();
@@ -99,10 +100,13 @@ const RBAC_PATTERNS = [
 // public contract guarantees an audit row. For the print platform,
 // `renderPrint()` is documented (printService.ts header, step 8) to call
 // `writePrintJob()` internally — so any route calling renderPrint IS
-// auditing, just through one level of indirection. Add new entries as
-// new audit pipelines land.
+// auditing, just through one level of indirection. `auditMutation` is a
+// thin wrapper around createAuditLog in businessHelpers.ts that pulls
+// scope from `req` and forwards — counts identically. Add new entries
+// as new audit pipelines land.
 const AUDIT_PATTERNS = [
   /\bcreateAuditLog\s*\(/,
+  /\bauditMutation\s*\(/,
   /\brenderPrint\s*\(/,
   /\bwritePrintJob\s*\(/,
 ];
