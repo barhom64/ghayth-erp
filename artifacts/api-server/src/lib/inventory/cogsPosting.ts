@@ -97,6 +97,11 @@ export interface CogsJournalLine {
   branchId?: number;
   projectId?: number;
   departmentId?: number;
+  /** Product FK on the COGS + Inventory legs so per-product COGS
+   *  and per-product margin reports stay attributed at the GL.
+   *  Two lines on the same account but different products stay in
+   *  distinct buckets (the bucket key includes productId). */
+  productId?: number;
 }
 
 /**
@@ -318,8 +323,12 @@ export async function planCogsForInvoice(
         });
       }
 
-      // Aggregate into JE buckets by (account, dimensions).
-      const dimKey = `${ln.costCenterId ?? ""}|${ln.branchId ?? input.branchId ?? ""}|${ln.projectId ?? ""}|${ln.departmentId ?? ""}`;
+      // Aggregate into JE buckets by (account, dimensions, productId).
+      // productId is in the bucket key so two lines on the same COGS
+      // account but different products stay in distinct buckets — the
+      // emitted JE line carries the productId for per-product margin
+      // reports to drill from.
+      const dimKey = `${ln.costCenterId ?? ""}|${ln.branchId ?? input.branchId ?? ""}|${ln.projectId ?? ""}|${ln.departmentId ?? ""}|${productId}`;
       const drKey = `${cogsRes.accountCode}|${dimKey}`;
       const crKey = `${invRes.accountCode}|${dimKey}`;
       const drExisting = bucketsDr.get(drKey);
@@ -334,6 +343,7 @@ export async function planCogsForInvoice(
           branchId: ln.branchId ?? input.branchId ?? undefined,
           projectId: ln.projectId ?? undefined,
           departmentId: ln.departmentId ?? undefined,
+          productId,
         });
       }
       const crExisting = bucketsCr.get(crKey);
@@ -348,6 +358,7 @@ export async function planCogsForInvoice(
           branchId: ln.branchId ?? input.branchId ?? undefined,
           projectId: ln.projectId ?? undefined,
           departmentId: ln.departmentId ?? undefined,
+          productId,
         });
       }
     }
@@ -637,9 +648,10 @@ export async function planCogsReversal(
       });
     }
 
-    // Bucket DR Inventory / CR COGS lines by dimensions so a
-    // 200-line invoice's reversal still posts as compact pairs.
-    const dimKey = `${ln.costCenterId ?? ""}|${ln.branchId ?? ""}|${ln.projectId ?? ""}|${ln.employeeId ?? ""}`;
+    // Bucket DR Inventory / CR COGS lines by dimensions + productId
+    // so the reversal stays compact per product and the per-product
+    // margin reports tie out symmetrically with the original sale.
+    const dimKey = `${ln.costCenterId ?? ""}|${ln.branchId ?? ""}|${ln.projectId ?? ""}|${ln.employeeId ?? ""}|${ln.productId}`;
     const drKey = `${invRes.accountCode}|${dimKey}`;
     const crKey = `${cogsRes.accountCode}|${dimKey}`;
     const drExisting = bucketsDr.get(drKey);
@@ -654,6 +666,7 @@ export async function planCogsReversal(
         branchId: ln.branchId ?? undefined,
         projectId: ln.projectId ?? undefined,
         departmentId: undefined,
+        productId: ln.productId,
       });
     }
     const crExisting = bucketsCr.get(crKey);
@@ -668,6 +681,7 @@ export async function planCogsReversal(
         branchId: ln.branchId ?? undefined,
         projectId: ln.projectId ?? undefined,
         departmentId: undefined,
+        productId: ln.productId,
       });
     }
 
