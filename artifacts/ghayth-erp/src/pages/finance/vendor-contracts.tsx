@@ -81,6 +81,18 @@ export default function VendorContractsPage() {
     `/finance/contracts${qs ? `?${qs}` : ""}`,
   );
 
+  // Quick-preview: when the user clicks "تفاصيل" we lazy-fetch the
+  // single row's full detail (lines + payment schedule) from
+  // GET /finance/contracts/:id. The list endpoint above only carries
+  // the header columns.
+  const [previewId, setPreviewId] = useState<number | null>(null);
+  const { data: detailResp } = useApiQuery<any>(
+    ["vendor-contract-detail", String(previewId ?? 0)],
+    previewId ? `/finance/contracts/${previewId}` : null,
+    { enabled: !!previewId },
+  );
+  const detail = detailResp?.data ?? detailResp;
+
   const createMut = useApiMutation("/finance/contracts", "POST", [["vendor-contracts"]]);
 
   // Inline edit + delete on rows. Backend's PATCH /finance/contracts/:id
@@ -219,17 +231,28 @@ export default function VendorContractsPage() {
       key: "_actions" as any,
       header: "",
       render: (r) => (
-        <RowActions
-          onEdit={() => startEdit(r.id, {
-            title: r.title,
-            endDate: r.endDate,
-            contractValue: r.contractValue ? String(r.contractValue) : "",
-            status: r.status,
-            notes: r.notes ?? "",
-          })}
-          onDelete={() => startDelete(r.id)}
-          deletePerm="finance:delete"
-        />
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2"
+            onClick={() => setPreviewId(r.id)}
+            title="تفاصيل"
+          >
+            تفاصيل
+          </Button>
+          <RowActions
+            onEdit={() => startEdit(r.id, {
+              title: r.title,
+              endDate: r.endDate,
+              contractValue: r.contractValue ? String(r.contractValue) : "",
+              status: r.status,
+              notes: r.notes ?? "",
+            })}
+            onDelete={() => startDelete(r.id)}
+            deletePerm="finance:delete"
+          />
+        </div>
       ),
     },
   ];
@@ -400,6 +423,32 @@ export default function VendorContractsPage() {
           onCancel={cancelEdit}
           isPending={isPending}
         />
+      )}
+
+      {previewId !== null && (
+        <Dialog open={!!previewId} onOpenChange={(o) => !o && setPreviewId(null)}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>تفاصيل العقد {detail?.title || `#${previewId}`}</DialogTitle>
+            </DialogHeader>
+            {detail ? (
+              <div className="space-y-2 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <div><span className="text-muted-foreground">المورد:</span> {detail.vendorName ?? "—"}</div>
+                  <div><span className="text-muted-foreground">القيمة:</span> {formatCurrency(Number(detail.contractValue ?? 0))} {detail.currency ?? "SAR"}</div>
+                  <div><span className="text-muted-foreground">من:</span> {detail.startDate ? formatDateAr(detail.startDate) : "—"}</div>
+                  <div><span className="text-muted-foreground">إلى:</span> {formatDateAr(detail.endDate)}</div>
+                  <div className="col-span-2"><span className="text-muted-foreground">الحالة:</span> <Badge className={`text-[10px] ${STATUS_BADGE[detail.status as VendorContract["status"]]}`}>{STATUS_LABEL[detail.status as VendorContract["status"]]}</Badge></div>
+                  {detail.notes && (
+                    <div className="col-span-2 text-xs text-muted-foreground">{detail.notes}</div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">جارٍ التحميل...</p>
+            )}
+          </DialogContent>
+        </Dialog>
       )}
 
       {deletingId !== null && (
