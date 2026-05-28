@@ -348,6 +348,7 @@ const templateColumns: DataTableColumn<any>[] = [
 function TemplatesTab() {
   const { data: templatesResp, isLoading } = useApiQuery<any>(["doc-templates"], "/documents/templates");
   const [showForm, setShowForm] = useState(false);
+  const [previewId, setPreviewId] = useState<number | null>(null);
   const items = asList(templatesResp);
 
   const createMut = useApiMutation<any, TemplateForm>(
@@ -356,6 +357,22 @@ function TemplatesTab() {
     [["doc-templates"]],
     { successMessage: "تم إنشاء القالب" },
   );
+
+  // GET /documents/templates/:id + /:id/variables — lazy-fetch the
+  // selected template's full body and the list of template variables
+  // it supports when the user clicks "عرض" on a row.
+  const { data: tplDetailResp } = useApiQuery<any>(
+    ["doc-template-detail", String(previewId ?? 0)],
+    previewId ? `/documents/templates/${previewId}` : null,
+    { enabled: !!previewId },
+  );
+  const { data: tplVarsResp } = useApiQuery<any>(
+    ["doc-template-vars", String(previewId ?? 0)],
+    previewId ? `/documents/templates/${previewId}/variables` : null,
+    { enabled: !!previewId },
+  );
+  const tplDetail = tplDetailResp?.data ?? tplDetailResp;
+  const tplVars: any[] = tplVarsResp?.data ?? tplVarsResp?.variables ?? [];
 
   return (
     <div className="space-y-4">
@@ -396,7 +413,40 @@ function TemplatesTab() {
         searchPlaceholder="بحث بالاسم أو التصنيف..."
         emptyMessage="لا توجد قوالب"
         emptyIcon={<FilePlus className="h-8 w-8 text-slate-400" />}
+        onRowClick={(row) => setPreviewId((row as any).id)}
       />
+
+      {previewId !== null && (
+        <Card className="border-status-info-surface">
+          <CardContent className="p-4 space-y-2 text-sm">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold">{tplDetail?.name ?? `قالب #${previewId}`}</p>
+              <Button variant="ghost" size="sm" onClick={() => setPreviewId(null)}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+            {tplDetail?.description && <p className="text-xs text-muted-foreground">{tplDetail.description}</p>}
+            {tplDetail?.body && (
+              <pre className="text-xs font-mono whitespace-pre-wrap bg-surface-subtle p-2 rounded max-h-40 overflow-y-auto">
+                {tplDetail.body.slice(0, 500)}
+                {tplDetail.body.length > 500 ? "…" : ""}
+              </pre>
+            )}
+            {tplVars.length > 0 && (
+              <div>
+                <p className="text-xs font-medium mb-1">المتغيرات المتاحة ({tplVars.length}):</p>
+                <div className="flex flex-wrap gap-1">
+                  {tplVars.slice(0, 30).map((v: any, i: number) => (
+                    <span key={i} className="px-2 py-0.5 text-[10px] font-mono bg-status-info-surface text-status-info-foreground rounded">
+                      {typeof v === "string" ? v : v.name ?? v.key ?? "—"}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
