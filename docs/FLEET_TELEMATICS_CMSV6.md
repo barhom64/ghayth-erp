@@ -366,6 +366,23 @@ signature = "sha256=" + hex(digest)
 - **TTL alignment**: لجلسات HLS، `streamProxyExpiresAt` يساوي
   `expiresAt` السيشن بدل افتراضي 60 ث، فلا ينتهي التوكن وسط بث حي.
 
+### HLS Multi-Variant Support
+
+الـ rewriter يدعم الـ master playlists الكاملة:
+
+| الـ tag | كيف يُعامَل |
+|---|---|
+| `#EXT-X-STREAM-INF` ثم URL | variant playlist → `/playlist.m3u8?variant=…` |
+| `#EXT-X-I-FRAME-STREAM-INF:URI="…"` | URI داخل الـ tag → variant proxy |
+| `#EXT-X-MEDIA:URI="…"` (audio/subtitle) | URI داخل الـ tag → variant proxy |
+| `#EXT-X-MAP:URI="…"` (fmp4 init) | URI داخل الـ tag → segment proxy |
+| `#EXT-X-KEY:URI="…"` (decryption key) | URI داخل الـ tag → segment proxy |
+| EXTINF ثم URL | segment → `/segment/<filename>` |
+
+أي URI off-origin يُسقط (الـ tag كله للـ URI tags، السطر للـ bare URLs).
+الـ player يتجاوز fallback أو يُظهر فجوة — لا يستطيع إجبارنا على proxy
+لخادم آخر.
+
 ## Known Limitations (المتبقية بعد Hardening)
 
 1. **CircuitBreaker per-process**: في multi-replica، كل replica
@@ -373,10 +390,7 @@ signature = "sha256=" + hex(digest)
    counter يحتاج فقط في حالة 50+ تكامل نشطة (ليس مركبات — تكاملات).
 2. **رفع الأدلة auto-only من URL alert**: لا يوجد آلية pull للملفات
    من MDVR SSD مباشرة (يفترض CMSV6 ترفعها).
-3. **HLS variant playlists (multi-bitrate)**: الـ rewriter الحالي يدعم
-   single-variant playlists. multi-variant playlists تحتاج تعديل
-   إضافي لإعادة كتابة الـ variant URLs أيضاً. ليس في خطة Pilot.
-4. **161 legacy migrations بدون `@rollback`**: technical debt قبل
+3. **161 legacy migrations بدون `@rollback`**: technical debt قبل
    #1141 (خارج نطاق هذا الـ branch).
 
 ## ملفات المرجع

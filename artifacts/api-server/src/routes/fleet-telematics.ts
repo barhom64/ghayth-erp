@@ -1521,20 +1521,31 @@ async function gateVideoProxyRequest(opts: {
 }
 
 /**
- * Rewrites an HLS playlist (`.m3u8` text) so every segment URL points at
- * our segment-proxy route instead of the original CMSV6 host. Same-
- * origin enforcement: a hostile playlist that injects an off-host
- * segment URL is rejected at the rewrite step — we never construct a
- * proxy URL for a host other than the original streamUrl's host.
+ * Rewrites an HLS playlist (`.m3u8` text) so every URL points at our
+ * proxy routes. Supports both media playlists (segments) and master
+ * playlists (variant streams + alternate media).
  *
- * The proxy preserves all `#` lines (EXTINF, EXT-X-VERSION, EXT-X-MAP,
- * EXT-X-KEY, …) verbatim. URL lines are replaced with our route.
+ * Routing rules:
+ *   • URL preceded by `#EXT-X-STREAM-INF` / `#EXT-X-I-FRAME-STREAM-INF`
+ *     → `/playlist.m3u8?token=…&variant=<path>` (variant playlist)
+ *   • `#EXT-X-MEDIA:URI="…"` (audio/subtitle alternate playlists)
+ *     → rewritten URI inside the tag, same variant route
+ *   • `#EXT-X-MAP:URI="…"` (init segment for fmp4 streams)
+ *     → rewritten URI inside the tag, segment route
+ *   • `#EXT-X-KEY:URI="…"` (encryption key URL)
+ *     → rewritten URI inside the tag, segment route
+ *   • Any other URL → `/segment/<filename>?token=…` (media segment)
  *
- * @param body            text of the original .m3u8 fetched from CMSV6
- * @param originalUrl     full CMSV6 playlist URL (used to resolve
- *                        relative segment URLs and enforce same-origin)
- * @param sessionId       fleet_video_sessions.id
- * @param token           streamProxyToken
+ * Same-origin enforcement: any URL whose resolved host differs from the
+ * original playlist host is DROPPED (URI tag) or LINE-SKIPPED (bare URL).
+ * This means a CMSV6 playlist that points segments at evil.example.net
+ * never makes us proxy that host — defence against vendor compromise.
+ *
+ * @param body         text of the original .m3u8 fetched from CMSV6
+ * @param originalUrl  full CMSV6 playlist URL (used to resolve relative
+ *                     URLs and enforce same-origin)
+ * @param sessionId    fleet_video_sessions.id
+ * @param token        streamProxyToken
  * @returns rewritten playlist (still valid M3U8 syntax)
  */
 function rewriteHlsPlaylist(
@@ -1544,38 +1555,88 @@ function rewriteHlsPlaylist(
   token: string,
 ): string {
   const base = new URL(originalUrl);
-  const proxyRoot = `/api/fleet/telematics/video/proxy/${sessionId}/segment`;
-  const out: string[] = [];
-  for (const rawLine of body.split(/\r?\n/)) {
-    const line = rawLine.trimEnd();
-    if (line.length === 0 || line.startsWith("#")) {
-      out.push(rawLine);
-      continue;
-    }
-    // Resolve against the playlist URL — handles both relative and
-    // absolute segment references.
+  const segmentRoot = `/api/fleet/telematics/video/proxy/${sessionId}/segment`;
+  const playlistRoot = `/api/fleet/telematics/video/proxy/${sessionId}/playlist.m3u8`;
+  const encodedToken = encodeURIComponent(token);
+
+  // Try to resolve `urlText` against the playlist URL and return the
+  // proxied URL. Returns null when the URL is off-origin or unparseable
+  // — caller decides what to do with that (drop the line / drop the
+  // attribute).
+  const proxify = (urlText: string, mode: "segment" | "variant"): string | null => {
     let resolved: URL;
     try {
-      resolved = new URL(line, base);
+      resolved = new URL(urlText, base);
     } catch {
-      // Unparseable line — skip it rather than silently embedding
-      // arbitrary text in the rewritten playlist.
-      continue;
+      return null;
     }
-    if (resolved.host !== base.host) {
-      // Refuse to proxy off-origin URLs — that would turn this endpoint
-      // into an open relay. Drop the line; the player will show a gap.
-      continue;
-    }
-    // Filename component used for routing back to the segment proxy.
-    // We URL-encode it because some HLS variants use `?` query strings
-    // (e.g. signed CDN URLs); the segment proxy decodes again.
+    if (resolved.host !== base.host) return null;
     const tail =
       resolved.pathname.replace(/^\//, "") +
       (resolved.search.length > 0 ? resolved.search : "");
-    out.push(
-      `${proxyRoot}/${encodeURIComponent(tail)}?token=${encodeURIComponent(token)}`,
-    );
+    if (mode === "variant") {
+      return `${playlistRoot}?token=${encodedToken}&variant=${encodeURIComponent(tail)}`;
+    }
+    return `${segmentRoot}/${encodeURIComponent(tail)}?token=${encodedToken}`;
+  };
+
+  // Rewrites `URI="..."` attributes inside an EXT-X-MEDIA / EXT-X-MAP /
+  // EXT-X-KEY tag. Off-origin URIs cause the WHOLE tag to be dropped —
+  // a missing alternate audio track is recoverable; a leaked URL is not.
+  const rewriteUriAttribute = (
+    tagLine: string,
+    mode: "segment" | "variant",
+  ): string | null => {
+    const match = tagLine.match(/URI="([^"]*)"/);
+    if (!match) return tagLine; // no URI attribute present
+    const proxied = proxify(match[1], mode);
+    if (proxied === null) return null;
+    return tagLine.replace(/URI="[^"]*"/, `URI="${proxied}"`);
+  };
+
+  let prevTag = "";
+  const isVariantContext = (tag: string): boolean =>
+    /^#EXT-X-STREAM-INF/i.test(tag) || /^#EXT-X-I-FRAME-STREAM-INF/i.test(tag);
+
+  const out: string[] = [];
+  for (const rawLine of body.split(/\r?\n/)) {
+    const line = rawLine.trimEnd();
+    if (line.length === 0) {
+      out.push(rawLine);
+      continue;
+    }
+    if (line.startsWith("#")) {
+      // Tags that carry inline URIs need rewriting:
+      //   • EXT-X-MEDIA  (audio/subtitle alternate playlists) → variant
+      //   • EXT-X-MAP    (initialization segment for fmp4)    → segment
+      //   • EXT-X-KEY    (decryption key URL)                 → segment
+      if (
+        /^#EXT-X-MEDIA[: ]/.test(line) ||
+        /^#EXT-X-I-FRAME-STREAM-INF[: ]/.test(line)
+      ) {
+        // EXT-X-MEDIA = alternate renditions (audio / subtitles)
+        // EXT-X-I-FRAME-STREAM-INF = trick-play variant playlist
+        // Both reference a sub-playlist via URI="…".
+        const rewritten = rewriteUriAttribute(line, "variant");
+        if (rewritten !== null) out.push(rewritten);
+        // off-origin URI ⇒ drop the whole tag
+      } else if (/^#EXT-X-MAP[: ]/.test(line) || /^#EXT-X-KEY[: ]/.test(line)) {
+        const rewritten = rewriteUriAttribute(line, "segment");
+        if (rewritten !== null) out.push(rewritten);
+      } else {
+        out.push(rawLine);
+      }
+      prevTag = line;
+      continue;
+    }
+    // Bare URL line — variant or segment depending on the prior tag.
+    const mode: "segment" | "variant" = isVariantContext(prevTag)
+      ? "variant"
+      : "segment";
+    const proxied = proxify(line, mode);
+    if (proxied !== null) out.push(proxied);
+    // off-origin or unparseable ⇒ drop, leave a gap; player will skip.
+    prevTag = "";
   }
   return out.join("\n");
 }
@@ -1648,6 +1709,7 @@ router.get(
   async (req, res) => {
     const sessionId = parseId(req.params.id);
     const presentedToken = String(req.query.token ?? "");
+    const variantParam = req.query.variant ? String(req.query.variant) : null;
     const accessIp = req.ip ?? null;
     const userAgent = req.header("user-agent") ?? null;
 
@@ -1665,17 +1727,48 @@ router.get(
         res.status(gate.httpStatus).json(gate.body);
         return;
       }
+
+      // Determine which playlist to fetch:
+      //   • no variant param      → session's main playlist (master OR
+      //                             single-variant — caller doesn't know)
+      //   • variant=<encoded path> → variant playlist, resolved against
+      //                              the master playlist URL with same-
+      //                              origin enforcement
+      const base = new URL(gate.session.streamUrl!);
+      let targetUrl: string;
+      if (variantParam) {
+        let resolved: URL;
+        try {
+          resolved = new URL(decodeURIComponent(variantParam), base);
+        } catch {
+          res.status(400).json({ error: "متغيّر playlist غير صالح" });
+          return;
+        }
+        if (resolved.host !== base.host) {
+          res.status(400).json({ error: "playlist خارج النطاق المسموح" });
+          return;
+        }
+        if (resolved.pathname.includes("..")) {
+          res.status(400).json({ error: "playlist غير صالح" });
+          return;
+        }
+        targetUrl = resolved.toString();
+      } else {
+        targetUrl = gate.session.streamUrl!;
+      }
+
       await logVideoAccess(
         gate.session.companyId, sessionId, scope.userId, "granted",
-        accessIp, userAgent, "playlist",
+        accessIp, userAgent, variantParam ? `playlist-variant:${variantParam}` : "playlist",
       );
+
       // Fetch the M3U8 server-side. AbortController so a stuck CMSV6
       // can't tie up an Express handler indefinitely.
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10_000);
       let upstream: Response;
       try {
-        upstream = await fetch(gate.session.streamUrl!, {
+        upstream = await fetch(targetUrl, {
           signal: controller.signal,
           headers: { accept: "application/vnd.apple.mpegurl, application/x-mpegURL, text/plain" },
         });
@@ -1687,9 +1780,13 @@ router.get(
         return;
       }
       const body = await upstream.text();
+      // Rewriter uses targetUrl as the base so variant playlists with
+      // their own relative segment paths resolve correctly. The
+      // rewriter handles master playlists (variant lines) and media
+      // playlists (segment lines) in the same pass.
       const rewritten = rewriteHlsPlaylist(
         body,
-        gate.session.streamUrl!,
+        targetUrl,
         sessionId,
         presentedToken,
       );
