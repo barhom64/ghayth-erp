@@ -74,6 +74,14 @@ import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
 import operationsCenterRouter from "./operationsCenter.js";
+import {
+  warehouseStubsRouter,
+  documentsStubsRouter,
+  hrStubsRouter,
+  financeStubsRouter,
+  adminStubsRouter,
+  wiringScopeErrorHandler,
+} from "./wiring-stubs.js";
 import notificationEngineRouter from "./notification-engine.js";
 import printRouter from "./print.js";
 import printVerifyRouter from "./printVerify.js";
@@ -414,6 +422,15 @@ router.use("/umrah", umrahUserLimiter);
 router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahRouter);
 router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahEntitiesRouter);
 router.use("/operations-center", requireModule("operations"), requireMinLevel(40), operationsCenterRouter);
+// Wiring stubs — fills the 42 frontend↔backend orphans surfaced by
+// scripts/src/check-frontend-backend-wiring.mjs. Mounted at /api root because
+// the routes carry their full domain prefix internally.
+router.use("/warehouse", requireModule("warehouse"), warehouseStubsRouter);
+router.use("/documents", requireModule("documents"), documentsStubsRouter);
+router.use("/hr", requireModule("hr"), hrStubsRouter);
+router.use("/finance", requireModule("finance"), financeStubsRouter);
+router.use("/admin", requireModule("admin"), requireMinLevel(90), adminStubsRouter);
+router.use(wiringScopeErrorHandler);
 router.use("/export", requireMinLevel(30), exportRouter);
 router.use("/import", requireMinLevel(50), importRouter);
 router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);
