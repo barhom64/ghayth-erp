@@ -21,6 +21,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Paperclip, Eye, Inbox, SendHorizonal, Mail } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "مسودة",
@@ -85,6 +90,21 @@ export default function CorrespondenceDetail() {
 
   const item = data;
 
+  const editDelete = useDetailEditDelete({
+    entityLabel: "المراسلة",
+    patchPath: `/correspondence/${id}`,
+    listPath: "/comms/correspondence",
+    initialValues: item,
+    fields: [
+      { key: "subject", label: "الموضوع" },
+      { key: "summary", label: "الملخص" },
+      { key: "status", label: "الحالة" },
+      { key: "notes", label: "ملاحظات" },
+    ],
+    invalidateKeys: [["correspondence-detail", String(id)], ["correspondence"]],
+    onSaved: () => refetch(),
+  });
+
   const attachments: Array<{ name: string; url?: string; id?: number; mimeType?: string; size?: number }> = useMemo(() => {
     if (!item?.attachments) return [];
     try {
@@ -128,6 +148,8 @@ export default function CorrespondenceDetail() {
   const directionTone = item?.direction === "outgoing" ? "bg-status-info-surface text-status-info-foreground border-status-info-surface" : "bg-emerald-50 text-emerald-700 border-emerald-200";
 
   const overview = (
+    <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
     <div className="grid gap-4 md:grid-cols-3">
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
@@ -276,6 +298,7 @@ export default function CorrespondenceDetail() {
       {id && <EntityComments entityType="correspondence" entityId={id} />}
       {id && <EntityTags entityType="correspondence" entityId={id} />}
     </div>
+    </div>
   );
 
   return (
@@ -319,6 +342,7 @@ export default function CorrespondenceDetail() {
               <Edit className="h-4 w-4 ms-1" />
               تعديل
             </GuardedButton>
+            <DetailActionButtons hook={editDelete} editPerm="comms:update" />
           </>
         }
       />
