@@ -9,7 +9,7 @@ import {
   Calendar, DollarSign, KeyRound, FileSignature, ShoppingCart, Wallet,
   AlertTriangle, Bell, ListTodo, ChevronLeft, Check, X as XIcon, CornerUpLeft,
   ArrowUpRight, Briefcase, CheckCircle2, Timer, LogOut, Banknote,
-  User, Loader2,
+  User, Loader2, Forward, ArrowUp,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -76,7 +76,7 @@ export default function ActionCenter() {
   const [activeTab, setActiveTab] = useState<TabKey>("leaves");
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [pendingPrompt, setPendingPrompt] = useState<
-    | { kind: "workflow"; id: number; decision: "reject" | "return" }
+    | { kind: "workflow"; id: number; decision: "reject" | "return" | "refer" | "escalate" }
     | { kind: "approval"; tab: TabKey; id: number }
     | null
   >(null);
@@ -105,6 +105,20 @@ export default function ActionCenter() {
     [["action-center"]],
     { successMessage: false },
   );
+  // POST /workflows/:id/refer hands the step to another approver.
+  // POST /workflows/:id/escalate bumps it up the hierarchy.
+  const workflowReferMut = useApiMutation<any, { id: number; notes?: string }>(
+    (b) => `/workflows/${b.id}/refer`,
+    "POST",
+    [["action-center"]],
+    { successMessage: false },
+  );
+  const workflowEscalateMut = useApiMutation<any, { id: number; notes?: string }>(
+    (b) => `/workflows/${b.id}/escalate`,
+    "POST",
+    [["action-center"]],
+    { successMessage: false },
+  );
   const approvalMut = useApiMutation<any, { url: string; approved: boolean; reason?: string; notes?: string }>(
     (body) => body.url,
     "PATCH",
@@ -117,7 +131,7 @@ export default function ActionCenter() {
     `/action-center${scopeSuffix}`
   );
 
-  type WorkflowDecision = "approve" | "reject" | "return";
+  type WorkflowDecision = "approve" | "reject" | "return" | "refer" | "escalate";
 
   const runWorkflow = (id: number, decision: WorkflowDecision, notes?: string) => {
     const key = `workflows-${id}`;
@@ -126,13 +140,28 @@ export default function ActionCenter() {
     const mut =
       decision === "approve" ? workflowApproveMut
       : decision === "reject" ? workflowRejectMut
+      : decision === "refer" ? workflowReferMut
+      : decision === "escalate" ? workflowEscalateMut
       : workflowReturnMut;
     mut.mutate(
       { id, notes },
       {
         onSuccess: () => {
-          const labels: Record<WorkflowDecision, string> = { approve: "تم الاعتماد", reject: "تم الرفض", return: "تم الإرجاع" };
-          toast({ title: labels[decision], description: decision === "approve" ? "تم اعتماد المعاملة بنجاح" : decision === "reject" ? "تم رفض المعاملة" : "تم إرجاع المعاملة للتعديل" });
+          const labels: Record<WorkflowDecision, string> = {
+            approve: "تم الاعتماد",
+            reject: "تم الرفض",
+            return: "تم الإرجاع",
+            refer: "تمت الإحالة",
+            escalate: "تم التصعيد",
+          };
+          const desc: Record<WorkflowDecision, string> = {
+            approve: "تم اعتماد المعاملة بنجاح",
+            reject: "تم رفض المعاملة",
+            return: "تم إرجاع المعاملة للتعديل",
+            refer: "تمت إحالة المعاملة لمعتمد آخر",
+            escalate: "تم تصعيد المعاملة لأعلى",
+          };
+          toast({ title: labels[decision], description: desc[decision] });
           setProcessingIds((prev) => { const next = new Set(prev); next.delete(key); return next; });
         },
         onError: () => {
@@ -493,6 +522,26 @@ export default function ActionCenter() {
                             <CornerUpLeft className="w-4 h-4" />
                           </GuardedButton>
                           <GuardedButton
+                            perm="workflow:approve"
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-status-info-foreground hover:bg-status-info-surface hover:text-status-info-foreground"
+                            title="إحالة لمعتمد آخر"
+                            onClick={(e) => { e.preventDefault(); handleWorkflowDecision(item.id, "refer"); }}
+                          >
+                            <Forward className="w-4 h-4" />
+                          </GuardedButton>
+                          <GuardedButton
+                            perm="workflow:approve"
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                            title="تصعيد"
+                            onClick={(e) => { e.preventDefault(); handleWorkflowDecision(item.id, "escalate"); }}
+                          >
+                            <ArrowUp className="w-4 h-4" />
+                          </GuardedButton>
+                          <GuardedButton
                             perm="workflow:reject"
                             size="sm"
                             variant="ghost"
@@ -689,17 +738,29 @@ export default function ActionCenter() {
         title={
           pendingPrompt?.kind === "workflow" && pendingPrompt.decision === "return"
             ? "إرجاع المعاملة للتعديل"
-            : "رفض المعاملة"
+            : pendingPrompt?.kind === "workflow" && pendingPrompt.decision === "refer"
+              ? "إحالة المعاملة لمعتمد آخر"
+              : pendingPrompt?.kind === "workflow" && pendingPrompt.decision === "escalate"
+                ? "تصعيد المعاملة"
+                : "رفض المعاملة"
         }
         description={
           pendingPrompt?.kind === "workflow" && pendingPrompt.decision === "return"
             ? "يرجى إدخال سبب الإرجاع للتعديل."
-            : "يرجى إدخال سبب الرفض."
+            : pendingPrompt?.kind === "workflow" && pendingPrompt.decision === "refer"
+              ? "يرجى إدخال سبب الإحالة والمعتمد المستهدف إن لزم."
+              : pendingPrompt?.kind === "workflow" && pendingPrompt.decision === "escalate"
+                ? "يرجى إدخال سبب التصعيد."
+                : "يرجى إدخال سبب الرفض."
         }
         confirmLabel={
           pendingPrompt?.kind === "workflow" && pendingPrompt.decision === "return"
             ? "تأكيد الإرجاع"
-            : "تأكيد الرفض"
+            : pendingPrompt?.kind === "workflow" && pendingPrompt.decision === "refer"
+              ? "تأكيد الإحالة"
+              : pendingPrompt?.kind === "workflow" && pendingPrompt.decision === "escalate"
+                ? "تأكيد التصعيد"
+                : "تأكيد الرفض"
         }
         onSubmit={(reason) => {
           if (!pendingPrompt) return;

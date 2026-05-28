@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { Layers, Plus, Building, Car, User, Briefcase, MapPin } from "lucide-react";
+import { Layers, Plus, Building, Car, User, Briefcase, MapPin, Info } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 interface CostCenter {
@@ -61,10 +61,19 @@ export default function CostCentersPage() {
   const { toast } = useToast();
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [detailId, setDetailId] = useState<number | null>(null);
 
   const { data, isLoading, isError } = useApiQuery<{ data: CostCenter[] }>(
     ["cost-centers"],
     `/finance/cost-centers`,
+  );
+
+  // GET /finance/cost-centers/:id — fetched lazily when the user clicks
+  // the info icon. Returns full details (children, related, allocations).
+  const detailQ = useApiQuery<any>(
+    ["cost-center-detail", String(detailId ?? 0)],
+    detailId ? `/finance/cost-centers/${detailId}` : null,
+    { enabled: detailId !== null },
   );
 
   const createMut = useApiMutation("/finance/cost-centers", "POST", [["cost-centers"]]);
@@ -183,16 +192,27 @@ export default function CostCentersPage() {
       key: "_actions" as any,
       header: "",
       render: (r) => (
-        <RowActions
-          onEdit={() => ccActions.startEdit(r.id, {
-            code: r.code ?? "",
-            name: r.name,
-            type: r.type ?? "",
-            allocatedAmount: r.allocatedAmount ? String(r.allocatedAmount) : "",
-          })}
-          onDelete={() => ccActions.startDelete(r.id)}
-          deletePerm="finance:delete"
-        />
+        <div className="inline-flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            title="تفاصيل"
+            onClick={() => setDetailId(r.id)}
+          >
+            <Info className="h-3.5 w-3.5" />
+          </Button>
+          <RowActions
+            onEdit={() => ccActions.startEdit(r.id, {
+              code: r.code ?? "",
+              name: r.name,
+              type: r.type ?? "",
+              allocatedAmount: r.allocatedAmount ? String(r.allocatedAmount) : "",
+            })}
+            onDelete={() => ccActions.startDelete(r.id)}
+            deletePerm="finance:delete"
+          />
+        </div>
       ),
     },
   ];
@@ -355,6 +375,74 @@ export default function CostCentersPage() {
           isPending={ccActions.isPending}
         />
       )}
+
+      <Dialog open={detailId !== null} onOpenChange={(o) => !o && setDetailId(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>تفاصيل مركز التكلفة #{detailId}</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            {detailQ.isLoading ? (
+              <div className="text-center py-6 text-sm text-muted-foreground">جاري التحميل...</div>
+            ) : detailQ.data ? (
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">الاسم</p>
+                  <p className="font-medium">{detailQ.data.name ?? "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">الرمز</p>
+                  <p className="font-mono">{detailQ.data.code ?? "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">النوع</p>
+                  <p>{detailQ.data.type ?? "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">الحالة</p>
+                  <p>{detailQ.data.status ?? "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">الميزانية المخصصة</p>
+                  <p className="font-mono">{formatCurrency(Number(detailQ.data.allocatedAmount ?? 0))}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">المصروف الفعلي</p>
+                  <p className="font-mono">{formatCurrency(Number(detailQ.data.actualAmount ?? detailQ.data.spent ?? 0))}</p>
+                </div>
+                {detailQ.data.relatedEntityName && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-muted-foreground">الكيان المرتبط</p>
+                    <p className="font-medium">
+                      {ENTITY_TYPE_LABEL[detailQ.data.relatedEntityType ?? ""] ?? detailQ.data.relatedEntityType}
+                      {" — "}
+                      {detailQ.data.relatedEntityName}
+                    </p>
+                  </div>
+                )}
+                {Array.isArray(detailQ.data.children) && detailQ.data.children.length > 0 && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-muted-foreground mb-1">المراكز الفرعية</p>
+                    <ul className="text-xs space-y-0.5">
+                      {detailQ.data.children.slice(0, 8).map((c: any) => (
+                        <li key={c.id} className="flex items-center justify-between">
+                          <span>{c.name}</span>
+                          <span className="font-mono text-muted-foreground">{c.code ?? ""}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-6 text-sm text-muted-foreground">لا توجد بيانات</div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailId(null)}>إغلاق</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }
