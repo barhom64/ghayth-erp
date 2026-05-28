@@ -359,8 +359,38 @@ const SOURCE_LABELS: Record<string, { label: string; color: string; bg: string }
 function ResolvedSettingsTab() {
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["settings-resolved"], "/settings/resolved");
   const items = data?.data || [];
+
+  // GET /settings — raw key/value rows scoped to the current company.
+  // GET /settings/resolve?key=... — probe a single key with full
+  //   inheritance resolution.
+  // PUT /settings + DELETE /settings — admin-only KV CRUD shown in the
+  //   small "محرر متقدم" panel below the inheritance table.
+  // GET /settings/timezone — server's resolved timezone string (used
+  //   to verify what the rest of the platform sees).
+  const rawSettingsQ = useApiQuery<any>(["settings-raw"], "/settings");
+  const tzQ = useApiQuery<any>(["settings-timezone"], "/settings/timezone");
+  const [probeKey, setProbeKey] = useState("");
+  const probeQ = useApiQuery<any>(
+    ["settings-resolve", probeKey],
+    probeKey ? `/settings/resolve?key=${encodeURIComponent(probeKey)}` : null,
+    { enabled: !!probeKey },
+  );
+  const [putKey, setPutKey] = useState("");
+  const [putValue, setPutValue] = useState("");
+  const putMut = useApiMutation<unknown, { key: string; value: string }>(
+    "/settings", "PUT",
+    [["settings-raw"], ["settings-resolved"]],
+    { successMessage: "تم حفظ الإعداد" },
+  );
+  const delMut = useApiMutation<unknown, { key: string }>(
+    "/settings", "DELETE",
+    [["settings-raw"], ["settings-resolved"]],
+    { successMessage: "تم حذف الإعداد" },
+  );
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
+  const rawSettings: any[] = rawSettingsQ.data?.data ?? rawSettingsQ.data ?? [];
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -386,6 +416,92 @@ function ResolvedSettingsTab() {
           </tbody>
         </table>
       </CardContent></Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">محرر متقدم (KV)</CardTitle>
+          <p className="text-xs text-muted-foreground">للمستخدمين الإداريين — تحرير قيم الإعدادات مباشرةً مع كامل قواعد الوراثة</p>
+        </CardHeader>
+        <CardContent className="space-y-3 text-xs">
+          {tzQ.data?.timezone && (
+            <p className="text-muted-foreground">
+              المنطقة الزمنية المتفعّلة على الخادم: <span className="font-mono">{tzQ.data.timezone}</span>
+            </p>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <p className="font-semibold mb-1">فحص مفتاح</p>
+              <div className="flex gap-2">
+                <input
+                  value={probeKey}
+                  onChange={(e) => setProbeKey(e.target.value)}
+                  className="flex-1 h-7 px-2 border rounded text-xs"
+                  dir="ltr"
+                  placeholder="my.setting.key"
+                />
+              </div>
+              {probeKey && probeQ.data && (
+                <pre className="mt-2 bg-surface-subtle p-2 rounded max-h-32 overflow-y-auto">
+                  {JSON.stringify(probeQ.data, null, 2)}
+                </pre>
+              )}
+            </div>
+            <div>
+              <p className="font-semibold mb-1">حفظ / حذف</p>
+              <div className="space-y-1">
+                <input
+                  value={putKey}
+                  onChange={(e) => setPutKey(e.target.value)}
+                  className="w-full h-7 px-2 border rounded text-xs"
+                  dir="ltr"
+                  placeholder="key"
+                />
+                <input
+                  value={putValue}
+                  onChange={(e) => setPutValue(e.target.value)}
+                  className="w-full h-7 px-2 border rounded text-xs"
+                  dir="ltr"
+                  placeholder="value (JSON أو نص)"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="text-xs h-7 px-3 rounded bg-status-info-foreground text-white"
+                    disabled={!putKey.trim() || putMut.isPending}
+                    onClick={() => putMut.mutate({ key: putKey.trim(), value: putValue })}
+                  >
+                    حفظ
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs h-7 px-3 rounded border border-status-error-surface text-status-error-foreground"
+                    disabled={!putKey.trim() || delMut.isPending}
+                    onClick={() => delMut.mutate({ key: putKey.trim() })}
+                    title="حذف الإعداد (لا يمكن التراجع)"
+                  >
+                    حذف
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          {rawSettings.length > 0 && (
+            <div>
+              <p className="font-semibold mb-1">الإعدادات الخام ({rawSettings.length})</p>
+              <div className="max-h-32 overflow-y-auto divide-y">
+                {rawSettings.slice(0, 20).map((s: any, i: number) => (
+                  <div key={s.key ?? i} className="py-1 flex items-center justify-between">
+                    <span className="font-mono text-[10px]">{s.key}</span>
+                    <span className="text-muted-foreground truncate max-w-[50%]">
+                      {typeof s.value === "object" ? JSON.stringify(s.value) : String(s.value ?? "")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
