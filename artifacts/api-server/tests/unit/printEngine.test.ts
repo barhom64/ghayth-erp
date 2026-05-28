@@ -880,3 +880,19 @@ describe("Print platform — finance reports wave 5 migrated (#1286 Q4 wave 5)",
     });
   }
 });
+
+describe("Print platform — print-log self-print (#1286 closeout)", () => {
+  // The print platform's own audit-log viewer is the last page to migrate.
+  // Compliance reviews routinely want a printed copy of the print log
+  // itself; the meta-print loops back through the platform (audited row
+  // recording who printed which print log + when) — perfect closure on
+  // the unification work.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  it("pages/reports/print-log.tsx mounts <PrintButton entityType=\"report_print_log\" payload={...}>", () => {
+    const src = readFileSync(join(SPA, "pages/reports/print-log.tsx"), "utf8");
+    expect(src).toContain('from "@/components/shared/print-button"');
+    expect(src).toContain("<PrintButton");
+    expect(src).toContain('entityType="report_print_log"');
+    expect(src).toMatch(/payload=\{/);
+  });
+});
