@@ -461,6 +461,25 @@ function extractFrontendCalls() {
       calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "POST", source: "prop" });
     }
 
+    // <CrudSection endpoint="/settings/departments" …/> — the generic
+    // CRUD tab used on the Settings page. The component itself fires
+    // GET /endpoint, POST /endpoint, PUT /endpoint/:id, DELETE
+    // /endpoint/:id, but the URLs are templated from the prop so the
+    // helper-call scan can't see them. Credit all four verbs.
+    const crudRe = /\bCrudSection[\s\S]{0,80}?\bendpoint\s*=\s*/g;
+    for (const m of src.matchAll(crudRe)) {
+      let i = m.index + m[0].length;
+      while (i < src.length && /\s/.test(src[i])) i++;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      if (!lit.value.startsWith("/")) continue;
+      const line = lineOf(src, m.index);
+      calls.push({ file: rel, url: lit.value, line, method: "GET", source: "prop" });
+      calls.push({ file: rel, url: lit.value, line, method: "POST", source: "prop" });
+      calls.push({ file: rel, url: `${lit.value}/:param`, line, method: "PUT", source: "prop" });
+      calls.push({ file: rel, url: `${lit.value}/:param`, line, method: "DELETE", source: "prop" });
+    }
+
     // useDetailEditDelete({ patchPath, deletePath }) — the shared hook in
     // components/shared/detail-edit-delete-actions.tsx that backs the
     // canonical inline-edit + soft-delete pattern on detail pages

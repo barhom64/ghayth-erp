@@ -3,6 +3,12 @@ import { Link } from "wouter";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
+  useInlineActions,
+  RowActions,
+  InlineEditForm,
+  InlineDeleteConfirm,
+} from "@/components/inline-actions";
+import {
   PageShell,
   DataTable,
   type DataTableColumn,
@@ -76,6 +82,25 @@ export default function VendorContractsPage() {
   );
 
   const createMut = useApiMutation("/finance/contracts", "POST", [["vendor-contracts"]]);
+
+  // Inline edit + delete on rows. Backend's PATCH /finance/contracts/:id
+  // accepts the typical column set; DELETE soft-deletes.
+  const {
+    editingId, deletingId, editForm,
+    startEdit, startDelete, cancelEdit, cancelDelete,
+    isPending, handleSave, handleDelete,
+  } = useInlineActions({
+    endpoint: "/finance/contracts",
+    queryKeys: [["vendor-contracts"]],
+  });
+
+  const contractEditFields = [
+    { key: "title", label: "العنوان" },
+    { key: "endDate", label: "تاريخ النهاية", type: "date" as const },
+    { key: "contractValue", label: "القيمة", type: "number" as const },
+    { key: "status", label: "الحالة" },
+    { key: "notes", label: "ملاحظات" },
+  ];
 
   const [form, setForm] = useState({
     vendorId: 0,
@@ -188,6 +213,23 @@ export default function VendorContractsPage() {
         <Badge className={`text-[10px] ${STATUS_BADGE[r.status]}`}>
           {STATUS_LABEL[r.status]}
         </Badge>
+      ),
+    },
+    {
+      key: "_actions" as any,
+      header: "",
+      render: (r) => (
+        <RowActions
+          onEdit={() => startEdit(r.id, {
+            title: r.title,
+            endDate: r.endDate,
+            contractValue: r.contractValue ? String(r.contractValue) : "",
+            status: r.status,
+            notes: r.notes ?? "",
+          })}
+          onDelete={() => startDelete(r.id)}
+          deletePerm="finance:delete"
+        />
       ),
     },
   ];
@@ -350,12 +392,23 @@ export default function VendorContractsPage() {
         </CardContent>
       </Card>
 
-      <Card className="mt-4 bg-status-warning-surface/30 border-status-warning-surface">
-        <CardContent className="p-3 text-xs text-status-warning-foreground">
-          ⓘ التعديل والحذف — follow-up PR (PATCH/DELETE /finance/contracts/:id موجود في الـ backend).
-          حالياً للتعديل استخدم الـ API مباشرة.
-        </CardContent>
-      </Card>
+      {editingId !== null && (
+        <InlineEditForm
+          fields={contractEditFields}
+          initialValues={editForm}
+          onSave={(values) => handleSave(editingId, values)}
+          onCancel={cancelEdit}
+          isPending={isPending}
+        />
+      )}
+
+      {deletingId !== null && (
+        <InlineDeleteConfirm
+          onConfirm={() => handleDelete(deletingId)}
+          onCancel={cancelDelete}
+          isPending={isPending}
+        />
+      )}
     </PageShell>
   );
 }
