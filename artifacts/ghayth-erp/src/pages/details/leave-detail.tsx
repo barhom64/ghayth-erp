@@ -217,12 +217,15 @@ export default function LeaveDetail() {
                 approveEndpoint={`/hr/leave-requests/${id}/approve`}
                 rejectEndpoint={`/hr/leave-requests/${id}/approve`}
                 returnEndpoint={`/hr/leave-requests/${id}/approve`}
+                escalateEndpoint={`/hr/leave-requests/${id}/escalate`}
                 approveMethod="PATCH"
                 rejectMethod="PATCH"
                 returnMethod="PATCH"
+                escalateMethod="PATCH"
                 approveBody={(notes) => ({ approved: true, reason: notes || undefined })}
                 rejectBody={(notes) => ({ approved: false, reason: notes })}
                 returnBody={(notes) => ({ approved: "returned", reason: notes })}
+                escalateBody={(notes) => ({ notes: notes || undefined })}
                 pendingStatuses={["pending", "returned"]}
                 invalidateKeys={[["leaves"], ["leave-requests"], ["leave-balance"], ["leave-stats"]]}
                 onDone={() => {
