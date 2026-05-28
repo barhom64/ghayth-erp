@@ -107,6 +107,28 @@ export default function ObligationsPage() {
     }
   };
 
+  // POST /employees/obligations/seed — backfill obligations for all
+  // existing employees with future iqama/passport/visa expiry. Safe to
+  // re-run; dedupeKey prevents duplicates. Used after onboarding a
+  // large team that pre-dated the obligations engine.
+  const [seedingEmp, setSeedingEmp] = useState(false);
+  const handleSeedEmployeeObligations = async () => {
+    setSeedingEmp(true);
+    try {
+      const result: any = await apiFetch("/employees/obligations/seed", { method: "POST" });
+      toast({
+        title: "اكتمل الجرد",
+        description: `أُنشئت ${result?.created ?? result?.count ?? 0} التزامات جديدة`,
+      });
+      refetch();
+      refetchSummary();
+    } catch (e: any) {
+      toast({ title: e.message || "خطأ في الجرد", variant: "destructive" });
+    } finally {
+      setSeedingEmp(false);
+    }
+  };
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => refetch()} />;
 
@@ -119,10 +141,24 @@ export default function ObligationsPage() {
       subtitle="تتبع وإدارة جميع المواعيد النهائية عبر النظام (دفعات، تجديدات، صيانة، جلسات، انتهاء وثائق)"
       breadcrumbs={[{ label: "العمليات" }, { label: "الالتزامات" }]}
       actions={
-        <GuardedButton perm="obligations:create" size="sm" variant="outline" className="gap-1" onClick={handleScan} disabled={scanning}>
-          <RefreshCw className={`h-4 w-4 ${scanning ? "animate-spin" : ""}`} />
-          {scanning ? "جاري الفحص..." : "فحص المتجاوزات"}
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <GuardedButton
+            perm="obligations:create"
+            size="sm"
+            variant="outline"
+            className="gap-1"
+            onClick={handleSeedEmployeeObligations}
+            disabled={seedingEmp}
+            rateLimitAware
+          >
+            <RefreshCw className={`h-4 w-4 ${seedingEmp ? "animate-spin" : ""}`} />
+            {seedingEmp ? "جاري الجرد..." : "جرد التزامات الموظفين"}
+          </GuardedButton>
+          <GuardedButton perm="obligations:create" size="sm" variant="outline" className="gap-1" onClick={handleScan} disabled={scanning}>
+            <RefreshCw className={`h-4 w-4 ${scanning ? "animate-spin" : ""}`} />
+            {scanning ? "جاري الفحص..." : "فحص المتجاوزات"}
+          </GuardedButton>
+        </div>
       }
     >
       <KpiGrid items={[

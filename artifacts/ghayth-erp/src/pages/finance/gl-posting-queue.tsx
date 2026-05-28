@@ -179,6 +179,21 @@ export default function GLPostingQueuePage() {
     },
   );
 
+  // POST /finance/gl-helpers/realized-fx/:invoiceId — operator-triggered
+  // FX realization. Unlike the other helpers, there's no "pending" queue
+  // because realization fires at invoice-settlement time. We expose a
+  // manual one-off trigger here for the rare back-fill case.
+  const postRealizedFx = useApiMutation<PostOutcome, { invoiceId: number }>(
+    (body) => `/finance/gl-helpers/realized-fx/${body.invoiceId}`,
+    "POST",
+    [["gl-helpers", "realized-fx", "history"]],
+    {
+      successMessage: false,
+      onSuccess: (r) => toast({ title: describeOutcome(r.data) }),
+    },
+  );
+  const [realizedInvoiceId, setRealizedInvoiceId] = useState("");
+
   if (
     mudad.isLoading || lots.isLoading || fx.isLoading ||
     cycle.isLoading || realized.isLoading
@@ -618,7 +633,30 @@ export default function GLPostingQueuePage() {
 
         <TabsContent value="realized" className="mt-3">
           <div className="mb-2 text-xs text-muted-foreground">
-            سجل آخر 200 عملية تحقيق FX. لا يوجد طابور "قيد الانتظار" هنا — يُرحَّل التحقيق من شاشة تسوية الفاتورة مباشرةً.
+            سجل آخر 200 عملية تحقيق FX. التحقيق يُرحَّل تلقائياً من شاشة تسوية الفاتورة — استخدم الحقل أدناه للتشغيل اليدوي على فاتورة محددة.
+          </div>
+          <div className="mb-3 flex items-end gap-2 flex-wrap p-3 border rounded bg-muted/30">
+            <div className="flex-1 min-w-[200px]">
+              <label className="text-xs text-muted-foreground mb-1 block">رقم الفاتورة</label>
+              <input
+                type="number"
+                value={realizedInvoiceId}
+                onChange={(e) => setRealizedInvoiceId(e.target.value)}
+                dir="ltr"
+                className="w-full h-8 px-2 text-xs border rounded bg-white"
+              />
+            </div>
+            <Button
+              size="sm"
+              disabled={postRealizedFx.isPending || !realizedInvoiceId.trim()}
+              onClick={() => {
+                const n = Number(realizedInvoiceId);
+                if (!Number.isFinite(n) || n <= 0) return;
+                postRealizedFx.mutate({ invoiceId: n }, { onSuccess: () => setRealizedInvoiceId("") });
+              }}
+            >
+              ترحيل تحقيق FX يدوياً
+            </Button>
           </div>
           <DataTable
             columns={realizedColumns}
