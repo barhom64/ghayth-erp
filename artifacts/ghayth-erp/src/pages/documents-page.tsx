@@ -35,7 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   FileText, FolderOpen, FilePlus, X, Upload, Download, History,
-  CheckCircle2, Clock, XCircle, Filter, Search, Plus
+  CheckCircle2, Clock, XCircle, Filter, Search, Plus, Eye
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
@@ -203,9 +203,20 @@ function DocumentsList() {
                     <StatusBadgeDoc status={d.status || "draft"} />
                     <div className="flex items-center gap-1">
                       {d.storageKey && (
-                        <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => handleDownload(d.id, d.fileName)}>
-                          <Download className="h-3.5 w-3.5" /> تنزيل
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1 text-xs"
+                            onClick={() => window.open(`/api/documents/${d.id}/preview`, "_blank")}
+                            title="معاينة"
+                          >
+                            <Eye className="h-3.5 w-3.5" /> معاينة
+                          </Button>
+                          <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => handleDownload(d.id, d.fileName)}>
+                            <Download className="h-3.5 w-3.5" /> تنزيل
+                          </Button>
+                        </>
                       )}
                       <Link href={`/documents/${d.id}/versions`}>
                         <Button variant="ghost" size="sm" className="gap-1 text-xs">
