@@ -6,6 +6,9 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 // Phase A — HR official letters on unified primitives.
 import {
@@ -57,7 +60,15 @@ const LETTER_TYPE_OPTIONS = Object.entries(LETTER_TYPES).map(([value, label]) =>
 export default function OfficialLettersPage() {
   const [, navigate] = useLocation();
   const [showForm, setShowForm] = useState(false);
+  const [viewId, setViewId] = useState<number | null>(null);
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["official-letters"], "/hr/official-letters");
+  // GET /hr/official-letters/:id — full body fetched lazily for the
+  // "تفاصيل" preview. The list endpoint only returns summaries.
+  const letterDetailQ = useApiQuery<any>(
+    ["official-letter-detail", String(viewId ?? 0)],
+    viewId ? `/hr/official-letters/${viewId}` : null,
+    { enabled: viewId !== null },
+  );
   const items = data?.data || [];
   // HR-U4 — successMessage بدل buildErrorToast اليدوي.
   const createMut = useApiMutation<unknown, Record<string, unknown>>(
@@ -109,6 +120,9 @@ export default function OfficialLettersPage() {
       header: "إجراءات",
       render: (l) => (
         <div className="flex gap-1 items-center">
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setViewId(l.id)}>
+            تفاصيل
+          </Button>
           <PrintButton
             entityType="official_letter"
             entityId={l.id}
@@ -254,6 +268,40 @@ export default function OfficialLettersPage() {
         />
       )}
 
+      <Dialog open={viewId !== null} onOpenChange={(o) => !o && setViewId(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{letterDetailQ.data?.subject ?? "تفاصيل الخطاب"}</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-2 text-sm">
+            {letterDetailQ.isLoading ? (
+              <p className="text-muted-foreground">جاري التحميل...</p>
+            ) : letterDetailQ.data ? (
+              <>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div><span className="text-muted-foreground">النوع:</span> {LETTER_TYPES[letterDetailQ.data.type] ?? letterDetailQ.data.type}</div>
+                  <div><span className="text-muted-foreground">الحالة:</span> <PageStatusBadge status={letterDetailQ.data.status} /></div>
+                  <div><span className="text-muted-foreground">الموظف:</span> {letterDetailQ.data.employeeName ?? "-"}</div>
+                  <div><span className="text-muted-foreground">التاريخ:</span> {letterDetailQ.data.createdAt ? formatDateAr(letterDetailQ.data.createdAt) : "-"}</div>
+                </div>
+                {letterDetailQ.data.body && (
+                  <div className="border rounded p-3 bg-muted/30 whitespace-pre-wrap text-sm leading-relaxed">
+                    {letterDetailQ.data.body}
+                  </div>
+                )}
+                {letterDetailQ.data.notes && (
+                  <p className="text-xs text-muted-foreground">ملاحظات: {letterDetailQ.data.notes}</p>
+                )}
+              </>
+            ) : (
+              <p className="text-muted-foreground">لا توجد بيانات</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewId(null)}>إغلاق</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }

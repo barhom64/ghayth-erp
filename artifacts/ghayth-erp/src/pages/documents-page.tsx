@@ -35,8 +35,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   FileText, FolderOpen, FilePlus, X, Upload, Download, History,
-  CheckCircle2, Clock, XCircle, Filter, Search, Plus, Eye
+  CheckCircle2, Clock, XCircle, Filter, Search, Plus, Eye, Edit, Trash2, Link2,
 } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -111,6 +115,75 @@ function DocumentsList() {
   const handleStatusChange = (docId: number, newStatus: string) => {
     statusMut.mutate({ id: docId, status: newStatus });
   };
+
+  // PATCH /documents/:id — rename/redescribe a document.
+  const renameMut = useApiMutation<any, { id: number; title?: string; description?: string }>(
+    (body) => `/documents/${body.id}`,
+    "PATCH",
+    [["documents"], ["doc-stats"]],
+    { successMessage: "تم تعديل بيانات المستند" },
+  );
+  // DELETE /documents/:id — hard delete (only for cancelled documents).
+  const deleteMut = useApiMutation<any, number>(
+    (id) => `/documents/${id}`,
+    "DELETE",
+    [["documents"], ["doc-stats"]],
+    { successMessage: "تم حذف المستند" },
+  );
+  // GET /documents/:id/entity-links + POST same path — show + add
+  // cross-references that pin this document to another business entity
+  // (an invoice, contract, ticket, etc.).
+  const [linksDocId, setLinksDocId] = useState<number | null>(null);
+  const linksQ = useApiQuery<any>(
+    ["doc-entity-links", String(linksDocId ?? 0)],
+    linksDocId ? `/documents/${linksDocId}/entity-links` : null,
+    { enabled: linksDocId !== null },
+  );
+  const addLinkMut = useApiMutation<any, { id: number; entityType: string; entityId: number }>(
+    (b) => `/documents/${b.id}/entity-links`,
+    "POST",
+    [["doc-entity-links", String(linksDocId ?? 0)]],
+    { successMessage: "تم ربط المستند" },
+  );
+  const [linkEntityType, setLinkEntityType] = useState("");
+  const [linkEntityId, setLinkEntityId] = useState("");
+  const submitAddLink = () => {
+    if (!linksDocId || !linkEntityType.trim() || !linkEntityId.trim()) {
+      toast({ variant: "destructive", title: "النوع والمعرّف مطلوبان" });
+      return;
+    }
+    const eid = Number(linkEntityId);
+    if (!Number.isFinite(eid) || eid <= 0) {
+      toast({ variant: "destructive", title: "المعرّف غير صالح" });
+      return;
+    }
+    addLinkMut.mutate(
+      { id: linksDocId, entityType: linkEntityType.trim(), entityId: eid },
+      { onSuccess: () => { setLinkEntityType(""); setLinkEntityId(""); } },
+    );
+  };
+
+  // Inline edit + delete state
+  const [editingDoc, setEditingDoc] = useState<any | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const startEdit = (d: any) => {
+    setEditingDoc(d);
+    setEditTitle(d.title ?? "");
+    setEditDesc(d.description ?? "");
+  };
+  const submitEdit = () => {
+    if (!editingDoc) return;
+    if (!editTitle.trim()) {
+      toast({ variant: "destructive", title: "العنوان مطلوب" });
+      return;
+    }
+    renameMut.mutate(
+      { id: editingDoc.id, title: editTitle.trim(), description: editDesc.trim() || undefined },
+      { onSuccess: () => setEditingDoc(null) },
+    );
+  };
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const handleDownload = async (docId: number, fileName: string) => {
     try {
@@ -223,6 +296,12 @@ function DocumentsList() {
                           <History className="h-3.5 w-3.5" /> الإصدارات
                         </Button>
                       </Link>
+                      <GuardedButton perm="documents:update" variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => startEdit(d)}>
+                        <Edit className="h-3.5 w-3.5" /> تعديل
+                      </GuardedButton>
+                      <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setLinksDocId(d.id)}>
+                        <Link2 className="h-3.5 w-3.5" /> ربط
+                      </Button>
                       {d.status !== "approved" && (
                         <GuardedButton perm="documents:approve" variant="ghost" size="sm" className="gap-1 text-xs text-status-success-foreground" onClick={() => handleStatusChange(d.id, "approved")}>
                           <CheckCircle2 className="h-3.5 w-3.5" /> اعتماد
@@ -234,9 +313,14 @@ function DocumentsList() {
                         </GuardedButton>
                       )}
                       {d.status === "cancelled" && (
-                        <Button variant="ghost" size="sm" className="gap-1 text-xs text-muted-foreground" onClick={() => handleStatusChange(d.id, "draft")}>
-                          <Clock className="h-3.5 w-3.5" /> مسودة
-                        </Button>
+                        <>
+                          <Button variant="ghost" size="sm" className="gap-1 text-xs text-muted-foreground" onClick={() => handleStatusChange(d.id, "draft")}>
+                            <Clock className="h-3.5 w-3.5" /> مسودة
+                          </Button>
+                          <GuardedButton perm="documents:delete" variant="ghost" size="sm" className="gap-1 text-xs text-status-error-foreground" onClick={() => setConfirmDeleteId(d.id)}>
+                            <Trash2 className="h-3.5 w-3.5" /> حذف نهائي
+                          </GuardedButton>
+                        </>
                       )}
                     </div>
                   </div>
@@ -262,6 +346,96 @@ function DocumentsList() {
           ))}
         </div>
       )}
+
+      <Dialog open={editingDoc !== null} onOpenChange={(o) => { if (!o) setEditingDoc(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>تعديل بيانات المستند</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <div>
+              <Label className="text-xs">العنوان *</Label>
+              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">الوصف</Label>
+              <Textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={2} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingDoc(null)}>إلغاء</Button>
+            <Button onClick={submitEdit} disabled={renameMut.isPending}>حفظ</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmDeleteId !== null} onOpenChange={(o) => !o && setConfirmDeleteId(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>تأكيد الحذف النهائي</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground py-2">
+            سيتم حذف المستند نهائياً من النظام. هذا الإجراء غير قابل للتراجع.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>إلغاء</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMut.isPending}
+              onClick={() => {
+                if (confirmDeleteId == null) return;
+                deleteMut.mutate(confirmDeleteId, { onSuccess: () => setConfirmDeleteId(null) });
+              }}
+            >
+              حذف نهائي
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={linksDocId !== null} onOpenChange={(o) => !o && setLinksDocId(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>ربط المستند بكيانات أخرى</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {linksQ.isLoading ? (
+              <p className="text-sm text-muted-foreground">جاري التحميل...</p>
+            ) : (
+              <>
+                {(linksQ.data?.data ?? linksQ.data?.links ?? []).length === 0 ? (
+                  <p className="text-xs text-muted-foreground">لا توجد ارتباطات بعد.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {(linksQ.data?.data ?? linksQ.data?.links ?? []).map((l: any, i: number) => (
+                      <div key={l.id ?? i} className="flex items-center justify-between text-xs border rounded px-2 py-1">
+                        <span><Badge variant="outline" className="text-[10px] me-2">{l.entityType}</Badge>#{l.entityId}</span>
+                        {l.entityLabel && <span className="text-muted-foreground">{l.entityLabel}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+                  <div>
+                    <Label className="text-xs">نوع الكيان</Label>
+                    <Input value={linkEntityType} onChange={(e) => setLinkEntityType(e.target.value)} placeholder="invoice / contract / ticket" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">المعرّف</Label>
+                    <Input type="number" value={linkEntityId} onChange={(e) => setLinkEntityId(e.target.value)} dir="ltr" />
+                  </div>
+                </div>
+                <GuardedButton perm="documents:update" size="sm" onClick={submitAddLink} disabled={addLinkMut.isPending}>
+                  <Plus className="h-3 w-3 me-1" /> إضافة ربط
+                </GuardedButton>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinksDocId(null)}>إغلاق</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
