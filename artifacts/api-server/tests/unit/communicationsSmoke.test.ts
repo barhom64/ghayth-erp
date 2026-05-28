@@ -198,7 +198,9 @@ describe("Parameterized SQL (no string interpolation in queries)", () => {
   it("POST /send uses parameterized INSERT with positional placeholders", () => {
     const idx = COMM_ROUTE.indexOf('router.post("/send"');
     const section = COMM_ROUTE.slice(idx, idx + 5000);
-    expect(section).toContain("$1,$2");
+    // Whitespace-tolerant — accept "$1, $2" as well as "$1,$2" so the
+    // smoke isn't brittle to harmless formatting changes.
+    expect(section).toMatch(/\$1,\s*\$2/);
     expect(section).toContain("scope.companyId");
     expect(section).not.toMatch(/VALUES\s*\(\s*'\$\{/);
   });
