@@ -129,6 +129,86 @@ export default function ObligationsPage() {
     }
   };
 
+  // POST /obligations — create a new manual obligation (ad-hoc
+  // reminder for a deadline that isn't captured by any other domain).
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newObligation, setNewObligation] = useState({
+    entityType: "manual",
+    entityId: "0",
+    obligationType: "follow_up",
+    title: "",
+    dueAt: "",
+  });
+  const handleCreateObligation = async () => {
+    if (!newObligation.title.trim() || !newObligation.dueAt) {
+      toast({ title: "العنوان والاستحقاق مطلوبان", variant: "destructive" });
+      return;
+    }
+    try {
+      await apiFetch("/obligations", {
+        method: "POST",
+        body: JSON.stringify({
+          entityType: newObligation.entityType,
+          entityId: Number(newObligation.entityId) || 0,
+          obligationType: newObligation.obligationType,
+          title: newObligation.title.trim(),
+          dueAt: newObligation.dueAt,
+        }),
+      });
+      toast({ title: "أُنشئ الالتزام" });
+      setCreateOpen(false);
+      setNewObligation({ entityType: "manual", entityId: "0", obligationType: "follow_up", title: "", dueAt: "" });
+      refetch();
+      refetchSummary();
+    } catch (e: any) {
+      toast({ title: e.message || "تعذّر الإنشاء", variant: "destructive" });
+    }
+  };
+
+  // POST /obligations/met-by-entity + /cancel-by-entity — bulk close
+  // all obligations registered against a specific entity (e.g. mark
+  // every renewal for invoice #12 as met once it's settled).
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkForm, setBulkForm] = useState({ entityType: "invoice", entityId: "", obligationType: "" });
+  const runBulkMet = async () => {
+    if (!bulkForm.entityType || !bulkForm.entityId.trim()) {
+      toast({ title: "نوع الكيان والمعرّف مطلوبان", variant: "destructive" });
+      return;
+    }
+    try {
+      const result: any = await apiFetch("/obligations/met-by-entity", {
+        method: "POST",
+        body: JSON.stringify({
+          entityType: bulkForm.entityType,
+          entityId: Number(bulkForm.entityId),
+          obligationType: bulkForm.obligationType || undefined,
+        }),
+      });
+      toast({ title: "تم تعليم الالتزامات كملباة", description: `${result?.count ?? 0} التزام تم تحديثه` });
+      refetch();
+      refetchSummary();
+    } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
+  };
+  const runBulkCancel = async () => {
+    if (!bulkForm.entityType || !bulkForm.entityId.trim()) {
+      toast({ title: "نوع الكيان والمعرّف مطلوبان", variant: "destructive" });
+      return;
+    }
+    try {
+      const result: any = await apiFetch("/obligations/cancel-by-entity", {
+        method: "POST",
+        body: JSON.stringify({
+          entityType: bulkForm.entityType,
+          entityId: Number(bulkForm.entityId),
+          obligationType: bulkForm.obligationType || undefined,
+        }),
+      });
+      toast({ title: "تم إلغاء الالتزامات", description: `${result?.count ?? 0} التزام تم تحديثه` });
+      refetch();
+      refetchSummary();
+    } catch (e: any) { toast({ title: e.message || "خطأ", variant: "destructive" }); }
+  };
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => refetch()} />;
 
@@ -141,7 +221,24 @@ export default function ObligationsPage() {
       subtitle="تتبع وإدارة جميع المواعيد النهائية عبر النظام (دفعات، تجديدات، صيانة، جلسات، انتهاء وثائق)"
       breadcrumbs={[{ label: "العمليات" }, { label: "الالتزامات" }]}
       actions={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <GuardedButton
+            perm="obligations:create"
+            size="sm"
+            className="gap-1"
+            onClick={() => setCreateOpen((v) => !v)}
+          >
+            التزام جديد
+          </GuardedButton>
+          <GuardedButton
+            perm="obligations:approve"
+            size="sm"
+            variant="outline"
+            className="gap-1"
+            onClick={() => setBulkOpen((v) => !v)}
+          >
+            إغلاق مجمّع
+          </GuardedButton>
           <GuardedButton
             perm="obligations:create"
             size="sm"
@@ -167,6 +264,84 @@ export default function ObligationsPage() {
         { label: "تصعيد", value: (s.escalated_l1 || 0) + (s.escalated_l2 || 0), icon: ShieldAlert, color: "text-orange-600 bg-orange-50" },
         { label: "تستحق خلال 24س", value: s.dueIn24h || 0, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
       ]} />
+
+      {createOpen && (
+        <Card className="mt-3 border-indigo-200 bg-indigo-50/30">
+          <CardContent className="p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">إنشاء التزام يدوي</p>
+              <Button variant="ghost" size="sm" onClick={() => setCreateOpen(false)}>إغلاق</Button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground">نوع الكيان</label>
+                <Input value={newObligation.entityType} onChange={(e) => setNewObligation((s) => ({ ...s, entityType: e.target.value }))} dir="ltr" className="h-8 text-xs" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">معرّف الكيان</label>
+                <Input value={newObligation.entityId} onChange={(e) => setNewObligation((s) => ({ ...s, entityId: e.target.value }))} dir="ltr" className="h-8 text-xs" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">النوع</label>
+                <Select value={newObligation.obligationType} onValueChange={(v) => setNewObligation((s) => ({ ...s, obligationType: v }))}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(TYPE_LABELS).map(([k, l]) => (
+                      <SelectItem key={k} value={k}>{l}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs text-muted-foreground">العنوان *</label>
+                <Input value={newObligation.title} onChange={(e) => setNewObligation((s) => ({ ...s, title: e.target.value }))} className="h-8 text-xs" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">تاريخ الاستحقاق *</label>
+                <Input type="datetime-local" value={newObligation.dueAt} onChange={(e) => setNewObligation((s) => ({ ...s, dueAt: e.target.value }))} dir="ltr" className="h-8 text-xs" />
+              </div>
+            </div>
+            <Button size="sm" onClick={handleCreateObligation} rateLimitAware>حفظ الالتزام</Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {bulkOpen && (
+        <Card className="mt-3 border-emerald-200 bg-emerald-50/30">
+          <CardContent className="p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">إغلاق مجمّع لالتزامات كيان</p>
+              <Button variant="ghost" size="sm" onClick={() => setBulkOpen(false)}>إغلاق</Button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground">نوع الكيان</label>
+                <Input value={bulkForm.entityType} onChange={(e) => setBulkForm((s) => ({ ...s, entityType: e.target.value }))} dir="ltr" className="h-8 text-xs" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">المعرّف</label>
+                <Input value={bulkForm.entityId} onChange={(e) => setBulkForm((s) => ({ ...s, entityId: e.target.value }))} dir="ltr" className="h-8 text-xs" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">النوع (اختياري)</label>
+                <Select value={bulkForm.obligationType || "__any__"} onValueChange={(v) => setBulkForm((s) => ({ ...s, obligationType: v === "__any__" ? "" : v }))}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__any__">جميع الأنواع</SelectItem>
+                    {Object.entries(TYPE_LABELS).map(([k, l]) => (
+                      <SelectItem key={k} value={k}>{l}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={runBulkMet}>تعليم كملبية</Button>
+              <Button size="sm" variant="outline" onClick={runBulkCancel}>إلغاء الكل</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex items-center gap-3 mt-4">
         <div className="relative flex-1 max-w-md">
