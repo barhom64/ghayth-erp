@@ -1052,6 +1052,8 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           driverId: number | null;
           contractId: number | null;
           productId: number | null;
+          unitId: number | null;
+          assetId: number | null;
           umrahSeasonId: number | null;
           umrahAgentId: number | null;
         }>();
@@ -1079,6 +1081,8 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
             dims.driverId ?? "",
             dims.contractId ?? "",
             dims.productId ?? "",
+            dims.unitId ?? "",
+            dims.assetId ?? "",
             dims.umrahSeasonId ?? "",
             dims.umrahAgentId ?? "",
           ].join("|");
@@ -1100,6 +1104,8 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
               driverId: dims.driverId,
               contractId: dims.contractId,
               productId: dims.productId,
+              unitId: dims.unitId,
+              assetId: dims.assetId,
               umrahSeasonId: dims.umrahSeasonId,
               umrahAgentId: dims.umrahAgentId,
             });
@@ -1112,10 +1118,11 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         // balances against the AR debit.
         const diff = roundTo2(totalNet - postedNet);
         if (Math.abs(diff) >= 0.005) {
-          // Bucket key has 12 dimension slots after `acct` — keep them
-          // all empty for the fallback bucket so it doesn't collide with
-          // any resolved bucket that happens to use invRevenueCode.
-          const fallbackKey = `${invRevenueCode}|||||||||||`;
+          // Bucket key has 14 dimension slots after `acct` — keep them
+          // all empty (13 pipes for 14 empty slots after acct) for the
+          // fallback bucket so it doesn't collide with any resolved
+          // bucket that happens to use invRevenueCode.
+          const fallbackKey = `${invRevenueCode}|||||||||||||`;
           const prev = buckets.get(fallbackKey);
           if (prev) {
             prev.amount = roundTo2(prev.amount + diff);
@@ -1125,6 +1132,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
               costCenter: null, activityType: null, projectId: null,
               vehicleId: null, propertyId: null, employeeId: null,
               driverId: null, contractId: null, productId: null,
+              unitId: null, assetId: null,
               umrahSeasonId: null, umrahAgentId: null,
             });
           }
@@ -1143,6 +1151,8 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
             driverId: b.driverId ?? undefined,
             contractId: b.contractId ?? undefined,
             productId: b.productId ?? undefined,
+            unitId: b.unitId ?? undefined,
+            assetId: b.assetId ?? undefined,
             umrahSeasonId: b.umrahSeasonId ?? undefined,
             umrahAgentId: b.umrahAgentId ?? undefined,
             clientId: invoice.clientId as number | undefined,
