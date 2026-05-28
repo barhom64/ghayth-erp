@@ -33,6 +33,7 @@ const TelematicsVideoEvidence = lazy(() => import("@/pages/fleet/telematics/vide
 const TelematicsSettings = lazy(() => import("@/pages/fleet/telematics/settings"));
 const TelematicsOperations = lazy(() => import("@/pages/fleet/telematics/operations"));
 const TelematicsEvidence = lazy(() => import("@/pages/fleet/telematics/evidence"));
+const TelematicsScorecard = lazy(() => import("@/pages/fleet/telematics/scorecard"));
 
 export const fleetRoutes = [
   { path: "/fleet", component: Fleet },
@@ -70,6 +71,7 @@ export const fleetRoutes = [
   { path: "/fleet/telematics/settings", component: TelematicsSettings },
   { path: "/fleet/telematics/operations", component: TelematicsOperations },
   { path: "/fleet/telematics/evidence", component: TelematicsEvidence },
+  { path: "/fleet/telematics/scorecard", component: TelematicsScorecard },
   { path: "/fleet/:id/status", component: VehicleStatusChange },
   { path: "/fleet/:id", component: VehicleDetail },
 ];

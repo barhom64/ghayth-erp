@@ -1,12 +1,13 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
-  MapPin, Bot, Activity, Video, HardDrive, Settings, ShieldCheck, Archive,
+  MapPin, Bot, Activity, Video, HardDrive, Settings, ShieldCheck, Archive, Award,
 } from "lucide-react";
 
 const TABS = [
   { href: "/fleet/telematics/live-map", label: "الخريطة المباشرة", icon: MapPin },
   { href: "/fleet/telematics/ai-alerts", label: "تنبيهات السلامة الذكية", icon: Bot },
+  { href: "/fleet/telematics/scorecard", label: "بطاقة أداء السائقين", icon: Award },
   { href: "/fleet/telematics/sensors", label: "قراءات الحساسات", icon: Activity },
   { href: "/fleet/telematics/evidence", label: "أرشيف الأدلة", icon: Archive },
   { href: "/fleet/telematics/video-evidence", label: "جلسات الفيديو", icon: Video },

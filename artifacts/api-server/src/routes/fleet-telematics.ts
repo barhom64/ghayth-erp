@@ -2149,6 +2149,207 @@ router.get(
     }
   },
 );
+
+// ─────────────────────────────────────────────────────────────────────────
+// Driver Safety Scorecard — operator-facing accountability surface.
+//
+// Aggregates fleet_ai_alerts grouped by driver to produce a "safety
+// score" (100 minus a weighted sum of severity-weighted alert counts).
+// The driverId is populated by persistAlert via a fleet_trips lookup at
+// alert time — so this surface only includes alerts that landed during
+// an in-progress trip.
+//
+// Severity weights (decreasing safety):
+//   • info     → 0   (no penalty — informational only)
+//   • low      → 1
+//   • medium   → 3
+//   • high     → 7
+//   • critical → 15
+//
+// Score formula: max(0, 100 - SUM(severityWeight * alertCount))
+//
+// Three endpoints:
+//   • Per-driver scorecard with full breakdown by category + severity
+//   • Per-driver alert history (last 50 in the window)
+//   • Fleet-wide leaderboard ranked by score ascending (worst first)
+// ─────────────────────────────────────────────────────────────────────────
+
+const SEVERITY_WEIGHT_SQL = `
+  CASE severity
+    WHEN 'info' THEN 0
+    WHEN 'low' THEN 1
+    WHEN 'medium' THEN 3
+    WHEN 'high' THEN 7
+    WHEN 'critical' THEN 15
+    ELSE 0
+  END
+`;
+
+function scorecardWindow(req: { query: Record<string, unknown> }): { from: string; to: string } {
+  // Default to the trailing 30 days when the operator doesn't specify.
+  // Limit looking back to 365 days regardless of `from` so a runaway
+  // query doesn't scan an unbounded slice.
+  const now = new Date();
+  const defaultFrom = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+  const earliest = new Date(now.getTime() - 365 * 24 * 3600 * 1000);
+  let from = req.query.from ? new Date(String(req.query.from)) : defaultFrom;
+  if (Number.isNaN(from.getTime()) || from < earliest) from = earliest;
+  let to = req.query.to ? new Date(String(req.query.to)) : now;
+  if (Number.isNaN(to.getTime()) || to > now) to = now;
+  if (to < from) to = new Date(from.getTime() + 24 * 3600 * 1000);
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
+router.get(
+  "/telematics/drivers/scorecard-leaderboard",
+  authorize({ feature: "fleet.telematics.ai_alerts", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { from, to } = scorecardWindow(req);
+
+      const rows = await rawQuery(
+        `SELECT d.id AS "driverId",
+                d.name AS "driverName",
+                d."licenseNumber",
+                COUNT(a.id)::int AS "totalAlerts",
+                SUM(${SEVERITY_WEIGHT_SQL})::int AS "rawPenalty",
+                GREATEST(0, 100 - SUM(${SEVERITY_WEIGHT_SQL}))::int AS "safetyScore",
+                COUNT(*) FILTER (WHERE category = 'adas')::int AS "adasCount",
+                COUNT(*) FILTER (WHERE category = 'dms')::int  AS "dmsCount",
+                COUNT(*) FILTER (WHERE category = 'bsd')::int  AS "bsdCount",
+                COUNT(*) FILTER (WHERE severity IN ('high','critical'))::int AS "severeCount",
+                MAX(a."occurredAt") AS "lastAlertAt"
+           FROM drivers d
+           LEFT JOIN fleet_ai_alerts a
+             ON a."driverId" = d.id
+             AND a."companyId" = ANY($1::int[])
+             AND a."occurredAt" >= $2
+             AND a."occurredAt" <= $3
+          WHERE d."companyId" = ANY($1::int[])
+          GROUP BY d.id, d.name, d."licenseNumber"
+          ORDER BY "safetyScore" ASC, "totalAlerts" DESC
+          LIMIT 200`,
+        [scope.allowedCompanies, from, to],
+      );
+
+      res.json({
+        data: rows,
+        meta: {
+          window: { from, to },
+          weights: { info: 0, low: 1, medium: 3, high: 7, critical: 15 },
+          maxScore: 100,
+        },
+      });
+    } catch (e) {
+      handleRouteError(e, res, "fleet-telematics");
+    }
+  },
+);
+
+router.get(
+  "/telematics/drivers/:driverId/scorecard",
+  authorize({ feature: "fleet.telematics.ai_alerts", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const driverId = parseId(req.params.driverId);
+      const { from, to } = scorecardWindow(req);
+
+      // Confirm the driver belongs to a company the caller can see —
+      // this is the only place we hand back driver-level breakdowns.
+      const [driver] = await rawQuery<{ id: number; name: string; licenseNumber: string | null }>(
+        `SELECT id, name, "licenseNumber" FROM drivers
+          WHERE id = $1 AND "companyId" = ANY($2::int[])`,
+        [driverId, scope.allowedCompanies],
+      );
+      if (!driver) throw new NotFoundError("السائق غير موجود");
+
+      const [aggregate] = await rawQuery<{
+        totalAlerts: number;
+        rawPenalty: number;
+        safetyScore: number;
+        adasCount: number;
+        dmsCount: number;
+        bsdCount: number;
+        infoCount: number;
+        lowCount: number;
+        mediumCount: number;
+        highCount: number;
+        criticalCount: number;
+      }>(
+        `SELECT
+            COUNT(*)::int AS "totalAlerts",
+            COALESCE(SUM(${SEVERITY_WEIGHT_SQL}),0)::int AS "rawPenalty",
+            GREATEST(0, 100 - COALESCE(SUM(${SEVERITY_WEIGHT_SQL}),0))::int AS "safetyScore",
+            COUNT(*) FILTER (WHERE category = 'adas')::int AS "adasCount",
+            COUNT(*) FILTER (WHERE category = 'dms')::int  AS "dmsCount",
+            COUNT(*) FILTER (WHERE category = 'bsd')::int  AS "bsdCount",
+            COUNT(*) FILTER (WHERE severity = 'info')::int     AS "infoCount",
+            COUNT(*) FILTER (WHERE severity = 'low')::int      AS "lowCount",
+            COUNT(*) FILTER (WHERE severity = 'medium')::int   AS "mediumCount",
+            COUNT(*) FILTER (WHERE severity = 'high')::int     AS "highCount",
+            COUNT(*) FILTER (WHERE severity = 'critical')::int AS "criticalCount"
+           FROM fleet_ai_alerts
+          WHERE "driverId" = $1
+            AND "companyId" = ANY($2::int[])
+            AND "occurredAt" >= $3
+            AND "occurredAt" <= $4`,
+        [driverId, scope.allowedCompanies, from, to],
+      );
+
+      // Top alert types so the operator sees the dominant failure modes.
+      const topTypes = await rawQuery(
+        `SELECT "alertType", category, COUNT(*)::int AS count
+           FROM fleet_ai_alerts
+          WHERE "driverId" = $1
+            AND "companyId" = ANY($2::int[])
+            AND "occurredAt" >= $3
+            AND "occurredAt" <= $4
+          GROUP BY "alertType", category
+          ORDER BY count DESC
+          LIMIT 10`,
+        [driverId, scope.allowedCompanies, from, to],
+      );
+
+      // Recent alerts (50 max) for the timeline view.
+      const recent = await rawQuery(
+        `SELECT a.id, a.category, a."alertType", a.severity, a.confidence,
+                a."occurredAt", a.status,
+                v."plateNumber" AS "vehiclePlate"
+           FROM fleet_ai_alerts a
+           LEFT JOIN vehicles v ON v.id = a."vehicleId"
+          WHERE a."driverId" = $1
+            AND a."companyId" = ANY($2::int[])
+            AND a."occurredAt" >= $3
+            AND a."occurredAt" <= $4
+          ORDER BY a."occurredAt" DESC
+          LIMIT 50`,
+        [driverId, scope.allowedCompanies, from, to],
+      );
+
+      res.json({
+        data: {
+          driver,
+          window: { from, to },
+          aggregate: aggregate ?? {
+            totalAlerts: 0, rawPenalty: 0, safetyScore: 100,
+            adasCount: 0, dmsCount: 0, bsdCount: 0,
+            infoCount: 0, lowCount: 0, mediumCount: 0, highCount: 0, criticalCount: 0,
+          },
+          topAlertTypes: topTypes,
+          recent,
+        },
+        meta: {
+          weights: { info: 0, low: 1, medium: 3, high: 7, critical: 15 },
+          maxScore: 100,
+        },
+      });
+    } catch (e) {
+      handleRouteError(e, res, "fleet-telematics");
+    }
+  },
+);
 // Idempotency lives in the DB unique indexes; ON CONFLICT DO NOTHING is
 // the right level of strictness here.
 // ─────────────────────────────────────────────────────────────────────────
@@ -2279,12 +2480,38 @@ export async function persistAlert(
   device: DeviceRow,
   a: NormalizedAlert,
 ): Promise<boolean> {
+  // Driver derivation: look up the active fleet_trips row at the alert's
+  // occurredAt for this vehicle. Without this, every AI alert was being
+  // recorded with driverId=NULL — the scorecard endpoints can't attribute
+  // events to drivers, and the discipline workflow has no hook. The
+  // lookup is best-effort: trips outside `in_progress` or missing rows
+  // leave driverId NULL exactly like before, which the scorecard query
+  // already tolerates.
+  let derivedDriverId: number | null = null;
+  if (device.vehicleId) {
+    try {
+      const [trip] = await rawQuery<{ driverId: number | null }>(
+        `SELECT "driverId" FROM fleet_trips
+          WHERE "companyId" = $1
+            AND "vehicleId" = $2
+            AND status = 'in_progress'
+            AND "startTime" <= $3
+          ORDER BY "startTime" DESC
+          LIMIT 1`,
+        [companyId, device.vehicleId, a.occurredAt],
+      );
+      derivedDriverId = trip?.driverId ?? null;
+    } catch (err) {
+      logger.warn({ err, deviceId: device.id }, "driver derivation lookup failed");
+    }
+  }
+
   const { affectedRows, insertId } = await rawExecute(
     `INSERT INTO fleet_ai_alerts
-       ("companyId","branchId","deviceId","vehicleId",category,"alertType",
+       ("companyId","branchId","deviceId","vehicleId","driverId",category,"alertType",
         "alertCode",severity,confidence,"occurredAt",lat,lng,speed,
         "imageUrl","videoUrl","externalAlertId","rawPayload","normalizedPayload")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
      ON CONFLICT ("deviceId","externalAlertId") DO NOTHING
      RETURNING id`,
     [
@@ -2292,6 +2519,7 @@ export async function persistAlert(
       branchId,
       device.id,
       device.vehicleId,
+      derivedDriverId,
       a.category,
       a.alertType,
       a.alertCode ?? null,

@@ -18,7 +18,7 @@ import {
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
   BarChart2, ShieldAlert, Flag, Lock, Layers, Calculator, LayoutGrid,
   RefreshCw, Globe, TrendingDown as TrendingDown2,
-  Satellite, Bot, HardDrive, Video as VideoIcon,
+  Satellite, Bot, HardDrive, Video as VideoIcon, Award,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -396,6 +396,7 @@ const allNavSections: NavSection[] = [
         { label: "مخالفات المرور", path: "/fleet/traffic-violations", icon: AlertTriangle },
         { label: "التتبع المباشر", path: "/fleet/telematics/live-map", icon: Satellite },
         { label: "تنبيهات السلامة الذكية", path: "/fleet/telematics/ai-alerts", icon: Bot },
+        { label: "بطاقة أداء السائقين", path: "/fleet/telematics/scorecard", icon: Award },
         { label: "قراءات الحساسات", path: "/fleet/telematics/sensors", icon: Activity },
         { label: "أرشيف الأدلة", path: "/fleet/telematics/evidence", icon: Archive },
         { label: "أدلة الفيديو", path: "/fleet/telematics/video-evidence", icon: VideoIcon },

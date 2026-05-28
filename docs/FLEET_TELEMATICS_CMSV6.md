@@ -417,6 +417,34 @@ per-replica (`mode: "per-replica"`).
 - Drill-down لكل دليل مع category + severity
 - مرشحات date-range + vehicle + type + category
 
+## Driver Safety Scorecard
+
+اثنان endpoints جديدان يربطان AI alerts بالسائقين عبر `driverId`
+المُشتق تلقائياً في `persistAlert` من active trip في `fleet_trips`:
+
+- `GET /telematics/drivers/scorecard-leaderboard?from=&to=`
+  - leaderboard مرتب تصاعدياً بالنقاط (الأسوأ أولاً)
+  - تجميع: total/adas/dms/bsd/severe counts + safety score
+- `GET /telematics/drivers/:driverId/scorecard?from=&to=`
+  - aggregate كامل لسائق واحد
+  - top 10 alert types
+  - آخر 50 alert مع vehicle context
+
+**Severity weights** (تخصم من 100):
+- info = 0، low = 1، medium = 3، high = 7، critical = 15
+- `safetyScore = max(0, 100 - SUM(weight × count))`
+
+**Window math**:
+- افتراضي: آخر 30 يوم
+- أقصى look-back: 365 يوم (يُقصَر تلقائياً)
+- `to` يُقصَر إلى الآن (يرفض future dates)
+
+**واجهة** `/fleet/telematics/scorecard`:
+- KPIs: total/clean/avg score/at risk count
+- "أعلى 3 سائقين بالمخاطر" بطاقات بارزة
+- جدول leaderboard مع badges (Trophy/Award للأعلى) + score tone
+- مرشحات date-range قابلة للضبط
+
 ## Known Limitations (المتبقية بعد Hardening)
 
 1. **رفع الأدلة auto-only من URL alert**: لا يوجد آلية pull للملفات
