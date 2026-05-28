@@ -14,6 +14,10 @@ import { Edit, FolderTree } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { PrintButton } from "@/components/shared/print-button";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+} from "@/components/shared/detail-edit-delete-actions";
 
 /**
  * WarehouseCategoryDetail — detail page for a single warehouse category.
@@ -34,6 +38,21 @@ export default function WarehouseCategoryDetail() {
   );
 
   const category = data;
+
+  const editDelete = useDetailEditDelete({
+    entityLabel: "التصنيف",
+    patchPath: `/warehouse/categories/${id}`,
+    deletePath: `/warehouse/categories/${id}`,
+    listPath: "/warehouse/categories",
+    initialValues: category,
+    fields: [
+      { key: "name", label: "الاسم" },
+      { key: "icon", label: "الأيقونة" },
+      { key: "color", label: "اللون" },
+    ],
+    invalidateKeys: [["warehouse-category", String(id)], ["warehouse-categories"]],
+    onSaved: () => refetch(),
+  });
 
   const productsCount = Number(category?.productsCount ?? 0);
   const totalStockValue = Number(category?.totalStockValue ?? 0);
@@ -161,10 +180,11 @@ export default function WarehouseCategoryDetail() {
       actions={
         <div className="flex items-center gap-2">
           <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={handleEdit} disabled={!category}>
-          <Edit className="h-4 w-4 ms-1" />
-          تعديل
-        </GuardedButton>
+            <Edit className="h-4 w-4 ms-1" />
+            تعديل
+          </GuardedButton>
           <PrintButton entityType="warehouse_category" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <DetailActionButtons hook={editDelete} editPerm="warehouse:update" deletePerm="warehouse:delete" />
         </div>
       }
     />
