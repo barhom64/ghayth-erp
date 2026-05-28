@@ -148,6 +148,13 @@ export default function AdminObservability() {
     ["admin-observability-overview"],
     "/admin/observability/overview",
   );
+  // Kubernetes-style liveness/readiness probes + Prometheus metrics
+  // endpoint. Wired here as small status pills so operators can verify
+  // the pod is responding without `kubectl exec`-ing in.
+  const livezQ = useApiQuery<any>(["k8s-livez"], "/livez");
+  const readyzQ = useApiQuery<any>(["k8s-readyz"], "/readyz");
+  const healthzQ = useApiQuery<any>(["k8s-healthz"], "/healthz");
+  const metricsQ = useApiQuery<any>(["k8s-metrics"], "/metrics");
 
   const anomalies = data?.anomalies ?? [];
   const queues = data?.queues?.eventBus;
@@ -297,6 +304,23 @@ export default function AdminObservability() {
     >
       <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>
         <div className="space-y-6">
+
+          {/* Infrastructure probes — Kubernetes liveness/readiness +
+              Prometheus metrics. Failing probes show as red badges. */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Badge variant="outline" className={livezQ.isError ? "bg-status-error-surface text-status-error-foreground border-status-error-surface" : livezQ.data ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" : ""}>
+              livez: {livezQ.isError ? "DOWN" : livezQ.isLoading ? "…" : "OK"}
+            </Badge>
+            <Badge variant="outline" className={readyzQ.isError ? "bg-status-error-surface text-status-error-foreground border-status-error-surface" : readyzQ.data ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" : ""}>
+              readyz: {readyzQ.isError ? "NOT READY" : readyzQ.isLoading ? "…" : "OK"}
+            </Badge>
+            <Badge variant="outline" className={healthzQ.isError ? "bg-status-error-surface text-status-error-foreground border-status-error-surface" : healthzQ.data ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" : ""}>
+              healthz: {healthzQ.isError ? "DOWN" : healthzQ.isLoading ? "…" : "OK"}
+            </Badge>
+            <Badge variant="outline" className={metricsQ.isError ? "bg-status-error-surface text-status-error-foreground border-status-error-surface" : "bg-status-success-surface text-status-success-foreground border-status-success-surface"}>
+              /metrics: {metricsQ.isError ? "DOWN" : metricsQ.isLoading ? "…" : "exposed"}
+            </Badge>
+          </div>
 
           {/* ── 1. KPI strip ─────────────────────────────────────────── */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
