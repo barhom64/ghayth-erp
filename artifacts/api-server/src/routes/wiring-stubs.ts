@@ -206,7 +206,7 @@ warehouseStubsRouter.get("/reports/lot-aging", async (req, res) => {
     const data = await rawQuery(
       `SELECT l.id, l."lotNumber", l."productId", p.name as "productName",
               l.quantity, l."receivedDate",
-              EXTRACT(DAY FROM NOW() - l."receivedDate")::int as "ageDays"
+              (CURRENT_DATE - l."receivedDate"::date)::int as "ageDays"
        FROM warehouse_stock_lots l
        LEFT JOIN warehouse_products p ON p.id=l."productId"
        WHERE l."companyId"=$1 AND l."deletedAt" IS NULL
