@@ -57,6 +57,14 @@ export default function UmrahCommissionPlans() {
   const plansQ = useApiQuery<{ data: CommissionPlan[] }>(["umrah-commission-plans"], "/umrah/commission-plans");
   const employeesQ = useApiQuery<{ data: any[] }>(["employees"], "/employees");
   const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
+  // GET /umrah/commission-calculations — historical calculation runs
+  // across all plans. Surfaced as a count card so the operator knows
+  // how many calculations have been recorded.
+  const calculationsQ = useApiQuery<{ data: any[] }>(
+    ["umrah-commission-calculations"],
+    "/umrah/commission-calculations",
+  );
+  const calculationsCount = (calculationsQ.data?.data ?? []).length;
 
   const plans = plansQ.data?.data ?? [];
   const employees = employeesQ.data?.data ?? [];
@@ -197,7 +205,7 @@ export default function UmrahCommissionPlans() {
     >
       <UmrahTabsNav />
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl bg-status-info-surface flex items-center justify-center">
             <Briefcase className="w-5 h-5 text-status-info-foreground" />
@@ -205,6 +213,15 @@ export default function UmrahCommissionPlans() {
           <div>
             <p className="text-2xl font-bold">{formatNumber(counts.total)}</p>
             <p className="text-xs text-muted-foreground">إجمالي الخطط</p>
+          </div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-purple-50 flex items-center justify-center">
+            <Calculator className="w-5 h-5 text-purple-600" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold">{formatNumber(calculationsCount)}</p>
+            <p className="text-xs text-muted-foreground">احتسابات مسجَّلة</p>
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">
