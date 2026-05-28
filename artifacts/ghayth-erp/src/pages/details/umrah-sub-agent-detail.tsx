@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useRoute, Link } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,6 +72,54 @@ export default function UmrahSubAgentDetail() {
   );
   const statement = stmtResp?.data ?? stmtResp;
 
+  // GET /umrah/payments?subAgentId=... — payment history for this
+  // sub-agent. POST /umrah/payments — record a new incoming payment.
+  const paymentsQ = useApiQuery<any>(
+    ["umrah-payments-by-sub-agent", String(id ?? 0)],
+    id ? `/umrah/payments?subAgentId=${id}` : null,
+    { enabled: !!id },
+  );
+  const payments: any[] = paymentsQ.data?.data ?? [];
+  const { toast: subAgentToast } = useToast();
+  const addPaymentMut = useApiMutation<unknown, {
+    subAgentId: number;
+    amount: number;
+    method: string;
+    receivedAt?: string;
+    notes?: string;
+  }>(
+    "/umrah/payments",
+    "POST",
+    [["umrah-payments-by-sub-agent", String(id ?? 0)], ["umrah-statement-summary", String(id ?? 0)]],
+    { successMessage: "تم تسجيل الدفعة" },
+  );
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState("bank_transfer");
+  const [payDate, setPayDate] = useState("");
+  const [payNotes, setPayNotes] = useState("");
+  const submitPayment = () => {
+    if (!id) return;
+    const amt = Number(payAmount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      subAgentToast({ variant: "destructive", title: "أدخل مبلغاً صحيحاً" });
+      return;
+    }
+    addPaymentMut.mutate(
+      {
+        subAgentId: id,
+        amount: amt,
+        method: payMethod,
+        receivedAt: payDate || undefined,
+        notes: payNotes.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          setPayAmount(""); setPayDate(""); setPayNotes("");
+        },
+      },
+    );
+  };
+
   // PATCH /umrah/sub-agents/:id + DELETE soft-delete.
   const editDelete = useDetailEditDelete({
     entityLabel: "الوكيل الفرعي",
@@ -118,6 +168,82 @@ export default function UmrahSubAgentDetail() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">الدفعات ({payments.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {payments.length > 0 ? (
+            <div className="divide-y text-xs">
+              {payments.slice(0, 8).map((p: any) => (
+                <div key={p.id} className="py-1.5 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-[10px]">{p.method ?? "—"}</Badge>
+                    <span className="text-muted-foreground">{p.receivedAt ? formatDateAr(p.receivedAt) : ""}</span>
+                  </div>
+                  <span className="font-mono">{formatCurrency(Number(p.amount ?? 0))}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">لا توجد دفعات مسجلة</p>
+          )}
+          <div className="border-t pt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div>
+              <p className="text-xs text-muted-foreground">المبلغ *</p>
+              <input
+                type="number"
+                value={payAmount}
+                onChange={(e) => setPayAmount(e.target.value)}
+                className="w-full h-8 text-xs border rounded px-2"
+                dir="ltr"
+              />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">الطريقة</p>
+              <select
+                value={payMethod}
+                onChange={(e) => setPayMethod(e.target.value)}
+                className="w-full h-8 text-xs border rounded px-2 bg-white"
+              >
+                <option value="bank_transfer">حوالة بنكية</option>
+                <option value="cash">نقدي</option>
+                <option value="cheque">شيك</option>
+                <option value="other">أخرى</option>
+              </select>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">التاريخ</p>
+              <input
+                type="date"
+                value={payDate}
+                onChange={(e) => setPayDate(e.target.value)}
+                className="w-full h-8 text-xs border rounded px-2"
+                dir="ltr"
+              />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">ملاحظات</p>
+              <input
+                value={payNotes}
+                onChange={(e) => setPayNotes(e.target.value)}
+                className="w-full h-8 text-xs border rounded px-2"
+              />
+            </div>
+            <div className="md:col-span-4">
+              <button
+                type="button"
+                className="text-xs h-8 px-3 rounded bg-status-info-foreground text-white"
+                onClick={submitPayment}
+                disabled={addPaymentMut.isPending}
+              >
+                تسجيل دفعة
+              </button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="inline-flex items-center gap-2 text-sm">
