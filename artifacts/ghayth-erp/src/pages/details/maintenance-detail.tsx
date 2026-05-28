@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import {
   useDetailEditDelete,
   DetailActionButtons,
@@ -15,10 +15,11 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Wrench, Car, User } from "lucide-react";
+import { Edit, Wrench, Car, User, CheckCircle2, XCircle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import { useToast } from "@/hooks/use-toast";
 
 const STATUS_LABELS: Record<string, string> = {
   scheduled: "مجدول",
@@ -50,12 +51,55 @@ export default function MaintenanceDetail() {
   const [, params] = useRoute("/fleet/maintenance/:id");
   const id = params?.id ? Number(params.id) : null;
   const { extraTabs, hideTabs } = useRegistryTabs("maintenance_request", id ?? 0);
+  const { toast } = useToast();
+  const [actionBusy, setActionBusy] = useState(false);
 
   const { data: maintenance, isLoading, error, refetch } = useApiQuery<any>(
     ["maintenance-detail", String(id)],
     `/fleet/maintenance/${id}`,
     !!id
   );
+
+  // Lifecycle transitions — backend has dedicated POST endpoints (not
+  // the bare PATCH /:id) so the side-effects fire: complete bumps the
+  // vehicle's lastServiceDate + odometer; cancel releases the workshop
+  // booking. Buttons are status-gated to match the backend's 409 guard.
+  const handleComplete = async () => {
+    if (!id) return;
+    const odometer = window.prompt("قراءة عداد المركبة عند إكمال الصيانة (اختياري):", "");
+    if (odometer === null) return;
+    setActionBusy(true);
+    try {
+      await apiFetch(`/fleet/maintenance/${id}/complete`, {
+        method: "POST",
+        body: JSON.stringify(odometer ? { odometer: Number(odometer) } : {}),
+      });
+      toast({ title: "تم إكمال الصيانة" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر الإكمال", description: err.message });
+    } finally {
+      setActionBusy(false);
+    }
+  };
+  const handleCancel = async () => {
+    if (!id) return;
+    const reason = window.prompt("سبب إلغاء الصيانة:", "");
+    if (reason == null) return;
+    setActionBusy(true);
+    try {
+      await apiFetch(`/fleet/maintenance/${id}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason || undefined }),
+      });
+      toast({ title: "تم إلغاء الصيانة" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر الإلغاء", description: err.message });
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -269,6 +313,32 @@ export default function MaintenanceDetail() {
               entityType="maintenance_request"
               entityId={maintenance.id ?? id}
               formats={["a4"]}/>
+          )}
+          {maintenance && !["completed", "cancelled"].includes(maintenance.status) && (
+            <>
+              <GuardedButton
+                perm="fleet:update"
+                variant="outline"
+                size="sm"
+                className="text-status-success-foreground"
+                onClick={handleComplete}
+                disabled={actionBusy}
+              >
+                <CheckCircle2 className="h-4 w-4 ms-1" />
+                إكمال
+              </GuardedButton>
+              <GuardedButton
+                perm="fleet:update"
+                variant="outline"
+                size="sm"
+                className="text-status-error-foreground"
+                onClick={handleCancel}
+                disabled={actionBusy}
+              >
+                <XCircle className="h-4 w-4 ms-1" />
+                إلغاء
+              </GuardedButton>
+            </>
           )}
           <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>
