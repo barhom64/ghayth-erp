@@ -244,6 +244,15 @@ export default function LegalCaseDetail() {
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("legal_case", Number(id));
 
   const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], `/legal/cases/${id}`);
+  // GET /legal/cases/:caseId/sessions — dedicated session index that
+  // includes audit metadata (createdBy, decisionType, hearingType) the
+  // bundled `caseData.sessions` doesn't carry. Falls back to the bundle
+  // until the dedicated endpoint loads.
+  const sessionsQ = useApiQuery<any>(
+    ["legal-case-sessions", id],
+    id ? `/legal/cases/${id}/sessions` : null,
+    { enabled: !!id },
+  );
 
   const transitionMut = useApiMutation<any, { status: string }>(
     () => `/legal/cases/${id}`,
@@ -257,7 +266,7 @@ export default function LegalCaseDetail() {
     }
   );
 
-  const sessions = caseData?.sessions || [];
+  const sessions = sessionsQ.data?.data ?? sessionsQ.data?.sessions ?? caseData?.sessions ?? [];
 
   const handleSessionAdded = () => {
     setShowAddSession(false);

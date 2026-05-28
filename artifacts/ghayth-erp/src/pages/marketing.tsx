@@ -9,7 +9,7 @@ import {
   useFilters,
   applyFilters,
 } from "@workspace/ui-core";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -142,6 +142,16 @@ function CampaignsTab() {
   );
   const campaignDetail = campaignDetailResp?.data ?? campaignDetailResp;
   const campaignRoas = campaignRoasResp?.data ?? campaignRoasResp;
+
+  // PATCH /marketing/campaigns/:id/revenue — quick-record actual revenue
+  // attributed to a campaign without opening the full edit form. Used
+  // by sales-ops after a closed deal back-fills attribution.
+  const recordRevenueMut = useApiMutation<unknown, { id: number; revenue: number }>(
+    (b) => `/marketing/campaigns/${b.id}/revenue`,
+    "PATCH",
+    [["mkt-campaigns"], ["mkt-campaign-detail", String(previewId ?? 0)], ["mkt-campaign-roas", String(previewId ?? 0)]],
+    { successMessage: "تم تحديث الإيرادات" },
+  );
   const campaignFields: PreviewField[] = [
     { label: "الحملة", key: "name" },
     { label: "القناة", key: "channel", type: "badge" },
@@ -208,6 +218,21 @@ function CampaignsTab() {
       render: (c) => (
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={() => setPreviewCampaign(c)}><Eye className="h-4 w-4" /></Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            title="تسجيل إيرادات"
+            onClick={() => {
+              const raw = window.prompt(`إيرادات حملة "${c.name}" (ر.س):`, String(c.revenue ?? 0));
+              if (raw == null) return;
+              const n = Number(raw);
+              if (!Number.isFinite(n) || n < 0) return;
+              recordRevenueMut.mutate({ id: c.id, revenue: n });
+            }}
+            rateLimitAware
+          >
+            +ر.س
+          </Button>
           <RowActions
             onEdit={() => startEdit(c.id, { name: c.name, channel: c.channel || "", budget: Number(c.budget) || 0, spent: Number(c.spent) || 0, revenue: Number(c.revenue) || 0, status: c.status || "draft" })}
             onDelete={() => startDelete(c.id)}

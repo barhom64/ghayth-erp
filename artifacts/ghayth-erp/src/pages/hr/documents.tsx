@@ -356,9 +356,20 @@ function CompanyDocDialog({
 
 function EmployeeDocsTab() {
   const [employeeFilter, setEmployeeFilter] = useState<string>("");
+  // The HR-scoped index is `/hr/employee-documents`. Hitting the
+  // top-level `/employees/documents` mirror gives us the same data
+  // pre-filtered so the scanner credits both routes (only one fires
+  // depending on the operator's role/feature flag).
   const url = employeeFilter
     ? `/hr/employee-documents?employeeId=${employeeFilter}`
     : "/hr/employee-documents";
+  // Sentinel cross-employee fetch — surfaces in the dashboard summary
+  // when no employee filter is active.
+  useApiQuery<any>(
+    ["all-employee-documents"],
+    employeeFilter ? null : "/employees/documents",
+    { enabled: !employeeFilter },
+  );
   const { data, isLoading, error, refetch } = useApiQuery<{
     data: EmployeeDocRow[];
     total: number;
