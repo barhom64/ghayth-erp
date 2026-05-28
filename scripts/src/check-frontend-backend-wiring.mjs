@@ -449,10 +449,18 @@ function extractFrontendCalls() {
     // route gets credit.
     //
     // ExportButton variants accept either a string literal or a
-    // template literal (for per-row IDs). readString handles both.
-    const exportRe = /\b(?:ExportButton[^/>]*?\bendpoint\s*=\s*|endpoint\s*:\s*)[`"']/g;
+    // template literal (for per-row IDs). readString handles both —
+    // but the JSX brace form `endpoint={…}` needs a separate match
+    // class. The combined regex catches both `endpoint="…"` and
+    // `endpoint={…}` followed by the literal/template.
+    const exportRe = /\b(?:ExportButton[^/>]*?\bendpoint\s*=\s*|endpoint\s*:\s*)([{`"'])/g;
     for (const m of src.matchAll(exportRe)) {
-      let i = m.index + m[0].length - 1; // back up onto the opening quote
+      let i = m.index + m[0].length - 1;
+      // JSX brace expression — skip past `{` and any leading whitespace.
+      if (src[i] === "{") {
+        i++;
+        while (i < src.length && /\s/.test(src[i])) i++;
+      }
       const lit = readString(src, i);
       if (!lit) continue;
       // The /export/* prefix is the marker that this `endpoint:` is for
