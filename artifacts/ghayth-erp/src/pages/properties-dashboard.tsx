@@ -20,11 +20,29 @@ import { KpiGrid } from "@/components/shared/kpi-card";
 import { Badge } from "@/components/ui/badge";
 import { ErrorState } from "@/components/shared/loading-error-states";
 
+interface OperationsDashboard {
+  unitStats?: { total: number; available: number; rented: number; maintenance: number };
+  expiringContracts?: Array<{ id: number; tenantName: string; endDate: string; unitNumber: string; buildingName: string }>;
+  overduePayments?: Array<{ id: number; amount: number; paidAmount: number; dueDate: string; tenantName: string; unitNumber: string }>;
+  openMaintenance?: Array<{ id: number; category: string; description: string; priority: string; status: string; createdAt: string; unitNumber: string; buildingName: string; tenantName: string }>;
+  collectionSummary?: { expected: number; collected: number };
+}
+
 export default function PropertiesDashboard() {
   const { scopeQueryString } = useAppContext();
   const { data: stats, isLoading, isError } = useApiQuery(
     ["properties-stats", scopeQueryString],
     `/properties/stats?${scopeQueryString || ""}`
+  );
+
+  // Richer drill-down: GET /properties/operations-dashboard returns
+  // expiring contracts (next 30d), overdue payments, open maintenance
+  // requests, and a separate collection summary. Renders below the
+  // headline stats so the operator sees what needs attention without
+  // bouncing through 4 list pages.
+  const { data: ops } = useApiQuery<OperationsDashboard>(
+    ["properties-ops-dashboard"],
+    "/properties/operations-dashboard",
   );
 
   if (isError) return <ErrorState />;
@@ -380,6 +398,92 @@ export default function PropertiesDashboard() {
           </Link>
         ))}
       </div>
+
+      {/* Operations drill-downs from /properties/operations-dashboard.
+          Each card appears only when there's at least one row so a
+          clean environment renders nothing here. */}
+      {ops?.expiringContracts && ops.expiringContracts.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-status-warning-foreground" />
+              عقود تنتهي خلال 30 يوماً ({ops.expiringContracts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <DataTable
+              columns={[
+                { key: "tenantName", header: "المستأجر", render: (r) => <span className="text-xs font-medium">{r.tenantName}</span> },
+                { key: "unitNumber", header: "الوحدة", render: (r) => <span className="text-xs">{r.unitNumber || "—"}</span> },
+                { key: "buildingName", header: "المبنى", render: (r) => <span className="text-xs text-muted-foreground">{r.buildingName || "—"}</span> },
+                { key: "endDate", header: "تاريخ الانتهاء", render: (r) => (
+                  <Badge variant="outline" className="text-xs">{r.endDate}</Badge>
+                )},
+              ] as DataTableColumn<any>[]}
+              data={ops.expiringContracts}
+              noToolbar
+              pageSize={5}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {ops?.overduePayments && ops.overduePayments.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-status-error-foreground" />
+              دفعات إيجار متأخرة ({ops.overduePayments.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <DataTable
+              columns={[
+                { key: "tenantName", header: "المستأجر", render: (r) => <span className="text-xs font-medium">{r.tenantName}</span> },
+                { key: "unitNumber", header: "الوحدة", render: (r) => <span className="text-xs">{r.unitNumber || "—"}</span> },
+                { key: "amount", header: "المستحق", render: (r) => (
+                  <span className="font-mono text-xs">{formatCurrency(Number(r.amount) - Number(r.paidAmount || 0))}</span>
+                )},
+                { key: "dueDate", header: "تاريخ الاستحقاق", render: (r) => (
+                  <span className="text-xs text-status-error-foreground">{r.dueDate}</span>
+                )},
+              ] as DataTableColumn<any>[]}
+              data={ops.overduePayments}
+              noToolbar
+              pageSize={10}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {ops?.openMaintenance && ops.openMaintenance.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Wrench className="w-5 h-5 text-status-info-foreground" />
+              طلبات صيانة مفتوحة ({ops.openMaintenance.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <DataTable
+              columns={[
+                { key: "category", header: "الفئة", render: (r) => <Badge variant="outline" className="text-xs">{r.category}</Badge> },
+                { key: "description", header: "الوصف", render: (r) => (
+                  <span className="text-xs max-w-[300px] truncate block" title={r.description}>{r.description}</span>
+                )},
+                { key: "unitNumber", header: "الوحدة", render: (r) => <span className="text-xs">{r.unitNumber || "—"}</span> },
+                { key: "tenantName", header: "المستأجر", render: (r) => <span className="text-xs text-muted-foreground">{r.tenantName || "—"}</span> },
+                { key: "priority", header: "الأولوية", render: (r) => (
+                  <Badge variant={r.priority === "high" || r.priority === "urgent" ? "destructive" : "secondary"} className="text-xs">{r.priority}</Badge>
+                )},
+              ] as DataTableColumn<any>[]}
+              data={ops.openMaintenance}
+              noToolbar
+              pageSize={10}
+            />
+          </CardContent>
+        </Card>
+      )}
     </PageShell>
   );
 }
