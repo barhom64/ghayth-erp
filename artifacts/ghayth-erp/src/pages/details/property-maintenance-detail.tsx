@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
@@ -10,10 +10,15 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Wrench } from "lucide-react";
+import { Edit, Wrench, CheckCircle, User } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+} from "@/components/shared/detail-edit-delete-actions";
+import { useToast } from "@/hooks/use-toast";
 
 const STATUS_LABELS: Record<string, string> = {
   open: "مفتوح",
@@ -59,6 +64,61 @@ export default function PropertyMaintenanceDetail() {
     !!id,
   );
 
+  const { toast } = useToast();
+
+  // PATCH /properties/maintenance-requests/:id — quick-edit for the
+  // description / category / priority. The /properties/maintenance/:id
+  // GET endpoint returns the same row; only the write path is
+  // /maintenance-requests/.
+  const editDelete = useDetailEditDelete({
+    entityLabel: "طلب الصيانة",
+    patchPath: `/properties/maintenance-requests/${id}`,
+    listPath: "/properties/maintenance",
+    initialValues: data,
+    fields: [
+      { key: "description", label: "الوصف" },
+      { key: "category", label: "الفئة" },
+      { key: "priority", label: "الأولوية" },
+    ],
+    invalidateKeys: [["property-maintenance", String(id)], ["properties-maintenance"]],
+    onSaved: () => refetch(),
+  });
+
+  // POST /properties/maintenance-requests/:id/complete — closes the
+  // ticket with the final cost and resolution notes; backend transitions
+  // the request to "completed" and stamps completedAt.
+  const completeMut = useApiMutation<unknown, { cost?: number; resolutionNotes?: string }>(
+    `/properties/maintenance-requests/${id}/complete`,
+    "POST",
+    [["property-maintenance", String(id)], ["properties-maintenance"]],
+    {
+      successMessage: "تم إغلاق طلب الصيانة",
+      onSuccess: () => refetch(),
+    },
+  );
+
+  const handleComplete = () => {
+    const costStr = window.prompt("التكلفة النهائية (اختياري):", "0");
+    if (costStr === null) return;
+    const cost = Number(costStr);
+    const notes = window.prompt("ملاحظات الإنجاز (اختياري):", "");
+    if (notes === null) return;
+    completeMut.mutate({
+      cost: Number.isFinite(cost) && cost > 0 ? cost : undefined,
+      resolutionNotes: notes.trim() || undefined,
+    });
+  };
+
+  // GET /properties/technicians — list the technicians that can be
+  // assigned; rendered as a quick-pick under the actions when the
+  // request is open or in-progress.
+  const { data: techResp } = useApiQuery<{ data: any[] }>(
+    ["properties-technicians"],
+    "/properties/technicians",
+  );
+  const technicians = techResp?.data ?? [];
+  const [showTechs, setShowTechs] = useState(false);
+
   const item = data;
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
@@ -96,6 +156,31 @@ export default function PropertyMaintenanceDetail() {
 
 
   const overview = (
+    <div className="space-y-4">
+      {showTechs && technicians.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <User className="h-4 w-4 text-muted-foreground" />
+              الفنيون المتاحون ({technicians.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              {technicians.map((t: any) => (
+                <div key={t.id} className="flex items-center gap-2 p-2 border rounded text-sm">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate">{t.name}</p>
+                    {t.specialty && <p className="text-xs text-muted-foreground">{t.specialty}</p>}
+                    {t.phone && <p className="text-xs font-mono text-muted-foreground">{t.phone}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     <div className="grid gap-4 md:grid-cols-3">
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
@@ -184,6 +269,7 @@ export default function PropertyMaintenanceDetail() {
       {id && <EntityComments entityType="property-maintenance" entityId={id} />}
       {id && <EntityTags entityType="property-maintenance" entityId={id} />}
     </div>
+    </div>
   );
 
   return (
@@ -212,6 +298,32 @@ export default function PropertyMaintenanceDetail() {
             entityType="maintenance_request"
             entityId={id ?? 0}
             formats={["a4"]}/>
+          {item && !["completed", "cancelled"].includes(item.status) && (
+            <GuardedButton
+              perm="properties:update"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowTechs((v) => !v)}
+              title="عرض الفنيين"
+            >
+              <User className="h-4 w-4 ms-1" />
+              الفنيون ({technicians.length})
+            </GuardedButton>
+          )}
+          {item && !["completed", "cancelled"].includes(item.status) && (
+            <GuardedButton
+              perm="properties:update"
+              variant="outline"
+              size="sm"
+              onClick={handleComplete}
+              disabled={completeMut.isPending}
+              rateLimitAware
+              className="text-status-success-foreground"
+            >
+              <CheckCircle className="h-4 w-4 ms-1" />
+              إنجاز
+            </GuardedButton>
+          )}
           <GuardedButton
             perm="properties:update"
             variant="outline"
@@ -222,6 +334,7 @@ export default function PropertyMaintenanceDetail() {
             <Edit className="h-4 w-4 ms-1" />
             تعديل
           </GuardedButton>
+          <DetailActionButtons hook={editDelete} editPerm="properties:update" />
         </>
       }
     />
