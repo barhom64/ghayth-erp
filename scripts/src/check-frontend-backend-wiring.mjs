@@ -322,20 +322,36 @@ function extractFrontendCalls() {
       // string opener, so readString fails. Walk forward to the `?` and
       // read the true-branch string. Bail if the true-branch isn't a
       // string literal (e.g. a function call).
+      //
+      // Also handle the dual-branch shape `body.id ? "/x/${body.id}" :
+      // "/x"` used by useApiMutation in commission-plan-editor — credit
+      // both URLs.
       if (helper === "useApiQuery" || helper === "useApiMutation" || helper === "apiFetch") {
-        // Snapshot — restore i if the inline-conditional shape doesn't match.
         const savedI = i;
-        // Identifier or simple member-access chain followed by `?`.
         const condArgRe = /^[\w.$\s]+\?/;
         const rest = src.slice(i, i + 200);
         if (condArgRe.test(rest) && !/^[\s]*[`"']/.test(rest)) {
-          // Move past the condition to the `?` operator.
           while (i < src.length && src[i] !== "?") i++;
           if (src[i] === "?") {
             i++;
             while (i < src.length && /\s/.test(src[i])) i++;
+            // Try to capture the false branch too (after the `:`).
+            const trueLit = readString(src, i);
+            if (trueLit && trueLit.value.startsWith("/")) {
+              let j = trueLit.end;
+              while (j < src.length && /\s/.test(src[j])) j++;
+              if (src[j] === ":") {
+                j++;
+                while (j < src.length && /\s/.test(src[j])) j++;
+                const falseLit = readString(src, j);
+                if (falseLit && falseLit.value.startsWith("/")) {
+                  const method = inferMethod(helper, src, falseLit.end);
+                  calls.push({ file: rel, url: falseLit.value, line: lineOf(src, m.index), method, source: "helper" });
+                }
+              }
+            }
           } else {
-            i = savedI; // restore for readString fallback
+            i = savedI;
           }
         }
       }
@@ -373,7 +389,7 @@ function extractFrontendCalls() {
     // own fix-up pass. The prop calls still count toward backend
     // coverage so the Phase C "unused endpoints" list gets credit for
     // them.
-    const propRe = /\b(approve|reject|return)Endpoint\s*=\s*\{/g;
+    const propRe = /\b(approve|reject|return|refer|escalate)Endpoint\s*=\s*\{/g;
     for (const m of src.matchAll(propRe)) {
       const kind = m[1]; // "approve" | "reject" | "return"
       let i = m.index + m[0].length;
