@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   DataTable, type DataTableColumn, PageShell,
 } from "@workspace/ui-core";
@@ -197,6 +198,14 @@ export default function LotExpiryAlertsPage() {
           >
             <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
           </GuardedButton>
+          <PrintButton
+            entityType="report_lot_expiry_alerts"
+            entityId={todayLocal()}
+            payload={{
+              entity: { title: "تنبيهات انتهاء صلاحية الدفعات", asOfDate: todayLocal(), count: rows.length },
+              items: rows,
+            }}
+          />
         </>
       }
     >

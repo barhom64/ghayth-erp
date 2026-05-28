@@ -314,14 +314,18 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
         [id, scope.companyId]
       ),
       rawQuery<ClientConversationRow>(
-        `SELECT wq.id, wq.phone, wq.message, wq.status, wq."createdAt", 'whatsapp' AS channel
-         FROM whatsapp_queue wq
-         WHERE wq."clientId" = $1 AND wq."companyId" = $2
-         UNION ALL
-         SELECT sq.id, sq."recipientPhone" AS phone, sq.message, sq.status, sq."createdAt", 'sms' AS channel
-         FROM sms_queue sq
-         WHERE sq."companyId" = $2 AND sq."recipientPhone" = (SELECT phone FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1)
-         ORDER BY "createdAt" DESC LIMIT 20`,
+        // Phase 4 contract cleanup: read from outbound_queue (unified)
+        // instead of the per-channel legacy queues. The client's phone
+        // matches outbound_queue.recipient when channel='sms'; for
+        // whatsapp the legacy whatsapp_queue.clientId column has no
+        // analogue here, so we match on recipient = clients.phone too.
+        `SELECT oq.id::int AS id, oq.recipient AS phone, oq.body AS message,
+                oq.status, oq."createdAt", oq.channel
+           FROM outbound_queue oq
+          WHERE oq."companyId" = $2
+            AND oq.channel IN ('whatsapp','sms')
+            AND oq.recipient = (SELECT phone FROM clients WHERE id = $1 AND "companyId" = $2 LIMIT 1)
+          ORDER BY oq."createdAt" DESC LIMIT 20`,
         [id, scope.companyId]
       ).catch((e) => { logger.error(e, "clients query failed"); return [] as ClientConversationRow[]; }),
       rawQuery<ClientTimelineRow>(

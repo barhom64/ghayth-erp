@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   FileSignature, Calendar, AlertTriangle, CheckCircle2,
   Search, ExternalLink, Download, Clock, ChevronRight,
@@ -178,6 +179,14 @@ export default function VendorContractsTrackerPage() {
               <Download className="w-4 h-4 ml-1" />
               CSV
             </Button>
+            <PrintButton
+              entityType="report_vendor_contracts"
+              entityId="all"
+              payload={{
+                entity: { title: "متابعة عقود الموردين", count: filtered.length },
+                items: filtered,
+              }}
+            />
           </div>
         </CardContent>
       </Card>

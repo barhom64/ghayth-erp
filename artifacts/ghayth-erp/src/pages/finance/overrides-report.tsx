@@ -11,6 +11,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatNumber, formatDateAr, todayLocal } from "@/lib/formatters";
 import { Pencil, Download, ShieldAlert } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
 
 /**
@@ -219,10 +220,20 @@ export default function OverridesReportPage() {
         { label: "التعديلات اليدوية" },
       ]}
       actions={
-        <GuardedButton perm="finance:export" variant="outline" size="sm"
-          onClick={() => exportCSV(filtered)}>
-          <Download className="h-3.5 w-3.5 me-1" /> تصدير CSV
-        </GuardedButton>
+        <>
+          <GuardedButton perm="finance:export" variant="outline" size="sm"
+            onClick={() => exportCSV(filtered)}>
+            <Download className="h-3.5 w-3.5 me-1" /> تصدير CSV
+          </GuardedButton>
+          <PrintButton
+            entityType="report_overrides"
+            entityId="all"
+            payload={{
+              entity: { title: "تقرير التعديلات اليدوية", count: filtered.length },
+              items: filtered,
+            }}
+          />
+        </>
       }
     >
       <FinanceTabsNav />
