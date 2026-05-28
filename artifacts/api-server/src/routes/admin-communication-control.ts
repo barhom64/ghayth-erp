@@ -64,7 +64,7 @@ router.get("/overview", authorize({ feature: "admin", action: "list" }), async (
       ),
       rawQuery(
         `SELECT channel, direction, COUNT(*)::int AS count
-           FROM communications_log
+           FROM v_message_log_all
           WHERE "createdAt" > NOW() - INTERVAL '24 hours'
             AND ("companyId" = $1 OR "companyId" IS NULL)
             AND "deletedAt" IS NULL
@@ -128,15 +128,15 @@ router.get("/inbox", authorize({ feature: "admin", action: "list" }), async (req
                 id::text AS id,
                 channel,
                 direction,
-                "fromNumber" AS from_addr,
-                "toNumber" AS to_addr,
+                "fromAddress" AS from_addr,
+                "toAddress" AS to_addr,
                 subject,
                 LEFT(body, 500) AS body,
                 status,
                 "relatedType" AS related_type,
                 "relatedId" AS related_id,
                 "createdAt"
-           FROM communications_log
+           FROM v_message_log_all
           WHERE "companyId" = $1
             AND "createdAt" > NOW() - $2::interval
             AND "deletedAt" IS NULL
