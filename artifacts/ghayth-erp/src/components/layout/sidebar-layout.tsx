@@ -211,6 +211,8 @@ const allNavSections: NavSection[] = [
       { label: "الحسابات والقيود", path: "/finance/accounts", icon: GitBranch, module: "finance", children: [
         { label: "شجرة الحسابات", path: "/finance/accounts", icon: GitBranch },
         { label: "حسابات فرعية", path: "/finance/subsidiary-accounts", icon: Layers },
+        { label: "مراكز التكلفة", path: "/finance/cost-centers", icon: Network },
+        { label: "كشف الحساب التحليلي", path: "/finance/entity-statements", icon: FileText },
         { label: "القيود اليومية", path: "/finance/journal", icon: ScrollText },
         { label: "ميزان مع تتبّع", path: "/finance/trial-balance-drilldown", icon: Scale },
         { label: "مقارنة ميزان", path: "/finance/trial-balance-comparison", icon: BarChart3 },
@@ -238,6 +240,7 @@ const allNavSections: NavSection[] = [
         { label: "تسجيل دفعة عميل", path: "/finance/receivables/receipt", icon: DollarSign },
         { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
         { label: "دفعات مقدمة من العملاء", path: "/finance/customer-advances", icon: ArrowLeftRight },
+        { label: "منضدة الدفعات المقدمة", path: "/finance/customer-advances-workbench", icon: Briefcase },
       ]},
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
         { label: "طلبات الشراء (PR)", path: "/finance/purchase-requests", icon: ClipboardList },
@@ -276,6 +279,7 @@ const allNavSections: NavSection[] = [
         { label: "إهلاك دفعة واحدة", path: "/finance/fixed-assets/batch-depreciate", icon: TrendingUp },
         { label: "العهد", path: "/finance/custodies", icon: KeyRound },
         { label: "منضدة العُهد", path: "/finance/custody-workbench", icon: KeyRound },
+        { label: "تقرير العهد", path: "/finance/custodies/report", icon: FileBarChart },
       ]},
       { label: "الفترات والميزانية", path: "/finance/budget", icon: FileBarChart, module: "finance", children: [
         { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
@@ -300,6 +304,8 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "الضرائب والتقارير", path: "/finance/tax", icon: Scale, module: "finance", children: [
         { label: "نظام الضرائب", path: "/finance/tax", icon: Scale },
+        { label: "رموز الضريبة", path: "/finance/tax-codes", icon: Percent },
+        { label: "فئات WHT", path: "/finance/wht-categories", icon: Percent },
         { label: "تقويم الإقرارات", path: "/finance/tax-filing-calendar", icon: Calendar },
         { label: "جاهزية ZATCA", path: "/finance/vat-filing-readiness", icon: FileCheck },
         { label: "ZATCA Reports Hub", path: "/finance/reports/zatca", icon: FileCheck },
@@ -349,6 +355,7 @@ const allNavSections: NavSection[] = [
         { label: "متابعة Dunning", path: "/finance/dunning", icon: Bell },
         { label: "مراحل التصعيد", path: "/finance/collection", icon: AlertTriangle },
         { label: "الديون المشكوك بها", path: "/finance/bad-debt-provision", icon: ShieldAlert },
+        { label: "الديون المعدومة", path: "/finance/bad-debt", icon: ShieldAlert },
       ]},
       // F6 (audit) — العملات الأجنبية: rates + revaluation + history في
       // مجموعة واحدة بدلاً من تركها كلها off-sidebar.
