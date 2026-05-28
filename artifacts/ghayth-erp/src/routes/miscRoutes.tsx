@@ -34,6 +34,7 @@ const Marketing = lazy(() => import("@/pages/marketing"));
 const MarketingCreate = lazy(() => import("@/pages/create/marketing-create"));
 const Notifications = lazy(() => import("@/pages/notifications"));
 const Intelligence = lazy(() => import("@/pages/intelligence"));
+const AiWorkbench = lazy(() => import("@/pages/ai-workbench"));
 const Insights = lazy(() => import("@/pages/insights"));
 const Automation = lazy(() => import("@/pages/automation"));
 const ActivityLog = lazy(() => import("@/pages/activity-log"));
@@ -125,6 +126,7 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/tasks", component: Tasks, module: "operations" },
   { path: "/notifications", component: Notifications },
   { path: "/intelligence", component: Intelligence, module: "bi" },
+  { path: "/intelligence/ai-workbench", component: AiWorkbench, module: "bi" },
   { path: "/insights", component: Insights, module: "bi" },
   { path: "/automation", component: Automation, module: "admin" },
   { path: "/activity-log", component: ActivityLog },

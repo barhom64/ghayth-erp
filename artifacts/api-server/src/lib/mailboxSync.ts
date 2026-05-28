@@ -321,10 +321,12 @@ async function syncMicrosoft365(account: MailboxAccountRow): Promise<SyncResult>
     // The Graph id lives in message_log via the future legacyId column
     // for messageId once we add it; for now we use a digest probe
     // against `body` + `receivedAt` + `fromAddress` to avoid duplicates.
+    // Reads from message_log (the unified table) so this still works
+    // after the deferred legacy DROP.
     const [dup] = await rawQuery<{ id: number }>(
-      `SELECT id FROM communications_log
+      `SELECT id FROM message_log
         WHERE "companyId" = $1 AND direction = 'inbound' AND channel = 'email'
-          AND COALESCE("fromNumber",'') = COALESCE($2,'')
+          AND COALESCE("fromAddress",'') = COALESCE($2,'')
           AND "createdAt" = $3
         LIMIT 1`,
       [account.companyId, fromAddress, receivedAt],
@@ -431,9 +433,10 @@ async function syncImap(account: MailboxAccountRow): Promise<SyncResult> {
 
         // Dedupe by Message-ID header if present, else fall back to the
         // (companyId, from, receivedAt) probe used for the M365 path.
+        // Reads from message_log so the probe survives the DROP.
         if (parsed.messageId) {
           const [dup] = await rawQuery<{ id: number }>(
-            `SELECT id FROM communications_log
+            `SELECT id FROM message_log
               WHERE "companyId" = $1 AND direction = 'inbound' AND channel = 'email'
                 AND body LIKE $2 LIMIT 1`,
             [account.companyId, `%Message-ID: ${parsed.messageId}%`],
