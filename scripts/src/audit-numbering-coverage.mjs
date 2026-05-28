@@ -165,7 +165,9 @@ const NON_ROUTE_EXCEPTIONS = new Map([
   ["lib/engines/financialEngine.ts", "ref is a required parameter; caller MUST issue. Caller-side audit covers compliance"],
   ["lib/engines/legalEngine.ts",     "caseNumber must be issued by caller and passed; gap currently tracked in coverage report §3 (G5)"],
   ["lib/engines/supportEngine.ts",   "ref must be issued by caller (createPortalTicket) or column left NULL (createTicket — gap tracked in coverage report §3 G4)"],
-  ["lib/cronScheduler.ts",           "auto-generated documents from cron — gap tracked in coverage report §3 G6 and G7. Pending fix."],
+  // lib/cronScheduler.ts G6+G7 closed: both auto-PO and auto-legal-
+  // case paths now route through issueNumber. The audit's regex will
+  // detect those calls and no exemption is needed.
 ]);
 
 // ─── Regex helpers ──────────────────────────────────────────────────
