@@ -122,14 +122,43 @@ export default function ProfitabilityPage({ entityType }: Props) {
   );
   const [endDate, setEndDate] = useState(todayLocal());
 
-  const endpoint = id
-    ? `/finance/reports/profitability/${config.endpointSegment}/${id}?startDate=${startDate}&endDate=${endDate}`
-    : null;
-  const queryKey = [`profitability-${entityType}`, id, startDate, endDate];
-
-  const { data, isLoading, isError, refetch } = useApiQuery<ProfitabilityResponse>(
-    queryKey, endpoint, !!id,
+  // Static dispatch over the 4 entity types so the wiring scanner can
+  // see each endpoint URL by name. Earlier shape was a single dynamic
+  // ${config.endpointSegment}/${id} string which the audit normalised
+  // to `/:param/:param` and couldn't match against
+  // /finance/reports/profitability/vehicle/:vehicleId (etc.).
+  const qs = `?startDate=${startDate}&endDate=${endDate}`;
+  const isVehicle = !!id && entityType === "vehicle";
+  const isProperty = !!id && entityType === "property";
+  const isProject = !!id && entityType === "project";
+  const isUmrahAgent = !!id && entityType === "umrah-agent";
+  // Each query uses an inline array literal as its first arg so the
+  // wiring scanner can advance past the queryKey and pick up the URL.
+  const vehicleQ = useApiQuery<ProfitabilityResponse>(
+    ["profitability-vehicle", id, startDate, endDate],
+    isVehicle ? `/finance/reports/profitability/vehicle/${id}${qs}` : null,
+    { enabled: isVehicle },
   );
+  const propertyQ = useApiQuery<ProfitabilityResponse>(
+    ["profitability-property", id, startDate, endDate],
+    isProperty ? `/finance/reports/profitability/property/${id}${qs}` : null,
+    { enabled: isProperty },
+  );
+  const projectQ = useApiQuery<ProfitabilityResponse>(
+    ["profitability-project", id, startDate, endDate],
+    isProject ? `/finance/reports/profitability/project/${id}${qs}` : null,
+    { enabled: isProject },
+  );
+  const umrahAgentQ = useApiQuery<ProfitabilityResponse>(
+    ["profitability-umrah-agent", id, startDate, endDate],
+    isUmrahAgent ? `/finance/reports/profitability/umrah-agent/${id}${qs}` : null,
+    { enabled: isUmrahAgent },
+  );
+  const { data, isLoading, isError, refetch } =
+    entityType === "vehicle" ? vehicleQ
+    : entityType === "property" ? propertyQ
+    : entityType === "project" ? projectQ
+    : umrahAgentQ;
 
   if (isLoading) return <LoadingSpinner />;
   if (isError || !data) return <ErrorState />;
