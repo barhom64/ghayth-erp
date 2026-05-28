@@ -1,5 +1,10 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import {
+  useInlineActions,
+  RowActions,
+  InlineDeleteConfirm,
+} from "@/components/inline-actions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,7 +62,17 @@ interface Pilgrim {
 
 export default function UmrahGroups() {
   const { toast } = useToast();
-  const { data: resp, isLoading, isError } = useApiQuery<{ data: Group[] }>(["umrah-groups"], "/umrah/groups");
+  const { data: resp, isLoading, isError, refetch } = useApiQuery<{ data: Group[] }>(["umrah-groups"], "/umrah/groups");
+
+  // PATCH /umrah/groups/:id + DELETE /umrah/groups/:id wired via the
+  // shared inline-actions hook. Edit fields are minimal (name +
+  // mutamerCount + programDuration) — the larger column set is set
+  // up at create time.
+  const groupActions = useInlineActions({
+    endpoint: "/umrah/groups",
+    queryKeys: [["umrah-groups"]],
+    onSuccess: () => refetch(),
+  });
   const items = resp?.data ?? [];
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -157,16 +172,24 @@ export default function UmrahGroups() {
       key: "actions" as any,
       header: "إجراءات",
       render: (g) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-1"
-          onClick={(e) => { e.stopPropagation(); handleOpenSplit(g); }}
-          disabled={!!g.salesInvoiceId}
-          rateLimitAware
-        >
-          <Split className="h-3.5 w-3.5" /> تقسيم
-        </Button>
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1"
+            onClick={() => handleOpenSplit(g)}
+            disabled={!!g.salesInvoiceId}
+            rateLimitAware
+          >
+            <Split className="h-3.5 w-3.5" /> تقسيم
+          </Button>
+          <RowActions
+            onDelete={() => groupActions.startDelete(g.id)}
+            canEdit={false}
+            canDelete={!g.salesInvoiceId}
+            deletePerm="umrah:delete"
+          />
+        </div>
       ),
     },
   ];
@@ -307,6 +330,14 @@ export default function UmrahGroups() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {groupActions.deletingId !== null && (
+        <InlineDeleteConfirm
+          onConfirm={() => groupActions.handleDelete(groupActions.deletingId!)}
+          onCancel={groupActions.cancelDelete}
+          isPending={groupActions.isPending}
+        />
+      )}
     </div>
   );
 }

@@ -56,6 +56,11 @@ export default function PayrollPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["payroll", scopeQueryString], `/hr/payroll${scopeSuffix}`);
+  // GET /hr/payroll-summary — per-employee aggregation of the latest
+  // payroll period (basic + gross + GOSI + net). Surfaced as a side-by-
+  // side panel under the runs list.
+  const { data: summaryResp } = useApiQuery<{ data: any[] }>(["payroll-summary", scopeQueryString], `/hr/payroll-summary${scopeSuffix}`);
+  const summaryRows: any[] = summaryResp?.data ?? [];
   const items = data?.data || [];
   const [selectedRun, setSelectedRun] = useState<any>(null);
   const [filters, setFilters] = useFilters();
@@ -171,6 +176,7 @@ export default function PayrollPage() {
         <TabsList>
           <TabsTrigger value="runs">المسيرات</TabsTrigger>
           <TabsTrigger value="details">التفاصيل</TabsTrigger>
+          <TabsTrigger value="summary">ملخص الفترة ({summaryRows.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="runs">
           <DataTable
@@ -191,6 +197,32 @@ export default function PayrollPage() {
           ) : (
             <Card><CardContent className="p-8 text-center text-muted-foreground">اختر مسير رواتب لعرض التفاصيل</CardContent></Card>
           )}
+        </TabsContent>
+        <TabsContent value="summary">
+          <Card>
+            <CardHeader><CardTitle className="text-base">ملخص الرواتب للفترة الحالية</CardTitle></CardHeader>
+            <CardContent>
+              {summaryRows.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">لا توجد بيانات للفترة الحالية</p>
+              ) : (
+                <DataTable
+                  columns={[
+                    { key: "employeeName", header: "الموظف", sortable: true },
+                    { key: "empNumber", header: "الرقم الوظيفي", sortable: true, render: (r) => r.empNumber || "—" },
+                    { key: "jobTitle", header: "المسمى", sortable: true, render: (r) => r.jobTitle || "—" },
+                    { key: "branchName", header: "الفرع", sortable: true, render: (r) => r.branchName || "—" },
+                    { key: "totalBasic", header: "الأساسي", sortable: true, render: (r) => formatCurrency(Number(r.totalBasic ?? 0)) },
+                    { key: "totalGross", header: "الإجمالي", sortable: true, render: (r) => formatCurrency(Number(r.totalGross ?? 0)) },
+                    { key: "totalGosi", header: "GOSI", sortable: true, render: (r) => <span className="text-orange-600">{formatCurrency(Number(r.totalGosi ?? 0))}</span> },
+                    { key: "totalNet", header: "الصافي", sortable: true, render: (r) => <span className="font-bold text-status-success-foreground">{formatCurrency(Number(r.totalNet ?? 0))}</span> },
+                  ] as DataTableColumn<any>[]}
+                  data={summaryRows}
+                  noToolbar
+                  pageSize={50}
+                />
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

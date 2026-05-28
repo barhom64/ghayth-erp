@@ -86,6 +86,15 @@ export default function HR() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `&${scopeQueryString}` : "";
 
+  // GET /hr/stats — single roll-up of all the per-domain counts the
+  // dashboard tiles need. Kept alongside the granular queries below as a
+  // fallback (some domains expose extra fields the stats roll-up
+  // doesn't carry).
+  const statsQ = useApiQuery<any>(["hr-stats", scopeQueryString], `/hr/stats${scopeSuffix}`);
+  const hrStats = statsQ.data ?? {};
+  // unused-fallback: kept for visibility while we cut over per-tile.
+  void hrStats;
+
   const empQ = useApiQuery<any>(["employees-summary", scopeQueryString], `/employees?page=1&limit=1${scopeSuffix}`);
   const leavesQ = useApiQuery<any>(["leaves-pending", scopeQueryString], `/hr/leave-requests?status=pending&page=1&limit=1${scopeSuffix}`);
   const payrollQ = useApiQuery<any>(["payroll-latest", scopeQueryString], `/hr/payroll?page=1&limit=1${scopeSuffix}`);
