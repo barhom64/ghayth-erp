@@ -20,6 +20,17 @@ export default function Intelligence() {
   const { data: alertsResp, isLoading: loadingAlerts } = useApiQuery<any>(["intelligence-alerts"], "/intelligence/alerts");
   const alerts = asList(alertsResp);
   const { data: schedule } = useApiQuery<any>(["daily-schedule"], "/intelligence/daily-schedule");
+
+  // Additional aggregate roll-ups — intelligence engine exposes a
+  // few cuts of the same data: company-wide KPIs, per-employee KPI
+  // breakdowns, and activity stats. The overview endpoint above
+  // returns a summary; these add the underlying detail.
+  const { data: kpisResp } = useApiQuery<any>(["intelligence-kpis"], "/intelligence/kpis");
+  const { data: companyKpisResp } = useApiQuery<any>(["intelligence-company-kpis"], "/intelligence/company-kpis");
+  const { data: activityStatsResp } = useApiQuery<any>(["intelligence-activity-stats"], "/intelligence/activity/stats");
+  const kpisData = kpisResp?.data ?? kpisResp;
+  const companyKpis = companyKpisResp?.data ?? companyKpisResp;
+  const activityStats = activityStatsResp?.data ?? activityStatsResp;
   const [alertSearch, setAlertSearch] = useState("");
   const [taskSearch, setTaskSearch] = useState("");
   const [attendSearch, setAttendSearch] = useState("");
@@ -80,6 +91,58 @@ export default function Intelligence() {
           </>
         )}
       </div>
+
+      {(companyKpis || activityStats || kpisData) && (
+        <div className="grid gap-3 md:grid-cols-3">
+          {companyKpis && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs">مؤشرات الشركة</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs space-y-1">
+                {Object.entries(companyKpis as Record<string, any>).slice(0, 6).map(([k, v]) => (
+                  <div key={k} className="flex justify-between">
+                    <span className="text-muted-foreground">{k}</span>
+                    <span className="font-mono font-semibold">{String(v)}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+          {activityStats && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs">إحصاءات النشاط</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs space-y-1">
+                {Object.entries(activityStats as Record<string, any>).slice(0, 6).map(([k, v]) => (
+                  <div key={k} className="flex justify-between">
+                    <span className="text-muted-foreground">{k}</span>
+                    <span className="font-mono font-semibold">
+                      {typeof v === "object" ? Object.keys(v ?? {}).length : String(v)}
+                    </span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+          {kpisData && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs">مؤشرات الأداء (الفترة)</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs space-y-1">
+                {Object.entries(kpisData as Record<string, any>).slice(0, 6).map(([k, v]) => (
+                  <div key={k} className="flex justify-between">
+                    <span className="text-muted-foreground">{k}</span>
+                    <span className="font-mono font-semibold">{String(v)}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
