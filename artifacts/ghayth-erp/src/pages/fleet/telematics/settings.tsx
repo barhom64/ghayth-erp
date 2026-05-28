@@ -53,6 +53,7 @@ const DEFAULT_FORM = {
   account: "",
   password: "",
   apiKey: "",
+  webhookSecret: "",
   notes: "",
 };
 
@@ -100,6 +101,7 @@ export default function FleetTelematicsSettings() {
         password: form.password,
         ...(form.apiKey ? { apiKey: form.apiKey } : {}),
       },
+      ...(form.webhookSecret ? { webhookSecret: form.webhookSecret } : {}),
       notes: form.notes,
     });
   };
@@ -274,6 +276,24 @@ export default function FleetTelematicsSettings() {
               value={form.apiKey}
               onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
             />
+          </div>
+          <div className="md:col-span-2">
+            <Label>مفتاح Webhook HMAC (للأمان عند الاستقبال)</Label>
+            <Input
+              type="password"
+              placeholder="حد أدنى 16 حرفًا — يُستخدم لتوقيع طلبات webhook"
+              value={form.webhookSecret}
+              onChange={(e) => setForm({ ...form, webhookSecret: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              يُحفظ مُشفّرًا في قاعدة البيانات. يجب إعداده في CMSV6 على نفس
+              القيمة. عنوان الاستقبال:
+              <code className="mx-1 px-1 bg-surface-subtle rounded">
+                POST /api/webhooks/cmsv6/{"{integrationId}"}
+              </code>
+              مع رؤوس <code>x-cmsv6-signature</code> و
+              <code>x-cmsv6-timestamp</code>.
+            </p>
           </div>
           <div>
             <Label>فاصل المزامنة (بالثواني)</Label>

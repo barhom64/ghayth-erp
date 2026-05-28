@@ -31,6 +31,7 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import { authorize } from "../lib/rbac/authorize.js";
 import { auditMutation, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+import { encryptSecret, decryptSecret, isEncrypted } from "../lib/secrets.js";
 import {
   createCmsv6Adapter,
   validateCmsv6BaseUrl,
@@ -55,6 +56,8 @@ const upsertIntegrationSchema = z.object({
   videoOnDemandOnly: z.boolean().optional(),
   status: z.enum(["active", "inactive", "paused"]).optional(),
   config: z.record(z.unknown()).optional(),
+  /** HMAC shared secret for /api/webhooks/cmsv6/:id. Stored encrypted. */
+  webhookSecret: z.string().min(16, "مفتاح webhook يجب أن يكون 16 حرفًا على الأقل").optional(),
   notes: z.string().optional().nullable(),
 });
 
@@ -101,7 +104,7 @@ const ackAlertSchema = z.object({
 // ─────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────
-interface IntegrationRow {
+export interface IntegrationRow {
   id: number;
   companyId: number;
   branchId: number | null;
@@ -116,10 +119,12 @@ interface IntegrationRow {
   lastSyncStatus: string | null;
   lastSyncError: string | null;
   config: Record<string, unknown>;
+  /** Encrypted HMAC secret for /api/webhooks/cmsv6/:id (migration 229). */
+  webhookSecret: string | null;
   notes: string | null;
 }
 
-interface DeviceRow {
+export interface DeviceRow {
   id: number;
   companyId: number;
   branchId: number | null;
@@ -152,6 +157,39 @@ async function loadIntegration(
   return rows[0] ?? null;
 }
 
+/** Field names inside `config` JSONB that hold secret material. */
+const ENCRYPTED_CONFIG_KEYS = new Set(["password", "apiKey", "secret", "token"]);
+
+/**
+ * Encrypts the secret fields in a config object in-place. Idempotent —
+ * already-encrypted values are passed through. Used on write (CREATE +
+ * PATCH) so plaintext credentials never reach `fleet_telematics_integrations.config`.
+ */
+function encryptConfigSecrets(config: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(config)) {
+    if (ENCRYPTED_CONFIG_KEYS.has(k) && typeof v === "string" && v.length > 0) {
+      out[k] = encryptSecret(v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+/** Mirror of encryptConfigSecrets — used right before passing to the adapter. */
+function decryptConfigSecrets(config: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(config)) {
+    if (ENCRYPTED_CONFIG_KEYS.has(k) && typeof v === "string" && isEncrypted(v)) {
+      out[k] = decryptSecret(v) ?? "";
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 /**
  * Build a CMSV6Adapter for the given integration row. Credentials come
  * from config (DB) and are NOT fetched from env — operators manage the
@@ -159,21 +197,21 @@ async function loadIntegration(
  * doesn't have the minimum credentials to attempt a request.
  */
 function buildAdapter(integration: IntegrationRow): CMSV6Adapter | null {
-  const cfg = integration.config ?? {};
-  const account = (cfg as Record<string, unknown>).account as string | undefined;
-  const password = (cfg as Record<string, unknown>).password as string | undefined;
+  const cfg = decryptConfigSecrets(integration.config ?? {});
+  const account = cfg.account as string | undefined;
+  const password = cfg.password as string | undefined;
   if (!account || !password) return null;
   return createCmsv6Adapter({
     baseUrl: integration.baseUrl,
     account,
     password,
-    apiKey: (cfg as Record<string, unknown>).apiKey as string | undefined,
-    sessionTtlSec: (cfg as Record<string, unknown>).sessionTtlSec as number | undefined,
-    timeoutMs: (cfg as Record<string, unknown>).timeoutMs as number | undefined,
+    apiKey: cfg.apiKey as string | undefined,
+    sessionTtlSec: cfg.sessionTtlSec as number | undefined,
+    timeoutMs: cfg.timeoutMs as number | undefined,
   });
 }
 
-async function logSync(params: {
+export async function logSync(params: {
   companyId: number;
   integrationId: number | null;
   deviceId?: number | null;
@@ -358,11 +396,17 @@ router.get(
           ORDER BY id DESC`,
         [scope.allowedCompanies],
       );
-      // Never leak account/password to the wire.
-      const masked = rows.map((r) => ({
-        ...r,
-        config: maskCmsv6Config(r.config),
-      }));
+      // Never leak account/password/webhookSecret to the wire. Decrypt for
+      // the masker so it can show the last 2 chars (operator UX) — the
+      // ciphertext envelope itself isn't useful client-side.
+      const masked = rows.map((r) => {
+        const decrypted = decryptConfigSecrets(r.config ?? {});
+        return {
+          ...r,
+          config: maskCmsv6Config(decrypted),
+          webhookSecret: r.webhookSecret ? "***configured***" : null,
+        };
+      });
       res.json({ data: masked });
     } catch (e) {
       handleRouteError(e, res, "fleet-telematics");
@@ -380,12 +424,20 @@ router.post(
       const err = await validateCmsv6BaseUrl(body.baseUrl);
       if (err) throw new ValidationError(err);
 
+      // Encrypt secrets in config before they hit the DB. encryptSecret
+      // is idempotent — passing an already-encrypted value through is a
+      // no-op, so a future re-save doesn't double-wrap.
+      const encryptedConfig = encryptConfigSecrets(body.config ?? {});
+      const encryptedWebhookSecret = body.webhookSecret
+        ? encryptSecret(body.webhookSecret)
+        : null;
+
       const { insertId } = await rawExecute(
         `INSERT INTO fleet_telematics_integrations
            ("companyId","branchId",provider,"displayName","baseUrl",
             "vendorSecretSlug","pollIntervalSec","videoOnDemandOnly",
-            status,config,notes,"createdBy")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+            status,config,"webhookSecret",notes,"createdBy")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
          RETURNING id`,
         [
           scope.companyId,
@@ -397,7 +449,8 @@ router.post(
           body.pollIntervalSec ?? 30,
           body.videoOnDemandOnly ?? true,
           body.status ?? "inactive",
-          JSON.stringify(body.config ?? {}),
+          JSON.stringify(encryptedConfig),
+          encryptedWebhookSecret,
           body.notes ?? null,
           scope.userId,
         ],
@@ -407,7 +460,13 @@ router.post(
         entity: "fleet_telematics_integrations",
         action: "create",
         entityId: id,
-        after: { ...body, config: maskCmsv6Config(body.config ?? {}) },
+        // Pass the MASKED form through so the audit log doesn't store
+        // plaintext credentials either.
+        after: {
+          ...body,
+          config: maskCmsv6Config(body.config ?? {}),
+          webhookSecret: body.webhookSecret ? "***" : null,
+        },
       });
       res.status(201).json({ data: { id } });
     } catch (e) {
@@ -447,10 +506,16 @@ router.patch(
       if (body.videoOnDemandOnly !== undefined) setField("videoOnDemandOnly", body.videoOnDemandOnly);
       if (body.status !== undefined) setField("status", body.status);
       if (body.config !== undefined) {
-        // Merge so a partial PATCH keeps secrets already on file.
-        const merged = { ...(existing.config ?? {}), ...body.config };
+        // Merge so a partial PATCH keeps secrets already on file. Anything
+        // in body.config that is a known secret key gets encrypted before
+        // the merge so plaintext never lands in JSONB.
+        const incoming = encryptConfigSecrets(body.config);
+        const merged = { ...(existing.config ?? {}), ...incoming };
         sets.push(`config = $${paramIdx++}`);
         params.push(JSON.stringify(merged));
+      }
+      if (body.webhookSecret !== undefined) {
+        setField("webhookSecret", body.webhookSecret ? encryptSecret(body.webhookSecret) : null);
       }
       if (body.notes !== undefined) setField("notes", body.notes);
       if (sets.length === 0) {
@@ -1011,10 +1076,14 @@ router.post(
 );
 
 // ─────────────────────────────────────────────────────────────────────────
-// Webhook receiver — CMSV6 vendors that support push delivery POST here.
+// Internal testing surface for QA — pushes a CMSV6-shaped payload through
+// the SAME normaliser + persist helpers the real webhook uses. The
+// production webhook lives at /api/webhooks/cmsv6/:integrationId and is
+// HMAC-signed; this route is JWT-authenticated and intended for internal
+// payload injection during pilot testing only.
 // ─────────────────────────────────────────────────────────────────────────
 router.post(
-  "/telematics/webhook/cmsv6",
+  "/telematics/webhook/cmsv6/test",
   authorize({ feature: "fleet.telematics.sync", action: "create" }),
   async (req, res) => {
     const started = Date.now();
@@ -1108,8 +1177,8 @@ router.post(
         `INSERT INTO fleet_video_sessions
            ("companyId","branchId","deviceId","vehicleId","channelNo",
             "streamType","streamUrl","expiresAt","requestedBy",reason,
-            "linkedAlertId",status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active')
+            "linkedAlertId","externalSessionId",status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'active')
          RETURNING id`,
         [
           scope.companyId,
@@ -1123,6 +1192,7 @@ router.post(
           scope.userId,
           body.reason ?? null,
           body.linkedAlertId ?? null,
+          handle.externalSessionId ?? null,
         ],
       );
       const id = assertInsert(insertId, "fleet_video_sessions");
@@ -1171,8 +1241,9 @@ router.post(
         deviceId: number;
         status: string;
         streamUrl: string | null;
+        externalSessionId: string | null;
       }>(
-        `SELECT id, "companyId", "deviceId", status, "streamUrl"
+        `SELECT id, "companyId", "deviceId", status, "streamUrl", "externalSessionId"
            FROM fleet_video_sessions
           WHERE id = $1 AND "companyId" = ANY($2::int[])`,
         [id, scope.allowedCompanies],
@@ -1184,7 +1255,10 @@ router.post(
       }
 
       // Best-effort vendor stop. We always close the local row even if
-      // CMSV6 is unreachable so the audit trail is correct.
+      // CMSV6 is unreachable so the audit trail is correct. The vendor
+      // session id was persisted on open (migration 229), so the close
+      // call no longer regex-parses the URL — which was hostile-input
+      // adjacent and fragile.
       try {
         const [device] = await rawQuery<DeviceRow>(
           `SELECT * FROM fleet_telematics_devices WHERE id = $1`,
@@ -1196,11 +1270,8 @@ router.post(
             device.integrationId ?? undefined,
           );
           const adapter = integration ? buildAdapter(integration) : null;
-          if (adapter && sess.streamUrl) {
-            // Pull a vendor session-id out of the streamUrl if there is one
-            // (best-effort; the close endpoint accepts whatever we have).
-            const m = sess.streamUrl.match(/session=([^&]+)/);
-            await adapter.closeVideoSession(m?.[1] ?? String(id));
+          if (adapter && sess.externalSessionId) {
+            await adapter.closeVideoSession(sess.externalSessionId);
           }
         }
       } catch (err) {
@@ -1284,7 +1355,7 @@ router.get(
 // Idempotency lives in the DB unique indexes; ON CONFLICT DO NOTHING is
 // the right level of strictness here.
 // ─────────────────────────────────────────────────────────────────────────
-async function persistPosition(
+export async function persistPosition(
   companyId: number,
   branchId: number | null,
   device: DeviceRow,
@@ -1335,7 +1406,7 @@ async function persistPosition(
   return affectedRows > 0;
 }
 
-async function persistEvent(
+export async function persistEvent(
   companyId: number,
   branchId: number | null,
   device: DeviceRow,
@@ -1384,7 +1455,7 @@ async function persistEvent(
   return affectedRows > 0;
 }
 
-async function persistAlert(
+export async function persistAlert(
   companyId: number,
   branchId: number | null,
   device: DeviceRow,
@@ -1476,7 +1547,7 @@ async function persistAlert(
   return affectedRows > 0;
 }
 
-async function persistSensor(
+export async function persistSensor(
   companyId: number,
   branchId: number | null,
   device: DeviceRow,
