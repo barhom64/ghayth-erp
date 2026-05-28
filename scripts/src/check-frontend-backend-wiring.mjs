@@ -649,7 +649,17 @@ function extractFrontendCalls() {
     // don't credit URLs in pure config files or routing tables.
     const hasApiHelper = /\b(?:useApiQuery|useApiMutation|apiFetch|apiPatch|apiPost|apiPut|apiDelete)\s*[(<]/.test(src);
     if (hasApiHelper) {
-      const condVarRe = /\b(?:const|let)\s+(endpoint|apiUrl|apiPath)\s*(?::\s*[^=]+)?=\s*[^;]+\?/g;
+      // Match endpoint/apiUrl/apiPath/*Url named variables when bound
+      // in a conditional expression. The previous form only matched the
+      // 3 specific names; pages like properties-owner-statement bind
+      // their URL to `queryUrl` and slipped through. Catch any *Url
+      // suffix (same convention as the unconditional-arg scanner below).
+      // Greedy `[^;]+\?` was matching past nested `?` inside template
+      // literals (commissionOverride ?-expression in owner-statement),
+      // so the segment we scan ended up being the INNER ternary instead
+      // of the outer one. Lazy variant + tight char class `[^;?]+` stops
+      // at the first `?` — which is what the outer ternary boundary is.
+      const condVarRe = /\b(?:const|let)\s+(endpoint|apiUrl|apiPath|[a-zA-Z_$][\w$]*Url)\s*(?::\s*[^=]+)?=\s*[^;?]+\?/g;
       for (const m of src.matchAll(condVarRe)) {
         const start = m.index + m[0].length;
         const tail = src.slice(start, Math.min(src.length, start + 600));
