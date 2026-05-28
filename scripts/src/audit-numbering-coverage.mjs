@@ -142,14 +142,9 @@ const ENGINE_FORWARD_NOTES = new Map([
 // Keying: `${file}::${table}` so a file can exempt one table and still
 // be checked for others.
 const PER_TABLE_EXEMPTIONS = new Map([
-  // crm.ts converts a CRM opportunity into a client without re-issuing
-  // a code (the opportunity already has the contact info). Gap tracked
-  // in coverage report §3 G11.
-  // crm.ts G10 closed in PR #1325. credit_memos + debit_memos
-  // (G12/G13) closed in this PR. employees.ts G11 closed in PR #1329
-  // — still in flight at the time this branch was created, so the
-  // exemption stays until #1329 lands and main has it.
-  ["employees.ts::employee_contracts", "onboarding creates contract without ref — gap tracked in coverage report §3 G11 (PR #1329 in flight)"],
+  // G10 (crm.ts) closed in PR #1325, G11 (employees.ts) closed in this
+  // PR, G12+G13 (credit_memos / debit_memos) closed in PR #1333. Only
+  // G14 (payment_runs) remains.
   ["finance-purchase.ts::payment_runs", "payment_runs uses PR-${Date.now()} inline — gap tracked in coverage report §3 inline-date-now offender + G14"],
 ]);
 
