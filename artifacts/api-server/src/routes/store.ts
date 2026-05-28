@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { handleRouteError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -259,13 +260,38 @@ router.post("/orders", authorize({ feature: "store", action: "create" }), async 
   try {
     const scope = req.scope!;
     const { orderNumber, customerName, customerPhone, status, totalAmount, items, notes, branchId } = zodParse(createStoreOrderSchema.safeParse(req.body));
-    const effectiveOrderNumber = orderNumber || `ORD-${Date.now()}`;
+    // G2 fix (Issue #1141 coverage report §3 G2) — issue a real
+    // store order number through the numbering center (scheme
+    // `store.store_order`, seeded by migration 228). The previous
+    // path built `ORD-` + Date.now() inline. The `orderNumber`
+    // query-param is still honoured for legacy imports (legacy_import_only
+    // manual edit policy on the scheme).
+    let effectiveOrderNumber = orderNumber;
+    let issuedOrder: Awaited<ReturnType<typeof issueNumber>> | null = null;
+    if (!effectiveOrderNumber) {
+      issuedOrder = await issueNumber({
+        companyId: scope.companyId,
+        branchId: branchId || scope.branchId || null,
+        moduleKey: "store",
+        entityKey: "store_order",
+        entityTable: "store_orders",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      effectiveOrderNumber = issuedOrder.number;
+    }
     const orderId = await withTransaction(async (client) => {
       const r = await client.query(
         `INSERT INTO store_orders ("orderNumber", "customerName", "customerPhone", status, "totalAmount", items, notes, "companyId", "branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
         [effectiveOrderNumber, customerName, customerPhone, status, totalAmount, items ? JSON.stringify(items) : '[]', notes, scope.companyId, branchId || scope.branchId || null]
       );
       const newId = r.rows[0].id;
+      if (issuedOrder) {
+        await client.query(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [newId, issuedOrder.assignmentId]
+        );
+      }
       if (Array.isArray(items) && items.length > 0) {
         for (const item of items) {
           const unitPrice = Number(item.unitPrice || item.price || 0);
