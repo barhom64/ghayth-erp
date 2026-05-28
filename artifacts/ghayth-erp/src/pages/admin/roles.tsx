@@ -85,6 +85,10 @@ export default function AdminRolesPage() {
   const { toast } = useToast();
   const { data: predefinedData, isLoading, isError, refetch: refetchPredefined } = useApiQuery<any>(["predefined-roles"], "/admin/predefined-roles");
   const { data: roleModulesData, refetch } = useApiQuery<any>(["role-modules"], "/settings/role-modules");
+  // GET /admin/roles — system + custom roles roll-up used to show the
+  // total count alongside the predefined system roles.
+  const { data: allRolesData } = useApiQuery<any>(["admin-roles"], "/admin/roles");
+  const allRolesCount = Number(allRolesData?.total ?? (allRolesData?.data?.length ?? 0));
   const predefinedRoles: any[] = predefinedData?.data || [];
   const roleModulesMap = new Map<string, string[]>(
     (roleModulesData?.data || []).map((r: any) => [r.roleKey, Array.isArray(r.modules) ? r.modules : []])
@@ -222,7 +226,12 @@ export default function AdminRolesPage() {
             <KeyRound className="w-8 h-8 text-purple-600" />
             إدارة الأدوار والصلاحيات
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">تعيين الوحدات المسموحة لكل دور وضبط مصفوفة الصلاحيات</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            تعيين الوحدات المسموحة لكل دور وضبط مصفوفة الصلاحيات
+            {allRolesCount > 0 && (
+              <span className="ms-2 text-xs">· إجمالي الأدوار في النظام: {allRolesCount}</span>
+            )}
+          </p>
         </div>
         <GuardedButton perm="admin:create" size="sm" onClick={() => setActiveTab(activeTab === "create" ? "modules" : "create")}>
           {activeTab === "create" ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />إنشاء دور جديد</>}
