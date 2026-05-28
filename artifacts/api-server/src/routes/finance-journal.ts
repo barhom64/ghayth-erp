@@ -1802,8 +1802,28 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
         );
       }
 
+      // Carry the FULL dimensional payload onto the reversal entry so
+      // every drilldown (vehicle/property/contract/umrah-agent/asset/
+      // activity-type) reverses cleanly. The previous SELECT pulled only
+      // 4 of ~18 dim columns, so per-vehicle profitability reports
+      // showed the original posting but not the reversal — silently
+      // double-counting the cost. Audit-trail dims (sourceLineTable/Id,
+      // activityType) propagate too so the reversal links back to the
+      // same source row.
+      //
+      // NOTE: `branchId` on the journal_line is intentionally NOT carried
+      // here because the JournalEntryLine interface in businessHelpers
+      // omits it — branchId lives on the journal_entries header. PR #1304
+      // adds it to the line shape; once merged, this SELECT + map can
+      // grow to include "branchId" too.
       const { rows: originalLines } = await client.query(
-        `SELECT "accountCode", debit, credit, description, "costCenter", "departmentId", "projectId", "employeeId"
+        `SELECT "accountCode", debit, credit, description,
+                "costCenter", "departmentId", "projectId", "employeeId",
+                "costCenterId", "vehicleId", "propertyId",
+                "unitId", "assetId", "contractId",
+                "umrahSeasonId", "umrahAgentId", "activityType",
+                "productId", "clientId", "vendorId", "driverId",
+                "sourceLineTable", "sourceLineId"
          FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL ORDER BY id ASC`,
         [id]
       );
@@ -1820,6 +1840,21 @@ journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal
         departmentId: l.departmentId as number | undefined,
         projectId: l.projectId as number | undefined,
         employeeId: l.employeeId as number | undefined,
+        costCenterId: l.costCenterId as number | undefined,
+        vehicleId: l.vehicleId as number | undefined,
+        propertyId: l.propertyId as number | undefined,
+        unitId: l.unitId as number | undefined,
+        assetId: l.assetId as number | undefined,
+        contractId: l.contractId as number | undefined,
+        umrahSeasonId: l.umrahSeasonId as number | undefined,
+        umrahAgentId: l.umrahAgentId as number | undefined,
+        activityType: l.activityType as string | undefined,
+        productId: l.productId as number | undefined,
+        clientId: l.clientId as number | undefined,
+        vendorId: l.vendorId as number | undefined,
+        driverId: l.driverId as number | undefined,
+        sourceLineTable: l.sourceLineTable as string | undefined,
+        sourceLineId: l.sourceLineId as number | undefined,
       }));
 
       const newRef = `REV-${original.ref}`;

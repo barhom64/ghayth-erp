@@ -1209,7 +1209,10 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       driverId: number | null;
       contractId: number | null;
       productId: number | null;
+      unitId: number | null;
       assetId: number | null;
+      umrahSeasonId: number | null;
+      umrahAgentId: number | null;
     };
     const buckets = new Map<string, DrBucket>();
     let postedNet = 0;
@@ -1249,7 +1252,10 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
         dims.driverId ?? "",
         dims.contractId ?? "",
         dims.productId ?? "",
+        dims.unitId ?? "",
         dims.assetId ?? "",
+        dims.umrahSeasonId ?? "",
+        dims.umrahAgentId ?? "",
       ].join("|");
       const amt = roundTo2(Number(ln.lineTotal));
       postedNet += amt;
@@ -1270,7 +1276,10 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
           driverId: dims.driverId,
           contractId: dims.contractId,
           productId: dims.productId,
+          unitId: dims.unitId,
           assetId: dims.assetId,
+          umrahSeasonId: dims.umrahSeasonId,
+          umrahAgentId: dims.umrahAgentId,
         });
       }
     }
@@ -1279,7 +1288,8 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     // account so the entry always balances against the GRNI credit.
     const diff = roundTo2(subtotal - postedNet);
     if (Math.abs(diff) >= 0.005) {
-      const fallbackKey = `${defaultInvAccount}|||||||||||`;
+      // 14 dim slots after acct → 13 pipes for the all-empty fallback key.
+      const fallbackKey = `${defaultInvAccount}|||||||||||||`;
       const prev = buckets.get(fallbackKey);
       if (prev) prev.amount = roundTo2(prev.amount + diff);
       else buckets.set(fallbackKey, {
@@ -1287,7 +1297,9 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
         vendorId: po.supplierId as number | undefined,
         costCenter: null, activityType: null, projectId: null,
         vehicleId: null, propertyId: null, employeeId: null,
-        driverId: null, contractId: null, productId: null, assetId: null,
+        driverId: null, contractId: null, productId: null,
+        unitId: null, assetId: null,
+        umrahSeasonId: null, umrahAgentId: null,
       });
     }
 
@@ -1307,7 +1319,10 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
         driverId: b.driverId ?? undefined,
         contractId: b.contractId ?? undefined,
         productId: b.productId ?? undefined,
+        unitId: b.unitId ?? undefined,
         assetId: b.assetId ?? undefined,
+        umrahSeasonId: b.umrahSeasonId ?? undefined,
+        umrahAgentId: b.umrahAgentId ?? undefined,
       }));
 
     let journalId: number | null = null;
