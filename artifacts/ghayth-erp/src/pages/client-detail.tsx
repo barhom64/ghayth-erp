@@ -70,6 +70,17 @@ export default function ClientDetail() {
   const id = params?.id || "";
   const { hideTabs: registryHideTabs } = useRegistryTabs("client", id ?? "");
   const { data: client, isLoading, isError } = useApiQuery<any>(["client", id], `/clients/${id}`, !!id);
+
+  // GET /intelligence/clients/:clientId/rfm — Recency / Frequency /
+  // Monetary score for this client (segment label + last-order date +
+  // total spend). Shown as a chip in the overview header when
+  // available.
+  const { data: rfmResp } = useApiQuery<any>(
+    ["client-rfm", id],
+    id ? `/intelligence/clients/${id}/rfm` : null,
+    { enabled: !!id },
+  );
+  const rfm = rfmResp?.data ?? rfmResp;
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
   const invoices: any[] = client?.invoices || [];
@@ -621,6 +632,11 @@ export default function ClientDetail() {
           {client && (
             <Badge className={cn("text-sm px-3 py-1", CLASSIFICATION_COLORS[client?.classification] || "bg-surface-subtle")}>
               {CLASSIFICATIONS[client?.classification] || client?.classification}
+            </Badge>
+          )}
+          {rfm && (rfm.segment || rfm.rfmSegment) && (
+            <Badge variant="outline" className="text-xs px-2 py-1" title={`R:${rfm.recencyScore ?? "—"} F:${rfm.frequencyScore ?? "—"} M:${rfm.monetaryScore ?? "—"}`}>
+              {rfm.segment ?? rfm.rfmSegment}
             </Badge>
           )}
           {client?.isBlacklisted && (
