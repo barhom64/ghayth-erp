@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -8,7 +8,7 @@ import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
-import { Edit, ArrowLeftRight } from "lucide-react";
+import { Edit, ArrowLeftRight, CheckCircle, XCircle } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 
@@ -68,6 +68,31 @@ export default function TransferDetail() {
 
   const handleEdit = () => {
     setLocation(`/hr/transfers/${id}/edit`);
+  };
+
+  // PATCH /hr/transfers/:id/receive — final step where the receiving
+  // branch manager confirms (or rejects) the transferred employee. Backend
+  // gates this on PR_APPROVAL_ROLES (branch manager / GM).
+  const receiveMut = useApiMutation<unknown, { confirmed: boolean; notes?: string }>(
+    `/hr/transfers/${id}/receive`,
+    "PATCH",
+    [["hr-transfer", String(id)], ["transfers"]],
+    {
+      successMessage: "تم استقبال الموظف",
+      onSuccess: () => refetch(),
+    },
+  );
+
+  const handleReceive = (confirmed: boolean) => {
+    if (!id) return;
+    const notes = confirmed
+      ? undefined
+      : window.prompt("سبب الرفض:") ?? undefined;
+    if (!confirmed && (!notes || !notes.trim())) {
+      toast({ variant: "destructive", title: "سبب الرفض مطلوب" });
+      return;
+    }
+    receiveMut.mutate({ confirmed, notes: notes?.trim() });
   };
 
   const overview = (
@@ -218,6 +243,34 @@ export default function TransferDetail() {
               entityType="transfer"
               entityId={id ?? 0}
               formats={["a4"]}/>
+          )}
+          {transfer?.status === "approved" && (
+            <>
+              <GuardedButton
+                perm="hr:update"
+                variant="outline"
+                size="sm"
+                onClick={() => handleReceive(true)}
+                disabled={receiveMut.isPending}
+                rateLimitAware
+                className="text-status-success-foreground"
+              >
+                <CheckCircle className="h-4 w-4 ms-1" />
+                استقبال
+              </GuardedButton>
+              <GuardedButton
+                perm="hr:update"
+                variant="outline"
+                size="sm"
+                onClick={() => handleReceive(false)}
+                disabled={receiveMut.isPending}
+                rateLimitAware
+                className="text-status-error-foreground"
+              >
+                <XCircle className="h-4 w-4 ms-1" />
+                رفض الاستقبال
+              </GuardedButton>
+            </>
           )}
           <GuardedButton
             perm="hr:update"
