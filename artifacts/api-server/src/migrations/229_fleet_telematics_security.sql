@@ -32,12 +32,15 @@
 --     DROP COLUMN IF EXISTS "webhookSecret";
 --   ALTER TABLE public.fleet_video_sessions
 --     DROP COLUMN IF EXISTS "externalSessionId";
+--   DROP INDEX IF EXISTS public.idx_fleet_video_sessions_external_session;
 --   ALTER TABLE public.fleet_device_positions
 --     DROP CONSTRAINT IF EXISTS fleet_device_positions_payload_size;
 --   ALTER TABLE public.fleet_device_events
 --     DROP CONSTRAINT IF EXISTS fleet_device_events_payload_size;
 --   ALTER TABLE public.fleet_ai_alerts
 --     DROP CONSTRAINT IF EXISTS fleet_ai_alerts_payload_size;
+--   ALTER TABLE public.fleet_sensor_readings
+--     DROP CONSTRAINT IF EXISTS fleet_sensor_readings_payload_size;
 -- ===========================================================================
 
 -- 1) webhookSecret column — stores the HMAC shared secret for the

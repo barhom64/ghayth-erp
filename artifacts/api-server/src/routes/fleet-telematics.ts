@@ -32,6 +32,7 @@ import { authorize } from "../lib/rbac/authorize.js";
 import { auditMutation, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { encryptSecret, decryptSecret, isEncrypted } from "../lib/secrets.js";
+import { telematicsBreaker } from "../lib/fleet/telematicsReliability.js";
 import {
   createCmsv6Adapter,
   validateCmsv6BaseUrl,
@@ -56,8 +57,22 @@ const upsertIntegrationSchema = z.object({
   videoOnDemandOnly: z.boolean().optional(),
   status: z.enum(["active", "inactive", "paused"]).optional(),
   config: z.record(z.unknown()).optional(),
-  /** HMAC shared secret for /api/webhooks/cmsv6/:id. Stored encrypted. */
-  webhookSecret: z.string().min(16, "مفتاح webhook يجب أن يكون 16 حرفًا على الأقل").optional(),
+  /**
+   * HMAC shared secret for /api/webhooks/cmsv6/:id. Stored encrypted.
+   * Accepts null to allow explicit clearing via PATCH (re-rotation
+   * workflow: PATCH null → PATCH "<new>"). Minimum 16 chars when set.
+   */
+  webhookSecret: z
+    .union([
+      z.string().min(16, "مفتاح webhook يجب أن يكون 16 حرفًا على الأقل"),
+      z.literal(null),
+    ])
+    .optional(),
+  // Retention / heartbeat tunables (migration 230). Range-checked at
+  // the DB level too; we mirror the bounds here for a nice error message.
+  positionRetentionDays: z.coerce.number().int().min(1).max(3650).optional(),
+  syncLogRetentionDays: z.coerce.number().int().min(1).max(365).optional(),
+  offlineThresholdSec: z.coerce.number().int().min(60).max(86400).optional(),
   notes: z.string().optional().nullable(),
 });
 
@@ -145,7 +160,7 @@ export interface DeviceRow {
   lastPositionAt: Date | null;
 }
 
-async function loadIntegration(
+export async function loadIntegration(
   companyId: number,
   integrationId?: number,
 ): Promise<IntegrationRow | null> {
@@ -199,8 +214,12 @@ function decryptConfigSecrets(config: Record<string, unknown>): Record<string, u
  * from config (DB) and are NOT fetched from env — operators manage the
  * vendor through the settings UI. Returns null when the integration
  * doesn't have the minimum credentials to attempt a request.
+ *
+ * Exported so the auto-poll cron (lib/fleet/telematicsCron.ts) reuses
+ * the same decryption + construction path the routes do — duplicating
+ * the logic was the #6 finding from the engineering review.
  */
-function buildAdapter(integration: IntegrationRow): CMSV6Adapter | null {
+export function buildAdapter(integration: IntegrationRow): CMSV6Adapter | null {
   const cfg = decryptConfigSecrets(integration.config ?? {});
   const account = cfg.account as string | undefined;
   const password = cfg.password as string | undefined;
@@ -440,8 +459,10 @@ router.post(
         `INSERT INTO fleet_telematics_integrations
            ("companyId","branchId",provider,"displayName","baseUrl",
             "vendorSecretSlug","pollIntervalSec","videoOnDemandOnly",
-            status,config,"webhookSecret",notes,"createdBy")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+            status,config,"webhookSecret",
+            "positionRetentionDays","syncLogRetentionDays","offlineThresholdSec",
+            notes,"createdBy")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
          RETURNING id`,
         [
           scope.companyId,
@@ -455,6 +476,9 @@ router.post(
           body.status ?? "inactive",
           JSON.stringify(encryptedConfig),
           encryptedWebhookSecret,
+          body.positionRetentionDays ?? 90,
+          body.syncLogRetentionDays ?? 30,
+          body.offlineThresholdSec ?? 600,
           body.notes ?? null,
           scope.userId,
         ],
@@ -519,8 +543,14 @@ router.patch(
         params.push(JSON.stringify(merged));
       }
       if (body.webhookSecret !== undefined) {
+        // null clears the secret (rotation step 1 of 2); a non-empty
+        // string sets a new one. zod already enforced the 16-char min
+        // for non-null values so we don't re-check here.
         setField("webhookSecret", body.webhookSecret ? encryptSecret(body.webhookSecret) : null);
       }
+      if (body.positionRetentionDays !== undefined) setField("positionRetentionDays", body.positionRetentionDays);
+      if (body.syncLogRetentionDays !== undefined) setField("syncLogRetentionDays", body.syncLogRetentionDays);
+      if (body.offlineThresholdSec !== undefined) setField("offlineThresholdSec", body.offlineThresholdSec);
       if (body.notes !== undefined) setField("notes", body.notes);
       if (sets.length === 0) {
         res.json({ data: existing });
@@ -1348,6 +1378,41 @@ router.get(
         [scope.allowedCompanies],
       );
       res.json({ data: rows });
+    } catch (e) {
+      handleRouteError(e, res, "fleet-telematics");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// Circuit breaker observability — operator sees which integrations the
+// auto-poll cron is currently short-circuiting on. Scoped to the caller's
+// companies so a sub-tenant doesn't see neighbours' integration ids.
+// ─────────────────────────────────────────────────────────────────────────
+router.get(
+  "/telematics/breaker-state",
+  authorize({ feature: "fleet.telematics.sync", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const all = telematicsBreaker.snapshot();
+      // Filter to integrations the caller actually owns. A platform-wide
+      // breaker state is fine in-memory but must NOT leak to a tenant UI.
+      const allowed = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_telematics_integrations
+          WHERE "companyId" = ANY($1::int[]) AND "deletedAt" IS NULL`,
+        [scope.allowedCompanies],
+      );
+      const allowedIds = new Set(allowed.map((r) => r.id));
+      const filtered = all
+        .filter((s) => allowedIds.has(s.integrationId))
+        .map((s) => ({
+          integrationId: s.integrationId,
+          failures: s.failures,
+          openedAt: s.openedAt,
+          status: s.openedAt ? "open" : "closed",
+        }));
+      res.json({ data: filtered });
     } catch (e) {
       handleRouteError(e, res, "fleet-telematics");
     }

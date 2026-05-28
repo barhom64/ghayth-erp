@@ -54,6 +54,9 @@ const DEFAULT_FORM = {
   password: "",
   apiKey: "",
   webhookSecret: "",
+  positionRetentionDays: "90",
+  syncLogRetentionDays: "30",
+  offlineThresholdSec: "600",
   notes: "",
 };
 
@@ -102,6 +105,9 @@ export default function FleetTelematicsSettings() {
         ...(form.apiKey ? { apiKey: form.apiKey } : {}),
       },
       ...(form.webhookSecret ? { webhookSecret: form.webhookSecret } : {}),
+      positionRetentionDays: Number(form.positionRetentionDays) || 90,
+      syncLogRetentionDays: Number(form.syncLogRetentionDays) || 30,
+      offlineThresholdSec: Number(form.offlineThresholdSec) || 600,
       notes: form.notes,
     });
   };
@@ -326,6 +332,46 @@ export default function FleetTelematicsSettings() {
                 <SelectItem value="active">نشط</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label>مدة الاحتفاظ بالمواقع (أيام)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={3650}
+              value={form.positionRetentionDays}
+              onChange={(e) => setForm({ ...form, positionRetentionDays: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              المواقع الأقدم تُحذف تلقائيًا في cron يومي 03:00. الافتراضي 90 يوم.
+            </p>
+          </div>
+          <div>
+            <Label>مدة الاحتفاظ بسجلات المزامنة (أيام)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={365}
+              value={form.syncLogRetentionDays}
+              onChange={(e) => setForm({ ...form, syncLogRetentionDays: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              سجلات `fleet_device_sync_logs` الأقدم تُحذف. الافتراضي 30 يوم.
+            </p>
+          </div>
+          <div>
+            <Label>عتبة قطع الاتصال (ثوانٍ)</Label>
+            <Input
+              type="number"
+              min={60}
+              max={86400}
+              value={form.offlineThresholdSec}
+              onChange={(e) => setForm({ ...form, offlineThresholdSec: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              إذا لم يصل GPS من جهاز خلال هذه المدة، يُعتبر offline تلقائيًا
+              (heartbeat كل دقيقتين). الافتراضي 600 (10 دقائق).
+            </p>
           </div>
           <div className="md:col-span-2">
             <Label>ملاحظات</Label>

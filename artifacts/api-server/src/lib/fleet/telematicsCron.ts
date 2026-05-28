@@ -27,8 +27,6 @@
 import { rawQuery, rawExecute } from "../rawdb.js";
 import { logger } from "../logger.js";
 import { emitEvent } from "../businessHelpers.js";
-import { decryptSecret, isEncrypted } from "../secrets.js";
-import { createCmsv6Adapter } from "../integrations/cmsv6Adapter.js";
 import {
   executeWithRetry,
   telematicsBreaker,
@@ -36,10 +34,8 @@ import {
 } from "./telematicsReliability.js";
 import {
   persistPosition,
-  persistEvent,
-  persistAlert,
-  persistSensor,
   logSync,
+  buildAdapter,
   type DeviceRow,
   type IntegrationRow,
 } from "../../routes/fleet-telematics.js";
@@ -217,34 +213,18 @@ export async function fleetTelematicsPoll(): Promise<string> {
 
     attempted++;
 
-    // Credentials live encrypted in config — decrypt only here, never
-    // expose plaintext to anyone above this function.
-    const cfg = integ.config ?? {};
-    const account = (cfg as Record<string, unknown>).account as string | undefined;
-    const password = (() => {
-      const v = (cfg as Record<string, unknown>).password as string | undefined;
-      if (!v) return undefined;
-      return isEncrypted(v) ? (decryptSecret(v) ?? undefined) : v;
-    })();
-    if (!account || !password) {
+    // Single source of truth for credential decryption + adapter
+    // construction — the same path the routes use. The previous
+    // implementation duplicated decryption here, which the engineering
+    // review flagged as #6.
+    const adapter = buildAdapter(integ);
+    if (!adapter) {
       logger.warn(
         { integrationId: integ.id },
         "[telematicsPoll] integration missing credentials — skipping",
       );
       continue;
     }
-    const apiKey = (() => {
-      const v = (cfg as Record<string, unknown>).apiKey as string | undefined;
-      if (!v) return undefined;
-      return isEncrypted(v) ? (decryptSecret(v) ?? undefined) : v;
-    })();
-
-    const adapter = createCmsv6Adapter({
-      baseUrl: integ.baseUrl,
-      account,
-      password,
-      apiKey,
-    });
 
     const devices = await rawQuery<DeviceRow>(
       `SELECT * FROM fleet_telematics_devices

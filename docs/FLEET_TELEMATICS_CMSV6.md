@@ -250,7 +250,7 @@ fleet.telematics.ai_alerts
 
 ### Webhook Signing — تعليمات للموفِّر
 
-العنوان: `POST https://erp.example.com/api/webhooks/cmsv6/{integrationId}`
+العنوان الفعلي بعد إصلاح bug #1: `POST https://erp.example.com/api/webhooks/cmsv6/{integrationId}`
 
 الرؤوس المطلوبة:
 
@@ -269,6 +269,25 @@ signature = "sha256=" + hex(digest)
 * النافذة الزمنية: ±5 دقائق.
 * المقارنة timing-safe.
 * الطلبات بدون توقيع، أو بتوقيع خاطئ، أو بـ timestamp قديم تُرفض بـ 401.
+
+### Endpoints الجديدة بعد الإصلاحات
+
+| المسار | الصلاحية | الوصف |
+|---|---|---|
+| `POST /api/webhooks/cmsv6/:integrationId` | anonymous + HMAC | webhook إنتاج |
+| `GET /api/fleet/telematics/breaker-state` | `fleet.telematics.sync:list` | حالة Circuit Breaker لكل تكامل في نطاق صلاحية الطالب |
+| `POST /api/fleet/telematics/webhook/cmsv6/test` | `fleet.telematics.sync:create` | حقن payload للاختبار (JWT) |
+
+### الحقول الجديدة في `fleet_telematics_integrations`
+
+| الحقل | الوصف | الافتراضي |
+|---|---|---|
+| `webhookSecret` | مفتاح HMAC المُشفّر | null |
+| `positionRetentionDays` | أيام الاحتفاظ بالمواقع | 90 |
+| `syncLogRetentionDays` | أيام الاحتفاظ بسجلات المزامنة | 30 |
+| `offlineThresholdSec` | ثوانٍ قبل اعتبار الجهاز offline | 600 |
+
+كل هذه الحقول قابلة للتعديل من شاشة الإعدادات في الواجهة.
 
 ## Known Limitations (المتبقية بعد Hardening)
 

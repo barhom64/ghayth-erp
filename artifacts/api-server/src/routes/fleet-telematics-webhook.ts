@@ -25,7 +25,7 @@
 import { Router, type Request, type Response } from "express";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import rateLimit from "express-rate-limit";
-import { rawQuery } from "../lib/rawdb.js";
+import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { decryptSecret } from "../lib/secrets.js";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
@@ -82,7 +82,7 @@ function verifySignature(
 }
 
 router.post(
-  "/cmsv6/:integrationId",
+  "/:integrationId",
   webhookLimiter,
   async (req: Request, res: Response) => {
     const started = Date.now();
@@ -179,6 +179,22 @@ router.post(
         const dev = devByNo.get(s.cmsv6DeviceNo);
         processed++;
         if (dev && (await persistSensor(integration.companyId, integration.branchId, dev, s))) created++;
+      }
+
+      // Touch the integration row so the "last received" indicator on
+      // the settings page reflects real-time webhook activity, not just
+      // explicit /sync/* calls.
+      try {
+        await rawExecute(
+          `UPDATE fleet_telematics_integrations
+              SET "lastSyncAt" = NOW(),
+                  "lastSyncStatus" = 'success',
+                  "lastSyncError" = NULL
+            WHERE id = $1`,
+          [integration.id],
+        );
+      } catch (err) {
+        logger.warn({ err, integrationId: integration.id }, "webhook lastSync touch failed");
       }
 
       void logSync({
