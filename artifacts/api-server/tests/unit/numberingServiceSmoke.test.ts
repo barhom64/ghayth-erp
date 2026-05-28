@@ -695,11 +695,13 @@ describe("phase-7 real-closure (#1141)", () => {
 
   it("audit-numbering-coverage enforces per-table coverage with documented exemptions", () => {
     // The stronger check catches files that issue for SOME tables but
-    // INSERT into OTHER tables without issuing. Each exemption must
-    // cite the coverage report.
+    // INSERT into OTHER tables without issuing. After G10-G14 closures
+    // the PER_TABLE_EXEMPTIONS map is now empty; the test just locks
+    // the structure (map exists + helper exists + closure comment cites
+    // the G-codes so the audit script still documents the journey).
     expect(AUDIT).toContain("PER_TABLE_EXEMPTIONS");
     expect(AUDIT).toContain("tablesIssuedFor");
-    expect(AUDIT).toMatch(/coverage report.*G1[0-5]/);
+    expect(AUDIT).toMatch(/G10[–-]G14|G1[0-5]/);
   });
 
   it("audit-numbering-coverage extends scan to lib/engines + cron + disciplineEngine", () => {
@@ -719,13 +721,15 @@ describe("phase-7 real-closure (#1141)", () => {
   it("inline-date-now-as-ref lint rule exists with explicit baseline", () => {
     const LINT = readFileSync(join(REPO_ROOT, "scripts/src/lint-patterns.mjs"), "utf8");
     expect(LINT).toContain('id: "inline-date-now-as-ref"');
-    // Must enumerate the 5 known offenders inline in the comment so a
-    // reviewer can see the live state without running the linter.
+    // Must enumerate the remaining offenders inline in the comment so
+    // a reviewer can see the live state without running the linter.
+    // After G14 fix the finance-purchase.ts PR- offender is closed,
+    // dropping baseline from 5 to 4.
     expect(LINT).toMatch(/communications\.ts.*CALL/);
     expect(LINT).toMatch(/finance-invoices\.ts.*ADV/);
-    expect(LINT).toMatch(/finance-purchase\.ts.*PR-/);
     expect(LINT).toMatch(/properties\.ts.*RENT/);
     expect(LINT).toMatch(/store\.ts.*ORD/);
+    expect(LINT).toMatch(/countBaseline:\s*4/);
   });
 });
 

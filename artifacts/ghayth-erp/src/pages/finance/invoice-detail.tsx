@@ -163,6 +163,19 @@ export default function InvoiceDetailPage() {
     },
   );
 
+  // POST /invoices/:id/post — moves an approved invoice to posted (final
+  // step in the maker-checker flow). Distinct from /approve which only
+  // marks the invoice as ready; /post is what generates the journal
+  // entries and locks the row from further edits.
+  const postMut = useApiMutation<unknown, Record<string, never>>(
+    () => `/finance/invoices/${id}/post`,
+    "POST",
+    [["invoice-detail", id || ""], ["invoices"], ["finance-stats"]],
+    {
+      successMessage: "تم ترحيل الفاتورة — تم إنشاء قيد المحاسبة",
+    },
+  );
+
   // Loading / error states are now handled by DetailPageLayout.
 
   const lines = invoice?.lines || [];
@@ -533,6 +546,33 @@ export default function InvoiceDetailPage() {
             </CardContent>
           </Card>
         </>
+      )}
+
+      {invoice.status === "approved" && (
+        <Card className="border-status-info-surface">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between gap-2">
+              <span>الترحيل المحاسبي</span>
+              <GuardedButton
+                perm="finance:approve"
+                onClick={() => {
+                  if (window.confirm("سيتم ترحيل الفاتورة وإنشاء قيد المحاسبة. متابعة؟")) {
+                    postMut.mutate({});
+                  }
+                }}
+                disabled={postMut.isPending}
+                rateLimitAware
+              >
+                ترحيل
+              </GuardedButton>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              الفاتورة معتمدة. اضغط <strong>ترحيل</strong> لإنشاء قيد المحاسبة وقفل الفاتورة عن أي تعديل.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
       <Card>

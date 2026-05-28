@@ -110,11 +110,11 @@ router.get("/", authorize({ feature: "admin", action: "list" }), async (req, res
             ELSE 'اتصال'
           END AS action,
           'communications' AS module,
-          COALESCE(cl.subject, cl.channel || ' - ' || cl."fromNumber") AS target,
-          COALESCE(cl."fromNumber", 'النظام') AS "userName",
+          COALESCE(cl.subject, cl.channel || ' - ' || cl."fromAddress") AS target,
+          COALESCE(cl."fromAddress", 'النظام') AS "userName",
           cl.id::text AS "entityId",
           'communication' AS "entityType"
-        FROM communications_log cl
+        FROM v_message_log_all cl
         WHERE cl."companyId" = $1 AND cl."deletedAt" IS NULL
         ${module ? `AND 'communications' = $${moduleParamIndex}` : ""}
 
@@ -178,7 +178,7 @@ router.get("/", authorize({ feature: "admin", action: "list" }), async (req, res
         UNION ALL
         SELECT r.id FROM requests r WHERE r."companyId" = $1 AND r."deletedAt" IS NULL ${module ? `AND 'requests' = $${moduleParamIndex}` : ""}
         UNION ALL
-        SELECT cl.id FROM communications_log cl WHERE cl."companyId" = $1 AND cl."deletedAt" IS NULL ${module ? `AND 'communications' = $${moduleParamIndex}` : ""}
+        SELECT cl.id FROM v_message_log_all cl WHERE cl."companyId" = $1 AND cl."deletedAt" IS NULL ${module ? `AND 'communications' = $${moduleParamIndex}` : ""}
         UNION ALL
         SELECT lr.id FROM hr_leave_requests lr WHERE lr."companyId" = $1 AND lr."deletedAt" IS NULL ${module ? `AND 'hr' = $${moduleParamIndex}` : ""}
         UNION ALL

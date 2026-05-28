@@ -1649,9 +1649,29 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
       whtCreditByAccount.set(code, roundTo2((whtCreditByAccount.get(code) ?? 0) + w.wht));
     }
 
-    // Persist a payment_runs header row (create table if missing)
+    // Persist a payment_runs header row (create table if missing).
+    // G14 fix (Issue #1141 coverage report 2026-05-27 §3 G14) — issue
+    // a real payment_run ref through the numbering center (scheme
+    // `purchase.payment_run`, seeded by migration 227) instead of the
+    // inline Date.now() legacy. The `reference` query-param is still
+    // honoured for legacy imports.
     let runId: number | null = null;
-    const runRef = reference || `PR-${Date.now()}`;
+    let runRef: string;
+    let issuedRun: Awaited<ReturnType<typeof issueNumber>> | null = null;
+    if (reference) {
+      runRef = reference;
+    } else {
+      issuedRun = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "purchase",
+        entityKey: "payment_run",
+        entityTable: "payment_runs",
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      runRef = issuedRun.number;
+    }
     await withTransaction(async (client: any) => {
       try {
         const ins = await client.query(
@@ -1696,6 +1716,12 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
         } else {
           throw e;
         }
+      }
+      if (issuedRun && runId) {
+        await client.query(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [runId, issuedRun.assignmentId]
+        );
       }
 
       for (const po of pos) {
