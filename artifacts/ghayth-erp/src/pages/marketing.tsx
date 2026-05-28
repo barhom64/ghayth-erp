@@ -118,9 +118,30 @@ function CampaignsTab() {
   const { data: stats } = useApiQuery<any>(["mkt-stats"], "/marketing/stats");
   const { data: campaignsResp, isLoading, isError, error, refetch } = useApiQuery<any>(["mkt-campaigns"], "/marketing/campaigns");
   const items = asList(campaignsResp);
+  // GET /marketing/templates — list of reusable email/SMS templates.
+  // Surfaced as a side panel under the campaigns table.
+  const { data: templatesResp } = useApiQuery<any>(["mkt-templates"], "/marketing/templates");
+  const templates: any[] = templatesResp?.data ?? asList(templatesResp);
   const [filters, setFilters] = useFilters();
   const pageSize = 20;
   const [previewCampaign, setPreviewCampaign] = useState<any>(null);
+
+  // GET /marketing/campaigns/:id and /marketing/campaigns/:id/roas — only
+  // fetch the detail + ROAS when the quick-preview is open so we don't
+  // spam the network for the whole list.
+  const previewId: number | null = previewCampaign?.id ?? null;
+  const { data: campaignDetailResp } = useApiQuery<any>(
+    ["mkt-campaign-detail", String(previewId ?? 0)],
+    previewId ? `/marketing/campaigns/${previewId}` : null,
+    { enabled: !!previewId },
+  );
+  const { data: campaignRoasResp } = useApiQuery<any>(
+    ["mkt-campaign-roas", String(previewId ?? 0)],
+    previewId ? `/marketing/campaigns/${previewId}/roas` : null,
+    { enabled: !!previewId },
+  );
+  const campaignDetail = campaignDetailResp?.data ?? campaignDetailResp;
+  const campaignRoas = campaignRoasResp?.data ?? campaignRoasResp;
   const campaignFields: PreviewField[] = [
     { label: "الحملة", key: "name" },
     { label: "القناة", key: "channel", type: "badge" },
@@ -267,7 +288,47 @@ function CampaignsTab() {
           />
         </CardContent>
       </Card>
-      <QuickPreviewDialog open={!!previewCampaign} onOpenChange={() => setPreviewCampaign(null)} title="تفاصيل الحملة" data={previewCampaign} fields={campaignFields} />
+
+      {templates.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">قوالب التسويق ({templates.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {templates.slice(0, 8).map((t: any) => (
+                <div key={t.id} className="p-2 flex justify-between text-xs">
+                  <div>
+                    <p className="font-medium">{t.name ?? t.subject ?? "—"}</p>
+                    <p className="text-[10px] text-muted-foreground">{t.channel ?? t.type ?? "—"}</p>
+                  </div>
+                  {t.usageCount != null && (
+                    <span className="text-[10px] text-muted-foreground">{t.usageCount} استخدام</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <QuickPreviewDialog
+        open={!!previewCampaign}
+        onOpenChange={() => setPreviewCampaign(null)}
+        title="تفاصيل الحملة"
+        data={{
+          ...(previewCampaign ?? {}),
+          ...(campaignDetail ?? {}),
+          ...(campaignRoas
+            ? {
+                roas: campaignRoas.roas,
+                cac: campaignRoas.cac,
+                conversions: campaignRoas.conversions,
+              }
+            : {}),
+        }}
+        fields={campaignFields}
+      />
     </div>
   );
 }
