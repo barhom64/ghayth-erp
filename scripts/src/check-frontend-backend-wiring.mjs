@@ -291,14 +291,25 @@ function extractFrontendCalls() {
       let i = m.index + m[0].length;
       while (i < src.length && /\s/.test(src[i])) i++;
       if (helper === "useApiQuery") {
-        // Skip the array literal arg.
-        if (src[i] !== "[") continue;
-        let depth = 1;
-        i++;
-        while (i < src.length && depth > 0) {
-          if (src[i] === "[") depth++;
-          else if (src[i] === "]") depth--;
+        // First arg is the query key. Normally an array literal but
+        // sometimes pre-built into a `const qk = [...]` variable that
+        // gets passed as an identifier (entity-tags pattern). Skip
+        // either form, then the comma + whitespace before the URL.
+        if (src[i] === "[") {
+          let depth = 1;
           i++;
+          while (i < src.length && depth > 0) {
+            if (src[i] === "[") depth++;
+            else if (src[i] === "]") depth--;
+            i++;
+          }
+        } else if (/[a-zA-Z_$]/.test(src[i])) {
+          // Identifier (variable holding the key). Read until comma.
+          while (i < src.length && src[i] !== "," && src[i] !== ")") i++;
+        } else {
+          // Anything else (digit, paren, etc.) — bail out, this isn't
+          // a shape we can confidently parse.
+          continue;
         }
         // Skip the comma + whitespace before the URL arg.
         while (i < src.length && /[\s,]/.test(src[i])) i++;
