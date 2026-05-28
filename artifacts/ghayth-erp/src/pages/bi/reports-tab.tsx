@@ -26,6 +26,15 @@ export function ReportsTab() {
     searchFields: ["title", "type", "description"],
   });
 
+  // GET /bi/reports/umrah-season-summary — built-in season analytics
+  // (total pilgrims, revenue, top agents). Surfaced as a "summary card"
+  // tile above the reports list so it's discoverable without browsing.
+  const { data: umrahSummaryResp } = useApiQuery<any>(
+    ["bi-umrah-season-summary"],
+    "/bi/reports/umrah-season-summary",
+  );
+  const umrahSummary = umrahSummaryResp?.data ?? umrahSummaryResp;
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -56,6 +65,32 @@ export function ReportsTab() {
         </div>
         {canWrite && <Link href="/bi/reports/create"><GuardedButton perm="bi:create" className="gap-2"><Plus className="h-4 w-4" /> إضافة تقرير</GuardedButton></Link>}
       </div>
+      {umrahSummary && (
+        <Card className="border-emerald-200 bg-emerald-50/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">ملخص موسم العمرة</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <div>
+              <p className="text-muted-foreground">عدد المعتمرين</p>
+              <p className="font-bold text-base">{umrahSummary.pilgrimCount ?? umrahSummary.totalPilgrims ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">إجمالي الإيرادات</p>
+              <p className="font-bold text-base font-mono">{umrahSummary.totalRevenue ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">عدد الوكلاء</p>
+              <p className="font-bold text-base">{umrahSummary.agentCount ?? umrahSummary.activeAgents ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">عدد الباقات النشطة</p>
+              <p className="font-bold text-base">{umrahSummary.activePackages ?? "—"}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader><CardTitle>التقارير</CardTitle></CardHeader>
         <CardContent>

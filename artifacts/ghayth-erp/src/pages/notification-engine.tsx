@@ -498,6 +498,15 @@ function FallbackChainsTab() {
     { successMessage: "تم الحذف" }
   );
 
+  // PUT /notification-engine/fallback-chains/:id — toggle the
+  // enabled/disabled state of a chain without rebuilding it.
+  const toggleMut = useApiMutation<any, { id: number; enabled: boolean }>(
+    (body) => `/notification-engine/fallback-chains/${body.id}`,
+    "PUT",
+    [["notif-fallback-chains"]],
+    { successMessage: "تم التحديث" },
+  );
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -588,9 +597,22 @@ function FallbackChainsTab() {
                   {!!chain.description && <p className="text-xs text-muted-foreground">{String(chain.description)}</p>}
                 </div>
                 {!isGlobal && (
-                  <GuardedButton perm="settings:create" size="sm" variant="ghost" className="text-status-error" onClick={() => deleteChain(chain.id as number)}>
-                    <Trash2 className="h-3 w-3" />
-                  </GuardedButton>
+                  <div className="flex items-center gap-1">
+                    <GuardedButton
+                      perm="settings:create"
+                      size="sm"
+                      variant="ghost"
+                      className="text-xs"
+                      onClick={() => toggleMut.mutate({ id: chain.id as number, enabled: !chain.enabled })}
+                      disabled={toggleMut.isPending}
+                      rateLimitAware
+                    >
+                      {chain.enabled ? "تعطيل" : "تفعيل"}
+                    </GuardedButton>
+                    <GuardedButton perm="settings:create" size="sm" variant="ghost" className="text-status-error" onClick={() => deleteChain(chain.id as number)}>
+                      <Trash2 className="h-3 w-3" />
+                    </GuardedButton>
+                  </div>
                 )}
               </div>
               <div className="flex items-center gap-2 mt-3 flex-wrap">
@@ -940,7 +962,7 @@ function PreferencesTab() {
     setDirty(true);
   };
 
-  const saveMut = useApiMutation<any, { preferences: Array<Record<string, any>> }>(
+  const saveMut = useApiMutation<any, { preferences: any[] }>(
     "/notification-engine/preferences",
     "PUT",
     [["notif-preferences"]],
