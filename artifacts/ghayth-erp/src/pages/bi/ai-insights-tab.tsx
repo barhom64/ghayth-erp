@@ -33,6 +33,17 @@ export function AIInsightsTab() {
     setDismissingId(null);
   };
 
+  const handleMarkRead = async (id: number) => {
+    // PATCH /bi/ai-insights/:id/read — distinct from dismiss: read
+    // keeps the alert in the inbox but unflagged, dismiss removes it.
+    try {
+      await apiFetch(`/bi/ai-insights/${id}/read`, { method: "PATCH" });
+      refetch();
+    } catch {
+      toast({ title: "خطأ", variant: "destructive" });
+    }
+  };
+
   const severityConfig: Record<string, { label: string; color: string; bg: string }> = {
     critical: { label: "عاجل", color: "text-status-error-foreground", bg: "bg-status-error-surface border-status-error-surface" },
     warning: { label: "مهم", color: "text-status-warning-foreground", bg: "bg-status-warning-surface border-status-warning-surface" },
@@ -96,15 +107,27 @@ export function AIInsightsTab() {
                       )}
                     </div>
                   </div>
-                  <GuardedButton
-                    perm="bi:create"
-                    size="sm" variant="ghost"
-                    onClick={() => handleDismiss(alert.id)}
-                    disabled={dismissingId === alert.id}
-                    className="shrink-0"
-                  >
-                    <X className="h-4 w-4" />
-                  </GuardedButton>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {!alert.readAt && (
+                      <GuardedButton
+                        perm="bi:create"
+                        size="sm" variant="ghost"
+                        onClick={() => handleMarkRead(alert.id)}
+                        title="تعليم كمقروء"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                      </GuardedButton>
+                    )}
+                    <GuardedButton
+                      perm="bi:create"
+                      size="sm" variant="ghost"
+                      onClick={() => handleDismiss(alert.id)}
+                      disabled={dismissingId === alert.id}
+                      title="إغلاق"
+                    >
+                      <X className="h-4 w-4" />
+                    </GuardedButton>
+                  </div>
                 </div>
               </CardContent>
             </Card>
