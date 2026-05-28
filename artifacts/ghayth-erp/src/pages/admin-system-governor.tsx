@@ -93,6 +93,21 @@ export default function AdminSystemGovernor() {
   );
   const registryPages: any[] = pagesResp?.pages ?? [];
 
+  // Events catalogue + recent log + stats. The catalogue lists every
+  // event the engine knows how to emit; the log is the actual feed.
+  const { data: eventsCatalogResp } = useApiQuery<{ events?: any[]; data?: any[] }>(
+    ["admin-events-catalog"], "/events/catalog",
+  );
+  const eventsCatalog: any[] = eventsCatalogResp?.events ?? eventsCatalogResp?.data ?? [];
+  const { data: eventsLogResp } = useApiQuery<{ data?: any[]; rows?: any[] }>(
+    ["admin-events-log"], "/events/log",
+  );
+  const eventsLog: any[] = eventsLogResp?.data ?? eventsLogResp?.rows ?? [];
+  const { data: eventsStatsResp } = useApiQuery<any>(
+    ["admin-events-log-stats"], "/events/log/stats",
+  );
+  const eventsStats = eventsStatsResp?.data ?? eventsStatsResp;
+
   const allowed = data?.allowed ?? true;
   const violations = data?.violations ?? [];
 
@@ -114,6 +129,7 @@ export default function AdminSystemGovernor() {
             <TabsTrigger value="dlq"><Inbox className="h-4 w-4 me-1" />أحداث فاشلة ({dlqEntries.length})</TabsTrigger>
             <TabsTrigger value="health"><Activity className="h-4 w-4 me-1" />صحة النظام ({healthChecks.length})</TabsTrigger>
             <TabsTrigger value="stops"><Pause className="h-4 w-4 me-1" />الإيقافات ({stops.filter((s) => s.active).length})</TabsTrigger>
+            <TabsTrigger value="events">سجل الأحداث ({eventsLog.length})</TabsTrigger>
             <TabsTrigger value="pages">سجل الصفحات ({registryPages.length})</TabsTrigger>
           </TabsList>
 
@@ -354,6 +370,60 @@ export default function AdminSystemGovernor() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="events">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">سجل الأحداث (آخر {eventsLog.length})</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {eventsLog.length === 0 ? (
+                  <p className="p-8 text-center text-sm text-muted-foreground">لا توجد أحداث مسجَّلة</p>
+                ) : (
+                  <div className="divide-y max-h-96 overflow-y-auto">
+                    {eventsLog.slice(0, 100).map((e: any, i: number) => (
+                      <div key={e.id ?? i} className="p-2 grid grid-cols-12 gap-2 text-xs items-center">
+                        <span className="col-span-4 font-mono font-semibold">{e.eventName ?? e.action ?? "—"}</span>
+                        <span className="col-span-4 text-muted-foreground line-clamp-1">{e.details ?? e.entity ?? ""}</span>
+                        <span className="col-span-3 text-[10px] text-muted-foreground">{e.createdAt ? formatDateAr(e.createdAt) : ""}</span>
+                        <Badge variant="outline" className="col-span-1 text-[10px] justify-center">{e.entityId ?? "—"}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">كتالوج الأحداث + الإحصاءات</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs space-y-2">
+                <div>
+                  <p className="font-semibold mb-1">الكتالوج ({eventsCatalog.length}):</p>
+                  <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+                    {eventsCatalog.slice(0, 40).map((e: any, i: number) => (
+                      <span key={i} className="px-1.5 py-0.5 bg-surface-subtle rounded text-[10px] font-mono">
+                        {typeof e === "string" ? e : e.name ?? "—"}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                {eventsStats && (
+                  <div className="border-t pt-2">
+                    <p className="font-semibold mb-1">إحصاءات السجل:</p>
+                    {Object.entries(eventsStats as Record<string, any>).slice(0, 6).map(([k, v]) => (
+                      <div key={k} className="flex justify-between">
+                        <span className="text-muted-foreground">{k}</span>
+                        <span className="font-mono">{typeof v === "object" ? JSON.stringify(v).slice(0, 30) : String(v)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="pages">
