@@ -126,6 +126,13 @@ const EnvSchema = z.object({
   // session open. Clamped 15..300 below. The client must redeem the
   // token within this window; expired tokens return 401 from the proxy.
   FLEET_TELEMATICS_PROXY_TTL_SEC: intEnv(60),
+  // Per-IP rate limit on the anonymous webhook endpoint (requests/minute).
+  // Default 3000/min comfortably covers 100+ vehicles each pushing ~20
+  // events/min with headroom for retries — vendors that push more should
+  // be tested then this raised explicitly via env. Operators can lower
+  // it for hostile-traffic protection. Clamped 100..60000 to stop a
+  // typo from disabling the cap entirely.
+  FLEET_TELEMATICS_WEBHOOK_RATE_LIMIT: intEnv(3000),
 
   // -- object storage ------------------------------------------------------
   PUBLIC_OBJECT_SEARCH_PATHS: optStr(),
@@ -262,6 +269,8 @@ export interface AppConfig {
     readonly allowHttp: boolean;
     /** Video proxy token TTL — clamped 15..300 seconds. */
     readonly proxyTtlSec: number;
+    /** Per-IP webhook rate limit (req/min). Clamped 100..60000. */
+    readonly webhookRateLimit: number;
   };
 
   readonly admin: {
@@ -430,6 +439,7 @@ function buildConfig(env: RawEnv): AppConfig {
     fleetTelematics: {
       allowHttp: env.FLEET_TELEMATICS_ALLOW_HTTP,
       proxyTtlSec: Math.min(300, Math.max(15, env.FLEET_TELEMATICS_PROXY_TTL_SEC)),
+      webhookRateLimit: Math.min(60000, Math.max(100, env.FLEET_TELEMATICS_WEBHOOK_RATE_LIMIT)),
     },
 
     admin: {

@@ -1605,9 +1605,11 @@ router.get(
 /**
  * Per-device throttle for `fleet.telematics.position.updated`. Persistence
  * still happens on every GPS point (the live map needs that) but emitting
- * an event for every point at 20 vehicles × every-30s would mean 57k
- * events/day, each one fanning out to every listener registered on the
- * bus. Throttle to 1 event/device/minute so the bus stays useful.
+ * an event for every point would saturate the bus at any non-trivial
+ * fleet size — at 100 vehicles × every-30s that's 288k events/day, each
+ * one fanning out to every listener registered on the bus. Throttle to
+ * 1 event/device/minute so the bus stays useful and the throttle scales
+ * linearly with vehicle count (each device gets its own slot).
  *
  * In-memory map is fine: missing a throttle window across a process
  * restart just means one extra event — same effect as if the next
@@ -1815,11 +1817,12 @@ export async function persistAlert(
 
 /**
  * Sensor-type-specific thresholds for `*_changed` event emission. Without
- * these, every fuel/weight reading would emit an event (57k+/day for a
- * 20-vehicle fleet) — most listeners only care about meaningful deltas
- * (a top-up, a load drop, a dump truck unloading). Numbers are tunable
- * but conservative enough to surface real operational events while
- * suppressing sensor noise.
+ * these, every fuel/weight reading would emit an event regardless of
+ * fleet size — most listeners only care about meaningful deltas (a
+ * top-up, a load drop, a dump truck unloading). Numbers are tunable but
+ * conservative enough to surface real operational events while
+ * suppressing sensor noise. Thresholds are per-device-per-type so they
+ * scale to any vehicle count without re-tuning.
  */
 const SENSOR_DELTA_THRESHOLDS: Record<string, number> = {
   fuel_level: 5,    // litres — sub-5L drift is noise; ≥5L is a fill/drain.

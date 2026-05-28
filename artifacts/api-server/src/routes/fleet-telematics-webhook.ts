@@ -29,6 +29,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { decryptSecret } from "../lib/secrets.js";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
+import { config } from "../lib/config.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import {
   persistPosition,
@@ -45,12 +46,15 @@ const router = Router();
 
 const REPLAY_WINDOW_MS = 5 * 60 * 1000;
 
-// Per-IP cap — anonymous surface, per-user limiter doesn't apply. 600/min
-// covers a chatty vendor (20 vehicles × ~10 events/min headroom) but stops
-// a hostile burst from filling the device_positions table.
+// Per-IP cap — anonymous surface, per-user limiter doesn't apply. The
+// default 3000/min comfortably covers 100+ vehicles each pushing ~20
+// events/min with headroom for vendor retries. Operators tune via
+// FLEET_TELEMATICS_WEBHOOK_RATE_LIMIT (clamped 100..60000 in config).
+// Vendors that push more than this must be tested and the env raised
+// before turning their integration `active`.
 const webhookLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 600,
+  max: config.fleetTelematics.webhookRateLimit,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "تم تجاوز الحد الأقصى لطلبات webhook" },

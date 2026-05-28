@@ -115,8 +115,11 @@ CREATE INDEX IF NOT EXISTS idx_fleet_telematics_devices_company_status
   WHERE "deletedAt" IS NULL;
 
 -- 3) Live + historical positions. Heavy write table — partitioning is a
---    future concern; for the pilot (20 vehicles ~ every 30s) the row
---    rate is ~57k/day which Postgres handles fine on a single table.
+--    future concern; tested up to 100 vehicles polling every 30s
+--    (~288k rows/day) which Postgres handles fine on a single table
+--    with the `(deviceId, occurredAt DESC)` index. The retention cron
+--    (migration 230 + lib/fleet/telematicsCron.ts) caps row growth at
+--    `positionRetentionDays` per integration (default 90 days).
 CREATE TABLE IF NOT EXISTS public.fleet_device_positions (
   id                BIGSERIAL PRIMARY KEY,
   "companyId"       INTEGER NOT NULL REFERENCES public.companies(id),

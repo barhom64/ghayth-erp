@@ -188,16 +188,29 @@ fleet.telematics.ai_alerts
 - [ ] التأكد من ظهور `audit_logs` و`event_logs` للأحداث الحرجة.
 - [ ] التأكد من ظهور سطر في `fleet_device_sync_logs` لكل عملية.
 
-### جاهزية الإنتاج (20 مركبة)
+### جاهزية الإنتاج (حتى 100 مركبة على نفس الـ integration)
 
-- [ ] حملة فحص: دفع 10 ألاف رسالة CMSV6 وقياس عدد ال idempotency hits
+> **القدرة الفعلية:** الـ webhook rate limit الافتراضي 3000/min/IP
+> يستوعب 100+ مركبة عند ~20 حدث/دقيقة لكل مركبة. للأكثر، ارفع عبر
+> `FLEET_TELEMATICS_WEBHOOK_RATE_LIMIT` (مقصور 100..60000). الـ
+> position throttle و sensor deltas لكل-جهاز فهي تتدرج خطياً تلقائياً.
+> retention يومي يحد نمو الجداول حسب `positionRetentionDays` لكل تكامل.
+
+- [ ] حملة فحص: دفع 10 آلاف رسالة CMSV6 وقياس عدد ال idempotency hits
       (المتوقع أن تكون nonzero عند تكرار webhook).
 - [ ] محاكاة سقوط CMSV6 ساعة كاملة → النظام الأساسي (`/fleet/*`)
-      يستمر بدون أخطاء، التنبيهات تتأخر فقط.
+      يستمر بدون أخطاء، التنبيهات تتأخر فقط. الـ CircuitBreaker
+      يفتح بعد 3 فشل → يقصر cron polls حتى يتعافى المزود.
 - [ ] محاكاة قطع 3G لمدة ساعتين على مركبة واحدة → عند العودة، التاريخ
-      يُستكمل بدون فجوات في `fleet_device_positions`.
-- [ ] لاwhitelist user `viewer` يحاول `POST /telematics/video/session`
+      يُستكمل بدون فجوات في `fleet_device_positions`. الـ heartbeat
+      cron يقلب الحالة إلى offline ثم online عند الرجوع.
+- [ ] أن whitelist user `viewer` يحاول `POST /telematics/video/session`
       ويُرفض بـ 403.
+- [ ] أن أي محاولة fetch لـ `/video/proxy/:id` بـ token خاطئ أو منتهي
+      تُسجَّل في `fleet_video_access_logs` مع status مناسب (denied_*).
+- [ ] قياس DB row growth: عند 100 مركبة × 30s polling = ~288k row/يوم
+      في `fleet_device_positions`. يجب أن يكون cron retention يومي 03:00
+      ينظف الأقدم من `positionRetentionDays` بنجاح.
 - [ ] كل عمليات `sync_positions` تُسجَّل في `fleet_device_sync_logs`.
 
 ## متطلبات الشراء (ملاحظة)
@@ -332,7 +345,8 @@ signature = "sha256=" + hex(digest)
    التشدد ستقوم بـ stream-proxying فعلي للـ HLS playlist + segments
    فلا يصل الـ URL الخام للمتصفح أبداً.
 2. **CircuitBreaker per-process**: في multi-replica، كل replica
-   تحتفظ بـ state خاص. مقبول لـ ≤ 20 تكامل.
+   تحتفظ بـ state خاص. مقبول حتى عشرات التكاملات؛ Redis-backed
+   counter يحتاج فقط في حالة 50+ تكامل نشطة (ليس مركبات — تكاملات).
 3. **رفع الأدلة auto-only من URL alert**: لا يوجد آلية pull للملفات
    من MDVR SSD مباشرة (يفترض CMSV6 ترفعها).
 4. **161 legacy migrations بدون `@rollback`**: technical debt قبل
