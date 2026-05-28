@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { BookOpen, Pencil, RefreshCw, AlertTriangle } from "lucide-react";
+import { BookOpen, Pencil, RefreshCw, AlertTriangle, Trash2 } from "lucide-react";
 import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
@@ -90,6 +90,16 @@ export default function DisciplineRegulationPage() {
   );
   const reseeding = reseedMut.isPending;
 
+  // DELETE /hr/discipline/regulation/:id — soft-deletes a single article
+  // from the live catalogue. The reseed action above can restore the
+  // factory copy if too many are removed.
+  const deleteMut = useApiMutation<unknown, number>(
+    (id) => `/hr/discipline/regulation/${id}`,
+    "DELETE",
+    [["discipline-regulation"]],
+    { successMessage: "تم حذف المادة" },
+  );
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -156,9 +166,23 @@ export default function DisciplineRegulationPage() {
             <p className="text-xs text-orange-700 mt-2">+ {a.extraDeduction}</p>
           )}
         </div>
-        <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>
-          <Pencil className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>
+            <Pencil className="w-4 h-4" />
+          </Button>
+          <GuardedButton
+            perm="hr:delete"
+            size="sm"
+            variant="ghost"
+            className="text-status-error-foreground"
+            onClick={() => deleteMut.mutate(a.id)}
+            disabled={deleteMut.isPending}
+            rateLimitAware
+            title="حذف"
+          >
+            <Trash2 className="w-4 h-4" />
+          </GuardedButton>
+        </div>
       </div>
     </div>
   );
