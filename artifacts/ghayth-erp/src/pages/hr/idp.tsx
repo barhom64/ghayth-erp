@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { z } from "zod";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import {
+  useInlineActions,
+  RowActions,
+  InlineDeleteConfirm,
+} from "@/components/inline-actions";
 import { formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -62,6 +67,12 @@ export default function IDPPage() {
     [["idp"]],
     { successMessage: "تم تحديث الحالة" },
   );
+
+  const idpActions = useInlineActions({
+    endpoint: "/hr/idp",
+    queryKeys: [["idp"]],
+    onSuccess: () => refetch(),
+  });
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -194,6 +205,19 @@ export default function IDPPage() {
         </Select>
       ),
     },
+    {
+      key: "_actions" as any,
+      header: "",
+      render: (v) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <RowActions
+            onDelete={() => idpActions.startDelete(v.id)}
+            canEdit={false}
+            deletePerm="hr:delete"
+          />
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -281,6 +305,14 @@ export default function IDPPage() {
           </FormShell>
         </DialogContent>
       </Dialog>
+
+      {idpActions.deletingId !== null && (
+        <InlineDeleteConfirm
+          onConfirm={() => idpActions.handleDelete(idpActions.deletingId!)}
+          onCancel={idpActions.cancelDelete}
+          isPending={idpActions.isPending}
+        />
+      )}
     </PageShell>
   );
 }
