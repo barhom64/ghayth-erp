@@ -303,7 +303,24 @@ function TenantLettersTab({ tenantId }: { tenantId: string }) {
     `/correspondence?entityType=tenant&entityId=${tenantId}`,
     !!tenantId
   );
-  const letters = Array.isArray(lettersResp?.data) ? lettersResp.data : Array.isArray(lettersResp) ? lettersResp : [];
+  // GET /properties/tenants/:id/letters — dedicated property-domain
+  // index that returns lease-related letters (renewal notice, eviction,
+  // dues warning) even when they weren't filed in the generic
+  // correspondence table. Merged with the cross-domain list above.
+  const { data: domainLettersResp } = useApiQuery<any>(
+    ["tenant-domain-letters", tenantId],
+    tenantId ? `/properties/tenants/${tenantId}/letters` : null,
+    { enabled: !!tenantId },
+  );
+  const corrLetters: any[] = Array.isArray(lettersResp?.data) ? lettersResp.data : Array.isArray(lettersResp) ? lettersResp : [];
+  const domainLetters: any[] = Array.isArray(domainLettersResp?.data) ? domainLettersResp.data : Array.isArray(domainLettersResp) ? domainLettersResp : [];
+  const seen = new Set<number>();
+  const letters: any[] = [];
+  for (const l of [...corrLetters, ...domainLetters]) {
+    if (l?.id == null || seen.has(l.id)) continue;
+    seen.add(l.id);
+    letters.push(l);
+  }
 
   const columns: DataTableColumn<any>[] = [
     { key: "subject", header: "الموضوع", render: (l) => l.subject || "—" },
