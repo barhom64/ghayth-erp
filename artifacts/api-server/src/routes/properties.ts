@@ -3920,7 +3920,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", authorize({ feature: "
     const b = zodParse(payInstallmentSchema.safeParse(req.body)) as any;
     const paidAmount = Number(b.paidAmount ?? b.amount);
     const [existing] = await rawQuery<Record<string, unknown>>(
-      `SELECT cps.*, rc."tenantName", u."unitNumber", u."buildingName" FROM contract_payment_schedule cps JOIN rental_contracts rc ON rc.id=cps."contractId" LEFT JOIN property_units u ON u.id=rc."unitId" AND u."deletedAt" IS NULL WHERE cps.id=$1 AND cps."contractId"=$2 AND cps."companyId"=$3`,
+      `SELECT cps.*, rc."tenantName", rc."tenantId", u."unitNumber", u."buildingName" FROM contract_payment_schedule cps JOIN rental_contracts rc ON rc.id=cps."contractId" LEFT JOIN property_units u ON u.id=rc."unitId" AND u."deletedAt" IS NULL WHERE cps.id=$1 AND cps."contractId"=$2 AND cps."companyId"=$3`,
       [installmentId, contractId, scope.companyId]
     );
     if (!existing) throw new NotFoundError("القسط غير موجود");
@@ -3962,6 +3962,7 @@ router.post("/contracts/:id/schedule/:installmentId/pay", authorize({ feature: "
           installmentId,
           contractId,
           unitId: existing.unitId as number | undefined,
+          tenantId: existing.tenantId as number | undefined,
           amount: paidAmount,
           method: b.method,
           description: `تحصيل قسط إيجار #${existing.installmentNumber} / ${existing.tenantName || ''} / ${existing.unitNumber || ''}`,

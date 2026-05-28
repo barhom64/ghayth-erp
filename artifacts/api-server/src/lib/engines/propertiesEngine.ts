@@ -239,6 +239,8 @@ class PropertiesEngineImpl implements DomainEngine {
       amount: number;
       method?: string;
       description?: string;
+      /** Tenant FK so per-tenant AR + rent revenue reports tie out from the GL. */
+      tenantId?: number;
     }
   ) {
     const cashDefault = payment.method === "cash" ? "1100" : "1110";
@@ -247,6 +249,11 @@ class PropertiesEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "rental_revenue", "credit", "4100"),
     ]);
 
+    // unitId belongs in the unitId slot. The previous shape wrote
+    // `propertyId: payment.unitId` — semantic bug because unitId points
+    // to property_units while propertyId points to property_buildings
+    // (different FK targets). Per-unit rent revenue reports drilled into
+    // the wrong table.
     return financialEngine.postJournalEntry({
       companyId: ctx.companyId,
       branchId: ctx.branchId,
@@ -260,8 +267,8 @@ class PropertiesEngineImpl implements DomainEngine {
       guardTable: "property_contracts",
       guardId: payment.contractId,
       lines: [
-        { accountCode: cashCode, debit: payment.amount, credit: 0, propertyId: payment.unitId, contractId: payment.contractId },
-        { accountCode: revenueCode, debit: 0, credit: payment.amount, propertyId: payment.unitId, contractId: payment.contractId },
+        { accountCode: cashCode, debit: payment.amount, credit: 0, unitId: payment.unitId, contractId: payment.contractId, clientId: payment.tenantId },
+        { accountCode: revenueCode, debit: 0, credit: payment.amount, unitId: payment.unitId, contractId: payment.contractId, clientId: payment.tenantId },
       ],
     });
   }
