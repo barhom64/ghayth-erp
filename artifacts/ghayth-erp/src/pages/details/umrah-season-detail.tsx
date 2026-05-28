@@ -51,7 +51,6 @@ export default function UmrahSeasonDetail() {
   const editDelete = useDetailEditDelete({
     entityLabel: "الموسم",
     patchPath: `/umrah/seasons/${id}`,
-    deletePath: `/umrah/seasons/${id}`,
     listPath: "/umrah/seasons",
     initialValues: season,
     fields: [

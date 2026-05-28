@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   DetailPageLayout,
   type RelatedEntity,
@@ -11,9 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 // ApprovalActions removed — contracts use direct status PATCH, no approval flow.
-import { Edit, FileText } from "lucide-react";
+import { Edit, FileText, RotateCcw, XCircle } from "lucide-react";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityTags } from "@/components/shared/entity-tags";
 
@@ -98,6 +99,61 @@ export default function LegalContractDetail() {
 
   const handleEdit = () => {
     setLocation(`/legal/contracts/${id}/edit`);
+  };
+
+  const queryClient = useQueryClient();
+
+  const handleRenew = async () => {
+    // POST /legal/contracts/:id/renew — server validates that the new
+    // end date is after the current one, bumps renewalCount, and runs
+    // the audited applyTransition. Body: { newEndDate, newValue?, notes? }.
+    const currentEnd = contract?.endDate || todayLocal();
+    const suggested = new Date(currentEnd);
+    suggested.setFullYear(suggested.getFullYear() + 1);
+    const defaultEnd = suggested.toISOString().split("T")[0];
+    const newEndDate = window.prompt("تاريخ نهاية التجديد (YYYY-MM-DD):", defaultEnd);
+    if (!newEndDate) return;
+    try {
+      await apiFetch(`/legal/contracts/${id}/renew`, {
+        method: "POST",
+        body: JSON.stringify({ newEndDate }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["legal-contract", String(id)] });
+      toast({ title: "تم تجديد العقد بنجاح" });
+      refetch();
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "تعذر تجديد العقد",
+        description: err.message || "حدث خطأ أثناء تجديد العقد",
+      });
+    }
+  };
+
+  const handleTerminate = async () => {
+    // POST /legal/contracts/:id/terminate — requires a non-empty reason
+    // and runs through applyTransition (events + audit + DLQ-safe).
+    const reason = window.prompt("سبب إنهاء العقد:");
+    if (reason === null) return;
+    if (!reason.trim()) {
+      toast({ variant: "destructive", title: "سبب الإنهاء مطلوب" });
+      return;
+    }
+    try {
+      await apiFetch(`/legal/contracts/${id}/terminate`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim(), effectiveDate: todayLocal() }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["legal-contract", String(id)] });
+      toast({ title: "تم إنهاء العقد بنجاح" });
+      refetch();
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "تعذر إنهاء العقد",
+        description: err.message || "حدث خطأ أثناء إنهاء العقد",
+      });
+    }
   };
 
   const overview = (
@@ -254,6 +310,28 @@ export default function LegalContractDetail() {
           >
             <Edit className="h-4 w-4 ms-1" />
             تعديل
+          </GuardedButton>
+          <GuardedButton
+            perm="legal:update"
+            variant="outline"
+            size="sm"
+            onClick={handleRenew}
+            disabled={!contract || !["active", "expired"].includes(contract?.status)}
+            rateLimitAware
+          >
+            <RotateCcw className="h-4 w-4 ms-1" />
+            تجديد
+          </GuardedButton>
+          <GuardedButton
+            perm="legal:update"
+            variant="outline"
+            size="sm"
+            onClick={handleTerminate}
+            disabled={!contract || contract?.status !== "active"}
+            rateLimitAware
+          >
+            <XCircle className="h-4 w-4 ms-1" />
+            إنهاء
           </GuardedButton>
         </>
       }

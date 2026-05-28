@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import {
   useDetailEditDelete,
   DetailActionButtons,
@@ -15,7 +17,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Wrench, Car, User } from "lucide-react";
+import { Edit, Wrench, Car, User, CheckCircle2, XCircle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -107,6 +109,63 @@ export default function MaintenanceDetail() {
     invalidateKeys: [["maintenance", String(id)], ["maintenance"]],
     onSaved: () => refetch(),
   });
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const handleComplete = async () => {
+    // POST /fleet/maintenance/:id/complete — finalCost defaults to existing
+    // cost; server runs applyTransition, releases the vehicle, and emits
+    // the JE-FLEET journal entry when cost > 0.
+    const defaultCost = String(maintenance?.cost || 0);
+    const costStr = window.prompt("التكلفة النهائية:", defaultCost);
+    if (costStr === null) return;
+    const cost = Number(costStr);
+    if (!Number.isFinite(cost) || cost < 0) {
+      toast({ variant: "destructive", title: "أدخل تكلفة صحيحة" });
+      return;
+    }
+    try {
+      await apiFetch(`/fleet/maintenance/${id}/complete`, {
+        method: "POST",
+        body: JSON.stringify({ cost }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["maintenance-detail", String(id)] });
+      toast({ title: "تم إكمال الصيانة" });
+      refetch();
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "تعذر إكمال الصيانة",
+        description: err.message || "حدث خطأ",
+      });
+    }
+  };
+
+  const handleCancel = async () => {
+    // POST /fleet/maintenance/:id/cancel — requires a non-empty reason.
+    const reason = window.prompt("سبب الإلغاء:");
+    if (reason === null) return;
+    if (!reason.trim()) {
+      toast({ variant: "destructive", title: "سبب الإلغاء مطلوب" });
+      return;
+    }
+    try {
+      await apiFetch(`/fleet/maintenance/${id}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["maintenance-detail", String(id)] });
+      toast({ title: "تم إلغاء الصيانة" });
+      refetch();
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "تعذر إلغاء الصيانة",
+        description: err.message || "حدث خطأ",
+      });
+    }
+  };
 
   const cost = maintenance?.cost || maintenance?.amount || 0;
 
@@ -270,6 +329,28 @@ export default function MaintenanceDetail() {
               entityId={maintenance.id ?? id}
               formats={["a4"]}/>
           )}
+          <GuardedButton
+            perm="fleet:update"
+            variant="outline"
+            size="sm"
+            onClick={handleComplete}
+            disabled={!maintenance || maintenance.status === "completed" || maintenance.status === "cancelled"}
+            rateLimitAware
+          >
+            <CheckCircle2 className="h-4 w-4 ms-1" />
+            إكمال
+          </GuardedButton>
+          <GuardedButton
+            perm="fleet:update"
+            variant="outline"
+            size="sm"
+            onClick={handleCancel}
+            disabled={!maintenance || maintenance.status === "completed" || maintenance.status === "cancelled"}
+            rateLimitAware
+          >
+            <XCircle className="h-4 w-4 ms-1" />
+            إلغاء
+          </GuardedButton>
           <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>
       }

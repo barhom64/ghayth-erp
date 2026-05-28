@@ -23,7 +23,10 @@ export type EditFieldDef = {
 export interface DetailEditDeleteOptions {
   entityLabel: string;
   patchPath: string;
-  deletePath: string;
+  // Optional: pages whose backend has no soft-delete route (e.g. umrah
+  // seasons) opt out by omitting this. DetailActionButtons hides the
+  // delete button when the hook reports no deletePath.
+  deletePath?: string;
   listPath: string;
   initialValues: Record<string, any> | null | undefined;
   fields: EditFieldDef[];
@@ -91,6 +94,7 @@ export function useDetailEditDelete(opts: DetailEditDeleteOptions) {
   };
 
   const confirmDelete = async () => {
+    if (!opts.deletePath) return;
     setRemoving(true);
     try {
       await apiDelete(opts.deletePath);
@@ -122,6 +126,7 @@ export function useDetailEditDelete(opts: DetailEditDeleteOptions) {
     fields: opts.fields,
     entityLabel: opts.entityLabel,
     initialValues: opts.initialValues,
+    hasDelete: !!opts.deletePath,
   };
 }
 
@@ -158,7 +163,7 @@ export function DetailActionButtons({
           تعديل
         </Button>
       )}
-      {showDelete && (hook.deleting ? (
+      {showDelete && hook.hasDelete && (hook.deleting ? (
         <div className="flex items-center gap-2">
           <Button
             variant="destructive"

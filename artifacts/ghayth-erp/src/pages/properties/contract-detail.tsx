@@ -4,7 +4,6 @@ import { toast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
@@ -17,6 +16,11 @@ import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import {
   FileText,
   User,
@@ -48,6 +52,30 @@ export default function ContractDetailPage() {
     id ? `/properties/contracts/${id}` : null,
     !!id
   );
+
+  // PATCH /properties/contracts/:id — backend refuses status changes through
+  // here (must use /renew or /terminate) and refuses edits on terminated/
+  // expired/cancelled/renewed contracts. The hook is permission-gated so the
+  // Edit button only appears for properties:update.
+  // DELETE is soft-delete and the backend refuses when status='active'
+  // (must terminate first).
+  const editDelete = useDetailEditDelete({
+    entityLabel: "العقد",
+    patchPath: `/properties/contracts/${id}`,
+    deletePath: `/properties/contracts/${id}`,
+    listPath: "/properties/contracts",
+    initialValues: contract,
+    fields: [
+      { key: "tenantName", label: "اسم المستأجر" },
+      { key: "tenantPhone", label: "هاتف المستأجر" },
+      { key: "tenantEmail", label: "بريد المستأجر" },
+      { key: "monthlyRent", label: "الإيجار الشهري", type: "number" },
+      { key: "paymentDay", label: "يوم الاستحقاق", type: "number" },
+      { key: "notes", label: "ملاحظات" },
+    ],
+    invalidateKeys: [["properties-contract", id], ["properties-contracts"]],
+    onSaved: () => refetch(),
+  });
 
   const { data: scheduleResp } = useApiQuery<any>(
     ["contract-detail-schedule", id],
@@ -110,27 +138,31 @@ export default function ContractDetailPage() {
   );
 
   const handleRenew = async () => {
+    // POST /contracts/:id/renew — server runs applyTransition, regenerates
+    // the payment schedule, cancels old renewal/expiry obligations and
+    // registers new ones, then emits property.contract.renewed. The old
+    // "create a fresh contract via POST /contracts" workaround duplicated
+    // the row and broke the audit trail.
+    const defaultMonths = Number(contract?.renewalPeriodMonths || 12);
+    const monthsStr = window.prompt(
+      "مدة التجديد بالشهور:",
+      String(defaultMonths),
+    );
+    if (monthsStr === null) return;
+    const renewalPeriodMonths = Number(monthsStr);
+    if (!Number.isFinite(renewalPeriodMonths) || renewalPeriodMonths <= 0) {
+      toast({ variant: "destructive", title: "مدة التجديد يجب أن تكون رقماً موجباً" });
+      return;
+    }
     try {
-      const oldEnd = contract?.endDate || todayLocal();
-      const newStart = oldEnd;
-      const endDate = new Date(oldEnd);
-      endDate.setFullYear(endDate.getFullYear() + 1);
-      const newEnd = endDate.toISOString().split("T")[0];
-
-      const { id: _oldId, ...contractData } = contract || {};
-      const newContract = await apiFetch<any>("/properties/contracts", {
+      await apiFetch(`/properties/contracts/${id}/renew`, {
         method: "POST",
-        body: JSON.stringify({
-          ...contractData,
-          startDate: newStart,
-          endDate: newEnd,
-          status: "active",
-        }),
+        body: JSON.stringify({ renewalPeriodMonths }),
       });
-      queryClient.invalidateQueries({ queryKey: ["properties-contract"] });
+      queryClient.invalidateQueries({ queryKey: ["properties-contract", id] });
+      queryClient.invalidateQueries({ queryKey: ["contract-detail-schedule", id] });
       toast({ title: "تم تجديد العقد بنجاح" });
-      const newId = newContract?.id || newContract?.data?.id;
-      navigate(newId ? `/properties/contracts/${newId}` : "/properties/contracts");
+      refetch();
     } catch (err: any) {
       toast({
         variant: "destructive",
@@ -173,6 +205,7 @@ export default function ContractDetailPage() {
 
   const overview = (
     <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
@@ -256,6 +289,7 @@ export default function ContractDetailPage() {
         إنهاء
       </GuardedButton>
       <EntityPrintButton entityType="rental_contract" entityId={id ?? ""} formats={["a4"]} />
+      <DetailActionButtons hook={editDelete} editPerm="properties:update" deletePerm="properties:delete" />
     </div>
   );
 

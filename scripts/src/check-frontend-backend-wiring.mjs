@@ -409,6 +409,40 @@ function extractFrontendCalls() {
         calls.push({ file: rel, url, line, method: "DELETE", source: "prop" });
       }
     }
+
+    // useDetailEditDelete({ patchPath, deletePath }) — the shared hook in
+    // components/shared/detail-edit-delete-actions.tsx that backs the
+    // canonical inline-edit + soft-delete pattern on detail pages
+    // (vendor-detail, invoice-detail, contract-detail, …). It fires
+    // PATCH on patchPath and DELETE on deletePath; both are dynamic URL
+    // expressions like `/finance/vendors/${id}` so the regular helper-call
+    // scanner can't see them.
+    //
+    // Both props are always present on real call-sites, but we look for
+    // them independently so a hook variant that omits one still credits
+    // the other.
+    const ddRe = /useDetailEditDelete\s*\(\s*\{/g;
+    for (const m of src.matchAll(ddRe)) {
+      // Walk the object literal until the matching `}`.
+      let i = m.index + m[0].length;
+      let depth = 1;
+      const start = i;
+      while (i < src.length && depth > 0) {
+        if (src[i] === "{") depth++;
+        else if (src[i] === "}") depth--;
+        i++;
+      }
+      const body = src.slice(start, i - 1);
+      const line = lineOf(src, m.index);
+      const patchMatch = body.match(/\bpatchPath\s*:\s*[`"']([^`"']+)[`"']/);
+      if (patchMatch && patchMatch[1].startsWith("/")) {
+        calls.push({ file: rel, url: patchMatch[1], line, method: "PATCH", source: "prop" });
+      }
+      const delMatch = body.match(/\bdeletePath\s*:\s*[`"']([^`"']+)[`"']/);
+      if (delMatch && delMatch[1].startsWith("/")) {
+        calls.push({ file: rel, url: delMatch[1], line, method: "DELETE", source: "prop" });
+      }
+    }
   }
   return calls;
 }

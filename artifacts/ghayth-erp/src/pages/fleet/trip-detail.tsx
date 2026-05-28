@@ -11,6 +11,11 @@ import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
+import {
   MapPin,
   User,
   Truck,
@@ -40,6 +45,25 @@ export default function TripDetailPage() {
     id ? `/fleet/trips/${id}` : null,
     !!id
   );
+
+  // PATCH /fleet/trips/:id allows editing non-lifecycle fields; status
+  // transitions to completed/cancelled must go through /complete /cancel.
+  // DELETE is soft-delete and gated on the backend.
+  const editDelete = useDetailEditDelete({
+    entityLabel: "الرحلة",
+    patchPath: `/fleet/trips/${id}`,
+    deletePath: `/fleet/trips/${id}`,
+    listPath: "/fleet/trips",
+    initialValues: trip,
+    fields: [
+      { key: "fromLocation", label: "من" },
+      { key: "toLocation", label: "إلى" },
+      { key: "notes", label: "ملاحظات" },
+      { key: "cost", label: "التكلفة", type: "number" },
+    ],
+    invalidateKeys: [["fleet-trip", id], ["fleet-trips"]],
+    onSaved: () => refetch(),
+  });
 
   const { data: fuelResp } = useApiQuery<any>(
     ["trip-fuel", id],
@@ -157,6 +181,7 @@ export default function TripDetailPage() {
 
   const overview = (
     <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4 flex items-center gap-3">
@@ -251,6 +276,7 @@ export default function TripDetailPage() {
         إلغاء
       </GuardedButton>
       <EntityPrintButton entityType="fleet_trip" entityId={id ?? ""} formats={["a4"]} />
+      <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
     </div>
   );
 
