@@ -146,7 +146,7 @@ Legacy-pattern guard:
 | رمز | المكان | الحالة |
 |---|---|---|
 | G1 | `lib/disciplineEngine.ts:331` COUNT(*) للـmemo | 🔓 مفتوحة |
-| G2 | `routes/store.ts:262` ORD-${Date.now()} | 🔓 مفتوحة |
+| G2 | `routes/store.ts:262` ORD-${Date.now()} | ✅ مُصلَحة في هذا الـPR (مهاجرة 228) |
 | G3 | `routes/requests.ts:916` PO-REQ-${id} | 🔓 مفتوحة |
 | G4 | `routes/requests.ts:904` ticket بلا ref | 🔓 مفتوحة |
 | G5 | `routes/requests.ts:925` case بلا caseNumber | 🔓 مفتوحة |
@@ -159,7 +159,7 @@ Legacy-pattern guard:
 | G12 | `routes/finance-invoices.ts:2560` credit_memos.ref NULL | ✅ مُصلَحة (#1333) |
 | G13 | `routes/finance-invoices.ts:2901` debit_memos.ref NULL | ✅ مُصلَحة (#1333) |
 | G14 | `routes/finance-purchase.ts:1654` payment_runs Date.now() | ✅ مُصلَحة في هذا الـPR (مهاجرة 227) |
-| G15 | 8 schemes ميتة في الـUI (vendor_invoice, lead, ...) | 🔓 مفتوحة |
+| G15 | 8 schemes ميتة في الـUI (vendor_invoice, lead, ...) | ✅ مُصلَحة في هذا الـPR (مهاجرة 229 تُعطّلها) |
 
 **13 ثغرة مفتوحة + 2 مُغلَقة في هذا الـPR.**
 
