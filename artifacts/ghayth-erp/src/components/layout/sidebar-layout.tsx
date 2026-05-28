@@ -438,6 +438,7 @@ const allNavSections: NavSection[] = [
         { label: "التسعير", path: "/umrah/pricing", icon: DollarSign },
         { label: "خطط العمولات", path: "/umrah/commission-plans", icon: TrendingUp },
         { label: "الفواتير", path: "/umrah/invoices", icon: Receipt },
+        { label: "المدفوعات", path: "/umrah/payments", icon: Banknote },
         { label: "الغرامات", path: "/umrah/penalties", icon: AlertTriangle },
         { label: "المخالفات النظامية", path: "/umrah/violations", icon: Shield },
         { label: "النقل والمواصلات", path: "/umrah/transport", icon: Truck },
