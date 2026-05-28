@@ -169,6 +169,7 @@ export default function JournalManualPage() {
         ]}
         queryKey={queryKey}
         endpoint={endpoint}
+        printEntityType="journal_entry"
         columns={columns}
         rowKey={(row) => String(row.id)}
         onRowClick={(row) => navigate(`/finance/journal-manual/${row.id}`)}

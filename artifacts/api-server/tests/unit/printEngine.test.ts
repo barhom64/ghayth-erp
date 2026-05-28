@@ -897,6 +897,24 @@ describe("Print platform — print-log self-print (#1286 closeout)", () => {
   });
 });
 
+describe("Print platform — ListPage opt-in pages (#1286 continuation)", () => {
+  // ListPage component has `printEntityType` prop built-in (auto-emits
+  // PrintButton when set). Pages using <ListPage> can opt in by passing
+  // the entityType — they then get the platform-routed print path for
+  // free. Locking this here so a future refactor doesn't drop the prop.
+  const SPA = join(REPO_ROOT, "artifacts/ghayth-erp/src");
+  const PAGES: Array<{ path: string; entityType: string }> = [
+    { path: "pages/finance/fiscal-periods-v2.tsx", entityType: "report_fiscal_periods" },
+    { path: "pages/finance/journal-manual.tsx",    entityType: "journal_entry" },
+  ];
+  for (const { path, entityType } of PAGES) {
+    it(`${path} passes printEntityType="${entityType}" to ListPage`, () => {
+      const src = readFileSync(join(SPA, path), "utf8");
+      expect(src).toContain(`printEntityType="${entityType}"`);
+    });
+  }
+});
+
 describe("Print platform — umrah daily runsheet (#1286 final closeout)", () => {
   // The umrah daily runsheet had its own /api/umrah/reports/daily-runsheet/pdf
   // endpoint — a parallel PDF generator that bypassed the official platform
