@@ -155,9 +155,9 @@ Legacy-pattern guard:
 | G8 | `routes/fleet.ts:1213` UPDATE numbering_assignments مباشر | ✅ مُصلَحة في هذا الـPR |
 | G9 | crm.client_code seed-pattern (false-finding) | ✅ مُغلَقة (regex fix) |
 | G10 | `routes/crm.ts:742` opp→client بلا code | ✅ مُصلَحة (#1325) |
-| G11 | `routes/employees.ts:614` onboarding contract بلا ref | ⏳ #1329 in flight |
-| G12 | `routes/finance-invoices.ts:2560` credit_memos.ref NULL | ✅ مُصلَحة في هذا الـPR |
-| G13 | `routes/finance-invoices.ts:2901` debit_memos.ref NULL | ✅ مُصلَحة في هذا الـPR |
+| G11 | `routes/employees.ts:614` onboarding contract بلا ref | ✅ مُصلَحة في هذا الـPR |
+| G12 | `routes/finance-invoices.ts:2560` credit_memos.ref NULL | ✅ مُصلَحة (#1333) |
+| G13 | `routes/finance-invoices.ts:2901` debit_memos.ref NULL | ✅ مُصلَحة (#1333) |
 | G14 | `routes/finance-purchase.ts:1654` payment_runs Date.now() | 🔓 مفتوحة |
 | G15 | 8 schemes ميتة في الـUI (vendor_invoice, lead, ...) | 🔓 مفتوحة |
 
