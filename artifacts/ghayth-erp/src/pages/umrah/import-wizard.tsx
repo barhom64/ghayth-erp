@@ -59,6 +59,21 @@ export default function UmrahImportWizard() {
 
   const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
   const clientsQ = useApiQuery<{ data: any[] }>(["clients"], "/clients");
+  // GET /umrah/import/batches — history of prior imports so the user
+  // can see what's already been ingested before adding a new batch.
+  const batchesQ = useApiQuery<{ data: any[] }>(
+    ["umrah-import-batches"],
+    "/umrah/import/batches",
+  );
+  const importBatches: any[] = batchesQ.data?.data ?? [];
+  // GET /umrah/import/batches/:id/changes — diff of what changed in a
+  // specific batch. Fetched lazily when the user clicks a batch row.
+  const [batchChangesId, setBatchChangesId] = useState<number | null>(null);
+  const changesQ = useApiQuery<any>(
+    ["umrah-import-batch-changes", String(batchChangesId ?? 0)],
+    batchChangesId ? `/umrah/import/batches/${batchChangesId}/changes` : null,
+    { enabled: batchChangesId !== null },
+  );
   // Asset accounts that can act as the cash box (treasuries are modelled
   // as chart-of-accounts rows; we filter to postingOnly so abstract
   // header accounts don't pollute the dropdown).
@@ -589,6 +604,56 @@ export default function UmrahImportWizard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {importBatches.length > 0 && (
+        <div className="mt-6 border rounded-lg p-4 bg-white">
+          <p className="text-sm font-semibold mb-2">دفعات الاستيراد السابقة ({importBatches.length})</p>
+          <div className="divide-y text-xs">
+            {importBatches.slice(0, 10).map((b: any) => (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => setBatchChangesId(b.id === batchChangesId ? null : b.id)}
+                className="w-full flex items-center justify-between py-2 text-right hover:bg-surface-subtle"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[10px] text-muted-foreground">#{b.id}</span>
+                  <span>{b.fileName ?? "—"}</span>
+                  <span className="text-muted-foreground">
+                    {b.fileType === "mutamers" ? "معتمرين" : b.fileType === "vouchers" ? "سندات" : b.fileType}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  {b.insertedCount != null && <span>+{b.insertedCount}</span>}
+                  {b.updatedCount != null && <span>~{b.updatedCount}</span>}
+                  {b.createdAt && <span>{new Date(b.createdAt).toLocaleDateString("ar-SA")}</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+          {batchChangesId !== null && (
+            <div className="mt-3 border-t pt-3">
+              <p className="text-xs font-semibold mb-2">تفاصيل التعديلات للدفعة #{batchChangesId}</p>
+              {changesQ.isLoading ? (
+                <p className="text-xs text-muted-foreground">جاري التحميل...</p>
+              ) : changesQ.data ? (
+                <div className="text-xs space-y-1 max-h-48 overflow-y-auto">
+                  {Array.isArray(changesQ.data?.data) && changesQ.data.data.length > 0 ? (
+                    changesQ.data.data.slice(0, 30).map((c: any, i: number) => (
+                      <div key={c.id ?? i} className="flex items-center justify-between border-b pb-1">
+                        <span>{c.entityType ?? c.table ?? "—"} #{c.entityId ?? "?"}</span>
+                        <span className="text-muted-foreground">{c.changeKind ?? c.action ?? "—"}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground">لا توجد تعديلات مسجلة</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
+      )}
     </PageShell>
   );
 }
