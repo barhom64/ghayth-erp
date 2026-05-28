@@ -404,6 +404,48 @@ function extractFrontendCalls() {
       calls.push({ file: rel, url: lit.value, line: lineOf(src, m.index), method: "DELETE", source: "prop" });
     }
 
+    // Raw fetch() calls — used for file uploads (multipart), file
+    // downloads (stream-as-blob), and the print client (streams base64
+    // HTML payload). The pattern is \`fetch(\`${BASE}/api/...\`)\` or
+    // \`fetch(\`/api/...\`)\` where BASE is import.meta.env.BASE_URL.
+    // Method comes from the options object passed as 2nd arg; default
+    // is GET. Tagged source:"prop" so the orphan gate doesn't trip on
+    // BASE-prefixed paths that the URL normaliser sees as `/api/api/...`
+    // — we normalise away the BASE prefix here.
+    const fetchRe = /\bfetch\s*\(\s*[`"']/g;
+    for (const m of src.matchAll(fetchRe)) {
+      let i = m.index + m[0].length - 1;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      // Accept three URL shapes: `/api/...`, `${BASE}/api/...`, and bare
+      // `/...` that doesn't start with /api (skip those — they're route
+      // navigations or external).
+      let url = lit.value;
+      url = url.replace(/^\$\{[^}]+\}/, ""); // strip leading ${BASE}
+      if (!url.startsWith("/api/")) continue;
+      // Strip the /api prefix so the normaliser doesn't double it up.
+      url = url.slice(4);
+      // Find the method in the options object (2nd arg). Skip the URL
+      // arg using readString.end, then look for the options literal.
+      let j = lit.end;
+      while (j < src.length && /[\s,]/.test(src[j])) j++;
+      let method = "GET";
+      if (src[j] === "{") {
+        let depth = 1;
+        const start = j + 1;
+        j++;
+        while (j < src.length && depth > 0) {
+          if (src[j] === "{") depth++;
+          else if (src[j] === "}") depth--;
+          j++;
+        }
+        const body = src.slice(start, j - 1);
+        const mm = body.match(/\bmethod\s*:\s*["'`]([A-Z]+)["'`]/);
+        if (mm) method = mm[1].toUpperCase();
+      }
+      calls.push({ file: rel, url, line: lineOf(src, m.index), method, source: "prop" });
+    }
+
     // apiUrl("/…") helper from lib/api.ts — wraps a path with /api prefix
     // for use in `<a href={apiUrl(…)} download>` anchors. The href scanner
     // below sees `href={…}` but the value is a function call, not a
