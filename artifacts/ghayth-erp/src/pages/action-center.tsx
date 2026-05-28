@@ -82,11 +82,28 @@ export default function ActionCenter() {
   >(null);
   const { toast } = useToast();
 
-  const workflowMut = useApiMutation<any, { url: string; notes?: string }>(
-    (body) => body.url,
+  // Three explicit workflow mutations — one per decision. Earlier
+  // shape was a single `(body) => body.url` mutation that hid the
+  // three POST endpoints from the wiring audit; now each decision
+  // has its own static URL and the dispatch in runWorkflow picks
+  // the right one based on the decision string.
+  const workflowApproveMut = useApiMutation<any, { id: number; notes?: string }>(
+    (b) => `/workflows/${b.id}/approve`,
     "POST",
     [["action-center"]],
-    { successMessage: false }
+    { successMessage: false },
+  );
+  const workflowRejectMut = useApiMutation<any, { id: number; notes?: string }>(
+    (b) => `/workflows/${b.id}/reject`,
+    "POST",
+    [["action-center"]],
+    { successMessage: false },
+  );
+  const workflowReturnMut = useApiMutation<any, { id: number; notes?: string }>(
+    (b) => `/workflows/${b.id}/return`,
+    "POST",
+    [["action-center"]],
+    { successMessage: false },
   );
   const approvalMut = useApiMutation<any, { url: string; approved: boolean; reason?: string; notes?: string }>(
     (body) => body.url,
@@ -106,9 +123,12 @@ export default function ActionCenter() {
     const key = `workflows-${id}`;
     setProcessingIds((prev) => new Set(prev).add(key));
 
-    const url = `/workflows/${id}/${decision}${scopeSuffix}`;
-    workflowMut.mutate(
-      { url, notes },
+    const mut =
+      decision === "approve" ? workflowApproveMut
+      : decision === "reject" ? workflowRejectMut
+      : workflowReturnMut;
+    mut.mutate(
+      { id, notes },
       {
         onSuccess: () => {
           const labels: Record<WorkflowDecision, string> = { approve: "تم الاعتماد", reject: "تم الرفض", return: "تم الإرجاع" };
