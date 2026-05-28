@@ -4,6 +4,7 @@ import { useParams } from "wouter";
 import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { EntityPrintButton } from "@/components/shared/entity-print";
+import { ClientPortalLinkCard } from "@/components/shared/client-portal-link-card";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -588,6 +589,17 @@ export default function LegalCaseDetail() {
       <div className="space-y-4">
         <StepImpactPanel caseStatus={caseData.status} />
         <RiskPanel caseData={caseData} sessions={sessions} />
+        {id && (
+          <ClientPortalLinkCard
+            entityType="legal_case"
+            entityId={Number(id)}
+            patchPath={`/legal/cases/${id}`}
+            linkedClientId={caseData.clientId ?? null}
+            linkedClientName={caseData.clientName ?? null}
+            perm="legal.cases:update"
+            onUpdated={refetch}
+          />
+        )}
         {id && <EntityObligations entityType="legal-case" entityId={Number(id)} hideWhenEmpty />}
       </div>
     </div>

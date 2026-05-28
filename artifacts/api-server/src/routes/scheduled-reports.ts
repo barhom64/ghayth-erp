@@ -7,9 +7,19 @@ import { handleRouteError, ValidationError, NotFoundError,
   zodParse,
 } from "../lib/errorHandler.js";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 
 export const scheduledReportsRouter = Router();
 scheduledReportsRouter.use(authMiddleware);
+
+const audit = (companyId: number, userId: number | null | undefined, action: string, entityId: number, after?: Record<string, unknown>, before?: Record<string, unknown>) => {
+  if (userId == null) return;
+  createAuditLog({ companyId, userId, action, entity: "scheduled_reports", entityId, after, before })
+    .catch((e) => logger.error(e, "[audit] scheduled_report"));
+  emitEvent({ companyId, userId, action: `scheduled_report.${action}`, entity: "scheduled_reports", entityId, details: after ? JSON.stringify(after) : undefined })
+    .catch((e) => logger.error(e, "[event] scheduled_report"));
+};
 
 interface ScheduledReportRow {
   id: number;
@@ -89,6 +99,7 @@ scheduledReportsRouter.post("/", authorize({ feature: "reports", action: "create
        RETURNING *`,
       [scope.companyId, reportType, title, frequency, JSON.stringify(recipients), JSON.stringify(params || {}), isActive !== false, scope.activeAssignmentId]
     );
+    audit(scope.companyId, scope.userId, "create", row.id, { reportType, title, frequency, recipients, isActive });
     res.status(201).json({ data: row });
   } catch (err) {
     handleRouteError(err, res, "Create scheduled report error:");
@@ -113,6 +124,7 @@ scheduledReportsRouter.patch("/:id", authorize({ feature: "reports", action: "cr
       vals
     );
     if (!row) throw new NotFoundError("Not found");
+    audit(scope.companyId, scope.userId, "update", row.id, { title, frequency, recipients, params, isActive });
     res.json({ data: row });
   } catch (err) {
     handleRouteError(err, res, "Update scheduled report error:");
@@ -127,6 +139,7 @@ scheduledReportsRouter.delete("/:id", authorize({ feature: "reports", action: "c
       `DELETE FROM scheduled_reports WHERE id = $1 AND "companyId" = $2`,
       [id, scope.companyId]
     );
+    audit(scope.companyId, scope.userId, "delete", id);
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete scheduled report error:");

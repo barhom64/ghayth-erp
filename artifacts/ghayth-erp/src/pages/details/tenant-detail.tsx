@@ -22,6 +22,7 @@ import {
 import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
+import { ClientPortalLinkCard } from "@/components/shared/client-portal-link-card";
 import {
   Users2, Phone, Mail, CreditCard, FileText,
   Banknote, AlertTriangle, Home, Clock, BookOpen
@@ -156,6 +157,18 @@ export default function TenantDetail() {
             />
           </CardContent>
         </Card>
+      )}
+
+      {id && (
+        <ClientPortalLinkCard
+          entityType="tenant"
+          entityId={Number(id)}
+          patchPath={`/properties/tenants/${id}`}
+          linkedClientId={tenant?.clientId ?? null}
+          linkedClientName={tenant?.clientName ?? null}
+          perm="properties.tenants:update"
+          onUpdated={refetch}
+        />
       )}
 
       {id && <EntityComments entityType="tenant" entityId={id} />}

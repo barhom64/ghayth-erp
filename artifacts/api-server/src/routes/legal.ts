@@ -107,6 +107,11 @@ const updateCaseSchema = z.object({
   lawyerName: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   court: z.string().optional().nullable(),
+  // clientId — link the case to a CRM client so the client's portal
+  // shows their own legal/cases + legal/sessions/upcoming tabs.
+  // Column added in migration 230. Nullable: existing cases stay
+  // un-linked until an operator (legal manager) sets it explicitly.
+  clientId: z.coerce.number().optional().nullable(),
 });
 
 const updateJudgmentSchema = z.object({
@@ -726,7 +731,16 @@ router.get("/cases/:id", authorize({ feature: "legal.cases", action: "view", res
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    // LEFT JOIN clients to resolve the portal-linked client's name in
+    // one round-trip — same pattern as tenant-detail. Migration 230
+    // added the clientId column; un-linked cases just carry NULL.
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT lc.*, c.name AS "clientName"
+         FROM legal_cases lc
+         LEFT JOIN clients c ON c.id = lc."clientId" AND c."companyId" = lc."companyId" AND c."deletedAt" IS NULL
+        WHERE lc.id = $1 AND lc."companyId" = $2 AND lc."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
     if (!row) throw new NotFoundError("القضية غير موجودة");
 
     const sessions = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_sessions WHERE "caseId"=$1 AND "deletedAt" IS NULL ORDER BY "sessionDate" DESC LIMIT 500`, [row.id]);
@@ -771,6 +785,21 @@ router.patch("/cases/:id", authorize({ feature: "legal.cases", action: "update" 
     if (b.lawyerName !== undefined) { params.push(b.lawyerName); sets.push(`"lawyerName"=$${params.length}`); }
     if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
     if (b.court !== undefined) { params.push(b.court); sets.push(`court=$${params.length}`); }
+    // Portal link — validate the client exists in this company before
+    // wiring it. Null unlinks. Column added in migration 230.
+    if (b.clientId !== undefined) {
+      if (b.clientId !== null) {
+        const [client] = await rawQuery<{ id: number }>(
+          `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+          [b.clientId, scope.companyId],
+        );
+        if (!client) {
+          throw new ValidationError("العميل غير موجود في هذه الشركة", { field: "clientId" });
+        }
+      }
+      params.push(b.clientId);
+      sets.push(`"clientId"=$${params.length}`);
+    }
     if (sets.length <= 1 && params.length === 0) { res.json(existing); return; }
     params.push(id); params.push(scope.companyId);
     const { affectedRows } = await rawExecute(`UPDATE legal_cases SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
