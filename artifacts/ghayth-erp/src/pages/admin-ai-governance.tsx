@@ -717,6 +717,7 @@ function NewPromptDialog({ open, onClose, onSubmit, isSubmitting }: {
 function ViewPromptDialog({ promptId, onClose }: {
   promptId: number | null; onClose: () => void;
 }) {
+  const qc = useQueryClient();
   const { data: prompt } = useApiQuery<PromptDetail>(
     ["ai-governance-prompt", String(promptId ?? 0)],
     promptId ? `/admin/ai-governance/prompts/${promptId}` : null,
@@ -728,6 +729,43 @@ function ViewPromptDialog({ promptId, onClose }: {
     { enabled: !!promptId },
   );
   const reviews = reviewsResp?.data ?? [];
+
+  // PATCH /admin/ai-governance/prompts/:id — edit draft body. Only
+  // visible when the prompt is still a draft; once submitted for review
+  // the server rejects edits.
+  const [editing, setEditing] = useState(false);
+  const [draftSystem, setDraftSystem] = useState("");
+  const [draftUser, setDraftUser] = useState("");
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftDesc, setDraftDesc] = useState("");
+  const startEdit = () => {
+    if (!prompt) return;
+    setDraftSystem(prompt.systemPrompt ?? "");
+    setDraftUser(prompt.userTemplate ?? "");
+    setDraftTitle(prompt.title ?? "");
+    setDraftDesc(prompt.description ?? "");
+    setEditing(true);
+  };
+  const editMut = useMutation({
+    mutationFn: (b: Record<string, unknown>) =>
+      apiFetch(`/admin/ai-governance/prompts/${promptId}`, { method: "PATCH", body: JSON.stringify(b) }),
+    onSuccess: () => {
+      toast({ title: "تم تحديث المسوّدة" });
+      setEditing(false);
+      qc.invalidateQueries({ queryKey: ["ai-governance-prompt", String(promptId ?? 0)] });
+      qc.invalidateQueries({ queryKey: ["ai-governance-prompts"] });
+    },
+    onError: (e: Error) => toast({ title: "فشل التحديث", description: e.message, variant: "destructive" }),
+  });
+  const submitEdit = () => {
+    if (!draftSystem.trim() || !draftTitle.trim()) return;
+    editMut.mutate({
+      title: draftTitle,
+      description: draftDesc || null,
+      systemPrompt: draftSystem,
+      userTemplate: draftUser || null,
+    });
+  };
 
   return (
     <Dialog open={!!promptId} onOpenChange={(v) => !v && onClose()}>
@@ -746,25 +784,62 @@ function ViewPromptDialog({ promptId, onClose }: {
         </DialogHeader>
         {prompt && (
           <div className="space-y-3 max-h-[60vh] overflow-y-auto">
-            {prompt.description && (
-              <div>
-                <Label className="text-xs text-muted-foreground">الوصف</Label>
-                <p className="text-sm">{prompt.description}</p>
-              </div>
-            )}
-            <div>
-              <Label className="text-xs text-muted-foreground">System Prompt</Label>
-              <pre className="bg-surface-subtle rounded p-3 text-xs font-mono whitespace-pre-wrap break-words">
-                {prompt.systemPrompt}
-              </pre>
-            </div>
-            {prompt.userTemplate && (
-              <div>
-                <Label className="text-xs text-muted-foreground">User Template</Label>
-                <pre className="bg-surface-subtle rounded p-3 text-xs font-mono whitespace-pre-wrap break-words">
-                  {prompt.userTemplate}
-                </pre>
-              </div>
+            {editing ? (
+              <>
+                <div>
+                  <Label className="text-xs">العنوان *</Label>
+                  <input value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)}
+                    className="w-full h-8 px-2 text-sm border rounded" />
+                </div>
+                <div>
+                  <Label className="text-xs">الوصف</Label>
+                  <Textarea value={draftDesc} onChange={(e) => setDraftDesc(e.target.value)} rows={2} />
+                </div>
+                <div>
+                  <Label className="text-xs">System Prompt *</Label>
+                  <Textarea value={draftSystem} onChange={(e) => setDraftSystem(e.target.value)} rows={8}
+                    className="font-mono text-xs" />
+                </div>
+                <div>
+                  <Label className="text-xs">User Template</Label>
+                  <Textarea value={draftUser} onChange={(e) => setDraftUser(e.target.value)} rows={4}
+                    className="font-mono text-xs" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button onClick={submitEdit} disabled={editMut.isPending || !draftSystem.trim() || !draftTitle.trim()}>
+                    حفظ التعديل
+                  </Button>
+                  <Button variant="outline" onClick={() => setEditing(false)}>إلغاء</Button>
+                </div>
+              </>
+            ) : (
+              <>
+                {prompt.description && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">الوصف</Label>
+                    <p className="text-sm">{prompt.description}</p>
+                  </div>
+                )}
+                <div>
+                  <Label className="text-xs text-muted-foreground">System Prompt</Label>
+                  <pre className="bg-surface-subtle rounded p-3 text-xs font-mono whitespace-pre-wrap break-words">
+                    {prompt.systemPrompt}
+                  </pre>
+                </div>
+                {prompt.userTemplate && (
+                  <div>
+                    <Label className="text-xs text-muted-foreground">User Template</Label>
+                    <pre className="bg-surface-subtle rounded p-3 text-xs font-mono whitespace-pre-wrap break-words">
+                      {prompt.userTemplate}
+                    </pre>
+                  </div>
+                )}
+                {prompt.status === "draft" && (
+                  <Button variant="outline" size="sm" onClick={startEdit}>
+                    تعديل المسوّدة
+                  </Button>
+                )}
+              </>
             )}
             {reviews.length > 0 && (
               <div>

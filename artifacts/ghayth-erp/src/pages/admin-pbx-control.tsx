@@ -19,7 +19,7 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -656,6 +656,7 @@ function NewIvrMenuDialog({ open, onClose, onSubmit, isSubmitting }: {
 function IvrMenuEditorDialog({ menuId, onClose }: {
   menuId: number | null; onClose: () => void;
 }) {
+  const qc = useQueryClient();
   const { data: detail, refetch } = useApiQuery<{ menu: IvrMenuRow; options: IvrOptionRow[] }>(
     ["pbx-control-menu", String(menuId ?? 0)],
     menuId ? `/admin/pbx-control/ivr-menus/${menuId}` : null,
@@ -674,6 +675,27 @@ function IvrMenuEditorDialog({ menuId, onClose }: {
     onSuccess: () => { toast({ title: "حُذف الخيار" }); refetch(); },
     onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
   });
+  // PATCH /admin/pbx-control/ivr-menus/:id — edit the greeting text +
+  // slug + active flag at the menu level. Server enforces uniqueness
+  // of slug per company.
+  const [editMenu, setEditMenu] = useState(false);
+  const [greetingDraft, setGreetingDraft] = useState("");
+  const startEditMenu = () => {
+    setGreetingDraft(detail?.menu?.greetingText ?? "");
+    setEditMenu(true);
+  };
+  const updateMenu = useMutation({
+    mutationFn: (b: { greetingText: string }) => apiFetch(`/admin/pbx-control/ivr-menus/${menuId}`, {
+      method: "PATCH", body: JSON.stringify(b),
+    }),
+    onSuccess: () => {
+      toast({ title: "تم تحديث نص الترحيب" });
+      setEditMenu(false);
+      refetch();
+      qc.invalidateQueries({ queryKey: ["pbx-control-menus"] });
+    },
+    onError: (e: Error) => toast({ title: "فشل التحديث", description: e.message, variant: "destructive" }),
+  });
 
   return (
     <Dialog open={!!menuId} onOpenChange={(v) => !v && onClose()}>
@@ -686,8 +708,34 @@ function IvrMenuEditorDialog({ menuId, onClose }: {
         {detail && (
           <div className="space-y-3 max-h-[60vh] overflow-y-auto">
             <div>
-              <Label className="text-xs text-muted-foreground">نص الترحيب</Label>
-              <pre className="bg-surface-subtle p-2 rounded text-xs whitespace-pre-wrap">{detail.menu.greetingText}</pre>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground">نص الترحيب</Label>
+                {!editMenu && (
+                  <Button variant="ghost" size="sm" onClick={startEditMenu}>تعديل</Button>
+                )}
+              </div>
+              {editMenu ? (
+                <>
+                  <Textarea
+                    value={greetingDraft}
+                    onChange={(e) => setGreetingDraft(e.target.value)}
+                    rows={3}
+                    className="text-sm"
+                  />
+                  <div className="flex items-center gap-2 mt-2">
+                    <Button
+                      size="sm"
+                      disabled={updateMenu.isPending || !greetingDraft.trim()}
+                      onClick={() => updateMenu.mutate({ greetingText: greetingDraft })}
+                    >
+                      حفظ
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setEditMenu(false)}>إلغاء</Button>
+                  </div>
+                </>
+              ) : (
+                <pre className="bg-surface-subtle p-2 rounded text-xs whitespace-pre-wrap">{detail.menu.greetingText}</pre>
+              )}
             </div>
             <div>
               <div className="flex items-center justify-between mb-2">
