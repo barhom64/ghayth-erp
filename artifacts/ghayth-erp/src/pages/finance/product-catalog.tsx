@@ -11,6 +11,8 @@ import { formatNumber } from "@/lib/formatters";
 import { Package, Wrench, ShoppingBag } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { AllocationTabsNav } from "@/components/shared/allocation-tabs-nav";
+import { ProductAccountingEditDialog } from "@/components/finance/product-accounting-edit-dialog";
+import { Pencil } from "lucide-react";
 
 interface ProductCatalogRow {
   id: number;
@@ -58,8 +60,9 @@ export default function ProductCatalogPage() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [routedFilter, setRoutedFilter] = useState<string>("");
+  const [editTarget, setEditTarget] = useState<ProductCatalogRow | null>(null);
 
-  const { data, isLoading, isError } = useApiQuery<{ data: ProductCatalogRow[] }>(
+  const { data, isLoading, isError, refetch } = useApiQuery<{ data: ProductCatalogRow[] }>(
     ["product-catalog"], "/warehouse/products?limit=500",
   );
 
@@ -166,6 +169,18 @@ export default function ProductCatalogPage() {
       render: (r) => r.defaultCostCenterStrategy
         ? <Badge variant="outline" className="text-[10px]">{STRATEGY_LABEL[r.defaultCostCenterStrategy] ?? r.defaultCostCenterStrategy}</Badge>
         : <span className="text-muted-foreground italic text-xs">—</span> },
+    { key: "actions", header: "",
+      render: (r) => (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 px-2 text-xs"
+          onClick={() => setEditTarget(r)}
+        >
+          <Pencil className="h-3 w-3 me-1" />
+          تحرير
+        </Button>
+      ) },
   ];
 
   return (
@@ -277,11 +292,17 @@ export default function ProductCatalogPage() {
       </Card>
 
       <p className="text-xs text-muted-foreground mt-3 text-center">
-        💡 تحرير الـ catalog لكل منتج يتم عبر صفحة تفاصيل المنتج
+        💡 اضغط "تحرير" على أي منتج لضبط التوجيه المحاسبي مباشرة، أو افتح صفحة تفاصيل المنتج
         (<Link href="/warehouse" className="text-status-info-foreground hover:underline">/warehouse</Link>)
-        أو عبر <code className="bg-muted px-1 rounded">PATCH /warehouse/products/:id</code> مع
-        الحقول المحاسبية الجديدة.
+        للتعديل الكامل.
       </p>
+
+      <ProductAccountingEditDialog
+        open={!!editTarget}
+        onOpenChange={(o) => { if (!o) setEditTarget(null); }}
+        product={editTarget}
+        onSaved={() => { setEditTarget(null); refetch(); }}
+      />
     </PageShell>
   );
 }
