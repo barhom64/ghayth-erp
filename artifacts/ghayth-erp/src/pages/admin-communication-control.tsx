@@ -113,11 +113,13 @@ export default function AdminCommunicationControl() {
   const { data: overview, isLoading: ovLoading, error: ovError, refetch: refetchOverview } =
     useApiQuery<Overview>(["comm-control-overview"], "/admin/communication-control/overview");
 
-  const inboxPath = inboxChannel === "all"
-    ? "/admin/communication-control/inbox"
-    : `/admin/communication-control/inbox?channel=${inboxChannel}`;
   const { data: inboxResp, isLoading: ibLoading, refetch: refetchInbox } =
-    useApiQuery<{ data: InboxRow[] }>(["comm-control-inbox", inboxChannel], inboxPath);
+    useApiQuery<{ data: InboxRow[] }>(
+      ["comm-control-inbox", inboxChannel],
+      inboxChannel === "all"
+        ? "/admin/communication-control/inbox"
+        : `/admin/communication-control/inbox?channel=${inboxChannel}`,
+    );
 
   const { data: providersResp, refetch: refetchProviders } =
     useApiQuery<{ data: ProviderRow[] }>(["comm-control-providers"], "/admin/communication-control/providers");

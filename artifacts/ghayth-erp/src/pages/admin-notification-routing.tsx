@@ -120,6 +120,19 @@ export default function AdminNotificationRouting() {
     )},
   ];
 
+  // PATCH /admin/notification-routing/chains/:id — toggles the chain's
+  // isActive flag inline so admins can disable a misbehaving fallback
+  // chain without opening the editor.
+  const toggleChainMut = useMutation({
+    mutationFn: (body: { id: number; isActive: boolean }) =>
+      apiFetch(`/admin/notification-routing/chains/${body.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive: body.isActive }),
+      }),
+    onSuccess: () => { toast({ title: "تم التحديث" }); refetchChains(); },
+    onError: (e: Error) => toast({ title: "فشل", description: e.message, variant: "destructive" }),
+  });
+
   const chainColumns: DataTableColumn<ChainRow>[] = [
     { key: "name", header: "الاسم", searchable: true, render: (r) => (
       <div>
@@ -130,7 +143,17 @@ export default function AdminNotificationRouting() {
     { key: "steps", header: "الخطوات", render: (r) => (
       <span className="font-mono text-xs">{r.steps.length}</span>
     )},
-    { key: "isActive", header: "مفعّلة", render: (r) => <PageStatusBadge status={r.isActive ? "active" : "disabled"} /> },
+    { key: "isActive", header: "مفعّلة", render: (r) => (
+      <button
+        type="button"
+        onClick={() => toggleChainMut.mutate({ id: r.id, isActive: !r.isActive })}
+        disabled={toggleChainMut.isPending}
+        className="cursor-pointer"
+        title={r.isActive ? "تعطيل" : "تفعيل"}
+      >
+        <PageStatusBadge status={r.isActive ? "active" : "disabled"} />
+      </button>
+    ) },
     { key: "createdAt", header: "أُضيفت", render: (r) => (
       <span className="text-xs">{formatDateAr(r.createdAt)}</span>
     )},
