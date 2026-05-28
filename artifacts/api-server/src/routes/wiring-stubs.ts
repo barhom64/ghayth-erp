@@ -9,6 +9,7 @@
  */
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { rawQuery } from "../lib/rawdb.js";
+import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { logger } from "../lib/logger.js";
 
@@ -54,7 +55,7 @@ warehouseStubsRouter.get("/cycle-counts", async (req, res) => {
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
 
-warehouseStubsRouter.post("/cycle-counts", async (_req, res) => {
+warehouseStubsRouter.post("/cycle-counts", requireMinLevel(20), async (_req, res) => {
   res.status(201).json({ id: 0, ok: true, message: "تم استلام الطلب — وحدة الجرد قيد التفعيل" });
 });
 warehouseStubsRouter.get("/cycle-counts/plans", async (_req, res) => {
@@ -63,16 +64,16 @@ warehouseStubsRouter.get("/cycle-counts/plans", async (_req, res) => {
 warehouseStubsRouter.get("/cycle-counts/:id", async (req, res) => {
   res.json({ id: Number(req.params.id), status: "draft", items: [], notes: null });
 });
-warehouseStubsRouter.post("/cycle-counts/:id/approve", async (req, res) => {
+warehouseStubsRouter.post("/cycle-counts/:id/approve", requireMinLevel(20), async (req, res) => {
   res.json({ id: Number(req.params.id), status: "approved", ok: true });
 });
-warehouseStubsRouter.post("/cycle-counts/:id/submit", async (req, res) => {
+warehouseStubsRouter.post("/cycle-counts/:id/submit", requireMinLevel(20), async (req, res) => {
   res.json({ id: Number(req.params.id), status: "submitted", ok: true });
 });
-warehouseStubsRouter.post("/cycle-counts/:id/post", async (req, res) => {
+warehouseStubsRouter.post("/cycle-counts/:id/post", requireMinLevel(20), async (req, res) => {
   res.json({ id: Number(req.params.id), status: "posted", ok: true });
 });
-warehouseStubsRouter.post("/cycle-counts/:id/record", async (req, res) => {
+warehouseStubsRouter.post("/cycle-counts/:id/record", requireMinLevel(20), async (req, res) => {
   res.json({ id: Number(req.params.id), recorded: true, ok: true });
 });
 
@@ -94,10 +95,10 @@ warehouseStubsRouter.get("/lots", async (req, res) => {
     res.json({ data, total: data.length });
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-warehouseStubsRouter.post("/lots", async (_req, res) => {
+warehouseStubsRouter.post("/lots", requireMinLevel(20), async (_req, res) => {
   res.status(201).json({ id: 0, ok: true, message: "تم — استخدم المسار الكامل لاحقاً" });
 });
-warehouseStubsRouter.post("/lots/:id/qc-approve", async (req, res) => {
+warehouseStubsRouter.post("/lots/:id/qc-approve", requireMinLevel(20), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const id = Number(req.params.id);
@@ -109,7 +110,7 @@ warehouseStubsRouter.post("/lots/:id/qc-approve", async (req, res) => {
     res.json({ id, qualityControlStatus: "approved", ok: true });
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-warehouseStubsRouter.post("/lots/:id/qc-reject", async (req, res) => {
+warehouseStubsRouter.post("/lots/:id/qc-reject", requireMinLevel(20), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const id = Number(req.params.id);
@@ -121,7 +122,7 @@ warehouseStubsRouter.post("/lots/:id/qc-reject", async (req, res) => {
     res.json({ id, qualityControlStatus: "rejected", ok: true });
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-warehouseStubsRouter.post("/lots/:id/recall", async (req, res) => {
+warehouseStubsRouter.post("/lots/:id/recall", requireMinLevel(20), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const id = Number(req.params.id);
@@ -162,7 +163,7 @@ warehouseStubsRouter.get("/serials/:id", async (req, res) => {
     res.json(rows[0]);
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-warehouseStubsRouter.post("/serials", async (_req, res) => {
+warehouseStubsRouter.post("/serials", requireMinLevel(20), async (_req, res) => {
   res.status(201).json({ id: 0, ok: true });
 });
 
@@ -232,13 +233,13 @@ documentsStubsRouter.get("/ocr/extractions", async (req, res) => {
     res.json({ data, total: data.length });
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-documentsStubsRouter.post("/ocr/extractions/:id/confirm", async (req, res) => {
+documentsStubsRouter.post("/ocr/extractions/:id/confirm", requireMinLevel(20), async (req, res) => {
   res.json({ id: Number(req.params.id), status: "confirmed", ok: true });
 });
-documentsStubsRouter.post("/ocr/extractions/:id/reject", async (req, res) => {
+documentsStubsRouter.post("/ocr/extractions/:id/reject", requireMinLevel(20), async (req, res) => {
   res.json({ id: Number(req.params.id), status: "rejected", ok: true });
 });
-documentsStubsRouter.post("/:id/ocr/rerun", async (req, res) => {
+documentsStubsRouter.post("/:id/ocr/rerun", requireMinLevel(20), async (req, res) => {
   res.json({ documentId: Number(req.params.id), queued: true, ok: true });
 });
 
@@ -304,7 +305,7 @@ hrStubsRouter.get("/saudi/wps/credentials/:bankCode", async (req, res) => {
     message: "لم يتم تكوين بيانات WPS لهذا البنك بعد",
   });
 });
-hrStubsRouter.put("/saudi/wps/credentials/:bankCode", async (req, res) => {
+hrStubsRouter.put("/saudi/wps/credentials/:bankCode", requireMinLevel(20), async (req, res) => {
   res.json({ bankCode: req.params.bankCode, ok: true, message: "تم حفظ الإعدادات" });
 });
 
@@ -314,19 +315,19 @@ hrStubsRouter.put("/saudi/wps/credentials/:bankCode", async (req, res) => {
 financeStubsRouter.get("/pricing/rules", async (_req, res) => {
   res.json({ data: [], total: 0 });
 });
-financeStubsRouter.post("/pricing/rules", async (req, res) => {
+financeStubsRouter.post("/pricing/rules", requireMinLevel(20), async (req, res) => {
   res.status(201).json({ id: Date.now(), ok: true, ...req.body });
 });
 financeStubsRouter.get("/pricing/rules/:id", async (req, res) => {
   res.json({ id: Number(req.params.id), name: "", active: false, conditions: [] });
 });
-financeStubsRouter.put("/pricing/rules/:id", async (req, res) => {
+financeStubsRouter.put("/pricing/rules/:id", requireMinLevel(20), async (req, res) => {
   res.json({ id: Number(req.params.id), ok: true, ...req.body });
 });
-financeStubsRouter.delete("/pricing/rules/:id", async (req, res) => {
+financeStubsRouter.delete("/pricing/rules/:id", requireMinLevel(20), async (req, res) => {
   res.json({ id: Number(req.params.id), deleted: true });
 });
-financeStubsRouter.post("/pricing/resolve", async (req, res) => {
+financeStubsRouter.post("/pricing/resolve", requireMinLevel(20), async (req, res) => {
   const productId = Number(req.body?.productId || 0);
   const quantity = Number(req.body?.quantity || 1);
   res.json({
@@ -354,7 +355,7 @@ financeStubsRouter.get("/zatca/missing-tax-numbers", async (req, res) => {
     res.json({ data, total: data.length });
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-financeStubsRouter.patch("/zatca/missing-tax-numbers/:id", async (req, res) => {
+financeStubsRouter.patch("/zatca/missing-tax-numbers/:id", requireMinLevel(20), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const id = Number(req.params.id);
