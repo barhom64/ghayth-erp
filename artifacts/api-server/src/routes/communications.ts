@@ -637,22 +637,35 @@ router.post("/send", authorize({ feature: "communications", action: "create" }),
       return;
     }
 
-    // Audit-only channels (call / push): keep the direct INSERT —
-    // these are book-keeping rows, not actual sends, and don't need
-    // DLP or queue dispatch.
+    // Audit-only channels (call / push): write directly to message_log
+    // — these are book-keeping rows, not actual sends, and don't need
+    // DLP or queue dispatch. Phase 4 contract final cleanup: was
+    // previously writing to communications_log; switched so the row
+    // survives the deferred legacy DROP and matches the id semantics
+    // used by /convert/:id + the soft-delete endpoint below.
     const { insertId } = await rawExecute(
-      `INSERT INTO communications_log ("companyId",channel,direction,"fromNumber","toNumber",subject,body,status,"relatedType","relatedId") VALUES ($1,$2,'outbound',$3,$4,$5,$6,'queued',$7,$8)`,
+      `INSERT INTO message_log
+         ("companyId", channel, direction, "fromAddress", "toAddress",
+          subject, body, status, folder, "relatedType", "relatedId", "createdAt")
+       VALUES ($1, $2, 'outbound', $3, $4, $5, $6, 'queued', 'sent', $7, $8, NOW())`,
       [scope.companyId, channel, b.fromNumber ?? null, recipient, b.subject ?? null, b.body.trim(), b.relatedType ?? null, b.relatedId ?? null],
     );
-    assertInsert(insertId, "communications_log");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM communications_log WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    assertInsert(insertId, "message_log");
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, "companyId", channel, direction,
+              "fromAddress" AS "fromNumber", "toAddress" AS "toNumber",
+              subject, body, status, folder, "isStarred",
+              "relatedType", "relatedId", "createdAt", "deletedAt"
+         FROM message_log WHERE id=$1 AND "companyId"=$2`,
+      [insertId, scope.companyId],
+    );
     if (!row) throw new NotFoundError("فشل في استرجاع السجل");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "communications_log", entityId: insertId, after: { channel, toNumber: recipient } }).catch((e) => logger.error(e, "communications background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "message_log", entityId: insertId, after: { channel, toNumber: recipient } }).catch((e) => logger.error(e, "communications background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
       action: "communications.message.sent",
-      entity: "communications_log",
+      entity: "message_log",
       entityId: insertId,
       details: JSON.stringify({ channel, toNumber: recipient }),
     }).catch((e) => logger.error(e, "communications background task failed"));
@@ -773,8 +786,13 @@ router.post("/log/:id/convert", authorize({ feature: "communications", action: "
     const logId = parseId(req.params.id, "id");
     const { targetType } = parsed;
 
+    // Phase 4 contract final cleanup: read from v_message_log_all so
+    // the id resolves to the same row /threads + /log return.
     const [logEntry] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM communications_log WHERE id=$1 AND "companyId"=$2`,
+      `SELECT id, "companyId", channel, direction,
+              "fromAddress" AS "fromNumber", "toAddress" AS "toNumber",
+              subject, body, status, "relatedType", "relatedId", "createdAt"
+         FROM v_message_log_all WHERE id=$1 AND "companyId"=$2`,
       [logId, scope.companyId]
     );
     if (!logEntry) { throw new NotFoundError("سجل الاتصال غير موجود"); }
@@ -877,13 +895,19 @@ router.delete("/log/:id", authorize({ feature: "communications", action: "delete
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [before] = await rawQuery<Record<string, unknown>>(`SELECT * FROM communications_log WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    // Phase 4 contract final cleanup: soft-delete now targets
+    // message_log (the unified table the frontend reads from).
+    const [before] = await rawQuery<Record<string, unknown>>(
+      `SELECT id, "companyId", channel, direction, subject, status, "createdAt"
+         FROM message_log WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
     const [row] = await rawQuery<Record<string, unknown>>(
-      `UPDATE communications_log SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
+      `UPDATE message_log SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL RETURNING id`,
       [id, scope.companyId]
     );
     if (!row) { throw new NotFoundError("السجل غير موجود"); }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "communications_log", entityId: id, before }).catch((e) => logger.error(e, "communications background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "message_log", entityId: id, before }).catch((e) => logger.error(e, "communications background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,

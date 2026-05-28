@@ -7,7 +7,7 @@ import { handleRouteError, NotFoundError,
 } from "../lib/errorHandler.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { emitEvent } from "../lib/businessHelpers.js";
+import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import {
   ensureObligationsTable,
   queryObligations,
@@ -119,6 +119,7 @@ obligationsRouter.post("/", authorize({ feature: "projects", action: "create" })
       dedupeKey,
     });
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.created", entity: "obligations", entityId: id, details: JSON.stringify({ entityType, entityId, obligationType, title, dueAt }) }).catch((e) => logger.error(e, "obligations background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "obligations", entityId: id, after: { entityType, entityId, obligationType, title, dueAt } }).catch((e) => logger.error(e, "[audit] obligation.create"));
     const [row] = await rawQuery<ObligationRow>(`SELECT * FROM obligations WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
     res.status(201).json(row || { id });
   } catch (err) {
@@ -139,6 +140,7 @@ obligationsRouter.post("/:id/met", authorize({ feature: "projects", action: "cre
     );
     if (rows.length === 0) throw new NotFoundError("الالتزام غير موجود");
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.met", entity: "obligations", entityId: id, details: JSON.stringify({ status: "met" }) }).catch((e) => logger.error(e, "obligations background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "obligations", entityId: id, after: { status: "met" } }).catch((e) => logger.error(e, "[audit] obligation.met"));
     res.json(rows[0]);
   } catch (err) {
     handleRouteError(err, res, "Mark obligation met error:");
@@ -157,6 +159,7 @@ obligationsRouter.post("/met-by-entity", authorize({ feature: "projects", action
       obligationType as ObligationType | undefined
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.met_by_entity", entity: "obligations", entityId: entityId, details: JSON.stringify({ entityType, entityId, obligationType, marked: n }) }).catch((e) => logger.error(e, "obligations background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "obligations", entityId: entityId, after: { entityType, obligationType, marked: n, status: "met" } }).catch((e) => logger.error(e, "[audit] obligation.met_by_entity"));
     res.json({ marked: n });
   } catch (err) {
     handleRouteError(err, res, "Mark obligation met by entity error:");
@@ -175,6 +178,7 @@ obligationsRouter.post("/:id/cancel", authorize({ feature: "projects", action: "
     );
     if (rows.length === 0) throw new NotFoundError("الالتزام غير موجود");
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.cancelled", entity: "obligations", entityId: id, details: JSON.stringify({ status: "cancelled" }) }).catch((e) => logger.error(e, "obligations background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "obligations", entityId: id, after: { status: "cancelled" } }).catch((e) => logger.error(e, "[audit] obligation.cancelled"));
     res.json(rows[0]);
   } catch (err) {
     handleRouteError(err, res, "Cancel obligation error:");
@@ -192,6 +196,7 @@ obligationsRouter.post("/cancel-by-entity", authorize({ feature: "projects", act
       obligationType as ObligationType | undefined
     );
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "obligation.cancelled_by_entity", entity: "obligations", entityId: entityId, details: JSON.stringify({ entityType, entityId, obligationType, cancelled: n }) }).catch((e) => logger.error(e, "obligations background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "obligations", entityId: entityId, after: { entityType, obligationType, cancelled: n, status: "cancelled" } }).catch((e) => logger.error(e, "[audit] obligation.cancelled_by_entity"));
     res.json({ cancelled: n });
   } catch (err) {
     handleRouteError(err, res, "Cancel obligation by entity error:");

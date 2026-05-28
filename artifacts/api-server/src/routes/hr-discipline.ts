@@ -17,7 +17,7 @@ import { Router } from "express";
 import type { PoolClient } from "pg";
 import { HR_ROLES } from "../lib/rbacCatalog.js";
 import { z } from "zod";
-import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import {
   handleRouteError,
@@ -38,7 +38,7 @@ import {
 import {
   resolvePenalty,
   getDailyWage,
-  generateMemoNumber,
+  issueMemoNumber,
   parsePenaltyLabel,
   ensureInquiryMemoForViolation,
   type IncidentType,
@@ -689,23 +689,38 @@ router.post("/memos", authorize({ feature: "hr.discipline", action: "create" }),
       }
     }
 
-    const memoNumber = await generateMemoNumber(scope.companyId);
-    const { insertId: memoId } = await rawExecute(
-      `INSERT INTO hr_inquiry_memos (
-         "companyId","branchId","memoNumber","assignmentId","employeeId",
-         "regulationId","incidentType","incidentDate","incidentDurationMinutes",
-         "incidentDescription", source, status, "createdBy"
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'manual','pending_employee',$11)
-       RETURNING id`,
-      [
-        scope.companyId, assignment.branchId, memoNumber,
-        assignmentId, assignment.employeeId,
-        resolvedRegulationId,
-        incidentType, incidentDate, incidentDurationMinutes ?? null,
-        incidentDescription ?? null,
+    // G1 fix (#1141 coverage report §3 G1) — issue + INSERT + linkback
+    // are atomic. Replaces the legacy generateMemoNumber + post-insert
+    // .catch() pattern.
+    const { memoId, memoNumber } = await withTransaction(async (client) => {
+      const issued = await issueMemoNumber(
+        scope.companyId,
+        assignment.branchId,
         scope.userId,
-      ]
-    );
+      );
+      const ins = await client.query(
+        `INSERT INTO hr_inquiry_memos (
+           "companyId","branchId","memoNumber","assignmentId","employeeId",
+           "regulationId","incidentType","incidentDate","incidentDurationMinutes",
+           "incidentDescription", source, status, "createdBy"
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'manual','pending_employee',$11)
+         RETURNING id`,
+        [
+          scope.companyId, assignment.branchId, issued.number,
+          assignmentId, assignment.employeeId,
+          resolvedRegulationId,
+          incidentType, incidentDate, incidentDurationMinutes ?? null,
+          incidentDescription ?? null,
+          scope.userId,
+        ]
+      );
+      const newMemoId = ins.rows[0].id;
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [newMemoId, issued.assignmentId]
+      );
+      return { memoId: newMemoId, memoNumber: issued.number };
+    });
 
     await logMemoEvent({
       memoId, companyId: scope.companyId, actorId: scope.userId,
