@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { z } from "zod";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -291,6 +291,65 @@ export function RbacV2Tab() {
   const selectedRole = roles.find((r) => r.id === selectedRoleId);
   const violations = sodData?.violations || [];
 
+  // POST /rbac/v2/roles — create a new role with a code and Arabic label.
+  // PATCH /rbac/v2/roles/:id — rename / re-color / re-level a custom role.
+  // DELETE /rbac/v2/roles/:id — drop a non-system role (server enforces
+  //   the constraint).
+  const createRoleMut = useApiMutation<{ data: any }, { code: string; label_ar: string; level?: number; color?: string }>(
+    "/rbac/v2/roles",
+    "POST",
+    [["rbac-roles"]],
+    { successMessage: "تم إنشاء الدور" },
+  );
+  const updateRoleMut = useApiMutation<{ data: any }, { id: number; label_ar?: string; level?: number; color?: string }>(
+    (b) => `/rbac/v2/roles/${b.id}`,
+    "PATCH",
+    [["rbac-roles"]],
+    { successMessage: "تم تحديث الدور" },
+  );
+  const deleteRoleMut = useApiMutation<unknown, number>(
+    (id) => `/rbac/v2/roles/${id}`,
+    "DELETE",
+    [["rbac-roles"]],
+    { successMessage: "تم حذف الدور" },
+  );
+  const [newRoleOpen, setNewRoleOpen] = useState(false);
+  const [newCode, setNewCode] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [newLevel, setNewLevel] = useState("50");
+  const [editRoleId, setEditRoleId] = useState<number | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editLevel, setEditLevel] = useState("");
+  const submitNewRole = () => {
+    if (!newCode.trim() || !newLabel.trim()) return;
+    createRoleMut.mutate(
+      {
+        code: newCode.trim(),
+        label_ar: newLabel.trim(),
+        level: Number(newLevel) || 50,
+      },
+      {
+        onSuccess: () => {
+          setNewRoleOpen(false);
+          setNewCode(""); setNewLabel(""); setNewLevel("50");
+          refetchRoles();
+        },
+      },
+    );
+  };
+  const submitEditRole = () => {
+    if (editRoleId == null || !editLabel.trim()) return;
+    updateRoleMut.mutate(
+      { id: editRoleId, label_ar: editLabel.trim(), level: Number(editLevel) || undefined },
+      {
+        onSuccess: () => {
+          setEditRoleId(null); setEditLabel(""); setEditLevel("");
+          refetchRoles();
+        },
+      },
+    );
+  };
+
   return (
     <div className="space-y-4">
       {violations.length > 0 && <SodViolationsBanner violations={violations} onPickRole={(rid) => setSelectedRoleId(rid)} />}
@@ -300,29 +359,88 @@ export function RbacV2Tab() {
           <Card>
             <CardHeader className="pb-2 flex flex-row justify-between items-center">
               <CardTitle className="text-sm">الأدوار ({roles.length})</CardTitle>
-              <Button size="sm" variant="ghost" onClick={() => setShowTemplates(true)}>
-                <Sparkles className="h-4 w-4 me-1" />
-                قوالب
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="ghost" onClick={() => setNewRoleOpen((v) => !v)}>
+                  + جديد
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowTemplates(true)}>
+                  <Sparkles className="h-4 w-4 me-1" />
+                  قوالب
+                </Button>
+              </div>
             </CardHeader>
+            {newRoleOpen && (
+              <div className="border-b p-3 space-y-2 bg-status-info-surface/30">
+                <div>
+                  <label className="text-xs text-muted-foreground">الرمز (code)</label>
+                  <input value={newCode} onChange={(e) => setNewCode(e.target.value)} dir="ltr"
+                    className="w-full h-8 px-2 text-xs border rounded bg-white font-mono" placeholder="custom_manager" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">المسمى العربي</label>
+                  <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
+                    className="w-full h-8 px-2 text-xs border rounded bg-white" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">المستوى</label>
+                  <input type="number" value={newLevel} onChange={(e) => setNewLevel(e.target.value)} dir="ltr"
+                    className="w-full h-8 px-2 text-xs border rounded bg-white" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" onClick={submitNewRole} disabled={createRoleMut.isPending}>حفظ</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setNewRoleOpen(false)}>إلغاء</Button>
+                </div>
+              </div>
+            )}
             <CardContent className="p-0 max-h-[600px] overflow-auto">
               {roles.map((r) => (
-                <button
+                <div
                   key={r.id}
-                  onClick={() => setSelectedRoleId(r.id)}
-                  className={`w-full text-start p-3 border-b hover:bg-surface-subtle transition ${
+                  className={`border-b ${
                     selectedRoleId === r.id ? "bg-status-info-surface border-r-4 border-r-blue-500" : ""
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: r.color || "#3b82f6" }} />
-                    <span className="font-medium text-sm">{r.label_ar}</span>
-                    {r.is_system && <Badge variant="outline" className="text-xs">نظامي</Badge>}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {r.member_count} موظف · {r.grant_count} صلاحية · المستوى {r.level}
-                  </div>
-                </button>
+                  <button
+                    onClick={() => setSelectedRoleId(r.id)}
+                    className="w-full text-start p-3 hover:bg-surface-subtle transition"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: r.color || "#3b82f6" }} />
+                      <span className="font-medium text-sm">{r.label_ar}</span>
+                      {r.is_system && <Badge variant="outline" className="text-xs">نظامي</Badge>}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {r.member_count} موظف · {r.grant_count} صلاحية · المستوى {r.level}
+                    </div>
+                  </button>
+                  {!r.is_system && editRoleId === r.id && (
+                    <div className="p-2 bg-status-info-surface/30 border-t space-y-2">
+                      <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)}
+                        className="w-full h-7 px-2 text-xs border rounded bg-white" />
+                      <input type="number" value={editLevel} onChange={(e) => setEditLevel(e.target.value)} dir="ltr"
+                        className="w-full h-7 px-2 text-xs border rounded bg-white" />
+                      <div className="flex items-center gap-1">
+                        <Button size="sm" onClick={submitEditRole} disabled={updateRoleMut.isPending}>حفظ</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setEditRoleId(null)}>إلغاء</Button>
+                      </div>
+                    </div>
+                  )}
+                  {!r.is_system && editRoleId !== r.id && (
+                    <div className="px-3 pb-2 flex items-center gap-1">
+                      <Button size="sm" variant="ghost" className="h-6 text-xs"
+                        onClick={() => { setEditRoleId(r.id); setEditLabel(r.label_ar); setEditLevel(String(r.level ?? 50)); }}>
+                        تعديل
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-6 text-xs text-status-error-foreground"
+                        onClick={() => {
+                          if (!confirm(`حذف الدور "${r.label_ar}"؟`)) return;
+                          deleteRoleMut.mutate(r.id, { onSuccess: () => { if (selectedRoleId === r.id) setSelectedRoleId(null); refetchRoles(); } });
+                        }}>
+                        حذف
+                      </Button>
+                    </div>
+                  )}
+                </div>
               ))}
             </CardContent>
           </Card>
