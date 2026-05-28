@@ -432,7 +432,7 @@ function extractFrontendCalls() {
     // destructure pulls `handleDelete` or `startDelete` — pages that
     // don't (governance/capa-tab.tsx) intentionally suppress the delete
     // affordance because the backend doesn't expose a DELETE route.
-    const inlineRe = /(?:const\s*\{([^}]*)\}\s*=\s*)?useInlineActions\s*\(\s*\{[^}]*endpoint\s*:\s*/g;
+    const inlineRe = /(?:const\s+(?:\{([^}]*)\}|([A-Za-z_$][\w$]*))\s*=\s*)?useInlineActions\s*\(\s*\{[^}]*endpoint\s*:\s*/g;
     for (const m of src.matchAll(inlineRe)) {
       let i = m.index + m[0].length;
       while (i < src.length && /\s/.test(src[i])) i++;
@@ -443,9 +443,50 @@ function extractFrontendCalls() {
       const line = lineOf(src, m.index);
       calls.push({ file: rel, url, line, method: "PATCH", source: "prop" });
       const destructure = m[1] ?? "";
-      if (/\b(handleDelete|startDelete|deletingId)\b/.test(destructure)) {
+      const objName = m[2] ?? "";
+      // Destructured form: `const { handleDelete, ... } = useInlineActions(...)`.
+      // Stored form: `const x = useInlineActions(...)` — look for `x.handleDelete`
+      // / `x.startDelete` references later in the file.
+      const hasDelete = /\b(handleDelete|startDelete|deletingId)\b/.test(destructure)
+        || (objName && new RegExp(`\\b${objName}\\.(handleDelete|startDelete|deletingId)\\b`).test(src));
+      if (hasDelete) {
         calls.push({ file: rel, url, line, method: "DELETE", source: "prop" });
       }
+    }
+
+    // Raw `fetch(\`${BASE}/api/x\`, { method: ... })` calls — used in a
+    // handful of places where the helper layer can't handle the response
+    // (blob downloads, custom credentials, etc.). The scanner reads the
+    // method literal from the options object the same way apiFetch does.
+    const fetchRe = /\bfetch\s*\(\s*[`"']/g;
+    for (const m of src.matchAll(fetchRe)) {
+      let i = m.index + m[0].length - 1;
+      const lit = readString(src, i);
+      if (!lit) continue;
+      let url = lit.value;
+      // Strip ${BASE}/api/ prefix — what the rest of the audit produces
+      // for the canonical helper-prefixed URL shape.
+      url = url.replace(/^\$\{BASE\}\s*\/api/, "")
+               .replace(/^https?:\/\/[^/]+\/api/, "");
+      if (!url.startsWith("/")) continue;
+      // Now read the method from the options arg if present.
+      let j = lit.end;
+      while (j < src.length && /[\s,]/.test(src[j])) j++;
+      let method = "GET";
+      if (src[j] === "{") {
+        let depth = 1;
+        j++;
+        const start = j;
+        while (j < src.length && depth > 0) {
+          if (src[j] === "{") depth++;
+          else if (src[j] === "}") depth--;
+          j++;
+        }
+        const body = src.slice(start, j - 1);
+        const mm = body.match(/\bmethod\s*:\s*["']([A-Z]+)["']/);
+        if (mm) method = mm[1].toUpperCase();
+      }
+      calls.push({ file: rel, url, line: lineOf(src, m.index), method, source: "helper" });
     }
 
     // <ImpactPreviewButton endpoint="/x/impact-preview" payload={...} />
