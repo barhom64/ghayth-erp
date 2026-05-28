@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,8 +15,9 @@ import {
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
-import { Plus, Eye, Pencil, CheckCircle2, Briefcase } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { formatCurrency, formatDateAr, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
+import { Plus, Eye, Pencil, CheckCircle2, Briefcase, Calculator } from "lucide-react";
 
 type PlanStatus = "active" | "suspended" | "expired" | "pending";
 type CommissionType = "percentage" | "fixed" | "tiered" | "mixed";
@@ -60,6 +61,31 @@ export default function UmrahCommissionPlans() {
   const plans = plansQ.data?.data ?? [];
   const employees = employeesQ.data?.data ?? [];
   const seasons = seasonsQ.data?.data ?? [];
+
+  const { toast } = useToast();
+
+  // POST /umrah/commission-plans/:id/calculate — recomputes commissions
+  // for the current month / year (defaults to now in Riyadh). The page
+  // already shows recent calculations via the editor's history.
+  const calculateMut = useApiMutation<unknown, { id: number; month: number; year: number }>(
+    (body) => `/umrah/commission-plans/${body.id}/calculate`,
+    "POST",
+    [["umrah-commission-plans"]],
+    {
+      successMessage: "تم احتساب العمولة",
+    },
+  );
+
+  const handleCalculate = (planId: number) => {
+    calculateMut.mutate(
+      { id: planId, month: Number(currentMonthPaddedRiyadh()), year: currentYearRiyadh() },
+      {
+        onError: (e: any) => {
+          toast({ variant: "destructive", title: "تعذر الاحتساب", description: e?.message });
+        },
+      },
+    );
+  };
 
   const [empFilter, setEmpFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -138,6 +164,17 @@ export default function UmrahCommissionPlans() {
             <Link href={`/umrah/commission-plans/${p.id}/edit`}>
               <Pencil className="h-3.5 w-3.5" />
             </Link>
+          </GuardedButton>
+          <GuardedButton
+            perm="umrah:write"
+            size="sm"
+            variant="ghost"
+            onClick={() => handleCalculate(p.id)}
+            disabled={calculateMut.isPending}
+            rateLimitAware
+            title="احتساب العمولة للشهر الحالي"
+          >
+            <Calculator className="h-3.5 w-3.5" />
           </GuardedButton>
         </div>
       ),

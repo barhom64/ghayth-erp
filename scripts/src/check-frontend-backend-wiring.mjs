@@ -360,6 +360,12 @@ function extractFrontendCalls() {
       // "/x"` used by useApiMutation in commission-plan-editor — credit
       // both URLs.
       if (helper === "useApiQuery" || helper === "useApiMutation" || helper === "apiFetch") {
+        // Skip a leading `(` for the parenthesized form
+        // `(body.id ? "/x" : "/y")` used by useApiMutation arrow bodies.
+        if (src[i] === "(") {
+          const inside = src.slice(i + 1, i + 200);
+          if (/^[\w.$\s]+\?/.test(inside)) i++;
+        }
         const savedI = i;
         const condArgRe = /^[\w.$\s]+\?/;
         const rest = src.slice(i, i + 200);
