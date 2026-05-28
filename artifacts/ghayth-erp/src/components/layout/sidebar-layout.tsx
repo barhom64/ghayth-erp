@@ -524,6 +524,7 @@ const allNavSections: NavSection[] = [
         { label: "التقارير التحليلية", path: "/bi/reports", icon: FileBarChart },
         { label: "الرؤى الذكية", path: "/insights", icon: Sparkles },
         { label: "لوحة الذكاء", path: "/intelligence", icon: Brain },
+        { label: "منصة AI", path: "/intelligence/ai-workbench", icon: Sparkles },
       ]},
       // 17-item "مدير النظام" was one flat list — broke into 4 themed
       // sub-groups so an admin can find a specific tool without scanning
