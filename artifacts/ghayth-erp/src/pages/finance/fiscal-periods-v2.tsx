@@ -101,6 +101,7 @@ export default function FiscalPeriodsV2Page() {
   const [createOpen, setCreateOpen] = useState(false);
   const [closeTarget, setCloseTarget] = useState<FiscalPeriodV2Row | null>(null);
   const [reopenTarget, setReopenTarget] = useState<FiscalPeriodV2Row | null>(null);
+  const [lockTarget, setLockTarget] = useState<FiscalPeriodV2Row | null>(null);
 
   // Stats need the row count — read once from cache. ListPage owns the
   // canonical fetch; this just borrows the same key so we don't double
@@ -189,18 +190,32 @@ export default function FiscalPeriodsV2Page() {
             <Lock className="h-4 w-4 ml-1" />
             إقفال
           </GuardedButton>
-        ) : (
-          <GuardedButton
-            perm={PERM_FINANCE_APPROVE}
-            size="sm"
-            variant="outline"
-            onClick={() => setReopenTarget(row)}
-            data-testid={`reopen-period-${row.id}`}
-          >
-            <Unlock className="h-4 w-4 ml-1" />
-            إعادة فتح
-          </GuardedButton>
-        )
+        ) : row.status === "closed" ? (
+          <div className="flex items-center gap-1">
+            <GuardedButton
+              perm={PERM_FINANCE_APPROVE}
+              size="sm"
+              variant="outline"
+              onClick={() => setReopenTarget(row)}
+              data-testid={`reopen-period-${row.id}`}
+            >
+              <Unlock className="h-4 w-4 ml-1" />
+              إعادة فتح
+            </GuardedButton>
+            <GuardedButton
+              perm={PERM_FINANCE_APPROVE}
+              size="sm"
+              variant="outline"
+              onClick={() => setLockTarget(row)}
+              data-testid={`lock-period-${row.id}`}
+              className="text-status-error-foreground"
+              title="قفل نهائي (لا يمكن العودة)"
+            >
+              <Lock className="h-4 w-4 ml-1" />
+              قفل نهائي
+            </GuardedButton>
+          </div>
+        ) : null
       }
       filters={{
         config: {
@@ -226,6 +241,7 @@ export default function FiscalPeriodsV2Page() {
       <CreateDialog open={createOpen} onOpenChange={setCreateOpen} />
       <CloseDialog target={closeTarget} onOpenChange={(open) => !open && setCloseTarget(null)} />
       <ReopenDialog target={reopenTarget} onOpenChange={(open) => !open && setReopenTarget(null)} />
+      <LockDialog target={lockTarget} onOpenChange={(open) => !open && setLockTarget(null)} />
     </ListPage>
   );
 }
@@ -461,6 +477,69 @@ function ReopenDialog({
         >
           <DirtyTracker onChange={setIsDirty} />
           <FormTextareaField name="reason" label="سبب إعادة الفتح" required rows={3} />
+        </FormShell>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// PER-3 — Lock a closed period (audit-grade irreversible).
+// POST /fiscal-periods-v2/:id/lock reuses the reopen schema (just
+// `reason`). Once locked the period cannot be reopened from the UI,
+// so the dialog is intentionally distinct from the Reopen variant
+// even though the mutation shape is the same.
+function LockDialog({
+  target,
+  onOpenChange,
+}: {
+  target: FiscalPeriodV2Row | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const [isDirty, setIsDirty] = useState(false);
+  const lock = useApiMutation<{ message: string }, ReopenValues>(
+    () => `/finance/fiscal-periods-v2/${target!.id}/lock`,
+    "POST",
+    [[...QUERY_KEY]],
+  );
+
+  return (
+    <Dialog open={!!target} onOpenChange={makeDirtyGuardedClose(isDirty, onOpenChange)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>قفل نهائي للفترة المالية</DialogTitle>
+          <DialogDescription className="text-status-error-foreground">
+            تحذير: القفل النهائي لا يمكن التراجع عنه. لن يكون من الممكن إعادة فتح
+            هذه الفترة أو تعديل أي قيد داخل نطاقها بعد القفل.
+          </DialogDescription>
+        </DialogHeader>
+
+        {target && (
+          <div className="rounded-md border bg-muted/30 p-3 text-sm">
+            <div className="font-medium">{target.name}</div>
+            <div className="text-xs text-muted-foreground tabular-nums">
+              {formatDateAr(target.startDate)} – {formatDateAr(target.endDate)}
+            </div>
+          </div>
+        )}
+
+        <FormShell
+          schema={reopenSchema}
+          defaultValues={{ reason: "" }}
+          submitLabel="قفل نهائي"
+          onSubmit={async (values, { setFieldError }) => {
+            try {
+              await lock.mutateAsync(values);
+              toast({ title: `تم القفل النهائي لـ "${target?.name ?? ""}"` });
+              setIsDirty(false);
+              onOpenChange(false);
+            } catch (err) {
+              handleFormError(err, setFieldError, toast);
+            }
+          }}
+        >
+          <DirtyTracker onChange={setIsDirty} />
+          <FormTextareaField name="reason" label="سبب القفل النهائي" required rows={3} />
         </FormShell>
       </DialogContent>
     </Dialog>
