@@ -12,6 +12,7 @@ import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import {
   LogOut, Calendar, DollarSign, CheckCircle, Clock,
   User, AlertTriangle,
@@ -312,6 +313,17 @@ export default function ExitDetail() {
             إتمام نهاية الخدمة
           </GuardedButton>
         ) : undefined
+          {item?.employeeId && (
+            <ImpactPreviewButton
+              endpoint="/hr/impact-preview/termination"
+              payload={{
+                employeeId: item.employeeId,
+                terminationDate: item.terminationDate ?? undefined,
+                terminationType: item.terminationType ?? undefined,
+              }}
+              label="معاينة أثر نهاية الخدمة"
+            />
+          )}
           <PrintButton entityType="exit_request" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
         </div>
       }

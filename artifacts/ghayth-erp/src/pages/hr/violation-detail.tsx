@@ -17,6 +17,7 @@ import {
   type StageStep,
 } from "@workspace/entity-kit";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
+import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -181,7 +182,21 @@ export default function ViolationDetail() {
       {/* إجراءات الاعتماد */}
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">إجراءات الاعتماد</CardTitle>
+          <CardTitle className="text-base flex items-center justify-between gap-2">
+            <span>إجراءات الاعتماد</span>
+            {item?.employeeId && (
+              <ImpactPreviewButton
+                endpoint="/hr/impact-preview/violation"
+                payload={{
+                  employeeId: item.employeeId,
+                  deduction: Number(item.deduction || 0),
+                  severity: item.severity,
+                  type: item.type,
+                }}
+                label="معاينة أثر المخالفة"
+              />
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ApprovalActions
