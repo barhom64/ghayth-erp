@@ -36,6 +36,7 @@ import {
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
 import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
@@ -1999,19 +2000,39 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", authorize({ feature
     }
 
     if (force && missing.length > 0) {
+      // F3 — Force-close path. Previously this block ran its own raw
+      // UPDATE that bypassed the pending-JE guard, the lifecycle engine,
+      // the audit log, and the event bus — so a year-end on a year with
+      // unposted manual journals would silently close the periods and
+      // post the YE entry without those journals. The fix: for any
+      // missing period that already exists in `financial_periods`,
+      // close it through `closeFiscalPeriodCanonical` (the same helper
+      // /fiscal-periods-v2/:id/close uses). Periods that don't exist
+      // at all are created on-the-fly already-closed (this is a backfill
+      // case for historic data — by definition no journals were ever
+      // posted into a period the system didn't know about, so there are
+      // no pending JEs to guard).
       await withTransaction(async (client: any) => {
         for (const p of missing) {
           const startDate = `${p}-01`;
           const endDate = toDateISO(new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)), 0));
           const { rows: [existing] } = await client.query(
-            `SELECT id FROM financial_periods WHERE "companyId"=$1 AND to_char("startDate",'YYYY-MM')=$2 AND "deletedAt" IS NULL LIMIT 1`,
+            `SELECT id, status FROM financial_periods WHERE "companyId"=$1 AND to_char("startDate",'YYYY-MM')=$2 AND "deletedAt" IS NULL LIMIT 1`,
             [scope.companyId, p]
           );
           if (existing) {
-            await client.query(
-              `UPDATE financial_periods SET status='closed', "closedAt"=NOW(), "closedBy"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND status = 'open' AND "deletedAt" IS NULL`,
-              [scope.activeAssignmentId, existing.id, scope.companyId]
-            );
+            if (existing.status !== "open") continue;
+            await closeFiscalPeriodCanonical({
+              periodId: Number(existing.id),
+              scope: {
+                companyId: scope.companyId,
+                branchId: scope.branchId ?? null,
+                userId: scope.userId,
+                activeAssignmentId: scope.activeAssignmentId,
+              },
+              reason: `إقفال تلقائي عبر إقفال السنة المالية ${year}`,
+              client,
+            });
           } else {
             await client.query(
               `INSERT INTO financial_periods ("companyId",name,"startDate","endDate",status,"closedAt","closedBy")
