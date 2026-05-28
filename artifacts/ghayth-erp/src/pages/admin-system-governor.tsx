@@ -1,17 +1,97 @@
 import { PageShell } from "@workspace/ui-core";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { formatDateAr } from "@/lib/formatters";
 import {
   Shield, ShieldCheck, ShieldAlert, RefreshCw, AlertTriangle, CheckCircle,
+  Activity, Inbox, Pause, RotateCw, Trash2,
 } from "lucide-react";
+
+interface DlqEntry {
+  id: number;
+  type: string;
+  eventName: string;
+  error: string;
+  retryCount: number;
+  createdAt: string;
+}
+
+interface SystemHealthCheck {
+  id: number;
+  name: string;
+  category: string;
+  status: string;
+  lastChecked: string | null;
+  details: string | null;
+}
+
+interface SystemStop {
+  id: number;
+  scope: string;
+  reason: string;
+  active: boolean;
+  createdAt: string;
+}
 
 export default function AdminSystemGovernor() {
   const { data, isLoading, error, refetch } = useApiQuery<any>(
     ["system-guards"], "/admin/governance/system-guards"
   );
+
+  // Event DLQ — events that failed to dispatch and parked for replay.
+  const { data: dlqResp, refetch: refetchDlq } = useApiQuery<{ entries: DlqEntry[]; summary: any[] }>(
+    ["admin-event-dlq"], "/admin/governance/event-dlq",
+  );
+  const dlqEntries: DlqEntry[] = dlqResp?.entries ?? [];
+
+  const dlqReplayMut = useApiMutation<unknown, number>(
+    (id) => `/admin/governance/event-dlq/${id}/replay`,
+    "POST",
+    [["admin-event-dlq"]],
+    { successMessage: "أُعيد تشغيل الحدث" },
+  );
+  const dlqDeleteMut = useApiMutation<unknown, number>(
+    (id) => `/admin/governance/event-dlq/${id}`,
+    "DELETE",
+    [["admin-event-dlq"]],
+    { successMessage: "تم حذف السجل" },
+  );
+
+  // System health checks + dependency graph.
+  const { data: healthResp } = useApiQuery<{ checks: SystemHealthCheck[] }>(
+    ["admin-system-health-checks"], "/admin/system-health-checks",
+  );
+  const healthChecks: SystemHealthCheck[] = healthResp?.checks ?? [];
+  const { data: depGraphResp } = useApiQuery<{ nodes: any[]; edges: any[] }>(
+    ["admin-system-health-graph"], "/admin/system-health/dependency-graph",
+  );
+
+  // System stops — temporary "halt this scope" markers used in
+  // governance scenarios (e.g. tax-cert expired → block invoice
+  // posting until refresh).
+  const { data: stopsResp, refetch: refetchStops } = useApiQuery<{ data: SystemStop[] }>(
+    ["admin-system-stops"], "/admin/system-stops",
+  );
+  const stops: SystemStop[] = stopsResp?.data ?? [];
+
+  const deactivateStopMut = useApiMutation<unknown, number>(
+    (id) => `/admin/system-stops/${id}/deactivate`,
+    "PATCH",
+    [["admin-system-stops"]],
+    { successMessage: "تم إيقاف الحظر" },
+  );
+
+  // Pages registry — what's mounted in the SystemRegistry vs what
+  // the UI actually exposes. Useful for the audit team.
+  const { data: pagesResp } = useApiQuery<{ pages: any[] }>(
+    ["admin-system-registry-pages"], "/admin/system-registry/pages",
+  );
+  const registryPages: any[] = pagesResp?.pages ?? [];
 
   const allowed = data?.allowed ?? true;
   const violations = data?.violations ?? [];
@@ -28,7 +108,16 @@ export default function AdminSystemGovernor() {
       }
     >
       <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>
-        <div className="space-y-6">
+        <Tabs defaultValue="guards" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="guards"><Shield className="h-4 w-4 me-1" />الحراسات</TabsTrigger>
+            <TabsTrigger value="dlq"><Inbox className="h-4 w-4 me-1" />أحداث فاشلة ({dlqEntries.length})</TabsTrigger>
+            <TabsTrigger value="health"><Activity className="h-4 w-4 me-1" />صحة النظام ({healthChecks.length})</TabsTrigger>
+            <TabsTrigger value="stops"><Pause className="h-4 w-4 me-1" />الإيقافات ({stops.filter((s) => s.active).length})</TabsTrigger>
+            <TabsTrigger value="pages">سجل الصفحات ({registryPages.length})</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="guards" className="space-y-6">
           <Card className={allowed ? "border-status-success-surface bg-status-success-surface" : "border-status-error-surface bg-status-error-surface"}>
             <CardContent className="p-6 flex items-center gap-4">
               {allowed ? (
@@ -97,7 +186,201 @@ export default function AdminSystemGovernor() {
               <p>كل حراسة (Guard) تُفحص تلقائياً قبل العمليات المالية والإدارية. إذا فشلت أي حراسة، يُمنع التنفيذ ويظهر سبب المنع للمستخدم.</p>
             </CardContent>
           </Card>
-        </div>
+        </TabsContent>
+
+        <TabsContent value="dlq">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Inbox className="h-4 w-4" /> الأحداث الفاشلة ({dlqEntries.length})
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={() => refetchDlq()}>
+                <RefreshCw className="h-3 w-3 me-1" /> تحديث
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {dlqEntries.length === 0 ? (
+                <p className="p-8 text-center text-sm text-muted-foreground">لا توجد أحداث فاشلة</p>
+              ) : (
+                <div className="divide-y">
+                  {dlqEntries.map((r) => (
+                    <div key={r.id} className="p-3 grid grid-cols-12 gap-2 items-start text-xs">
+                      <div className="col-span-3">
+                        <p className="font-mono font-semibold">{r.eventName}</p>
+                        <p className="text-[10px] text-muted-foreground">{r.type}</p>
+                      </div>
+                      <div className="col-span-5 text-muted-foreground line-clamp-2">{r.error}</div>
+                      <div className="col-span-1">
+                        <Badge variant="outline" className="text-[10px]">×{r.retryCount}</Badge>
+                      </div>
+                      <div className="col-span-2 text-[10px] text-muted-foreground">
+                        {formatDateAr(r.createdAt)}
+                      </div>
+                      <div className="col-span-1 flex items-center gap-1">
+                        <GuardedButton
+                          perm="admin:update"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => dlqReplayMut.mutate(r.id)}
+                          disabled={dlqReplayMut.isPending}
+                          title="إعادة تشغيل"
+                        >
+                          <RotateCw className="h-3 w-3" />
+                        </GuardedButton>
+                        <GuardedButton
+                          perm="admin:delete"
+                          size="sm"
+                          variant="ghost"
+                          className="text-status-error-foreground"
+                          onClick={() => dlqDeleteMut.mutate(r.id)}
+                          disabled={dlqDeleteMut.isPending}
+                          title="حذف"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </GuardedButton>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="health">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Activity className="h-4 w-4" /> فحوصات صحة النظام
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {healthChecks.length === 0 ? (
+                <p className="p-8 text-center text-sm text-muted-foreground">لم تُسجَّل فحوصات</p>
+              ) : (
+                <div className="divide-y">
+                  {healthChecks.map((c) => (
+                    <div key={c.id} className="p-3 flex items-center justify-between text-sm">
+                      <div>
+                        <p className="font-medium">{c.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{c.category}</p>
+                        {c.details && <p className="text-xs text-muted-foreground mt-1">{c.details}</p>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {c.lastChecked && (
+                          <span className="text-[10px] text-muted-foreground">{formatDateAr(c.lastChecked)}</span>
+                        )}
+                        <Badge
+                          variant="outline"
+                          className={
+                            c.status === "healthy" || c.status === "ok"
+                              ? "text-status-success-foreground border-status-success-surface"
+                              : c.status === "degraded"
+                              ? "text-status-warning-foreground border-status-warning-surface"
+                              : "text-status-error-foreground border-status-error-surface"
+                          }
+                        >
+                          {c.status}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          {depGraphResp && (
+            <Card className="mt-4">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">مخطط التبعيات</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs">
+                <p className="text-muted-foreground">
+                  {(depGraphResp.nodes ?? []).length} عقدة · {(depGraphResp.edges ?? []).length} علاقة
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="stops">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Pause className="h-4 w-4" /> إيقافات النظام
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={() => refetchStops()}>
+                <RefreshCw className="h-3 w-3 me-1" /> تحديث
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {stops.length === 0 ? (
+                <p className="p-8 text-center text-sm text-muted-foreground">لا توجد إيقافات</p>
+              ) : (
+                <div className="divide-y">
+                  {stops.map((s) => (
+                    <div key={s.id} className="p-3 flex items-center justify-between text-sm">
+                      <div>
+                        <p className="font-medium">{s.scope}</p>
+                        <p className="text-xs text-muted-foreground">{s.reason}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{formatDateAr(s.createdAt)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className={
+                            s.active
+                              ? "text-status-error-foreground border-status-error-surface"
+                              : "text-muted-foreground"
+                          }
+                        >
+                          {s.active ? "نشط" : "موقوف"}
+                        </Badge>
+                        {s.active && (
+                          <GuardedButton
+                            perm="admin:update"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => deactivateStopMut.mutate(s.id)}
+                            disabled={deactivateStopMut.isPending}
+                          >
+                            إلغاء الإيقاف
+                          </GuardedButton>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="pages">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">صفحات النظام المسجَّلة</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {registryPages.length === 0 ? (
+                <p className="p-8 text-center text-sm text-muted-foreground">لا توجد صفحات مسجَّلة</p>
+              ) : (
+                <div className="divide-y">
+                  {registryPages.slice(0, 100).map((p: any, i: number) => (
+                    <div key={p.path ?? i} className="p-2 grid grid-cols-12 gap-2 text-xs items-center">
+                      <span className="col-span-6 font-mono">{p.path ?? p.route ?? "—"}</span>
+                      <span className="col-span-4 text-muted-foreground">{p.title ?? p.label ?? "—"}</span>
+                      <span className="col-span-2 text-end">
+                        <Badge variant="outline" className="text-[10px]">{p.module ?? p.domain ?? "—"}</Badge>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        </Tabs>
       </PageStateWrapper>
     </PageShell>
   );
