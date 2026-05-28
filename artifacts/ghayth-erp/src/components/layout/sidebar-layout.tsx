@@ -18,6 +18,7 @@ import {
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
   BarChart2, ShieldAlert, Flag, Lock, Layers, Calculator, LayoutGrid,
   RefreshCw, Globe, TrendingDown as TrendingDown2,
+  Satellite, Bot, HardDrive, Video as VideoIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -393,6 +394,12 @@ const allNavSections: NavSection[] = [
         { label: "التنبيهات", path: "/fleet/alerts", icon: Bell },
         { label: "خطط الصيانة الوقائية", path: "/fleet/preventive-plans", icon: CalendarClock },
         { label: "مخالفات المرور", path: "/fleet/traffic-violations", icon: AlertTriangle },
+        { label: "التتبع المباشر", path: "/fleet/telematics/live-map", icon: Satellite },
+        { label: "تنبيهات السلامة الذكية", path: "/fleet/telematics/ai-alerts", icon: Bot },
+        { label: "قراءات الحساسات", path: "/fleet/telematics/sensors", icon: Activity },
+        { label: "أدلة الفيديو", path: "/fleet/telematics/video-evidence", icon: VideoIcon },
+        { label: "أجهزة MDVR", path: "/fleet/telematics/devices", icon: HardDrive },
+        { label: "إعدادات CMSV6", path: "/fleet/telematics/settings", icon: Settings },
         { label: "التقارير", path: "/fleet/reports", icon: FileBarChart },
       ]},
       { label: "المستودعات", path: "/warehouse", icon: Package, module: "warehouse", children: [
