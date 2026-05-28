@@ -371,7 +371,10 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   vehicle: "fleet_vehicles",
   fleet_trip: "fleet_trips",
   fuel: "fleet_fuel_logs",
-  driver: "drivers",
+  // The fleet driver master is in `fleet_drivers` — there's no `drivers` table.
+  // Earlier wave (#1286) misnamed this; left a 404 when SPA hit the print
+  // button on a driver detail page. Resolves to a real card now.
+  driver: "fleet_drivers",
   // Legal
   legal_contract: "legal_contracts",
   legal_judgment: "legal_cases",
@@ -429,6 +432,11 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   application: "job_applications",
   campaign: "marketing_campaigns",
   umrah_runsheet: "umrah_pilgrims",
+  // Wave 8 — `umrah_agent` was the last short alias the SPA passed without a
+  // table mapping. Everything else closing-sweep needs was already routed by
+  // an earlier wave; the matching BESPOKE_PRESETS keys now turn those rows
+  // into real layouts instead of the empty fallback grid.
+  umrah_agent: "umrah_agents",
 };
 
 // ─── Focused loaders ────────────────────────────────────────────────────────
