@@ -10,6 +10,7 @@ import {
   DetailPageLayout,
   type RelatedEntity,
 } from "@workspace/entity-kit";
+import { ApprovalActions } from "@workspace/workflow-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -268,6 +269,25 @@ export default function BudgetDetail() {
             entityType="budget"
             entityId={id ?? 0}
             formats={["a4"]}/>
+          {item && ["draft", "pending_approval", "returned"].includes(item.status) && (
+            <ApprovalActions
+              entityType="budget"
+              entityId={Number(id)}
+              currentStatus={item.status}
+              approveEndpoint={`/finance/budgets/${id}/approve`}
+              rejectEndpoint={`/finance/budgets/${id}/approve`}
+              returnEndpoint={`/finance/budgets/${id}/approve`}
+              approveMethod="PATCH"
+              rejectMethod="PATCH"
+              returnMethod="PATCH"
+              approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
+              rejectBody={(notes) => ({ approved: false, notes })}
+              returnBody={(notes) => ({ approved: "returned", notes })}
+              pendingStatuses={["draft", "pending_approval", "returned"]}
+              invalidateKeys={[["budget", String(id)], ["budgets"]]}
+              onDone={() => refetch()}
+            />
+          )}
           <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
         </>
       }
