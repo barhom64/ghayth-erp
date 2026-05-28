@@ -20,7 +20,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
-import { ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Clock, Plus } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 
 interface BudgetApprovalRequest {
@@ -73,6 +74,49 @@ export default function BudgetApprovalsPage() {
     "POST",
     [["budget-approvals"]],
   );
+
+  // POST /finance/budget/approval-requests — operator requests an
+  // increase / variance approval. Auto-routes server-side based on
+  // resulting utilisation (≤80% = auto, ≤99% = CFO, else GM).
+  const createRequestMut = useApiMutation<unknown, {
+    accountCode: string;
+    period: string;
+    requestedAmount: number;
+    reason?: string;
+  }>(
+    "/finance/budget/approval-requests",
+    "POST",
+    [["budget-approvals"]],
+    { successMessage: "تم إرسال طلب الاعتماد" },
+  );
+
+  // Inline new-request dialog
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [reqAccount, setReqAccount] = useState("");
+  const [reqPeriod, setReqPeriod] = useState("");
+  const [reqAmount, setReqAmount] = useState("");
+  const [reqReason, setReqReason] = useState("");
+  const handleSubmitRequest = () => {
+    const amt = Number(reqAmount);
+    if (!reqAccount.trim() || !reqPeriod.trim() || !Number.isFinite(amt) || amt <= 0) {
+      toast({ variant: "destructive", title: "الحقول الإلزامية ناقصة" });
+      return;
+    }
+    createRequestMut.mutate(
+      {
+        accountCode: reqAccount.trim(),
+        period: reqPeriod.trim(),
+        requestedAmount: amt,
+        reason: reqReason.trim() || undefined,
+      },
+      {
+        onSuccess: () => {
+          setRequestOpen(false);
+          setReqAccount(""); setReqPeriod(""); setReqAmount(""); setReqReason("");
+        },
+      },
+    );
+  };
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -249,6 +293,12 @@ export default function BudgetApprovalsPage() {
         { href: "/finance/budget", label: "الميزانية" },
         { label: "اعتمادات التجاوز" },
       ]}
+      actions={
+        <GuardedButton perm="finance:create" size="sm" onClick={() => setRequestOpen(true)} rateLimitAware>
+          <Plus className="h-4 w-4 me-1" />
+          طلب اعتماد
+        </GuardedButton>
+      }
     >
       <FinanceTabsNav />
 
@@ -326,6 +376,35 @@ export default function BudgetApprovalsPage() {
           />
         </CardContent>
       </Card>
+      <AlertDialog open={requestOpen} onOpenChange={setRequestOpen}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>طلب اعتماد تجاوز</AlertDialogTitle>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <div>
+              <Label className="text-xs">رمز الحساب *</Label>
+              <Input value={reqAccount} onChange={(e) => setReqAccount(e.target.value)} dir="ltr" className="font-mono" />
+            </div>
+            <div>
+              <Label className="text-xs">الفترة *</Label>
+              <Input value={reqPeriod} onChange={(e) => setReqPeriod(e.target.value)} placeholder="2026-05" dir="ltr" className="font-mono" />
+            </div>
+            <div>
+              <Label className="text-xs">المبلغ المطلوب *</Label>
+              <Input type="number" value={reqAmount} onChange={(e) => setReqAmount(e.target.value)} dir="ltr" />
+            </div>
+            <div>
+              <Label className="text-xs">سبب الطلب</Label>
+              <Textarea value={reqReason} onChange={(e) => setReqReason(e.target.value)} rows={2} />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSubmitRequest} disabled={createRequestMut.isPending}>إرسال الطلب</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 }
