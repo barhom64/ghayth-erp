@@ -634,9 +634,10 @@ journalRouter.patch("/expenses/:id", authorize({ feature: "finance.journal", act
   }
 });
 
-// Audit F5 — DELETE candidate. UI uses the soft-status `void` flow
-// instead of hard delete. Marked for removal in the F5 follow-up PR
-// (see docs/audits/finance-orphan-endpoints-disposition.md).
+// Audit F5 — DOC. Defensive endpoint with maintained guards. The UI
+// uses the soft-status `void` flow, but `financeGoldenPath.test.ts:358`
+// validates the "budget reservation release" behaviour on hard delete —
+// the route exists to keep that safety net green.
 journalRouter.delete("/expenses/:id", authorize({ feature: "finance.journal", action: "delete", resource: { table: "expenses", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1167,9 +1168,12 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
   }
 });
 
-// Audit F5 — DELETE candidate. UI uses approve/reject flows; no direct
-// PATCH on individual vouchers. Marked for removal in the F5 follow-up
-// PR (see docs/audits/finance-orphan-endpoints-disposition.md).
+// Audit F5 — DOC. Defensive endpoint with the **VL-1 guard contract**
+// (ref-prefix filter, terminal-state rejection, period gate). The UI
+// uses approve/reject flows, but `financeGoldenPath.test.ts:316+`
+// validates each VL-1 guard on this exact route — deleting would lose
+// the contract that protects against silent rewrites of approved
+// vouchers.
 journalRouter.patch("/vouchers/:id", authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1231,9 +1235,10 @@ journalRouter.patch("/vouchers/:id", authorize({ feature: "finance.journal", act
   }
 });
 
-// Audit F5 — DELETE candidate. UI uses the soft-status `void` flow
-// instead of hard delete. Marked for removal in the F5 follow-up PR
-// (see docs/audits/finance-orphan-endpoints-disposition.md).
+// Audit F5 — DOC. Defensive sibling to the VL-1-guarded PATCH.
+// `financeGoldenPath.test.ts:141` asserts existence; the handler only
+// deletes drafts so the audit invariant of "approved JE is immutable"
+// stays intact.
 journalRouter.delete("/vouchers/:id", authorize({ feature: "finance.journal", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;

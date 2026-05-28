@@ -803,9 +803,10 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
   }
 });
 
-// Audit F5 — DELETE candidate. Path-param variant; the UI uses the
-// body-style POST /custodies/settle. Marked for removal in the F5
-// follow-up PR (see docs/audits/finance-orphan-endpoints-disposition.md).
+// Audit F5 — DOC. Defensive REST-style variant. The UI uses the
+// body-style POST /custodies/settle; this path variant is kept because
+// `financeBudgetCustodySmoke.test.ts` asserts its existence as part
+// of the custody router smoke contract.
 custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.custodies", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
