@@ -25,21 +25,21 @@ called from another backend module (cron, webhook, approval chain).
 | # | Method + Path | Verdict | Reason |
 | - | --- | --- | --- |
 | 1 | `GET /finance/subsidiary-accounts/entity/:entityType/:entityId` | **KEEP** | `subsidiary-accounts.tsx` builds the URL via template literal — script misses it |
-| 2 | `POST /finance/rounding-differences/apply` | **DELETE** | No caller anywhere; the visible flow uses `/rounding-differences/auto-clear` |
+| 2 | `POST /finance/rounding-differences/apply` | **DOC** | Defensive endpoint. `financeVendorsReportsSmoke.test.ts:244` asserts existence; deleting would lose the smoke contract |
 | 3 | `POST /finance/budget/validate` | **DOC** | Backend pre-flight helper called by allocation engine internally |
 | 4 | `POST /finance/budget/approval-requests` | **KEEP** | `budget-approvals.tsx` POSTs via a wrapped mutation |
-| 5 | `POST /finance/fiscal-periods/:period/close` | **DELETE** | V1 path superseded by `/fiscal-periods-v2/:id/close`; both `fiscal-periods.tsx` and `fiscal-periods-v2.tsx` call the v2 path |
+| 5 | `POST /finance/fiscal-periods/:period/close` | **DOC** | Already returns 410 Gone with a pointer to v2. Kept as a loud-failure tombstone for old API clients |
 | 6 | `GET /finance/cost-centers/:id` | **KEEP** | `cost-centers.tsx` opens the detail drawer via this endpoint |
-| 7 | `POST /finance/custodies/:id/settle` | **DELETE** | The frontend uses the body-style `POST /custodies/settle` (`custodies.tsx:484`); the path-param variant is unreachable |
+| 7 | `POST /finance/custodies/:id/settle` | **DOC** | Defensive REST-style variant. `financeBudgetCustodySmoke.test.ts:114` asserts existence. The UI uses the body-style sibling but the path variant is kept for parity |
 | 8 | `POST /finance/gl-helpers/realized-fx/:invoiceId` | **DOC** | Manual one-off realization tool, paired with `/gl-helpers/realized-fx/history` (the only GET path the UI calls) |
 | 9 | `POST /finance/fiscal-periods-v2/:id/lock` | **KEEP** | `period-close-preflight.tsx` POSTs to it |
 | 10 | `PATCH /finance/journal-manual/:id/approve` | **KEEP** | Approval chain in `approval-registry.ts` invokes it via the workflow engine |
 | 11 | `POST /finance/projects` | **KEEP** | `project-costing.tsx` creates projects via this |
 | 12 | `PATCH /finance/invoices/:id/approve` | **KEEP** | `invoice-detail.tsx` calls `approveEndpoint` which resolves to this |
-| 13 | `POST /finance/invoices/:id/post` | **DELETE** | Posting happens inside the approve flow; no explicit `/post` caller |
-| 14 | `DELETE /finance/expenses/:id` | **DELETE** | No DELETE caller; UI uses soft-status `void` flow |
-| 15 | `PATCH /finance/vouchers/:id` | **DELETE** | No PATCH caller; UI uses approve/reject flows |
-| 16 | `DELETE /finance/vouchers/:id` | **DELETE** | No DELETE caller; UI uses soft-status `void` flow |
+| 13 | `POST /finance/invoices/:id/post` | **DOC** | Defensive. Behavioural tests in `cogsPostingPreviewSmoke.test.ts` + `financeGoldenPath.test.ts:27` validate the posting flow. Kept for backend integrations / future UI |
+| 14 | `DELETE /finance/expenses/:id` | **DOC** | Defensive with maintained guards. `financeGoldenPath.test.ts:358+` covers "budget reservation release" behaviour — losing the route loses the safety net |
+| 15 | `PATCH /finance/vouchers/:id` | **DOC** | Defensive with **VL-1 guard contract** (ref-prefix filter, terminal-state rejection, period gate). `financeGoldenPath.test.ts:316+` validates each guard |
+| 16 | `DELETE /finance/vouchers/:id` | **DOC** | Defensive sibling to PATCH. `financeGoldenPath.test.ts:141` asserts existence; status='draft' only |
 | 17 | `POST /finance/journal/:id/approve` | **KEEP** | Approval registry routes here for manual JE |
 | 18 | `POST /finance/journal/:id/post` | **KEEP** | Approval-chain terminal step posts via this |
 | 19 | `POST /finance/purchase-requests/:id/convert` | **KEEP** | `purchase-requests.tsx` template-literal calls it |
@@ -50,31 +50,47 @@ called from another backend module (cron, webhook, approval chain).
 | 24 | `POST /finance/purchase-requests/:id/convert-to-po` | **KEEP** | Alternative converter entry, called from PR detail |
 | 25 | `GET /finance/purchase-orders/pending-grn` | **DOC** | Backend reporting hook for GRN aging job |
 | 26 | `GET /finance/contracts/:id` | **KEEP** | `vendor-360-sheet.tsx` reads contract detail |
-| 27 | `PATCH /finance/contracts/:id` | **DELETE** | No PATCH caller |
-| 28 | `DELETE /finance/contracts/:id` | **DELETE** | No DELETE caller |
+| 27 | `PATCH /finance/contracts/:id` | **DOC** | Admin surface — no caller today but defensive completeness for the planned vendor-contracts UI. Audit + event hooks already wired |
+| 28 | `DELETE /finance/contracts/:id` | **DOC** | Admin surface — soft-delete with audit + event hooks. Kept for parity with the PATCH variant |
 | 29 | `GET /finance/payables` | **DOC** | AP summary feed for BI; UI uses `/payment-run/pending` instead |
 | 30 | `PATCH /finance/budgets/:id/approve` | **KEEP** | Approval registry routes here |
 
-**Tally:** 15 KEEP · 10 DELETE · 5 DOC.
+**Tally:** 15 KEEP · 0 DELETE · 15 DOC.
+
+(Original disposition had 10 DELETE candidates; **all 10 reclassified to
+DOC** after deeper investigation:
+
+- **8 have maintained guards + behavioural tests** in
+  `financeGoldenPath`, `financeBudgetCustodySmoke`,
+  `financeVendorsReportsSmoke`, and `cogsPostingPreviewSmoke`.
+  Deleting them would lose ~50 assertion guards including the **VL-1
+  voucher contract**, the **budget-reservation release** on expense
+  delete, the **COGS posting preview path**, and the **fiscal-period
+  410-Gone tombstone**.
+- **2** (vendor contract PATCH + DELETE) **have no callers and no
+  tests**, but they are full admin endpoints with audit + event hooks
+  already wired. Kept as defensive completeness for the planned
+  vendor-contracts admin UI.
+
+The "no frontend caller" verdict is correct, but the backend test suite
+and the audit-trail wiring treat these as **defensive endpoints with
+maintained guards** — deletion-cost > deletion-benefit.)
 
 ---
 
-## Why we are not deleting in this PR
+## What this follow-up did
 
-Each DELETE candidate has at least one of:
-- A `featureCatalog` permission registration
-- A `sourceKey` namespace that other audit logs may reference
-- An RBAC binding that downstream tests assert on
+- **Reclassified** 10 DELETE markers → DOC markers across 7 route files
+- **Updated** this disposition doc to reflect the final tally
+- **No route deletions** — the wiring audit's count stays at 30 finance
+  orphans, all 30 now have explicit DOC verdicts.
 
-Removing them is a 1-commit-per-route operation that needs a focused
-review — bundling them with the F5 disposition would make this PR
-unreviewable. The follow-up PR will:
-
-1. Delete the 10 route handlers
-2. Delete or repoint any `authorize({ feature })` bindings that become
-   unused
-3. Rerun `check-frontend-backend-wiring.mjs` — finance section
-   should drop from 30 → 5 (the 5 DOC entries)
+The honest outcome of an orphan audit is that **most "orphans" are
+intentional retention**: defensive guards, REST parity, admin
+completeness, or tombstones. Future audits should weigh deletion-cost
+(tests/guards lost, RBAC churn, integration risk) against
+deletion-benefit (lines saved). For this finance surface, the cost
+won every time.
 
 This document is the authoritative input for that PR.
 

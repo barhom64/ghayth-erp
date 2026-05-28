@@ -1716,10 +1716,11 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
   }
 });
 
-// Audit F5 — DELETE candidate. Posting happens inside the approve
-// flow (PATCH /invoices/:id/approve); no UI directly posts. Marked
-// for removal in the F5 follow-up PR
-// (see docs/audits/finance-orphan-endpoints-disposition.md).
+// Audit F5 — DOC. Defensive endpoint. Posting happens inside the
+// approve flow (PATCH /invoices/:id/approve); this explicit /post
+// variant is kept because `cogsPostingPreviewSmoke.test.ts` and
+// `financeGoldenPath.test.ts:27` validate the posting flow via this
+// path — deleting would lose the behavioural smoke contract.
 invoicesRouter.post("/invoices/:id/post", authorize({ feature: "finance.invoices", action: "approve" }), requireOwnership({ table: "invoices", checks: ["company", "branch"] }), async (req, res) => {
   try {
     const scope = req.scope!;
