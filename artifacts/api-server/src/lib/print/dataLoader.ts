@@ -366,6 +366,39 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   umrah_sub_agent: "umrah_sub_agents",
   umrah_transport: "umrah_transport",
   umrah_violation: "umrah_violations",
+  // Short-name aliases for entityTypes the SPA detail pages actually use
+  // (issue #1286). Each one was returning an empty stub before because the
+  // SPA passes the short name (e.g. "expense") but the registry lists the
+  // long form (e.g. "expense_claim"). Aliasing here makes the bespoke
+  // preset render real data — see the audit in #1286 follow-up.
+  expense: "expense_claims",
+  leave: "hr_leave_requests",
+  excuse: "hr_excuse_requests",
+  maintenance: "maintenance_requests",
+  voucher: "payment_vouchers",
+  season: "umrah_seasons",
+  agent: "umrah_agents",
+  transport: "umrah_transport",
+  violation: "traffic_violations",
+  opportunity: "crm_opportunities",
+  task: "tasks",
+  ticket: "support_tickets",
+  unit: "property_units",
+  contract: "rental_contracts",
+  policy: "insurance_policies",
+  property: "buildings",
+  sub_agent: "umrah_sub_agents",
+  umrah_package: "umrah_packages",
+  performance: "evaluation_cycles",
+  performance_review: "evaluation_cycles",
+  account: "chart_of_accounts",
+  audit: "audit_logs",
+  audit_record: "audit_logs",
+  correspondence: "correspondence",
+  request: "hr_leave_requests",
+  compliance: "governance_compliance",
+  owner: "property_owners",
+  risk: "governance_risks",
 };
 
 // ─── Focused loaders ────────────────────────────────────────────────────────
