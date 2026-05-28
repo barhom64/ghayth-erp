@@ -115,6 +115,19 @@ interface EvaluationRow {
   completedAt: string | null;
 }
 
+interface EvaluationResultRow {
+  id: number;
+  caseName: string | null;
+  status: string;
+  passed: boolean | null;
+  expectedContains: string | null;
+  actualOutput: string | null;
+  tokens: number;
+  costUsd: number;
+  durationMs: number;
+  errorMessage: string | null;
+}
+
 interface SimulateResult {
   promptSlug: string;
   output: string;
@@ -986,24 +999,7 @@ function EvaluatePromptDialog({ prompt, onClose }: {
               <Label className="text-sm mb-2 block">آخر تقييمات ({evals.length})</Label>
               <div className="space-y-1">
                 {evals.slice(0, 10).map((e) => (
-                  <div key={e.id} className={cn(
-                    "text-xs p-2 rounded border",
-                    e.failedCases > 0 ? "bg-status-error-surface/40 border-status-error-surface" :
-                    e.skippedCases > 0 ? "bg-status-warning-surface/40 border-status-warning-surface" :
-                    "bg-status-success-surface border-status-success-surface",
-                  )}>
-                    <div className="flex items-center justify-between">
-                      <span>
-                        <Badge variant="outline" className="text-[10px]">v{e.promptVersion}</Badge>
-                        <span className="ms-2">{e.passedCases}/{e.totalCases} نجحت</span>
-                        {e.failedCases > 0 && <span className="ms-2 text-status-error-foreground">{e.failedCases} فشلت</span>}
-                        {e.skippedCases > 0 && <span className="ms-2 text-status-warning-foreground">{e.skippedCases} تخطّت</span>}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        ${e.totalCostUsd.toFixed(4)} · {e.totalTokens} tok · {e.durationMs}ms · {formatDateAr(e.startedAt)}
-                      </span>
-                    </div>
-                  </div>
+                  <EvaluationRunRow key={e.id} run={e} />
                 ))}
               </div>
             </div>
@@ -1022,6 +1018,69 @@ function EvaluatePromptDialog({ prompt, onClose }: {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Expandable evaluation run summary — click to fetch per-case results
+// from /admin/ai-governance/evaluations/:id/results. Lazy so the
+// dialog stays fast when 50 runs exist but only one is interesting.
+function EvaluationRunRow({ run }: { run: EvaluationRow }) {
+  const [expanded, setExpanded] = useState(false);
+  const { data: resultsResp } = useApiQuery<{ data: EvaluationResultRow[] }>(
+    ["ai-eval-results", String(run.id)],
+    expanded ? `/admin/ai-governance/evaluations/${run.id}/results` : null,
+    { enabled: expanded },
+  );
+  const results: EvaluationResultRow[] = resultsResp?.data ?? [];
+  return (
+    <div className={cn(
+      "text-xs rounded border",
+      run.failedCases > 0 ? "bg-status-error-surface/40 border-status-error-surface" :
+      run.skippedCases > 0 ? "bg-status-warning-surface/40 border-status-warning-surface" :
+      "bg-status-success-surface border-status-success-surface",
+    )}>
+      <button
+        type="button"
+        className="w-full text-start p-2 cursor-pointer hover:bg-black/5"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className="flex items-center justify-between">
+          <span>
+            <Badge variant="outline" className="text-[10px]">v{run.promptVersion}</Badge>
+            <span className="ms-2">{run.passedCases}/{run.totalCases} نجحت</span>
+            {run.failedCases > 0 && <span className="ms-2 text-status-error-foreground">{run.failedCases} فشلت</span>}
+            {run.skippedCases > 0 && <span className="ms-2 text-status-warning-foreground">{run.skippedCases} تخطّت</span>}
+          </span>
+          <span className="text-[10px] text-muted-foreground">
+            ${run.totalCostUsd.toFixed(4)} · {run.totalTokens} tok · {run.durationMs}ms · {formatDateAr(run.startedAt)}
+          </span>
+        </div>
+      </button>
+      {expanded && results.length > 0 && (
+        <div className="border-t bg-white px-2 py-2 space-y-1">
+          {results.map((r) => (
+            <div key={r.id} className="text-[10px] flex items-start gap-2">
+              <span className={cn(
+                "inline-block px-1.5 py-0.5 rounded font-mono",
+                r.passed ? "bg-status-success-surface text-status-success-foreground" :
+                r.passed === false ? "bg-status-error-surface text-status-error-foreground" :
+                "bg-status-warning-surface text-status-warning-foreground",
+              )}>{r.status}</span>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium">{r.caseName || "—"}</p>
+                {r.errorMessage && <p className="text-status-error-foreground line-clamp-2">{r.errorMessage}</p>}
+                {r.actualOutput && (
+                  <p className="text-muted-foreground line-clamp-1 font-mono">{r.actualOutput.slice(0, 200)}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {expanded && results.length === 0 && (
+        <p className="border-t bg-white p-2 text-[10px] text-muted-foreground">لا توجد نتائج تفصيلية</p>
+      )}
+    </div>
   );
 }
 

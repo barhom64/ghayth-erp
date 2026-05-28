@@ -9,6 +9,11 @@ import {
 } from "@workspace/entity-kit";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { EntityTags } from "@/components/shared/entity-tags";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { UserPlus, FileText, ExternalLink, Phone, Mail, MapPin } from "lucide-react";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
@@ -54,6 +59,25 @@ export default function UmrahSubAgentDetail() {
     !!id,
   );
 
+  // PATCH /umrah/sub-agents/:id + DELETE soft-delete.
+  const editDelete = useDetailEditDelete({
+    entityLabel: "الوكيل الفرعي",
+    patchPath: `/umrah/sub-agents/${id}`,
+    deletePath: `/umrah/sub-agents/${id}`,
+    listPath: "/umrah/sub-agents",
+    initialValues: sa,
+    fields: [
+      { key: "name", label: "الاسم" },
+      { key: "phone", label: "الهاتف" },
+      { key: "email", label: "البريد الإلكتروني" },
+      { key: "country", label: "الدولة" },
+      { key: "defaultPricePerMutamer", label: "السعر الافتراضي للمعتمر", type: "number" },
+      { key: "notes", label: "ملاحظات" },
+    ],
+    invalidateKeys: [["umrah-sub-agent", String(id ?? 0)], ["umrah-sub-agents"]],
+    onSaved: () => refetch(),
+  });
+
   const status = sa
     ? sa.isActive
       ? ({ label: "نشط", tone: "success" as const })
@@ -62,6 +86,7 @@ export default function UmrahSubAgentDetail() {
 
   const overview = (
     <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="inline-flex items-center gap-2 text-sm">
@@ -185,7 +210,12 @@ export default function UmrahSubAgentDetail() {
 
   return (
     <DetailPageLayout
-      actions={<PrintButton entityType="umrah_sub_agent" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
+      actions={
+        <div className="flex items-center gap-2">
+          <PrintButton entityType="umrah_sub_agent" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />
+          <DetailActionButtons hook={editDelete} editPerm="umrah:update" deletePerm="umrah:delete" />
+        </div>
+      }
       title={sa?.name || "تفاصيل الوكيل الفرعي"}
       subtitle={sa?.nuskCode ? `رمز نسك: ${sa.nuskCode}` : undefined}
       backPath="/umrah/sub-agents"
