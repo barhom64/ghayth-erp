@@ -351,6 +351,35 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   shift: () => buildShiftCardPreset(),
   umrah_season: () => buildUmrahSeasonPreset(),
   chart_of_account: () => buildChartOfAccountPreset(),
+  // Short-name aliases — SPA detail pages pass the short form (`policy`,
+  // `ticket`, `opportunity`) while BESPOKE_PRESETS_KEYS are the long form
+  // (`insurance_policy`, `support_ticket`, `crm_opportunity`). Without these
+  // entries the resolver dropped to universalFallback which renders a
+  // generic key/value grid instead of the bespoke layout. The dataLoader
+  // FALLBACK_TABLE_MAP already routes the short name to the right table —
+  // the template lookup needed the same alias treatment.
+  policy: () => buildInsurancePolicyPreset(),
+  ticket: () => buildSupportTicketPreset(),
+  opportunity: () => buildOpportunityPreset(),
+  season: () => buildUmrahSeasonPreset(),
+  account: () => buildChartOfAccountPreset(),
+  property: () => buildBuildingCardPreset(),
+  unit: () => buildPropertyUnitPreset(),
+  contract: () => buildRentalContractPreset(),
+  product: () => buildWarehouseProductPreset(),
+  pilgrim: () => buildUmrahPilgrimPreset(),
+  mutamer: () => buildUmrahPilgrimPreset(),
+  trip: () => buildFleetTripPreset(),
+  customer: () => buildClientCardPreset(),
+  agent: () => buildUmrahPilgrimPreset(),
+  sub_agent: () => buildUmrahPilgrimPreset(),
+  overtime: () => buildOvertimeRequestPreset(),
+  leave: () => buildLeaveRequestPreset(),
+  excuse: () => buildExcuseRequestPreset(),
+  maintenance: () => buildMaintenanceRequestPreset(),
+  violation: () => buildTrafficViolationPreset(),
+  voucher: () => buildVoucherPreset("receipt"),
+  request: () => buildLeaveRequestPreset(),
 };
 
 function buildInvoicePreset(): PrintTemplate {
@@ -2937,6 +2966,16 @@ const ARABIC_TITLES: Record<string, string> = {
   support_ticket: "تذكرة دعم", warehouse_category: "تصنيف مستودع",
   owner: "بطاقة مالك", policy_detail: "تفاصيل سياسة",
   client: "بطاقة عميل", crm_lead: "عميل محتمل",
+  // Short-name aliases — match the BESPOKE_PRESETS entries added above.
+  ticket: "تذكرة دعم", opportunity: "فرصة CRM", season: "موسم عمرة",
+  account: "حساب", property: "بطاقة عقار", unit: "وحدة عقارية",
+  contract: "عقد إيجار", product: "بطاقة منتج",
+  pilgrim: "بطاقة معتمر", mutamer: "بطاقة معتمر",
+  trip: "رحلة أسطول", customer: "بطاقة عميل",
+  agent: "وكيل عمرة", sub_agent: "وكيل فرعي",
+  overtime: "طلب وقت إضافي", leave: "طلب إجازة",
+  maintenance: "طلب صيانة", violation: "مخالفة",
+  voucher: "سند",
 };
 
 function universalFallback(entityType: string): PrintTemplate {
