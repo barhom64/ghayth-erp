@@ -310,6 +310,15 @@ function NuskInvoicesTab() {
     [["umrah-nusk-invoices"]],
     { successMessage: "تم حذف الفاتورة", onSuccess: () => setDeleteId(null) },
   );
+  // PATCH /umrah/nusk-invoices/:id — backend gates "paid" → only
+  // "refunded" transition allowed. Quick status update so operators
+  // don't have to delete+recreate to flip pending↔issued↔paid.
+  const statusMut = useApiMutation<any, { id: number; nuskStatus: string }>(
+    (body) => `/umrah/nusk-invoices/${body.id}`,
+    "PATCH",
+    [["umrah-nusk-invoices"]],
+    { successMessage: "تم تحديث حالة الفاتورة" },
+  );
 
   const setField = (k: keyof typeof NUSK_INITIAL) => (v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -346,7 +355,23 @@ function NuskInvoicesTab() {
     { key: "subAgentName", header: "الوكيل الفرعي", render: (r) => r.subAgentName || "—" },
     { key: "mutamerCount", header: "المعتمرون" },
     { key: "totalAmount", header: "الإجمالي (ريال)", render: (r) => <span className="font-bold">{formatCurrency(Number(r.totalAmount || 0))}</span> },
-    { key: "nuskStatus", header: "الحالة", render: (r) => <PageStatusBadge status={r.nuskStatus} /> },
+    { key: "nuskStatus", header: "الحالة", render: (r) => (
+      <Select
+        value={r.nuskStatus}
+        onValueChange={(v) => statusMut.mutate({ id: r.id, nuskStatus: v })}
+        disabled={r.nuskStatus === "paid"}
+      >
+        <SelectTrigger className="w-[140px] h-7 text-xs" onClick={(e) => e.stopPropagation()}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="pending">معلقة</SelectItem>
+          <SelectItem value="issued">صادرة</SelectItem>
+          <SelectItem value="paid">مدفوعة</SelectItem>
+          <SelectItem value="refunded">مرتجعة</SelectItem>
+        </SelectContent>
+      </Select>
+    )},
     { key: "expiryDate", header: "تنتهي في", render: (r) => (r.expiryDate ? formatDateAr(r.expiryDate) : "—") },
     {
       key: "actions",
