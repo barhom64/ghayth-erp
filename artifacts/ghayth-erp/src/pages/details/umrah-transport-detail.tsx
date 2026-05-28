@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useRoute } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import {
   useDetailEditDelete,
   DetailActionButtons,
@@ -81,6 +82,27 @@ export default function UmrahTransportDetail() {
     onSaved: () => refetch(),
   });
 
+  // POST /umrah/transport/:id/assign-pilgrims — bulk-assigns a list
+  // of pilgrim IDs to this trip in one round-trip. The page exposes a
+  // simple comma-separated input + "إسناد" button below the pilgrims
+  // table so an operator can paste IDs without per-row clicking.
+  const [assignIds, setAssignIds] = useState("");
+  const assignMut = useApiMutation<unknown, { id: number; pilgrimIds: number[] }>(
+    (b) => `/umrah/transport/${b.id}/assign-pilgrims`,
+    "POST",
+    [["umrah-transport-detail", String(id)]],
+    { successMessage: "تم إسناد المعتمرين", onSuccess: () => refetch() },
+  );
+  const submitAssign = () => {
+    if (!id) return;
+    const ids = assignIds
+      .split(/[\s,]+/)
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (ids.length === 0) return;
+    assignMut.mutate({ id, pilgrimIds: ids }, { onSuccess: () => setAssignIds("") });
+  };
+
   const overview = item ? (
     <div className="space-y-4">
       <InlineEditCard hook={editDelete} />
@@ -125,6 +147,32 @@ export default function UmrahTransportDetail() {
           </CardContent>
         </Card>
       )}
+
+      <Card className="border-0 shadow-sm border-dashed">
+        <CardContent className="p-4 space-y-2">
+          <p className="text-sm font-medium">إسناد معتمرين بالـ ID</p>
+          <p className="text-xs text-muted-foreground">
+            أدخل أرقام المعتمرين مفصولة بمسافة أو فاصلة. مثال: 12 33 45
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              value={assignIds}
+              onChange={(e) => setAssignIds(e.target.value)}
+              dir="ltr"
+              className="flex-1 h-8 text-xs border rounded px-2"
+              placeholder="IDs..."
+            />
+            <button
+              type="button"
+              className="text-xs h-8 px-3 rounded bg-status-info-foreground text-white"
+              onClick={submitAssign}
+              disabled={assignMut.isPending || !assignIds.trim()}
+            >
+              إسناد
+            </button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   ) : null;
 
