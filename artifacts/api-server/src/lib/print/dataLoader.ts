@@ -208,6 +208,7 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "exit_settlement":
       return await loadExitSettlement(companyId, entityId);
     case "overtime_request":
+    case "overtime":
       return await loadOvertimeRequest(companyId, entityId);
     case "legal_case":
       return await loadLegalCase(companyId, entityId);
@@ -220,6 +221,7 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "vehicle":
       return await loadVehicle(companyId, entityId);
     case "fleet_trip":
+    case "trip":
       return await loadFleetTrip(companyId, entityId);
     case "fuel_log":
       return await loadFuelLog(companyId, entityId);
@@ -244,6 +246,8 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "ticket":
       return await loadSupportTicket(companyId, entityId);
     case "umrah_pilgrim":
+    case "pilgrim":
+    case "mutamer":
       return await loadUmrahPilgrim(companyId, entityId);
     case "umrah_group":
       return await loadUmrahGroup(companyId, entityId);
@@ -262,6 +266,7 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadCustody(companyId, entityId);
     case "warehouse_product":
     case "store_product":
+    case "product":
       return await loadWarehouseProductCard(companyId, entityId);
     case "governance_policy":
       return await loadGovernancePolicy(companyId, entityId);
@@ -411,6 +416,19 @@ const FALLBACK_TABLE_MAP: Record<string, string> = {
   compliance: "governance_compliance",
   owner: "property_owners",
   risk: "governance_risks",
+  // Wave 7 — short aliases for entityTypes still passed by detail pages but
+  // not yet covered. Each maps to the real table; presets that need
+  // related-entity joins get a bespoke switch case below. Fallback is fine
+  // when the preset only reads {{entity.*}}.
+  customer: "clients",
+  product: "warehouse_products",
+  trip: "fleet_trips",
+  overtime: "hr_overtime_requests",
+  mutamer: "umrah_pilgrims",
+  pilgrim: "umrah_pilgrims",
+  application: "job_applications",
+  campaign: "marketing_campaigns",
+  umrah_runsheet: "umrah_pilgrims",
 };
 
 // ─── Focused loaders ────────────────────────────────────────────────────────
