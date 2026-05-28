@@ -16,7 +16,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Banknote, Download, Plus, Eye, AlertTriangle } from "lucide-react";
+import { Banknote, Download, Plus, Eye, AlertTriangle, CheckCircle } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 
@@ -99,6 +99,29 @@ export default function WpsRunsPage() {
 
   const runs = asList(runsData?.data || []);
   const payrolls = asList(payrollData?.data || []).filter((p: PayrollRunOption) => p.status === "approved" || p.status === "paid");
+
+  // Preflight: as soon as the operator picks a payroll in the dialog, fetch
+  // /hr/wps/preflight/:id and show eligible vs skipped counts BEFORE generating.
+  // Skipped employees fall into 4 buckets; surfacing them up front lets the
+  // operator fix IBANs / loan-eaten salaries on the HR side first, instead of
+  // discovering the issue inside an already-built run.
+  interface PreflightResponse {
+    payrollRunId: number;
+    period: string;
+    canGenerate: boolean;
+    eligibleCount: number;
+    skippedCount: number;
+    totalAmount: number;
+    eligible: Array<{ employeeId: number; employeeName: string; amount: number }>;
+    missingIban: Array<{ employeeId: number; employeeName: string }>;
+    missingId: Array<{ employeeId: number; employeeName: string }>;
+    invalidIban: Array<{ employeeId: number; employeeName: string; iban: string }>;
+    zeroAmount: Array<{ employeeId: number; employeeName: string; netSalary: number }>;
+  }
+  const { data: preflight, isLoading: preflightLoading } = useApiQuery<PreflightResponse>(
+    ["wps-preflight", selectedPayrollId],
+    selectedPayrollId ? `/hr/wps/preflight/${selectedPayrollId}` : null,
+  );
 
   const filtered = applyFilters(runs, filters, {
     searchFields: ["period", "bankCode", "fileName"],
@@ -250,6 +273,57 @@ export default function WpsRunsPage() {
               </Select>
             </div>
 
+            {selectedPayrollId && (
+              <div className="rounded-md border p-3 bg-muted/30">
+                {preflightLoading ? (
+                  <div className="text-sm text-muted-foreground">جاري فحص الأهلية...</div>
+                ) : preflight ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium flex items-center gap-2">
+                        <CheckCircle className={`h-4 w-4 ${preflight.eligibleCount > 0 ? "text-green-600" : "text-muted-foreground"}`} />
+                        مؤهلون للتحويل
+                      </div>
+                      <div className="text-sm">
+                        <span className="font-bold text-green-700">{preflight.eligibleCount}</span> موظف
+                        {preflight.totalAmount > 0 && (
+                          <span className="text-muted-foreground"> — {formatCurrency(preflight.totalAmount)}</span>
+                        )}
+                      </div>
+                    </div>
+                    {preflight.skippedCount > 0 && (
+                      <div className="space-y-1 text-xs pt-2 border-t">
+                        <div className="font-medium text-amber-700 flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          سيتم تخطي {preflight.skippedCount} موظف
+                        </div>
+                        <div className="grid grid-cols-2 gap-1 text-muted-foreground">
+                          {preflight.missingIban.length > 0 && (
+                            <div>لا IBAN: <span className="font-medium text-foreground">{preflight.missingIban.length}</span></div>
+                          )}
+                          {preflight.invalidIban.length > 0 && (
+                            <div>IBAN غير صحيح: <span className="font-medium text-foreground">{preflight.invalidIban.length}</span></div>
+                          )}
+                          {preflight.missingId.length > 0 && (
+                            <div>لا إقامة/هوية: <span className="font-medium text-foreground">{preflight.missingId.length}</span></div>
+                          )}
+                          {preflight.zeroAmount.length > 0 && (
+                            <div>صافي صفر: <span className="font-medium text-foreground">{preflight.zeroAmount.length}</span></div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {!preflight.canGenerate && (
+                      <div className="text-xs text-red-700 pt-2 border-t flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        مسير الرواتب يجب أن يكون معتمداً أو مدفوعاً قبل توليد WPS
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            )}
+
             <div>
               <Label>صيغة البنك</Label>
               <Select value={selectedFormat} onValueChange={setSelectedFormat}>
@@ -283,7 +357,12 @@ export default function WpsRunsPage() {
               إلغاء
             </Button>
             <Button
-              disabled={!selectedPayrollId || createMut.isPending}
+              disabled={
+                !selectedPayrollId ||
+                createMut.isPending ||
+                preflightLoading ||
+                (preflight ? !preflight.canGenerate || preflight.eligibleCount === 0 : false)
+              }
               onClick={() =>
                 createMut.mutate({
                   payrollRunId: Number(selectedPayrollId),
@@ -292,7 +371,11 @@ export default function WpsRunsPage() {
                 })
               }
             >
-              {createMut.isPending ? "جاري التوليد..." : "توليد الملف"}
+              {createMut.isPending
+                ? "جاري التوليد..."
+                : preflight && preflight.eligibleCount > 0
+                ? `توليد ملف ${preflight.eligibleCount} موظف`
+                : "توليد الملف"}
             </Button>
           </DialogFooter>
         </DialogContent>
