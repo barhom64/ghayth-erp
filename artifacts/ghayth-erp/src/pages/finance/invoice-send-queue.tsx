@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   Send, Search, ExternalLink, Download, AlertTriangle,
   CheckCircle2, FileText, Clock, Filter, Mail,
@@ -171,6 +172,11 @@ export default function InvoiceSendQueuePage() {
             <Download className="w-4 h-4 ml-1" />
             CSV
           </Button>
+          <PrintButton
+            entityType="report_invoice_send_queue"
+            entityId="all"
+            payload={{ entity: { title: "صف إرسال الفواتير" }, items: [] }}
+          />
         </CardContent>
       </Card>
 

@@ -13,6 +13,7 @@ import {
   Calendar, Activity, Banknote,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Cash Flow Statement — Direct Method
@@ -217,6 +218,11 @@ export default function CashFlowStatementPage() {
               <Download className="w-4 h-4 ml-1" />
               تصدير CSV
             </Button>
+            <PrintButton
+              entityType="report_cash_flow_statement"
+              entityId="all"
+              payload={{ entity: { title: "قائمة التدفقات النقدية" }, items: [] }}
+            />
           </div>
         </CardContent>
       </Card>
