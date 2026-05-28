@@ -18,6 +18,7 @@ import {
   exportToCSV,
 } from "@workspace/ui-core";
 import { Plus, Receipt, DollarSign, AlertTriangle, CheckCircle, Eye, ExternalLink, ChevronDown, ChevronUp, Copy, Zap } from "lucide-react";
+import { ExportButton } from "@/components/shared/export-buttons";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import {
   CollectionStages,
@@ -173,9 +174,12 @@ export default function InvoicesPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الفواتير" }]}
       loading={isLoading}
       actions={
-        <Link href="/finance/invoices/create">
-          <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />فاتورة جديدة</GuardedButton>
-        </Link>
+        <div className="flex items-center gap-2">
+          <ExportButton endpoint="/export/excel/invoices" filename="invoices.xlsx" type="excel" label="تصدير Excel" />
+          <Link href="/finance/invoices/create">
+            <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />فاتورة جديدة</GuardedButton>
+          </Link>
+        </div>
       }
     >
       <FinanceTabsNav />

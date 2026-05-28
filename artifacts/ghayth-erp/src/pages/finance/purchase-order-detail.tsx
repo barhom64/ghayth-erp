@@ -3,6 +3,7 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/shared/print-button";
+import { ExportButton } from "@/components/shared/export-buttons";
 import {
   DataTable,
   PageStatusBadge,
@@ -180,6 +181,13 @@ export default function PurchaseOrderDetailPage() {
         entityId={po.id ?? id}
         formats={["a4", "excel"]}
         label="طباعة"
+      />
+      <ExportButton
+        endpoint={`/export/pdf/purchase-order/${po.id ?? id}`}
+        filename={`po-${po.id ?? id}.pdf`}
+        type="pdf"
+        label="PDF"
+        size="sm"
       />
     </div>
   ) : undefined;
