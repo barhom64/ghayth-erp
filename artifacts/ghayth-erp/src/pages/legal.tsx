@@ -16,7 +16,7 @@ import {
 } from "@workspace/ui-core";
 import { useApiQuery, asList } from "@/lib/api";
 import { PageStateWrapper } from "@/components/shared/page-state";
-import { FileText, Gavel, Plus, Scale, Copy, ExternalLink, Mail, BarChart2, DollarSign, CheckCircle } from "lucide-react";
+import { FileText, Gavel, Plus, Scale, Copy, ExternalLink, Mail, BarChart2, DollarSign, CheckCircle, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
@@ -69,6 +69,15 @@ function ContractsTab() {
   );
   const contracts = asList(contractsResp);
   const total = contractsResp?.total || contracts.length;
+
+  // GET /legal/contracts/renewal-alerts — returns contracts expiring
+  // within the alerting horizon. Surface as a "soon to expire" banner
+  // above the list when there's at least one alert.
+  const { data: alertsResp } = useApiQuery<any>(
+    ["legal-renewal-alerts"],
+    "/legal/contracts/renewal-alerts",
+  );
+  const renewalAlerts: any[] = alertsResp?.data || [];
 
   const filtered = applyFilters(contracts, filters, {
     searchFields: ["title", "partyName", "contractType"],
@@ -157,6 +166,24 @@ function ContractsTab() {
         </div>
         {canManage && <Link href="/legal/create"><GuardedButton perm="legal:create" className="gap-2"><Plus className="h-4 w-4" /> عقد جديد</GuardedButton></Link>}
       </div>
+
+      {renewalAlerts.length > 0 && (
+        <Card className="border-status-warning-surface bg-status-warning-surface/40">
+          <CardContent className="p-4">
+            <h3 className="text-sm font-semibold text-status-warning-foreground mb-2 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" /> عقود تحتاج تجديد ({renewalAlerts.length})
+            </h3>
+            <div className="space-y-1 text-xs">
+              {renewalAlerts.slice(0, 6).map((a: any) => (
+                <Link key={a.id} href={`/legal/contracts/${a.id}`} className="flex justify-between px-2 py-1 rounded hover:bg-white/50">
+                  <span className="font-medium">{a.title}</span>
+                  <span className="text-muted-foreground">ينتهي: {a.endDate}</span>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader><CardTitle>العقود القانونية</CardTitle></CardHeader>
