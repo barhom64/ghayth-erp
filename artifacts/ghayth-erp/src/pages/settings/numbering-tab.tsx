@@ -837,8 +837,10 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
     if (filters.q) u.set("q", filters.q);
     return u.toString();
   }, [filters]);
-  const url = `/numbering/assignments${query ? `?${query}` : ""}`;
-  const { data, isLoading } = useApiQuery<{ data: Assignment[] }>(["numbering-assignments", query], url);
+  const { data, isLoading } = useApiQuery<{ data: Assignment[] }>(
+    ["numbering-assignments", query],
+    `/numbering/assignments${query ? `?${query}` : ""}`,
+  );
   const rows = (data?.data || []) as Assignment[];
   const moduleKeys = useMemo(
     () => Array.from(new Set(schemes.map((s) => s.moduleKey))).sort(),
@@ -929,6 +931,17 @@ function AuditPanel() {
   const { data, isLoading } = useApiQuery<{ data: AuditRow[] }>(["numbering-audit"], "/numbering/audit");
   const rows = (data?.data || []) as AuditRow[];
 
+  // GET /numbering/health — gaps, duplicates, locked counters across
+  // all schemes. Surfaced as a banner above the audit log so any
+  // discrepancy is visible before the operator drills into individual
+  // rows.
+  const { data: healthResp } = useApiQuery<any>(
+    ["numbering-health"],
+    "/numbering/health",
+  );
+  const health = healthResp?.data ?? healthResp;
+  const healthIssues = Number(health?.totalIssues ?? health?.issues ?? 0);
+
   if (isLoading) return <LoadingSpinner />;
 
   const labelFor = (action: string): string => {
@@ -948,6 +961,23 @@ function AuditPanel() {
   };
 
   return (
+    <div className="space-y-3">
+      {health && (
+        <Card className={healthIssues > 0 ? "border-status-warning-surface bg-status-warning-surface/30" : "border-status-success-surface bg-status-success-surface/30"}>
+          <CardContent className="p-3 text-sm">
+            {healthIssues > 0 ? (
+              <p className="text-status-warning-foreground">
+                <strong>{healthIssues}</strong> مسألة تتطلب المراجعة في مركز الترقيم.
+                {health?.gaps != null && <span className="ms-3 text-xs">فجوات: {String(health.gaps)}</span>}
+                {health?.duplicates != null && <span className="ms-3 text-xs">تكرارات: {String(health.duplicates)}</span>}
+                {health?.lockedCounters != null && <span className="ms-3 text-xs">عدادات مقفلة: {String(health.lockedCounters)}</span>}
+              </p>
+            ) : (
+              <p className="text-status-success-foreground">سلامة الترقيم: لا توجد مسائل مكتشفة.</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
     <Card><CardContent className="p-0 overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
@@ -987,5 +1017,6 @@ function AuditPanel() {
         </tbody>
       </table>
     </CardContent></Card>
+    </div>
   );
 }
