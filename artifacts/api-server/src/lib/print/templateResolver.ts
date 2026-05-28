@@ -1904,7 +1904,6 @@ function buildStockAdjustmentPreset(): PrintTemplate {
   <div><strong>نوع التسوية:</strong> {{entity.adjustmentType}}</div>
   <div><strong>الحالة:</strong> {{entity.status}}</div>
   <div><strong>أنشأ التسوية:</strong> {{entity.createdByName}}</div>
-  <div><strong>اعتمد التسوية:</strong> {{entity.approvedByName}}</div>
 </div>
 <div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
   <div style="font-weight:bold;margin-bottom:4px">سبب التسوية</div>
@@ -2253,23 +2252,12 @@ function buildInsurancePolicyPreset(): PrintTemplate {
   <div><strong>نوع التأمين:</strong> {{entity.policyType}}</div>
   <div><strong>الجهة المؤمَّن لها:</strong> {{entity.insuredEntity}}</div>
   <div><strong>شركة التأمين:</strong> {{entity.insurerName}}</div>
-  <div><strong>الوكيل:</strong> {{entity.agentName}}</div>
   <div><strong>تاريخ البدء:</strong> {{entity.startDate}}</div>
   <div><strong>تاريخ الانتهاء:</strong> {{entity.expiryDate}}</div>
   <div><strong>قيمة التغطية:</strong> {{entity.coverageAmount}}</div>
   <div><strong>قيمة القسط:</strong> {{entity.premiumAmount}}</div>
-  <div><strong>دورية القسط:</strong> {{entity.paymentFrequency}}</div>
-  <div><strong>نسبة التحمل:</strong> {{entity.deductible}}</div>
   <div><strong>الحالة:</strong> {{entity.status}}</div>
   <div><strong>الفرع:</strong> {{branch.branchName}}</div>
-</div>
-<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
-  <div style="font-weight:bold;margin-bottom:4px">التغطية</div>
-  <div style="white-space:pre-wrap">{{entity.coverageDetails}}</div>
-</div>
-<div style="margin:14px 0;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px">
-  <div style="font-weight:bold;margin-bottom:4px">الاستثناءات</div>
-  <div style="white-space:pre-wrap">{{entity.exclusions}}</div>
 </div>
 <div class="signatures" style="margin-top:36px">
   <div>الوكيل<br/>____________________</div>
@@ -2586,14 +2574,8 @@ function buildFleetMaintenancePreset(): PrintTemplate {
   <div style="font-weight:bold;margin-bottom:4px">وصف العطل / الطلب</div>
   <div style="white-space:pre-wrap">{{entity.description}}</div>
 </div>
-<div style="margin:14px 0;padding:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px">
-  <div style="font-weight:bold;margin-bottom:4px">الأعمال المنفَّذة</div>
-  <div style="white-space:pre-wrap">{{entity.workPerformed}}</div>
-</div>
 <table style="width:100%;border-collapse:collapse;margin:14px 0">
-  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold;width:50%">تكلفة قطع الغيار</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.partsCost}}</td></tr>
-  <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f8fafc;font-weight:bold">تكلفة العمالة</td><td style="border:1px solid #cbd5e1;padding:8px;text-align:left">{{entity.laborCost}}</td></tr>
-  <tr style="background:#fef9c3;font-weight:bold"><td style="border:1px solid #ca8a04;padding:8px">إجمالي التكلفة</td><td style="border:1px solid #ca8a04;padding:8px;text-align:left">{{entity.totalCost}}</td></tr>
+  <tr style="background:#fef9c3;font-weight:bold"><td style="border:1px solid #ca8a04;padding:8px;width:50%">إجمالي التكلفة</td><td style="border:1px solid #ca8a04;padding:8px;text-align:left">{{entity.totalCost}}</td></tr>
 </table>
 <div class="signatures" style="margin-top:36px">
   <div>السائق<br/>____________________</div>
