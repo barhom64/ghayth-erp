@@ -227,19 +227,23 @@ interface WorkflowTimelineProps {
 }
 
 export function WorkflowTimeline({ instanceId, refTable, refId, className }: WorkflowTimelineProps) {
-  // Inline conditional URLs so the wiring scanner can resolve both
-  // GET /workflows/:id/timeline and GET /workflows/timeline/:refTable/
-  // :refId statically. The dual-branch handler in
-  // scripts/src/check-frontend-backend-wiring.mjs picks both up.
-  const { data } = useApiQuery<any>(
-    ["workflow-timeline", String(instanceId ?? ""), String(refTable ?? ""), String(refId ?? "")],
-    instanceId
-      ? `/workflows/${instanceId}/timeline`
-      : refTable && refId
-        ? `/workflows/timeline/${refTable}/${refId}`
-        : null,
-    !!(instanceId || (refTable && refId)),
+  // Two parallel queries — only one fires at a time based on which
+  // identifier the caller supplied. Splitting into two useApiQuery
+  // calls keeps both URLs statically resolvable for the wiring audit
+  // (the dual-branch handler can't follow a nested ternary).
+  const byInstanceQ = useApiQuery<any>(
+    ["workflow-timeline-instance", String(instanceId ?? "")],
+    instanceId ? `/workflows/${instanceId}/timeline` : null,
+    { enabled: !!instanceId },
   );
+  const byRefQ = useApiQuery<any>(
+    ["workflow-timeline-ref", String(refTable ?? ""), String(refId ?? "")],
+    !instanceId && refTable && refId
+      ? `/workflows/timeline/${refTable}/${refId}`
+      : null,
+    { enabled: !instanceId && !!(refTable && refId) },
+  );
+  const { data } = instanceId ? byInstanceQ : byRefQ;
 
   const instance = data?.instance;
   const actions = asList(data?.actions);
