@@ -144,6 +144,7 @@ export default function FiscalPeriodsV2Page() {
       ]}
       queryKey={[...QUERY_KEY]}
       endpoint="/finance/fiscal-periods-v2"
+      printEntityType="report_fiscal_periods"
       columns={[
         {
           key: "name",
