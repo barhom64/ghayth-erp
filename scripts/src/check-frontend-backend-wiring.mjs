@@ -291,14 +291,30 @@ function extractFrontendCalls() {
       let i = m.index + m[0].length;
       while (i < src.length && /\s/.test(src[i])) i++;
       if (helper === "useApiQuery") {
-        // Skip the array literal arg.
-        if (src[i] !== "[") continue;
-        let depth = 1;
-        i++;
-        while (i < src.length && depth > 0) {
-          if (src[i] === "[") depth++;
-          else if (src[i] === "]") depth--;
+        // Skip the array literal arg OR a bare identifier
+        // (`useApiQuery(queryKey, "/x")` is a common shape when the
+        // key is composed at the top of the function).
+        if (src[i] === "[") {
+          let depth = 1;
           i++;
+          while (i < src.length && depth > 0) {
+            if (src[i] === "[") depth++;
+            else if (src[i] === "]") depth--;
+            i++;
+          }
+        } else if (/^[A-Za-z_$]/.test(src[i] ?? "")) {
+          // Bare identifier — walk to the first `,` that isn't inside a
+          // nested call. The URL arg starts after it.
+          let depth = 0;
+          while (i < src.length) {
+            const c = src[i];
+            if (c === "(") depth++;
+            else if (c === ")") { if (depth === 0) break; depth--; }
+            else if (c === "," && depth === 0) break;
+            i++;
+          }
+        } else {
+          continue; // unexpected shape — skip
         }
         // Skip the comma + whitespace before the URL arg.
         while (i < src.length && /[\s,]/.test(src[i])) i++;
