@@ -9,18 +9,151 @@ import {
   useFilters,
   applyFilters,
 } from "@workspace/ui-core";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Megaphone, Plus, DollarSign, Eye, TrendingUp, Users, BarChart2, Target, CheckCircle } from "lucide-react";
+import { Megaphone, Plus, DollarSign, Eye, TrendingUp, Users, BarChart2, Target, CheckCircle, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { GuardedButton } from "@/components/shared/permission-gate";
+
+interface CampaignRoas {
+  campaignId: number;
+  campaignName: string;
+  spent: number;
+  revenue: number;
+  roas: string | null;
+  leadsGenerated: number;
+}
+
+function CampaignRoasDialog({ campaign, onClose }: { campaign: any | null; onClose: () => void }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [revenueInput, setRevenueInput] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+
+  const { data: roas, isLoading, refetch } = useApiQuery<CampaignRoas>(
+    ["campaign-roas", String(campaign?.id ?? "")],
+    campaign ? `/marketing/campaigns/${campaign.id}/roas` : "",
+    !!campaign,
+  );
+
+  if (!campaign) return null;
+
+  const handleSaveRevenue = async () => {
+    const n = Number(revenueInput);
+    if (!Number.isFinite(n) || n < 0) {
+      toast({ variant: "destructive", title: "أدخل قيمة إيرادات صحيحة" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiFetch(`/marketing/campaigns/${campaign.id}/revenue`, {
+        method: "PATCH",
+        body: JSON.stringify({ revenue: n }),
+      });
+      toast({ title: "تم تحديث الإيرادات" });
+      qc.invalidateQueries({ queryKey: ["mkt-campaigns"] });
+      qc.invalidateQueries({ queryKey: ["mkt-stats"] });
+      refetch();
+      setRevenueInput("");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "تعذر التحديث", description: err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!campaign} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-status-info-foreground" />
+            عائد الحملة: {campaign.name}
+          </DialogTitle>
+        </DialogHeader>
+        {isLoading || !roas ? (
+          <p className="text-sm text-muted-foreground text-center py-4">جارٍ التحميل…</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <Card>
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">المصروف</p>
+                  <p className="text-lg font-bold text-status-error-foreground">{formatCurrency(roas.spent)}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">الإيرادات</p>
+                  <p className="text-lg font-bold text-status-success-foreground">{formatCurrency(roas.revenue)}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">عائد الإنفاق (ROAS)</p>
+                  <p className={cn(
+                    "text-lg font-bold",
+                    roas.roas && Number(roas.roas) >= 3 ? "text-status-success-foreground"
+                      : roas.roas && Number(roas.roas) >= 1 ? "text-status-warning-foreground"
+                      : "text-status-error-foreground",
+                  )}>
+                    {roas.roas ? `${roas.roas}×` : "—"}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3">
+                  <p className="text-xs text-muted-foreground">العملاء المحتملون</p>
+                  <p className="text-lg font-bold">{roas.leadsGenerated}</p>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="pt-3 border-t space-y-2">
+              <Label className="text-xs">تحديث قيمة الإيرادات</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder={String(roas.revenue || 0)}
+                  value={revenueInput}
+                  onChange={(e) => setRevenueInput(e.target.value)}
+                  className="flex-1"
+                />
+                <GuardedButton
+                  perm="marketing:update"
+                  onClick={handleSaveRevenue}
+                  disabled={saving || revenueInput === ""}
+                  rateLimitAware
+                >
+                  حفظ
+                </GuardedButton>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                ROAS = الإيرادات ÷ المصروف. تحديث الإيرادات سيعيد حساب القيمة فوراً.
+              </p>
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>إغلاق</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 const STAGE_LABELS: Record<string, string> = {
   lead: "عميل محتمل",
@@ -121,6 +254,7 @@ function CampaignsTab() {
   const [filters, setFilters] = useFilters();
   const pageSize = 20;
   const [previewCampaign, setPreviewCampaign] = useState<any>(null);
+  const [roasCampaign, setRoasCampaign] = useState<any>(null);
   const campaignFields: PreviewField[] = [
     { label: "الحملة", key: "name" },
     { label: "القناة", key: "channel", type: "badge" },
@@ -170,11 +304,23 @@ function CampaignsTab() {
         const spent = Number(c.spent) || 0;
         const revenue = Number(c.revenue) || 0;
         const roas = spent > 0 ? (revenue / spent).toFixed(2) : null;
-        return roas ? (
-          <span className={cn("text-sm font-medium", Number(roas) >= 3 ? "text-status-success-foreground" : Number(roas) >= 1 ? "text-status-warning-foreground" : "text-status-error-foreground")}>
-            {roas}×
-          </span>
-        ) : <span className="text-muted-foreground">—</span>;
+        return (
+          <button
+            type="button"
+            className={cn(
+              "inline-flex items-center gap-1 text-sm font-medium hover:underline cursor-pointer",
+              roas == null && "text-muted-foreground",
+              roas != null && Number(roas) >= 3 && "text-status-success-foreground",
+              roas != null && Number(roas) >= 1 && Number(roas) < 3 && "text-status-warning-foreground",
+              roas != null && Number(roas) < 1 && "text-status-error-foreground",
+            )}
+            onClick={() => setRoasCampaign(c)}
+            title="عرض تفاصيل العائد + تحديث الإيرادات"
+          >
+            {roas ? `${roas}×` : "—"}
+            <BarChart3 className="h-3 w-3 opacity-50" />
+          </button>
+        );
       },
     },
     { key: "createdAt", header: "التاريخ", sortable: true, render: (c) => formatDateAr(c.createdAt) },
@@ -268,6 +414,7 @@ function CampaignsTab() {
         </CardContent>
       </Card>
       <QuickPreviewDialog open={!!previewCampaign} onOpenChange={() => setPreviewCampaign(null)} title="تفاصيل الحملة" data={previewCampaign} fields={campaignFields} />
+      <CampaignRoasDialog campaign={roasCampaign} onClose={() => setRoasCampaign(null)} />
     </div>
   );
 }

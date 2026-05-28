@@ -65,11 +65,19 @@ router.get("/notification-stats", authorize({ feature: "admin", action: "list" }
   try {
     const scope = req.scope!;
     const cid = scope.companyId;
+    // Phase 4 contract cleanup: read from v_message_log_all (unified
+    // view) — covers both communications_log + notification_log via
+    // the migration-221 backfill.
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT channel, status, COUNT(*) as count FROM notification_log WHERE "companyId"=$1 GROUP BY channel, status ORDER BY channel`,
+      `SELECT channel, status, COUNT(*) as count FROM v_message_log_all
+        WHERE "companyId"=$1 AND "deletedAt" IS NULL
+        GROUP BY channel, status ORDER BY channel`,
       [cid]
     );
-    const [total] = await rawQuery<Record<string, unknown>>(`SELECT COUNT(*) as total FROM notification_log WHERE "companyId"=$1`, [cid]);
+    const [total] = await rawQuery<Record<string, unknown>>(
+      `SELECT COUNT(*) as total FROM v_message_log_all WHERE "companyId"=$1 AND "deletedAt" IS NULL`,
+      [cid]
+    );
     res.json(maskFields(req, { breakdown: rows, total: Number(total?.total || 0) }));
   } catch (err) { handleRouteError(err, res, "Notification stats error:"); }
 });

@@ -142,10 +142,10 @@ const ENGINE_FORWARD_NOTES = new Map([
 // Keying: `${file}::${table}` so a file can exempt one table and still
 // be checked for others.
 const PER_TABLE_EXEMPTIONS = new Map([
-  // G10 (crm.ts) closed in PR #1325, G11 (employees.ts) closed in this
-  // PR, G12+G13 (credit_memos / debit_memos) closed in PR #1333. Only
-  // G14 (payment_runs) remains.
-  ["finance-purchase.ts::payment_runs", "payment_runs uses PR-${Date.now()} inline — gap tracked in coverage report §3 inline-date-now offender + G14"],
+  // G10–G14 all closed (PRs #1325 / #1329 / #1333 / this PR).
+  // No per-table exemptions remain — the audit is now zero-exemption
+  // at the per-table level. Any new partial-coverage finding will
+  // fail CI immediately.
 ]);
 
 // Non-route exceptions: when a lib/engines/* file legitimately INSERTs

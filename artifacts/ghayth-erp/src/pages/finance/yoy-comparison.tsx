@@ -14,6 +14,7 @@ import {
   TrendingUp, TrendingDown, Download, BarChart3, Trophy,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
 
 /**
  * Year-over-Year Comparison
@@ -202,6 +203,14 @@ export default function YoyComparisonPage() {
           <Button variant="outline" size="sm" onClick={exportCsv} disabled={rows.length === 0}>
             <Download className="h-4 w-4 me-1" /> CSV
           </Button>
+          <PrintButton
+            entityType="report_yoy_comparison"
+            entityId="all"
+            payload={{
+              entity: { title: "مقارنة سنة على سنة (YoY)", count: rows.length },
+              items: rows,
+            }}
+          />
         </div>
       }
     >
