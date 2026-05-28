@@ -145,7 +145,7 @@ Legacy-pattern guard:
 
 | رمز | المكان | الحالة |
 |---|---|---|
-| G1 | `lib/disciplineEngine.ts:331` COUNT(*) للـmemo | 🔓 مفتوحة |
+| G1 | `lib/disciplineEngine.ts:331` COUNT(*) للـmemo | ✅ مُصلَحة في هذا الـPR (مهاجرة 230) |
 | G2 | `routes/store.ts:262` ORD-${Date.now()} | ✅ مُصلَحة في هذا الـPR (مهاجرة 228) |
 | G3 | `routes/requests.ts:916` PO-REQ-${id} | ✅ مُصلَحة في هذا الـPR |
 | G4 | `routes/requests.ts:904` ticket بلا ref | ✅ مُصلَحة في هذا الـPR |
