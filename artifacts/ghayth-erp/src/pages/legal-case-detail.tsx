@@ -17,14 +17,19 @@ import {
   FormShell,
   FormTextField,
   FormDateField,
+  FormNumberField,
+  FormSelectField,
+  FormTextareaField,
   FormGrid,
+  DataTable,
+  type DataTableColumn,
 } from "@workspace/ui-core";
-import { formatDateAr } from "@/lib/formatters";
+import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import {
   Gavel, Calendar, FileText, AlertTriangle, Clock,
   CheckCircle2, User, MapPin, TrendingUp, Activity,
-  Plus, ChevronRight, Info, X
+  Plus, ChevronRight, Info, X, Scale, Mail, DollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EntityObligations } from "@/components/shared/entity-obligations";
@@ -122,6 +127,163 @@ function CaseTimeline({ sessions }: { sessions: any[] }) {
         })}
       </div>
     </div>
+  );
+}
+
+// ─── Schemas for the case sub-resource forms ──────────────────────────────
+// Each schema mirrors the backend's create*Schema in routes/legal.ts.
+
+const judgmentSchema = z.object({
+  judgmentDate: z.string().min(1, "تاريخ الحكم مطلوب"),
+  verdict: z.string().min(1, "نص الحكم مطلوب"),
+  judgmentType: z.string().trim(),
+  amount: z.coerce.number(),
+  paidAmount: z.coerce.number(),
+  dueDate: z.string(),
+  notes: z.string().trim(),
+});
+type JudgmentForm = z.infer<typeof judgmentSchema>;
+const defaultJudgmentForm: JudgmentForm = {
+  judgmentDate: "", verdict: "", judgmentType: "", amount: 0, paidAmount: 0, dueDate: "", notes: "",
+};
+
+const correspondenceSchema = z.object({
+  direction: z.enum(["outgoing", "incoming"]),
+  subject: z.string().min(1, "الموضوع مطلوب"),
+  parties: z.string().trim(),
+  correspondenceDate: z.string(),
+  documentRef: z.string().trim(),
+  notes: z.string().trim(),
+});
+type CorrespondenceForm = z.infer<typeof correspondenceSchema>;
+const defaultCorrespondenceForm: CorrespondenceForm = {
+  direction: "outgoing", subject: "", parties: "", correspondenceDate: "", documentRef: "", notes: "",
+};
+
+const caseCostSchema = z.object({
+  amount: z.coerce.number().positive("المبلغ مطلوب وأكبر من صفر"),
+  type: z.string().min(1, "نوع التكلفة مطلوب"),
+  notes: z.string().trim(),
+});
+type CaseCostForm = z.infer<typeof caseCostSchema>;
+const defaultCaseCostForm: CaseCostForm = {
+  amount: 0, type: "", notes: "",
+};
+
+function AddJudgmentForm({ caseId, onSuccess }: { caseId: number; onSuccess: () => void }) {
+  const saveMut = useApiMutation<unknown, JudgmentForm>(
+    `/legal/cases/${caseId}/judgments`,
+    "POST",
+    [["legal-case", String(caseId)], ["legal-case-judgments", String(caseId)]],
+    { successMessage: "تم تسجيل الحكم", onSuccess },
+  );
+  return (
+    <Card className="border-dashed">
+      <CardContent className="p-4">
+        <h4 className="font-semibold mb-3 text-sm">إضافة حكم جديد</h4>
+        <FormShell
+          schema={judgmentSchema}
+          defaultValues={defaultJudgmentForm}
+          submitLabel="حفظ الحكم"
+          onSubmit={async (values, ctx) => {
+            await saveMut.mutateAsync(values);
+            ctx.reset();
+          }}
+        >
+          <FormGrid cols={2}>
+            <FormDateField name="judgmentDate" label="تاريخ الحكم" required />
+            <FormTextField name="judgmentType" label="نوع الحكم" placeholder="ابتدائي / استئنافي / تنفيذ" />
+            <FormTextareaField name="verdict" label="نص الحكم" required className="md:col-span-2" />
+            <FormNumberField name="amount" label="قيمة الحكم" />
+            <FormNumberField name="paidAmount" label="المسدد" />
+            <FormDateField name="dueDate" label="تاريخ الاستحقاق" />
+            <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+          </FormGrid>
+        </FormShell>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AddCorrespondenceForm({ caseId, onSuccess }: { caseId: number; onSuccess: () => void }) {
+  const saveMut = useApiMutation<unknown, CorrespondenceForm>(
+    `/legal/cases/${caseId}/correspondence`,
+    "POST",
+    [["legal-case", String(caseId)], ["legal-case-correspondence", String(caseId)]],
+    { successMessage: "تم تسجيل المراسلة", onSuccess },
+  );
+  return (
+    <Card className="border-dashed">
+      <CardContent className="p-4">
+        <h4 className="font-semibold mb-3 text-sm">إضافة مراسلة جديدة</h4>
+        <FormShell
+          schema={correspondenceSchema}
+          defaultValues={defaultCorrespondenceForm}
+          submitLabel="حفظ المراسلة"
+          onSubmit={async (values, ctx) => {
+            await saveMut.mutateAsync(values);
+            ctx.reset();
+          }}
+        >
+          <FormGrid cols={2}>
+            <FormSelectField
+              name="direction"
+              label="الاتجاه"
+              options={[
+                { value: "outgoing", label: "صادرة" },
+                { value: "incoming", label: "واردة" },
+              ]}
+            />
+            <FormDateField name="correspondenceDate" label="تاريخ المراسلة" />
+            <FormTextField name="subject" label="الموضوع" required className="md:col-span-2" />
+            <FormTextField name="parties" label="الأطراف" />
+            <FormTextField name="documentRef" label="مرجع المستند" />
+            <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+          </FormGrid>
+        </FormShell>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AddCostForm({ caseId, onSuccess }: { caseId: number; onSuccess: () => void }) {
+  const saveMut = useApiMutation<unknown, CaseCostForm>(
+    `/legal/cases/${caseId}/costs`,
+    "POST",
+    [["legal-case", String(caseId)]],
+    { successMessage: "تم تسجيل التكلفة", onSuccess },
+  );
+  return (
+    <Card className="border-dashed">
+      <CardContent className="p-4">
+        <h4 className="font-semibold mb-3 text-sm">إضافة تكلفة جديدة</h4>
+        <FormShell
+          schema={caseCostSchema}
+          defaultValues={defaultCaseCostForm}
+          submitLabel="حفظ التكلفة"
+          onSubmit={async (values, ctx) => {
+            await saveMut.mutateAsync(values);
+            ctx.reset();
+          }}
+        >
+          <FormGrid cols={2}>
+            <FormSelectField
+              name="type"
+              label="نوع التكلفة"
+              options={[
+                { value: "lawyer_fee", label: "أتعاب محامي" },
+                { value: "court_fee", label: "رسوم محكمة" },
+                { value: "expert_fee", label: "أتعاب خبير" },
+                { value: "translation", label: "ترجمة" },
+                { value: "other", label: "أخرى" },
+              ]}
+            />
+            <FormNumberField name="amount" label="المبلغ" />
+            <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
+          </FormGrid>
+        </FormShell>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -236,10 +398,29 @@ export default function LegalCaseDetail() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [showAddSession, setShowAddSession] = useState(false);
+  const [showAddJudgment, setShowAddJudgment] = useState(false);
+  const [showAddCorrespondence, setShowAddCorrespondence] = useState(false);
+  const [showAddCost, setShowAddCost] = useState(false);
 
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("legal_case", Number(id));
 
   const { data: caseData, refetch, isLoading, error } = useApiQuery<any>(["legal-case", id], `/legal/cases/${id}`);
+
+  // Sub-resource fetches — each endpoint is dedicated and case-scoped.
+  // Kept independent from the main caseData payload so adding a judgment
+  // or correspondence row doesn't have to refetch the whole case header.
+  const { data: judgmentsResp, refetch: refetchJudgments } = useApiQuery<any>(
+    ["legal-case-judgments", id],
+    `/legal/cases/${id}/judgments`,
+    !!id,
+  );
+  const { data: correspondenceResp, refetch: refetchCorrespondence } = useApiQuery<any>(
+    ["legal-case-correspondence", id],
+    `/legal/cases/${id}/correspondence`,
+    !!id,
+  );
+  const judgments: any[] = asList(judgmentsResp?.data ?? judgmentsResp);
+  const correspondence: any[] = asList(correspondenceResp?.data ?? correspondenceResp);
 
   const transitionMut = useApiMutation<any, { status: string }>(
     () => `/legal/cases/${id}`,
@@ -253,6 +434,16 @@ export default function LegalCaseDetail() {
     }
   );
 
+  // Dedicated /close endpoint (vs. the generic status PATCH) so the
+  // backend can run lifecycle side-effects (lawyer notification, risk
+  // closure, audit row) that wouldn't fire on a plain status change.
+  const closeMut = useApiMutation<any, { reason?: string }>(
+    `/legal/cases/${id}/close`,
+    "POST",
+    [["legal-case", String(id)], ["legal-cases"]],
+    { successMessage: "تم إغلاق القضية", onSuccess: () => refetch() },
+  );
+
   const sessions = caseData?.sessions || [];
 
   const handleSessionAdded = () => {
@@ -260,6 +451,25 @@ export default function LegalCaseDetail() {
     refetch();
     qc.invalidateQueries({ queryKey: ["legal-cases"] });
     qc.invalidateQueries({ queryKey: ["legal-stats"] });
+  };
+
+  const handleJudgmentAdded = () => {
+    setShowAddJudgment(false);
+    refetchJudgments();
+    refetch();
+  };
+  const handleCorrespondenceAdded = () => {
+    setShowAddCorrespondence(false);
+    refetchCorrespondence();
+  };
+  const handleCostAdded = () => {
+    setShowAddCost(false);
+    refetch();
+  };
+
+  const handleClose = () => {
+    if (!window.confirm("سيتم إغلاق القضية. متابعة؟")) return;
+    closeMut.mutate({});
   };
 
   const handleTransition = (newStatus: string) => {
@@ -297,6 +507,20 @@ export default function LegalCaseDetail() {
           {resolveStatus(t, "legal_case")?.label || t}
         </GuardedButton>
       ))}
+      {caseData && caseData.status !== "closed" && (
+        <GuardedButton
+          perm="legal:update"
+          size="sm"
+          variant="outline"
+          className="text-xs gap-1 text-status-error-foreground"
+          onClick={handleClose}
+          disabled={closeMut.isPending}
+          title="إغلاق نهائي للقضية (يفعل side-effects: إشعار المحامي، إغلاق المخاطر)"
+        >
+          <X className="h-3 w-3" />
+          إغلاق القضية
+        </GuardedButton>
+      )}
       <EntityPrintButton entityType="legal_judgment" entityId={id ?? ""} formats={["a4"]} />
     </div>
   );
@@ -431,6 +655,112 @@ export default function LegalCaseDetail() {
               })}
             </div>
           )}
+        </div>
+      ),
+    },
+    {
+      key: "judgments",
+      label: "الأحكام",
+      icon: Scale,
+      badge: judgments.length || undefined,
+      content: (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">أحكام القضية</h3>
+            <GuardedButton perm="legal:create" size="sm" onClick={() => setShowAddJudgment(!showAddJudgment)}>
+              {showAddJudgment ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />حكم جديد</>}
+            </GuardedButton>
+          </div>
+          {showAddJudgment && <AddJudgmentForm caseId={Number(id)} onSuccess={handleJudgmentAdded} />}
+          {judgments.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <Scale className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">لا توجد أحكام مسجلة</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <DataTable
+              columns={[
+                { key: "judgmentDate", header: "تاريخ الحكم", sortable: true, render: (j) => formatDateAr(j.judgmentDate) },
+                { key: "judgmentType", header: "النوع", render: (j) => j.judgmentType || "—" },
+                { key: "verdict", header: "نص الحكم", render: (j) => <span className="text-xs">{j.verdict}</span> },
+                { key: "amount", header: "القيمة", sortable: true, render: (j) => j.amount ? formatCurrency(Number(j.amount)) : "—" },
+                { key: "paidAmount", header: "المسدد", render: (j) => j.paidAmount ? formatCurrency(Number(j.paidAmount)) : "—" },
+                { key: "dueDate", header: "الاستحقاق", render: (j) => j.dueDate ? formatDateAr(j.dueDate) : "—" },
+              ] as DataTableColumn<any>[]}
+              data={judgments}
+              noToolbar
+              pageSize={10}
+            />
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "correspondence",
+      label: "المراسلات",
+      icon: Mail,
+      badge: correspondence.length || undefined,
+      content: (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">مراسلات القضية</h3>
+            <GuardedButton perm="legal:create" size="sm" onClick={() => setShowAddCorrespondence(!showAddCorrespondence)}>
+              {showAddCorrespondence ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />مراسلة جديدة</>}
+            </GuardedButton>
+          </div>
+          {showAddCorrespondence && <AddCorrespondenceForm caseId={Number(id)} onSuccess={handleCorrespondenceAdded} />}
+          {correspondence.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-muted-foreground">
+                <Mail className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">لا توجد مراسلات مسجلة</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <DataTable
+              columns={[
+                { key: "correspondenceDate", header: "التاريخ", sortable: true, render: (c) => formatDateAr(c.correspondenceDate) },
+                { key: "direction", header: "الاتجاه", render: (c) => (
+                  <Badge variant="outline">{c.direction === "outgoing" ? "صادرة" : "واردة"}</Badge>
+                )},
+                { key: "subject", header: "الموضوع", render: (c) => <span className="text-xs">{c.subject}</span> },
+                { key: "parties", header: "الأطراف", render: (c) => c.parties || "—" },
+                { key: "documentRef", header: "المرجع", render: (c) => c.documentRef ? <span className="font-mono text-xs">{c.documentRef}</span> : "—" },
+              ] as DataTableColumn<any>[]}
+              data={correspondence}
+              noToolbar
+              pageSize={10}
+            />
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "costs",
+      label: "التكاليف",
+      icon: DollarSign,
+      content: (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">تكاليف القضية</h3>
+            <GuardedButton perm="legal:create" size="sm" onClick={() => setShowAddCost(!showAddCost)}>
+              {showAddCost ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />تكلفة جديدة</>}
+            </GuardedButton>
+          </div>
+          {showAddCost && <AddCostForm caseId={Number(id)} onSuccess={handleCostAdded} />}
+          <Card>
+            <CardContent className="p-4 text-sm text-muted-foreground">
+              مجموع المخاطر المالية المتراكم على القضية:
+              <span className="font-bold text-status-error-foreground ms-2">
+                {formatCurrency(Number(caseData?.financialRisk || 0))}
+              </span>
+              <p className="text-xs text-muted-foreground mt-2">
+                إضافة تكلفة جديدة تُراكم القيمة على financialRisk الإجمالي للقضية.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       ),
     },

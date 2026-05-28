@@ -629,6 +629,32 @@ function extractFrontendCalls() {
           calls.push({ file: rel, url: lit.value, line: lineOf(src, start + sm.index), method: "GET", source: "prop" });
         }
       }
+
+      // `const xUrl = `/...`;` followed by `useApiQuery(..., xUrl, ...)` —
+      // the same variable-bound URL pattern as above, but for non-conditional
+      // template URLs that are bound to a `*Url` named variable. Wires
+      // PurchaseOrderReceiveSection (matchUrl, receiptsUrl) and similar.
+      //
+      // Restricted to *Url suffix to avoid colliding with route constants in
+      // sidebar/routing config. We also verify the variable is actually
+      // passed as the URL arg to a known helper later in the file before
+      // crediting — otherwise dead variables would leak.
+      const urlVarRe = /\b(?:const|let)\s+([a-zA-Z_$][\w$]*Url)\s*(?::\s*[^=]+)?=\s*[`"'](\/[^`"']*)[`"']/g;
+      for (const m of src.matchAll(urlVarRe)) {
+        const varName = m[1];
+        const url = m[2];
+        // Confirm the variable is actually used as an argument to an API
+        // helper later in the file. The previous form used `[^)]*` which
+        // stops at the first `)` and missed `useApiQuery([key, String(x)],
+        // varName)` (the inner `)` of `String(x)` aborted the match). A
+        // bounded `[\s\S]{0,500}` window with lazy expansion catches the
+        // common arg-list shapes without false positives.
+        const passedToHelper = new RegExp(
+          `\\b(?:useApiQuery|useApiMutation|apiFetch|apiPatch|apiPost|apiPut|apiDelete)\\b[\\s\\S]{0,500}?\\b${varName}\\b`,
+        ).test(src);
+        if (!passedToHelper) continue;
+        calls.push({ file: rel, url, line: lineOf(src, m.index), method: "GET", source: "prop" });
+      }
     }
   }
   return calls;
