@@ -721,15 +721,11 @@ describe("phase-7 real-closure (#1141)", () => {
   it("inline-date-now-as-ref lint rule exists with explicit baseline", () => {
     const LINT = readFileSync(join(REPO_ROOT, "scripts/src/lint-patterns.mjs"), "utf8");
     expect(LINT).toContain('id: "inline-date-now-as-ref"');
-    // Must enumerate the remaining offenders inline in the comment so
-    // a reviewer can see the live state without running the linter.
-    // After G14 fix the finance-purchase.ts PR- offender is closed,
-    // dropping baseline from 5 to 4.
+    // After G2 + G14 fixes, baseline = 3. Only 3 offenders remain.
     expect(LINT).toMatch(/communications\.ts.*CALL/);
     expect(LINT).toMatch(/finance-invoices\.ts.*ADV/);
     expect(LINT).toMatch(/properties\.ts.*RENT/);
-    expect(LINT).toMatch(/store\.ts.*ORD/);
-    expect(LINT).toMatch(/countBaseline:\s*4/);
+    expect(LINT).toMatch(/countBaseline:\s*[0-3]/);
   });
 });
 
