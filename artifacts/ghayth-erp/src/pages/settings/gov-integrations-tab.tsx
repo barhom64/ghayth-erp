@@ -44,6 +44,28 @@ export function GovIntegrationsTab() {
 
   const integrations: any[] = data?.data || [];
 
+  // Expiry alerts — iqama / registration documents nearing expiry.
+  // Surfaced as warning banners above the integration cards.
+  const { data: iqamaResp } = useApiQuery<{ data: any[] }>(
+    ["gov-expiring-iqama"],
+    "/gov-integrations/expiring/iqama",
+  );
+  const { data: registrationResp } = useApiQuery<{ data: any[] }>(
+    ["gov-expiring-registration"],
+    "/gov-integrations/expiring/registration",
+  );
+  const expiringIqamas: any[] = iqamaResp?.data ?? [];
+  const expiringRegistrations: any[] = registrationResp?.data ?? [];
+
+  // Entity links — vehicles / employees / properties tied to gov
+  // integration records. Just count for now; full UI is the next
+  // gov-integrations link manager page.
+  const { data: linksResp } = useApiQuery<{ data: any[] }>(
+    ["gov-integrations-links"],
+    "/gov-integrations/links",
+  );
+  const linksCount = linksResp?.data?.length ?? 0;
+
   const handleSave = async (id: number, enabled: boolean, values: IntegrationForm) => {
     try {
       await apiFetch(`/gov-integrations/${id}`, {
@@ -110,6 +132,29 @@ export function GovIntegrationsTab() {
         <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
         <span>هذه التكاملات تعمل حالياً في وضع المحاكاة — بيانات الربط الفعلي ستُفعَّل عند الاشتراك في الخدمات الحكومية المقابلة.</span>
       </div>
+
+      {(expiringIqamas.length > 0 || expiringRegistrations.length > 0 || linksCount > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+          {expiringIqamas.length > 0 && (
+            <div className="rounded-md border border-status-warning-surface bg-status-warning-surface/30 p-3">
+              <p className="font-semibold text-status-warning-foreground mb-1">إقامات قاربت على الانتهاء ({expiringIqamas.length})</p>
+              <p className="text-xs text-muted-foreground">{expiringIqamas[0]?.name ?? expiringIqamas[0]?.employeeName ?? ""}{expiringIqamas.length > 1 ? ` و${expiringIqamas.length - 1} أخرى` : ""}</p>
+            </div>
+          )}
+          {expiringRegistrations.length > 0 && (
+            <div className="rounded-md border border-status-warning-surface bg-status-warning-surface/30 p-3">
+              <p className="font-semibold text-status-warning-foreground mb-1">سجلات تنتهي ({expiringRegistrations.length})</p>
+              <p className="text-xs text-muted-foreground">{expiringRegistrations[0]?.name ?? expiringRegistrations[0]?.companyName ?? ""}</p>
+            </div>
+          )}
+          {linksCount > 0 && (
+            <div className="rounded-md border bg-surface-subtle p-3">
+              <p className="font-semibold mb-1">روابط الكيانات المسجَّلة</p>
+              <p className="text-xs text-muted-foreground">{linksCount} كيان مربوط بمنصات حكومية</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {isLoading ? (
         <LoadingSpinner />
