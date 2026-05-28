@@ -316,6 +316,29 @@ function extractFrontendCalls() {
         // Skip `=>` and whitespace.
         while (i < src.length && /[\s=>]/.test(src[i])) i++;
       }
+      // Inline-conditional URL: `useApiQuery([...], id ? \`/x/${id}\` : null)`
+      // is the canonical "skip fetch when id missing" idiom for detail
+      // pages. The arg starts with the condition variable name, not a
+      // string opener, so readString fails. Walk forward to the `?` and
+      // read the true-branch string. Bail if the true-branch isn't a
+      // string literal (e.g. a function call).
+      if (helper === "useApiQuery" || helper === "useApiMutation" || helper === "apiFetch") {
+        // Snapshot — restore i if the inline-conditional shape doesn't match.
+        const savedI = i;
+        // Identifier or simple member-access chain followed by `?`.
+        const condArgRe = /^[\w.$\s]+\?/;
+        const rest = src.slice(i, i + 200);
+        if (condArgRe.test(rest) && !/^[\s]*[`"']/.test(rest)) {
+          // Move past the condition to the `?` operator.
+          while (i < src.length && src[i] !== "?") i++;
+          if (src[i] === "?") {
+            i++;
+            while (i < src.length && /\s/.test(src[i])) i++;
+          } else {
+            i = savedI; // restore for readString fallback
+          }
+        }
+      }
       const lit = readString(src, i);
       if (!lit) continue;
       if (!lit.value.startsWith("/")) continue;
@@ -877,13 +900,17 @@ function main() {
     const sorted = [...byDomain.entries()].sort(
       (a, b) => b[1].length - a[1].length,
     );
-    for (const [domain, list] of sorted.slice(0, 20)) {
+    const fullMode = process.env.WIRING_FULL === "1" || process.argv.includes("--full");
+    const domainCap = fullMode ? sorted.length : 20;
+    const itemCap = fullMode ? Infinity : 8;
+    for (const [domain, list] of sorted.slice(0, domainCap)) {
       console.log(`### /${domain} (${list.length})`);
-      for (const line of list.slice(0, 8)) console.log(`  ${line}`);
-      if (list.length > 8) console.log(`  … and ${list.length - 8} more`);
+      const cap = Number.isFinite(itemCap) ? itemCap : list.length;
+      for (const line of list.slice(0, cap)) console.log(`  ${line}`);
+      if (list.length > cap) console.log(`  … and ${list.length - cap} more`);
       console.log();
     }
-    if (sorted.length > 20) {
+    if (!fullMode && sorted.length > 20) {
       console.log(`(${sorted.length - 20} more domains with unused endpoints, truncated)`);
     }
   }

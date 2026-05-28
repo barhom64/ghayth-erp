@@ -1,5 +1,11 @@
 import { useParams } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
+import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
   PageStatusBadge,
@@ -50,8 +56,29 @@ export default function ViolationDetail() {
   const { id } = useParams<{ id: string }>();
   const { extraTabs, hideTabs } = useRegistryTabs("violation", id ?? "");
 
-  const { data, isLoading, isError } = useApiQuery<any>(["hr-violation-detail", id], id ? `/hr/violations/${id}` : null);
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(["hr-violation-detail", id], id ? `/hr/violations/${id}` : null);
   const item = data?.data ?? data;
+
+  // PATCH /hr/violations/:id — backend gates this on HR_APPROVAL_ROLES
+  // so the Edit button is permission-gated to match.
+  // DELETE /hr/violations/:id is soft-delete, gated on HR_ROLES.
+  const editDelete = useDetailEditDelete({
+    entityLabel: "المخالفة",
+    patchPath: `/hr/violations/${id}`,
+    deletePath: `/hr/violations/${id}`,
+    listPath: "/hr/violations",
+    initialValues: item,
+    fields: [
+      { key: "type", label: "النوع" },
+      { key: "severity", label: "الشدة" },
+      { key: "deduction", label: "الخصم", type: "number" },
+      { key: "period", label: "الفترة" },
+      { key: "description", label: "الوصف" },
+      { key: "notes", label: "ملاحظات" },
+    ],
+    invalidateKeys: [["hr-violation-detail", id], ["hr-violations"]],
+    onSaved: () => refetch(),
+  });
 
   const severity = item
     ? (SEVERITY_LEVELS[item.severity] ?? { label: item.severity || "متوسطة", color: "bg-surface-subtle text-muted-foreground" })
@@ -78,6 +105,7 @@ export default function ViolationDetail() {
 
   const overviewContent = item ? (
     <div className="space-y-4">
+      <InlineEditCard hook={editDelete} />
       {/* KPI cards */}
       <KpiGrid items={[
         { label: "الموظف", value: item.employeeName, icon: User, color: "text-status-info-foreground bg-status-info-surface", size: "sm" },
@@ -149,7 +177,21 @@ export default function ViolationDetail() {
       {/* إجراءات الاعتماد */}
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">إجراءات الاعتماد</CardTitle>
+          <CardTitle className="text-base flex items-center justify-between gap-2">
+            <span>إجراءات الاعتماد</span>
+            {item?.employeeId && (
+              <ImpactPreviewButton
+                endpoint="/hr/impact-preview/violation"
+                payload={{
+                  employeeId: item.employeeId,
+                  deduction: Number(item.deduction || 0),
+                  severity: item.severity,
+                  type: item.type,
+                }}
+                label="معاينة أثر المخالفة"
+              />
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ApprovalActions
@@ -224,6 +266,7 @@ export default function ViolationDetail() {
         <div className="flex items-center gap-2">
           <Badge className={cn("text-sm px-3 py-1", severity.color)}>{severity.label}</Badge>
           <PrintButton entityType="discipline_memo" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <DetailActionButtons hook={editDelete} editPerm="hr:approve" deletePerm="hr:delete" />
         </div>
       }
     />
