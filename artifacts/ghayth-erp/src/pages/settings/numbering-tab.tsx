@@ -185,20 +185,53 @@ export function NumberingTab() {
     ["numbering-schemes"], "/numbering/schemes",
   );
   const schemes = asList<Scheme>(data);
+  const { toast } = useToast();
+
+  // POST /numbering/backfill-all — runs the backfill across every
+  // scheme that has legacy refs lingering in the assignments table.
+  // The per-scheme button still exists; this is the "do them all" shortcut.
+  const backfillAllMut = useApiMutation<unknown, Record<string, never>>(
+    "/numbering/backfill-all",
+    "POST",
+    [["numbering-assignments"], ["numbering-schemes"]],
+    { successMessage: "تم تشغيل الجرد على كل السياسات" },
+  );
+  const [backfillOpen, setBackfillOpen] = useState(false);
+
+  // GET /numbering/scheme-lookup — server-side dispatch that maps an
+  // arbitrary string (a legacy doc number, an external reference) back
+  // to its scheme. Useful when an operator finds a stray number in a
+  // ticket and wants to know which policy issued it.
+  const [lookupOpen, setLookupOpen] = useState(false);
+  const [lookupNumber, setLookupNumber] = useState("");
+  const trimmedLookup = lookupNumber.trim();
+  const lookupQ = useApiQuery<any>(
+    ["numbering-scheme-lookup", trimmedLookup],
+    trimmedLookup ? `/numbering/scheme-lookup?number=${encodeURIComponent(trimmedLookup)}` : null,
+    { enabled: lookupOpen && trimmedLookup.length > 0 },
+  );
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Hash className="w-5 h-5 text-status-info" />
           إعدادات الترقيم الموحد
         </h3>
-        <Badge variant="outline" className="text-xs">
-          {schemes.length} نوع معاملة
-        </Badge>
+        <div className="flex items-center gap-2">
+          <GuardedButton perm="admin:update" variant="outline" size="sm" onClick={() => setLookupOpen(true)}>
+            بحث عن رقم
+          </GuardedButton>
+          <GuardedButton perm="admin:update" variant="outline" size="sm" onClick={() => setBackfillOpen(true)}>
+            جرد شامل
+          </GuardedButton>
+          <Badge variant="outline" className="text-xs">
+            {schemes.length} نوع معاملة
+          </Badge>
+        </div>
       </div>
 
       <p className="text-sm text-muted-foreground">
@@ -225,6 +258,70 @@ export function NumberingTab() {
           <AuditPanel />
         </TabsContent>
       </Tabs>
+
+      {backfillOpen && (
+        <Card className="border-amber-200 bg-amber-50/30">
+          <CardContent className="p-4 space-y-2">
+            <p className="text-sm font-semibold">جرد ترقيم شامل</p>
+            <p className="text-xs text-muted-foreground">
+              سيتم جرد جميع المعاملات السابقة عبر كل السياسات. قد تستغرق العملية وقتاً
+              على القواعد الكبيرة.
+            </p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setBackfillOpen(false)}>إلغاء</Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  backfillAllMut.mutate({}, { onSuccess: () => { setBackfillOpen(false); refetch(); } });
+                }}
+                disabled={backfillAllMut.isPending}
+              >
+                {backfillAllMut.isPending ? "جارٍ التشغيل..." : "تشغيل الجرد"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {lookupOpen && (
+        <Card className="border-status-info-surface bg-status-info-surface/30">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">بحث عن سياسة لرقم</p>
+              <Button variant="ghost" size="sm" onClick={() => { setLookupOpen(false); setLookupNumber(""); }}>
+                إغلاق
+              </Button>
+            </div>
+            <Label className="text-xs">الرقم</Label>
+            <Input
+              value={lookupNumber}
+              onChange={(e) => setLookupNumber(e.target.value)}
+              placeholder="مثال: INV-2025-MK-0001"
+              dir="ltr"
+              className="font-mono"
+            />
+            {lookupQ.isLoading && <p className="text-xs text-muted-foreground">جاري البحث...</p>}
+            {lookupQ.data && (
+              <div className="border rounded p-2 text-xs space-y-1 bg-white">
+                {lookupQ.data.scheme ? (
+                  <>
+                    <p><span className="text-muted-foreground">السياسة:</span> {lookupQ.data.scheme.name ?? `${lookupQ.data.scheme.moduleKey}.${lookupQ.data.scheme.entityKey}`}</p>
+                    {lookupQ.data.assignment && (
+                      <>
+                        <p><span className="text-muted-foreground">الجدول:</span> {lookupQ.data.assignment.entityTable}</p>
+                        <p><span className="text-muted-foreground">المعرف:</span> {lookupQ.data.assignment.entityId ?? "—"}</p>
+                        <p><span className="text-muted-foreground">الحالة:</span> {lookupQ.data.assignment.status}</p>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">لم يُعثر على سياسة لهذا الرقم.</p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -837,7 +934,7 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
     if (filters.q) u.set("q", filters.q);
     return u.toString();
   }, [filters]);
-  const { data, isLoading } = useApiQuery<{ data: Assignment[] }>(
+  const { data, isLoading, refetch } = useApiQuery<{ data: Assignment[] }>(
     ["numbering-assignments", query],
     `/numbering/assignments${query ? `?${query}` : ""}`,
   );
@@ -846,6 +943,43 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
     () => Array.from(new Set(schemes.map((s) => s.moduleKey))).sort(),
     [schemes],
   );
+
+  // POST /numbering/assignments/:id/override — manually rewrite the
+  // issued number (e.g. correct a typo before the document is delivered).
+  // POST /numbering/assignments/:id/void — invalidate an issued number
+  // and free the position for the next request. Both audited.
+  const overrideMut = useApiMutation<unknown, { id: number; newNumber: string; reason?: string }>(
+    (b) => `/numbering/assignments/${b.id}/override`,
+    "POST",
+    [["numbering-assignments"]],
+    { successMessage: "تم تعديل الرقم", onSuccess: () => refetch() },
+  );
+  const voidMut = useApiMutation<unknown, { id: number; reason?: string }>(
+    (b) => `/numbering/assignments/${b.id}/void`,
+    "POST",
+    [["numbering-assignments"]],
+    { successMessage: "تم إلغاء الرقم", onSuccess: () => refetch() },
+  );
+  const [overrideRow, setOverrideRow] = useState<Assignment | null>(null);
+  const [newNumber, setNewNumber] = useState("");
+  const [reason, setReason] = useState("");
+  const submitOverride = () => {
+    if (!overrideRow) return;
+    if (!newNumber.trim()) return;
+    overrideMut.mutate(
+      { id: overrideRow.id, newNumber: newNumber.trim(), reason: reason.trim() || undefined },
+      { onSuccess: () => { setOverrideRow(null); setNewNumber(""); setReason(""); } },
+    );
+  };
+  const [voidRow, setVoidRow] = useState<Assignment | null>(null);
+  const [voidReason, setVoidReason] = useState("");
+  const submitVoid = () => {
+    if (!voidRow) return;
+    voidMut.mutate(
+      { id: voidRow.id, reason: voidReason.trim() || undefined },
+      { onSuccess: () => { setVoidRow(null); setVoidReason(""); } },
+    );
+  };
 
   return (
     <div className="space-y-3">
@@ -895,6 +1029,7 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
                 <th className="p-3 text-start">المعرف</th>
                 <th className="p-3 text-start">الحالة</th>
                 <th className="p-3 text-start">تاريخ الإصدار</th>
+                <th className="p-3 text-start">إجراءات</th>
               </tr>
             </thead>
             <tbody>
@@ -910,16 +1045,87 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
                     </Badge>
                   </td>
                   <td className="p-3 text-xs text-muted-foreground">{formatDateAr(r.issuedAt)}</td>
+                  <td className="p-3">
+                    {r.status !== "voided" && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost" size="sm" className="h-7 text-xs"
+                          onClick={() => { setOverrideRow(r); setNewNumber(r.number); setReason(""); }}
+                        >
+                          تعديل
+                        </Button>
+                        <Button
+                          variant="ghost" size="sm" className="h-7 text-xs text-status-error-foreground"
+                          onClick={() => { setVoidRow(r); setVoidReason(""); }}
+                        >
+                          إلغاء
+                        </Button>
+                      </div>
+                    )}
+                  </td>
                 </tr>
               ))}
               {rows.length === 0 && (
-                <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">
+                <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">
                   لا توجد أرقام مسجلة بهذه المعايير
                 </td></tr>
               )}
             </tbody>
           </table>
         </CardContent></Card>
+      )}
+
+      {overrideRow && (
+        <Card className="border-status-info-surface bg-status-info-surface/30">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">تعديل رقم #{overrideRow.id}</p>
+              <Button variant="ghost" size="sm" onClick={() => setOverrideRow(null)}>إغلاق</Button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label className="text-xs">الرقم الحالي</Label>
+                <Input value={overrideRow.number} disabled dir="ltr" className="font-mono" />
+              </div>
+              <div>
+                <Label className="text-xs">الرقم الجديد *</Label>
+                <Input value={newNumber} onChange={(e) => setNewNumber(e.target.value)} dir="ltr" className="font-mono" />
+              </div>
+              <div>
+                <Label className="text-xs">السبب</Label>
+                <Input value={reason} onChange={(e) => setReason(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={submitOverride} disabled={overrideMut.isPending || !newNumber.trim()} size="sm">
+                حفظ التعديل
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setOverrideRow(null)}>إلغاء</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {voidRow && (
+        <Card className="border-status-error-surface bg-status-error-surface/30">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">إلغاء رقم #{voidRow.id} ({voidRow.number})</p>
+              <Button variant="ghost" size="sm" onClick={() => setVoidRow(null)}>إغلاق</Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              سيتم تعليم الرقم كـ voided، ولن يُستخدم بعد ذلك. الإجراء قابل للتدقيق.
+            </p>
+            <Label className="text-xs">السبب</Label>
+            <Input value={voidReason} onChange={(e) => setVoidReason(e.target.value)} />
+            <div className="flex items-center gap-2">
+              <Button variant="destructive" size="sm" onClick={submitVoid} disabled={voidMut.isPending}>
+                تأكيد الإلغاء
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setVoidRow(null)}>تراجع</Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
