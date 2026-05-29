@@ -73,6 +73,18 @@ export default function UmrahImportWizard() {
     mutamers: { forward: Record<string, string>; targets: Record<string, string[]> };
     vouchers: { forward: Record<string, string>; targets: Record<string, string[]> };
   }>(["umrah-import-header-maps"], "/umrah/import/header-maps");
+  // Saved column-mapping presets for THIS operator + fileType. The
+  // dropdown lists them so a one-click pick replaces re-mapping every
+  // import. Refetches when fileType flips (vouchers ↔ mutamers).
+  const presetsQ = useApiQuery<{ data: Array<{ id: number; name: string; fileType: string; mapping: Record<string, string>; isDefault: boolean }> }>(
+    ["umrah-import-presets", fileType],
+    `/umrah/import/presets?fileType=${fileType}`,
+  );
+  const presets = presetsQ.data?.data ?? [];
+  const [selectedPresetId, setSelectedPresetId] = useState<string>("");
+  const [savingPreset, setSavingPreset] = useState<boolean>(false);
+  const [presetName, setPresetName] = useState<string>("");
+  const [makeDefault, setMakeDefault] = useState<boolean>(false);
   // GET /umrah/import/batches — history of prior imports so the user
   // can see what's already been ingested before adding a new batch.
   const batchesQ = useApiQuery<{ data: any[] }>(
@@ -144,20 +156,27 @@ export default function UmrahImportWizard() {
       });
       setParsedRows(rows);
 
-      // Detect headers + pre-fill the column mapping from the built-in
-      // dictionary for the current fileType. The operator opens the
-      // mapping step only when something needs to be hand-mapped.
+      // Detect headers + pre-fill the column mapping. Priority order:
+      //   1. Saved default preset for this user + fileType (highest)
+      //   2. Built-in Arabic dictionary fallback
+      //   3. Empty (operator must map)
+      // The mapping panel auto-opens only if at least one column ends
+      // up unmapped after both passes — zero typing when the preset
+      // covers everything.
       const headers = rows.length > 0 ? Object.keys(rows[0] ?? {}) : [];
       setDetectedHeaders(headers);
       const forward = headerMapsQ.data?.[fileType]?.forward ?? {};
+      const defaultPreset = presets.find((p) => p.isDefault);
       const auto: Record<string, string> = {};
       let unmapped = 0;
       for (const h of headers) {
-        const target = forward[h];
+        const fromPreset = defaultPreset?.mapping?.[h];
+        const target = fromPreset || forward[h];
         if (target) auto[h] = target;
         else { auto[h] = ""; unmapped++; }
       }
       setColumnMapping(auto);
+      if (defaultPreset) setSelectedPresetId(String(defaultPreset.id));
       // If anything is unmapped, open the mapping panel automatically so
       // the operator doesn't import garbage by accident.
       setShowMapping(unmapped > 0);
@@ -377,6 +396,101 @@ export default function UmrahImportWizard() {
                 automatically when at least one header isn't recognised. */}
             {fileName && parsedRows.length > 0 && showMapping && (
               <div className="rounded-lg border border-muted/40 p-3 bg-muted/10 space-y-2">
+                {/* Saved presets row — one click replaces re-mapping. */}
+                <div className="flex items-center gap-2 pb-2 border-b border-muted/40">
+                  <Label className="text-xs whitespace-nowrap">قالب محفوظ:</Label>
+                  <Select
+                    value={selectedPresetId}
+                    onValueChange={(v) => {
+                      setSelectedPresetId(v);
+                      const p = presets.find((x) => String(x.id) === v);
+                      if (!p) return;
+                      // Re-seed mapping from preset values, falling back
+                      // to built-in for headers the preset doesn't cover.
+                      const forward = headerMapsQ.data?.[fileType]?.forward ?? {};
+                      const next: Record<string, string> = {};
+                      for (const h of detectedHeaders) {
+                        next[h] = p.mapping[h] ?? forward[h] ?? "";
+                      }
+                      setColumnMapping(next);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 flex-1"><SelectValue placeholder="— بدون قالب —" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">— بدون قالب —</SelectItem>
+                      {presets.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>
+                          {p.name}{p.isDefault ? " ⭐" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSavingPreset(true)}
+                    rateLimitAware
+                  >
+                    حفظ كقالب
+                  </Button>
+                </div>
+
+                {/* Inline save form — appears when the operator clicks حفظ. */}
+                {savingPreset && (
+                  <div className="flex items-end gap-2 p-2 bg-status-info-surface/40 rounded">
+                    <div className="flex-1">
+                      <Label className="text-xs">اسم القالب</Label>
+                      <Input
+                        value={presetName}
+                        onChange={(e) => setPresetName(e.target.value)}
+                        placeholder="مثال: نسك_فواتير_شهري"
+                        className="h-8"
+                      />
+                    </div>
+                    <label className="flex items-center gap-1 text-xs whitespace-nowrap pb-1.5">
+                      <input
+                        type="checkbox"
+                        checked={makeDefault}
+                        onChange={(e) => setMakeDefault(e.target.checked)}
+                      />
+                      افتراضي
+                    </label>
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        if (!presetName.trim()) {
+                          toast({ variant: "destructive", title: "اسم القالب مطلوب" });
+                          return;
+                        }
+                        try {
+                          await apiFetch("/umrah/import/presets", {
+                            method: "POST",
+                            body: JSON.stringify({
+                              name: presetName.trim(),
+                              fileType,
+                              mapping: columnMapping,
+                              isDefault: makeDefault,
+                            }),
+                          });
+                          toast({ title: "تم حفظ القالب" });
+                          setSavingPreset(false);
+                          setPresetName("");
+                          setMakeDefault(false);
+                          presetsQ.refetch?.();
+                        } catch (err: any) {
+                          toast({ variant: "destructive", title: err?.message ?? "فشل الحفظ" });
+                        }
+                      }}
+                      rateLimitAware
+                    >
+                      حفظ
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setSavingPreset(false)}>
+                      إلغاء
+                    </Button>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium">ربط أعمدة الملف بحقول النظام</p>
