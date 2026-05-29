@@ -153,7 +153,7 @@ export default function JournalManualDetailPage() {
   // exposed for the rare case where the reviewer wants to skip the
   // review form and finalize the approval in one click (server runs
   // the same approval helper as `/review` but doesn't accept notes).
-  const directApproveMut = useApiMutation<{ approvalStatus: string }, Record<string, never>>(
+  const directApproveMut = useApiMutation<{ approvalStatus: string }, { approved: boolean }>(
     () => `/finance/journal-manual/${id}/approve`,
     "PATCH",
     invalidateKeys,
@@ -344,7 +344,7 @@ export default function JournalManualDetailPage() {
                 // direct PATCH /approve helper. Server enforces same
                 // permission, just doesn't accept notes.
                 if (e.shiftKey) {
-                  directApproveMut.mutate({});
+                  directApproveMut.mutate({ approved: true });
                   return;
                 }
                 approveMut.mutate({ approved: true });

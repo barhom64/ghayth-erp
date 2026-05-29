@@ -106,9 +106,13 @@ export default function OfficialLettersPage() {
   };
   // POST /umrah/letters/:id/dispatch — records that the operator
   // handed the printed letter to the consul/dispatched it externally.
-  // The dispatchMethod toggles between in-person delivery and courier
-  // pickup so the audit trail is unambiguous.
-  const dispatchUmrahLetterMut = useApiMutation<unknown, { id: number; dispatchMethod: string }>(
+  // `dispatchedVia` enum: print | email | whatsapp | courier | hand_delivery.
+  const dispatchUmrahLetterMut = useApiMutation<unknown, {
+    id: number;
+    dispatchedVia: "print" | "email" | "whatsapp" | "courier" | "hand_delivery";
+    recipient?: string;
+    notes?: string;
+  }>(
     (b) => `/umrah/letters/${b.id}/dispatch`,
     "POST",
     [["official-letters"]],
@@ -159,7 +163,7 @@ export default function OfficialLettersPage() {
                   variant="ghost"
                   size="sm"
                   className="h-7 text-xs"
-                  onClick={() => dispatchUmrahLetterMut.mutate({ id: l.id, dispatchMethod: "in_person" })}
+                  onClick={() => dispatchUmrahLetterMut.mutate({ id: l.id, dispatchedVia: "hand_delivery" })}
                   disabled={dispatchUmrahLetterMut.isPending || l.status !== "approved"}
                   rateLimitAware
                   title="تسليم الخطاب (تسجيل في السجل)"
