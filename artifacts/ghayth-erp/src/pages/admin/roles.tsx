@@ -2,7 +2,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { useFormContext } from "react-hook-form";
 import { useApiQuery, apiFetch } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -89,6 +89,65 @@ export default function AdminRolesPage() {
   // total count alongside the predefined system roles.
   const { data: allRolesData } = useApiQuery<any>(["admin-roles"], "/admin/roles");
   const allRolesCount = Number(allRolesData?.total ?? (allRolesData?.data?.length ?? 0));
+
+  // Admin-only role-permission CRUD.
+  //   GET    /admin/role-permissions          — list (filterable by role)
+  //   POST   /admin/role-permissions          — add a (role, permission) row
+  //   PUT    /admin/role-permissions/bulk     — replace all rows for a role atomically
+  //   DELETE /admin/role-permissions/:id      — drop one (role, permission) row
+  const [permRoleFilter, setPermRoleFilter] = useState("");
+  const rolePermsQ = useApiQuery<any>(
+    ["admin-role-permissions", permRoleFilter],
+    permRoleFilter
+      ? `/admin/role-permissions?role=${encodeURIComponent(permRoleFilter)}`
+      : "/admin/role-permissions",
+  );
+  const rolePermsRows: any[] = rolePermsQ.data?.data ?? [];
+  const [newPermRole, setNewPermRole] = useState("");
+  const [newPerm, setNewPerm] = useState("");
+  const handleAddPerm = async () => {
+    if (!newPermRole.trim() || !newPerm.trim()) return;
+    try {
+      await apiFetch("/admin/role-permissions", {
+        method: "POST",
+        body: JSON.stringify({ role: newPermRole.trim(), permission: newPerm.trim() }),
+      });
+      toast({ title: "أُضيفت الصلاحية" });
+      setNewPerm("");
+      rolePermsQ.refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل الإضافة", description: err?.message });
+    }
+  };
+  const handleDeletePerm = async (id: number) => {
+    try {
+      await apiFetch(`/admin/role-permissions/${id}`, { method: "DELETE" });
+      toast({ title: "حُذفت الصلاحية" });
+      rolePermsQ.refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل الحذف", description: err?.message });
+    }
+  };
+  const [bulkRole, setBulkRole] = useState("");
+  const [bulkPerms, setBulkPerms] = useState("");
+  const handleBulkReplace = async () => {
+    if (!bulkRole.trim()) return;
+    const perms = bulkPerms
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    try {
+      await apiFetch("/admin/role-permissions/bulk", {
+        method: "PUT",
+        body: JSON.stringify({ role: bulkRole.trim(), permissions: perms }),
+      });
+      toast({ title: `استُبدلت ${perms.length} صلاحية للدور` });
+      setBulkPerms("");
+      rolePermsQ.refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل الاستبدال", description: err?.message });
+    }
+  };
   const predefinedRoles: any[] = predefinedData?.data || [];
   const roleModulesMap = new Map<string, string[]>(
     (roleModulesData?.data || []).map((r: any) => [r.roleKey, Array.isArray(r.modules) ? r.modules : []])
@@ -377,6 +436,103 @@ export default function AdminRolesPage() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">صلاحيات الأدوار (إدارة منخفضة المستوى)</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            تحرير مباشر لصلاحيات الأدوار في قاعدة بيانات الصلاحيات. الاستبدال الجماعي يستخدم معاملة واحدة لتجنّب وجود حالة وسطية.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3 text-xs">
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="text-[10px] text-muted-foreground">فلتر حسب الدور</label>
+              <input
+                value={permRoleFilter}
+                onChange={(e) => setPermRoleFilter(e.target.value)}
+                dir="ltr"
+                className="w-full h-7 px-2 border rounded text-xs"
+                placeholder="role_key (اتركه فارغاً لرؤية الكل)"
+              />
+            </div>
+            <span className="text-muted-foreground">{rolePermsRows.length} صلاحية</span>
+          </div>
+
+          <div className="border rounded">
+            <div className="max-h-48 overflow-y-auto divide-y">
+              {rolePermsRows.slice(0, 50).map((p: any) => (
+                <div key={p.id} className="px-2 py-1 flex items-center justify-between">
+                  <span className="font-mono text-[10px]">
+                    {p.role} <span className="text-muted-foreground">→</span> {p.permission}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePerm(p.id)}
+                    className="text-[10px] text-status-error-foreground"
+                  >
+                    حذف
+                  </button>
+                </div>
+              ))}
+              {rolePermsRows.length === 0 && (
+                <p className="text-muted-foreground p-2 text-center">لا توجد صلاحيات مطابقة</p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="p-3 border rounded bg-surface-subtle/30 space-y-2">
+              <p className="text-xs font-semibold">إضافة صلاحية واحدة</p>
+              <input
+                value={newPermRole}
+                onChange={(e) => setNewPermRole(e.target.value)}
+                placeholder="role"
+                dir="ltr"
+                className="w-full h-7 px-2 border rounded text-xs"
+              />
+              <input
+                value={newPerm}
+                onChange={(e) => setNewPerm(e.target.value)}
+                placeholder="permission"
+                dir="ltr"
+                className="w-full h-7 px-2 border rounded text-xs"
+              />
+              <button
+                type="button"
+                className="text-xs h-7 px-3 rounded bg-status-info-foreground text-white"
+                onClick={handleAddPerm}
+              >
+                إضافة
+              </button>
+            </div>
+            <div className="p-3 border rounded bg-surface-subtle/30 space-y-2">
+              <p className="text-xs font-semibold">استبدال جماعي لدور</p>
+              <input
+                value={bulkRole}
+                onChange={(e) => setBulkRole(e.target.value)}
+                placeholder="role"
+                dir="ltr"
+                className="w-full h-7 px-2 border rounded text-xs"
+              />
+              <textarea
+                value={bulkPerms}
+                onChange={(e) => setBulkPerms(e.target.value)}
+                placeholder={"perm1\nperm2,perm3"}
+                dir="ltr"
+                className="w-full h-16 px-2 py-1 border rounded text-xs font-mono"
+              />
+              <button
+                type="button"
+                className="text-xs h-7 px-3 rounded bg-status-warning-foreground text-white"
+                onClick={handleBulkReplace}
+              >
+                استبدال
+              </button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

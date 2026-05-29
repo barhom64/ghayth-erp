@@ -41,6 +41,13 @@ export default function PurchaseOrdersCreate() {
   const { toast } = useToast();
   const { selectedBranchId, selectedCompanyIds } = useAppContext();
   const createMut = useApiMutation("/finance/purchase-requests", "POST", [["purchase-orders"], ["purchase-requests"]]);
+  // POST /finance/purchase-orders — bypass the request → approval →
+  // PO workflow and create a PO directly. Available to operators with
+  // the `finance:purchase:direct-po` permission (server enforces); used
+  // for emergency procurement where waiting for the request loop would
+  // block operations.
+  const createDirectMut = useApiMutation("/finance/purchase-orders", "POST", [["purchase-orders"]]);
+  const [createMode, setCreateMode] = useState<"request" | "direct">("request");
   const { data: productsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["warehouse-products"], "/warehouse/products");
   const products = productsData?.data || [];
   const { data: copySource } = useApiQuery<any>(["po-copy", copyFromId || ""], `/finance/purchase-orders/${copyFromId}`, !!copyFromId);
@@ -103,7 +110,8 @@ export default function PurchaseOrdersCreate() {
       return;
     }
     try {
-      await createMut.mutateAsync({
+      const submitMut = createMode === "direct" ? createDirectMut : createMut;
+      await submitMut.mutateAsync({
         supplierId: form.supplierId ? Number(form.supplierId) : undefined,
         notes: form.notes || undefined,
         branchId: form.branchId ? Number(form.branchId) : undefined,
@@ -245,11 +253,21 @@ export default function PurchaseOrdersCreate() {
       )}
 
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
-      <div className="flex justify-end gap-3 pt-6">
-        <Button variant="outline" onClick={() => setLocation("/finance/purchase-orders")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
-          {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
-        </Button>
+      <div className="flex items-center justify-between gap-3 pt-6">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={createMode === "direct"}
+            onChange={(e) => setCreateMode(e.target.checked ? "direct" : "request")}
+          />
+          إنشاء أمر شراء مباشر (تخطّي مسار الموافقة)
+        </label>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={() => setLocation("/finance/purchase-orders")}>إلغاء</Button>
+          <Button onClick={handleSubmit} disabled={createMut.isPending || createDirectMut.isPending} rateLimitAware>
+            {(createMut.isPending || createDirectMut.isPending) ? "جاري الحفظ..." : (createMode === "direct" ? "إنشاء PO مباشر" : "حفظ")}
+          </Button>
+        </div>
       </div>
     </CreatePageLayout>
   );

@@ -88,16 +88,27 @@ export default function PurchaseRequestsPage() {
 
   // POST /finance/purchase-requests/:id/convert-to-po — convert an
   // approved PR into a purchase order. POST /:id/convert is the legacy
-  // alias (kept for back-compat). The "تحويل إلى PO" button appears
-  // only on approved rows; backend enforces the same gate.
+  // alias kept for back-compat — we expose it as a fallback that the
+  // operator can shift-click into when the new flow rejects (e.g.,
+  // contract attachment validation that the legacy route doesn't run).
   const convertMut = useApiMutation<unknown, { id: number; expectedDelivery?: string; notes?: string }>(
     (b) => `/finance/purchase-requests/${b.id}/convert-to-po`,
     "POST",
     [["purchase-requests"], ["purchase-orders"]],
     { successMessage: "تم تحويل الطلب إلى أمر شراء" },
   );
+  const convertLegacyMut = useApiMutation<unknown, { id: number }>(
+    (b) => `/finance/purchase-requests/${b.id}/convert`,
+    "POST",
+    [["purchase-requests"], ["purchase-orders"]],
+    { successMessage: "تم التحويل (المسار القديم)" },
+  );
 
-  const handleConvert = (id: number) => {
+  const handleConvert = (id: number, useLegacy = false) => {
+    if (useLegacy) {
+      convertLegacyMut.mutate({ id });
+      return;
+    }
     const notes = window.prompt("ملاحظات (اختياري):") ?? "";
     convertMut.mutate({ id, notes: notes.trim() || undefined });
   };
@@ -208,10 +219,10 @@ export default function PurchaseRequestsPage() {
                 variant="ghost"
                 size="sm"
                 className="h-7 text-xs text-purple-700"
-                onClick={() => handleConvert(r.id)}
-                disabled={convertMut.isPending}
+                onClick={(e) => handleConvert(r.id, e.shiftKey)}
+                disabled={convertMut.isPending || convertLegacyMut.isPending}
                 rateLimitAware
-                title="تحويل مباشر إلى PO"
+                title="تحويل مباشر إلى PO (Shift = المسار القديم)"
               >
                 <ArrowRight className="h-3 w-3 me-1" /> تحويل سريع
               </Button>
