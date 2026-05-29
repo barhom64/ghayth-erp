@@ -471,7 +471,7 @@ export default function DisciplineMemoDetailPage() {
         actions={
         <div className="flex items-center gap-2">
           headerActions
-          <PrintButton entityType="discipline_memo" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="discipline_memo" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
         overview={overview}

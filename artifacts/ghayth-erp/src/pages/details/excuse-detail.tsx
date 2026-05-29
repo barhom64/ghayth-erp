@@ -213,7 +213,7 @@ export default function ExcuseDetail() {
             <EntityPrintButton
               entityType="excuse"
               entityId={id ?? 0}
-              formats={["a4"]}/>
+             />
           )}
           <GuardedButton
             perm="hr:update"

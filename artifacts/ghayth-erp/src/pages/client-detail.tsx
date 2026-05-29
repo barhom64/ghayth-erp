@@ -766,7 +766,7 @@ export default function ClientDetail() {
             <EntityPrintButton
               entityType="client"
               entityId={client.id ?? params?.id}
-              formats={["a4"]}
+             
             />
           )}
           {client && (client.email || client.phone) && (

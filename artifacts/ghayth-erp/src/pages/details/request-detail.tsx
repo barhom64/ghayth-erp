@@ -308,7 +308,7 @@ export default function RequestDetail() {
               <EntityPrintButton
                 entityType="request"
                 entityId={id ?? 0}
-                formats={["a4"]}/>
+               />
             )}
             <GuardedButton
               perm="requests:write"

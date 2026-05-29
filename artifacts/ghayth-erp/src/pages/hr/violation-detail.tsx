@@ -255,7 +255,7 @@ export default function ViolationDetail() {
       actions={
         <div className="flex items-center gap-2">
           <Badge className={cn("text-sm px-3 py-1", severity.color)}>{severity.label}</Badge>
-          <PrintButton entityType="discipline_memo" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="discipline_memo" entityId={(id as any) ?? 0} label="طباعة" />
           <DetailActionButtons hook={editDelete} editPerm="hr:approve" deletePerm="hr:delete" />
         </div>
       }

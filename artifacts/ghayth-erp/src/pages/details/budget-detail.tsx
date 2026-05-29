@@ -294,7 +294,7 @@ export default function BudgetDetail() {
           <EntityPrintButton
             entityType="budget"
             entityId={id ?? 0}
-            formats={["a4"]}/>
+           />
           <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
         </>
       }

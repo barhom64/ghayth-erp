@@ -321,7 +321,7 @@ export default function UmrahInvoiceDetail() {
             <EntityPrintButton
               entityType="umrah_invoice"
               entityId={invoice.id ?? id}
-              formats={["a4"]}/>
+             />
           )}
         </div>
       }

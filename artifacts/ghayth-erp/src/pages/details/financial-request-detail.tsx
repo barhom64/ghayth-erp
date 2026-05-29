@@ -223,7 +223,7 @@ export default function FinancialRequestDetail() {
           <EntityPrintButton
             entityType="purchase_request"
             entityId={item?.id ?? id}
-            formats={["a4"]}/>
+           />
         </>
       }
     />

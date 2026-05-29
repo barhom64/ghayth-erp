@@ -225,7 +225,7 @@ export default function WarehouseSupplierDetail() {
             <EntityPrintButton
               entityType="vendor"
               entityId={id ?? 0}
-              formats={["a4"]}/>
+             />
           )}
           <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={() => setEditOpen(true)} disabled={!supplier}>
             <Edit className="h-4 w-4 ms-1" /> تعديل

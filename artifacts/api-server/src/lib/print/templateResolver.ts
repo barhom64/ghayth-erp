@@ -3477,7 +3477,10 @@ function buildAccountStatementPreset(): PrintTemplate {
  *  the SPA uses on detail/list pages so the printed doc reads the same as
  *  the screen. Anything not in the map falls back to the raw entityType,
  *  which is rare now that every common type has a bespoke preset. */
-const ARABIC_TITLES: Record<string, string> = {
+/** Exported so printService can pre-fill `data.entity.title` when the
+ *  caller hasn't supplied one — the universalFallback template references
+ *  `{{entity.title}}` instead of baking the title at template-build time. */
+export const ARABIC_TITLES: Record<string, string> = {
   invoice: "فاتورة ضريبية", sales_invoice: "فاتورة مبيعات",
   credit_note: "إشعار دائن", pos_receipt: "إيصال نقطة بيع",
   receipt_voucher: "سند قبض", payment_voucher: "سند صرف",
@@ -3553,9 +3556,15 @@ function universalFallback(entityType: string): PrintTemplate {
     paperSize: "A4",
     mode: "preset",
     presetKey: "universal",
+    // Title token resolution: printService sets `data.entity.title` to the
+    // caller-supplied value when present, else the ARABIC_TITLES lookup, so
+    // by the time substitute() runs there's always a usable title in
+    // entity.title. Without that defaulting, the 37 report types whose
+    // entityType is not in ARABIC_TITLES (report_print_log, report_ar_aging,
+    // …) rendered the raw snake_case slug in the printed header.
     htmlContent: `<div class="print-doc">
 {{branch.letterhead}}
-<h2 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">${title}</h2>
+<h2 style="text-align:center;margin:16px 0;padding-bottom:8px;border-bottom:2px solid #334155">{{entity.title}}</h2>
 <div class="meta-grid">
   <div><strong>المرجع:</strong> {{entity.ref}}</div>
   <div><strong>التاريخ:</strong> {{entity.date}}</div>

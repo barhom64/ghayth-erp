@@ -276,7 +276,7 @@ export default function InsuranceDetail() {
             <EntityPrintButton
               entityType="insurance"
               entityId={id ?? 0}
-              formats={["a4"]}/>
+             />
           )}
           <DetailActionButtons hook={editDelete} editPerm="fleet:update" deletePerm="fleet:delete" />
         </>

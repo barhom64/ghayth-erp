@@ -339,7 +339,7 @@ export default function TicketDetail() {
       overview={overview}
       actions={
         <div className="flex items-center gap-2">
-          <PrintButton entityType="support_ticket" entityId={id ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="support_ticket" entityId={id ?? 0} label="طباعة" />
           {deleting ? (
             <div className="flex gap-2">
               <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
