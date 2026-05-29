@@ -1,4 +1,5 @@
 import { useApiQuery, asList } from "@/lib/api";
+import { LegalTabsNav } from "@/components/shared/legal-tabs-nav";
 import {
   DataTable,
   type DataTableColumn,
@@ -45,6 +46,7 @@ export default function LegalCorrespondence() {
       breadcrumbs={[{ href: "/legal", label: "الشؤون القانونية" }, { label: "المراسلات القانونية" }]}
       loading={isLoading}
     >
+      <LegalTabsNav />
       <AdvancedFilters config={{ searchPlaceholder: "بحث...", showDateRange: false }} values={filters} onChange={setFilters} resultCount={filtered.length} />
       <DataTable
         columns={columns}

@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useApiQuery, asList } from "@/lib/api";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -212,6 +213,7 @@ export default function PropertiesBuildings() {
         ) : undefined
       }
     >
+      <PropertyTabsNav />
       <KpiGrid items={kpis} />
 
       <AdvancedFilters

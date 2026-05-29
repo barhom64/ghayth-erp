@@ -176,7 +176,6 @@ const allNavSections: NavSection[] = [
       { label: "الامتثال السعودي", path: "/hr/saudization", icon: Flag, module: "hr", children: [
         { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees" },
         { label: "WPS / مدد / بنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll" },
-        { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
       ]},
       { label: "الأداء والتطوير", path: "/hr/performance", icon: Target, module: "hr", children: [
         { label: "تقييم الأداء", path: "/hr/performance", icon: Target, subKey: "performance" },
@@ -243,7 +242,6 @@ const allNavSections: NavSection[] = [
         { label: "موزّع التكاليف", path: "/finance/expenses/split", icon: Layers },
         { label: "تحويل بين الحسابات", path: "/finance/treasury/transfer", icon: ArrowLeftRight },
         { label: "المقبوضات", path: "/finance/receivables", icon: DollarSign },
-        { label: "تسجيل دفعة عميل", path: "/finance/receivables/receipt", icon: DollarSign },
         { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
         { label: "دفعات مقدمة من العملاء", path: "/finance/customer-advances", icon: ArrowLeftRight },
         { label: "منضدة الدفعات المقدمة", path: "/finance/customer-advances-workbench", icon: Briefcase },
@@ -266,8 +264,6 @@ const allNavSections: NavSection[] = [
         { label: "الخزينة", path: "/finance/treasury", icon: Wallet },
         { label: "التسوية البنكية", path: "/finance/bank-reconciliation", icon: Building },
         { label: "ورقة عمل تسوية حساب", path: "/finance/account-recon-workpaper", icon: FileSignature },
-        { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
-        { label: "منضدة التحصيل", path: "/finance/ar-collection-workbench", icon: Users },
         { label: "كشف حساب عميل للطباعة", path: "/finance/customer-statement-print", icon: Printer },
         { label: "ملف العميل 360°", path: "/finance/customer-360-sheet", icon: Users },
         { label: "مخاطر العملاء", path: "/finance/customer-risk", icon: AlertTriangle },
@@ -301,9 +297,7 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "التكاليف والتسويات", path: "/finance/project-costing", icon: FolderOpen, module: "finance", children: [
         { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
-        { label: "محفظة المشاريع", path: "/finance/project-portfolio", icon: BarChart3 },
         { label: "محفظة المركبات", path: "/finance/vehicle-portfolio", icon: BarChart3 },
-        { label: "محفظة العقارات", path: "/finance/property-portfolio", icon: BarChart3 },
         { label: "Cost Center P&L", path: "/finance/cost-center-pnl", icon: BarChart3 },
         { label: "تقييم المخزون", path: "/finance/inventory-costing", icon: Package },
         { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
@@ -325,9 +319,6 @@ const allNavSections: NavSection[] = [
         { label: "قائمة التدفقات النقدية", path: "/finance/reports/cash-flow-statement", icon: Banknote },
         { label: "Y/Y Comparison", path: "/finance/reports/yoy", icon: BarChart2 },
         { label: "معدل الحرق", path: "/finance/expense-burn-rate", icon: Activity },
-        { label: "محلل الإيرادات", path: "/finance/revenue-mix", icon: BarChart3 },
-        { label: "محلل المصاريف", path: "/finance/expense-mix", icon: BarChart3 },
-        { label: "DSO Trend", path: "/finance/reports/dso-trend", icon: Activity },
         { label: "GL Health Score", path: "/finance/gl-health", icon: ShieldAlert },
       ]},
       { label: "صناديق الواردات", path: "/finance/approvals-inbox", icon: Bell, module: "finance", children: [
@@ -341,8 +332,8 @@ const allNavSections: NavSection[] = [
       // 1297, 1304, 1307, 1309, 1311). الترابط بينها مكتمل عبر AllocationTabsNav
       // و AllocationHealthCard، وهذا المدخل في القائمة الجانبية يخلي الكلستر
       // قابلاً للوصول من أي صفحة في النظام (ليس من finance فقط).
-      { label: "محرك التوجيه المحاسبي", path: "/finance/settings-hub", icon: Network, module: "finance", children: [
-        { label: "مركز الإعدادات", path: "/finance/settings-hub", icon: Settings },
+      { label: "محرك التوجيه المحاسبي", path: "/finance/settings", icon: Network, module: "finance", children: [
+        { label: "مركز الإعدادات", path: "/finance/settings", icon: Settings },
         { label: "قواعد التوجيه", path: "/finance/allocation-rules", icon: Network },
         { label: "كتالوج المنتجات", path: "/finance/product-catalog", icon: Package },
         { label: "تشخيص التغطية", path: "/finance/allocation-coverage", icon: Target },
@@ -585,6 +576,8 @@ const allNavSections: NavSection[] = [
         { label: "السياسات والحوكمة", path: "/admin/policy-engine", icon: Shield, children: [
           { label: "محرك السياسات", path: "/admin/policy-engine", icon: Shield, perm: "admin:update" },
           { label: "تجاوزات الموافقات", path: "/admin/approval-overrides", icon: Bell, perm: "admin:update" },
+          { label: "حماية البيانات (PDPL)", path: "/admin/pdpl", icon: Shield, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "التوقيع الرقمي", path: "/admin/digital-signature", icon: FileSignature, perm: ["admin:list", "admin:view"], permMode: "any" },
         ]},
         { label: "تشخيص محاسبي وطباعة", path: "/admin/gl-reconciliation", icon: ShieldAlert, children: [
           { label: "تسوية GL", path: "/admin/gl-reconciliation", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
@@ -601,6 +594,8 @@ const allNavSections: NavSection[] = [
           { label: "تشخيص التكاملات", path: "/admin/integrations-diagnostics", icon: Activity, perm: "admin:update" },
           { label: "مراجعات ZATCA", path: "/admin/zatca-audits", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "حوكمة الذكاء الاصطناعي", path: "/admin/ai-governance", icon: Brain, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "مختبر الذكاء", path: "/admin/intelligence-playground", icon: Brain, perm: "admin:update" },
+          { label: "استيراد البيانات", path: "/admin/data-import", icon: FilePlus, perm: "admin:update" },
         ]},
         { label: "سجلات التدقيق", path: "/admin/logs", icon: ScrollText, children: [
           { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any" },

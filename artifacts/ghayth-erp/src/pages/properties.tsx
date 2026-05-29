@@ -14,6 +14,7 @@ import {
   exportToCSV,
 } from "@workspace/ui-core";
 import { useApiQuery, asList } from "@/lib/api";
+import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { Building, Building2, Plus, Eye, Home, DollarSign } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { KpiGrid } from "@/components/shared/kpi-card";
@@ -110,6 +111,7 @@ export default function Properties() {
         ) : null
       }
     >
+      <PropertyTabsNav />
       <KpiGrid items={[
         { label: "إجمالي العقارات", value: stats?.totalUnits || 0, icon: Building2, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "وحدات شاغرة", value: stats?.available || 0, icon: Home, color: "text-emerald-600 bg-emerald-50" },

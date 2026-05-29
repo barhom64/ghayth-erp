@@ -25,6 +25,7 @@ import {
 import { EntityComments } from "@workspace/entity-kit";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { SupportTabsNav } from "@/components/shared/support-tabs-nav";
 import { z } from "zod";
 import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Star, ThumbsUp, CheckCircle, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -144,6 +145,7 @@ function Support() {
         </Link>
       }
     >
+      <SupportTabsNav />
       <KpiGrid items={[
         { label: "إجمالي التذاكر", value: stats?.totalTickets || 0, icon: Headphones, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "مفتوحة", value: stats?.openTickets || 0, icon: Clock, color: "text-status-warning-foreground bg-status-warning-surface" },
