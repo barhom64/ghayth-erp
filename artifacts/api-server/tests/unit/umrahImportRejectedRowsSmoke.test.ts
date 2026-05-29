@@ -136,7 +136,11 @@ describe("import-wizard UI — rejected rows table + CSV download", () => {
     expect(WIZARD).toMatch(/replace\(\/"\/g,\s*'""'\)/);
   });
 
-  it("file name encodes fileType + ISO date so multiple downloads don't collide", () => {
-    expect(WIZARD).toMatch(/umrah-rejected-\$\{fileType\}-\$\{new Date\(\)\.toISOString\(\)\.slice\(0,\s*10\)\}\.csv/);
+  it("file name encodes fileType + Riyadh-local date so multiple downloads don't collide", () => {
+    // todayLocal() (not new Date().toISOString().slice(0,10)) is the
+    // project's Riyadh-aware day helper — the guard's check:utc-time-drift
+    // step rejects the UTC variant.
+    expect(WIZARD).toMatch(/umrah-rejected-\$\{fileType\}-\$\{todayLocal\(\)\}\.csv/);
+    expect(WIZARD).toMatch(/import \{[^}]*todayLocal[^}]*\} from "@\/lib\/formatters"/);
   });
 });

@@ -14,7 +14,7 @@ import { SearchableSelect } from "@/components/shared/searchable-select";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
-import { formatNumber } from "@/lib/formatters";
+import { formatNumber, todayLocal } from "@/lib/formatters";
 import { Upload, CheckCircle2, AlertTriangle, Link2, ArrowRight, FileSpreadsheet, AlertOctagon } from "lucide-react";
 
 type FileType = "mutamers" | "vouchers";
@@ -77,7 +77,7 @@ function downloadRejectedRowsCsv(
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `umrah-rejected-${fileType}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `umrah-rejected-${fileType}-${todayLocal()}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
