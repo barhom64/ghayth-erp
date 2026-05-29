@@ -969,7 +969,7 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400'
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' ${dateFilter}
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, e.name
        ORDER BY je."createdAt" DESC
@@ -985,7 +985,7 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1410'
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'ADV%' ${dateFilter}
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, e.name
        ORDER BY je."createdAt" DESC
@@ -1040,7 +1040,7 @@ reportsRouter.get("/reports/expenses-analysis", authorize({ feature: "finance.re
        JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa.type = 'expense'
        LEFT JOIN branches b ON b.id = je."branchId"
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
-       LEFT JOIN employees e ON e.id = ea."employeeId"
+       LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
        WHERE jl.debit > jl.credit AND jl."deletedAt" IS NULL
        GROUP BY ${groupCol}
        ORDER BY amount DESC

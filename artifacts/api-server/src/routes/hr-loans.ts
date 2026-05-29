@@ -216,7 +216,7 @@ router.get("/loans", authorize({ feature: "hr.loans", action: "list" }), async (
        FROM hr_employee_loans l
        JOIN employee_assignments ea ON ea.id = l."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        WHERE ${where}
        ORDER BY l."createdAt" DESC
        LIMIT 500`,
@@ -304,7 +304,7 @@ router.get("/loans/:id", authorize({ feature: "hr.loans", action: "view" }), asy
        FROM hr_employee_loans l
        JOIN employee_assignments ea ON ea.id = l."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        WHERE l.id = $1 AND l."companyId" = $2 AND l."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
