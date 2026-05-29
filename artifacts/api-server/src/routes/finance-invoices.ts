@@ -1790,14 +1790,16 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     let invoiceRef!: string;
     let newPaid!: number;
     let newStatus!: string;
+    let invoiceClientId: number | undefined;
     await withTransaction(async (client) => {
       const invRes = await client.query(
-        `SELECT id, total, "paidAmount", status, ref FROM invoices
+        `SELECT id, total, "paidAmount", status, ref, "clientId" FROM invoices
          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL FOR UPDATE`,
         [id, scope.companyId]
       );
       const invoice = invRes.rows[0];
       if (!invoice) throw new NotFoundError("الفاتورة غير موجودة");
+      invoiceClientId = (invoice.clientId as number | null) ?? undefined;
 
       const lockedStatuses = ["paid", "closed", "cancelled"];
       if (lockedStatuses.includes(invoice.status)) {
@@ -1872,8 +1874,12 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
       sourceId: id,
       sourceKey: `finance:payment:${id}:${paidScaled}`,
       lines: [
-        { accountCode: cashAccountCode, debit: paymentAmount, credit: 0 },
-        { accountCode: arAccountCode, debit: 0, credit: paymentAmount },
+        // Both legs carry clientId so per-customer cash inflow + AR
+        // clearing reports drill cleanly from the GL — without this
+        // the payment was attributable on the invoice header only,
+        // not on the GL line.
+        { accountCode: cashAccountCode, debit: paymentAmount, credit: 0, clientId: invoiceClientId },
+        { accountCode: arAccountCode, debit: 0, credit: paymentAmount, clientId: invoiceClientId },
       ],
       guardTable: "invoices",
       guardId: id,
