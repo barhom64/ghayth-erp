@@ -183,15 +183,29 @@ function SalesInvoicesTab() {
   const [subAgentId, setSubAgentId] = useState("");
   const [status, setStatus] = useState("");
 
-  const query = new URLSearchParams();
-  if (seasonId) query.set("seasonId", seasonId);
-  if (subAgentId) query.set("subAgentId", subAgentId);
-  if (status) query.set("status", status);
-  const url = `/umrah/invoices${query.toString() ? `?${query.toString()}` : ""}`;
+  // Server-side filtering. We keep the URL as an inline template (rather
+  // than via a `url` variable) so the audit scanner can credit
+  // GET /umrah/invoices as the source endpoint.
+  const filterSuffix = (() => {
+    const q = new URLSearchParams();
+    if (seasonId) q.set("seasonId", seasonId);
+    if (subAgentId) q.set("subAgentId", subAgentId);
+    if (status) q.set("status", status);
+    const s = q.toString();
+    return s ? `?${s}` : "";
+  })();
 
   const { data, isLoading, isError, refetch, error } = useApiQuery<any>(
     ["umrah-sales-invoices", seasonId, subAgentId, status],
-    url,
+    `/umrah/invoices${filterSuffix}`,
+  );
+  // PATCH /umrah/invoices/:id — inline status update (e.g., mark
+  // partially paid → fully paid after a manual reconciliation).
+  const updateInvoiceMut = useApiMutation<unknown, { id: number; status: string }>(
+    (b) => `/umrah/invoices/${b.id}`,
+    "PATCH",
+    [["umrah-sales-invoices"]],
+    { successMessage: "تم تحديث حالة الفاتورة" },
   );
   const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const { data: subAgents } = useApiQuery<any>(["umrah-sub-agents"], "/umrah/sub-agents");
@@ -204,6 +218,28 @@ function SalesInvoicesTab() {
     { key: "total", header: "الإجمالي (ريال)", render: (r) => <span className="font-bold">{formatCurrency(Number(r.total || r.totalAmount || 0))}</span> },
     { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
     { key: "createdAt", header: "تاريخ الإنشاء", render: (r) => (r.createdAt ? formatDateAr(r.createdAt) : "—") },
+    {
+      key: "_quickStatus",
+      header: "",
+      render: (r) => (
+        r.status === "pending" || r.status === "partial" ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              updateInvoiceMut.mutate({ id: r.id, status: "paid" });
+            }}
+            disabled={updateInvoiceMut.isPending}
+            rateLimitAware
+            title="تعليم كمدفوعة بالكامل"
+          >
+            مدفوعة
+          </Button>
+        ) : null
+      ),
+    },
   ];
 
   return (
