@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,7 @@ export default function UmrahSeasons() {
       loading={isLoading}
       actions={<GuardedButton perm="umrah:create" onClick={() => setShowForm(!showForm)} className="gap-2"><Plus className="h-4 w-4" />موسم جديد</GuardedButton>}
     >
+      <UmrahTabsNav />
       <div className="flex gap-3 text-sm text-muted-foreground">
         <span><span className="font-bold text-foreground">{items.length}</span> إجمالي المواسم</span>
         <span>•</span>

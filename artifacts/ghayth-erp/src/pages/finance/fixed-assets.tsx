@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -121,6 +122,7 @@ export default function FixedAssetsPage() {
         </>
       }
     >
+      <FinanceTabsNav />
       <KpiGrid items={[
         { label: "إجمالي الأصول", value: formatNumber(assets.length), icon: Building2, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "نشطة", value: formatNumber(assets.filter((a: any) => a.status === "active").length), icon: PackageCheck, color: "text-status-success-foreground bg-status-success-surface" },
