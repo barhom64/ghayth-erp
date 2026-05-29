@@ -263,8 +263,8 @@ export default function FleetTelematicsSettings() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="cmsv6">CMSV6 / Eastyle</SelectItem>
-                <SelectItem value="wialon">Wialon</SelectItem>
-                <SelectItem value="teltonika">Teltonika</SelectItem>
+                <SelectItem value="wialon" disabled>Wialon — قريباً</SelectItem>
+                <SelectItem value="teltonika" disabled>Teltonika — قريباً</SelectItem>
                 <SelectItem value="manual">يدوي</SelectItem>
               </SelectContent>
             </Select>
