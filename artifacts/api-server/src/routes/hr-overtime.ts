@@ -163,7 +163,7 @@ router.get("/overtime", authorize({ feature: "hr.overtime", action: "list" }), a
        FROM hr_overtime_requests o
        JOIN employee_assignments ea ON ea.id = o."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        WHERE ${where}
        ORDER BY o."overtimeDate" DESC, o."createdAt" DESC
        LIMIT 500`,
@@ -280,7 +280,7 @@ router.get("/overtime/:id", authorize({ feature: "hr.overtime", action: "view" }
        FROM hr_overtime_requests o
        JOIN employee_assignments ea ON ea.id = o."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
-       LEFT JOIN branches b ON b.id = ea."branchId"
+       LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        WHERE o.id = $1 AND o."companyId" = $2 AND o."deletedAt" IS NULL`,
       [id, scope.companyId]
     );

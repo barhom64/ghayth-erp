@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { useSearch } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
@@ -45,6 +46,13 @@ export default function FleetTelematicsLiveMap() {
     ["fleet-telematics-live"],
     "/fleet/telematics/live",
   );
+  // Live view: positions are updated by the CMSV6 poller every 30s
+  // (configurable per integration). Match that cadence so the operator
+  // sees fresh data without manually clicking refresh.
+  useEffect(() => {
+    const t = setInterval(() => refetch(), 30_000);
+    return () => clearInterval(t);
+  }, [refetch]);
   const allRows = asList(data) as LiveRow[];
   const rows = vehicleIdFilter
     ? allRows.filter((r) => String(r.vehicleId) === vehicleIdFilter)
