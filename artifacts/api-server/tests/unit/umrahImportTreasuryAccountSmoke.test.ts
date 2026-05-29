@@ -58,7 +58,10 @@ describe("umrahImportEngine — ImportScope cash-box + account override (gaps #2
 
 describe("umrah route — /import/vouchers now wires through the engine", () => {
   it("imports confirmVouchersImport from the engine", () => {
-    expect(ROUTE).toMatch(/import \{ confirmVouchersImport \}/);
+    // The named import may be a single line OR part of a multi-line
+    // block that also pulls in preview functions (gap #5 follow-up).
+    // Match either shape.
+    expect(ROUTE).toMatch(/import\s*\{[\s\S]{0,400}\bconfirmVouchersImport\b[\s\S]{0,400}\}\s*from\s*"\.\.\/lib\/umrahImportEngine\.js"/);
   });
 
   it("importVouchersSchema accepts optional treasuryId + purchaseAccountCode", () => {
