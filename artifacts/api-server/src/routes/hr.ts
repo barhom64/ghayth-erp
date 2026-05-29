@@ -3689,17 +3689,14 @@ router.patch("/approval-requests/:id/decide", authorize({ feature: "hr.organizat
 
       // Cancel any queued email/WhatsApp dispatches for a rejected official
       // letter — otherwise the queue workers will send it after it was denied.
+      // Phase 4 final contract: one UPDATE against the unified
+      // outbound_queue covers email + whatsapp in one go.
       if (request.refType === "official_letter") {
         await rawExecute(
-          `UPDATE email_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
+          `UPDATE outbound_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
             WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
           [request.refId, scope.companyId]
-        ).catch((e) => logger.error(e, "cancel email_queue for rejected letter failed:"));
-        await rawExecute(
-          `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
-            WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
-          [request.refId, scope.companyId]
-        ).catch((e) => { logger.warn(e, "hr whatsapp_queue insert failed (table may not exist)"); });
+        ).catch((e) => logger.error(e, "cancel outbound_queue for rejected letter failed:"));
       }
     }
 
@@ -4802,18 +4799,14 @@ router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organizat
     }
 
     // If the letter was rejected or returned, cancel any queued dispatches
-    // so the queue worker doesn't send it after the fact.
+    // so the queue worker doesn't send it after the fact. Phase 4 final
+    // contract: one UPDATE against the unified outbound_queue.
     if (newStatus === "rejected" || newStatus === "returned") {
       await rawExecute(
-        `UPDATE email_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
+        `UPDATE outbound_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
           WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
         [Number(id), scope.companyId]
-      ).catch((e) => logger.error(e, "cancel email_queue for rejected letter failed:"));
-      await rawExecute(
-        `UPDATE whatsapp_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
-          WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
-        [Number(id), scope.companyId]
-      ).catch((e) => { logger.warn(e, "hr whatsapp_queue insert failed (table may not exist)"); });
+      ).catch((e) => logger.error(e, "cancel outbound_queue for rejected letter failed:"));
 
       // Notify whoever filed the letter about the rejection/return so they
       // can see the reason and take action. Prefer the creator assignment

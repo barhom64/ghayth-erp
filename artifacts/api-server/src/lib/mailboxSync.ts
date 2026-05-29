@@ -333,26 +333,15 @@ async function syncMicrosoft365(account: MailboxAccountRow): Promise<SyncResult>
     );
     if (dup) continue;
 
+    // Phase 4 final contract: write directly to message_log.
     const { insertId } = await rawExecute(
-      `INSERT INTO communications_log
-         ("companyId", channel, direction, "fromNumber", "toNumber",
+      `INSERT INTO message_log
+         ("companyId", channel, direction, "fromAddress", "toAddress",
           subject, body, status, folder, "createdAt")
        VALUES ($1, 'email', 'inbound', $2, $3, $4, $5, 'received', 'inbox', $6)`,
       [account.companyId, fromAddress, toAddress, subject, body, receivedAt],
     );
-
-    if (insertId > 0) {
-      await rawExecute(
-        `INSERT INTO message_log
-           ("companyId", channel, direction, "fromAddress", "toAddress",
-            subject, body, status, folder,
-            "legacySource", "legacyId", "createdAt")
-         VALUES ($1, 'email', 'inbound', $2, $3, $4, $5, 'received', 'inbox',
-                 'communications_log', $6, $7)`,
-        [account.companyId, fromAddress, toAddress, subject, body, insertId, receivedAt],
-      ).catch((e) => logger.warn(e, "[mailboxSync] message_log mirror failed"));
-      messagesFetched++;
-    }
+    if (insertId > 0) messagesFetched++;
   }
 
   // Persist the deltaLink so the next sync only fetches new messages.
@@ -444,25 +433,15 @@ async function syncImap(account: MailboxAccountRow): Promise<SyncResult> {
           if (dup) { maxUid = Math.max(maxUid, msg.uid); continue; }
         }
 
+        // Phase 4 final contract: write directly to message_log.
         const { insertId } = await rawExecute(
-          `INSERT INTO communications_log
-             ("companyId", channel, direction, "fromNumber", "toNumber",
+          `INSERT INTO message_log
+             ("companyId", channel, direction, "fromAddress", "toAddress",
               subject, body, status, folder, "createdAt")
            VALUES ($1, 'email', 'inbound', $2, $3, $4, $5, 'received', 'inbox', $6)`,
           [account.companyId, fromAddress, toAddress, subject, body, receivedAt],
         );
-        if (insertId > 0) {
-          await rawExecute(
-            `INSERT INTO message_log
-               ("companyId", channel, direction, "fromAddress", "toAddress",
-                subject, body, status, folder,
-                "legacySource", "legacyId", "createdAt")
-             VALUES ($1, 'email', 'inbound', $2, $3, $4, $5, 'received', 'inbox',
-                     'communications_log', $6, $7)`,
-            [account.companyId, fromAddress, toAddress, subject, body, insertId, receivedAt],
-          ).catch((e) => logger.warn(e, "[mailboxSync imap] message_log mirror failed"));
-          messagesFetched++;
-        }
+        if (insertId > 0) messagesFetched++;
         maxUid = Math.max(maxUid, msg.uid);
         // One page per tick — keep latency bounded even on large mailboxes.
         if (messagesFetched >= 50) break;
