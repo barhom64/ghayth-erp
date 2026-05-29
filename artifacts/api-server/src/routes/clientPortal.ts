@@ -318,7 +318,7 @@ protectedRouter.get("/me", withPortalScope(async (req, res) => {
          (SELECT COUNT(*) FROM support_tickets WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS tickets,
          (SELECT COUNT(*) FROM projects WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS projects,
          (SELECT COUNT(*) FROM umrah_sub_agents WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS "umrahSubAgents",
-         (SELECT COUNT(*) FROM tenants WHERE "clientId" = $1 AND "companyId" = $2)::int AS "tenantLinks",
+         (SELECT COUNT(*) FROM tenants WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS "tenantLinks",
          (SELECT COUNT(*) FROM legal_cases WHERE "clientId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL)::int AS "legalCases"`,
       params
     );
@@ -874,7 +874,10 @@ protectedRouter.get("/umrah/invoices", withPortalScope(async (req, res) => {
               si."paidAmount", si.status, si."dueDate", si."pilgrimCount",
               sa.name AS "subAgentName"
          FROM umrah_sales_invoices si
-         JOIN umrah_sub_agents sa ON sa.id = si."subAgentId"
+         JOIN umrah_sub_agents sa
+           ON sa.id = si."subAgentId"
+          AND sa."companyId" = si."companyId"
+          AND sa."deletedAt" IS NULL
         WHERE sa."clientId" = $1 AND si."companyId" = $2 AND si."deletedAt" IS NULL
         ORDER BY si."invoiceDate" DESC LIMIT 100`,
       [scope.clientId, scope.companyId]
@@ -892,7 +895,10 @@ protectedRouter.get("/umrah/groups", withPortalScope(async (req, res) => {
       `SELECT g.id, g."nuskGroupNumber", g.name, g."mutamerCount",
               g."programDuration", g.status, g."nuskInvoiceNumber", g."createdAt"
          FROM umrah_groups g
-         JOIN umrah_sub_agents sa ON sa.id = g."subAgentId"
+         JOIN umrah_sub_agents sa
+           ON sa.id = g."subAgentId"
+          AND sa."companyId" = g."companyId"
+          AND sa."deletedAt" IS NULL
         WHERE sa."clientId" = $1 AND g."companyId" = $2 AND g."deletedAt" IS NULL
         ORDER BY g."createdAt" DESC LIMIT 100`,
       [scope.clientId, scope.companyId]
@@ -910,7 +916,10 @@ protectedRouter.get("/umrah/payments", withPortalScope(async (req, res) => {
       `SELECT p.id, p.ref, p."paymentDate", p.amount, p.currency, p."sarAmount",
               p.method, p."externalReference"
          FROM umrah_payments p
-         JOIN umrah_sub_agents sa ON sa.id = p."subAgentId"
+         JOIN umrah_sub_agents sa
+           ON sa.id = p."subAgentId"
+          AND sa."companyId" = p."companyId"
+          AND sa."deletedAt" IS NULL
         WHERE sa."clientId" = $1 AND p."companyId" = $2 AND p."deletedAt" IS NULL
         ORDER BY p."paymentDate" DESC LIMIT 100`,
       [scope.clientId, scope.companyId]
@@ -937,7 +946,10 @@ protectedRouter.get("/property/contracts", withPortalScope(async (req, res) => {
               rc."autoRenewal", rc."renewalNoticeDays",
               u."unitNumber", u."buildingName", u.address AS "unitAddress"
          FROM rental_contracts rc
-         JOIN tenants t ON t.id = rc."tenantId" AND t."companyId" = rc."companyId"
+         JOIN tenants t
+           ON t.id = rc."tenantId"
+          AND t."companyId" = rc."companyId"
+          AND t."deletedAt" IS NULL
          LEFT JOIN property_units u ON u.id = rc."unitId" AND u."companyId" = rc."companyId"
         WHERE t."clientId" = $1 AND rc."companyId" = $2 AND rc."deletedAt" IS NULL
         ORDER BY rc."startDate" DESC LIMIT 100`,
@@ -961,7 +973,10 @@ protectedRouter.get("/property/rent-payments", withPortalScope(async (req, res) 
               (CURRENT_DATE - rp."dueDate") AS "daysPastDue"
          FROM rent_payments rp
          JOIN rental_contracts rc ON rc.id = rp."contractId" AND rc."deletedAt" IS NULL
-         JOIN tenants t ON t.id = rc."tenantId" AND t."companyId" = rc."companyId"
+         JOIN tenants t
+           ON t.id = rc."tenantId"
+          AND t."companyId" = rc."companyId"
+          AND t."deletedAt" IS NULL
         WHERE t."clientId" = $1 AND rc."companyId" = $2
         ORDER BY rp."dueDate" DESC LIMIT 200`,
       [scope.clientId, scope.companyId]
@@ -982,7 +997,10 @@ protectedRouter.get("/property/maintenance-requests", withPortalScope(async (req
               u."unitNumber", u."buildingName"
          FROM maintenance_requests mr
          JOIN rental_contracts rc ON rc.id = mr."contractId" AND rc."deletedAt" IS NULL
-         JOIN tenants t ON t.id = rc."tenantId" AND t."companyId" = rc."companyId"
+         JOIN tenants t
+           ON t.id = rc."tenantId"
+          AND t."companyId" = rc."companyId"
+          AND t."deletedAt" IS NULL
          LEFT JOIN property_units u ON u.id = mr."unitId" AND u."companyId" = mr."companyId"
         WHERE t."clientId" = $1 AND mr."companyId" = $2
         ORDER BY mr."createdAt" DESC LIMIT 100`,
