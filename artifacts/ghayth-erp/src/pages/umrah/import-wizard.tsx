@@ -161,7 +161,10 @@ export default function UmrahImportWizard() {
     if (!preview || !seasonId) return;
     setConfirming(true);
     try {
-      const endpoint = fileType === "mutamers" ? "/umrah/import/mutamers" : "/umrah/import/vouchers";
+      // Explicit static URLs (rather than a `${kind}-prefixed` template)
+      // so the wiring scanner can credit both endpoints. Same payload
+      // shape for either branch; the vouchers endpoint accepts the
+      // extra treasury + purchase-account overrides.
       const body: Record<string, unknown> = {
         seasonId: Number(seasonId),
         fileName,
@@ -172,10 +175,9 @@ export default function UmrahImportWizard() {
         if (treasuryId) body.treasuryId = Number(treasuryId);
         if (purchaseAccountCode) body.purchaseAccountCode = purchaseAccountCode;
       }
-      const res: any = await apiFetch(endpoint, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
+      const res: any = fileType === "mutamers"
+        ? await apiFetch("/umrah/import/mutamers", { method: "POST", body: JSON.stringify(body) })
+        : await apiFetch("/umrah/import/vouchers", { method: "POST", body: JSON.stringify(body) });
       const data = res?.data ?? res;
       setConfirmResult({ batchId: data?.batchId ?? data?.id });
       toast({ title: "تم تنفيذ الاستيراد بنجاح" });

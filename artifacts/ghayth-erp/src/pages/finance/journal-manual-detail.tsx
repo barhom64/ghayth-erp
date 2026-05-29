@@ -149,6 +149,20 @@ export default function JournalManualDetailPage() {
     },
   );
 
+  // PATCH /finance/journal-manual/:id/approve — direct-approve helper
+  // exposed for the rare case where the reviewer wants to skip the
+  // review form and finalize the approval in one click (server runs
+  // the same approval helper as `/review` but doesn't accept notes).
+  const directApproveMut = useApiMutation<{ approvalStatus: string }, Record<string, never>>(
+    () => `/finance/journal-manual/${id}/approve`,
+    "PATCH",
+    invalidateKeys,
+    {
+      successMessage: "تم الاعتماد المباشر",
+      onSuccess: () => refetch(),
+    },
+  );
+
   const rejectMut = useApiMutation<{ approvalStatus: string }, { approved: boolean; notes: string }>(
     () => `/finance/journal-manual/${id}/review`,
     "PATCH",
@@ -325,12 +339,21 @@ export default function JournalManualDetailPage() {
               className="gap-1 bg-emerald-600 hover:bg-emerald-700"
               disabled={approveMut.isPending || rejectMut.isPending || isCreator}
               deniedTooltip={creatorTooltip}
-              onClick={() => approveMut.mutate({ approved: true })}
-              title={creatorTooltip}
+              onClick={(e) => {
+                // Shift-click skips the review pipeline and uses the
+                // direct PATCH /approve helper. Server enforces same
+                // permission, just doesn't accept notes.
+                if (e.shiftKey) {
+                  directApproveMut.mutate({});
+                  return;
+                }
+                approveMut.mutate({ approved: true });
+              }}
+              title={`${creatorTooltip ?? ""} — Shift = اعتماد مباشر`}
               rateLimitAware
             >
               <CheckCircle2 className="h-4 w-4" />
-              {approveMut.isPending ? "جارٍ الاعتماد…" : "اعتماد"}
+              {(approveMut.isPending || directApproveMut.isPending) ? "جارٍ الاعتماد…" : "اعتماد"}
             </GuardedButton>
             <GuardedButton
               perm="finance:approve"
