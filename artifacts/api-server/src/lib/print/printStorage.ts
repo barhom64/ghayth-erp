@@ -36,7 +36,12 @@ export async function storePrintArtifact(opts: {
     const now = new Date();
     const yyyy = String(now.getFullYear());
     const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const ext = opts.format === "excel" ? "xlsx" : "pdf";
+    // The current adapter set emits HTML for A4/thermal/label and xlsx for
+    // excel — there is no real PDF stream stored yet (browsers handle the
+    // HTML→PDF step on the client). The earlier ".pdf" suffix on the
+    // storage key was misleading every storage inspector that opened it.
+    // Match the actual byte content.
+    const ext = opts.format === "excel" ? "xlsx" : "html";
     const key = `print/${opts.companyId}/${yyyy}/${mm}/${opts.jobId}.${ext}`;
     const fullPath = `${dir.replace(/\/+$/, "")}/${key}`;
     const { bucketName, objectName } = parseObjectPath(fullPath);
