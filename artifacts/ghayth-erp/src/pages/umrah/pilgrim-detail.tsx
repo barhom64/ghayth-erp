@@ -23,6 +23,10 @@ import { DetailPageLayout } from "@workspace/entity-kit";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PrintButton } from "@/components/shared/print-button";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+} from "@/components/shared/detail-edit-delete-actions";
 
 const STATUS_OPTIONS = [
   { value: "pending", label: "لم يصل" },
@@ -65,6 +69,23 @@ export default function PilgrimDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [, navigate] = useLocation();
   const { toast } = useToast();
+
+  // DELETE /umrah/pilgrims/:id soft-delete. Edit happens through the
+  // status select above, so we only expose delete here.
+  const editDelete = useDetailEditDelete({
+    entityLabel: "المعتمر",
+    patchPath: `/umrah/pilgrims/${id}`,
+    deletePath: `/umrah/pilgrims/${id}`,
+    listPath: "/umrah/pilgrims",
+    initialValues: data,
+    fields: [
+      { key: "phone", label: "الهاتف" },
+      { key: "roomNumber", label: "رقم الغرفة" },
+      { key: "hotelName", label: "الفندق" },
+    ],
+    invalidateKeys: [["umrah-pilgrim", id], ["umrah-pilgrims"]],
+    onSaved: () => refetch(),
+  });
 
   const updateStatus = async () => {
     if (!newStatus) return;
@@ -210,6 +231,7 @@ export default function PilgrimDetail() {
         <div className="flex items-center gap-2">
           {actions}
           <PrintButton entityType="umrah_pilgrim" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <DetailActionButtons hook={editDelete} editPerm="umrah:update" deletePerm="umrah:delete" />
         </div>
       }
     />

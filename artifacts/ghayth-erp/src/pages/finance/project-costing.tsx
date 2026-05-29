@@ -14,8 +14,12 @@ import {
   FormTextareaField,
   FormDateField,
   FormSelectField,
+  FormTextField,
   FormGrid,
 } from "@workspace/ui-core";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import { formatCurrency, todayLocal } from "@/lib/formatters";
 import { Plus } from "lucide-react";
 import { useAppContext } from "@/contexts/app-context";
@@ -31,6 +35,18 @@ const costSchema = z.object({
   category: z.enum(["direct", "indirect", "overhead", "labor", "materials"]),
 });
 type CostForm = z.infer<typeof costSchema>;
+const projectSchema = z.object({
+  name: z.string().min(1, "اسم المشروع مطلوب"),
+  description: z.string().trim(),
+  budget: z.coerce.number().min(0, "الميزانية لا يمكن أن تكون سالبة"),
+  startDate: z.string(),
+  endDate: z.string(),
+});
+type ProjectForm = z.infer<typeof projectSchema>;
+const projectDefaults: ProjectForm = {
+  name: "", description: "", budget: 0, startDate: "", endDate: "",
+};
+
 const CATEGORY_OPTIONS = [
   { value: "direct", label: "تكلفة مباشرة" },
   { value: "indirect", label: "تكلفة غير مباشرة" },
@@ -67,6 +83,20 @@ export default function ProjectCostingPage() {
     { successMessage: "تم تسجيل التكلفة بنجاح" },
   );
 
+  // POST /finance/projects — creates a project on the finance-hardening
+  // route. Numbering centre stamps the ref; the page just collects name
+  // + dates + budget.
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const createProjectMut = useApiMutation<any, ProjectForm>(
+    "/finance/projects",
+    "POST",
+    [["projects-finance"]],
+    {
+      successMessage: "تم إنشاء المشروع",
+      onSuccess: () => setShowCreateProject(false),
+    },
+  );
+
   const handleAddCost = async (values: CostForm) => {
     await addCostMutation.mutateAsync({
       ...values,
@@ -99,10 +129,16 @@ export default function ProjectCostingPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "تكاليف المشاريع" }]}
       loading={isLoading}
       actions={
-        <GuardedButton perm="finance:create" onClick={() => setShowAddCost(true)} disabled={list.length === 0}>
-          <Plus className="h-4 w-4 ml-2" />
-          تسجيل تكلفة
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <GuardedButton perm="finance:create" variant="outline" onClick={() => setShowCreateProject(true)}>
+            <Plus className="h-4 w-4 ml-2" />
+            مشروع جديد
+          </GuardedButton>
+          <GuardedButton perm="finance:create" onClick={() => setShowAddCost(true)} disabled={list.length === 0}>
+            <Plus className="h-4 w-4 ml-2" />
+            تسجيل تكلفة
+          </GuardedButton>
+        </div>
       }
     >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -222,6 +258,29 @@ export default function ProjectCostingPage() {
           </div>
         </div>
       )}
+
+      <Dialog open={showCreateProject} onOpenChange={setShowCreateProject}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>مشروع جديد</DialogTitle>
+          </DialogHeader>
+          <FormShell
+            schema={projectSchema}
+            defaultValues={projectDefaults}
+            submitLabel="إنشاء المشروع"
+            onSubmit={(values) => createProjectMut.mutateAsync(values)}
+          >
+            <FormGrid cols={2}>
+              <FormTextField name="name" label="اسم المشروع" required className="md:col-span-2" />
+              <FormNumberField name="budget" label="الميزانية" />
+              <FormDateField name="startDate" label="تاريخ البداية" />
+              <FormDateField name="endDate" label="تاريخ النهاية" />
+              <FormTextareaField name="description" label="الوصف" rows={2} className="md:col-span-2" />
+            </FormGrid>
+          </FormShell>
+          <DialogFooter />
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }

@@ -115,7 +115,7 @@ router.post("/", authorize({ feature: "admin", action: "update" }), async (req, 
       const [invoice] = await rawQuery<InvoicePreviewRow>(
         `SELECT i.*, c.name AS "clientName"
          FROM invoices i
-         LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+         LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
          WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
         [entityId, scope.companyId]
       );

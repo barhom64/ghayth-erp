@@ -318,7 +318,7 @@ execDashboardRouter.get("/overdue-invoices", authorize({ feature: "dashboard.exe
               COALESCE((SELECT MAX(dl.stage) FROM dunning_letters dl WHERE dl."invoiceId" = i.id), 0) AS "dunningStage",
               c.name AS "clientName"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$1 AND i.status NOT IN ('paid','cancelled')
          AND i."deletedAt" IS NULL
          AND i."dueDate"::date < CURRENT_DATE

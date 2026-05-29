@@ -50,7 +50,7 @@ router.get("/feed", authorize({ feature: "workspace", action: "view" }), async (
                 t."linkedEntityType", t."linkedEntityId",
                 c.name AS "clientName"
            FROM tasks t
-           LEFT JOIN clients c ON c.id = t."clientId" AND c."deletedAt" IS NULL
+           LEFT JOIN clients c ON c.id = t."clientId" AND c."companyId" = t."companyId" AND c."deletedAt" IS NULL
           WHERE t."companyId" = $1
             AND t."deletedAt" IS NULL
             AND t.status IN ('pending','in_progress')
@@ -65,7 +65,7 @@ router.get("/feed", authorize({ feature: "workspace", action: "view" }), async (
         `SELECT t.id, t.title, t.priority, t."scheduledDate",
                 c.name AS "clientName"
            FROM tasks t
-           LEFT JOIN clients c ON c.id = t."clientId" AND c."deletedAt" IS NULL
+           LEFT JOIN clients c ON c.id = t."clientId" AND c."companyId" = t."companyId" AND c."deletedAt" IS NULL
           WHERE t."companyId" = $1
             AND t."deletedAt" IS NULL
             AND t.status IN ('pending','in_progress')

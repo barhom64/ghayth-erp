@@ -7,7 +7,7 @@ import {
   useFilters,
   exportToCSV,
 } from "@workspace/ui-core";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Link, useLocation } from "wouter";
 
@@ -31,6 +31,31 @@ export default function Clients() {
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
+  // POST /clients/auto-create — find-or-create-by-phone shortcut used
+  // by the inbound-call popup and the WhatsApp inbox. Exposed here as
+  // a quick-add inline form so an operator on a phone call can capture
+  // the contact without leaving the list view.
+  const autoCreateMut = useApiMutation<any, { phone: string; name?: string; source?: string }>(
+    "/clients/auto-create",
+    "POST",
+    [["clients", scopeQueryString]],
+    { successMessage: "تم إنشاء/استدعاء العميل" },
+  );
+  const [quickPhone, setQuickPhone] = useState("");
+  const [quickName, setQuickName] = useState("");
+  const handleQuickAdd = () => {
+    if (!quickPhone.trim()) return;
+    autoCreateMut.mutate(
+      { phone: quickPhone.trim(), name: quickName.trim() || undefined, source: "manual" },
+      {
+        onSuccess: (r: any) => {
+          setQuickPhone(""); setQuickName("");
+          if (r?.id) navigate(`/clients/${r.id}`);
+        },
+      },
+    );
+  };
 
   const previewFields: PreviewField[] = [
     { label: "اسم العميل", key: "name" },
@@ -158,12 +183,37 @@ export default function Clients() {
       loading={isLoading}
       actions={
         canManage && (
-          <Link href="/clients/create">
-            <GuardedButton perm="clients:create" className="gap-2">
-              <Plus className="h-4 w-4" />
-              إضافة عميل
+          <div className="flex items-center gap-2">
+            <input
+              value={quickPhone}
+              onChange={(e) => setQuickPhone(e.target.value)}
+              placeholder="رقم الجوال"
+              dir="ltr"
+              className="h-8 px-2 text-xs border rounded w-32"
+            />
+            <input
+              value={quickName}
+              onChange={(e) => setQuickName(e.target.value)}
+              placeholder="الاسم (اختياري)"
+              className="h-8 px-2 text-xs border rounded w-32"
+            />
+            <GuardedButton
+              perm="clients:create"
+              size="sm"
+              variant="outline"
+              rateLimitAware
+              onClick={handleQuickAdd}
+              disabled={autoCreateMut.isPending || !quickPhone.trim()}
+            >
+              + سريع
             </GuardedButton>
-          </Link>
+            <Link href="/clients/create">
+              <GuardedButton perm="clients:create" className="gap-2">
+                <Plus className="h-4 w-4" />
+                إضافة عميل
+              </GuardedButton>
+            </Link>
+          </div>
         )
       }
     >

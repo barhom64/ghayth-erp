@@ -381,6 +381,28 @@ router.post("/journal-templates", authorize({ feature: "finance.accounting_engin
   }
 });
 
+router.get("/journal-templates/:id", authorize({ feature: "finance.accounting_engine", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [template] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!template) throw new NotFoundError("القالب غير موجود");
+    template.lines = await rawQuery<Record<string, unknown>>(
+      `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
+       FROM journal_entry_template_lines tl
+       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
+       WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
+      [id, scope.companyId],
+    );
+    res.json(maskFields(req, { data: template }));
+  } catch (err) {
+    handleRouteError(err, res, "Get journal template error:");
+  }
+});
+
 router.put("/journal-templates/:id", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(updateJournalTemplateSchema.safeParse(req.body));

@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { AlertTriangle, DollarSign, Clock, Zap, XCircle, MinusCircle } from "lucide-react";
+import { AlertTriangle, DollarSign, Clock, Zap, XCircle, MinusCircle, Plus } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -69,6 +69,45 @@ export default function UmrahPenalties() {
     } catch {
       toast({ variant: "destructive", title: "خطأ في تشغيل محرك الغرامات" });
     }
+  };
+
+  // POST /umrah/penalties — register a manual penalty (the engine
+  // generates most automatically; this covers ad-hoc cases the engine
+  // doesn't catch — e.g., the agent agreed verbally to a fine outside
+  // the standard overstay rules). Surfaced as a "غرامة يدوية" inline
+  // form revealed via the toolbar toggle.
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualPilgrimId, setManualPilgrimId] = useState("");
+  const [manualType, setManualType] = useState("overstay");
+  const [manualAmount, setManualAmount] = useState("");
+  const [manualReason, setManualReason] = useState("");
+  const createManualMut = useApiMutation<unknown, {
+    pilgrimId: number;
+    type: string;
+    amount: number;
+    reason?: string;
+  }>(
+    "/umrah/penalties",
+    "POST",
+    [["umrah-penalties"]],
+    { successMessage: "أُسجّلت الغرامة اليدوية" },
+  );
+  const submitManualPenalty = () => {
+    const pid = Number(manualPilgrimId);
+    const amt = Number(manualAmount);
+    if (!Number.isFinite(pid) || pid <= 0 || !Number.isFinite(amt) || amt <= 0) {
+      toast({ variant: "destructive", title: "أدخل معرّف معتمر ومبلغاً صحيحاً" });
+      return;
+    }
+    createManualMut.mutate(
+      { pilgrimId: pid, type: manualType, amount: amt, reason: manualReason.trim() || undefined },
+      {
+        onSuccess: () => {
+          setManualPilgrimId(""); setManualAmount(""); setManualReason("");
+          setManualOpen(false);
+        },
+      },
+    );
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -157,11 +196,53 @@ export default function UmrahPenalties() {
               إعفاء جماعي ({selectedIds.length})
             </Button>
           )}
+          <GuardedButton perm="umrah:create" variant="outline" onClick={() => setManualOpen((v) => !v)} className="gap-2">
+            <Plus className="h-4 w-4" />غرامة يدوية
+          </GuardedButton>
           <GuardedButton perm="umrah:approve" variant="outline" onClick={runPenaltyEngine} className="gap-2" rateLimitAware>
             <Zap className="h-4 w-4" />تشغيل محرك الغرامات
           </GuardedButton>
         </div>
       </div>
+
+      {manualOpen && (
+        <Card className="border-dashed">
+          <CardContent className="p-3 space-y-2">
+            <p className="text-sm font-semibold">تسجيل غرامة يدوية</p>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
+              <div>
+                <label className="text-[10px] text-muted-foreground">رقم المعتمر</label>
+                <input value={manualPilgrimId} onChange={(e) => setManualPilgrimId(e.target.value)} dir="ltr" className="w-full h-8 px-2 border rounded" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">النوع</label>
+                <select value={manualType} onChange={(e) => setManualType(e.target.value)} className="w-full h-8 px-2 border rounded bg-white">
+                  <option value="overstay">تجاوز مدة</option>
+                  <option value="visa_violation">مخالفة تأشيرة</option>
+                  <option value="other">أخرى</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">المبلغ (ر.س)</label>
+                <input value={manualAmount} onChange={(e) => setManualAmount(e.target.value)} dir="ltr" className="w-full h-8 px-2 border rounded" />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">السبب</label>
+                <input value={manualReason} onChange={(e) => setManualReason(e.target.value)} className="w-full h-8 px-2 border rounded" />
+              </div>
+            </div>
+            <GuardedButton
+              perm="umrah:create"
+              size="sm"
+              rateLimitAware
+              onClick={submitManualPenalty}
+              disabled={createManualMut.isPending}
+            >
+              تسجيل
+            </GuardedButton>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 grid-cols-3">
         {kpiCards.map((c) => (

@@ -265,6 +265,15 @@ export default function ActivityLogPage() {
   );
 
   const { data: summaryData } = useApiQuery<any>(["activity-summary"], "/activity-log/summary");
+  // GET /activity-log — module-tagged activity feed distinct from
+  // /audit-logs (which is per-table audit_logs). Surfaced as a small
+  // "تيار النشاط الحديث" tail card in the rightmost sidebar position
+  // so an operator can see what's happening across modules right now.
+  const { data: activityStream } = useApiQuery<{ data: any[] }>(
+    ["activity-log-stream"],
+    "/activity-log?limit=20",
+  );
+  const activityFeed: any[] = activityStream?.data ?? [];
 
   const items = data?.data || [];
   const total = data?.total || 0;
@@ -506,6 +515,25 @@ export default function ActivityLogPage() {
             <Button variant="outline" size="sm" disabled={(page + 1) * pageSize >= total} onClick={() => setPage(p => p + 1)}>
               التالي <ChevronLeft className="w-4 h-4" />
             </Button>
+          </div>
+        </div>
+      )}
+
+      {activityFeed.length > 0 && (
+        <div className="mt-4 border rounded p-3 bg-white">
+          <p className="text-sm font-semibold mb-2">تيار النشاط الحديث ({activityFeed.length})</p>
+          <div className="divide-y text-xs max-h-48 overflow-y-auto">
+            {activityFeed.slice(0, 20).map((a: any, i: number) => (
+              <div key={a.id ?? i} className="py-1 flex items-center justify-between">
+                <span>
+                  <span className="font-mono text-[10px] text-muted-foreground me-1">{a.module ?? "—"}</span>
+                  {a.action ?? a.event ?? a.description ?? "—"}
+                </span>
+                <span className="text-muted-foreground text-[10px]">
+                  {a.createdAt ? new Date(a.createdAt).toLocaleTimeString("ar-SA") : ""}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}

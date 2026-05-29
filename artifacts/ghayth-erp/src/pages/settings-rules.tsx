@@ -119,7 +119,7 @@ function formatDate(d: string) {
   return formatDateAr(d);
 }
 
-function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: () => void; onDelete: () => void }) {
+function RuleCard({ rule, onToggle, onDelete, onBumpPriority }: { rule: BusinessRule; onToggle: () => void; onDelete: () => void; onBumpPriority?: (delta: number) => void }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -166,6 +166,16 @@ function RuleCard({ rule, onToggle, onDelete }: { rule: BusinessRule; onToggle: 
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setExpanded(!expanded)}>
               {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             </Button>
+            {onBumpPriority && rule.companyId && (
+              <>
+                <GuardedButton perm="settings:create" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onBumpPriority(-10)} title="رفع الأولوية">
+                  <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                </GuardedButton>
+                <GuardedButton perm="settings:create" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => onBumpPriority(10)} title="خفض الأولوية">
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                </GuardedButton>
+              </>
+            )}
             <GuardedButton perm="settings:create" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onToggle}>
               {rule.isActive ? <PowerOff className="h-3.5 w-3.5 text-orange-500" /> : <Power className="h-3.5 w-3.5 text-status-success" />}
             </GuardedButton>
@@ -388,6 +398,14 @@ export default function SettingsRulesPage() {
     "PATCH",
     [["business-rules"]]
   );
+  // PATCH /rules/:id — update non-toggle fields (priority, action, conditions).
+  // Inline reorder uses this with `{ priority: n }` to drag-reorder rules.
+  const updateMut = useApiMutation<any, { id: number; priority?: number; description?: string }>(
+    (body) => `/rules/${body.id}`,
+    "PATCH",
+    [["business-rules"]],
+    { successMessage: "تم التحديث" },
+  );
   const deleteMut = useApiMutation<any, { id: number }>(
     (body) => `/rules/${body.id}`,
     "DELETE",
@@ -397,6 +415,8 @@ export default function SettingsRulesPage() {
 
   const handleToggle = (ruleId: number) => toggleMut.mutate({ id: ruleId });
   const handleDelete = (ruleId: number) => deleteMut.mutate({ id: ruleId });
+  const handleBumpPriority = (rule: BusinessRule, delta: number) =>
+    updateMut.mutate({ id: rule.id, priority: (rule.priority ?? 100) + delta });
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={() => refetch()} error={error} />;
@@ -447,6 +467,7 @@ export default function SettingsRulesPage() {
                   rule={rule}
                   onToggle={() => handleToggle(rule.id)}
                   onDelete={() => handleDelete(rule.id)}
+                  onBumpPriority={(delta) => handleBumpPriority(rule, delta)}
                 />
               ))}
             </div>
