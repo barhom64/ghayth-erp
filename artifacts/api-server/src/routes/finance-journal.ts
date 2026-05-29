@@ -519,6 +519,14 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     if (relatedEntityType === "vehicle" && relatedEntityId) entityLink.vehicleId = Number(relatedEntityId);
     if (relatedEntityType === "property" && relatedEntityId) entityLink.propertyId = Number(relatedEntityId);
     if (relatedEntityType === "contract" && relatedEntityId) entityLink.contractId = Number(relatedEntityId);
+    // Supplier / vendor / customer / client coverage — the expense form
+    // (expenses-create.tsx) ships "supplier"; older callers may use the
+    // dimension-name variants. Pre-fix the expense JE never carried
+    // vendorId/clientId on the expense line even though the operator
+    // explicitly tagged the supplier — per-supplier expense reports
+    // were silently incomplete.
+    if ((relatedEntityType === "supplier" || relatedEntityType === "vendor") && relatedEntityId) entityLink.vendorId = Number(relatedEntityId);
+    if ((relatedEntityType === "customer" || relatedEntityType === "client") && relatedEntityId) entityLink.clientId = Number(relatedEntityId);
     if (projectId) entityLink.projectId = Number(projectId);
     if (costCenter) entityLink.costCenter = costCenter;
 
@@ -1054,13 +1062,22 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     // same attribution. Pre-fix the voucher posted with bare lines —
     // per-supplier voucher analysis, per-tenant payment history, and
     // per-department cashflow drilldowns were all silently broken.
+    //
+    // The frontend voucher form (vouchers-create.tsx) ships the
+    // relatedEntityType values: employee, supplier, customer, contract,
+    // property. Map each to the canonical journal_lines column. "client"
+    // + "vendor" + "vehicle" are accepted too for callers that use the
+    // dimension-name variants.
     const voucherDims: Record<string, any> = {};
-    if (relatedEntityType === "supplier" && relatedEntityId) voucherDims.vendorId = Number(relatedEntityId);
-    if (relatedEntityType === "client" && relatedEntityId) voucherDims.clientId = Number(relatedEntityId);
-    if (relatedEntityType === "vendor" && relatedEntityId) voucherDims.vendorId = Number(relatedEntityId);
+    if ((relatedEntityType === "supplier" || relatedEntityType === "vendor") && relatedEntityId) voucherDims.vendorId = Number(relatedEntityId);
+    if ((relatedEntityType === "customer" || relatedEntityType === "client") && relatedEntityId) voucherDims.clientId = Number(relatedEntityId);
     if (relatedEntityType === "employee" && relatedEntityId) voucherDims.employeeId = Number(relatedEntityId);
     if (relatedEntityType === "vehicle" && relatedEntityId) voucherDims.vehicleId = Number(relatedEntityId);
     if (relatedEntityType === "property" && relatedEntityId) voucherDims.propertyId = Number(relatedEntityId);
+    // When relatedEntityType=contract the contractId is encoded both in
+    // relatedEntityId (form path) and in the top-level contractId field
+    // (legacy path). Honour either.
+    if (relatedEntityType === "contract" && relatedEntityId) voucherDims.contractId = Number(relatedEntityId);
     if (contractId) voucherDims.contractId = Number(contractId);
     if (departmentId) voucherDims.departmentId = Number(departmentId);
     if (b.costCenter) voucherDims.costCenter = b.costCenter;
