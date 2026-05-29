@@ -341,7 +341,7 @@ export default function CorrespondenceDetail() {
               <EntityPrintButton
                 entityType="official_letter"
                 entityId={item.id ?? id}
-                formats={["a4"]}/>
+               />
             )}
             <GuardedButton
               perm="communications:create"

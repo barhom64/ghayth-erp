@@ -139,6 +139,60 @@ export default function ProjectDetail() {
     { successMessage: "تم إضافة المهمة", onSuccess: () => setShowTaskForm(false) }
   );
 
+  // POST /projects/:id/milestones — quick-add milestone with title +
+  // due date. PATCH /projects/milestones/:milestoneId updates an
+  // individual milestone (status / dates) without going through the
+  // gantt editor.
+  const addMilestoneMut = useApiMutation<any, { title: string; targetDate?: string }>(
+    `/projects/${id}/milestones`,
+    "POST",
+    [["project-milestones", id || ""], ["project-detail", id || ""]],
+    { successMessage: "تمت إضافة المعلم" },
+  );
+  const updateMilestoneMut = useApiMutation<any, { id: number; status?: string; targetDate?: string }>(
+    (b) => `/projects/milestones/${b.id}`,
+    "PATCH",
+    [["project-milestones", id || ""]],
+    { successMessage: "تم تحديث المعلم" },
+  );
+
+  // POST /projects/:id/resources — assign an employee / contractor
+  // to the project with a role + allocation %.
+  const addResourceMut = useApiMutation<any, { employeeId: number; role?: string; allocationPct?: number }>(
+    `/projects/${id}/resources`,
+    "POST",
+    [["project-resources", id || ""]],
+    { successMessage: "تمت إضافة المورد البشري" },
+  );
+
+  const handleAddMilestone = () => {
+    const title = window.prompt("عنوان المعلم:");
+    if (!title?.trim()) return;
+    const targetDate = window.prompt("التاريخ المستهدف (YYYY-MM-DD، اختياري):") ?? "";
+    addMilestoneMut.mutate({
+      title: title.trim(),
+      targetDate: targetDate.trim() || undefined,
+    });
+  };
+
+  const handleMarkMilestoneComplete = (mid: number) => {
+    updateMilestoneMut.mutate({ id: mid, status: "completed" });
+  };
+
+  const handleAddResource = () => {
+    const empStr = window.prompt("معرّف الموظف:");
+    if (!empStr) return;
+    const empId = Number(empStr);
+    if (!Number.isFinite(empId) || empId <= 0) return;
+    const role = window.prompt("الدور (مثال: مهندس / محاسب):") ?? "";
+    const allocStr = window.prompt("نسبة التخصيص (0-100):") ?? "";
+    addResourceMut.mutate({
+      employeeId: empId,
+      role: role.trim() || undefined,
+      allocationPct: allocStr ? Number(allocStr) : undefined,
+    });
+  };
+
   const statusTone = (s: string) =>
     s === "completed" || s === "done" ? "success" as const :
     s === "active" || s === "in_progress" ? "info" as const :
@@ -429,7 +483,12 @@ export default function ProjectDetail() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base flex items-center gap-2"><Flag className="w-4 h-4 text-orange-500" /> المعالم ({milestones.length})</CardTitle>
-                  <Link href={`/projects/gantt?projectId=${id}`}><Button variant="ghost" size="sm" className="text-xs">غانت</Button></Link>
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" className="text-xs" onClick={handleAddMilestone} disabled={addMilestoneMut.isPending} rateLimitAware>
+                      + إضافة
+                    </Button>
+                    <Link href={`/projects/gantt?projectId=${id}`}><Button variant="ghost" size="sm" className="text-xs">غانت</Button></Link>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -443,6 +502,18 @@ export default function ProjectDetail() {
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">{m.targetDate ? formatDateAr(m.targetDate) : m.dueDate ? formatDateAr(m.dueDate) : ""}</span>
                       <PageStatusBadge status={m.status || "pending"} domain="project" />
+                      {m.status !== "completed" && m.status !== "cancelled" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-1 text-[10px]"
+                          onClick={() => handleMarkMilestoneComplete(m.id)}
+                          disabled={updateMilestoneMut.isPending}
+                          title="تعليم كمكتمل"
+                        >
+                          ✓
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -562,7 +633,12 @@ export default function ProjectDetail() {
       {activeTab === "team" && id && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2"><Users2 className="w-5 h-5 text-muted-foreground" /> فريق المشروع ({resources.length})</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2"><Users2 className="w-5 h-5 text-muted-foreground" /> فريق المشروع ({resources.length})</CardTitle>
+              <Button variant="outline" size="sm" onClick={handleAddResource} disabled={addResourceMut.isPending} rateLimitAware>
+                + إضافة عضو
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {resources.length === 0 ? (
@@ -738,7 +814,7 @@ export default function ProjectDetail() {
               <TrendingUp className="h-4 w-4" /> الربحية
             </Button>
           </Link>
-          <PrintButton entityType="project" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="project" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
     />

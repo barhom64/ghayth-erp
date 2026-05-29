@@ -88,6 +88,24 @@ export default function VendorDetailPage() {
     (p: any) => String(p.supplierId ?? p.vendorId) === String(id)
   );
 
+  // GET /finance/payables — outstanding AP per vendor. The vendor
+  // page already shows individual PO and invoice rows; this is the
+  // aggregate roll-up that AR teams use to see what's due across all
+  // documents for this vendor. Filtered client-side to this vendor.
+  const { data: payablesResp } = useApiQuery<any>(
+    ["finance-payables-vendor", id],
+    "/finance/payables",
+    !!id,
+  );
+  const allPayables: any[] = payablesResp?.data ?? payablesResp ?? [];
+  const vendorPayables = allPayables.filter(
+    (p: any) => String(p.supplierId ?? p.vendorId ?? p.agentId) === String(id),
+  );
+  const outstandingTotal = vendorPayables.reduce(
+    (s: number, p: any) => s + Number(p.outstandingAmount ?? p.netCost ?? 0),
+    0,
+  );
+
   const totalPurchases = vendor?.totalPurchases != null
     ? Number(vendor.totalPurchases)
     : pos.reduce((sum, p) => sum + (Number(p.total) || Number(p.amount) || 0), 0);
@@ -138,6 +156,14 @@ export default function VendorDetailPage() {
         <KpiCard icon={CreditCard} label="مدفوعات معلقة" value={formatCurrency(pendingPayments)} color="text-orange-600 bg-orange-50" />
         <KpiCard icon={ShoppingCart} label="أوامر شراء نشطة" value={String(activePos)} color="text-purple-600 bg-purple-50" />
         <KpiCard icon={Clock} label="آخر فاتورة" value={lastInvoiceDate ? formatDateAr(lastInvoiceDate) : "—"} color="text-status-success-foreground bg-status-success-surface" />
+        {vendorPayables.length > 0 && (
+          <KpiCard
+            icon={CreditCard}
+            label={`مستحقات قائمة (${vendorPayables.length})`}
+            value={formatCurrency(outstandingTotal)}
+            color="text-status-error-foreground bg-status-error-surface"
+          />
+        )}
       </div>
 
       <Card className="border-0 shadow-sm">
@@ -297,7 +323,7 @@ export default function VendorDetailPage() {
           <Button size="sm" variant="outline" onClick={() => navigate(`/finance/vendors/${id}/statement`)}>
             <FileSpreadsheet className="h-4 w-4 me-1" /> كشف حساب
           </Button>
-          <PrintButton entityType="vendor" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="vendor" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
       extraTabs={extraTabs}

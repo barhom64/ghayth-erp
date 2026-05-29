@@ -267,7 +267,7 @@ export default function OwnerDetail() {
                 <EntityPrintButton
                   entityType="owner"
                   entityId={id ?? 0}
-                  formats={["a4"]}/>
+                 />
               ) : null
             }
           />

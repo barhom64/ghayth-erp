@@ -86,6 +86,24 @@ export default function Insights() {
     "/intelligence/recommendations"
   );
 
+  // GET /intelligence/clients/analytics — RFM-style top customers
+  // breakdown computed server-side. Shows recency / frequency / value
+  // bands the insights page already labels qualitatively.
+  const { data: clientAnalyticsResp } = useApiQuery<any>(
+    ["intelligence-clients-analytics"],
+    "/intelligence/clients/analytics"
+  );
+  const clientAnalyticsLive = clientAnalyticsResp?.data ?? clientAnalyticsResp;
+
+  // GET /intelligence/seasonal-patterns — month-by-month revenue
+  // pattern with peak/trough callouts. Useful as a sidebar trend
+  // ribbon under the recommendations.
+  const { data: seasonalResp } = useApiQuery<any>(
+    ["intelligence-seasonal-patterns"],
+    "/intelligence/seasonal-patterns"
+  );
+  const seasonalPatternsLive = seasonalResp?.data ?? seasonalResp;
+
   const handleRecalculate = async () => {
     setRecalculating(true);
     try {
@@ -225,6 +243,36 @@ export default function Insights() {
             </Card>
           </div>
 
+          {seasonalPatternsLive && Array.isArray(seasonalPatternsLive.months) && seasonalPatternsLive.months.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2"><Activity className="h-4 w-4" /> الأنماط الموسمية (12 شهر)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-12 gap-1">
+                  {seasonalPatternsLive.months.map((m: any, i: number) => (
+                    <div key={i} className="text-center">
+                      <div
+                        className="h-16 rounded flex items-end justify-center"
+                        style={{ backgroundColor: `rgba(139, 92, 246, ${Math.min(1, (Number(m.value || 0) / Number(seasonalPatternsLive.peak || 1)))})` }}
+                        title={`${m.label}: ${m.value}`}
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-1">{m.label?.slice(0, 3) ?? i + 1}</p>
+                    </div>
+                  ))}
+                </div>
+                {seasonalPatternsLive.peakLabel && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    الذروة: <span className="font-semibold">{seasonalPatternsLive.peakLabel}</span>
+                    {seasonalPatternsLive.troughLabel && (
+                      <span className="ms-3">الأدنى: {seasonalPatternsLive.troughLabel}</span>
+                    )}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {dailyActivityData.length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Activity className="h-4 w-4" /> النشاط اليومي (آخر 30 يوم)</CardTitle></CardHeader>
@@ -264,6 +312,28 @@ export default function Insights() {
 
         {/* Client Analytics Tab */}
         <TabsContent value="clients" className="space-y-6">
+          {clientAnalyticsLive && Array.isArray(clientAnalyticsLive.topClients) && clientAnalyticsLive.topClients.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4" /> أعلى العملاء قيمةً ({clientAnalyticsLive.topClients.length})</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y">
+                  {clientAnalyticsLive.topClients.slice(0, 10).map((c: any) => (
+                    <div key={c.id ?? c.clientId} className="p-2 flex items-center justify-between text-xs">
+                      <span className="font-medium">{c.name ?? c.clientName}</span>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <span>{c.frequency ?? 0} طلب</span>
+                        <span className="font-mono font-semibold text-status-success-foreground">
+                          {formatCurrency(Number(c.totalValue ?? 0))}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <div className="grid gap-6 md:grid-cols-2">
             <Card>
               <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4" /> تصنيف العملاء (الحداثة والتكرار والقيمة)</CardTitle></CardHeader>

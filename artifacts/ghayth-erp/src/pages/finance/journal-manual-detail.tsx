@@ -16,7 +16,7 @@ import { DetailPageLayout, ProcessStages, type StageStep } from "@workspace/enti
 
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { Undo2, Send, CheckCircle, CheckCircle2, XCircle, Upload } from "lucide-react";
+import { Undo2, Send, CheckCircle, CheckCircle2, XCircle, Upload, Scale } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -149,6 +149,20 @@ export default function JournalManualDetailPage() {
     },
   );
 
+  // PATCH /finance/journal-manual/:id/approve — direct-approve helper
+  // exposed for the rare case where the reviewer wants to skip the
+  // review form and finalize the approval in one click (server runs
+  // the same approval helper as `/review` but doesn't accept notes).
+  const directApproveMut = useApiMutation<{ approvalStatus: string }, { approved: boolean }>(
+    () => `/finance/journal-manual/${id}/approve`,
+    "PATCH",
+    invalidateKeys,
+    {
+      successMessage: "تم الاعتماد المباشر",
+      onSuccess: () => refetch(),
+    },
+  );
+
   const rejectMut = useApiMutation<{ approvalStatus: string }, { approved: boolean; notes: string }>(
     () => `/finance/journal-manual/${id}/review`,
     "PATCH",
@@ -169,6 +183,24 @@ export default function JournalManualDetailPage() {
     invalidateKeys,
     {
       successMessage: "تم ترحيل القيد بنجاح",
+      onSuccess: () => refetch(),
+    },
+  );
+
+  // POST /finance/rounding-differences/apply — append a sub-cent
+  // rounding adjustment line to balance the journal. Server enforces
+  // |diff| ≤ 0.05; UI only shows the button when the imbalance is in
+  // that range so we don't trip the server check.
+  const applyRoundingMut = useApiMutation<unknown, {
+    journalEntryId: number;
+    roundingAmount: number;
+    description?: string;
+  }>(
+    "/finance/rounding-differences/apply",
+    "POST",
+    invalidateKeys,
+    {
+      successMessage: "تم تطبيق تسوية التقريب",
       onSuccess: () => refetch(),
     },
   );
@@ -307,12 +339,21 @@ export default function JournalManualDetailPage() {
               className="gap-1 bg-emerald-600 hover:bg-emerald-700"
               disabled={approveMut.isPending || rejectMut.isPending || isCreator}
               deniedTooltip={creatorTooltip}
-              onClick={() => approveMut.mutate({ approved: true })}
-              title={creatorTooltip}
+              onClick={(e) => {
+                // Shift-click skips the review pipeline and uses the
+                // direct PATCH /approve helper. Server enforces same
+                // permission, just doesn't accept notes.
+                if (e.shiftKey) {
+                  directApproveMut.mutate({ approved: true });
+                  return;
+                }
+                approveMut.mutate({ approved: true });
+              }}
+              title={`${creatorTooltip ?? ""} — Shift = اعتماد مباشر`}
               rateLimitAware
             >
               <CheckCircle2 className="h-4 w-4" />
-              {approveMut.isPending ? "جارٍ الاعتماد…" : "اعتماد"}
+              {(approveMut.isPending || directApproveMut.isPending) ? "جارٍ الاعتماد…" : "اعتماد"}
             </GuardedButton>
             <GuardedButton
               perm="finance:approve"
@@ -356,6 +397,33 @@ export default function JournalManualDetailPage() {
           عكس القيد
         </GuardedButton>
       )}
+
+      {/* Rounding adjustment — only appears on draft entries that are
+          imbalanced by ≤ 0.05 (server enforces the same cap). Adds a
+          single line against account 9999 to bring debit = credit. */}
+      {canShowLifecycle && approvalStatus === "draft" && (() => {
+        const diff = Math.round((totalDebit - totalCredit) * 100) / 100;
+        const abs = Math.abs(diff);
+        if (abs === 0 || abs > 0.05) return null;
+        return (
+          <GuardedButton
+            perm="finance:update"
+            variant="outline"
+            size="sm"
+            className="gap-1"
+            disabled={applyRoundingMut.isPending}
+            onClick={() => applyRoundingMut.mutate({
+              journalEntryId: Number(id),
+              roundingAmount: -diff,
+              description: "تسوية تقريب آلية",
+            })}
+            rateLimitAware
+          >
+            <Scale className="h-4 w-4" />
+            تسوية تقريب ({diff > 0 ? "+" : "-"}{abs.toFixed(2)})
+          </GuardedButton>
+        );
+      })()}
     </div>
   );
 
@@ -382,7 +450,7 @@ export default function JournalManualDetailPage() {
         actions={
         <div className="flex items-center gap-2">
           {actions}
-          <PrintButton entityType="journal_entry" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="journal_entry" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
       />

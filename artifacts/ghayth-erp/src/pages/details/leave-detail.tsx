@@ -277,7 +277,7 @@ export default function LeaveDetail() {
             <EntityPrintButton
               entityType="leave_request"
               entityId={leave.id ?? id}
-              formats={["a4"]}/>
+             />
           )}
           <GuardedButton
             perm="hr:update"

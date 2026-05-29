@@ -165,7 +165,7 @@ export default function AccountStatementPage({ entityType }: Props) {
           <EntityPrintButton
             entityType={entityType === "customer" ? "customer_statement" : "vendor_statement"}
             entityId={`${id ?? ""}:${startDate ?? ""}..${endDate ?? ""}`}
-            formats={["a4"]}
+           
           />
         </div>
       }

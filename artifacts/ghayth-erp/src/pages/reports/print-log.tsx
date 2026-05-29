@@ -157,20 +157,18 @@ export default function PrintLogPage() {
             </div>
             <div>
               <Label>الكيان</Label>
-              <Select value={entityType} onValueChange={onFilter(setEntityType)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">الكل</SelectItem>
-                  <SelectItem value="invoice">فاتورة</SelectItem>
-                  <SelectItem value="quotation">عرض سعر</SelectItem>
-                  <SelectItem value="receipt_voucher">سند قبض</SelectItem>
-                  <SelectItem value="payment_voucher">سند صرف</SelectItem>
-                  <SelectItem value="pos_receipt">إيصال POS</SelectItem>
-                  <SelectItem value="purchase_order">أمر شراء</SelectItem>
-                  <SelectItem value="delivery_note">سند تسليم</SelectItem>
-                  <SelectItem value="payroll">إيصال راتب</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Free-text input — the engine supports 100+ entityTypes now,
+                  a dropdown of every one is unusable. Ops just type the slug
+                  they care about (e.g. "invoice", "tenant", "umrah_pilgrim").
+                  Empty / "all" disables the filter. */}
+              <Input
+                placeholder="مثال: invoice، tenant، umrah_pilgrim"
+                value={entityType === "all" ? "" : entityType}
+                onChange={(e) => {
+                  const v = e.target.value.trim();
+                  onFilter(setEntityType)(v === "" ? "all" : v);
+                }}
+              />
             </div>
             <div>
               <Label>من تاريخ</Label>

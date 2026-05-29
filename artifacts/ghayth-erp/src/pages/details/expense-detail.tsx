@@ -14,6 +14,11 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { LineAllocationStatusBanner } from "@/components/shared/line-allocation-status-banner";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+  InlineEditCard,
+} from "@/components/shared/detail-edit-delete-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
@@ -98,6 +103,22 @@ export default function ExpenseDetail() {
   );
 
   const expense = data;
+
+  // PATCH /finance/expenses/:id — backend only accepts `description` and
+  // gates writes on status='draft'. DELETE /finance/expenses/:id soft-
+  // deletes the draft and reverses the ledger atomically.
+  const editDelete = useDetailEditDelete({
+    entityLabel: "المصروف",
+    patchPath: `/finance/expenses/${id}`,
+    deletePath: `/finance/expenses/${id}`,
+    listPath: "/finance/expenses",
+    initialValues: expense,
+    fields: [
+      { key: "description", label: "الوصف" },
+    ],
+    invalidateKeys: [["expense", String(id)], ["expenses"]],
+    onSaved: () => refetch(),
+  });
 
   // The expense "amount" is the sum of the debit side of the main
   // expense line (the list query projects COALESCE(SUM(debit)) as
@@ -214,8 +235,8 @@ export default function ExpenseDetail() {
 
   const overview = (
     <div className="space-y-4">
-      <LineAllocationStatusBanner lines={lines} documentType="expense" />
-      <div className="grid gap-4 md:grid-cols-3">
+      <InlineEditCard hook={editDelete} />
+    <div className="grid gap-4 md:grid-cols-3">
       {/* Primary info — big amount + core metadata */}
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
@@ -432,7 +453,7 @@ export default function ExpenseDetail() {
               <EntityPrintButton
                 entityType="expense"
                 entityId={id ?? 0}
-                formats={["a4"]}/>
+               />
             )}
             <GuardedButton
               perm="finance:update"
@@ -444,6 +465,7 @@ export default function ExpenseDetail() {
               <Edit className="h-4 w-4 ms-1" />
               تعديل
             </GuardedButton>
+            <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
           </>
         }
       />

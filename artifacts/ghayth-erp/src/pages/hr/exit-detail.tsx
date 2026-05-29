@@ -312,7 +312,7 @@ export default function ExitDetail() {
             إتمام نهاية الخدمة
           </GuardedButton>
         ) : undefined
-          <PrintButton entityType="exit_request" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="exit_request" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
       overview={overviewContent}

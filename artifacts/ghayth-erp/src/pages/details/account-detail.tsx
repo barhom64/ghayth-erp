@@ -80,7 +80,7 @@ export default function AccountDetail() {
       actions={
         <div className="flex items-center gap-2">
           <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
-          <PrintButton entityType="account_statement" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="account_statement" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
     />

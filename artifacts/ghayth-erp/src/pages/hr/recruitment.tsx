@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { GuardedButton } from "@/components/shared/permission-gate";
 // Phase A — HR recruitment on unified primitives, via @workspace/ui-core.
 import {
@@ -38,6 +40,16 @@ export default function RecruitmentPage() {
   const { data: jobsData, isLoading, isError, refetch: refetchJobs } = useApiQuery<any>(["jobs"], "/hr/recruitment/postings");
   const { data: appsData, refetch: refetchApps } = useApiQuery<any>(["applicants"], "/hr/recruitment/applications");
   const { data: stats } = useApiQuery<any>(["recruitment-stats"], "/hr/recruitment/stats");
+
+  // GET /hr/recruitment/applications/:id — full application detail
+  // (resume URL, interview notes, scoring history). Fetched lazily
+  // when an operator clicks "تفاصيل" on a row.
+  const [appPreviewId, setAppPreviewId] = useState<number | null>(null);
+  const appPreviewQ = useApiQuery<any>(
+    ["application-detail", String(appPreviewId ?? 0)],
+    appPreviewId ? `/hr/recruitment/applications/${appPreviewId}` : null,
+    { enabled: appPreviewId !== null },
+  );
   const jobs = jobsData?.data || [];
   const apps = appsData?.data || [];
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
@@ -150,7 +162,15 @@ export default function RecruitmentPage() {
       key: "actions",
       header: "إجراءات",
       render: (a) => (
-        <div onClick={(e) => e.stopPropagation()}>
+        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setAppPreviewId(a.id)}
+          >
+            تفاصيل
+          </Button>
           <RowActions
             canEdit={canManage}
             onEdit={() => appActions.startEdit(a.id, { status: a.status || a.stage || "new", rating: a.rating || 0 })}
@@ -306,6 +326,43 @@ export default function RecruitmentPage() {
           />
         </TabsContent>
       </Tabs>
+
+      {appPreviewId !== null && (
+        <Card className="border-status-info-surface bg-status-info-surface/30">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">تفاصيل المتقدم #{appPreviewId}</p>
+              <Button variant="ghost" size="sm" onClick={() => setAppPreviewId(null)}>إغلاق</Button>
+            </div>
+            {appPreviewQ.isLoading ? (
+              <p className="text-xs text-muted-foreground">جاري التحميل...</p>
+            ) : appPreviewQ.data ? (
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div><span className="text-muted-foreground">الاسم:</span> {appPreviewQ.data.applicantName ?? appPreviewQ.data.name}</div>
+                <div><span className="text-muted-foreground">المنصب:</span> {appPreviewQ.data.postingTitle ?? "—"}</div>
+                <div><span className="text-muted-foreground">البريد:</span> {appPreviewQ.data.email ?? "—"}</div>
+                <div><span className="text-muted-foreground">الهاتف:</span> {appPreviewQ.data.phone ?? "—"}</div>
+                <div><span className="text-muted-foreground">التقييم:</span> {appPreviewQ.data.rating ?? "—"}/5</div>
+                <div><span className="text-muted-foreground">المرحلة:</span> {RECRUITMENT_STAGES[appPreviewQ.data.status ?? appPreviewQ.data.stage]?.label ?? appPreviewQ.data.status ?? "—"}</div>
+                {appPreviewQ.data.resumeUrl && (
+                  <div className="col-span-2">
+                    <a href={appPreviewQ.data.resumeUrl} target="_blank" rel="noopener" className="text-status-info-foreground underline">
+                      السيرة الذاتية
+                    </a>
+                  </div>
+                )}
+                {appPreviewQ.data.notes && (
+                  <div className="col-span-2 whitespace-pre-wrap text-xs text-muted-foreground border-t pt-2">
+                    {appPreviewQ.data.notes}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">لا توجد بيانات</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </PageShell>
   );
 }

@@ -281,7 +281,7 @@ export default function TransferDetail() {
             <EntityPrintButton
               entityType="transfer"
               entityId={id ?? 0}
-              formats={["a4"]}/>
+             />
           )}
           <GuardedButton
             perm="hr:update"

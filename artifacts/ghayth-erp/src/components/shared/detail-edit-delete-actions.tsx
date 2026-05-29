@@ -166,7 +166,7 @@ export function DetailActionButtons({
           تعديل
         </Button>
       )}
-      {showDelete && (hook.deleting ? (
+      {showDelete && hook.hasDelete && (hook.deleting ? (
         <div className="flex items-center gap-2">
           <Button
             variant="destructive"

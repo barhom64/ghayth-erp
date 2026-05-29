@@ -1,5 +1,5 @@
 import { useRoute, Link } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   PageShell,
@@ -10,9 +10,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { ScrollText, ArrowLeftRight, ExternalLink, Hash, Calendar, FileText } from "lucide-react";
+import { ScrollText, ArrowLeftRight, ExternalLink, Hash, Calendar, FileText, CheckCircle, Send } from "lucide-react";
 
 // Detail view for any journal entry (sourced from invoice / expense /
 // voucher / reversal / fx_revaluation / manual / ...). The list page at
@@ -27,6 +28,11 @@ interface JournalLine {
   description: string | null;
   debit: number | string;
   credit: number | string;
+  // Full dimensional payload — every column journal_lines carries.
+  // Pre-fix the type omitted 9 of the 16 dim columns so the UI couldn't
+  // render them even when the engine wrote them. Backend `SELECT jl.*`
+  // returns all of these.
+  costCenter: string | null;
   costCenterId: number | null;
   vehicleId: number | null;
   propertyId: number | null;
@@ -34,6 +40,15 @@ interface JournalLine {
   contractId: number | null;
   umrahSeasonId: number | null;
   umrahAgentId: number | null;
+  employeeId: number | null;
+  departmentId: number | null;
+  unitId: number | null;
+  assetId: number | null;
+  productId: number | null;
+  clientId: number | null;
+  vendorId: number | null;
+  driverId: number | null;
+  activityType: string | null;
 }
 
 interface JournalDetail {
@@ -87,6 +102,22 @@ export default function JournalDetailPage() {
     !!id,
   );
 
+  // POST /finance/journal/:id/approve — moves draft → approved with
+  // permission gate. POST /finance/journal/:id/post moves approved →
+  // posted (applies balances to the chart of accounts).
+  const approveMut = useApiMutation<unknown, Record<string, never>>(
+    `/finance/journal/${id}/approve`,
+    "POST",
+    [["journal-detail", id ?? ""], ["journal"]],
+    { successMessage: "تم اعتماد القيد" },
+  );
+  const postMut = useApiMutation<unknown, Record<string, never>>(
+    `/finance/journal/${id}/post`,
+    "POST",
+    [["journal-detail", id ?? ""], ["journal"]],
+    { successMessage: "تم ترحيل القيد" },
+  );
+
   if (isLoading) return <LoadingSpinner />;
   if (isError || !je) return <ErrorState />;
 
@@ -137,16 +168,31 @@ export default function JournalDetailPage() {
       header: "الأبعاد",
       render: (l) => {
         const dims: string[] = [];
-        if (l.costCenterId)   dims.push(`CC:${l.costCenterId}`);
+        // Render every dimension the GL line carries so reviewers can
+        // verify per-entity attribution at a glance. Order matters: the
+        // most-used dims (cost-center, employee, vehicle, property,
+        // project, contract) come first; less-common ones (umrah,
+        // asset, product, client/vendor, driver, unit) follow.
+        if (l.costCenter)     dims.push(`CC:${l.costCenter}`);
+        else if (l.costCenterId) dims.push(`CC#:${l.costCenterId}`);
+        if (l.employeeId)     dims.push(`E:${l.employeeId}`);
+        if (l.departmentId)   dims.push(`D:${l.departmentId}`);
         if (l.vehicleId)      dims.push(`V:${l.vehicleId}`);
+        if (l.driverId)       dims.push(`DR:${l.driverId}`);
         if (l.propertyId)     dims.push(`P:${l.propertyId}`);
+        if (l.unitId)         dims.push(`U:${l.unitId}`);
         if (l.projectId)      dims.push(`PR:${l.projectId}`);
         if (l.contractId)     dims.push(`C:${l.contractId}`);
+        if (l.clientId)       dims.push(`CL:${l.clientId}`);
+        if (l.vendorId)       dims.push(`VN:${l.vendorId}`);
+        if (l.productId)      dims.push(`PD:${l.productId}`);
+        if (l.assetId)        dims.push(`A:${l.assetId}`);
         if (l.umrahSeasonId)  dims.push(`US:${l.umrahSeasonId}`);
         if (l.umrahAgentId)   dims.push(`UA:${l.umrahAgentId}`);
+        if (l.activityType)   dims.push(`AT:${l.activityType}`);
         return dims.length === 0
           ? <span className="text-muted-foreground italic text-xs">—</span>
-          : <span className="font-mono text-[10px]">{dims.join(" / ")}</span>;
+          : <span className="font-mono text-[10px]" title={dims.join(" • ")}>{dims.join(" / ")}</span>;
       },
     },
   ];
@@ -166,7 +212,35 @@ export default function JournalDetailPage() {
             ? <PageStatusBadge status="active">مُرَحَّل</PageStatusBadge>
             : <PageStatusBadge status="pending">مسودة</PageStatusBadge>}
           {je.reversedById && <PageStatusBadge status="reversed" />}
-          <EntityPrintButton entityType="journal_entry" entityId={id ?? ""} formats={["a4"]} />
+          {je.approvalStatus === "draft" && (
+            <GuardedButton
+              perm="finance:approve"
+              size="sm"
+              variant="outline"
+              onClick={() => approveMut.mutate({})}
+              disabled={approveMut.isPending}
+              rateLimitAware
+              className="gap-1"
+            >
+              <Send className="h-4 w-4" />
+              اعتماد
+            </GuardedButton>
+          )}
+          {je.approvalStatus === "approved" && !je.balancesApplied && (
+            <GuardedButton
+              perm="finance:approve"
+              size="sm"
+              variant="outline"
+              onClick={() => postMut.mutate({})}
+              disabled={postMut.isPending}
+              rateLimitAware
+              className="gap-1"
+            >
+              <CheckCircle className="h-4 w-4" />
+              ترحيل
+            </GuardedButton>
+          )}
+          <EntityPrintButton entityType="journal_entry" entityId={id ?? ""} />
         </div>
       }
     >

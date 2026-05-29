@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,8 @@ import {
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
+import { useToast } from "@/hooks/use-toast";
+import { formatCurrency, formatDateAr, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import { Plus, Eye, Pencil, CheckCircle2, Briefcase, Calculator } from "lucide-react";
 
 type PlanStatus = "active" | "suspended" | "expired" | "pending";
@@ -56,10 +57,43 @@ export default function UmrahCommissionPlans() {
   const plansQ = useApiQuery<{ data: CommissionPlan[] }>(["umrah-commission-plans"], "/umrah/commission-plans");
   const employeesQ = useApiQuery<{ data: any[] }>(["employees"], "/employees");
   const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
+  // GET /umrah/commission-calculations — historical calculation runs
+  // across all plans. Surfaced as a count card so the operator knows
+  // how many calculations have been recorded.
+  const calculationsQ = useApiQuery<{ data: any[] }>(
+    ["umrah-commission-calculations"],
+    "/umrah/commission-calculations",
+  );
+  const calculationsCount = (calculationsQ.data?.data ?? []).length;
 
   const plans = plansQ.data?.data ?? [];
   const employees = employeesQ.data?.data ?? [];
   const seasons = seasonsQ.data?.data ?? [];
+
+  const { toast } = useToast();
+
+  // POST /umrah/commission-plans/:id/calculate — recomputes commissions
+  // for the current month / year (defaults to now in Riyadh). The page
+  // already shows recent calculations via the editor's history.
+  const calculateMut = useApiMutation<unknown, { id: number; month: number; year: number }>(
+    (body) => `/umrah/commission-plans/${body.id}/calculate`,
+    "POST",
+    [["umrah-commission-plans"]],
+    {
+      successMessage: "تم احتساب العمولة",
+    },
+  );
+
+  const handleCalculate = (planId: number) => {
+    calculateMut.mutate(
+      { id: planId, month: Number(currentMonthPaddedRiyadh()), year: currentYearRiyadh() },
+      {
+        onError: (e: any) => {
+          toast({ variant: "destructive", title: "تعذر الاحتساب", description: e?.message });
+        },
+      },
+    );
+  };
 
   const [empFilter, setEmpFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -139,6 +173,17 @@ export default function UmrahCommissionPlans() {
               <Pencil className="h-3.5 w-3.5" />
             </Link>
           </GuardedButton>
+          <GuardedButton
+            perm="umrah:write"
+            size="sm"
+            variant="ghost"
+            onClick={() => handleCalculate(p.id)}
+            disabled={calculateMut.isPending}
+            rateLimitAware
+            title="احتساب العمولة للشهر الحالي"
+          >
+            <Calculator className="h-3.5 w-3.5" />
+          </GuardedButton>
         </div>
       ),
     },
@@ -168,7 +213,7 @@ export default function UmrahCommissionPlans() {
     >
       <UmrahTabsNav />
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-4">
         <Card><CardContent className="p-4 flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl bg-status-info-surface flex items-center justify-center">
             <Briefcase className="w-5 h-5 text-status-info-foreground" />
@@ -176,6 +221,15 @@ export default function UmrahCommissionPlans() {
           <div>
             <p className="text-2xl font-bold">{formatNumber(counts.total)}</p>
             <p className="text-xs text-muted-foreground">إجمالي الخطط</p>
+          </div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-purple-50 flex items-center justify-center">
+            <Calculator className="w-5 h-5 text-purple-600" />
+          </div>
+          <div>
+            <p className="text-2xl font-bold">{formatNumber(calculationsCount)}</p>
+            <p className="text-xs text-muted-foreground">احتسابات مسجَّلة</p>
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4 flex items-center gap-3">

@@ -15,6 +15,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { TextField, NumberField } from "@/components/shared/form-field-wrapper";
+import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 import { roundMoney, formatCurrency , todayLocal } from "@/lib/formatters";
 
 interface JournalLine {
@@ -25,6 +26,13 @@ interface JournalLine {
   costCenter?: string;
   departmentId?: string;
   projectId?: string;
+  // Audit follow-through: journal-create only exposed 3 inline dim
+  // fields, silently dropping 12 others the backend schema accepts.
+  // Embed the shared LineAllocationPanel so every JE created via this
+  // form can carry the full dim payload (vehicle / property / unit /
+  // asset / contract / client / vendor / product / umrahAgent /
+  // umrahSeason / activityType + manualOverrideReason).
+  allocation?: LineAllocation;
 }
 
 const DRAFT_KEY = "finance_journal_create";
@@ -88,6 +96,14 @@ export default function JournalCreate() {
           costCenter: l.costCenter || undefined,
           departmentId: l.departmentId ? Number(l.departmentId) : undefined,
           projectId: l.projectId ? Number(l.projectId) : undefined,
+          // Spread the LineAllocationPanel's dim payload so the line
+          // carries vehicleId / propertyId / unitId / assetId /
+          // contractId / clientId / vendorId / productId / driverId
+          // / umrahAgentId / umrahSeasonId / activityType +
+          // optional manualOverrideReason. The backend schema at
+          // routes/finance-accounts.ts:41 already accepts every
+          // field; only the form was dropping them.
+          ...buildAllocationPayload(l.allocation ?? {}),
         })),
       });
       clearDraft();
@@ -164,6 +180,17 @@ export default function JournalCreate() {
                     </SelectContent>
                   </Select>
                 </div>
+                {/* Full dim-allocation panel — exposes vehicle/property/
+                    unit/asset/contract/client/vendor/product/driver/
+                    umrahAgent/umrahSeason/activityType + optional
+                    manualOverrideReason so the line can carry the same
+                    drilldowns as invoice/PO/expense JE lines. */}
+                <LineAllocationPanel
+                  value={line.allocation ?? {}}
+                  onChange={(next) => updateLine(idx, "allocation" as any, next as any)}
+                  status={deriveAllocationStatus(line.allocation ?? {})}
+                  required={false}
+                />
               </div>
             ))}
             <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2 pt-2 border-t font-semibold text-sm">

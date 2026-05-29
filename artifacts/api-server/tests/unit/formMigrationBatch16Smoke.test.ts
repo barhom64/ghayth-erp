@@ -27,10 +27,13 @@ describe("hr/gratuity — end-of-service calculator on FormShell + zod", () => {
     expect(SRC).toMatch(/^\s*employeeId:\s*z\.string\(\)\.min\(1/m);
   });
 
-  it("submit handler builds query URL (no POST — this is a read-only calculator)", () => {
-    // The handleCalc just assembles a GET URL that the gratuity
-    // endpoint reads — no mutation, no audit-log entry.
-    expect(SRC).toMatch(/setCalcUrl\(`\/hr\/gratuity\/\$\{values\.employeeId\}/);
+  it("submit handler stages query params (no POST — this is a read-only calculator)", () => {
+    // handleCalc only stages the inputs into state; useApiQuery then
+    // builds the GET URL inline. The earlier `setCalcUrl(\`/hr/gratuity/
+    // ...\`)` shape masked the URL from the wiring audit, so the
+    // refactored page sets a typed `calcParams` object instead.
+    expect(SRC).toMatch(/setCalcParams\(/);
+    expect(SRC).toMatch(/`\/hr\/gratuity\/\$\{calcParams\.employeeId\}/);
   });
 
   it("removes dead Input/Label/Select/DatePicker imports (now via FormShell)", () => {

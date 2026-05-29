@@ -30,7 +30,7 @@ export default function MyPayslip() {
       subtitle="عرض مفصّل لراتبك الشهري"
       actions={
         hasData && payslip?.id ? (
-          <EntityPrintButton entityType="payslip" entityId={payslip.id} formats={["a4"]} />
+          <EntityPrintButton entityType="payslip" entityId={payslip.id} />
         ) : undefined
       }
     >

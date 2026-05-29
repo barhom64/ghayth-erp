@@ -27,6 +27,17 @@ export default function PropertiesDashboard() {
     `/properties/stats?${scopeQueryString || ""}`
   );
 
+  // Drill-downs for the cards below — same data source the cards
+  // need (expiring contracts within 30d, overdue payments, open
+  // maintenance) without re-querying each table directly.
+  const { data: opsData } = useApiQuery<any>(
+    ["properties-operations-dashboard"],
+    "/properties/operations-dashboard",
+  );
+  const expiringContracts: any[] = opsData?.expiringContracts || [];
+  const overduePayments: any[] = opsData?.overduePayments || [];
+  const openMaintenanceRows: any[] = opsData?.openMaintenance || [];
+
   if (isError) return <ErrorState />;
   if (isLoading) return (
     <div className="space-y-6">
@@ -247,6 +258,62 @@ export default function PropertiesDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {(expiringContracts.length > 0 || overduePayments.length > 0 || openMaintenanceRows.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {expiringContracts.length > 0 && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-orange-500" /> عقود منتهية خلال 30 يوم ({expiringContracts.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1.5 text-sm">
+                {expiringContracts.slice(0, 5).map((c: any) => (
+                  <Link key={c.id} href={`/properties/contracts/${c.id}`} className="flex justify-between items-center hover:bg-surface-subtle px-2 py-1 rounded">
+                    <span className="truncate font-medium">{c.tenantName}</span>
+                    <span className="text-xs text-muted-foreground font-mono">{c.unitNumber}</span>
+                  </Link>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+          {overduePayments.length > 0 && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-status-error-foreground" /> دفعات متأخرة ({overduePayments.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1.5 text-sm">
+                {overduePayments.slice(0, 5).map((p: any) => (
+                  <div key={p.id} className="flex justify-between items-center px-2 py-1">
+                    <span className="truncate">{p.tenantName}</span>
+                    <span className="text-xs font-bold text-status-error-foreground">{formatCurrency(Number(p.amount) - Number(p.paidAmount || 0))}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+          {openMaintenanceRows.length > 0 && (
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Wrench className="h-4 w-4 text-status-warning-foreground" /> صيانة مفتوحة ({openMaintenanceRows.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1.5 text-sm">
+                {openMaintenanceRows.slice(0, 5).map((m: any) => (
+                  <Link key={m.id} href={`/properties/maintenance/${m.id}`} className="flex justify-between items-center hover:bg-surface-subtle px-2 py-1 rounded">
+                    <span className="truncate">{m.category} — {m.tenantName || m.unitNumber}</span>
+                    <Badge variant="outline" className="text-xs">{m.priority || "—"}</Badge>
+                  </Link>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="border-0 shadow-sm">

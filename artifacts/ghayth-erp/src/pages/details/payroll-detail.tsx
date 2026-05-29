@@ -323,10 +323,17 @@ export default function PayrollDetail() {
       onRetry={refetch}
       actions={
         payroll ? (
-          <EntityPrintButton
-            entityType="payroll"
-            entityId={payroll.id ?? id}
-            formats={["a4"]}/>
+          <div className="flex items-center gap-2">
+            {/* The legacy ExportButton hit /export/pdf/payroll/:id which itself
+                proxies through renderPrint — same audit row, same artifact.
+                EntityPrintButton's dropdown now offers a "تنزيل" item, so the
+                duplicate button only created two print_jobs rows when both
+                were clicked. */}
+            <EntityPrintButton
+              entityType="payroll"
+              entityId={payroll.id ?? id}
+             />
+          </div>
         ) : undefined
       }
     />

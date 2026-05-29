@@ -139,7 +139,7 @@ financeAlgorithmsRouter.get("/ar-aging", authorize({ feature: "finance.algorithm
          c.phone AS "clientPhone",
          c.email AS "clientEmail"
        FROM invoices i
-       LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        WHERE i."companyId" = $2
          AND i."deletedAt" IS NULL
          AND i.status NOT IN ('paid','cancelled','draft')
@@ -984,8 +984,8 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", authorize({ feature
         sourceId: asset.id as number,
         sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
         lines: [
-          { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}` },
-          { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}` },
+          { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}`, assetId: asset.id as number },
+          { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}`, assetId: asset.id as number },
         ],
       });
       journalId = posted.journalId;
@@ -1085,8 +1085,8 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature
           sourceId: asset.id as number,
           sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
           lines: [
-            { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0 },
-            { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount },
+            { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0, assetId: asset.id as number },
+            { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount, assetId: asset.id as number },
           ],
         });
 
@@ -1946,7 +1946,24 @@ financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "f
       contract: 'jl."contractId"',
       department: 'jl."departmentId"',
       client: 'jl."clientId"',
-      supplier: 'jl."supplierId"',
+      // "customer" is the label used by the voucher / expense forms;
+      // it maps to the same clientId column as "client".
+      customer: 'jl."clientId"',
+      // journal_lines uses `vendorId` for the supplier dimension —
+      // "supplier" stays as the entityType alias for backwards compat
+      // with frontend pages that label it as "supplier", but the SQL
+      // column is `vendorId`. Pre-fix the mapping pointed at a
+      // non-existent `supplierId` column, so this endpoint threw a
+      // "column not found" SQL error for entityType=supplier silently.
+      supplier: 'jl."vendorId"',
+      vendor: 'jl."vendorId"',
+      asset: 'jl."assetId"',
+      unit: 'jl."unitId"',
+      umrahAgent: 'jl."umrahAgentId"',
+      umrahSeason: 'jl."umrahSeasonId"',
+      driver: 'jl."driverId"',
+      product: 'jl."productId"',
+      costCenter: 'jl."costCenterId"',
     };
     const safeCol = safeColumns[entityType];
 

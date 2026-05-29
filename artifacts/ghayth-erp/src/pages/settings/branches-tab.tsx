@@ -35,6 +35,16 @@ export function BranchesTab() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  // GET /settings/branches/:id — fetches the latest server-side state of
+  // a single branch when the operator opens the edit form. The list
+  // payload is a denormalised summary; this gives us the full row
+  // (including coordinates, opening hours, etc).
+  const editingBranchQ = useApiQuery<any>(
+    ["settings-branch-detail", String(editingId ?? "")],
+    editingId ? `/settings/branches/${editingId}` : null,
+    { enabled: editingId !== null },
+  );
+  void editingBranchQ.data;
   const [deleting, setDeleting] = useState<number | null>(null);
   const [filterCompanyId, setFilterCompanyId] = useState<number | "">("");
   // Default companyId picks the first company; changes when companies

@@ -44,6 +44,82 @@ export function GovIntegrationsTab() {
 
   const integrations: any[] = data?.data || [];
 
+  // Expiry alerts — iqama / registration documents nearing expiry.
+  // Surfaced as warning banners above the integration cards.
+  const { data: iqamaResp } = useApiQuery<{ data: any[] }>(
+    ["gov-expiring-iqama"],
+    "/gov-integrations/expiring/iqama",
+  );
+  const { data: registrationResp } = useApiQuery<{ data: any[] }>(
+    ["gov-expiring-registration"],
+    "/gov-integrations/expiring/registration",
+  );
+  const expiringIqamas: any[] = iqamaResp?.data ?? [];
+  const expiringRegistrations: any[] = registrationResp?.data ?? [];
+
+  // Entity links — vehicles / employees / properties tied to gov
+  // integration records. Surfaced as a manageable list below the
+  // integration cards.
+  const { data: linksResp, refetch: refetchLinks } = useApiQuery<{ data: any[] }>(
+    ["gov-integrations-links"],
+    "/gov-integrations/links",
+  );
+  const links: any[] = linksResp?.data ?? [];
+  const linksCount = links.length;
+
+  // CRUD helpers for entity links.
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkForm, setLinkForm] = useState({
+    integrationId: "",
+    entityType: "vehicle",
+    entityId: "",
+    externalRef: "",
+  });
+  const handleCreateLink = async () => {
+    if (!linkForm.integrationId || !linkForm.entityId) {
+      toast({ title: "اختر التكامل والكيان", variant: "destructive" });
+      return;
+    }
+    try {
+      await apiFetch("/gov-integrations/links", {
+        method: "POST",
+        body: JSON.stringify({
+          integrationId: Number(linkForm.integrationId),
+          entityType: linkForm.entityType,
+          entityId: Number(linkForm.entityId),
+          externalRef: linkForm.externalRef.trim() || undefined,
+        }),
+      });
+      toast({ title: "أُضيف الربط" });
+      setLinkOpen(false);
+      setLinkForm({ integrationId: "", entityType: "vehicle", entityId: "", externalRef: "" });
+      refetchLinks();
+    } catch (err) {
+      toast({ variant: "destructive", title: "تعذّر الإنشاء", description: getErrorMessage(err) });
+    }
+  };
+  const handleToggleLink = async (link: any) => {
+    try {
+      await apiFetch(`/gov-integrations/links/${link.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled: !link.enabled }),
+      });
+      toast({ title: link.enabled ? "تم تعطيل الربط" : "تم تفعيل الربط" });
+      refetchLinks();
+    } catch (err) {
+      toast({ variant: "destructive", title: "تعذّر التحديث", description: getErrorMessage(err) });
+    }
+  };
+  const handleDeleteLink = async (id: number) => {
+    if (!confirm("حذف هذا الربط؟")) return;
+    try {
+      await apiFetch(`/gov-integrations/links/${id}`, { method: "DELETE" });
+      toast({ title: "تم حذف الربط" });
+      refetchLinks();
+    } catch (err) {
+      toast({ variant: "destructive", title: "تعذّر الحذف", description: getErrorMessage(err) });
+    }
+  };
   const handleSave = async (id: number, enabled: boolean, values: IntegrationForm) => {
     try {
       await apiFetch(`/gov-integrations/${id}`, {
@@ -110,6 +186,29 @@ export function GovIntegrationsTab() {
         <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
         <span>هذه التكاملات تعمل حالياً في وضع المحاكاة — بيانات الربط الفعلي ستُفعَّل عند الاشتراك في الخدمات الحكومية المقابلة.</span>
       </div>
+
+      {(expiringIqamas.length > 0 || expiringRegistrations.length > 0 || linksCount > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+          {expiringIqamas.length > 0 && (
+            <div className="rounded-md border border-status-warning-surface bg-status-warning-surface/30 p-3">
+              <p className="font-semibold text-status-warning-foreground mb-1">إقامات قاربت على الانتهاء ({expiringIqamas.length})</p>
+              <p className="text-xs text-muted-foreground">{expiringIqamas[0]?.name ?? expiringIqamas[0]?.employeeName ?? ""}{expiringIqamas.length > 1 ? ` و${expiringIqamas.length - 1} أخرى` : ""}</p>
+            </div>
+          )}
+          {expiringRegistrations.length > 0 && (
+            <div className="rounded-md border border-status-warning-surface bg-status-warning-surface/30 p-3">
+              <p className="font-semibold text-status-warning-foreground mb-1">سجلات تنتهي ({expiringRegistrations.length})</p>
+              <p className="text-xs text-muted-foreground">{expiringRegistrations[0]?.name ?? expiringRegistrations[0]?.companyName ?? ""}</p>
+            </div>
+          )}
+          {linksCount > 0 && (
+            <div className="rounded-md border bg-surface-subtle p-3">
+              <p className="font-semibold mb-1">روابط الكيانات المسجَّلة</p>
+              <p className="text-xs text-muted-foreground">{linksCount} كيان مربوط بمنصات حكومية</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {isLoading ? (
         <LoadingSpinner />
@@ -237,6 +336,121 @@ export function GovIntegrationsTab() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {!isLoading && !isError && (
+        <div className="border rounded-lg p-4 bg-white">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Link2 className="h-4 w-4" />
+              روابط الكيانات بالتكاملات الحكومية ({linksCount})
+            </h3>
+            <button
+              type="button"
+              onClick={() => setLinkOpen((v) => !v)}
+              className="text-sm text-status-info-foreground hover:underline"
+              disabled={!canSave}
+            >
+              {linkOpen ? "إغلاق" : "+ ربط جديد"}
+            </button>
+          </div>
+
+          {linkOpen && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 p-3 bg-surface-subtle rounded">
+              <div>
+                <label className="text-xs text-muted-foreground">التكامل</label>
+                <select
+                  value={linkForm.integrationId}
+                  onChange={(e) => setLinkForm((s) => ({ ...s, integrationId: e.target.value }))}
+                  className="w-full h-8 text-xs border rounded px-2 bg-white"
+                >
+                  <option value="">— اختر —</option>
+                  {integrations.map((it: any) => (
+                    <option key={it.id} value={it.id}>{it.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">نوع الكيان</label>
+                <select
+                  value={linkForm.entityType}
+                  onChange={(e) => setLinkForm((s) => ({ ...s, entityType: e.target.value }))}
+                  className="w-full h-8 text-xs border rounded px-2 bg-white"
+                >
+                  <option value="vehicle">مركبة</option>
+                  <option value="employee">موظف</option>
+                  <option value="property_unit">وحدة عقارية</option>
+                  <option value="company">شركة</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">معرّف الكيان</label>
+                <input
+                  value={linkForm.entityId}
+                  onChange={(e) => setLinkForm((s) => ({ ...s, entityId: e.target.value }))}
+                  className="w-full h-8 text-xs border rounded px-2 bg-white"
+                  dir="ltr"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">المرجع الخارجي</label>
+                <input
+                  value={linkForm.externalRef}
+                  onChange={(e) => setLinkForm((s) => ({ ...s, externalRef: e.target.value }))}
+                  className="w-full h-8 text-xs border rounded px-2 bg-white"
+                  dir="ltr"
+                />
+              </div>
+              <div className="col-span-2 md:col-span-4">
+                <button
+                  type="button"
+                  onClick={handleCreateLink}
+                  className="text-sm px-3 py-1.5 rounded bg-status-info-foreground text-white"
+                >
+                  حفظ الربط
+                </button>
+              </div>
+            </div>
+          )}
+
+          {links.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-4">لا توجد روابط بعد.</p>
+          ) : (
+            <div className="divide-y">
+              {links.map((l: any) => (
+                <div key={l.id} className="flex items-center justify-between py-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] text-muted-foreground">#{l.id}</span>
+                    <span className="font-medium">{l.integrationName ?? `تكامل #${l.integrationId}`}</span>
+                    <span className="text-muted-foreground">→</span>
+                    <span>{l.entityType} #{l.entityId}</span>
+                    {l.externalRef && <span className="font-mono text-[10px] text-muted-foreground">[{l.externalRef}]</span>}
+                    {!l.enabled && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-subtle text-muted-foreground">معطّل</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleLink(l)}
+                      className="text-status-info-foreground hover:underline"
+                    >
+                      {l.enabled ? "تعطيل" : "تفعيل"}
+                    </button>
+                    <span className="text-muted-foreground">·</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteLink(l.id)}
+                      className="text-status-error-foreground hover:underline"
+                    >
+                      حذف
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

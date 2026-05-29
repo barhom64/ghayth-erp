@@ -209,7 +209,7 @@ router.get("/sub-agents", authorize({ feature: "umrah", action: "list" }), async
       `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
        FROM umrah_sub_agents sa
        LEFT JOIN umrah_agents a ON sa."agentId" = a.id
-       LEFT JOIN clients c ON sa."clientId" = c.id AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON sa."clientId" = c.id AND c."companyId" = sa."companyId" AND c."deletedAt" IS NULL
        WHERE sa."companyId" = $1 AND sa."deletedAt" IS NULL
        ORDER BY sa.name
        LIMIT 500`,
@@ -282,7 +282,7 @@ router.get("/sub-agents/:id", authorize({ feature: "umrah", action: "view" }), a
       `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
          FROM umrah_sub_agents sa
          LEFT JOIN umrah_agents a ON sa."agentId" = a.id
-         LEFT JOIN clients c ON sa."clientId" = c.id AND c."deletedAt" IS NULL
+         LEFT JOIN clients c ON sa."clientId" = c.id AND c."companyId" = sa."companyId" AND c."deletedAt" IS NULL
         WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -383,7 +383,7 @@ router.put("/sub-agents/:id/link", authorize({ feature: "umrah", action: "create
 
     const [row] = await rawQuery(
       `SELECT sa.*, c.name AS "clientName" FROM umrah_sub_agents sa
-       LEFT JOIN clients c ON c.id = sa."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = sa."clientId" AND c."companyId" = sa."companyId" AND c."deletedAt" IS NULL
        WHERE sa.id=$1 AND sa."companyId"=$2 AND sa."deletedAt" IS NULL`,
       [id, scope.companyId]
     );
@@ -1332,7 +1332,7 @@ router.get("/invoices", authorize({ feature: "umrah", action: "list" }), async (
       `SELECT si.*, sa.name AS "subAgentName", c.name AS "clientName"
        FROM umrah_sales_invoices si
        LEFT JOIN umrah_sub_agents sa ON sa.id = si."subAgentId"
-       LEFT JOIN clients c ON c.id = si."clientId" AND c."deletedAt" IS NULL
+       LEFT JOIN clients c ON c.id = si."clientId" AND c."companyId" = si."companyId" AND c."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY si."createdAt" DESC
        LIMIT 500`,
@@ -1420,7 +1420,10 @@ router.get("/payments", authorize({ feature: "umrah", action: "list" }), async (
     const rows = await rawQuery(
       `SELECT p.*, sa.name AS "subAgentName"
        FROM umrah_payments p
-       LEFT JOIN umrah_sub_agents sa ON sa.id = p."subAgentId"
+       LEFT JOIN umrah_sub_agents sa
+         ON sa.id = p."subAgentId"
+        AND sa."companyId" = p."companyId"
+        AND sa."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY p."paymentDate" DESC, p.id DESC
        LIMIT 500`,

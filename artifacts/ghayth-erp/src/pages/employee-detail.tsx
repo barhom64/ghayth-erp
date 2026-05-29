@@ -237,6 +237,22 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const id = propId || params?.id || "";
   const { hideTabs: registryHideTabs } = useRegistryTabs("employee", id ?? "");
   const { data: employee, isLoading, isError, error, refetch } = useApiQuery<any>(["employee", id], `/employees/${id}`, !!id);
+
+  // Per-employee intelligence rollups — KPIs (performance, attendance,
+  // task completion) + daily schedule preview. Both lazy via `enabled`
+  // so the queries only fire when an id is known.
+  const { data: empKpisResp } = useApiQuery<any>(
+    ["intelligence-employee-kpis", id],
+    id ? `/intelligence/kpis/employee/${id}` : null,
+    { enabled: !!id },
+  );
+  const empKpis = empKpisResp?.data ?? empKpisResp;
+  const { data: empScheduleResp } = useApiQuery<any>(
+    ["intelligence-employee-schedule", id],
+    id ? `/intelligence/daily-schedule/employee/${id}` : null,
+    { enabled: !!id },
+  );
+  const empSchedule: any[] = empScheduleResp?.data ?? empScheduleResp?.items ?? [];
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
   const [printHtml, setPrintHtml] = useState("");
@@ -311,6 +327,36 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
 
   const overview = (
     <div className="space-y-4">
+      {(empKpis || empSchedule.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {empKpis && (
+            <div className="md:col-span-2 rounded-lg border bg-status-info-surface/30 p-3 text-sm">
+              <p className="font-semibold mb-2">مؤشرات أداء الموظف</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {Object.entries(empKpis as Record<string, any>).slice(0, 8).map(([k, v]) => (
+                  <div key={k} className="flex justify-between">
+                    <span className="text-muted-foreground">{k}</span>
+                    <span className="font-mono font-semibold">{typeof v === "object" ? Object.keys(v ?? {}).length : String(v)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {empSchedule.length > 0 && (
+            <div className="rounded-lg border bg-purple-50/40 p-3 text-sm">
+              <p className="font-semibold mb-2">جدول اليوم ({empSchedule.length})</p>
+              <div className="space-y-1 text-xs">
+                {empSchedule.slice(0, 5).map((s: any, i: number) => (
+                  <div key={s.id ?? i} className="flex justify-between">
+                    <span className="truncate">{s.title ?? s.taskTitle ?? s.subject ?? "—"}</span>
+                    <span className="text-muted-foreground">{s.time ?? s.dueTime ?? ""}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex gap-1 border-b overflow-x-auto pb-px">
         {TABS.map((tab) => {
           const count = tab.key === "tasks" ? tasks.length
@@ -854,7 +900,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <OperationalStatusBar employeeId={id} />
-            <EntityPrintButton entityType="employee" entityId={id ?? ""} formats={["a4"]} label="بطاقة الموظف" />
+            <EntityPrintButton entityType="employee" entityId={id ?? ""} label="بطاقة الموظف" />
             <div className="relative">
               <Button variant="outline" size="sm" onClick={() => setShowPrintMenu(!showPrintMenu)}>
                 <Printer className="h-4 w-4 me-1" />طباعة قوالب HR

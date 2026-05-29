@@ -291,9 +291,12 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
 
       const sender = await matchSenderToEntity(from, companyId);
 
+      // Phase 4 final contract: write to message_log only.
       await rawExecute(
-        `INSERT INTO communications_log ("companyId",channel,direction,"fromNumber","toNumber",subject,body,status,"relatedType","relatedId","createdAt")
-         VALUES ($1,'whatsapp','inbound',$2,'',$3,$4,'received',$5,$6,NOW())`,
+        `INSERT INTO message_log
+           ("companyId", channel, direction, "fromAddress", "toAddress",
+            subject, body, status, folder, "relatedType", "relatedId", "createdAt")
+         VALUES ($1, 'whatsapp', 'inbound', $2, '', $3, $4, 'received', 'inbox', $5, $6, NOW())`,
         [companyId, from, `WhatsApp from ${sender.name}`, msgText, sender.type !== "unknown" ? sender.type : null, sender.id]
       );
 
@@ -326,9 +329,11 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
       await sendWhatsAppMessage(from, ackMessage);
 
       await rawExecute(
-        `INSERT INTO whatsapp_queue ("companyId",phone,"recipientName","clientId","assignmentId",message,status,"createdAt")
-         VALUES ($1,$2,$3,$4,NULL,$5,'sent',NOW())`,
-        [companyId, from, sender.name, sender.type === "client" ? sender.id : null, ackMessage]
+        `INSERT INTO outbound_queue
+           ("companyId", channel, recipient, "recipientName", body, status,
+            "sentAt", "createdAt", "updatedAt")
+         VALUES ($1, 'whatsapp', $2, $3, $4, 'sent', NOW(), NOW(), NOW())`,
+        [companyId, from, sender.name, ackMessage]
       );
 
       if (relatedType && relatedId) {
@@ -405,9 +410,12 @@ router.post("/pbx/incoming", async (req, res): Promise<void> => {
         [companyId, callId, callerNumber, calledNumber, direction]
       );
       pbxId = result.rows[0].id;
+      // Phase 4 final contract: write to message_log only.
       await client.query(
-        `INSERT INTO communications_log ("companyId",channel,direction,"fromNumber","toNumber",subject,body,status,"relatedType","relatedId","createdAt")
-         VALUES ($1,'pbx',$2,$3,$4,$5,$6,'received','pbx_call',$7,NOW())`,
+        `INSERT INTO message_log
+           ("companyId", channel, direction, "fromAddress", "toAddress",
+            subject, body, status, folder, "relatedType", "relatedId", "createdAt")
+         VALUES ($1, 'pbx', $2, $3, $4, $5, $6, 'received', 'inbox', 'pbx_call', $7, NOW())`,
         [companyId, direction, callerNumber, calledNumber, `PBX Call from ${sender.name}`, `Incoming call from ${callerNumber} identified as ${sender.name} (${sender.type})`, pbxId]
       );
     });
@@ -769,11 +777,11 @@ router.patch("/log/:id", authorize({ feature: "communications", action: "update"
     if (sets.length === 0) { throw new ValidationError("لا توجد بيانات"); }
     params.push(id, scope.companyId);
     const [row] = await rawQuery<Record<string, unknown>>(
-      `UPDATE communications_log SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
+      `UPDATE message_log SET ${sets.join(", ")} WHERE id = $${idx++} AND "companyId" = $${idx} AND "deletedAt" IS NULL RETURNING *`,
       params
     );
     if (!row) { throw new NotFoundError("السجل غير موجود"); }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "communications_log", entityId: id }).catch((e) => logger.error(e, "communications background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "message_log", entityId: id }).catch((e) => logger.error(e, "communications background task failed"));
     emitEvent({
       companyId: scope.companyId,
       userId: scope.userId,
@@ -872,7 +880,7 @@ router.post("/log/:id/convert", authorize({ feature: "communications", action: "
         targetPath = "/requests";
       }
       await client.query(
-        `UPDATE communications_log SET "relatedType"=$1, "relatedId"=$2 WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
+        `UPDATE message_log SET "relatedType"=$1, "relatedId"=$2 WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
         [targetType, createdId, logId, scope.companyId]
       );
     });

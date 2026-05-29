@@ -296,7 +296,7 @@ export default function AccountsPage() {
                 <Percent className="h-4 w-4 me-1" />رموز الضريبة
               </Button>
             </Link>
-            <EntityPrintButton entityType="report_chart_of_accounts" entityId="all" formats={["a4"]} />
+            <EntityPrintButton entityType="report_chart_of_accounts" entityId="all" />
             <Button
               size="sm"
               variant={viewMode === "tree" ? "default" : "outline"}

@@ -511,41 +511,24 @@ export function registerEventListeners() {
       const body = letter.content || subject;
 
       if (letter.employeeEmail) {
-        // Phase 4 contract slice 8: dual-write to outbound_queue. Once
-        // legacy email_queue is dropped, only the second INSERT remains.
-        await rawExecute(
-          `INSERT INTO email_queue ("companyId","toEmail","recipientName",subject,body,status,"createdAt","refType","refId")
-           VALUES ($1,$2,$3,$4,$5,'pending',NOW(),'official_letter',$6)`,
-          [payload.companyId, letter.employeeEmail, letter.employeeName ?? "", subject, body, letterId]
-        );
         await rawExecute(
           `INSERT INTO outbound_queue
              ("companyId", channel, recipient, "recipientName", subject, body,
               status, "refType", "refId", "createdAt", "updatedAt")
            VALUES ($1, 'email', $2, $3, $4, $5, 'pending', 'official_letter', $6, NOW(), NOW())`,
           [payload.companyId, letter.employeeEmail, letter.employeeName ?? null, subject, body, letterId]
-        ).catch((e) => logger.warn(e, "[eventListeners] outbound_queue email dual-write failed"));
+        );
       }
 
-      // Best-effort WhatsApp copy if we have a phone and the queue exists.
+      // WhatsApp copy if we have a phone.
       if (letter.employeePhone) {
-        try {
-          await rawExecute(
-            `INSERT INTO whatsapp_queue ("companyId",phone,message,status,"scheduledAt")
-             VALUES ($1,$2,$3,'queued',NOW())`,
-            [payload.companyId, letter.employeePhone, `${subject}\n\n${body}`]
-          );
-          // Mirror to outbound_queue (Phase 4 slice 8).
-          await rawExecute(
-            `INSERT INTO outbound_queue
-               ("companyId", channel, recipient, body, status,
-                "refType", "refId", "createdAt", "updatedAt")
-             VALUES ($1, 'whatsapp', $2, $3, 'pending', 'official_letter', $4, NOW(), NOW())`,
-            [payload.companyId, letter.employeePhone, `${subject}\n\n${body}`, letterId]
-          ).catch((e) => logger.warn(e, "[eventListeners] outbound_queue whatsapp dual-write failed"));
-        } catch (e) {
-          logger.warn(e, "whatsapp_queue table may not exist in this deployment");
-        }
+        await rawExecute(
+          `INSERT INTO outbound_queue
+             ("companyId", channel, recipient, body, status,
+              "refType", "refId", "createdAt", "updatedAt")
+           VALUES ($1, 'whatsapp', $2, $3, 'pending', 'official_letter', $4, NOW(), NOW())`,
+          [payload.companyId, letter.employeePhone, `${subject}\n\n${body}`, letterId]
+        );
       }
 
       // Mark the letter as dispatched so we never double-queue it.

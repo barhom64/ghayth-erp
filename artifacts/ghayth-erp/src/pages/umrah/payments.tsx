@@ -207,7 +207,24 @@ export default function UmrahPayments() {
         emptyMessage="لا توجد مدفوعات بعد — ابدأ بتسجيل دفعة من الوكيل الفرعي"
       />
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog
+        open={createOpen}
+        onOpenChange={(next) => {
+          setCreateOpen(next);
+          // Closing without submit (Cancel / Escape / outside-click) must
+          // clear field state so the next open starts from a blank form,
+          // not from the last operator's input.
+          if (!next) {
+            setSubAgentId("");
+            setSarAmount("");
+            setAmount("");
+            setExchangeRate("");
+            setReference("");
+            setCurrency("SAR");
+            setMethod("bank_transfer");
+          }
+        }}
+      >
         <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">

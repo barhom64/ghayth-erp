@@ -263,7 +263,7 @@ export default function FixedAssetDetail() {
           <EntityPrintButton
             entityType="fixed_asset"
             entityId={id ?? 0}
-            formats={["a4"]}/>
+           />
           <GuardedButton
             perm="finance:update"
             variant="outline"

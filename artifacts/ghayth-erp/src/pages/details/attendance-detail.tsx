@@ -240,7 +240,7 @@ export default function AttendanceDetail() {
             <EntityPrintButton
               entityType="attendance"
               entityId={id ?? 0}
-              formats={["a4"]}/>
+             />
           )}
           <GuardedButton
             perm="hr:update"

@@ -79,7 +79,7 @@ export default function UmrahViolationDetail() {
       actions={
         <div className="flex items-center gap-2">
           <DetailActionButtons hook={editDelete} editPerm="umrah:update" deletePerm="umrah:delete" />
-          <PrintButton entityType="umrah_violation" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="umrah_violation" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
     />

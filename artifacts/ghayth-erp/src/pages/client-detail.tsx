@@ -121,6 +121,17 @@ export default function ClientDetail() {
   const id = params?.id || "";
   const { hideTabs: registryHideTabs } = useRegistryTabs("client", id ?? "");
   const { data: client, isLoading, isError } = useApiQuery<any>(["client", id], `/clients/${id}`, !!id);
+
+  // GET /intelligence/clients/:clientId/rfm — Recency / Frequency /
+  // Monetary score for this client (segment label + last-order date +
+  // total spend). Shown as a chip in the overview header when
+  // available.
+  const { data: rfmResp } = useApiQuery<any>(
+    ["client-rfm", id],
+    id ? `/intelligence/clients/${id}/rfm` : null,
+    { enabled: !!id },
+  );
+  const rfm = rfmResp?.data ?? rfmResp;
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [composeOpen, setComposeOpen] = useState(false);
 
@@ -666,9 +677,8 @@ export default function ClientDetail() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-medium">{t.name}</div>
-                <div className="text-xs text-muted-foreground space-x-2 space-x-reverse">
-                  {t.phone && <span><Phone className="inline h-3 w-3 ml-1" />{t.phone}</span>}
-                  {t.nationalId && <span>هوية: {t.nationalId}</span>}
+                <div className="text-xs text-muted-foreground">
+                  افتح ملف المستأجر لرؤية تفاصيله
                 </div>
               </div>
               <Badge variant={Number(t.activeContracts) > 0 ? "default" : "outline"}>
@@ -739,6 +749,11 @@ export default function ClientDetail() {
               {CLASSIFICATIONS[client?.classification] || client?.classification}
             </Badge>
           )}
+          {rfm && (rfm.segment || rfm.rfmSegment) && (
+            <Badge variant="outline" className="text-xs px-2 py-1" title={`R:${rfm.recencyScore ?? "—"} F:${rfm.frequencyScore ?? "—"} M:${rfm.monetaryScore ?? "—"}`}>
+              {rfm.segment ?? rfm.rfmSegment}
+            </Badge>
+          )}
           {client?.isBlacklisted && (
             <Badge variant="destructive" className="text-sm px-3 py-1">قائمة سوداء</Badge>
           )}
@@ -751,7 +766,7 @@ export default function ClientDetail() {
             <EntityPrintButton
               entityType="client"
               entityId={client.id ?? params?.id}
-              formats={["a4"]}
+             
             />
           )}
           {client && (client.email || client.phone) && (

@@ -20,6 +20,7 @@ import {
   Send,
   FileText,
   FilePlus,
+  CheckCircle,
 } from "lucide-react";
 import {
   DataTable,
@@ -163,17 +164,26 @@ export default function InvoiceDetailPage() {
     },
   );
 
-  // POST /invoices/:id/post — moves an approved invoice to posted (final
-  // step in the maker-checker flow). Distinct from /approve which only
-  // marks the invoice as ready; /post is what generates the journal
-  // entries and locks the row from further edits.
+  // POST /finance/invoices/:id/post — moves approved → posted, the
+  // final state that locks the GL entry. Permission gate matches the
+  // backend (finance.invoices/approve).
   const postMut = useApiMutation<unknown, Record<string, never>>(
-    () => `/finance/invoices/${id}/post`,
+    `/finance/invoices/${id}/post`,
     "POST",
-    [["invoice-detail", id || ""], ["invoices"], ["finance-stats"]],
-    {
-      successMessage: "تم ترحيل الفاتورة — تم إنشاء قيد المحاسبة",
-    },
+    [["invoice-detail", id || ""], ["invoices"]],
+    { successMessage: "تم ترحيل الفاتورة" },
+  );
+
+  // PATCH /finance/invoices/:id/approve — direct approve helper that
+  // skips the ApprovalActions flow (no return-with-notes branch). Used
+  // by the "اعتماد سريع" override button for invoices on the manager
+  // queue where a one-shot approve is faster than the dialog round-trip.
+  // Server enforces the same `finance.invoices:approve` gate.
+  const directApproveInvoiceMut = useApiMutation<unknown, Record<string, never>>(
+    `/finance/invoices/${id}/approve`,
+    "PATCH",
+    [["invoice-detail", id || ""], ["invoices"]],
+    { successMessage: "تم اعتماد الفاتورة مباشرةً" },
   );
 
   // Loading / error states are now handled by DetailPageLayout.
@@ -242,7 +252,40 @@ export default function InvoiceDetailPage() {
           إصدار إشعار مدين
         </GuardedButton>
       )}
+      {invoice?.status === "pending" && (
+        <GuardedButton
+          perm="finance:approve"
+          variant="outline"
+          size="sm"
+          onClick={() => directApproveInvoiceMut.mutate({})}
+          disabled={directApproveInvoiceMut.isPending}
+          rateLimitAware
+          className="gap-1"
+        >
+          <CheckCircle className="h-4 w-4" />
+          اعتماد سريع
+        </GuardedButton>
+      )}
+      {invoice?.status === "approved" && (
+        <GuardedButton
+          perm="finance:approve"
+          variant="outline"
+          size="sm"
+          onClick={() => postMut.mutate({})}
+          disabled={postMut.isPending}
+          rateLimitAware
+          className="gap-1"
+        >
+          <CheckCircle className="h-4 w-4" />
+          ترحيل
+        </GuardedButton>
+      )}
       {invoice && (
+        // PrintButton dropdown now offers a "تنزيل" item that calls the
+        // engine in download mode — the legacy ExportButton calling
+        // /export/pdf/invoice/:id (which itself proxies to renderPrint)
+        // was redundant UX and produced a duplicate print_jobs row when
+        // users hit both buttons.
         <PrintButton
           entityType="invoice"
           entityId={invoice.id ?? id}

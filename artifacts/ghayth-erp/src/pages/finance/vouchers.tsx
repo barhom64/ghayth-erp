@@ -16,7 +16,7 @@ import {
   PageShell,
 } from "@workspace/ui-core";
 import { Plus, FileText, ArrowDownCircle, ArrowUpCircle, Wallet, ChevronDown, ChevronUp, ExternalLink, Paperclip, Calendar } from "lucide-react";
-import { ExportButton } from "@/components/shared/export-buttons";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useAppContext } from "@/contexts/app-context";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
@@ -221,7 +221,12 @@ export default function VouchersPage() {
               <div className="bg-white p-4 rounded-lg border">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-semibold text-sm">تفاصيل السند</h4>
-                  <ExportButton endpoint={`/export/pdf/voucher/${v.id}`} filename={`voucher-${v.id}.pdf`} type="pdf" label="تصدير PDF" size="sm" />
+                  <PrintButton
+                    entityType={v.type === "receipt" ? "receipt_voucher" : "payment_voucher"}
+                    entityId={v.id}
+                    formats={["a4", "thermal_80"]}
+                    label="طباعة"
+                  />
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                   <div>

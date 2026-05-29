@@ -206,7 +206,7 @@ export default function TaskDetail() {
           <EntityPrintButton
             entityType="task"
             entityId={id ?? 0}
-            formats={["a4"]}/>
+           />
           <GuardedButton
             perm="tasks:write"
             variant="outline"

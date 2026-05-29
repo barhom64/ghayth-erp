@@ -13,6 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import { Edit, Truck, Star, Phone, Mail, MapPin } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
+import {
+  useDetailEditDelete,
+  DetailActionButtons,
+} from "@/components/shared/detail-edit-delete-actions";
 
 /**
  * WarehouseSupplierDetail — detail page for a single warehouse supplier.
@@ -58,6 +62,24 @@ export default function WarehouseSupplierDetail() {
   );
 
   const supplier = data;
+
+  const editDelete = useDetailEditDelete({
+    entityLabel: "المورد",
+    patchPath: `/warehouse/suppliers/${id}`,
+    deletePath: `/warehouse/suppliers/${id}`,
+    listPath: "/warehouse/suppliers",
+    initialValues: supplier,
+    fields: [
+      { key: "name", label: "الاسم" },
+      { key: "contactPerson", label: "جهة الاتصال" },
+      { key: "phone", label: "الهاتف" },
+      { key: "email", label: "البريد الإلكتروني" },
+      { key: "address", label: "العنوان" },
+      { key: "rating", label: "التقييم", type: "number" },
+    ],
+    invalidateKeys: [["warehouse-supplier", String(id)], ["warehouse-suppliers"]],
+    onSaved: () => refetch(),
+  });
 
   const productsCount = Number(supplier?.productsCount ?? 0);
   const totalPurchased = Number(supplier?.totalPurchased ?? 0);
@@ -203,11 +225,12 @@ export default function WarehouseSupplierDetail() {
             <EntityPrintButton
               entityType="vendor"
               entityId={id ?? 0}
-              formats={["a4"]}/>
+             />
           )}
           <GuardedButton perm="warehouse:update" variant="outline" size="sm" onClick={() => setEditOpen(true)} disabled={!supplier}>
             <Edit className="h-4 w-4 ms-1" /> تعديل
           </GuardedButton>
+          <DetailActionButtons hook={editDelete} editPerm="warehouse:update" deletePerm="warehouse:delete" />
         </>
       }
     />

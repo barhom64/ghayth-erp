@@ -128,6 +128,12 @@ export default function ApprovalsInboxPage() {
   const q5 = useApiQuery<ListResp>(["inbox-pr"],        `/finance/purchase-requests?status=pending`);
   const q6 = useApiQuery<ListResp>(["inbox-vouchers"],  `/finance/vouchers?status=pending`);
   const q7 = useApiQuery<ListResp>(["inbox-custodies"], `/finance/custodies?status=pending`);
+  // Cross-domain workflow instances — covers approval flows whose
+  // ref tables are outside finance (HR letters, fleet, marketing).
+  // GET /workflows (recent), /workflows/pending (queue), /workflows/stats (KPIs).
+  const wfPending = useApiQuery<any>(["inbox-wf-pending"], `/workflows/pending`);
+  const wfStats   = useApiQuery<any>(["inbox-wf-stats"],   `/workflows/stats`);
+  const wfRecent  = useApiQuery<any>(["inbox-wf-recent"],  `/workflows?limit=5`);
 
   const loading = q1.isLoading || q2.isLoading || q3.isLoading || q4.isLoading || q5.isLoading || q6.isLoading || q7.isLoading;
 
@@ -218,6 +224,75 @@ export default function ApprovalsInboxPage() {
           </CardContent>
         </Card>
       </div>
+
+      {(() => {
+        const wfPendingCount = wfPending.data?.total ?? (wfPending.data?.data?.length ?? 0);
+        const wfStatsObj = wfStats.data?.data ?? wfStats.data ?? {};
+        const wfRecentItems: any[] = wfRecent.data?.data ?? [];
+        const slaWarn = Number(wfStatsObj.slaWarning ?? 0);
+        const slaBreached = Number(wfStatsObj.slaBreached ?? 0);
+        const totalActive = Number(wfStatsObj.active ?? wfStatsObj.total ?? wfPendingCount);
+        if (wfPendingCount === 0 && wfRecentItems.length === 0) return null;
+        return (
+          <Card className="mb-3 border-violet-200 bg-violet-50/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2 flex-wrap">
+                <Briefcase className="h-4 w-4 text-violet-600" />
+                سير العمل الشامل
+                <Badge className="text-[10px] bg-violet-100 text-violet-800">
+                  {formatNumber(wfPendingCount)} بانتظار قرار
+                </Badge>
+                {totalActive > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    إجمالي نشط: {formatNumber(totalActive)}
+                  </span>
+                )}
+                {(slaWarn > 0 || slaBreached > 0) && (
+                  <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-300">
+                    <AlertTriangle className="h-3 w-3 me-1" />
+                    {slaBreached > 0 ? `${slaBreached} متجاوز SLA` : `${slaWarn} تحذير SLA`}
+                  </Badge>
+                )}
+              </CardTitle>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                طلبات معتمدة عبر سير عمل قابل للتخصيص — تشمل خطابات HR والمتطلبات
+                المتداخلة (cross-domain).
+              </p>
+            </CardHeader>
+            {wfRecentItems.length > 0 && (
+              <CardContent className="p-3 pt-0">
+                <div className="space-y-1">
+                  {wfRecentItems.slice(0, 5).map((w: any) => (
+                    <div key={w.id} className="flex items-center justify-between text-xs p-2 bg-white/80 rounded border">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono text-[10px] text-muted-foreground">#{w.id}</span>
+                        <span className="truncate max-w-md">
+                          {w.title ?? w.definitionName ?? w.refTable ?? "—"}
+                        </span>
+                        {w.slaStatus && w.slaStatus !== "on_track" && (
+                          <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-300">
+                            {w.slaStatus === "warning" ? "تحذير" : "تجاوز SLA"}
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap ms-2">
+                        {w.currentStepName ?? `خطوة ${w.currentStepOrder ?? "?"}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="pt-2 text-end">
+                  <Link href="/action-center">
+                    <Button variant="outline" size="sm" className="h-7 text-[11px]">
+                      اتخاذ قرار <ChevronRight className="h-3 w-3 ms-1" />
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            )}
+          </Card>
+        );
+      })()}
 
       {totalPending === 0 ? (
         <Card className="text-center py-12 border-emerald-300 bg-emerald-50/30">

@@ -4605,7 +4605,8 @@ CREATE TABLE public.clients (
     notes text,
     "deletedAt" timestamp with time zone,
     attachments jsonb,
-    "taxNumber" text
+    "taxNumber" text,
+    CONSTRAINT clients_id_company_uq UNIQUE (id, "companyId")
 );
 
 
@@ -10976,7 +10977,9 @@ CREATE TABLE public.legal_cases (
     "deletedAt" timestamp with time zone,
     "financialRisk" numeric(15,2),
     "riskLevel" text,
-    CONSTRAINT "legal_cases_riskLevel_check" CHECK ((("riskLevel" = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text])) OR ("riskLevel" IS NULL)))
+    "clientId" integer,
+    CONSTRAINT "legal_cases_riskLevel_check" CHECK ((("riskLevel" = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text])) OR ("riskLevel" IS NULL))),
+    CONSTRAINT legal_cases_client_company_fk FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients (id, "companyId") ON DELETE SET NULL
 );
 
 
@@ -16149,7 +16152,9 @@ CREATE TABLE public.tenants (
     "previousAddress" text,
     "previousLandlord" character varying(200),
     "previousLandlordPhone" character varying(50),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "clientId" integer,
+    CONSTRAINT tenants_client_company_fk FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients (id, "companyId") ON DELETE SET NULL
 );
 
 

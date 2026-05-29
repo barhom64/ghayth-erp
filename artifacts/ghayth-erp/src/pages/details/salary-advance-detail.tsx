@@ -221,7 +221,7 @@ export default function SalaryAdvanceDetail() {
           <EntityPrintButton
             entityType="loan_request"
             entityId={item?.id ?? id}
-            formats={["a4"]}/>
+           />
         </>
       }
     />

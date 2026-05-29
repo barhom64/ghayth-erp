@@ -181,7 +181,7 @@ export default function TrafficViolationDetail() {
           <EntityPrintButton
             entityType="traffic_violation"
             entityId={id ?? 0}
-            formats={["a4"]}/>
+           />
         </>
       }
     />

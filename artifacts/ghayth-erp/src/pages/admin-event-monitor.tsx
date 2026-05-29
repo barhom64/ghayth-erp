@@ -19,6 +19,15 @@ export default function AdminEventMonitor() {
     ["event-catalog"], "/admin/governance/event-catalog"
   );
   const [domainFilter, setDomainFilter] = useState<string>("all");
+  const [selectedEventName, setSelectedEventName] = useState<string | null>(null);
+  // GET /events/catalog/:name — single-event detail (schema, recent
+  // payloads, fired-by count). Opens when the user clicks an event
+  // row in the catalog table.
+  const eventDetailQ = useApiQuery<any>(
+    ["events-catalog-detail", selectedEventName ?? ""],
+    selectedEventName ? `/events/catalog/${encodeURIComponent(selectedEventName)}` : null,
+    { enabled: selectedEventName !== null },
+  );
 
   const total = data?.total ?? 0;
   const byDomain = data?.byDomain ?? {};
@@ -141,9 +150,31 @@ export default function AdminEventMonitor() {
                 noToolbar
                 pageSize={0}
                 emptyMessage="لا توجد أحداث"
+                onRowClick={(r: any) => setSelectedEventName(r.action ?? r.name ?? null)}
               />
             </CardContent>
           </Card>
+
+          {selectedEventName && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">
+                  تفاصيل الحدث <span className="font-mono text-xs">{selectedEventName}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {eventDetailQ.isLoading ? (
+                  <p className="text-xs text-muted-foreground">جاري التحميل...</p>
+                ) : eventDetailQ.data ? (
+                  <pre className="text-xs bg-surface-subtle p-2 rounded max-h-48 overflow-y-auto">
+                    {JSON.stringify(eventDetailQ.data, null, 2)}
+                  </pre>
+                ) : (
+                  <p className="text-xs text-muted-foreground">لا توجد بيانات</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </PageStateWrapper>
     </PageShell>
