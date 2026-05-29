@@ -1786,10 +1786,18 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     for (const po of pos) {
       lines.push({ accountCode: apAccount, debit: Number(po.totalAmount), credit: 0, vendorId: po.supplierId });
     }
+    // When the payment run covers exactly ONE vendor, carry vendorId
+    // on the WHT-payable and cash CR lines too so the vendor subledger
+    // reconciles cleanly. With multiple vendors the credit side is an
+    // aggregate (one line per WHT account / one cash line) so there's
+    // no single vendor to attribute — leave NULL in that case (the
+    // per-PO DR lines still carry vendorId, so the AP subledger ties).
+    const uniqueSupplierIds = Array.from(new Set(pos.map(po => Number(po.supplierId)).filter(Boolean)));
+    const singleVendorId = uniqueSupplierIds.length === 1 ? uniqueSupplierIds[0] : undefined;
     for (const [code, amount] of whtCreditByAccount) {
-      lines.push({ accountCode: code, debit: 0, credit: amount });
+      lines.push({ accountCode: code, debit: 0, credit: amount, vendorId: singleVendorId });
     }
-    lines.push({ accountCode: cashAccount, debit: 0, credit: netCashOut });
+    lines.push({ accountCode: cashAccount, debit: 0, credit: netCashOut, vendorId: singleVendorId });
     const paymentRunJournalResult = await financialEngine.postJournalEntry({
       companyId: scope.companyId,
       branchId: scope.branchId,

@@ -151,17 +151,26 @@ financeAlgorithmsRouter.get("/ar-aging", authorize({ feature: "finance.algorithm
       [asOfDate, scope.companyId]
     );
 
-    const clientMap: Record<number, any> = {};
+    // Keying by `string` lets each NULL-clientId invoice get its own
+    // bucket ("orphan:<invoiceId>") instead of collapsing every NULL
+    // under cid=0. Before this fix, an AR aging report with 50 invoices
+    // missing clientId (real-estate self-rentals, legacy data, etc.)
+    // all aggregated under "عميل #0" and were unactionable. Real
+    // clients still bucket by their numeric id rendered as a string.
+    const clientMap: Record<string, any> = {};
     let totalCurrent = 0, total1_30 = 0, total31_60 = 0, total61_90 = 0, totalOver90 = 0;
 
     for (const inv of invoices) {
       const days = Number(inv.daysOverdue ?? 0);
       const outstanding = Number(inv.outstanding ?? 0);
-      const cid: number = (inv.clientId as number | null) ?? 0;
-      const clientName = (inv.clientName as string | null) || `عميل #${cid}`;
+      const realCid = inv.clientId as number | null;
+      const cidKey: string = realCid != null ? String(realCid) : `orphan:${inv.id}`;
+      const cid: number = realCid ?? 0;
+      const clientName = (inv.clientName as string | null)
+        || (realCid != null ? `عميل #${realCid}` : `فاتورة بدون عميل #${inv.ref ?? inv.id}`);
 
-      if (!clientMap[cid]) {
-        clientMap[cid] = {
+      if (!clientMap[cidKey]) {
+        clientMap[cidKey] = {
           clientId: cid, clientName, clientPhone: inv.clientPhone, clientEmail: inv.clientEmail,
           current: 0, "1_30": 0, "31_60": 0, "61_90": 0, over90: 0, total: 0, invoices: [],
         };
@@ -173,9 +182,9 @@ financeAlgorithmsRouter.get("/ar-aging", authorize({ feature: "finance.algorithm
         days <= 60 ? "31_60" :
         days <= 90 ? "61_90" : "over90";
 
-      clientMap[cid][bucket] += outstanding;
-      clientMap[cid].total += outstanding;
-      clientMap[cid].invoices.push({
+      clientMap[cidKey][bucket] += outstanding;
+      clientMap[cidKey].total += outstanding;
+      clientMap[cidKey].invoices.push({
         id: inv.id, ref: inv.ref, dueDate: inv.dueDate,
         outstanding, daysOverdue: days, bucket,
       });
