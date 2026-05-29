@@ -151,16 +151,22 @@ describe("postJournalEntry — INSERT shape", () => {
 
     // rawExecute shape: one INSERT INTO journal_lines per line (×2), then
     // one currentBalance UPDATE per account (×2) — RCA PD-1 fix.
+    // INSERT now carries all 21 dim columns after the Path B dim-parity
+    // fix (FX revaluation entries silently NULL'd every dim before).
+    // Lines without an explicit dim payload land NULL on each — verified
+    // via the trailing array of nulls.
     expect(mockRawExecute).toHaveBeenCalledTimes(4);
     const firstLineCall = mockRawExecute.mock.calls[0];
     expect(String(firstLineCall[0])).toContain("INSERT INTO journal_lines");
-    expect(firstLineCall[1]).toEqual([
+    expect(firstLineCall[1].slice(0, 6)).toEqual([
       4242, 100, "1100", 30, 0, "FX gain Q1",
     ]);
+    expect(firstLineCall[1].length).toBe(27);
     const secondLineCall = mockRawExecute.mock.calls[1];
-    expect(secondLineCall[1]).toEqual([
+    expect(secondLineCall[1].slice(0, 6)).toEqual([
       4242, 490, "4900", 0, 30, "FX gain Q1",
     ]);
+    expect(secondLineCall[1].length).toBe(27);
     // currentBalance moves by debit−credit per account: +30 on the debit
     // account (1100), −30 on the credit account (4900).
     const firstBalanceCall = mockRawExecute.mock.calls[2];
