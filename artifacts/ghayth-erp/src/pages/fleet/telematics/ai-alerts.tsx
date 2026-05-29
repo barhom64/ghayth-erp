@@ -41,6 +41,7 @@ interface AiAlertRow {
   vehicleId: number | null;
   vehiclePlate: string | null;
   deviceLabel: string | null;
+  driverName: string | null;
   status: string;
   imageUrl: string | null;
   videoUrl: string | null;
@@ -149,10 +150,17 @@ export default function FleetTelematicsAiAlerts() {
     },
     {
       key: "vehiclePlate",
-      header: "المركبة",
+      header: "المركبة / السائق",
       sortable: true,
       searchable: true,
-      render: (a) => a.vehiclePlate || a.deviceLabel || "—",
+      render: (a) => (
+        <div className="flex flex-col">
+          <span>{a.vehiclePlate || a.deviceLabel || "—"}</span>
+          {a.driverName && (
+            <span className="text-xs text-muted-foreground">{a.driverName}</span>
+          )}
+        </div>
+      ),
     },
     {
       key: "severity",
