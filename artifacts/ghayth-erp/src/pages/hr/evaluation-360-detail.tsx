@@ -173,7 +173,11 @@ export default function Evaluation360DetailPage() {
     managerId ? `/hr/upward-reviews/manager/${managerId}` : null,
     { enabled: !!managerId },
   );
-  const managerUpward: any[] = managerUpwardQ.data?.data ?? managerUpwardQ.data?.reviews ?? [];
+  // Endpoint returns a single aggregate object — never an array. Below
+  // 3 reviews it returns {locked: true, message, avgScore: null}; above
+  // it returns {count, avgScore, leadershipAvg, communicationAvg,
+  // fairnessAvg, supportAvg}.
+  const managerUpwardAgg: any = managerUpwardQ.data ?? null;
 
   const tabs = [
     { id: "summary", label: "ملخص 360°", icon: BarChart3 },
@@ -282,23 +286,39 @@ export default function Evaluation360DetailPage() {
 
       {tab === "system" && (
         <div className="space-y-4">
-          {systemReport && Array.isArray(systemReport.items) && systemReport.items.length > 0 && (
-            <Card className="border-0 shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">تقرير النظام المفصّل ({systemReport.items.length} بند)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-1 text-xs max-h-64 overflow-y-auto">
-                  {systemReport.items.slice(0, 30).map((row: any, i: number) => (
-                    <div key={row.id ?? i} className="flex items-center justify-between border-b pb-1">
-                      <span>{row.metric ?? row.label ?? row.kpi ?? "—"}</span>
-                      <span className="font-mono">{row.value ?? row.score ?? "—"}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {systemReport && (() => {
+            const rawMetrics = systemReport.metrics;
+            const parsed = (() => {
+              if (!rawMetrics) return null;
+              if (typeof rawMetrics === "string") {
+                try { return JSON.parse(rawMetrics); } catch { return null; }
+              }
+              return rawMetrics;
+            })();
+            const items = parsed && typeof parsed === "object"
+              ? Object.entries(parsed as Record<string, unknown>)
+              : [];
+            if (items.length === 0) return null;
+            return (
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">تقرير النظام المفصّل ({items.length} بند)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1 text-xs max-h-64 overflow-y-auto">
+                    {items.slice(0, 30).map(([key, value]) => (
+                      <div key={key} className="flex items-center justify-between border-b pb-1">
+                        <span>{key}</span>
+                        <span className="font-mono">
+                          {typeof value === "object" ? JSON.stringify(value) : String(value)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {!systemEval ? (
             <Card><CardContent className="p-8 text-center text-muted-foreground">لم يتم توليد التقرير الآلي بعد</CardContent></Card>
@@ -504,19 +524,35 @@ export default function Evaluation360DetailPage() {
             </Card>
           )}
 
-          {managerUpward.length > 0 && (
+          {managerUpwardAgg && !managerUpwardAgg.locked && managerUpwardAgg.avgScore != null && (
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">تاريخ التقييمات العكسية لهذا المدير ({managerUpward.length})</CardTitle>
+                <CardTitle className="text-base">
+                  ملخص التقييمات العكسية للمدير ({managerUpwardAgg.count ?? 0} تقييم)
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2 text-xs">
-                  {managerUpward.slice(0, 8).map((r: any, i: number) => (
-                    <div key={r.id ?? i} className="flex items-center justify-between border-b pb-1">
-                      <span className="text-muted-foreground">دورة #{r.cycleId ?? r.cycleNumber ?? "—"}</span>
-                      <span className="font-mono">{r.avgScore ?? r.score ?? "—"}% — {r.count ?? r.reviewCount ?? 0} تقييم</span>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+                  <div>
+                    <p className="text-muted-foreground">المتوسط العام</p>
+                    <p className="font-mono font-bold">{managerUpwardAgg.avgScore}%</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">القيادة</p>
+                    <p className="font-mono font-bold">{managerUpwardAgg.leadershipAvg ?? "—"}%</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">التواصل</p>
+                    <p className="font-mono font-bold">{managerUpwardAgg.communicationAvg ?? "—"}%</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">الإنصاف</p>
+                    <p className="font-mono font-bold">{managerUpwardAgg.fairnessAvg ?? "—"}%</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">الدعم</p>
+                    <p className="font-mono font-bold">{managerUpwardAgg.supportAvg ?? "—"}%</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
