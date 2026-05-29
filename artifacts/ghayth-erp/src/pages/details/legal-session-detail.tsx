@@ -232,7 +232,7 @@ export default function LegalSessionDetail() {
             <EntityPrintButton
               entityType="legal_session"
               entityId={id ?? 0}
-              formats={["a4"]}/>
+             />
           )}
         </>
       }

@@ -238,7 +238,7 @@ export default function UmrahPenaltyDetail() {
           <EntityPrintButton
             entityType="umrah_penalty"
             entityId={id ?? 0}
-            formats={["a4"]}/>
+           />
         ) : undefined
       }
     />

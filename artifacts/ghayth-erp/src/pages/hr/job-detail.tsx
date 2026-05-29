@@ -264,7 +264,7 @@ export default function JobDetailPage() {
       actions={
         <div className="flex items-center gap-2">
           {actions}
-          <PrintButton entityType="job_posting" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="job_posting" entityId={(id as any) ?? 0} label="طباعة" />
           <DetailActionButtons hook={editDelete} editPerm="hr:update" />
         </div>
       }

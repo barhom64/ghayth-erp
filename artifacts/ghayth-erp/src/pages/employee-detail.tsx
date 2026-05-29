@@ -900,7 +900,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <OperationalStatusBar employeeId={id} />
-            <EntityPrintButton entityType="employee" entityId={id ?? ""} formats={["a4"]} label="بطاقة الموظف" />
+            <EntityPrintButton entityType="employee" entityId={id ?? ""} label="بطاقة الموظف" />
             <div className="relative">
               <Button variant="outline" size="sm" onClick={() => setShowPrintMenu(!showPrintMenu)}>
                 <Printer className="h-4 w-4 me-1" />طباعة قوالب HR

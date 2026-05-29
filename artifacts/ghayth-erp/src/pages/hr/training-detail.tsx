@@ -307,7 +307,7 @@ export default function TrainingDetailPage() {
   return (
     <>
     <DetailPageLayout
-      actions={<PrintButton entityType="training" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />}
+      actions={<PrintButton entityType="training" entityId={(params?.id ?? id ?? 0) as any} label="طباعة" />}
       title={program?.title || "تفاصيل البرنامج التدريبي"}
       subtitle={program?.description || undefined}
       backPath="/hr/training"

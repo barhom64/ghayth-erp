@@ -286,7 +286,7 @@ export default function ContractDetailPage() {
         <XCircle className="h-4 w-4" />
         إنهاء
       </GuardedButton>
-      <EntityPrintButton entityType="rental_contract" entityId={id ?? ""} formats={["a4"]} />
+      <EntityPrintButton entityType="rental_contract" entityId={id ?? ""} />
       {!isContractLocked && (
         <DetailActionButtons hook={editDelete} editPerm="properties:update" deletePerm="properties:delete" />
       )}

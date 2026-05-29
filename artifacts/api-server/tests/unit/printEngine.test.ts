@@ -229,6 +229,20 @@ describe("Print Engine v2 — variable substitution", () => {
     expect(src).toContain("#each");
   });
 
+  it("universalFallback uses {{entity.title}} so caller-supplied titles win over the static fallback", () => {
+    // printService now pre-fills `data.entity.title` to ARABIC_TITLES[type]
+    // when the caller didn't supply one, so the universalFallback can use a
+    // single token. Without this, the 37 report types whose entityType has
+    // no ARABIC_TITLES entry rendered "report_print_log" / "report_ar_aging"
+    // / etc. as the printed header instead of the SPA's Arabic title.
+    const tmplSrc = read(join(PRINT_LIB, "templateResolver.ts"));
+    expect(tmplSrc).toContain("{{entity.title}}");
+    expect(tmplSrc).toMatch(/export const ARABIC_TITLES/);
+    const svcSrc = read(join(PRINT_LIB, "printService.ts"));
+    expect(svcSrc).toContain("ARABIC_TITLES");
+    expect(svcSrc).toMatch(/entity.*title.*ARABIC_TITLES/s);
+  });
+
   it("supports {{#if path}}…{{/if}} conditional blocks", () => {
     // Several presets (customer_statement, vendor_statement, …) were
     // authored with this Handlebars-style helper. Without an implementation

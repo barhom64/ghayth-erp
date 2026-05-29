@@ -351,7 +351,7 @@ export default function ReceivableDetail() {
               <EntityPrintButton
                 entityType="receivable"
                 entityId={id ?? 0}
-                formats={["a4"]}/>
+               />
             )}
           </>
         }

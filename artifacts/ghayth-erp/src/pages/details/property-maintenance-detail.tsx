@@ -226,7 +226,7 @@ export default function PropertyMaintenanceDetail() {
           <EntityPrintButton
             entityType="maintenance_request"
             entityId={id ?? 0}
-            formats={["a4"]}/>
+           />
           <GuardedButton
             perm="properties:update"
             variant="outline"

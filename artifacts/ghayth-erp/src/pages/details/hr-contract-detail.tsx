@@ -231,7 +231,7 @@ export default function HrContractDetail() {
             <EntityPrintButton
               entityType="employee_contract"
               entityId={contract.id ?? id}
-              formats={["a4"]}/>
+             />
           )}
           <GuardedButton
             perm="hr:update"

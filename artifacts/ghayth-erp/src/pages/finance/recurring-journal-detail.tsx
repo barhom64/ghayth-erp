@@ -159,7 +159,7 @@ export default function RecurringJournalDetailPage() {
     <DetailPageLayout
       actions={
         <div className="flex items-center gap-2">
-          <PrintButton entityType="recurring_journal" entityId={(params?.id ?? id ?? 0) as any} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="recurring_journal" entityId={(params?.id ?? id ?? 0) as any} label="طباعة" />
           <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
         </div>
       }

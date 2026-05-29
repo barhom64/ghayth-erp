@@ -228,7 +228,7 @@ export default function AuditDetail() {
             <EntityPrintButton
               entityType="audit_record"
               entityId={id ?? 0}
-              formats={["a4"]}/>
+             />
           )}
           <GuardedButton
             perm="governance:update"

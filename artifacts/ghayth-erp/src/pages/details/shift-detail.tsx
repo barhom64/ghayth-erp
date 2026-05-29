@@ -81,7 +81,7 @@ export default function ShiftDetail() {
       actions={
         <div className="flex items-center gap-2">
           <DetailActionButtons hook={editDelete} editPerm="hr:update" deletePerm="hr:delete" />
-          <PrintButton entityType="shift" entityId={(id as any) ?? 0} formats={["a4"]} label="طباعة" />
+          <PrintButton entityType="shift" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }
     />

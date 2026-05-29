@@ -240,7 +240,7 @@ export default function JournalDetailPage() {
               ترحيل
             </GuardedButton>
           )}
-          <EntityPrintButton entityType="journal_entry" entityId={id ?? ""} formats={["a4"]} />
+          <EntityPrintButton entityType="journal_entry" entityId={id ?? ""} />
         </div>
       }
     >

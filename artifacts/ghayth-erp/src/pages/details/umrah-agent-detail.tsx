@@ -234,7 +234,7 @@ export default function UmrahAgentDetail() {
               <EntityPrintButton
                 entityType="umrah_agent"
                 entityId={id ?? 0}
-                formats={["a4"]}/>
+               />
             </>
           }
         />
