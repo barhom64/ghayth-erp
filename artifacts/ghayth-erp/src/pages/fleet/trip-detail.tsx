@@ -1,4 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
@@ -188,18 +193,23 @@ export default function TripDetailPage() {
     );
   };
 
-  const handleCancel = async () => {
-    // FLT-001: /cancel frees the vehicle + driver and requires a reason.
-    const reason = window.prompt("سبب إلغاء الرحلة:");
-    if (reason === null) return; // user dismissed the prompt
-    if (!reason.trim()) {
+  // Cancellation dialog state — FLT-001 requires a non-empty reason.
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const handleCancel = () => {
+    setCancelReason("");
+    setCancelOpen(true);
+  };
+  const confirmCancel = async () => {
+    if (!cancelReason.trim()) {
       toast({ variant: "destructive", title: "سبب الإلغاء مطلوب" });
       return;
     }
+    setCancelOpen(false);
     try {
       await apiFetch(`/fleet/trips/${id}/cancel`, {
         method: "POST",
-        body: JSON.stringify({ reason: reason.trim() }),
+        body: JSON.stringify({ reason: cancelReason.trim() }),
       });
       queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
       toast({ title: "تم إلغاء الرحلة" });
@@ -353,6 +363,7 @@ export default function TripDetailPage() {
   ];
 
   return (
+    <>
     <DetailPageLayout
       title={trip ? `رحلة #${trip.id}` : "الرحلة"}
       subtitle={trip ? `${trip.fromLocation || trip.origin || ""} → ${trip.toLocation || trip.destination || ""}` : undefined}
@@ -371,6 +382,26 @@ export default function TripDetailPage() {
       extraTabs={[...extraTabs, ...registryExtraTabs]}
       hideTabs={registryHideTabs}
     />
+    <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إلغاء الرحلة</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">سبب الإلغاء (مطلوب)</Label>
+          <Textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            rows={3}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setCancelOpen(false)}>تراجع</Button>
+          <Button variant="destructive" onClick={confirmCancel} rateLimitAware>تأكيد الإلغاء</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

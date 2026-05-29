@@ -8,6 +8,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Headphones, User, MessageSquare, Send, Trash2, Clock, Star } from "lucide-react";
@@ -143,13 +148,19 @@ export default function TicketDetail() {
 
   // POST /support/tickets/:id/field-visit — schedule an on-site visit.
   // Backend schema field is `visitDate`, not scheduledDate.
-  const handleScheduleVisit = async () => {
+  const [visitOpen, setVisitOpen] = useState(false);
+  const [visitDate, setVisitDate] = useState("");
+  const handleScheduleVisit = () => {
+    setVisitDate("");
+    setVisitOpen(true);
+  };
+  const confirmScheduleVisit = async () => {
+    if (!visitDate.trim()) return;
+    setVisitOpen(false);
     try {
-      const dateInput = window.prompt("تاريخ الزيارة (YYYY-MM-DD)");
-      if (!dateInput?.trim()) return;
       await apiFetch(`/support/tickets/${id}/field-visit`, {
         method: "POST",
-        body: JSON.stringify({ visitDate: dateInput.trim() }),
+        body: JSON.stringify({ visitDate: visitDate.trim() }),
       });
       toast({ title: "تم جدولة الزيارة الميدانية" });
       qc.invalidateQueries({ queryKey: ["ticket-detail", id] });
@@ -353,6 +364,7 @@ export default function TicketDetail() {
   ) : null;
 
   return (
+    <>
     <DetailPageLayout
       title={ticket?.ref || `TKT-${id}`}
       subtitle={ticket?.title || undefined}
@@ -385,5 +397,21 @@ export default function TicketDetail() {
         </div>
       }
     />
+    <Dialog open={visitOpen} onOpenChange={setVisitOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>جدولة زيارة ميدانية</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">تاريخ الزيارة</Label>
+          <Input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setVisitOpen(false)}>إلغاء</Button>
+          <Button onClick={confirmScheduleVisit} disabled={!visitDate.trim()} rateLimitAware>جدولة</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

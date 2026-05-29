@@ -5,6 +5,12 @@ import { useApiQuery, useApiMutation } from "@/lib/api";
 import { FormGrid, FormTextField, FormTextareaField, FormSelectField, FormNumberField } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
   DetailPageLayout,
   type RelatedEntity,
   EntityComments,
@@ -91,14 +97,17 @@ export default function PropertyMaintenanceDetail() {
     [["property-maintenance", String(id)], ["maintenance-requests"]],
     { successMessage: "تم إنهاء طلب الصيانة" },
   );
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [closureReport, setClosureReport] = useState("");
   const handleComplete = () => {
-    const report = window.prompt(
-      "تقرير الإغلاق (ملخّص الأعمال):",
-      item?.closureReport ?? "",
-    );
-    if (!report?.trim()) return;
+    setClosureReport(item?.closureReport ?? "");
+    setCompleteOpen(true);
+  };
+  const confirmComplete = () => {
+    if (!closureReport.trim()) return;
+    setCompleteOpen(false);
     completeMut.mutate({
-      closureReport: report.trim(),
+      closureReport: closureReport.trim(),
       zeroCostConfirmed: true,
       cost: 0,
     });
@@ -289,6 +298,27 @@ export default function PropertyMaintenanceDetail() {
         </>
       }
     />
+    <Dialog open={completeOpen} onOpenChange={setCompleteOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إنهاء طلب الصيانة</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label className="text-xs">تقرير الإغلاق (ملخّص الأعمال) — مطلوب</Label>
+          <Textarea
+            value={closureReport}
+            onChange={(e) => setClosureReport(e.target.value)}
+            rows={4}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setCompleteOpen(false)}>إلغاء</Button>
+          <Button onClick={confirmComplete} disabled={!closureReport.trim() || completeMut.isPending} rateLimitAware>
+            إنهاء الصيانة
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     {item && id && (
       <EntityEditDialog<MaintenanceEditForm>
         open={editOpen}
