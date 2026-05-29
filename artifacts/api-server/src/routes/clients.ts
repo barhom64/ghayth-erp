@@ -669,6 +669,16 @@ router.patch("/:id/portal-account", authorize({ feature: "crm.clients", action: 
       params.push(true);
       sets.push(`"mustChangePassword" = $${params.length}`);
     }
+    // Bump tokenVersion when admin resets the password OR suspends the
+    // account — both are recovery paths that must invalidate any JWT
+    // currently in the user's (or an attacker's) hands. isActive=false
+    // is already blocked by the portal middleware on the next request,
+    // but bumping tokenVersion keeps the security model uniform: any
+    // change to "who can use this account right now" → all old tokens
+    // die.
+    if (password || isActive === false) {
+      sets.push(`"tokenVersion" = COALESCE("tokenVersion", 0) + 1`);
+    }
 
     if (sets.length === 0) { res.json({ account }); return; }
     sets.push(`"updatedAt" = NOW()`);
