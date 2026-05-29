@@ -79,7 +79,9 @@ export default function PricingRulesPage() {
       toast({ variant: "destructive", title: "أدخل اسم القاعدة" });
       return;
     }
-    if (editing) {
+    // editing has id 0 for the "new rule" sentinel — distinguish create
+    // vs update by the real id, not by truthiness of the wrapper object.
+    if (editing && editing.id > 0) {
       await updateMut.mutateAsync({ id: editing.id, ...draft });
     } else {
       await createMut.mutateAsync(draft);

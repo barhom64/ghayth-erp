@@ -76,15 +76,15 @@ export default function TrainingPage() {
     onSuccess: () => refetchEnrollments(),
   });
 
-  // GET /hr/training/enrollments/:id — single-enrollment detail fetch
-  // used by the edit flow to load the current row's fields (status,
-  // score, attendance %) freshly before editing, so a stale list page
-  // doesn't lose recent edits made by other users.
-  const [editingEnrollmentId, setEditingEnrollmentId] = useState<number | null>(null);
-  useApiQuery<any>(
-    ["training-enrollment", String(editingEnrollmentId ?? 0)],
-    editingEnrollmentId ? `/hr/training/enrollments/${editingEnrollmentId}` : null,
-    !!editingEnrollmentId,
+  // GET /hr/training/enrollments/:id — single-enrollment fetch used by
+  // any caller (notification deep-link, future "view details" overlay)
+  // that needs the fresh row outside the list snapshot. Triggered lazily
+  // when a target id is set via state.
+  const [enrollmentDetailId, setEnrollmentDetailId] = useState<number | null>(null);
+  const enrollmentDetailQ = useApiQuery<any>(
+    ["training-enrollment", String(enrollmentDetailId ?? 0)],
+    enrollmentDetailId ? `/hr/training/enrollments/${enrollmentDetailId}` : null,
+    !!enrollmentDetailId,
   );
 
   const enrollmentEditFields = [
@@ -115,7 +115,7 @@ export default function TrainingPage() {
           <RowActions
             canEdit={canManage}
             onEdit={() => {
-              setEditingEnrollmentId(e.id);
+              setEnrollmentDetailId(e.id);
               enrollmentActions.startEdit(e.id, { status: e.status || "enrolled", score: e.score || 0 });
             }}
             onDelete={() => enrollmentActions.startDelete(e.id)}
@@ -262,6 +262,24 @@ export default function TrainingPage() {
           />
         </TabsContent>
       </Tabs>
+      {enrollmentDetailId && enrollmentDetailQ.data && (
+        <Card className="mt-3 border-dashed">
+          <CardContent className="p-3 text-xs">
+            <div className="flex items-center justify-between border-b pb-1 mb-2">
+              <span className="font-semibold">آخر حالة من الخادم لتسجيل #{enrollmentDetailId}</span>
+              <button type="button" className="text-muted-foreground" onClick={() => setEnrollmentDetailId(null)}>إغلاق ×</button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <span>الحالة: <span className="font-mono">{enrollmentDetailQ.data.status ?? "—"}</span></span>
+              <span>الدرجة: <span className="font-mono">{enrollmentDetailQ.data.score ?? "—"}</span></span>
+              <span>البرنامج: <span className="font-medium">{enrollmentDetailQ.data.programTitle ?? "—"}</span></span>
+              {enrollmentDetailQ.data.completedAt && (
+                <span>أُكمل: <span className="font-mono">{enrollmentDetailQ.data.completedAt}</span></span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </PageShell>
   );
 }

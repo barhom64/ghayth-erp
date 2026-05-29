@@ -165,11 +165,29 @@ function buildBackendRoutes() {
   const files = fs
     .readdirSync(ROUTES_DIR)
     .filter((f) => f.endsWith(".ts") && f !== "index.ts");
+  // Route files explicitly out-of-scope for the main ERP UI's wiring audit.
+  // Both are separate apps with their own clients (mobile / candidate
+  // portal). Counting their endpoints inflates the "unused" list with
+  // routes the main UI was never going to call — and conversely, sham
+  // pages in the main UI that probe them are mis-credited as coverage
+  // (they fail at runtime because the JWT type doesn't match).
+  const SEPARATE_APP_STEMS = new Set([
+    "clientPortal",
+    "careersPortal",
+  ]);
+  // wiring-stubs.ts hosts placeholder routes for tables that don't exist
+  // yet; calling them returns canned data and writes nothing. We still
+  // emit them so frontend calls can resolve (no false orphans), but we
+  // tag them so the reverse-direction "unused" report skips them — they
+  // shouldn't pad the unused list and they shouldn't pad the covered list.
+  const STUB_FILE_STEMS = new Set(["wiring-stubs"]);
   const routes = [];
   for (const f of files) {
     const stem = f.replace(/\.ts$/, "");
+    if (SEPARATE_APP_STEMS.has(stem)) continue;
     const imps = stemToImports.get(stem);
     if (!imps) continue;
+    const isStub = STUB_FILE_STEMS.has(stem);
     // Resolve the export name(s) from the file: usually `routerVar`
     // matches the imported name 1:1, or maps via `export {x as y}`.
     // Cheap approach: for each call whose varName appears in any of
@@ -199,7 +217,7 @@ function buildBackendRoutes() {
       for (const mountPrefix of prefixes) {
         const localPath = c.path.startsWith("/") ? c.path : "/" + c.path;
         const full = ("/api" + mountPrefix + localPath).replace(/\/+$/, "") || "/";
-        routes.push({ method: c.method.toUpperCase(), path: full });
+        routes.push({ method: c.method.toUpperCase(), path: full, isStub });
       }
     }
   }
@@ -956,10 +974,17 @@ export function runAudit() {
   // resource), so a path-only match isn't enough — we also need to
   // confirm the method.
   const backendPaths = new Map(); // path -> Set<method>
+  // Stub-flagged (path, method) pairs — excluded from both the covered
+  // count and the unused list because they represent placeholder routes
+  // that return canned data without real DB interaction. Resolution still
+  // works (frontend calls aren't orphaned), the audit just doesn't credit
+  // either side.
+  const stubEndpoints = new Set();
   for (const r of backend) {
     const p = normaliseBackendUrl(r.path);
     if (!backendPaths.has(p)) backendPaths.set(p, new Set());
     backendPaths.get(p).add(r.method);
+    if (r.isStub) stubEndpoints.add(`${p}|${r.method}`);
   }
   const frontend = extractFrontendCalls();
 
@@ -1093,18 +1118,32 @@ export function runAudit() {
   const unusedBackend = [];
   for (const [bePath, methods] of backendPaths) {
     for (const method of methods) {
-      if (!touchedByFrontend.has(`${bePath}|${method}`)) {
+      const key = `${bePath}|${method}`;
+      if (stubEndpoints.has(key)) continue;
+      if (!touchedByFrontend.has(key)) {
         unusedBackend.push({ path: bePath, method });
       }
     }
   }
 
+  // Total backend (path, method) pairs the audit was run against — used
+  // by the test's canary assertion to verify `unusedBackend` can't grow
+  // to cover every endpoint (which would indicate a bookkeeping bug).
+  let backendEndpointCount = 0;
+  for (const methods of backendPaths.values()) backendEndpointCount += methods.size;
+  // Real (non-stub) endpoints — the denominator that should drive the
+  // coverage percentage. Stub endpoints don't represent real DB-backed
+  // features so they shouldn't pad either numerator or denominator.
+  const realEndpointCount = backendEndpointCount - stubEndpoints.size;
   return {
     resolved,
     orphans,
     methodMismatches,
     unusedBackend,
     backendPaths,
+    backendEndpointCount,
+    realEndpointCount,
+    stubEndpointCount: stubEndpoints.size,
     frontend,
   };
 }
@@ -1115,25 +1154,26 @@ export function runAudit() {
 export { normaliseFrontendUrl, urlsMatch, methodsMatch, readString, inferMethod };
 
 function main() {
-  const { resolved, orphans, methodMismatches, unusedBackend, backendPaths, frontend } = runAudit();
+  const { resolved, orphans, methodMismatches, unusedBackend, backendPaths, realEndpointCount, stubEndpointCount, frontend } = runAudit();
 
-  // Count total backend (path, method) endpoints — many paths serve
-  // 3-5 methods each, so this is the right denominator for "what %
-  // of the backend surface does the UI cover?".
+  // Count total backend (path, method) endpoints, then subtract the stub
+  // pool so the percentage reflects coverage of REAL DB-backed features
+  // only. Stubs are reachable but write nothing, so crediting them is
+  // misleading.
   let totalEndpoints = 0;
   for (const ms of backendPaths.values()) totalEndpoints += ms.size;
-  const usedEndpoints = totalEndpoints - unusedBackend.length;
-  const coveragePercent = totalEndpoints === 0
+  const usedRealEndpoints = realEndpointCount - unusedBackend.length;
+  const coveragePercent = realEndpointCount === 0
     ? 0
-    : Math.round((usedEndpoints / totalEndpoints) * 1000) / 10;
+    : Math.round((usedRealEndpoints / realEndpointCount) * 1000) / 10;
 
   console.log(`# frontend ↔ backend route wiring audit\n`);
-  console.log(`backend routes (mounted):         ${backendPaths.size} paths, ${totalEndpoints} (path,method) endpoints`);
+  console.log(`backend routes (mounted):         ${backendPaths.size} paths, ${totalEndpoints} (path,method) endpoints (${stubEndpointCount} stubs excluded)`);
   console.log(`frontend API call-sites scanned:  ${frontend.length}`);
   console.log(`resolved → real backend route:    ${resolved.length}`);
   console.log(`orphan (no backend match):        ${orphans.length}`);
   console.log(`method mismatch (path ok, verb wrong): ${methodMismatches.length}`);
-  console.log(`backend coverage by UI:           ${usedEndpoints}/${totalEndpoints} (${coveragePercent}%)`);
+  console.log(`backend coverage by UI:           ${usedRealEndpoints}/${realEndpointCount} (${coveragePercent}%) — stubs excluded`);
   console.log(`unused backend endpoints:         ${unusedBackend.length}\n`);
 
   let failed = false;

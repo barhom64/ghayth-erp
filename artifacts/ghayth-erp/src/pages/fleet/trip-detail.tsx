@@ -155,24 +155,37 @@ export default function TripDetailPage() {
   };
 
   // POST /fleet/trips/:id/waypoints — append an intermediate waypoint
-  // (location + timestamp + optional notes) to a planned/active trip.
-  // Used by the dispatcher when a driver phones in an unplanned stop.
+  // (lat/lon required by backend zod schema). Uses the browser's
+  // geolocation API to read the dispatcher's current position; the driver
+  // would typically be the one posting from the mobile app, but the
+  // desktop dispatcher can also record an ad-hoc stop.
   const handleAddWaypoint = async () => {
-    const label = window.prompt("اسم النقطة (مثل: محطة وقود الراجحي):");
-    if (!label?.trim()) return;
-    try {
-      await apiFetch(`/fleet/trips/${id}/waypoints`, {
-        method: "POST",
-        body: JSON.stringify({
-          label: label.trim(),
-          recordedAt: new Date().toISOString(),
-        }),
-      });
-      queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
-      toast({ title: "تمت إضافة النقطة" });
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "تعذر إضافة النقطة", description: err.message });
+    if (!navigator.geolocation) {
+      toast({ variant: "destructive", title: "الموقع الجغرافي غير متاح في هذا المتصفح" });
+      return;
     }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await apiFetch(`/fleet/trips/${id}/waypoints`, {
+            method: "POST",
+            body: JSON.stringify({
+              lat: pos.coords.latitude,
+              lon: pos.coords.longitude,
+              speed: pos.coords.speed ?? undefined,
+            }),
+          });
+          queryClient.invalidateQueries({ queryKey: ["fleet-trip", id] });
+          toast({ title: "تمت إضافة النقطة" });
+        } catch (err: any) {
+          toast({ variant: "destructive", title: "تعذر إضافة النقطة", description: err.message });
+        }
+      },
+      (err) => {
+        toast({ variant: "destructive", title: "فشل قراءة الموقع", description: err.message });
+      },
+      { enableHighAccuracy: true, timeout: 5000 },
+    );
   };
 
   const handleCancel = async () => {

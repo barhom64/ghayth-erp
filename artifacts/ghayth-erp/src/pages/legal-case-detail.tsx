@@ -540,7 +540,7 @@ export default function LegalCaseDetail() {
       ))}
       {caseData && caseData.status !== "closed" && (
         <GuardedButton
-          perm="legal:update"
+          perm="legal.cases:update"
           size="sm"
           variant="outline"
           className="text-xs gap-1 text-status-error-foreground"
@@ -846,7 +846,7 @@ export default function LegalCaseDetail() {
                   disabled={financialRiskMut.isPending}
                   onClick={() => {
                     const v = window.prompt("القيمة الجديدة للمخاطر المالية:", String(caseData?.financialRisk ?? 0));
-                    if (v == null) return;
+                    if (v == null || v.trim() === "") return;
                     const amount = Number(v);
                     if (!Number.isFinite(amount) || amount < 0) {
                       toast({ variant: "destructive", title: "قيمة غير صالحة" });

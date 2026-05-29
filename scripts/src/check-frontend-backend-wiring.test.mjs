@@ -213,7 +213,7 @@ check(
 
 console.log("end-to-end audit — baseline invariant");
 
-const { resolved, orphans, methodMismatches, unusedBackend, frontend } = runAudit();
+const { resolved, orphans, methodMismatches, unusedBackend, backendEndpointCount, frontend } = runAudit();
 check(
   `every scanned frontend call resolves to a real backend route (got ${orphans.length} orphan(s))`,
   orphans.length === 0,
@@ -235,14 +235,16 @@ check(
   `resolved + orphans + methodMismatches accounts for the whole scan`,
   resolved.length + orphans.length + methodMismatches.length === frontend.length,
 );
-// Reverse-direction sanity check: the unused-backend list MUST be an
-// array (Phase C signal). An empty list means we've actually reached
-// 100% coverage, which is the goal state — earlier this assertion
-// required > 0, but post-merge-PR #1377 the wiring sweep closed the
-// gap, so allow ≥ 0 as long as the array exists.
+// Reverse-direction sanity check: the unused-backend bookkeeping must
+// produce a usable list. The original "> 0" assertion served as a canary
+// against a `touchedByFrontend` bug that would mark every endpoint
+// covered. Relaxing it to ">= 0" made it a tautology (any array's
+// length is >= 0), removing the canary. Restore real teeth by asserting
+// the unused list cannot cover ALL backend endpoints — if every endpoint
+// suddenly looks "unused" something's broken in the matcher.
 check(
   `unused-backend list is computed (got ${unusedBackend.length} entries — Phase C signal)`,
-  Array.isArray(unusedBackend) && unusedBackend.length >= 0,
+  Array.isArray(unusedBackend) && unusedBackend.length < resolved.length + orphans.length + methodMismatches.length,
 );
 
 // ─── summary ───────────────────────────────────────────────────────────────

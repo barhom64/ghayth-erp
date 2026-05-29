@@ -32,8 +32,6 @@ const AdminDataImport = lazy(() => import("@/pages/admin-data-import"));
 const AdminIntelligencePlayground = lazy(() => import("@/pages/admin-intelligence-playground"));
 const AdminDigitalSignature = lazy(() => import("@/pages/admin-digital-signature"));
 const AdminZatcaAudits = lazy(() => import("@/pages/admin-zatca-audits"));
-const AdminClientPortal = lazy(() => import("@/pages/admin-client-portal"));
-const AdminCareersPortal = lazy(() => import("@/pages/admin-careers-portal"));
 const AdminIntegrationsDiagnostics = lazy(() => import("@/pages/admin-integrations-diagnostics"));
 
 export const adminRoutes = [
@@ -69,7 +67,5 @@ export const adminRoutes = [
   { path: "/admin/intelligence-playground", component: AdminIntelligencePlayground },
   { path: "/admin/digital-signature", component: AdminDigitalSignature },
   { path: "/admin/zatca-audits", component: AdminZatcaAudits },
-  { path: "/admin/client-portal", component: AdminClientPortal },
-  { path: "/admin/careers-portal", component: AdminCareersPortal },
   { path: "/admin/integrations-diagnostics", component: AdminIntegrationsDiagnostics },
 ];

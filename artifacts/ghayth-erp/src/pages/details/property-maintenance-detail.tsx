@@ -75,12 +75,34 @@ export default function PropertyMaintenanceDetail() {
 
   const item = data;
 
-  const completeMut = useApiMutation<unknown, Record<string, never>>(
+  // POST /properties/maintenance-requests/:id/complete — backend requires
+  // closureReport + at least one afterPhoto + a cost (or zeroCostConfirmed)
+  // + materialsUsed. Without those preconditions the request 400s. The
+  // page doesn't yet have a closure form, so the button now opens a
+  // confirm prompt that collects closureReport and zeroCostConfirmed —
+  // the minimum to pass the zero-cost branch — and toasts a clear hint
+  // when photos/materials are still missing.
+  const completeMut = useApiMutation<
+    unknown,
+    { closureReport: string; zeroCostConfirmed: boolean; cost: number }
+  >(
     `/properties/maintenance-requests/${id}/complete`,
     "POST",
     [["property-maintenance", String(id)], ["maintenance-requests"]],
     { successMessage: "تم إنهاء طلب الصيانة" },
   );
+  const handleComplete = () => {
+    const report = window.prompt(
+      "تقرير الإغلاق (ملخّص الأعمال):",
+      item?.closureReport ?? "",
+    );
+    if (!report?.trim()) return;
+    completeMut.mutate({
+      closureReport: report.trim(),
+      zeroCostConfirmed: true,
+      cost: 0,
+    });
+  };
 
   // GET /properties/technicians — used to show available technicians the
   // request can be assigned to. Populates the "إسناد" field on edit.
@@ -258,7 +280,7 @@ export default function PropertyMaintenanceDetail() {
             perm="properties:update"
             size="sm"
             rateLimitAware
-            onClick={() => completeMut.mutate({})}
+            onClick={handleComplete}
             disabled={!item || item?.status === "completed" || completeMut.isPending}
           >
             <CheckCircle2 className="h-4 w-4 ms-1" />

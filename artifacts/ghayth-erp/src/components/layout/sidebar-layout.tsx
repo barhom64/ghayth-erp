@@ -175,6 +175,7 @@ const allNavSections: NavSection[] = [
       ]},
       { label: "الامتثال السعودي", path: "/hr/saudization", icon: Flag, module: "hr", children: [
         { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees" },
+        { label: "WPS / مدد / بنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll" },
         { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
       ]},
       { label: "الأداء والتطوير", path: "/hr/performance", icon: Target, module: "hr", children: [
@@ -310,6 +311,7 @@ const allNavSections: NavSection[] = [
       { label: "الضرائب والتقارير", path: "/finance/tax", icon: Scale, module: "finance", children: [
         { label: "نظام الضرائب", path: "/finance/tax", icon: Scale },
         { label: "رموز الضريبة", path: "/finance/tax-codes", icon: Percent },
+        { label: "قواعد التسعير", path: "/finance/pricing-rules", icon: Percent },
         { label: "فئات WHT", path: "/finance/wht-categories", icon: Percent },
         { label: "تقويم الإقرارات", path: "/finance/tax-filing-calendar", icon: Calendar },
         { label: "جاهزية ZATCA", path: "/finance/vat-filing-readiness", icon: FileCheck },
@@ -424,6 +426,7 @@ const allNavSections: NavSection[] = [
         { label: "الفئات", path: "/warehouse/categories", icon: FolderOpen },
         { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
         { label: "جرد المخزون", path: "/warehouse/inventory-count", icon: ClipboardCheck },
+        { label: "عمليات متقدّمة (دفعات/تسلسلات/ABC)", path: "/warehouse/advanced", icon: BarChart3 },
       ]},
       { label: "المتجر", path: "/store", icon: ShoppingCart, module: "store", children: [
         { label: "لوحة التحكم", path: "/module-dashboards?tab=store", icon: LayoutDashboard },
@@ -507,6 +510,7 @@ const allNavSections: NavSection[] = [
         { label: "جميع المستندات", path: "/documents", icon: FileText },
         { label: "المجلدات", path: "/documents/folders", icon: FolderOpen },
         { label: "الأرشيف", path: "/documents/archive", icon: Archive },
+        { label: "صندوق OCR", path: "/documents/ocr-inbox", icon: FileText },
         { label: "القوالب", path: "/documents/templates", icon: FilePlus },
         { label: "رفع مستند", path: "/documents/upload", icon: FilePlus },
       ]},
@@ -594,6 +598,8 @@ const allNavSections: NavSection[] = [
           { label: "مركز التحكّم بالـ PBX", path: "/admin/pbx-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "توجيه الإشعارات", path: "/admin/notification-routing", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "إعدادات المزوّدات", path: "/admin/vendor-settings", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "تشخيص التكاملات", path: "/admin/integrations-diagnostics", icon: Activity, perm: "admin:update" },
+          { label: "مراجعات ZATCA", path: "/admin/zatca-audits", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "حوكمة الذكاء الاصطناعي", path: "/admin/ai-governance", icon: Brain, perm: ["admin:list", "admin:view"], permMode: "any" },
         ]},
         { label: "سجلات التدقيق", path: "/admin/logs", icon: ScrollText, children: [

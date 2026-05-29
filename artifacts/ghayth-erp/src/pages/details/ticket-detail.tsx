@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatDateAr, formatTimeAr } from "@/lib/formatters";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -141,15 +142,14 @@ export default function TicketDetail() {
   const replies = ticket?.replies || [];
 
   // POST /support/tickets/:id/field-visit — schedule an on-site visit.
-  // Useful for properties/maintenance tickets that escalate beyond a
-  // remote fix.
+  // Backend schema field is `visitDate`, not scheduledDate.
   const handleScheduleVisit = async () => {
     try {
       const dateInput = window.prompt("تاريخ الزيارة (YYYY-MM-DD)");
-      if (!dateInput) return;
+      if (!dateInput?.trim()) return;
       await apiFetch(`/support/tickets/${id}/field-visit`, {
         method: "POST",
-        body: JSON.stringify({ scheduledDate: dateInput }),
+        body: JSON.stringify({ visitDate: dateInput.trim() }),
       });
       toast({ title: "تم جدولة الزيارة الميدانية" });
       qc.invalidateQueries({ queryKey: ["ticket-detail", id] });
@@ -372,8 +372,8 @@ export default function TicketDetail() {
       actions={
         <div className="flex items-center gap-2">
           <PrintButton entityType="support_ticket" entityId={id ?? 0} formats={["a4"]} label="طباعة" />
-          <Button variant="outline" size="sm" onClick={handleCheckSla} rateLimitAware>احسب الـ SLA</Button>
-          <Button variant="outline" size="sm" onClick={handleScheduleVisit} rateLimitAware>زيارة ميدانية</Button>
+          <GuardedButton perm="support:update" variant="outline" size="sm" onClick={handleCheckSla} rateLimitAware>احسب الـ SLA</GuardedButton>
+          <GuardedButton perm="support:update" variant="outline" size="sm" onClick={handleScheduleVisit} rateLimitAware>زيارة ميدانية</GuardedButton>
           {deleting ? (
             <div className="flex gap-2">
               <Button variant="destructive" size="sm" onClick={handleDelete}>تأكيد الحذف</Button>
