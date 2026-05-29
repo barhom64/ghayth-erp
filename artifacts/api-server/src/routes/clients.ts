@@ -367,11 +367,17 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
     // they hold.
     const [tenancies, legalCases, umrahSubAgents] = await Promise.all([
       rawQuery<Record<string, unknown>>(
-        `SELECT t.id, t.name, t.phone, t."nationalId",
+        // Drop t.phone + t."nationalId" — the request is authorized
+        // under crm.clients, not properties.tenants. Sales/account
+        // managers viewing a client should not get tenant PII as a
+        // side-effect of the tenancies tab; the link is enough so they
+        // can navigate to /properties/tenants/:id where the proper
+        // properties.tenants:view RBAC + field policy apply.
+        `SELECT t.id, t.name,
                 (SELECT COUNT(*) FROM rental_contracts rc
                   WHERE rc."tenantId" = t.id AND rc.status = 'active' AND rc."deletedAt" IS NULL)::int AS "activeContracts"
            FROM tenants t
-          WHERE t."clientId" = $1 AND t."companyId" = $2
+          WHERE t."clientId" = $1 AND t."companyId" = $2 AND t."deletedAt" IS NULL
           ORDER BY t.id DESC LIMIT 20`,
         [id, scope.companyId]
       ).catch((e) => { logger.error(e, "clients-tenancies query failed"); return []; }),
@@ -668,6 +674,16 @@ router.patch("/:id/portal-account", authorize({ feature: "crm.clients", action: 
       sets.push(`"passwordHash" = $${params.length}`);
       params.push(true);
       sets.push(`"mustChangePassword" = $${params.length}`);
+    }
+    // Bump tokenVersion when admin resets the password OR suspends the
+    // account — both are recovery paths that must invalidate any JWT
+    // currently in the user's (or an attacker's) hands. isActive=false
+    // is already blocked by the portal middleware on the next request,
+    // but bumping tokenVersion keeps the security model uniform: any
+    // change to "who can use this account right now" → all old tokens
+    // die.
+    if (password || isActive === false) {
+      sets.push(`"tokenVersion" = COALESCE("tokenVersion", 0) + 1`);
     }
 
     if (sets.length === 0) { res.json({ account }); return; }

@@ -658,6 +658,19 @@ function collectLocallyDefinedIdentifiers(bodies) {
       // is the safe direction for this guard.
       local.add(m[1]);
     }
+
+    // SELECT-list column aliases: `<expr> AS "alias"` or `<expr> AS alias`.
+    // These are output column names — they exist only in the result set,
+    // not in any underlying table, so an ORDER BY / nested-CTE reference
+    // to them would otherwise (incorrectly) be flagged as missing-column
+    // drift. The match is intentionally permissive: any `AS <ident>`
+    // token whose preceding character is not a `(` (which would mean a
+    // subquery alias, already handled above) counts as a column alias.
+    const colAliasRe =
+      /(?<![(\w])AS\s+"?([a-zA-Z_][a-zA-Z0-9_]*)"?(?=\s|,|\)|$)/gi;
+    while ((m = colAliasRe.exec(cleaned)) !== null) {
+      local.add(m[1]);
+    }
   }
   return local;
 }
