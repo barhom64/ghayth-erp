@@ -229,6 +229,38 @@ describe("Print Engine v2 — variable substitution", () => {
     expect(src).toContain("#each");
   });
 
+  it("supports {{#if path}}…{{/if}} conditional blocks", () => {
+    // Several presets (customer_statement, vendor_statement, …) were
+    // authored with this Handlebars-style helper. Without an implementation
+    // the literal `{{#if entity.X}}` markers ended up in the printed PDF.
+    expect(src).toContain("expandIf");
+    expect(src).toContain("#if");
+  });
+
+  it("expandIf renders body when truthy, hides when falsy/missing", async () => {
+    // Black-box test through the public substitute() entry point so we
+    // exercise the actual pipeline order (if → each → token).
+    const { substitute } = await import("../../src/lib/print/variableSubstitution.js");
+    const branch = {
+      companyName: "ش", branchName: "ف",
+      address: null, phone: null, email: null,
+      logoUrl: null, footerText: null, taxNumber: null,
+      crNumber: null, vatNumber: null,
+      branchNameEn: null, companyNameEn: null, fullAddress: null,
+    } as Parameters<typeof substitute>[0]["branch"];
+    const template = `before {{#if entity.note}}NOTE={{entity.note}}{{/if}} after`;
+    const withNote = substitute({
+      template, data: { entity: { note: "هام" } }, branch, isThermal: false,
+    });
+    expect(withNote).toContain("NOTE=هام");
+    const withoutNote = substitute({
+      template, data: { entity: { id: 1 } }, branch, isThermal: false,
+    });
+    expect(withoutNote).not.toContain("NOTE=");
+    expect(withoutNote).not.toContain("{{#if");
+    expect(withoutNote).not.toContain("{{/if}}");
+  });
+
   it("escapes HTML by default", () => {
     expect(src).toContain("function escapeHtml");
     // Both & and < must be escaped to avoid stored-XSS via entity data.
