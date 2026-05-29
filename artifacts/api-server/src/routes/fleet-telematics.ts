@@ -71,10 +71,11 @@ const upsertIntegrationSchema = z.object({
       z.literal(null),
     ])
     .optional(),
-  // Retention / heartbeat tunables (migration 230). Range-checked at
-  // the DB level too; we mirror the bounds here for a nice error message.
+  // Retention / heartbeat tunables (migration 230 + 232). Range-checked
+  // at the DB level too; we mirror the bounds here for a nice error.
   positionRetentionDays: z.coerce.number().int().min(1).max(3650).optional(),
   syncLogRetentionDays: z.coerce.number().int().min(1).max(365).optional(),
+  videoAccessLogRetentionDays: z.coerce.number().int().min(1).max(365).optional(),
   offlineThresholdSec: z.coerce.number().int().min(60).max(86400).optional(),
   notes: z.string().optional().nullable(),
 });
@@ -143,6 +144,8 @@ export interface IntegrationRow {
   positionRetentionDays: number;
   syncLogRetentionDays: number;
   offlineThresholdSec: number;
+  /** Days of fleet_video_access_logs kept (migration 232). */
+  videoAccessLogRetentionDays: number;
   notes: string | null;
 }
 
@@ -463,9 +466,10 @@ router.post(
            ("companyId","branchId",provider,"displayName","baseUrl",
             "vendorSecretSlug","pollIntervalSec","videoOnDemandOnly",
             status,config,"webhookSecret",
-            "positionRetentionDays","syncLogRetentionDays","offlineThresholdSec",
+            "positionRetentionDays","syncLogRetentionDays",
+            "videoAccessLogRetentionDays","offlineThresholdSec",
             notes,"createdBy")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
          RETURNING id`,
         [
           scope.companyId,
@@ -481,6 +485,7 @@ router.post(
           encryptedWebhookSecret,
           body.positionRetentionDays ?? 90,
           body.syncLogRetentionDays ?? 30,
+          body.videoAccessLogRetentionDays ?? 90,
           body.offlineThresholdSec ?? 600,
           body.notes ?? null,
           scope.userId,
@@ -553,6 +558,7 @@ router.patch(
       }
       if (body.positionRetentionDays !== undefined) setField("positionRetentionDays", body.positionRetentionDays);
       if (body.syncLogRetentionDays !== undefined) setField("syncLogRetentionDays", body.syncLogRetentionDays);
+      if (body.videoAccessLogRetentionDays !== undefined) setField("videoAccessLogRetentionDays", body.videoAccessLogRetentionDays);
       if (body.offlineThresholdSec !== undefined) setField("offlineThresholdSec", body.offlineThresholdSec);
       if (body.notes !== undefined) setField("notes", body.notes);
       if (sets.length === 0) {

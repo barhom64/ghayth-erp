@@ -56,6 +56,7 @@ const DEFAULT_FORM = {
   webhookSecret: "",
   positionRetentionDays: "90",
   syncLogRetentionDays: "30",
+  videoAccessLogRetentionDays: "90",
   offlineThresholdSec: "600",
   notes: "",
 };
@@ -107,6 +108,7 @@ export default function FleetTelematicsSettings() {
       ...(form.webhookSecret ? { webhookSecret: form.webhookSecret } : {}),
       positionRetentionDays: Number(form.positionRetentionDays) || 90,
       syncLogRetentionDays: Number(form.syncLogRetentionDays) || 30,
+      videoAccessLogRetentionDays: Number(form.videoAccessLogRetentionDays) || 90,
       offlineThresholdSec: Number(form.offlineThresholdSec) || 600,
       notes: form.notes,
     });
@@ -357,6 +359,20 @@ export default function FleetTelematicsSettings() {
             />
             <p className="text-xs text-muted-foreground mt-1">
               سجلات `fleet_device_sync_logs` الأقدم تُحذف. الافتراضي 30 يوم.
+            </p>
+          </div>
+          <div>
+            <Label>مدة الاحتفاظ بسجلات وصول الفيديو (أيام)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={365}
+              value={form.videoAccessLogRetentionDays}
+              onChange={(e) => setForm({ ...form, videoAccessLogRetentionDays: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              سجلات `fleet_video_access_logs` (forensic audit للوصول).
+              الافتراضي 90 يوم. ارفع للمتطلبات التنظيمية الأطول.
             </p>
           </div>
           <div>

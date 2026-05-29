@@ -45,6 +45,7 @@ interface RetentionRow {
   companyId: number;
   positionRetentionDays: number;
   syncLogRetentionDays: number;
+  videoAccessLogRetentionDays: number;
 }
 
 interface HeartbeatRow {
@@ -64,13 +65,15 @@ interface HeartbeatRow {
 export async function fleetTelematicsRetention(): Promise<string> {
   const integrations = await rawQuery<RetentionRow>(
     `SELECT i.id, i."companyId",
-            i."positionRetentionDays", i."syncLogRetentionDays"
+            i."positionRetentionDays", i."syncLogRetentionDays",
+            i."videoAccessLogRetentionDays"
        FROM fleet_telematics_integrations i
        WHERE i."deletedAt" IS NULL`,
   );
 
   let positionsDeleted = 0;
   let logsDeleted = 0;
+  let accessLogsDeleted = 0;
   let videosExpired = 0;
 
   for (const integ of integrations) {
@@ -90,6 +93,17 @@ export async function fleetTelematicsRetention(): Promise<string> {
         [integ.companyId, integ.syncLogRetentionDays],
       );
       logsDeleted += logRes.affectedRows ?? 0;
+
+      // #1354 follow-up: fleet_video_access_logs was unbounded — every
+      // proxy fetch wrote a row and nothing ever swept them. Migration
+      // 232 added videoAccessLogRetentionDays (default 90).
+      const accessRes = await rawExecute(
+        `DELETE FROM fleet_video_access_logs
+           WHERE "companyId" = $1
+             AND "accessedAt" < NOW() - make_interval(days => $2)`,
+        [integ.companyId, integ.videoAccessLogRetentionDays],
+      );
+      accessLogsDeleted += accessRes.affectedRows ?? 0;
     } catch (err) {
       logger.error(
         { err, integrationId: integ.id, companyId: integ.companyId },
@@ -128,7 +142,7 @@ export async function fleetTelematicsRetention(): Promise<string> {
     logger.error({ err }, "[telematicsCron] video expiry sweep failed");
   }
 
-  return `retention: ${positionsDeleted} positions + ${logsDeleted} sync_logs deleted, ${videosExpired} video sessions expired`;
+  return `retention: ${positionsDeleted} positions + ${logsDeleted} sync_logs + ${accessLogsDeleted} access_logs deleted, ${videosExpired} video sessions expired`;
 }
 
 /**
