@@ -32,6 +32,9 @@ import {
   confirmVouchersImport,
   previewMutamersImport,
   previewVouchersImport,
+  normalizeImportRows,
+  MUTAMER_HEADER_MAP,
+  VOUCHER_HEADER_MAP,
 } from "../lib/umrahImportEngine.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -224,15 +227,24 @@ const patchPilgrimSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
+// `columnMapping` lets the wizard's column-mapping step override the
+// built-in Arabic header dictionary on a per-import basis. The shape is
+// { excelHeader → dbField }; values that don't match a known engine
+// field are still accepted (the engine just ignores unknown keys), so
+// operators can experiment without back-end validation churn.
+const columnMappingSchema = z.record(z.string(), z.string()).optional();
+
 const importPreviewSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
   rows: z.array(z.any()).min(1, "بيانات المعاينة غير مكتملة"),
   fileType: z.string().optional(),
+  columnMapping: columnMappingSchema,
 });
 
 const importMutamersSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
   rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة"),
+  columnMapping: columnMappingSchema,
 });
 
 const importVouchersSchema = z.object({
@@ -243,6 +255,7 @@ const importVouchersSchema = z.object({
   treasuryId: z.coerce.number().int().positive().optional().nullable(),
   /** Override umrah_nusk_cost DR account code (gap #3). */
   purchaseAccountCode: z.string().trim().min(1).optional().nullable(),
+  columnMapping: columnMappingSchema,
 });
 
 const importSchema = z.object({
@@ -847,7 +860,7 @@ router.delete("/pilgrims/:id", authorize({ feature: "umrah", action: "delete" })
 router.post("/import/preview", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows, fileType } = zodParse(importPreviewSchema.safeParse(req.body));
+    const { seasonId, rows: importRows, fileType, columnMapping } = zodParse(importPreviewSchema.safeParse(req.body));
 
     // Delegate to umrahImportEngine so the preview reflects the same
     // dedup keys + warnings the confirm step will use. Pre-PR the route
@@ -861,9 +874,15 @@ router.post("/import/preview", authorize({ feature: "umrah", action: "create" })
       userId: scope.userId,
       seasonId,
     };
-    const diff = fileType === "vouchers"
-      ? await previewVouchersImport(importScope, importRows)
-      : await previewMutamersImport(importScope, importRows);
+    // Translate Arabic-keyed Excel rows to engine-keyed rows. The
+    // wizard parses Excel client-side and ships the original headers
+    // unchanged; the engine consumes camelCase fields. Optional
+    // `columnMapping` overrides the built-in map per import.
+    const normalizedFileType: "mutamers" | "vouchers" = fileType === "vouchers" ? "vouchers" : "mutamers";
+    const normalizedRows = normalizeImportRows(importRows, normalizedFileType, columnMapping);
+    const diff = normalizedFileType === "vouchers"
+      ? await previewVouchersImport(importScope, normalizedRows)
+      : await previewMutamersImport(importScope, normalizedRows);
 
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -914,9 +933,14 @@ router.post("/import/preview", authorize({ feature: "umrah", action: "create" })
 router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows } = zodParse(importMutamersSchema.safeParse(req.body));
-    const importBody = { seasonId, rows: importRows, fileType: "mutamers", fileName: "import-mutamers" };
-    // Reuse existing import logic via internal redirect
+    const { seasonId, rows: importRows, columnMapping } = zodParse(importMutamersSchema.safeParse(req.body));
+    // Translate Arabic-keyed Excel rows BEFORE the legacy doImport
+    // touches them — doImport reads fields like `passportNumber`,
+    // `fullName`, `nuskNumber` directly. Without normalization the
+    // values would all be `undefined` and every row would be dropped
+    // as an "error row" silently.
+    const normalizedRows = normalizeImportRows(importRows, "mutamers", columnMapping);
+    const importBody = { seasonId, rows: normalizedRows, fileType: "mutamers", fileName: "import-mutamers" };
     const result = await doImport(scope, importBody);
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -931,7 +955,7 @@ router.post("/import/mutamers", authorize({ feature: "umrah", action: "create" }
 router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode } =
+    const { seasonId, rows: importRows, fileName, treasuryId, purchaseAccountCode, columnMapping } =
       zodParse(importVouchersSchema.safeParse(req.body));
     await requireOpenSeason(seasonId, scope.companyId);
     // Wire vouchers through the dedicated engine so they actually create
@@ -948,7 +972,12 @@ router.post("/import/vouchers", authorize({ feature: "umrah", action: "create" }
       treasuryId: treasuryId ?? null,
       purchaseAccountCode: purchaseAccountCode ?? null,
     };
-    const result = await confirmVouchersImport(importScope, importRows, fileName ?? "import-vouchers");
+    // Normalize Arabic-keyed Excel rows to engine fields before the
+    // confirm step. Without this confirmVouchersImport would see
+    // `row.nuskInvoiceNumber === undefined` and bucket every row as an
+    // error — the same bug the preview route hit before normalization.
+    const normalizedRows = normalizeImportRows(importRows, "vouchers", columnMapping);
+    const result = await confirmVouchersImport(importScope, normalizedRows, fileName ?? "import-vouchers");
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Import vouchers error"); }
 });
@@ -1865,6 +1894,37 @@ router.post("/transport/:id/assign-pilgrims", authorize({ feature: "umrah", acti
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.transport.pilgrims_assigned", entity: "umrah_transport", entityId: transportId, details: JSON.stringify({ pilgrimIds, count: pilgrimIds.length }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ transportId, assignedCount: pilgrimIds.length, totalPilgrimCount: newCount });
   } catch (err) { handleRouteError(err, res, "Assign pilgrims to transport error"); }
+});
+
+// Surface the built-in Arabic-header dictionaries to the wizard so the
+// column-mapping step can pre-fill the operator's choices for known
+// NUSK / MOFA layouts. The operator only types when their source uses
+// a header the server doesn't already recognise.
+router.get("/import/header-maps", authorize({ feature: "umrah", action: "create" }), async (_req, res) => {
+  try {
+    // Invert each map to { dbField → [arabicHeaders] } so the wizard
+    // can render a dropdown of recognised targets per column. The flat
+    // forward maps are also included for callers that just want the
+    // raw lookup table.
+    const invertMap = (m: Record<string, string>): Record<string, string[]> => {
+      const out: Record<string, string[]> = {};
+      for (const [k, v] of Object.entries(m)) {
+        if (!out[v]) out[v] = [];
+        out[v].push(k);
+      }
+      return out;
+    };
+    res.json({
+      mutamers: {
+        forward: MUTAMER_HEADER_MAP,
+        targets: invertMap(MUTAMER_HEADER_MAP),
+      },
+      vouchers: {
+        forward: VOUCHER_HEADER_MAP,
+        targets: invertMap(VOUCHER_HEADER_MAP),
+      },
+    });
+  } catch (err) { handleRouteError(err, res, "Import header maps error"); }
 });
 
 router.get("/import-logs", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
