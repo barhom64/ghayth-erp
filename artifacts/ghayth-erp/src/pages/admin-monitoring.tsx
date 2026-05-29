@@ -18,6 +18,10 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
@@ -56,18 +60,29 @@ function SystemStopsCard() {
   const [newReason, setNewReason] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [deactivatingId, setDeactivatingId] = useState<number | null>(null);
+  // Confirmation state replaces window.confirm for create + deactivate flows.
+  // `confirmCreate` true ⇒ show the "activate system stop" confirm dialog;
+  // `confirmDeactivateId` non-null ⇒ show the "deactivate" confirm dialog
+  // for that specific stop row.
+  const [confirmCreate, setConfirmCreate] = useState(false);
+  const [confirmDeactivateId, setConfirmDeactivateId] = useState<number | null>(null);
 
   const refreshAll = () => {
     refetch();
     qc.invalidateQueries({ queryKey: ["system-health"] });
   };
 
-  const createStop = async () => {
+  // Validates the form fields and opens the confirm dialog. Actual POST
+  // happens in confirmedCreateStop after the operator confirms.
+  const requestCreateStop = () => {
     if (!newReason.trim()) {
       toast({ variant: "destructive", title: "سبب الإيقاف مطلوب" });
       return;
     }
-    if (!window.confirm(`سيتم تفعيل إيقاف النظام للنطاق "${newScope}". متابعة؟`)) return;
+    setConfirmCreate(true);
+  };
+  const confirmedCreateStop = async () => {
+    setConfirmCreate(false);
     setBusy(true);
     try {
       await apiFetch("/admin/system-stops", {
@@ -85,8 +100,10 @@ function SystemStopsCard() {
     }
   };
 
-  const deactivateStop = async (id: number) => {
-    if (!window.confirm("تأكيد إلغاء تفعيل الإيقاف؟")) return;
+  const confirmedDeactivateStop = async () => {
+    const id = confirmDeactivateId;
+    if (!id) return;
+    setConfirmDeactivateId(null);
     setDeactivatingId(id);
     try {
       await apiFetch(`/admin/system-stops/${id}/deactivate`, { method: "PATCH" });
@@ -149,7 +166,7 @@ function SystemStopsCard() {
                     variant="ghost"
                     size="sm"
                     className="h-7 px-2 text-xs"
-                    onClick={() => deactivateStop(r.id)}
+                    onClick={() => setConfirmDeactivateId(r.id)}
                     disabled={deactivatingId === r.id}
                     title="إلغاء التفعيل"
                   >
@@ -204,7 +221,7 @@ function SystemStopsCard() {
             <Button
               variant="destructive"
               disabled={busy || !newReason.trim()}
-              onClick={createStop}
+              onClick={requestCreateStop}
               rateLimitAware
             >
               تفعيل الإيقاف
@@ -212,6 +229,38 @@ function SystemStopsCard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Replaces window.confirm() for the activate stop flow */}
+      <AlertDialog open={confirmCreate} onOpenChange={(o) => !o && setConfirmCreate(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد تفعيل الإيقاف</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم تفعيل إيقاف النظام للنطاق &quot;{newScope}&quot;. متابعة؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmedCreateStop}>تأكيد التفعيل</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Replaces window.confirm() for the deactivate flow */}
+      <AlertDialog open={confirmDeactivateId !== null} onOpenChange={(o) => !o && setConfirmDeactivateId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد إلغاء التفعيل</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم إلغاء تفعيل إيقاف النظام. متابعة؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmedDeactivateStop}>تأكيد الإلغاء</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

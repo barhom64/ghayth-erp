@@ -404,6 +404,7 @@ export default function LegalCaseDetail() {
   const [showAddCorrespondence, setShowAddCorrespondence] = useState(false);
   const [showAddCost, setShowAddCost] = useState(false);
   const [viewCorrespondenceId, setViewCorrespondenceId] = useState<number | null>(null);
+  const [manualRiskInput, setManualRiskInput] = useState("");
 
   // GET /legal/correspondence/:id — full correspondence row including
   // its parent caseNumber/caseTitle. Used when the user clicks a row in
@@ -837,22 +838,29 @@ export default function LegalCaseDetail() {
                 إضافة تكلفة جديدة تُراكم القيمة على financialRisk الإجمالي للقضية.
               </p>
               <div className="flex items-center gap-2 pt-2 border-t">
-                <span className="text-xs">تعديل يدوي:</span>
+                <span className="text-xs whitespace-nowrap">تعديل يدوي:</span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={manualRiskInput}
+                  onChange={(e) => setManualRiskInput(e.target.value)}
+                  placeholder={String(caseData?.financialRisk ?? 0)}
+                  className="h-8 text-xs w-32"
+                />
                 <GuardedButton
                   perm="legal.cases:update"
                   variant="outline"
                   size="sm"
                   rateLimitAware
-                  disabled={financialRiskMut.isPending}
+                  disabled={financialRiskMut.isPending || manualRiskInput.trim() === ""}
                   onClick={() => {
-                    const v = window.prompt("القيمة الجديدة للمخاطر المالية:", String(caseData?.financialRisk ?? 0));
-                    if (v == null || v.trim() === "") return;
-                    const amount = Number(v);
+                    const amount = Number(manualRiskInput);
                     if (!Number.isFinite(amount) || amount < 0) {
                       toast({ variant: "destructive", title: "قيمة غير صالحة" });
                       return;
                     }
                     financialRiskMut.mutate({ amount });
+                    setManualRiskInput("");
                   }}
                 >
                   تحديث المخاطر
