@@ -519,6 +519,14 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     if (relatedEntityType === "vehicle" && relatedEntityId) entityLink.vehicleId = Number(relatedEntityId);
     if (relatedEntityType === "property" && relatedEntityId) entityLink.propertyId = Number(relatedEntityId);
     if (relatedEntityType === "contract" && relatedEntityId) entityLink.contractId = Number(relatedEntityId);
+    // Supplier / vendor / customer / client coverage — the expense form
+    // (expenses-create.tsx) ships "supplier"; older callers may use the
+    // dimension-name variants. Pre-fix the expense JE never carried
+    // vendorId/clientId on the expense line even though the operator
+    // explicitly tagged the supplier — per-supplier expense reports
+    // were silently incomplete.
+    if ((relatedEntityType === "supplier" || relatedEntityType === "vendor") && relatedEntityId) entityLink.vendorId = Number(relatedEntityId);
+    if ((relatedEntityType === "customer" || relatedEntityType === "client") && relatedEntityId) entityLink.clientId = Number(relatedEntityId);
     if (projectId) entityLink.projectId = Number(projectId);
     if (costCenter) entityLink.costCenter = costCenter;
 
@@ -544,12 +552,19 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     }
 
     const { financialEngine } = await import("../lib/engines/index.js");
+    // Carry the full entityLink on EVERY leg of the expense JE — expense DR,
+    // VAT input DR, and cash CR. Without this the VAT obligation + cash
+    // movement are dim-less even though the expense line is fully tagged.
+    // Per-vendor cash outflow + per-property VAT input reports were
+    // silently broken (the expense DR ties to the property/vehicle but
+    // the cash CR didn't tie to anything, so cashflow-by-dim summed
+    // only half the picture).
     const journalLines: any[] = [{ accountCode: overrideAccountCode ?? "5000", debit: baseAmount, credit: 0, ...entityLink }];
     if (computedVat > 0) {
       const inputVatCode = await financialEngine.resolveAccountCode(effectiveCompanyId, "vat_input", "debit", "1400");
-      journalLines.push({ accountCode: inputVatCode, debit: computedVat, credit: 0 });
+      journalLines.push({ accountCode: inputVatCode, debit: computedVat, credit: 0, ...entityLink });
     }
-    journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat });
+    journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat, ...entityLink });
     if (subAccountCode && subAccountCode !== accountCode) { journalLines[0].accountCode = subAccountCode; }
 
     // C3 — the journal entry, its header metadata and the approval chain are
@@ -1041,21 +1056,47 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     // Net cash leaving the company = totalWithVat − totalWht. The
     // withheld portion sits in WHT Payable until the next ZATCA filing.
     const netCashOut = roundTo2(totalWithVat - totalWht);
+
+    // Derive line-level dims from the voucher's relatedEntity / contract /
+    // department / costCenter so EVERY leg of the voucher JE carries the
+    // same attribution. Pre-fix the voucher posted with bare lines —
+    // per-supplier voucher analysis, per-tenant payment history, and
+    // per-department cashflow drilldowns were all silently broken.
+    //
+    // The frontend voucher form (vouchers-create.tsx) ships the
+    // relatedEntityType values: employee, supplier, customer, contract,
+    // property. Map each to the canonical journal_lines column. "client"
+    // + "vendor" + "vehicle" are accepted too for callers that use the
+    // dimension-name variants.
+    const voucherDims: Record<string, any> = {};
+    if ((relatedEntityType === "supplier" || relatedEntityType === "vendor") && relatedEntityId) voucherDims.vendorId = Number(relatedEntityId);
+    if ((relatedEntityType === "customer" || relatedEntityType === "client") && relatedEntityId) voucherDims.clientId = Number(relatedEntityId);
+    if (relatedEntityType === "employee" && relatedEntityId) voucherDims.employeeId = Number(relatedEntityId);
+    if (relatedEntityType === "vehicle" && relatedEntityId) voucherDims.vehicleId = Number(relatedEntityId);
+    if (relatedEntityType === "property" && relatedEntityId) voucherDims.propertyId = Number(relatedEntityId);
+    // When relatedEntityType=contract the contractId is encoded both in
+    // relatedEntityId (form path) and in the top-level contractId field
+    // (legacy path). Honour either.
+    if (relatedEntityType === "contract" && relatedEntityId) voucherDims.contractId = Number(relatedEntityId);
+    if (contractId) voucherDims.contractId = Number(contractId);
+    if (departmentId) voucherDims.departmentId = Number(departmentId);
+    if (b.costCenter) voucherDims.costCenter = b.costCenter;
+
     const whtCreditLines = Array.from(whtCreditByAccount.entries()).map(
-      ([accountCode, amount]) => ({ accountCode, debit: 0, credit: amount })
+      ([accountCode, amount]) => ({ accountCode, debit: 0, credit: amount, ...voucherDims })
     );
 
-    const journalLines: { accountCode: string; debit: number; credit: number }[] = isReceipt
+    const journalLines: { accountCode: string; debit: number; credit: number; [k: string]: any }[] = isReceipt
       ? [
-          { accountCode: cashAcct, debit: totalWithVat, credit: 0 },
-          ...(computedVat > 0 ? [{ accountCode: outputVatCode, debit: 0, credit: computedVat }] : []),
-          { accountCode: subAccountCode || accountCode, debit: 0, credit: baseAmount },
+          { accountCode: cashAcct, debit: totalWithVat, credit: 0, ...voucherDims },
+          ...(computedVat > 0 ? [{ accountCode: outputVatCode, debit: 0, credit: computedVat, ...voucherDims }] : []),
+          { accountCode: subAccountCode || accountCode, debit: 0, credit: baseAmount, ...voucherDims },
         ]
       : [
-          { accountCode: subAccountCode || accountCode, debit: baseAmount, credit: 0 },
-          ...(computedVat > 0 ? [{ accountCode: inputVatCode2, debit: computedVat, credit: 0 }] : []),
+          { accountCode: subAccountCode || accountCode, debit: baseAmount, credit: 0, ...voucherDims },
+          ...(computedVat > 0 ? [{ accountCode: inputVatCode2, debit: computedVat, credit: 0, ...voucherDims }] : []),
           ...whtCreditLines,
-          { accountCode: cashAcct, debit: 0, credit: netCashOut },
+          { accountCode: cashAcct, debit: 0, credit: netCashOut, ...voucherDims },
         ];
 
     if (isDryRun(req)) {
@@ -1350,7 +1391,11 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
 
     const advanceLines = [
       { accountCode: advanceAccountCode, debit: Number(amount), credit: 0, employeeId: employeeId ? Number(employeeId) : undefined },
-      { accountCode: sourceAcct, debit: 0, credit: Number(amount) },
+      // Cash CR carries employeeId so per-employee advance-receivable
+      // aging stays in sync with the cashflow drilldown (without this,
+      // the DR ties to the employee but the matching cash outflow is
+      // unattributed in per-employee treasury reports).
+      { accountCode: sourceAcct, debit: 0, credit: Number(amount), employeeId: employeeId ? Number(employeeId) : undefined },
     ];
     const advanceDescription = description ?? `سلفة راتب ${employeeName} – خصم على ${deductMonths} شهر`;
 

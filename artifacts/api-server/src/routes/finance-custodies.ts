@@ -602,7 +602,11 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
         sourceKey: `finance:custody:${ref}`,
         lines: [
           { accountCode: custodyAccountCode, debit: Number(amount), credit: 0, employeeId: custodyEmployeeId ?? undefined },
-          { accountCode: sourceAcct, debit: 0, credit: Number(amount) },
+          // Cash CR carries employeeId too so per-employee cashflow drilldowns
+          // (and custody-outstanding-by-employee aging) tie out from the GL.
+          // Without this the DR tied to the employee but the matching cash
+          // outflow was unattributed.
+          { accountCode: sourceAcct, debit: 0, credit: Number(amount), employeeId: custodyEmployeeId ?? undefined },
         ],
       });
       journalId = posted.journalId;
@@ -711,7 +715,7 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
       }
 
       const custodyEntriesResult = await client.query(
-        `SELECT je.id, jl.debit, jl.credit, jl."accountCode"
+        `SELECT je.id, jl.debit, jl.credit, jl."accountCode", jl."employeeId"
          FROM journal_entries je
          JOIN journal_lines jl ON jl."journalId" = je.id
          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref = $2 AND jl.debit > 0`,
@@ -723,6 +727,11 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
         (sum: number, e: any) => sum + Number(e.debit || 0), 0
       );
       const custodyAccountCode = custodyEntries[0]?.accountCode || "1400";
+      // Propagate the employeeId from the original custody DR line onto
+      // the settlement JE so per-employee custody-outstanding aging stays
+      // accurate (the settle entry is the credit-side that closes out
+      // the receivable — must tie to the same employee).
+      const custodyEmployeeId = (custodyEntries[0]?.employeeId as number | null) ?? undefined;
 
       const settlementsResult = await client.query(
         `SELECT jl.credit
@@ -761,8 +770,8 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
         sourceId: 0,
         sourceKey: `finance:custody_settle:${custodyRef}:${idempotencyToken}`,
         lines: [
-          { accountCode: sourceAcct, debit: Number(amount), credit: 0 },
-          { accountCode: custodyAccountCode, debit: 0, credit: Number(amount) },
+          { accountCode: sourceAcct, debit: Number(amount), credit: 0, employeeId: custodyEmployeeId },
+          { accountCode: custodyAccountCode, debit: 0, credit: Number(amount), employeeId: custodyEmployeeId },
         ],
       });
 
@@ -861,7 +870,7 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
 
       // Resolve the custody account code from the original journal entry (not hardcoded)
       const custodyLinesResult = await client.query(
-        `SELECT jl.debit, jl.credit, jl."accountCode"
+        `SELECT jl.debit, jl.credit, jl."accountCode", jl."employeeId"
          FROM journal_entries je
          JOIN journal_lines jl ON jl."journalId" = je.id
          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref = $2 AND jl.debit > 0`,
@@ -872,6 +881,10 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
         (sum: number, e: any) => sum + Number(e.debit || 0) - Number(e.credit || 0), 0
       );
       const custodyAccountCode = custodyLines[0]?.accountCode || "1400";
+      // Propagate the employeeId from the original custody DR onto the
+      // settlement so per-employee custody-outstanding aging stays tied
+      // to the same actor across post + settle.
+      const custodyEmployeeId = (custodyLines[0]?.employeeId as number | null) ?? undefined;
 
       const priorSettlementsResult = await client.query(
         `SELECT jl.credit
@@ -910,8 +923,8 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
         sourceId: 0,
         sourceKey: `finance:custody_settle:${custody.ref}:${idempotencyToken}`,
         lines: [
-          { accountCode: sourceAcct, debit: Number(amount), credit: 0 },
-          { accountCode: custodyAccountCode, debit: 0, credit: Number(amount) },
+          { accountCode: sourceAcct, debit: Number(amount), credit: 0, employeeId: custodyEmployeeId },
+          { accountCode: custodyAccountCode, debit: 0, credit: Number(amount), employeeId: custodyEmployeeId },
         ],
       });
 

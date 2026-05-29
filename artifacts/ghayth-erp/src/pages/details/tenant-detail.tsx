@@ -37,7 +37,11 @@ import { PrintButton } from "@/components/shared/print-button";
 export default function TenantDetail() {
   const [, params] = useRoute("/properties/tenants/:id");
   const id = params?.id;
-  const { hideTabs: registryHideTabs } = useRegistryTabs("tenant", id ?? "");
+  // Destructure BOTH extraTabs (Financial Profile) and hideTabs so the
+  // per-tenant GL drilldown tab actually renders. Pre-fix only hideTabs
+  // was read; the Financial Profile tab was silently dropped even
+  // though the tenant entry now declares financialEntityType: "client".
+  const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("tenant", id ?? "");
 
   const { data: tenant, isLoading, isError, refetch } = useApiQuery<any>(
     ["tenant-detail", id || ""],
@@ -277,6 +281,11 @@ export default function TenantDetail() {
       icon: Mail,
       content: id ? <TenantLettersTab tenantId={id} /> : null,
     },
+    // Append the registry-provided Financial Profile tab so per-tenant
+    // GL movements (rent revenue / VAT / installment payments) drill
+    // here. The registry resolves tenant → entityType="client" so
+    // EntityFinancialProfile pulls every JE line with clientId=tenantId.
+    ...registryExtraTabs,
   ];
 
   const tenantActionsExtra = activeContract ? (

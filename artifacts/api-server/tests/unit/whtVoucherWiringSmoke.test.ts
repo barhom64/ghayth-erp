@@ -57,11 +57,15 @@ describe("voucher JE includes WHT", () => {
     expect(HANDLER).toMatch(/"wht_payable",\s*"credit",\s*"2330"/);
   });
   it("payment lines splice in whtCreditLines before the cash credit", () => {
-    expect(HANDLER).toMatch(/\.\.\.whtCreditLines,\s*\{ accountCode: cashAcct, debit: 0, credit: netCashOut \}/);
+    // The voucher legs now spread `...voucherDims` so per-supplier /
+    // per-customer / per-contract attribution flows through. The
+    // sequencing relative to whtCreditLines is unchanged.
+    expect(HANDLER).toMatch(/\.\.\.whtCreditLines,\s*\{ accountCode: cashAcct, debit: 0, credit: netCashOut, \.\.\.voucherDims \}/);
   });
   it("receipt path is unchanged (no WHT lines)", () => {
-    // The receipt branch of the ternary still emits exactly its 3 lines.
-    expect(HANDLER).toMatch(/isReceipt\s*\?\s*\[\s*\{ accountCode: cashAcct, debit: totalWithVat, credit: 0 \}/);
+    // The receipt branch of the ternary still emits exactly its 3 lines;
+    // each line now also spreads voucherDims for downstream drilldowns.
+    expect(HANDLER).toMatch(/isReceipt\s*\?\s*\[\s*\{ accountCode: cashAcct, debit: totalWithVat, credit: 0, \.\.\.voucherDims \}/);
   });
 });
 

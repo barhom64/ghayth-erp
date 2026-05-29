@@ -139,8 +139,14 @@ describe("invoice approval posts per-line revenue", () => {
   });
 
   it("approval VAT credit still uses invoice.vatAmount at header level", () => {
+    // The VAT line now also carries clientId so per-customer VAT reports
+    // tie out from the GL (silent dim-loss fix). Match the header values
+    // separately from the dim suffix.
     expect(INVOICES_ROUTE).toContain(
-      "{ accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0) }"
+      "accountCode: invVatPayableCode, debit: 0, credit: Number(invoice.vatAmount || 0)"
+    );
+    expect(INVOICES_ROUTE).toContain(
+      "clientId: invoice.clientId as number | undefined } as any,"
     );
   });
 });
